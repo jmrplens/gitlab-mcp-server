@@ -13,7 +13,7 @@
 
 Tools for managing enterprise users at the group level and build attestations at the project level.
 
-On the default dynamic surface, these operations are the `enterprise_user.*` and `attestation.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below. The JSON examples on this page show both call shapes: the first block is the meta-tool envelope (`TOOL_SURFACE=meta`, sent to the tool named in the section), the second is the same call as `gitlab_execute_action` arguments on the default surface. Meta-tools accept only `action` and `params` at the top level.
+On the default dynamic surface, these operations are the `enterprise_user.*` and `attestation.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below. The JSON examples on this page show both call shapes: the first block is the meta-tool envelope (`GITLAB_MCP_TOOL_SURFACE=meta`, sent to the tool named in the section), the second is the same call as `gitlab_execute_action` arguments on the default surface. Meta-tools accept only `action` and `params` at the top level.
 
 ## Enterprise Users (`enterpriseusers`)
 

@@ -46,7 +46,7 @@ When helping with Go MCP development:
 
 For this repository, do not create ordinary GitLab API tools by adding package-local `RegisterTools` functions or ad hoc `mcp.AddTool` calls. Add or update domain-local `ActionSpecs` and handlers instead. The canonical action catalog projects those specs into meta-tools, dynamic find/execute, `gitlab://tools` resources, audits, documentation, LLM indexes, snapshots, and individual tool registration.
 
-Default runtime surface is `TOOL_SURFACE=dynamic`, which exposes `gitlab_find_action` and `gitlab_execute_action`. `TOOL_SURFACE=meta` exposes consolidated domain meta-tools, and `TOOL_SURFACE=individual` exposes one tool per projected action. `META_TOOLS` is deprecated compatibility; prefer `TOOL_SURFACE` in new guidance.
+Default runtime surface is `GITLAB_MCP_TOOL_SURFACE=dynamic`, which exposes `gitlab_find_action` and `gitlab_execute_action`. `GITLAB_MCP_TOOL_SURFACE=meta` exposes consolidated domain meta-tools, and `GITLAB_MCP_TOOL_SURFACE=individual` exposes one tool per projected action. `GITLAB_MCP_META_TOOLS` is deprecated compatibility; prefer `GITLAB_MCP_TOOL_SURFACE` in new guidance.
 
 Use `gitlab://tools` and `gitlab://tools/{id}` terminology when referring to tool manifests and executable action schemas. Avoid legacy resource names and the old three-step dynamic discovery flow.
 

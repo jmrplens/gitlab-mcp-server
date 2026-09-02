@@ -28,12 +28,12 @@
       "env": {
         "GITLAB_URL": "${user_config.gitlab_url}",
         "GITLAB_TOKEN": "${user_config.gitlab_token}",
-        "TOOL_SURFACE": "${user_config.tool_surface}",
+        "GITLAB_MCP_TOOL_SURFACE": "${user_config.tool_surface}",
         "GITLAB_TIER": "${user_config.gitlab_tier}",
         "GITLAB_READ_ONLY": "${user_config.read_only}",
         "GITLAB_SAFE_MODE": "${user_config.safe_mode}",
         "GITLAB_SKIP_TLS_VERIFY": "${user_config.skip_tls_verify}",
-        "LOG_LEVEL": "${user_config.log_level}"
+        "GITLAB_MCP_LOG_LEVEL": "${user_config.log_level}"
       },
       "platform_overrides": {
         "win32": {

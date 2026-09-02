@@ -207,7 +207,7 @@ make the worst case something an operator can predict.
 ### Neutral
 
 - NEU-001: Nothing changes for clients that do not subscribe. The capability
-  is advertised only on `CAPABILITY_SURFACE=full`, where the GitLab
+  is advertised only on `GITLAB_MCP_CAPABILITY_SURFACE=full`, where the GitLab
   resources it applies to are registered.
 - NEU-002: If GitLab ever ships an events API reachable from this process,
   the reader interface is the seam to swap; the cadence, bounds and lease

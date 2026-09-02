@@ -264,7 +264,7 @@ func TestRun_WritesLLMSTxt(t *testing.T) {
 		"a default 2-tool dynamic find/execute surface, 2 resources, 1 prompts, and 4 MCP capabilities",
 		"Tool domains:\n\nIssue, Project.\n\n",
 		"- gitlab_find_action: Search the local GitLab action catalog.\n- gitlab_execute_action: Execute one canonical action.\n\n",
-		"When TOOL_SURFACE=meta, 2 domain meta-tools are registered instead of\nup to 3 individual tools. " +
+		"When GITLAB_MCP_TOOL_SURFACE=meta, 2 domain meta-tools are registered instead of\nup to 3 individual tools. " +
 			"Enterprise/Premium entries register 3 meta-tools on self-managed GitLab,\nor 4 on GitLab.com when Orbit is available.",
 		"- gitlab_issue: Manage issues.\n- gitlab_project: Manage projects.\n\n",
 		"2 read-only resources (26 resource kinds are subscribable",
@@ -307,7 +307,7 @@ func TestRun_WritesLLMSFullTxt(t *testing.T) {
 			"GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.\n\n" +
 			"### gitlab_epic\n\n**Epics**\n\nManage epics.\n\n\n**Action Output Schemas:**\n\n<details><summary>list</summary>",
 		"### gitlab_orbit\n\nQuery the Knowledge Graph.\n\n\n## Individual Tools\n\n" +
-			"When `TOOL_SURFACE=individual`, up to 3 individual tools are registered on GitLab.com Enterprise/Premium; " +
+			"When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 3 individual tools are registered on GitLab.com Enterprise/Premium; " +
 			"self-managed Enterprise/Premium registers 2.\nGrouped by domain:\n\n",
 		"### issue (2 tools)\n\n#### gitlab_issue_list\n\nList issues in a project. Supports filtering by state and labels.\n\n" +
 			"**Parameters:**\n\n- `assignee_id` (integer)\n- `labels` (array of strings): Label names\n- `project_id` (string) (required): Project ID or path\n\n" +
@@ -343,9 +343,9 @@ func TestRun_WritesCompanionFiles(t *testing.T) {
 			want: []string{
 				"# gitlab-mcp-server. Medium Reference\n\n" + cannedHeader,
 				"Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.\n\n## Dynamic Toolset\n\n",
-				"## Meta-Tools\n\nEnabled with `TOOL_SURFACE=meta`.",
+				"## Meta-Tools\n\nEnabled with `GITLAB_MCP_TOOL_SURFACE=meta`.",
 				"### gitlab_issue\n\n**Issues**\n\nManage issues.\n\nActions (2): get, list\n\n### gitlab_project\n\nManage projects.\n\n### gitlab_epic\n\n**Epics**\n\nManage epics.\n\nActions (1): list\n\n### gitlab_orbit\n\nQuery the Knowledge Graph.\n\n",
-				"## Individual Tools\n\nEnabled with `TOOL_SURFACE=individual`: 3 tools, one per operation.\n\n" +
+				"## Individual Tools\n\nEnabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 3 tools, one per operation.\n\n" +
 					"- gitlab_issue_list: List issues in a project.\n- gitlab_issue_get: Get one issue.\n- gitlab_project_get: Get one project.\n\n",
 				"## Resources\n\n2 resources",
 				"## Prompts\n\n1 prompt templates",

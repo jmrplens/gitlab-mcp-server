@@ -117,7 +117,7 @@ body:
     id: logs
     attributes:
       label: Logs / Error Output
-      description: Paste relevant stderr logs or error messages. Run with `LOG_LEVEL=debug` if possible.
+      description: Paste relevant stderr logs or error messages. Run with `GITLAB_MCP_LOG_LEVEL=debug` if possible.
       render: shell
 
   - type: textarea

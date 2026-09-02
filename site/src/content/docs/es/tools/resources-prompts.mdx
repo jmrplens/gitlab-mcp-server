@@ -8,7 +8,7 @@ faq:
   - q: "¿Cuál es la diferencia entre un recurso estático y una plantilla de recurso?"
     a: "Un **recurso estático** es una URI fija que siempre apunta a lo mismo, como `gitlab://user/current`. Una **plantilla de recurso** contiene marcadores como `{project_id}` o `{group_id}` que el cliente rellena en el momento de la petición para leer un proyecto, grupo, incidencia o merge request concretos. MCP lista los recursos fijos mediante `resources/list` y las plantillas mediante `resources/templates/list`, de modo que un cliente que solo inspecciona `resources/list` ve los {{resources}} recursos como 8 URIs fijas más 37 plantillas."
   - q: "¿Se pueden desactivar los recursos y los prompts?"
-    a: "Sí. El ajuste `CAPABILITY_SURFACE` controla qué capacidades se registran. El valor predeterminado `full` registra recursos, guías de flujo de trabajo, prompts y el manifiesto `gitlab://tools` dependiente de superficie. Establecer `CAPABILITY_SURFACE=minimal` mantiene solo el manifiesto `gitlab://tools` —útil cuando un cliente no consume recursos ni prompts y quieres una superficie de capacidades más pequeña."
+    a: "Sí. El ajuste `GITLAB_MCP_CAPABILITY_SURFACE` controla qué capacidades se registran. El valor predeterminado `full` registra recursos, guías de flujo de trabajo, prompts y el manifiesto `gitlab://tools` dependiente de superficie. Establecer `GITLAB_MCP_CAPABILITY_SURFACE=minimal` mantiene solo el manifiesto `gitlab://tools` —útil cuando un cliente no consume recursos ni prompts y quieres una superficie de capacidades más pequeña."
   - q: "¿Cuántos recursos y prompts hay disponibles?"
     a: "El servidor expone **{{resources}} recursos** (8 URIs fijas más 37 plantillas de URI) y **{{prompts}} plantillas de prompts** organizadas en categorías como análisis de MR principal, paneles entre proyectos, informes de equipo, analítica y auditorías. Los recuentos exactos se generan a partir del registro de capacidades en vivo del servidor, por lo que esta página se mantiene sincronizada con el servidor en ejecución."
   - q: "¿Cómo leo un recurso MCP de GitLab MCP Server?"
@@ -44,13 +44,13 @@ MCP lista por separado los recursos fijos y las plantillas de URI. En modo full,
 | --------------------- | ---------------------------------------------------------------------------------- |
 | `gitlab://tools/{id}` | Forma de llamada aceptada y schema de entrada para una entrada de `gitlab://tools` |
 
-Usa el manifiesto de herramientas cuando un cliente necesite la forma exacta de los parámetros de una entrada en cualquier superficie sin expandir todos los schemas en `tools/list`: IDs canónicos `domain.action` en la superficie dinámica predeterminada, entradas `gitlab_<domain>.<action>` con `TOOL_SURFACE=meta` y nombres de herramienta con `TOOL_SURFACE=individual`.
+Usa el manifiesto de herramientas cuando un cliente necesite la forma exacta de los parámetros de una entrada en cualquier superficie sin expandir todos los schemas en `tools/list`: IDs canónicos `domain.action` en la superficie dinámica predeterminada, entradas `gitlab_<domain>.<action>` con `GITLAB_MCP_TOOL_SURFACE=meta` y nombres de herramienta con `GITLAB_MCP_TOOL_SURFACE=individual`.
 
 1. Lee `gitlab://tools` para obtener la superficie activa, herramientas visibles y entradas ejecutables.
 2. Sustituye `{id}` en `gitlab://tools/{id}` para leer el JSON Schema y la forma de llamada de esa entrada.
-3. Llama a la herramienta que indica la forma `call` devuelta: `gitlab_execute_action` con `{ "action": "merge_request.create", "params": { ... } }` en la superficie dinámica, o la meta-herramienta con `{ "action": "create", "params": { ... } }` cuando `TOOL_SURFACE=meta`.
+3. Llama a la herramienta que indica la forma `call` devuelta: `gitlab_execute_action` con `{ "action": "merge_request.create", "params": { ... } }` en la superficie dinámica, o la meta-herramienta con `{ "action": "create", "params": { ... } }` cuando `GITLAB_MCP_TOOL_SURFACE=meta`.
 
-Por ejemplo, `gitlab://tools/merge_request.create` devuelve el schema de parámetros y la forma de llamada de `merge_request.create` en la superficie predeterminada; con `TOOL_SURFACE=meta` la misma acción es `gitlab://tools/gitlab_merge_request.create`. Estos recursos de manifiesto están disponibles con `CAPABILITY_SURFACE=full` o `minimal`, sin importar el modo de `META_PARAM_SCHEMA`. `gitlab_find_action` devuelve el mismo schema inline en la superficie dinámica, con descubrimiento ordenado además.
+Por ejemplo, `gitlab://tools/merge_request.create` devuelve el schema de parámetros y la forma de llamada de `merge_request.create` en la superficie predeterminada; con `GITLAB_MCP_TOOL_SURFACE=meta` la misma acción es `gitlab://tools/gitlab_merge_request.create`. Estos recursos de manifiesto están disponibles con `GITLAB_MCP_CAPABILITY_SURFACE=full` o `minimal`, sin importar el modo de `GITLAB_MCP_META_PARAM_SCHEMA`. `gitlab_find_action` devuelve el mismo schema inline en la superficie dinámica, con descubrimiento ordenado además.
 
 ### Plantillas de recursos de proyecto (23)
 
@@ -164,7 +164,7 @@ Para inspeccionar las formas de llamada aceptadas, lee primero el manifiesto de 
 }
 ```
 
-Con `TOOL_SURFACE=meta` la entrada es `gitlab://tools/gitlab_merge_request.create`, y con `TOOL_SURFACE=individual` es el nombre de la herramienta, `gitlab://tools/gitlab_mr_create`: usa el ID que `gitlab://tools` haya listado para la superficie activa.
+Con `GITLAB_MCP_TOOL_SURFACE=meta` la entrada es `gitlab://tools/gitlab_merge_request.create`, y con `GITLAB_MCP_TOOL_SURFACE=individual` es el nombre de la herramienta, `gitlab://tools/gitlab_mr_create`: usa el ID que `gitlab://tools` haya listado para la superficie activa.
 
 ## ¿Qué son los prompts MCP?
 
@@ -286,9 +286,9 @@ El servidor devuelve un prompt estructurado con contenido consciente del context
 
 ## Configuración
 
-| Variable             | Predeterminado | Descripción                                                                                      |
-| -------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
-| `CAPABILITY_SURFACE` | `full`         | `full` registra recursos, guías, prompts y `gitlab://tools`; `minimal` mantiene `gitlab://tools` |
+| Variable                        | Predeterminado | Descripción                                                                                      |
+| ------------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| `GITLAB_MCP_CAPABILITY_SURFACE` | `full`         | `full` registra recursos, guías, prompts y `gitlab://tools`; `minimal` mantiene `gitlab://tools` |
 
 :::tip
 Los recursos son particularmente útiles para proporcionar contexto del proyecto al inicio de una conversación. Al leer el recurso del proyecto, el LLM obtiene comprensión inmediata del propósito del repositorio, el equipo y el estado actual.

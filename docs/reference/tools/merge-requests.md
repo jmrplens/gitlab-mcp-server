@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Merge Requests
 > **Individual tools**: 56
-> **Meta-tool**: `gitlab_merge_request` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_merge_request` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `external_status_check.*`, `merge_request.*`, `merge_train.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Merge Requests API](https://docs.gitlab.com/ee/api/merge_requests.html), [Merge Request Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,9 +14,9 @@
 
 The merge requests domain covers the full lifecycle of GitLab merge requests: creation, retrieval, listing (project/group/global), updating, merging, rebasing, approval workflows, deletion, subscriptions, time tracking, dependencies, and context commits. File-level diffs and raw diffs are documented in [mr-review.md](mr-review.md). Merge trains and external status checks (Premium/Ultimate groups without dedicated meta-tools) are also covered here.
 
-On the default dynamic surface, these operations are the `external_status_check.*`, `merge_request.*`, `merge_train.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `external_status_check.*`, `merge_request.*`, `merge_train.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, all 56 individual tools below are consolidated into a single `gitlab_merge_request` meta-tool that dispatches by `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, all 56 individual tools below are consolidated into a single `gitlab_merge_request` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

@@ -85,7 +85,7 @@ A server with 100 active sessions, 10 concurrent tool calls, and 10 watched URIs
 
 ### Resource Subscription Watchers
 
-On `CAPABILITY_SURFACE=full` (the default), a session that subscribes to a
+On `GITLAB_MCP_CAPABILITY_SURFACE=full` (the default), a session that subscribes to a
 resource ([subscriptions reference](../reference/capabilities/subscriptions.md))
 starts — or joins — a watcher goroutine that polls GitLab in the background;
 subscriptions to the same URI share one watcher, so goroutines count per

@@ -56,7 +56,7 @@ export interface HomeContent {
 	/**
 	 * The one-sentence claim under the readout. `{default}` and `{minimal}`
 	 * are replaced in Home.astro with the measured startup totals of the
-	 * default configuration and of `CAPABILITY_SURFACE=minimal`, taken from
+	 * default configuration and of `GITLAB_MCP_CAPABILITY_SURFACE=minimal`, taken from
 	 * src/data/token-footprint.json. Rendered as HTML so the link to the
 	 * methodology survives.
 	 */
@@ -112,7 +112,7 @@ export const en: HomeContent = {
 		resources: "/gitlab-mcp-server/tools/resources-prompts/",
 	},
 	contextClaim:
-		'The default configuration costs {default} tokens of context on every GitLab tier; {minimal} with <code>CAPABILITY_SURFACE=minimal</code>. <a href="/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save">Measured</a>, not estimated.',
+		'The default configuration costs {default} tokens of context on every GitLab tier; {minimal} with <code>GITLAB_MCP_CAPABILITY_SURFACE=minimal</code>. <a href="/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save">Measured</a>, not estimated.',
 	what: {
 		title: "What it is",
 		body: [
@@ -217,7 +217,7 @@ export const en: HomeContent = {
 			{
 				title: "Pick a surface",
 				body: "The dynamic default fits any client. Prefer domain tools or one tool per operation? One environment variable switches the surface.",
-				code: "TOOL_SURFACE=dynamic|meta|individual",
+				code: "GITLAB_MCP_TOOL_SURFACE=dynamic|meta|individual",
 				href: "/gitlab-mcp-server/tools/overview/",
 				linkText: "Tool surfaces",
 			},
@@ -244,7 +244,7 @@ export const es: HomeContent = {
 		resources: "/gitlab-mcp-server/es/tools/resources-prompts/",
 	},
 	contextClaim:
-		'La configuración por defecto cuesta {default} tokens de contexto en todos los tiers de GitLab; {minimal} con <code>CAPABILITY_SURFACE=minimal</code>. <a href="/gitlab-mcp-server/es/tools/dynamic-tools/#cuánto-contexto-de-arranque-ahorra-el-modo-dinámico">Medido</a>, no estimado.',
+		'La configuración por defecto cuesta {default} tokens de contexto en todos los tiers de GitLab; {minimal} con <code>GITLAB_MCP_CAPABILITY_SURFACE=minimal</code>. <a href="/gitlab-mcp-server/es/tools/dynamic-tools/#cuánto-contexto-de-arranque-ahorra-el-modo-dinámico">Medido</a>, no estimado.',
 	what: {
 		title: "Qué es",
 		body: [
@@ -349,7 +349,7 @@ export const es: HomeContent = {
 			{
 				title: "Elige superficie",
 				body: "La dinámica por defecto encaja en cualquier cliente. ¿Prefieres tools por dominio o una por operación? Una variable de entorno cambia la superficie.",
-				code: "TOOL_SURFACE=dynamic|meta|individual",
+				code: "GITLAB_MCP_TOOL_SURFACE=dynamic|meta|individual",
 				href: "/gitlab-mcp-server/es/tools/overview/",
 				linkText: "Superficies de tools",
 			},

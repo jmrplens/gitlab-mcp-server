@@ -238,7 +238,7 @@ all.
 ### Logs
 
 The third signal is this server's own structured records: the same lines it
-writes to stderr, exported from `INFO` upward. `LOG_LEVEL` still governs the
+writes to stderr, exported from `INFO` upward. `GITLAB_MCP_LOG_LEVEL` still governs the
 terminal; the export floor is separate, so running at `debug` does not send a
 record per GitLab round trip to your collector on top of the span that already
 describes it.
@@ -446,7 +446,7 @@ cannot talk to a collector.
 To see what the SDK thinks is wrong:
 
 ```bash
-LOG_LEVEL=debug gitlab-mcp-server --telemetry 2>telemetry.log
+GITLAB_MCP_LOG_LEVEL=debug gitlab-mcp-server --telemetry 2>telemetry.log
 ```
 
 Export failures, malformed header pairs, unparseable durations and protocol

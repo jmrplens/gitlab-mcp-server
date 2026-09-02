@@ -42,11 +42,11 @@ Root runtime registration is catalog-backed:
 
 Package-local `RegisterTools` files have been removed from ordinary GitLab API domains. New ordinary GitLab actions must use domain-local `ActionSpecs` and catalog-backed projection rather than introducing package-local registration functions. Package-level `RegisterMeta` is not an approved path for ordinary GitLab API actions.
 
-`TOOL_SURFACE` is the canonical tool selector. `META_TOOLS` remains a deprecated compatibility fallback for one compatibility window when `TOOL_SURFACE` is absent.
+`GITLAB_MCP_TOOL_SURFACE` is the canonical tool selector. `GITLAB_MCP_META_TOOLS` remains a deprecated compatibility fallback for one compatibility window when `GITLAB_MCP_TOOL_SURFACE` is absent.
 
-`META_PARAM_SCHEMA=opaque|compact|full` remains a meta-tool `tools/list` schema strategy only. It does not change handler validation, the `gitlab://tools` manifest, dynamic discovery output, or individual tool schemas.
+`GITLAB_MCP_META_PARAM_SCHEMA=opaque|compact|full` remains a meta-tool `tools/list` schema strategy only. It does not change handler validation, the `gitlab://tools` manifest, dynamic discovery output, or individual tool schemas.
 
-`CAPABILITY_SURFACE=full|minimal` remains a separate resource and prompt exposure axis. `minimal` removes optional resources, prompts, and workflow guides while preserving the surface-aware `gitlab://tools` manifest. `gitlab_find_action` still returns schemas inline for dynamic minimal deployments.
+`GITLAB_MCP_CAPABILITY_SURFACE=full|minimal` remains a separate resource and prompt exposure axis. `minimal` removes optional resources, prompts, and workflow guides while preserving the surface-aware `gitlab://tools` manifest. `gitlab_find_action` still returns schemas inline for dynamic minimal deployments.
 
 Action-specific aliases and parameter aliases belong to the spec/catalog compatibility policy through `internal/tools/actioncompat`. Dynamic may own generic search, typo tolerance, ranking, and execution flow, but it must not become a second home for action-owned compatibility data.
 
@@ -58,7 +58,7 @@ Action-specific aliases and parameter aliases belong to the spec/catalog compati
 - **POS-002**: Runtime behavior no longer depends on capturing registration side effects.
 - **POS-003**: Adding an ordinary GitLab API action has one metadata path: handler plus `ActionSpec` plus audited catalog aggregation.
 - **POS-004**: Compatibility aliases and parameter aliases have explicit ownership, source, searchability, deprecation, and audit coverage.
-- **POS-005**: `TOOL_SURFACE` expresses all visible tool modes without overloading a legacy boolean.
+- **POS-005**: `GITLAB_MCP_TOOL_SURFACE` expresses all visible tool modes without overloading a legacy boolean.
 - **POS-006**: Standalone tools have a first-class surface policy instead of informal exceptions.
 
 ### Negative
@@ -80,7 +80,7 @@ Action-specific aliases and parameter aliases belong to the spec/catalog compati
 - [x] `RegisterAll` does not call per-domain `RegisterTools` for ordinary GitLab actions.
 - [x] Ordinary GitLab API domains no longer define package-local `RegisterTools` functions.
 - [x] Meta-tools, Dynamic, tool manifest resources, and individual projection consume the canonical catalog.
-- [x] `TOOL_SURFACE` is documented as canonical; `META_TOOLS` is compatibility only.
+- [x] `GITLAB_MCP_TOOL_SURFACE` is documented as canonical; `GITLAB_MCP_META_TOOLS` is compatibility only.
 - [x] Dynamic compatibility aliases and parameter aliases are catalog/spec policy data.
 - [x] AI instructions, skills, and ADR index point future contributors to the catalog-first workflow.
 

@@ -4,7 +4,7 @@
 
 ## Dynamic Toolset
 
-Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
+Dynamic mode is the default when `GITLAB_MCP_TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `GITLAB_MCP_TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
 
 ### gitlab_find_action
 
@@ -36,7 +36,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Meta-Tools
 
-Meta-tools are enabled with `TOOL_SURFACE=meta`. Each groups related
+Meta-tools are enabled with `GITLAB_MCP_TOOL_SURFACE=meta`. Each groups related
 operations under a single tool with an `action` parameter.
 
 ### gitlab_access

@@ -45,7 +45,7 @@ Docker image, so Docker has to be installed and running:
         "-e", "GITLAB_URL",
         "-e", "GITLAB_TOKEN",
         "-e", "GITLAB_SKIP_TLS_VERIFY",
-        "-e", "TOOL_SURFACE",
+        "-e", "GITLAB_MCP_TOOL_SURFACE",
         "ghcr.io/jmrplens/gitlab-mcp-server:latest"
       ]
     }
@@ -54,12 +54,12 @@ Docker image, so Docker has to be installed and running:
 ```
 
 The real file forwards a longer list with the same `-e NAME` pattern:
-`GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`,
-`CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_TIER`,
+`GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`,
+`GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_TIER`,
 `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`,
-`EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`,
-`GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`,
-`CLIENT_COMPAT` and `LOG_LEVEL`. A bare `-e NAME` copies the variable into
+`GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`,
+`GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`,
+`GITLAB_MCP_CLIENT_COMPAT` and `GITLAB_MCP_LOG_LEVEL`. A bare `-e NAME` copies the variable into
 the container from the environment `docker` itself runs in, and only when it
 is set there, so unset ones cost nothing. Only `GITLAB_TOKEN` is required; `GITLAB_URL` defaults to
 `https://gitlab.com` and matters only for a self-managed instance. Every

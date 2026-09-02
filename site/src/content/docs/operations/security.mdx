@@ -303,7 +303,7 @@ This is independent of the Cosign signature: the signature says the checksums ca
 
 The server does not log the token. Tool-call logging is structured and writes a fixed set of fields to stderr — the tool name, the call duration, the error when one occurs, and, when the request carries an authenticated identity, the GitLab username and user ID for audit purposes. The token is not one of those fields, and it is sent to GitLab as a request header rather than in a URL, so it does not appear in logged request paths.
 
-Two caveats worth stating plainly. First, logs at any level contain the GitLab URL, project paths, and resource identifiers you operate on, and `LOG_LEVEL=debug` adds more of that detail — treat them as you would any other operational log. Second, the server cannot control what your MCP client records in its own transcript. If you find a credential in server output, please report it through the channel below.
+Two caveats worth stating plainly. First, logs at any level contain the GitLab URL, project paths, and resource identifiers you operate on, and `GITLAB_MCP_LOG_LEVEL=debug` adds more of that detail — treat them as you would any other operational log. Second, the server cannot control what your MCP client records in its own transcript. If you find a credential in server output, please report it through the channel below.
 
 ## Reporting a vulnerability
 
@@ -343,7 +343,7 @@ A useful report includes the affected version (`gitlab-mcp-server --version`), t
 - ☐ Review server logs regularly
 - ☐ Monitor for unusual API call patterns
 - ☐ Check for token expiration or permission changes
-- ☐ Enable `LOG_LEVEL=info` for production audit trails
+- ☐ Enable `GITLAB_MCP_LOG_LEVEL=info` for production audit trails
 
 <FAQ />
 

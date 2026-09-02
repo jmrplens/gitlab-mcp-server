@@ -57,9 +57,15 @@ type HTTPEnvOverlay struct {
 	RateLimitBurst *int
 }
 
-// envPresent reports whether name is set to a non-empty value.
+// envPresent reports whether name is set to a non-empty value, under either
+// spelling.
+//
+// This is the gate every read below sits behind, so it has to agree with
+// [Getenv] about which name counts. A presence check that looked only at the
+// unprefixed spelling would leave an operator who migrated to GITLAB_MCP_ with
+// an HTTP deployment that reads none of their settings.
 func envPresent(name string) bool {
-	return strings.TrimSpace(os.Getenv(name)) != ""
+	return TrimmedGetenv(name) != ""
 }
 
 // LoadHTTPEnvOverlay reads the environment variables that have an HTTP flag
@@ -90,21 +96,21 @@ func loadOverlaySurface(o *HTTPEnvOverlay) error {
 	// TOOL_SURFACE and META_TOOLS resolve together: the deprecated selector is
 	// only consulted when the canonical one is absent.
 	if envPresent("TOOL_SURFACE") || envPresent("META_TOOLS") {
-		surface, metaTools, err := ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+		surface, metaTools, err := ParseToolSurface(Getenv("TOOL_SURFACE"), Getenv("META_TOOLS"))
 		if err != nil {
 			return err
 		}
 		o.ToolSurface, o.MetaTools = &surface, &metaTools
 	}
 	if envPresent("CAPABILITY_SURFACE") {
-		value, err := parseCapabilitySurface(os.Getenv("CAPABILITY_SURFACE"), DefaultCapabilitySurface)
+		value, err := parseCapabilitySurface(Getenv("CAPABILITY_SURFACE"), DefaultCapabilitySurface)
 		if err != nil {
 			return fmt.Errorf("invalid CAPABILITY_SURFACE value: %w", err)
 		}
 		o.CapabilitySurface = &value
 	}
 	if envPresent("META_PARAM_SCHEMA") {
-		value, err := parseMetaParamSchema(os.Getenv("META_PARAM_SCHEMA"), DefaultMetaParamSchema)
+		value, err := parseMetaParamSchema(Getenv("META_PARAM_SCHEMA"), DefaultMetaParamSchema)
 		if err != nil {
 			return fmt.Errorf("invalid META_PARAM_SCHEMA value: %w", err)
 		}
@@ -118,7 +124,7 @@ func loadOverlaySurface(o *HTTPEnvOverlay) error {
 		o.Tier, o.TierExplicit = &tier, explicit
 	}
 	if envPresent("EXCLUDE_TOOLS") {
-		value := os.Getenv("EXCLUDE_TOOLS")
+		value := Getenv("EXCLUDE_TOOLS")
 		o.ExcludeTools = &value
 	}
 	return nil
@@ -138,7 +144,7 @@ func loadOverlayBooleans(o *HTTPEnvOverlay) error {
 		if !envPresent(b.name) {
 			continue
 		}
-		value, err := parseBool(os.Getenv(b.name), false)
+		value, err := parseBool(Getenv(b.name), false)
 		if err != nil {
 			return fmt.Errorf("invalid %s value: %w", b.name, err)
 		}
@@ -149,7 +155,7 @@ func loadOverlayBooleans(o *HTTPEnvOverlay) error {
 
 func loadOverlayLimits(o *HTTPEnvOverlay) error {
 	if envPresent("MAX_HTTP_CLIENTS") {
-		value, err := parseInt(os.Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients)
+		value, err := parseInt(Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients)
 		if err != nil {
 			return fmt.Errorf("invalid MAX_HTTP_CLIENTS value: %w", err)
 		}
@@ -201,11 +207,11 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 	// only has to be https when auth-mode ends up being oauth), and parsing
 	// them twice would let the two checks disagree.
 	if envPresent("PUBLIC_URL") {
-		value := strings.TrimSpace(os.Getenv("PUBLIC_URL"))
+		value := TrimmedGetenv("PUBLIC_URL")
 		o.PublicURL = &value
 	}
 	if envPresent("TRUSTED_ORIGINS") {
-		value := strings.TrimSpace(os.Getenv("TRUSTED_ORIGINS"))
+		value := TrimmedGetenv("TRUSTED_ORIGINS")
 		o.TrustedOrigins = &value
 	}
 	if envPresent("OAUTH_CACHE_TTL") {
@@ -216,14 +222,14 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 		o.OAuthCacheTTL = &auth.oauthCacheTTL
 	}
 	if envPresent("RATE_LIMIT_RPS") {
-		value, err := parseFloatNonNegative(os.Getenv("RATE_LIMIT_RPS"), 0)
+		value, err := parseFloatNonNegative(Getenv("RATE_LIMIT_RPS"), 0)
 		if err != nil {
 			return fmt.Errorf("invalid RATE_LIMIT_RPS value: %w", err)
 		}
 		o.RateLimitRPS = &value
 	}
 	if envPresent("RATE_LIMIT_BURST") {
-		value, err := parseIntNonNegative(os.Getenv("RATE_LIMIT_BURST"), DefaultRateLimitBurst)
+		value, err := parseIntNonNegative(Getenv("RATE_LIMIT_BURST"), DefaultRateLimitBurst)
 		if err != nil {
 			return fmt.Errorf("invalid RATE_LIMIT_BURST value: %w", err)
 		}

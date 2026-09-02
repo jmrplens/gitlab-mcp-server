@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Branch Rules
 > **Individual tools**: 1
-> **Meta-tool**: `gitlab_branch` (with `TOOL_SURFACE=meta`, routed as a branch action)
+> **Meta-tool**: `gitlab_branch` (with `GITLAB_MCP_TOOL_SURFACE=meta`, routed as a branch action)
 > **Dynamic IDs**: `branch.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Branch Rules GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#projectbranchrules)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,7 +14,7 @@
 
 The branch rules domain provides an aggregated read-only view of branch protections, approval rules, and external status checks via the GitLab GraphQL API. Branch rules consolidate information that would otherwise require multiple REST API calls across protected branches, approval rules, and external status checks into a single query.
 
-On the default dynamic surface, these operations are the `branch.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `branch.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 This tool complements the existing REST-based branch protection tools (`gitlab_branch_protect`, `gitlab_protected_branches_list`, etc.) by providing a unified read-only overview.
 

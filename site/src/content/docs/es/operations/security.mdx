@@ -303,7 +303,7 @@ Es independiente de la firma Cosign: la firma dice que los checksums vienen del 
 
 El servidor no registra el token. El logging de llamadas a herramientas es estructurado y escribe un conjunto fijo de campos en stderr: el nombre de la herramienta, la duración de la llamada, el error cuando lo hay y, si la petición lleva una identidad autenticada, el nombre de usuario y el ID de GitLab con fines de auditoría. El token no es uno de esos campos, y se envía a GitLab como cabecera de la petición y no en la URL, así que tampoco aparece en las rutas registradas.
 
-Dos matices que conviene decir con claridad. Primero, los logs de cualquier nivel contienen la URL de GitLab, las rutas de proyecto y los identificadores de recursos sobre los que operas, y `LOG_LEVEL=debug` añade más detalle de ese tipo: trátalos como cualquier otro log operativo. Segundo, el servidor no puede controlar lo que tu cliente MCP registre en su propia transcripción. Si encuentras una credencial en la salida del servidor, repórtalo por el canal indicado abajo.
+Dos matices que conviene decir con claridad. Primero, los logs de cualquier nivel contienen la URL de GitLab, las rutas de proyecto y los identificadores de recursos sobre los que operas, y `GITLAB_MCP_LOG_LEVEL=debug` añade más detalle de ese tipo: trátalos como cualquier otro log operativo. Segundo, el servidor no puede controlar lo que tu cliente MCP registre en su propia transcripción. Si encuentras una credencial en la salida del servidor, repórtalo por el canal indicado abajo.
 
 ## Reportar una vulnerabilidad
 
@@ -343,7 +343,7 @@ Un reporte útil incluye la versión afectada (`gitlab-mcp-server --version`), e
 - ☐ Revisa los logs del servidor regularmente
 - ☐ Monitoriza patrones inusuales de llamadas a la API
 - ☐ Verifica la expiración del token o cambios de permisos
-- ☐ Habilita `LOG_LEVEL=info` para registros de auditoría en producción
+- ☐ Habilita `GITLAB_MCP_LOG_LEVEL=info` para registros de auditoría en producción
 
 <FAQ />
 

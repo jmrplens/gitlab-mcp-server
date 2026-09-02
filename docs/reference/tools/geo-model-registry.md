@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Geo & Model Registry
 > **Individual tools**: 9
-> **Meta-tools**: `gitlab_geo`, `gitlab_model_registry` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tools**: `gitlab_geo`, `gitlab_model_registry` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `geo.*`, `model_registry.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Geo Sites](https://docs.gitlab.com/ee/api/geo_sites.html) · [Model Registry](https://docs.gitlab.com/ee/api/model_registry.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,9 +14,9 @@
 
 The Geo & Model Registry domain covers GitLab Geo replication site management (create, list, get, edit, delete, repair, status) and ML model registry file downloads.
 
-On the default dynamic surface, these operations are the `geo.*` and `model_registry.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `geo.*` and `model_registry.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, the individual tools below are consolidated into two meta-tools that dispatch by `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the individual tools below are consolidated into two meta-tools that dispatch by `action` parameter.
 
 ### Common Questions
 

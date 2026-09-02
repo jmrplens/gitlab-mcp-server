@@ -43,7 +43,7 @@ You talk to your AI assistant; it does the GitLab work. No project IDs, API endp
 
 <!-- START TOKEN CLAIM -->
 
-**10,333 tokens of startup context by default, the same on every GitLab tier (1,671 with `CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
+**10,333 tokens of startup context by default, the same on every GitLab tier (1,671 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
 
 <!-- END TOKEN CLAIM -->
 
@@ -69,27 +69,27 @@ Pick one. Each path ends with you typing a prompt to your assistant. Every chann
   </tr>
   <tr>
     <td><b>VS Code</b></td>
-    <td><a href="https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D"><img alt="Install in VS Code" src="https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&amp;logo=visualstudiocode&amp;logoColor=white" /></a></td>
+    <td><a href="https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D"><img alt="Install in VS Code" src="https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&amp;logo=visualstudiocode&amp;logoColor=white" /></a></td>
     <td>prompts you (masked)</td>
   </tr>
   <tr>
     <td><b>VS Code Insiders</b></td>
-    <td><a href="https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D&amp;quality=insiders"><img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/Install_in-VS_Code_Insiders-24bfa5?style=flat-square&amp;logo=visualstudiocode&amp;logoColor=white" /></a></td>
+    <td><a href="https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D&amp;quality=insiders"><img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/Install_in-VS_Code_Insiders-24bfa5?style=flat-square&amp;logo=visualstudiocode&amp;logoColor=white" /></a></td>
     <td>prompts you (masked)</td>
   </tr>
   <tr>
     <td><b>Cursor</b></td>
-    <td><a href="https://cursor.com/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0Il0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Install in Cursor" src="https://cursor.com/deeplink/mcp-install-dark.svg" height="28" /></a></td>
+    <td><a href="https://cursor.com/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Install in Cursor" src="https://cursor.com/deeplink/mcp-install-dark.svg" height="28" /></a></td>
     <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
   </tr>
   <tr>
     <td><b>LM Studio</b></td>
-    <td><a href="https://lmstudio.ai/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0Il0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Add to LM Studio" src="https://files.lmstudio.ai/deeplink/mcp-install-dark.svg" height="28" /></a></td>
+    <td><a href="https://lmstudio.ai/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Add to LM Studio" src="https://files.lmstudio.ai/deeplink/mcp-install-dark.svg" height="28" /></a></td>
     <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
   </tr>
   <tr>
     <td><b>Kiro</b></td>
-    <td><a href="https://kiro.dev/launch/mcp/add?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D"><img alt="Add to Kiro" src="https://kiro.dev/images/add-to-kiro.svg" height="28" /></a></td>
+    <td><a href="https://kiro.dev/launch/mcp/add?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D"><img alt="Add to Kiro" src="https://kiro.dev/images/add-to-kiro.svg" height="28" /></a></td>
     <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
   </tr>
   <tr>
@@ -251,7 +251,7 @@ It is a personal service, run by one person and offered as-is: no SLA, no suppor
 
 ## Tool surfaces
 
-The server can present GitLab in three shapes, controlled by `TOOL_SURFACE`. The default needs no configuration.
+The server can present GitLab in three shapes, controlled by `GITLAB_MCP_TOOL_SURFACE`. The default needs no configuration.
 
 | Surface                       | Visible tools                                     | Best for                                                         |
 | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
@@ -259,24 +259,24 @@ The server can present GitLab in three shapes, controlled by `TOOL_SURFACE`. The
 | **Meta-tools** (`meta`)       | 32 base / 49 Ultimate / 50 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
 | **Individual** (`individual`) | ~847 Free/CE · ~999 Premium · 1065–1071 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
 
-Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `CAPABILITY_SURFACE=minimal`.
+Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `GITLAB_MCP_CAPABILITY_SURFACE=minimal`.
 
 ### Token Footprint
 
 <!-- START TOKEN FOOTPRINT -->
 
-Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
+Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `GITLAB_MCP_META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
 
-**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
+**Default configuration**: with `GITLAB_MCP_TOOL_SURFACE` unset or `GITLAB_MCP_TOOL_SURFACE=dynamic`, `GITLAB_MCP_CAPABILITY_SURFACE=full`, `GITLAB_MCP_META_TOOLS` unset, `GITLAB_MCP_META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `GITLAB_MCP_TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `GITLAB_MCP_TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
 
-| Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
-| ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              1,501 |           170 |        1,671 |
+| Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
+| --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
+| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               851 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               851 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,003 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,003 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,069 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,069 | n/a                            |              1,501 |           170 |        1,671 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -459,47 +459,47 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,021 |     215,458 |
-| Unit tests (`_test.go`)  |       593 |     353,662 |
-| End-to-end tests         |       215 |      58,596 |
-| **Total**                | **1,829** | **627,716** |
+| Source (`.go`, non-test) |     1,021 |     215,304 |
+| Unit tests (`_test.go`)  |       593 |     353,371 |
+| End-to-end tests         |       212 |      57,250 |
+| **Total**                | **1,826** | **625,925** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,113 |
-| . Exported (public)             |  2,752 |
-| . Unexported (private)          |  5,361 |
-| Unit test functions (`TestXxx`) | 12,736 |
-| Subtests (`t.Run(...)`)         |  4,649 |
-| End-to-end test functions       |    552 |
+| Source functions                |  8,110 |
+| . Exported (public)             |  2,756 |
+| . Unexported (private)          |  5,354 |
+| Unit test functions (`TestXxx`) | 12,726 |
+| Subtests (`t.Run(...)`)         |  4,639 |
+| End-to-end test functions       |    542 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.64× more tests than code |
-| Average source file length         |                 ~211 lines |
-| Average test file length           |                 ~596 lines |
-| Comment lines in source            |  31,046 (~14.4% of source) |
+| Average source file length         |                 ~210 lines |
+| Average test file length           |                 ~595 lines |
+| Comment lines in source            |  31,033 (~14.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,845 |
-| `defer` statements                 | 1,106 |
-| `struct` types defined             | 2,797 |
-| `//nolint` suppressions            |   259 |
+| `if err != nil` checks             | 6,825 |
+| `defer` statements                 | 1,100 |
+| `struct` types defined             | 2,795 |
+| `//nolint` suppressions            |   258 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   244 |
+| Go packages                    |   243 |
 | Direct dependencies (`go.mod`) |    30 |
 | Indirect dependencies          |    31 |
 
@@ -507,15 +507,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                   |
 | ------------------- | -------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,065 lines      |
-| Longest test file   | `cmd/server/main_test.go`. 8,644 lines |
+| Longest source file | `cmd/server/main.go`. 4,091 lines      |
+| Longest test file   | `cmd/server/main_test.go`. 8,625 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,917 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,032 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,914 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,067 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

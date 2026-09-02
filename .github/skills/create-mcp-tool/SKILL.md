@@ -147,7 +147,7 @@ Spec rules:
 
 - Set `ReadOnly`, `Destructive`, and `Idempotent` accurately; destructive actions must use destructive route helpers or options.
 - Set `OwnerPackage` to the sub-package name.
-- Set `IndividualTool` so `TOOL_SURFACE=individual` can project the visible per-action tool.
+- Set `IndividualTool` so `GITLAB_MCP_TOOL_SURFACE=individual` can project the visible per-action tool.
 - Add compatibility aliases and parameter aliases through the approved `actioncompat` policy when historical names must keep working.
 - New domains must be added through the catalog aggregation/generation path, not by hand-adding root runtime registration calls.
 - Set `Edition` (`free` / `premium` / `ultimate`) on each spec; `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go` drops premium/ultimate-only actions and prunes per-field schema entries once `GITLAB_TIER` / `--tier` resolves.

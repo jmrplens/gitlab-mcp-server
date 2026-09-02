@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Snippets
 > **Individual tools**: 24
-> **Meta-tool**: `gitlab_snippet` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_snippet` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `snippet.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Snippets API](https://docs.gitlab.com/ee/api/snippets.html), [Project Snippets API](https://docs.gitlab.com/ee/api/project_snippets.html), [Snippet Discussions API](https://docs.gitlab.com/ee/api/discussions.html#snippets), [Notes API — Snippets](https://docs.gitlab.com/ee/api/notes.html#snippets)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,9 +14,9 @@
 
 The snippets domain covers personal snippets, project snippets, snippet discussion threads, and snippet notes. Personal snippets belong to the authenticated user, while project snippets are scoped to a specific project. Discussion threads enable threaded conversations on project snippets. Snippet notes are individual comments (non-threaded) on project snippets.
 
-On the default dynamic surface, these operations are the `snippet.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `snippet.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, the 26 individual tools below are consolidated into the `gitlab_snippet` meta-tool. Personal snippet actions use direct names such as `list`, `get`, `create`, and `delete`; project-scoped snippets use `project_*`; threaded discussions use `discussion_*`; project snippet notes use `note_*`; award emoji actions use `emoji_snippet_*` and `emoji_snippet_note_*`.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the 26 individual tools below are consolidated into the `gitlab_snippet` meta-tool. Personal snippet actions use direct names such as `list`, `get`, `create`, and `delete`; project-scoped snippets use `project_*`; threaded discussions use `discussion_*`; project snippet notes use `note_*`; award emoji actions use `emoji_snippet_*` and `emoji_snippet_note_*`.
 
 ### Common Questions
 

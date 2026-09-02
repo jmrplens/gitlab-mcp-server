@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -161,4 +163,88 @@ func TestPrefixedEnvNames_IsACopy(t *testing.T) {
 	if PrefixedEnvNames()[0] == "MUTATED" {
 		t.Error("PrefixedEnvNames() handed out the backing array")
 	}
+}
+
+// TestPrefixedEnvNames_NoCallerReadsThemThroughOsGetenv is the guard that makes
+// the migration hold for names nobody thinks about again.
+//
+// [Getenv] only helps a setting whose reader calls it. A call site left on
+// os.Getenv keeps working under the deprecated spelling and silently ignores
+// the prefixed one, which is the worst of the three possible states: the
+// operator migrated, the documentation says the new name is read, and the
+// server reads the old one. Scanning the source is the only way to see that,
+// because a reader that was never converted behaves correctly in every test
+// that sets the old name.
+func TestPrefixedEnvNames_NoCallerReadsThemThroughOsGetenv(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolving the repository root: %v", err)
+	}
+	sources := moduleGoSources(t, root)
+
+	for _, name := range PrefixedEnvNames() {
+		t.Run(name, func(t *testing.T) {
+			needle := `os.Getenv("` + name + `")`
+			for path, body := range sources {
+				if !strings.Contains(body, needle) {
+					continue
+				}
+				rel, relErr := filepath.Rel(root, path)
+				if relErr != nil {
+					rel = path
+				}
+				t.Errorf("%s reads %s through os.Getenv; use Getenv or TrimmedGetenv "+
+					"so the %s spelling is honored", rel, name, EnvPrefix+name)
+			}
+		})
+	}
+}
+
+// moduleGoSources reads every non-test Go file of this module, keyed by path.
+//
+// test/ is excluded: those are separate modules that drive the built binary as
+// a client would, so they configure it through whichever spelling they mean to
+// exercise, the deprecated one included.
+//
+// The walk collects paths and the reads happen after it returns, rather than
+// inside the callback, because a path handed to a WalkDir callback has already
+// been resolved once and reading it there re-resolves it through whatever the
+// directory contains by then.
+func moduleGoSources(t *testing.T, root string) map[string]string {
+	t.Helper()
+
+	skip := map[string]bool{".git": true, "node_modules": true, "site": true, "test": true, "dist": true}
+
+	var paths []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if skip[entry.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
+			paths = append(paths, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the module sources under %s: %v", root, err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("no Go sources found under %s; the guard would pass by finding nothing", root)
+	}
+
+	sources := make(map[string]string, len(paths))
+	for _, path := range paths {
+		body, readErr := os.ReadFile(path) //#nosec G304 -- paths come from walking this module's own checkout
+		if readErr != nil {
+			t.Fatalf("reading %s: %v", path, readErr)
+		}
+		sources[path] = string(body)
+	}
+	return sources
 }

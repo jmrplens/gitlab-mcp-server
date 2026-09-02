@@ -24,7 +24,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#tool-surface",
             "name": "Tool surface",
-            "description": "The set of MCP tools a client actually sees at startup. GitLab MCP Server has three: dynamic (two tools), meta-tool (one tool per domain) and individual (one tool per operation). All three are projections of the same action catalog, so they differ in packaging and token cost, never in capability. Selected with TOOL_SURFACE.",
+            "description": "The set of MCP tools a client actually sees at startup. GitLab MCP Server has three: dynamic (two tools), meta-tool (one tool per domain) and individual (one tool per operation). All three are projections of the same action catalog, so they differ in packaging and token cost, never in capability. Selected with GITLAB_MCP_TOOL_SURFACE.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -87,7 +87,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#capability-surface",
             "name": "Capability surface",
-            "description": "Which MCP resources and prompts are registered, selected with CAPABILITY_SURFACE. full registers all of them and advertises resource subscriptions; minimal registers only the gitlab://tools manifest, dropping subscriptions with the resources they apply to, cutting shared startup context by about 98% while keeping per-action schema discovery available.",
+            "description": "Which MCP resources and prompts are registered, selected with GITLAB_MCP_CAPABILITY_SURFACE. full registers all of them and advertises resource subscriptions; minimal registers only the gitlab://tools manifest, dropping subscriptions with the resources they apply to, cutting shared startup context by about 98% while keeping per-action schema discovery available.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -137,13 +137,13 @@ These are the terms this documentation uses that are specific to GitLab MCP Serv
 
 ## Tool surface
 
-A **tool surface** is the set of MCP tools a client actually sees at startup. GitLab MCP Server has three, selected with `TOOL_SURFACE`:
+A **tool surface** is the set of MCP tools a client actually sees at startup. GitLab MCP Server has three, selected with `GITLAB_MCP_TOOL_SURFACE`:
 
-| Surface             | Visible tools                                         | Selected with                          |
-| ------------------- | ----------------------------------------------------- | -------------------------------------- |
-| Dynamic _(default)_ | {footprint.dynamic.visible_tools}                     | `TOOL_SURFACE=dynamic`, or leave unset |
-| Meta-tool           | {stats.meta.base} domain tools (more with Enterprise) | `TOOL_SURFACE=meta`                    |
-| Individual          | {stats.tools.free}–{stats.tools.gitlab_com}           | `TOOL_SURFACE=individual`              |
+| Surface             | Visible tools                                         | Selected with                                     |
+| ------------------- | ----------------------------------------------------- | ------------------------------------------------- |
+| Dynamic _(default)_ | {footprint.dynamic.visible_tools}                     | `GITLAB_MCP_TOOL_SURFACE=dynamic`, or leave unset |
+| Meta-tool           | {stats.meta.base} domain tools (more with Enterprise) | `GITLAB_MCP_TOOL_SURFACE=meta`                    |
+| Individual          | {stats.tools.free}–{stats.tools.gitlab_com}           | `GITLAB_MCP_TOOL_SURFACE=individual`              |
 
 All three are projections of the same [action catalog](#canonical-action-catalog), so they differ in packaging and token cost, never in capability. See [tools overview](/gitlab-mcp-server/tools/overview/).
 
@@ -181,7 +181,7 @@ A **meta-tool** is a domain-level MCP tool that groups related operations behind
 
 ## Capability surface
 
-The **capability surface** decides which MCP resources and prompts are registered, selected with `CAPABILITY_SURFACE`. `full` registers all of them and advertises [resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/); `minimal` registers only the `gitlab://tools` manifest — dropping subscriptions with the resources they apply to — cutting shared startup context from {footprint.shared.full.toLocaleString("en-US")} tokens to {footprint.shared.minimal.toLocaleString("en-US")} while keeping per-action schema discovery available.
+The **capability surface** decides which MCP resources and prompts are registered, selected with `GITLAB_MCP_CAPABILITY_SURFACE`. `full` registers all of them and advertises [resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/); `minimal` registers only the `gitlab://tools` manifest — dropping subscriptions with the resources they apply to — cutting shared startup context from {footprint.shared.full.toLocaleString("en-US")} tokens to {footprint.shared.minimal.toLocaleString("en-US")} while keeping per-action schema discovery available.
 
 ## Tool manifest resource
 

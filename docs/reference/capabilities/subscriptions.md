@@ -7,7 +7,7 @@
 instead of re-reading it on a hunch. This server honors that by polling
 GitLab, under bounds described below.
 
-Advertised only when `CAPABILITY_SURFACE=full` (the default) — the surface
+Advertised only when `GITLAB_MCP_CAPABILITY_SURFACE=full` (the default) — the surface
 that registers the GitLab resources a subscription can apply to.
 
 ## Protocol

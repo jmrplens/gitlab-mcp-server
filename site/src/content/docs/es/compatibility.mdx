@@ -14,7 +14,7 @@ faq:
   - q: "¿Qué sistemas operativos y arquitecturas se admiten?"
     a: "Hay binarios precompilados disponibles para Linux, macOS y Windows en amd64 y arm64 — seis binarios en total. macOS ofrece compilaciones separadas para Intel (amd64) y Apple Silicon (arm64). Cada plataforma se distribuye como un único binario autocontenido: no hay que instalar runtime de Go, intérprete ni bibliotecas aparte. Los binarios de Linux son ejecutables independientes de posición que usan el cargador dinámico de glibc, así que necesitan un userland con glibc; en distribuciones musl como Alpine, usa la imagen de contenedor `ghcr.io/jmrplens/gitlab-mcp-server`, compilada contra musl."
   - q: "¿Funciona GitLab MCP Server con OpenAI Codex?"
-    a: 'Sí. El servidor detecta las sesiones de Codex automáticamente y aplica un perfil de compatibilidad: las prioridades de las anotaciones de contenido se redondean a valores enteros, que es lo que exigen las builds de Codex incluidas en ChatGPT.app, mientras que el resto de campos se entrega sin cambios. Configura el servidor en ~/.codex/config.toml con default_tools_approval_mode = "approve" para que las ejecuciones no interactivas puedan usar herramientas de escritura, y mantén la superficie de herramientas dynamic por defecto. Usa CLIENT_COMPAT=off para desactivar la reescritura por cliente.'
+    a: 'Sí. El servidor detecta las sesiones de Codex automáticamente y aplica un perfil de compatibilidad: las prioridades de las anotaciones de contenido se redondean a valores enteros, que es lo que exigen las builds de Codex incluidas en ChatGPT.app, mientras que el resto de campos se entrega sin cambios. Configura el servidor en ~/.codex/config.toml con default_tools_approval_mode = "approve" para que las ejecuciones no interactivas puedan usar herramientas de escritura, y mantén la superficie de herramientas dynamic por defecto. Usa GITLAB_MCP_CLIENT_COMPAT=off para desactivar la reescritura por cliente.'
   - q: "¿Qué clientes MCP son compatibles con GitLab MCP Server?"
     a: "Cualquier cliente que soporte el Model Context Protocol puede usar GitLab MCP Server. Los clientes stdio probados incluyen VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code (CLI), Windsurf, IDEs de JetBrains, Zed y Kiro. Cualquier cliente Streamable HTTP puede conectarse mediante el modo HTTP. El servidor también admite recursos MCP ({{resources}}), prompts ({{prompts}}), completions ({{completions}} tipos de argumento), elicitation, notificaciones de progreso y suscripciones a recursos (notificaciones de cambio en vivo para 26 tipos de recurso)."
 ---
@@ -25,22 +25,22 @@ import stats from "../../../data/stats.json";
 
 ## Compatibilidad con ediciones de GitLab
 
-GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). El catálogo Enterprise/Premium desbloquea {stats.meta.self_managed_enterprise - stats.meta.base} dominios adicionales exclusivos de Enterprise, registrados como meta-herramientas extra con `TOOL_SURFACE=meta`, herramientas `gitlab_*` extra con `TOOL_SURFACE=individual` y acciones extra del catálogo en la superficie dinámica predeterminada: establece `GITLAB_TIER=premium` (o `GITLAB_TIER=ultimate`) en modo stdio, usa `--tier=premium`/`--tier=ultimate` en modo HTTP, o confía en la autodetección desde `GET /license` (por defecto `free`). La variable de entorno `GITLAB_ENTERPRISE=true`, ya deprecada, se sigue respetando cuando `GITLAB_TIER` no está definida (equivale a `ultimate`) y deja un aviso en el log. En modo HTTP no existe ningún flag `--enterprise`: pasarlo aborta el arranque; usa `--tier`.
+GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). El catálogo Enterprise/Premium desbloquea {stats.meta.self_managed_enterprise - stats.meta.base} dominios adicionales exclusivos de Enterprise, registrados como meta-herramientas extra con `GITLAB_MCP_TOOL_SURFACE=meta`, herramientas `gitlab_*` extra con `GITLAB_MCP_TOOL_SURFACE=individual` y acciones extra del catálogo en la superficie dinámica predeterminada: establece `GITLAB_TIER=premium` (o `GITLAB_TIER=ultimate`) en modo stdio, usa `--tier=premium`/`--tier=ultimate` en modo HTTP, o confía en la autodetección desde `GET /license` (por defecto `free`). La variable de entorno `GITLAB_ENTERPRISE=true`, ya deprecada, se sigue respetando cuando `GITLAB_TIER` no está definida (equivale a `ultimate`) y deja un aviso en el log. En modo HTTP no existe ningún flag `--enterprise`: pasarlo aborta el arranque; usa `--tier`.
 
-| Funcionalidad                                                               | Community (CE) | Enterprise (EE) |
-| --------------------------------------------------------------------------- | :------------: | :-------------: |
-| Proyectos, Issues, MRs, Pipelines, CI/CD                                    |       ✅        |        ✅        |
-| Wikis, Etiquetas, Hitos, Releases                                           |       ✅        |        ✅        |
-| Usuarios, Grupos, Miembros, Búsqueda                                        |       ✅        |        ✅        |
-| Despliegues, Entornos, Paquetes                                             |       ✅        |        ✅        |
-| {stats.meta.base} dominios base (meta-herramientas con `TOOL_SURFACE=meta`) |       ✅        |        ✅        |
-| {stats.resources} recursos, {stats.prompts} prompts                         |       ✅        |        ✅        |
-| Merge Trains                                                                |       ❌        |        ✅        |
-| Métricas DORA                                                               |       ❌        |        ✅        |
-| Gestión de vulnerabilidades                                                 |       ❌        |        ✅        |
-| Eventos de auditoría                                                        |       ❌        |        ✅        |
-| Políticas de cumplimiento                                                   |       ❌        |        ✅        |
-| +{stats.meta.self_managed_enterprise - stats.meta.base} dominios enterprise |       ❌        |        ✅        |
+| Funcionalidad                                                                          | Community (CE) | Enterprise (EE) |
+| -------------------------------------------------------------------------------------- | :------------: | :-------------: |
+| Proyectos, Issues, MRs, Pipelines, CI/CD                                               |       ✅        |        ✅        |
+| Wikis, Etiquetas, Hitos, Releases                                                      |       ✅        |        ✅        |
+| Usuarios, Grupos, Miembros, Búsqueda                                                   |       ✅        |        ✅        |
+| Despliegues, Entornos, Paquetes                                                        |       ✅        |        ✅        |
+| {stats.meta.base} dominios base (meta-herramientas con `GITLAB_MCP_TOOL_SURFACE=meta`) |       ✅        |        ✅        |
+| {stats.resources} recursos, {stats.prompts} prompts                                    |       ✅        |        ✅        |
+| Merge Trains                                                                           |       ❌        |        ✅        |
+| Métricas DORA                                                                          |       ❌        |        ✅        |
+| Gestión de vulnerabilidades                                                            |       ❌        |        ✅        |
+| Eventos de auditoría                                                                   |       ❌        |        ✅        |
+| Políticas de cumplimiento                                                              |       ❌        |        ✅        |
+| +{stats.meta.self_managed_enterprise - stats.meta.base} dominios enterprise            |       ❌        |        ✅        |
 
 Para habilitar funcionalidades enterprise en modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`. En modo HTTP, configura `--tier=premium`/`--tier=ultimate` para forzar el catálogo Enterprise/Premium, u omítelo para que el servidor autodetecte CE/EE por entrada token+URL cuando GitLab informe la edición. La variable deprecada `GITLAB_ENTERPRISE=true` sigue funcionando cuando `GITLAB_TIER` no está definida; no existe ningún flag `--enterprise`, usa `--tier`.
 
@@ -78,7 +78,7 @@ Cualquier cliente que soporte el transporte stdio del Model Context Protocol pue
 
 ### Perfiles de compatibilidad por cliente
 
-La mayoría de los clientes ignoran los campos MCP que no entienden, así que el servidor envía su superficie completa a todos. La única excepción se gestiona automáticamente: las builds de Codex incluidas en ChatGPT.app rechazan resultados cuyas anotaciones de contenido llevan un valor `priority` fraccionario, de modo que cuando una sesión se identifica como Codex el servidor redondea esas prioridades al entero válido más cercano según la especificación. Todo lo demás — anotaciones de audiencia, contenido estructurado, esquemas de salida, iconos — se entrega sin cambios, y ningún otro cliente se ve afectado. Configura `CLIENT_COMPAT=off` para desactivar la reescritura.
+La mayoría de los clientes ignoran los campos MCP que no entienden, así que el servidor envía su superficie completa a todos. La única excepción se gestiona automáticamente: las builds de Codex incluidas en ChatGPT.app rechazan resultados cuyas anotaciones de contenido llevan un valor `priority` fraccionario, de modo que cuando una sesión se identifica como Codex el servidor redondea esas prioridades al entero válido más cercano según la especificación. Todo lo demás — anotaciones de audiencia, contenido estructurado, esquemas de salida, iconos — se entrega sin cambios, y ningún otro cliente se ve afectado. Configura `GITLAB_MCP_CLIENT_COMPAT=off` para desactivar la reescritura.
 
 Para Codex, añade el servidor a `~/.codex/config.toml` con pre-aprobación de herramientas — sin ella, Codex pide confirmación en cada herramienta que no sea de solo lectura, y las ejecuciones no interactivas de `codex exec` cancelan esas llamadas:
 
@@ -93,7 +93,7 @@ GITLAB_URL = "https://gitlab.example.com"
 GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
 
-Mantén la superficie de herramientas `dynamic` por defecto para clientes con límites de número de herramientas (Cursor limita cada servidor a 40 herramientas, Windsurf a 100, los clientes basados en OpenAI a 128 por petición) y deja `META_PARAM_SCHEMA` en su valor por defecto `opaque` para Codex, que recorta silenciosamente los esquemas de herramienta mayores de ~5 KB.
+Mantén la superficie de herramientas `dynamic` por defecto para clientes con límites de número de herramientas (Cursor limita cada servidor a 40 herramientas, Windsurf a 100, los clientes basados en OpenAI a 128 por petición) y deja `GITLAB_MCP_META_PARAM_SCHEMA` en su valor por defecto `opaque` para Codex, que recorta silenciosamente los esquemas de herramienta mayores de ~5 KB.
 
 ### Validadores de pasarelas MCP
 

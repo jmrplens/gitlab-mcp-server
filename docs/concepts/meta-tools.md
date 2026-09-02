@@ -6,7 +6,7 @@ Meta-tools group related GitLab operations under a single MCP tool with an `acti
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`TOOL_SURFACE=meta`), the server registers **32 base GitLab/interactive tools**: 28 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 17 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**. The default tool surface is now dynamic find/execute; set `TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
+In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **32 base GitLab/interactive tools**: 28 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 17 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
 
 The `gitlab_server` meta-tool (actions `status` and `health_check`) is registered separately for server diagnostics and is not included in the 32/49/50 GitLab action catalog counts.
 
@@ -38,28 +38,28 @@ The dispatcher routes the request to the underlying handler based on the `action
 Meta-tools are available as an explicit tool surface. New configurations should use the canonical selector:
 
 ```env
-TOOL_SURFACE=meta
+GITLAB_MCP_TOOL_SURFACE=meta
 ```
 
 The legacy boolean selector remains supported for one compatibility window, but new configuration should not use it:
 
 ```env
-META_TOOLS=true
+GITLAB_MCP_META_TOOLS=true
 ```
 
 To switch from meta-tools to individual tools, use the explicit selector:
 
 ```env
-TOOL_SURFACE=individual
+GITLAB_MCP_TOOL_SURFACE=individual
 ```
 
-The old `META_TOOLS=false` spelling still maps to `TOOL_SURFACE=individual` when `TOOL_SURFACE` is absent.
+The old `GITLAB_MCP_META_TOOLS=false` spelling still maps to `GITLAB_MCP_TOOL_SURFACE=individual` when `GITLAB_MCP_TOOL_SURFACE` is absent.
 
 ```env
-META_TOOLS=false
+GITLAB_MCP_META_TOOLS=false
 ```
 
-To return to the default dynamic surface, unset `TOOL_SURFACE` (or set `TOOL_SURFACE=dynamic`).
+To return to the default dynamic surface, unset `GITLAB_MCP_TOOL_SURFACE` (or set `GITLAB_MCP_TOOL_SURFACE=dynamic`).
 
 Meta-tools remain available because they are the most broadly compatible consolidated surface.
 
@@ -284,9 +284,9 @@ If the MCP client supports elicitation, the server will ask for user confirmatio
 
 ## Discovering the params shape
 
-Meta-tools advertise a deliberately compact input schema by default (`META_PARAM_SCHEMA=opaque`): the LLM sees the `action` enum and an opaque `params` object. To discover the exact `params` shape for a chosen action, two mechanisms are available:
+Meta-tools advertise a deliberately compact input schema by default (`GITLAB_MCP_META_PARAM_SCHEMA=opaque`): the LLM sees the `action` enum and an opaque `params` object. To discover the exact `params` shape for a chosen action, two mechanisms are available:
 
-1. **MCP Resource** (recommended with `CAPABILITY_SURFACE=full`) — read the per-action call shape and JSON Schema:
+1. **MCP Resource** (recommended with `GITLAB_MCP_CAPABILITY_SURFACE=full`) — read the per-action call shape and JSON Schema:
 
    ```text
    gitlab://tools/{tool}.{action}
@@ -335,8 +335,8 @@ Meta-tools advertise a deliberately compact input schema by default (`META_PARAM
    }
    ```
 
-  These resources remain available for meta-tools when `CAPABILITY_SURFACE=minimal` is enabled, while optional GitLab data resources, prompts, and workflow guides are omitted. Dynamic surfaces can use `gitlab_find_action` for inline schemas in minimal mode; meta-tool callers can keep `META_PARAM_SCHEMA=opaque` and read `gitlab://tools/{id}` for exact params.
+  These resources remain available for meta-tools when `GITLAB_MCP_CAPABILITY_SURFACE=minimal` is enabled, while optional GitLab data resources, prompts, and workflow guides are omitted. Dynamic surfaces can use `gitlab_find_action` for inline schemas in minimal mode; meta-tool callers can keep `GITLAB_MCP_META_PARAM_SCHEMA=opaque` and read `gitlab://tools/{id}` for exact params.
 
-1. **Embed schemas in the tool description** — set `META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 11.9x larger than `opaque`, and `compact` is 6.5x larger, so keep `opaque` unless your MCP client cannot read resources. See [Environment Variables](../reference/env.md) for size/cost trade-offs.
+1. **Embed schemas in the tool description** — set `GITLAB_MCP_META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 11.9x larger than `opaque`, and `compact` is 6.5x larger, so keep `opaque` unless your MCP client cannot read resources. See [Environment Variables](../reference/env.md) for size/cost trade-offs.
 
 The dispatch behaviour is identical across modes — only the schema sent to the LLM changes.

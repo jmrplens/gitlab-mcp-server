@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Security Attributes
 > **Individual tools**: 5
-> **Meta-tool**: `gitlab_security_attribute` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_security_attribute` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `security_attribute.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [SecurityAttribute GraphQL object](https://docs.gitlab.com/api/graphql/reference/#securityattribute) · [Create](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate) · [Update](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate) · [Delete](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy) · [Project update](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate) · [Bulk update](https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes)
 > **Audience**: End users, AI assistant users
@@ -15,7 +15,7 @@
 
 Security attributes are namespace-level labels that classify GitLab groups and projects. Attributes belong to a security category, can be applied directly to a project, and can be added, removed, or replaced across multiple groups and projects in bulk.
 
-On the default dynamic surface, these operations are the `security_attribute.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `security_attribute.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 This domain is distinct from security findings and vulnerabilities: security attributes are classification metadata, while findings and vulnerabilities represent scanner output and triage state.
 

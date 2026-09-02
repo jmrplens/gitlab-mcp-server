@@ -239,7 +239,7 @@ todas.
 ### Registros
 
 La tercera señal son los registros estructurados del propio servidor: las mismas
-líneas que escribe en stderr, exportadas desde `INFO` hacia arriba. `LOG_LEVEL`
+líneas que escribe en stderr, exportadas desde `INFO` hacia arriba. `GITLAB_MCP_LOG_LEVEL`
 sigue gobernando el terminal; el umbral de exportación es aparte, así que
 ejecutar en `debug` no manda a tu colector un registro por cada viaje a GitLab
 además del span que ya lo describe.
@@ -444,7 +444,7 @@ la decisión es que un servidor que puede hablar con GitLab siga haciéndolo
 cuando no puede hablar con un colector.
 
 ```bash
-LOG_LEVEL=debug gitlab-mcp-server --telemetry 2>telemetry.log
+GITLAB_MCP_LOG_LEVEL=debug gitlab-mcp-server --telemetry 2>telemetry.log
 ```
 
 Los fallos de exportación, los pares de cabecera mal formados, las duraciones

@@ -65,7 +65,7 @@ intended recipient" as the alternative. Decision 2 is that alternative.
 intended recipient", is implemented, opt-in, and off by default.**
 
 `/oauth/token/info` names the OAuth application a token was minted for, in
-`application.uid`. `--oauth-client-uid` (env `OAUTH_CLIENT_UID`) pins the
+`application.uid`. `--oauth-client-uid` (env `GITLAB_MCP_OAUTH_CLIENT_UID`) pins the
 applications a deployment admits; `internal/oauth.acceptedRecipient` refuses
 anything else. It is a comma-separated set rather than a single value because
 `--gitlab-url` is repeatable and each published instance has its own

@@ -1812,3 +1812,81 @@ func TestValidateMetadataURL_RejectsWhatTheFlagsPromise(t *testing.T) {
 		})
 	}
 }
+
+// TestLoad_PrefixedNamesReachTheConfig verifies that a setting exported under
+// its GITLAB_MCP_ name arrives in the loaded [Config].
+//
+// Wiring each reader is not the same as each reader being wired: these values
+// pass through parsers, presence gates and grouping structs on the way, and a
+// name converted at the wrong end of one of those would still read only the
+// deprecated spelling. Asserting on the resulting Config is what covers the
+// whole path, and the absence of a deprecation warning is what proves the
+// prefixed name was the one used rather than an old one left over.
+func TestLoad_PrefixedNamesReachTheConfig(t *testing.T) {
+	// oauth mode is rejected without a public URL, so that case names the
+	// companion setting it needs rather than being dropped: auth mode is one of
+	// the readers this test exists to cover.
+	for _, tc := range []struct {
+		name      string
+		env       string
+		value     string
+		field     string
+		alsoEnv   string
+		alsoValue string
+	}{
+		{name: "tool surface", env: "TOOL_SURFACE", value: ToolSurfaceMeta, field: "ToolSurface"},
+		{name: "capability surface", env: "CAPABILITY_SURFACE", value: CapabilitySurfaceMinimal, field: "CapabilitySurface"},
+		{name: "meta param schema", env: "META_PARAM_SCHEMA", value: MetaParamSchemaFull, field: "MetaParamSchema"},
+		{
+			name: "auth mode", env: "AUTH_MODE", value: "oauth", field: "AuthMode",
+			alsoEnv: "PUBLIC_URL", alsoValue: "https://mcp.example.com",
+		},
+		{name: "public url", env: "PUBLIC_URL", value: "https://mcp.example.com", field: "PublicURL"},
+		{name: "excluded tools", env: "EXCLUDE_TOOLS", value: "gitlab_issue_delete", field: "ExcludeTools"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDeprecatedEnvUses()
+			t.Cleanup(resetDeprecatedEnvUses)
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv(EnvPrefix+tc.env, tc.value)
+			if tc.alsoEnv != "" {
+				t.Setenv(EnvPrefix+tc.alsoEnv, tc.alsoValue)
+			}
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() with %s set: %v", EnvPrefix+tc.env, err)
+			}
+
+			got := loadedSetting(cfg, tc.field)
+			if got != tc.value {
+				t.Errorf("%s = %q, want %q", EnvPrefix+tc.env, got, tc.value)
+			}
+			if warnings := DeprecatedEnvWarnings(); len(warnings) != 0 {
+				t.Errorf("loading with only prefixed names warned: %v", warnings)
+			}
+		})
+	}
+}
+
+// loadedSetting reads one string-valued setting by name, so the case table can
+// stay data instead of carrying an accessor closure per case.
+func loadedSetting(cfg *Config, field string) string {
+	switch field {
+	case "ToolSurface":
+		return cfg.ToolSurface
+	case "CapabilitySurface":
+		return cfg.CapabilitySurface
+	case "MetaParamSchema":
+		return cfg.MetaParamSchema
+	case "AuthMode":
+		return cfg.AuthMode
+	case "PublicURL":
+		return cfg.PublicURL
+	case "ExcludeTools":
+		return strings.Join(cfg.ExcludeTools, ",")
+	default:
+		return "<unknown field " + field + ">"
+	}
+}

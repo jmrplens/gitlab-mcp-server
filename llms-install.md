@@ -119,12 +119,12 @@ Add these to the `env` block (and, for Docker, a matching `-e NAME` in
 
 | Variable                 | Default   | Purpose                                                                                          |
 | ------------------------ | --------- | ------------------------------------------------------------------------------------------------ |
-| `TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (~32 consolidated domain tools), `individual` (one tool per action) |
+| `GITLAB_MCP_TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (~32 consolidated domain tools), `individual` (one tool per action) |
 | `GITLAB_TIER`            | detected  | Force `free`, `premium`, or `ultimate`; skips license detection                                   |
 | `GITLAB_READ_ONLY`       | `false`   | Disable all mutating tools                                                                        |
 | `GITLAB_SAFE_MODE`       | `false`   | Mutating tools return a JSON preview instead of executing                                         |
 | `GITLAB_SKIP_TLS_VERIFY` | `false`   | Allow self-signed certificates on self-managed instances                                          |
-| `LOG_LEVEL`              | `info`    | `debug`, `info`, `warn`, `error`                                                                  |
+| `GITLAB_MCP_LOG_LEVEL`              | `info`    | `debug`, `info`, `warn`, `error`                                                                  |
 
 Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
 
@@ -148,7 +148,7 @@ Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
   Docker args).
 - **Only two tools visible** — expected: the default `dynamic` surface
   exposes `gitlab_find_action` and `gitlab_execute_action`, which route to
-  every action. Set `TOOL_SURFACE=meta` for visible per-domain tools.
+  every action. Set `GITLAB_MCP_TOOL_SURFACE=meta` for visible per-domain tools.
 - **Docker: `docker: command not found`** — fall back to Method C (npm/npx,
   needs only Node 18+) or Method B (native binary).
 

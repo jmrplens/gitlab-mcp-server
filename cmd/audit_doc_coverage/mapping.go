@@ -206,7 +206,7 @@ func expectedGroupsForRow(row docMappingRow) []string {
 	csv = strings.ReplaceAll(csv, "etc.", "")
 	csv = strings.ReplaceAll(csv, "(routed)", "")
 	csv = strings.ReplaceAll(csv, "(enterprise routes)", "")
-	csv = strings.ReplaceAll(csv, "(with `TOOL_SURFACE=meta`, routed as a branch action)", "")
+	csv = strings.ReplaceAll(csv, "(with `GITLAB_MCP_TOOL_SURFACE=meta`, routed as a branch action)", "")
 	parts := strings.Split(csv, ",")
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {

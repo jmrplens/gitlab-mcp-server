@@ -64,7 +64,7 @@ The AI calls the `generate_release_notes` prompt which collects commits and MRs 
 
 ## Common Workflows
 
-The individual tool names below assume `TOOL_SURFACE=individual`. On the default `dynamic` surface the same operations are reached through `gitlab_execute_action` with the matching canonical action ID — `branch.create`, `merge_request.create`, `issue.update`, `job.trace` — as shown under [Dynamic Discovery and Execution](#dynamic-discovery-and-execution).
+The individual tool names below assume `GITLAB_MCP_TOOL_SURFACE=individual`. On the default `dynamic` surface the same operations are reached through `gitlab_execute_action` with the matching canonical action ID — `branch.create`, `merge_request.create`, `issue.update`, `job.trace` — as shown under [Dynamic Discovery and Execution](#dynamic-discovery-and-execution).
 
 ### 1. Project Discovery
 
@@ -76,7 +76,7 @@ User: "What tools are available for merge requests?"
 → Read gitlab://tools/merge_request.list for one action's call shape and schema
 ```
 
-With `TOOL_SURFACE=meta` the same information is under `gitlab://tools/gitlab_merge_request.<action>`, and the `gitlab_merge_request` tool description carries the action list.
+With `GITLAB_MCP_TOOL_SURFACE=meta` the same information is under `gitlab://tools/gitlab_merge_request.<action>`, and the `gitlab_merge_request` tool description carries the action list.
 
 Individual tool approach:
 
@@ -214,7 +214,7 @@ Use this flow when startup context or visible tool count matters. It reaches the
 
 ## Meta-Tool Discovery
 
-With `TOOL_SURFACE=meta`, 32 domain-level meta-tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, 32 domain-level meta-tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
 
 ```text
 Resource: gitlab://tools/gitlab_project

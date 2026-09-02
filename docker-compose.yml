@@ -8,11 +8,11 @@ services:
     environment:
       - GITLAB_URL=${GITLAB_URL:-}
       - GITLAB_SKIP_TLS_VERIFY=${GITLAB_SKIP_TLS_VERIFY:-false}
-      - TOOL_SURFACE=${TOOL_SURFACE:-dynamic}
+      - GITLAB_MCP_TOOL_SURFACE=${GITLAB_MCP_TOOL_SURFACE:-dynamic}
       - GITLAB_TIER=${GITLAB_TIER:-}
       - GITLAB_READ_ONLY=${GITLAB_READ_ONLY:-false}
       - GITLAB_SAFE_MODE=${GITLAB_SAFE_MODE:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - GITLAB_MCP_LOG_LEVEL=${GITLAB_MCP_LOG_LEVEL:-info}
     command:
       - "--http"
       - "--http-addr=0.0.0.0:8080"
@@ -21,7 +21,7 @@ services:
       # so the server refuses to start. Set GITLAB_URL in .env, or list
       # several comma-separated and let the GITLAB-URL header select among them.
       - "--gitlab-url=${GITLAB_URL:?set GITLAB_URL in .env: the server refuses to start without an instance allow-list}"
-      - "--tool-surface=${TOOL_SURFACE:-dynamic}"
+      - "--tool-surface=${GITLAB_MCP_TOOL_SURFACE:-dynamic}"
       - "--tier=${GITLAB_TIER:-}"
       - "--skip-tls-verify=${GITLAB_SKIP_TLS_VERIFY:-false}"
       - "--read-only=${GITLAB_READ_ONLY:-false}"

@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Vulnerabilities
 > **Individual tools**: 8
-> **Meta-tool**: `gitlab_vulnerability` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_vulnerability` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `vulnerability.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Vulnerabilities GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#queryvulnerabilities)
 > **Audience**: 👤 End users, AI assistant users
@@ -15,9 +15,9 @@
 
 The vulnerabilities domain provides full lifecycle management for security vulnerabilities detected by GitLab security scanners. All operations use the GitLab GraphQL API (no REST equivalent for these queries/mutations). This domain covers listing, inspecting, and triaging vulnerabilities, as well as retrieving severity counts and per-pipeline security report summaries.
 
-On the default dynamic surface, these operations are the `vulnerability.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `vulnerability.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, all 8 individual tools below are consolidated into a single `gitlab_vulnerability` meta-tool that dispatches by `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, all 8 individual tools below are consolidated into a single `gitlab_vulnerability` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

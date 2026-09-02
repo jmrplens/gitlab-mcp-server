@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Notifications & Events
 > **Individual tools**: 42
-> **Meta-tools**: none of its own — every action on this page belongs to `gitlab_user`, `gitlab_issue`, `gitlab_merge_request`, `gitlab_group` or `gitlab_snippet` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tools**: none of its own — every action on this page belongs to `gitlab_user`, `gitlab_issue`, `gitlab_merge_request`, `gitlab_group` or `gitlab_snippet` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `issue.*`, `merge_request.*`, `snippet.*`, `user.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Notification Settings](https://docs.gitlab.com/ee/api/notification_settings.html) · [Resource Label/Milestone/State Events](https://docs.gitlab.com/ee/api/resource_label_events.html) · [Award Emoji](https://docs.gitlab.com/api/emoji_reactions/)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,9 +14,9 @@
 
 The notifications & events domain covers notification settings (global, project, group), project and user events, resource-level change events (label, milestone, state), and award emoji reactions on issues, merge requests, snippets, and their notes.
 
-On the default dynamic surface, these operations are the `issue.*`, `merge_request.*`, `snippet.*`, `user.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `issue.*`, `merge_request.*`, `snippet.*`, `user.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, this page has no meta-tool of its own: it is a documentation grouping, and its actions are dispatched by the meta-tool that owns the resource they act on.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, this page has no meta-tool of its own: it is a documentation grouping, and its actions are dispatched by the meta-tool that owns the resource they act on.
 
 | Sub-domain                      | Owning meta-tool                                               | Example actions                                          |
 | ------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |

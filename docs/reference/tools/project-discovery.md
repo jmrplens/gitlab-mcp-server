@@ -14,7 +14,7 @@
 
 The project discovery domain provides a utility tool that resolves git remote URLs to GitLab projects. This enables LLMs to automatically discover the `project_id` needed for all other GitLab operations by reading the workspace `.git/config` file.
 
-On the default dynamic surface, these operations are the `discover_project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `discover_project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 ### Common Questions
 

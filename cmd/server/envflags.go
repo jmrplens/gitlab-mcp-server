@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"os"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // envBackedFlags are the settings whose only home used to be an environment
@@ -12,7 +14,7 @@ import (
 // # Why the flag writes the variable instead of being read directly
 //
 // Each of these is consumed somewhere that reads the process environment and
-// nothing else: parseLogLevel takes os.Getenv("LOG_LEVEL"),
+// nothing else: parseLogLevel takes config.Getenv("LOG_LEVEL"),
 // clientcompat.Enabled reads CLIENT_COMPAT, toolutil.IsYOLOMode reads YOLO_MODE
 // and AUTOPILOT, and the upload limit is read per request inside the tools that
 // enforce it. Threading a flag value to each of those would mean four new
@@ -47,17 +49,17 @@ var envBackedFlags = []struct {
 }{
 	{
 		flagName: "log-level",
-		envName:  "LOG_LEVEL",
+		envName:  config.EnvPrefix + "LOG_LEVEL",
 		usage:    "Logging verbosity: debug, info, warn or error",
 	},
 	{
 		flagName: "client-compat",
-		envName:  "CLIENT_COMPAT",
+		envName:  config.EnvPrefix + "CLIENT_COMPAT",
 		usage:    "Per-client response compatibility: auto (default) or off",
 	},
 	{
 		flagName: "upload-max-file-size",
-		envName:  "UPLOAD_MAX_FILE_SIZE",
+		envName:  config.EnvPrefix + "UPLOAD_MAX_FILE_SIZE",
 		usage:    "Maximum size in bytes for upload and file-read tools",
 	},
 	{
@@ -88,6 +90,12 @@ func registerEnvBackedFlags() {
 // typed the flag as well. An unset flag writes nothing, so it cannot clear a
 // variable by accident, which a naive implementation writing the empty string
 // would do to every deployment that configures through the environment.
+//
+// The prefixed spelling is what gets written, because that is the one
+// [config.Getenv] prefers. Writing the deprecated name instead would put a
+// flag the operator typed on the losing side of their own exported
+// GITLAB_MCP_ variable, and would report the flag as a deprecated variable in
+// the startup warnings.
 func applyEnvBackedFlags() {
 	for _, entry := range envBackedFlags {
 		if entry.value == nil || !isFlagPassed(entry.flagName) {

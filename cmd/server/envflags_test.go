@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // withFreshFlagSet swaps in a clean flag set, so a test can register and parse
@@ -32,8 +34,18 @@ func withFreshFlagSet(t *testing.T) {
 // implemented by writing the environment rather than by being read directly. A
 // version that wrote unconditionally would work in this direction and break the
 // next one.
+//
+// Asserted through [config.Getenv] rather than os.Getenv, because that is what
+// the readers use: the flag writes the prefixed spelling, and a flag losing to
+// the operator's own deprecated variable is exactly the regression reading the
+// bare name here would miss.
 func TestEnvBackedFlags_APassedFlagBeatsTheEnvironment(t *testing.T) {
 	withFreshFlagSet(t)
+	// applyEnvBackedFlags writes the environment with os.Setenv, which nothing
+	// would undo on its own. Claiming the name through t.Setenv first is what
+	// makes that write revert with this test instead of leaking a log level
+	// into every later test in the package.
+	t.Setenv(config.EnvPrefix+"LOG_LEVEL", "")
 	t.Setenv("LOG_LEVEL", "debug")
 
 	registerEnvBackedFlags()
@@ -42,7 +54,7 @@ func TestEnvBackedFlags_APassedFlagBeatsTheEnvironment(t *testing.T) {
 	}
 	applyEnvBackedFlags()
 
-	if got := os.Getenv("LOG_LEVEL"); got != "error" {
+	if got := config.Getenv("LOG_LEVEL"); got != "error" {
 		t.Errorf("LOG_LEVEL = %q, want the explicitly passed %q", got, "error")
 	}
 }
@@ -89,11 +101,16 @@ func TestEnvBackedFlags_AnUnpassedFlagLeavesTheEnvironmentAlone(t *testing.T) {
 // to be a deliberate act. The pairing is asserted too: a flag pointing at the
 // wrong variable would pass every other test here and silently configure
 // something else.
+//
+// The spellings are mixed on purpose. YOLO_MODE stays bare because it is a
+// convention other agent tooling sets, and honoring the name that tooling
+// already uses is the whole reason this server reads it; everything else this
+// project defines carries the GITLAB_MCP_ prefix.
 func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) {
 	want := map[string]string{
-		"log-level":                 "LOG_LEVEL",
-		"client-compat":             "CLIENT_COMPAT",
-		"upload-max-file-size":      "UPLOAD_MAX_FILE_SIZE",
+		"log-level":                 "GITLAB_MCP_LOG_LEVEL",
+		"client-compat":             "GITLAB_MCP_CLIENT_COMPAT",
+		"upload-max-file-size":      "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
 		"yolo-mode":                 "YOLO_MODE",
 		"description-substitutions": "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
 	}

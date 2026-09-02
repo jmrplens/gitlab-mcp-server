@@ -69,7 +69,7 @@ faq:
   - q: "How do I connect GitLab MCP Server to a self-managed GitLab instance?"
     a: "Point GITLAB_URL at your instance, for example GITLAB_URL=https://gitlab.example.com. GITLAB_URL defaults to https://gitlab.com, so you set it only for self-managed Community or Enterprise Edition instances. If the instance uses a self-signed or internal CA certificate, also set GITLAB_SKIP_TLS_VERIFY=true to bypass certificate verification on a trusted network."
   - q: "Which tool mode does GitLab MCP Server use by default?"
-    a: "By default GitLab MCP Server runs in dynamic mode, which exposes only two tools — gitlab_find_action and gitlab_execute_action — to keep the AI client's context small while still reaching every GitLab operation. Set TOOL_SURFACE=meta for consolidated domain-level meta-tools, or TOOL_SURFACE=individual for one tool per operation."
+    a: "By default GitLab MCP Server runs in dynamic mode, which exposes only two tools — gitlab_find_action and gitlab_execute_action — to keep the AI client's context small while still reaching every GitLab operation. Set GITLAB_MCP_TOOL_SURFACE=meta for consolidated domain-level meta-tools, or GITLAB_MCP_TOOL_SURFACE=individual for one tool per operation."
   - q: "Why does my AI client fail to connect to GitLab MCP Server?"
     a: "A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that GITLAB_URL is correct and reachable from your machine, that the token carries the api scope (or read_api in read-only mode) and has not expired, and that self-signed certificates are handled by setting GITLAB_SKIP_TLS_VERIFY=true."
 ---
@@ -691,16 +691,16 @@ By default, the server runs in **dynamic find/execute mode** with `gitlab_find_a
 }
 ```
 
-Set `TOOL_SURFACE=meta` to use **{stats.meta.base} domain-level meta-tools** ({stats.meta.self_managed_enterprise} on self-managed Enterprise/Premium, {stats.meta.gitlab_com} on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers. Instead of separate `gitlab_issue_list`, `gitlab_issue_create` and `gitlab_issue_update` tools (the `TOOL_SURFACE=individual` shape), there is a single `gitlab_issue` tool with an `action` parameter: the same call goes to `gitlab_issue` as `{ "action": "create", "params": { ... } }`. Meta-tools accept only `action` and `params` at the top level, so the parameters stay nested under `params` on both surfaces.
+Set `GITLAB_MCP_TOOL_SURFACE=meta` to use **{stats.meta.base} domain-level meta-tools** ({stats.meta.self_managed_enterprise} on self-managed Enterprise/Premium, {stats.meta.gitlab_com} on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers. Instead of separate `gitlab_issue_list`, `gitlab_issue_create` and `gitlab_issue_update` tools (the `GITLAB_MCP_TOOL_SURFACE=individual` shape), there is a single `gitlab_issue` tool with an `action` parameter: the same call goes to `gitlab_issue` as `{ "action": "create", "params": { ... } }`. Meta-tools accept only `action` and `params` at the top level, so the parameters stay nested under `params` on both surfaces.
 
-This is transparent to you: your AI client handles the routing. You just ask naturally, _"create an issue for the login bug"_, and on the default dynamic surface the assistant finds `issue.create` and executes it; with `TOOL_SURFACE=meta` it picks the `gitlab_issue` meta-tool and the `create` action instead.
+This is transparent to you: your AI client handles the routing. You just ask naturally, _"create an issue for the login bug"_, and on the default dynamic surface the assistant finds `issue.create` and executes it; with `GITLAB_MCP_TOOL_SURFACE=meta` it picks the `gitlab_issue` meta-tool and the `create` action instead.
 
 :::tip
-You do not need to set anything to get the two-tool catalog: dynamic is the default, and `TOOL_SURFACE=dynamic` only makes that explicit. The server exposes only `gitlab_find_action` and `gitlab_execute_action`, backed by the same canonical GitLab action catalog. See [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) for how discovery and execution work.
+You do not need to set anything to get the two-tool catalog: dynamic is the default, and `GITLAB_MCP_TOOL_SURFACE=dynamic` only makes that explicit. The server exposes only `gitlab_find_action` and `gitlab_execute_action`, backed by the same canonical GitLab action catalog. See [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) for how discovery and execution work.
 
 Meta-tools cut the visible tool count by more than 95% compared with individual tools, and the tool-schema tokens by roughly three quarters, while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
 
-Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots plus `gitlab://tools`, and omit optional resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
+Pair dynamic mode with `GITLAB_MCP_CAPABILITY_SURFACE=minimal` to keep only workspace roots plus `gitlab://tools`, and omit optional resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
 :::
 
 ## Common setup questions
@@ -715,7 +715,7 @@ Point `GITLAB_URL` at your instance, for example `GITLAB_URL=https://gitlab.exam
 
 ### Which tool mode does GitLab MCP Server use by default?
 
-By default GitLab MCP Server runs in **dynamic mode**, which exposes only two tools — `gitlab_find_action` and `gitlab_execute_action` — to keep the AI client's context small while still reaching every GitLab operation. Set `TOOL_SURFACE=meta` for consolidated domain-level meta-tools, or `TOOL_SURFACE=individual` for one tool per operation.
+By default GitLab MCP Server runs in **dynamic mode**, which exposes only two tools — `gitlab_find_action` and `gitlab_execute_action` — to keep the AI client's context small while still reaching every GitLab operation. Set `GITLAB_MCP_TOOL_SURFACE=meta` for consolidated domain-level meta-tools, or `GITLAB_MCP_TOOL_SURFACE=individual` for one tool per operation.
 
 ### Why does my AI client fail to connect?
 
@@ -725,7 +725,7 @@ A failed connection usually means GitLab MCP Server cannot reach GitLab or canno
 
 - [Configuration](/gitlab-mcp-server/configuration/) — Fine-tune environment variables and optional features
 - [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) — How the default find/execute surface discovers and runs every operation
-- [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) — The consolidated domain dispatchers behind `TOOL_SURFACE=meta`
+- [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) — The consolidated domain dispatchers behind `GITLAB_MCP_TOOL_SURFACE=meta`
 - [Architecture](/gitlab-mcp-server/architecture/) — Understand how the server works under the hood
 - [Tools Reference](/gitlab-mcp-server/tools/overview/) — Explore all available tools by domain
 

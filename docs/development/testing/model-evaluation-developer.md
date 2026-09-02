@@ -310,7 +310,7 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
 | `--tool-surface meta`    | Consolidated domain meta-tools plus standalone tools and optional MCP capability bridge tools. | Compatibility baseline and comparison with the pre-dynamic default.    |
 
 Capability bridge tools are enabled by task and evaluator options, not by
-`CAPABILITY_SURFACE=minimal`. The evaluator should expose the resources,
+`GITLAB_MCP_CAPABILITY_SURFACE=minimal`. The evaluator should expose the resources,
 prompts, and completions a normal full server exposes unless a test explicitly
 targets a capability-discovery fallback.
 

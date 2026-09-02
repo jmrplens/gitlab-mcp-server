@@ -8,7 +8,7 @@ faq:
   - q: "Which GitLab token type should I use in CI/CD pipelines?"
     a: "Use a **Project Access Token** scoped to a single project and store it as a masked CI/CD variable, never committed to the repository. Choose the `api` scope for full access or `read_api` for read-only workflows, set a maximum 90-day expiration, and rotate the token before it expires. For workflows that span several projects, use a **Group Access Token** instead."
   - q: "How do I block a CI script until a GitLab pipeline finishes?"
-    a: "Run the pipeline `wait` action: `gitlab_execute_action` with `action: 'pipeline.wait'` on the default dynamic surface, or the `gitlab_pipeline` meta-tool with `action: 'wait'` when `TOOL_SURFACE=meta`. It polls the pipeline until it reaches a terminal state (success, failed, or canceled), which lets a CI script block until a triggered pipeline completes. The `job.wait` action (`gitlab_job` with `wait` on the meta surface) does the same for individual jobs."
+    a: "Run the pipeline `wait` action: `gitlab_execute_action` with `action: 'pipeline.wait'` on the default dynamic surface, or the `gitlab_pipeline` meta-tool with `action: 'wait'` when `GITLAB_MCP_TOOL_SURFACE=meta`. It polls the pipeline until it reaches a terminal state (success, failed, or canceled), which lets a CI script block until a triggered pipeline completes. The `job.wait` action (`gitlab_job` with `wait` on the meta surface) does the same for individual jobs."
   - q: "Should I use stdio or HTTP transport in CI?"
     a: "Use stdio for occasional tool calls, because each call spawns and tears down a server process. For pipelines that make many tool calls, start the server once in HTTP mode with `--http` and call it over `http://127.0.0.1:8080/mcp` to avoid per-call process startup overhead. Both transports authenticate with a Personal Access Token or Project Access Token."
 ---
@@ -71,7 +71,7 @@ Send JSON-RPC messages directly to the server via stdio. Fully deterministic —
 
 The server communicates via the [MCP protocol](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio) over stdin/stdout using JSON-RPC 2.0. Each interaction requires an `initialize` handshake, an `initialized` notification, then one or more `tools/call` requests.
 
-Which tool names a job may call depends on the active **tool surface**. The default is `dynamic`: it registers exactly two tools — `gitlab_find_action` and `gitlab_execute_action` — so a script calls `gitlab_execute_action` with a canonical `domain.action` ID and a `params` object. Naming an individual tool on the default surface is answered with `{"code":-32602,"message":"unknown tool ..."}`; because that is a JSON-RPC error and not a tool result, `jq -s '.[1].result.content[0].text'` prints `null` and the job succeeds with no output. If you prefer one tool per operation, set `TOOL_SURFACE=individual` in the job's `variables:` — individual names are domain-first, not verb-first (`gitlab_issue_list`, `gitlab_mr_list`, `gitlab_project_get`); see the [Tools Overview](/gitlab-mcp-server/tools/overview/).
+Which tool names a job may call depends on the active **tool surface**. The default is `dynamic`: it registers exactly two tools — `gitlab_find_action` and `gitlab_execute_action` — so a script calls `gitlab_execute_action` with a canonical `domain.action` ID and a `params` object. Naming an individual tool on the default surface is answered with `{"code":-32602,"message":"unknown tool ..."}`; because that is a JSON-RPC error and not a tool result, `jq -s '.[1].result.content[0].text'` prints `null` and the job succeeds with no output. If you prefer one tool per operation, set `GITLAB_MCP_TOOL_SURFACE=individual` in the job's `variables:` — individual names are domain-first, not verb-first (`gitlab_issue_list`, `gitlab_mr_list`, `gitlab_project_get`); see the [Tools Overview](/gitlab-mcp-server/tools/overview/).
 
 ### GitLab CI example
 
@@ -257,11 +257,11 @@ See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for full deta
 
 ## CI/CD tools available
 
-Beyond running the server in pipelines, GitLab MCP Server provides comprehensive CI/CD management tools that AI assistants can use interactively. These are available through the default dynamic find/execute surface and through explicit meta-tools with `TOOL_SURFACE=meta`.
+Beyond running the server in pipelines, GitLab MCP Server provides comprehensive CI/CD management tools that AI assistants can use interactively. These are available through the default dynamic find/execute surface and through explicit meta-tools with `GITLAB_MCP_TOOL_SURFACE=meta`.
 
 ### Pipelines
 
-The `pipeline` domain manages the full pipeline lifecycle. Its actions are `pipeline.<action>` IDs for `gitlab_execute_action` on the default dynamic surface and the `action` values of the `gitlab_pipeline` meta-tool with `TOOL_SURFACE=meta`:
+The `pipeline` domain manages the full pipeline lifecycle. Its actions are `pipeline.<action>` IDs for `gitlab_execute_action` on the default dynamic surface and the `action` values of the `gitlab_pipeline` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`:
 
 | Action                | Description                                                                              |
 | --------------------- | ---------------------------------------------------------------------------------------- |
@@ -284,7 +284,7 @@ The `wait` action polls a pipeline until it reaches a terminal state (success, f
 
 ### Jobs
 
-The `job` domain provides complete job management. Its actions are `job.<action>` IDs for `gitlab_execute_action` on the default dynamic surface and the `action` values of the `gitlab_job` meta-tool with `TOOL_SURFACE=meta`:
+The `job` domain provides complete job management. Its actions are `job.<action>` IDs for `gitlab_execute_action` on the default dynamic surface and the `action` values of the `gitlab_job` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`:
 
 | Action              | Description                              |
 | ------------------- | ---------------------------------------- |
@@ -328,7 +328,7 @@ Trigger a pipeline with custom variables on the default dynamic surface:
 }
 ```
 
-With `TOOL_SURFACE=meta` the same call is `gitlab_pipeline` with `{ "action": "create", "params": { ... } }`; meta-tools accept only `action` and `params` at the top level, so the parameters stay nested under `params` on both surfaces.
+With `GITLAB_MCP_TOOL_SURFACE=meta` the same call is `gitlab_pipeline` with `{ "action": "create", "params": { ... } }`; meta-tools accept only `action` and `params` at the top level, so the parameters stay nested under `params` on both surfaces.
 
 For the complete tool reference, see [Tools Overview](/gitlab-mcp-server/tools/overview/).
 

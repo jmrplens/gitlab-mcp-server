@@ -4,13 +4,13 @@ description: "Ejemplos de gestión de issues con GitLab MCP Server — triar, as
 datePublished: "2026-04-23"
 faq:
   - q: "¿Cómo triago issues de GitLab con un asistente de IA?"
-    a: "Se trabaja de arriba abajo: pide al asistente que liste los issues abiertos que te interesan y después que los asigne, etiquete y enlace. Un ciclo típico son cuatro llamadas: `issue.list` (filtrando por `state: opened` y una etiqueta) para ver el backlog, `issue.update` para fijar `assignee_ids`, `labels` y `milestone_id`, `issue.link_create` para registrar dependencias, y de nuevo `issue.update` con `state_event: close` al resolverlo. En la superficie dinámica predeterminada son acciones de `gitlab_execute_action`, localizables con `gitlab_find_action`; con `TOOL_SURFACE=meta` son las acciones `list`, `update` y `link_create` de la meta-herramienta `gitlab_issue`."
+    a: "Se trabaja de arriba abajo: pide al asistente que liste los issues abiertos que te interesan y después que los asigne, etiquete y enlace. Un ciclo típico son cuatro llamadas: `issue.list` (filtrando por `state: opened` y una etiqueta) para ver el backlog, `issue.update` para fijar `assignee_ids`, `labels` y `milestone_id`, `issue.link_create` para registrar dependencias, y de nuevo `issue.update` con `state_event: close` al resolverlo. En la superficie dinámica predeterminada son acciones de `gitlab_execute_action`, localizables con `gitlab_find_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` son las acciones `list`, `update` y `link_create` de la meta-herramienta `gitlab_issue`."
   - q: "¿Cuál es la diferencia entre relates_to, blocks y is_blocked_by?"
     a: "Son los tres valores de `link_type` que acepta `issue.link_create` (`gitlab_issue` con `action: link_create` en la superficie meta). `relates_to` es una asociación simétrica y no bloqueante: ningún issue condiciona al otro. `blocks` significa que el issue de origen debe resolverse antes de que el destino pueda avanzar. `is_blocked_by` es la dirección inversa de esa misma relación, así que crear un enlace `blocks` de #300 a #400 es lo que hace que #400 aparezca como `is_blocked_by` #300. Listar los enlaces con `issue.link_list` devuelve el tipo de relación junto a cada issue enlazado."
   - q: "¿Puede un asistente de IA cerrar un issue por mí?"
     a: "Sí, pero cerrar es un cambio de estado y sigue las mismas reglas de seguridad que cualquier otra mutación. La llamada es `issue.update` con `state_event: close` (`gitlab_issue`, `action: update`, en la superficie meta). Si el despliegue usa `GITLAB_READ_ONLY=true` la acción ni siquiera se registra, y con `GITLAB_SAFE_MODE=true` el servidor devuelve una previsualización JSON del cambio en lugar de aplicarlo."
   - q: "¿Cómo busco issues en varios proyectos de GitLab a la vez?"
-    a: "Usa `search.issues` en lugar de `issue.list` (las meta-herramientas `gitlab_search` y `gitlab_issue` cuando `TOOL_SURFACE=meta`), porque el listado de issues está limitado a un proyecto o a un grupo. La búsqueda acepta alcance de instancia, grupo o proyecto, así que `search.issues` con un `group_id` busca en todos los proyectos de ese grupo en una sola llamada. Los resultados incluyen la ruta del proyecto en cada coincidencia, de modo que el asistente puede continuar con `issue.get` sobre el proyecto propietario."
+    a: "Usa `search.issues` en lugar de `issue.list` (las meta-herramientas `gitlab_search` y `gitlab_issue` cuando `GITLAB_MCP_TOOL_SURFACE=meta`), porque el listado de issues está limitado a un proyecto o a un grupo. La búsqueda acepta alcance de instancia, grupo o proyecto, así que `search.issues` con un `group_id` busca en todos los proyectos de ese grupo en una sola llamada. Los resultados incluyen la ruta del proyecto en cada coincidencia, de modo que el asistente puede continuar con `issue.get` sobre el proyecto propietario."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -34,7 +34,7 @@ import FAQ from "../../../../components/FAQ.astro";
   />
 </CardGrid>
 
-Estos flujos paso a paso cubren la gestión de issues de principio a fin: triar issues abiertos, asignarlos y etiquetarlos, vincular issues relacionados y bloqueantes, seguir el progreso de los milestones, mantener discusiones y buscar entre proyectos. Cada ejemplo combina el prompt que escribes con la acción exacta del catálogo que el servidor ejecuta, escrita como `dominio.acción → parámetros`: en la superficie dinámica predeterminada es el `action` que pasas a `gitlab_execute_action`, y con `TOOL_SURFACE=meta` es el `action` de la meta-herramienta `gitlab_<dominio>`, para que puedas reutilizar la llamada directamente.
+Estos flujos paso a paso cubren la gestión de issues de principio a fin: triar issues abiertos, asignarlos y etiquetarlos, vincular issues relacionados y bloqueantes, seguir el progreso de los milestones, mantener discusiones y buscar entre proyectos. Cada ejemplo combina el prompt que escribes con la acción exacta del catálogo que el servidor ejecuta, escrita como `dominio.acción → parámetros`: en la superficie dinámica predeterminada es el `action` que pasas a `gitlab_execute_action`, y con `GITLAB_MCP_TOOL_SURFACE=meta` es el `action` de la meta-herramienta `gitlab_<dominio>`, para que puedas reutilizar la llamada directamente.
 
 ## Triaje de issues
 
@@ -247,7 +247,7 @@ gitlab_execute_action → action: "issue.update", params: { project_id: "my-grou
 gitlab_execute_action → action: "issue.link_create", params: { project_id: "my-group/backend", issue_iid: 300, target_issue_iid: 400, link_type: "blocks" }
 ```
 
-Con `TOOL_SURFACE=meta` las mismas llamadas van a la meta-herramienta `gitlab_issue` con `action: list`, `action: update` y `action: link_create`, cada una con los parámetros anidados en `params`.
+Con `GITLAB_MCP_TOOL_SURFACE=meta` las mismas llamadas van a la meta-herramienta `gitlab_issue` con `action: list`, `action: update` y `action: link_create`, cada una con los parámetros anidados en `params`.
 
 ---
 

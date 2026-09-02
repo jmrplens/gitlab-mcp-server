@@ -10,7 +10,7 @@ faq:
   - q: "How do completions improve AI assistant accuracy?"
     a: "Completions cut failed tool calls in four ways: they eliminate typos because the assistant picks from validated suggestions; they reduce round-trips by removing the need to call `list_projects` before `create_issue`; they provide context by pairing IDs with names; and they offer real-time search updated as characters are typed. The net effect is fewer errors caused by invalid identifiers."
   - q: "What if my MCP client does not support completions?"
-    a: "Completions require the MCP client to support the `completion/complete` protocol method. If your client lacks it, GitLab MCP Server simply does not offer suggestions and tool functionality is unaffected. You can still discover valid values by running the domain's list action (`project.list`, `branch.list` or `project.label_list` through `gitlab_execute_action` on the default surface, or the `list` action of the matching meta-tool with `TOOL_SURFACE=meta`) and then supply the chosen value directly."
+    a: "Completions require the MCP client to support the `completion/complete` protocol method. If your client lacks it, GitLab MCP Server simply does not offer suggestions and tool functionality is unaffected. You can still discover valid values by running the domain's list action (`project.list`, `branch.list` or `project.label_list` through `gitlab_execute_action` on the default surface, or the `list` action of the matching meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`) and then supply the chosen value directly."
 ---
 
 import stats from "../../../data/stats.json";
@@ -98,7 +98,7 @@ Completions reduce errors in AI tool calls in several concrete ways. Together th
 4. **Real-time search** — Results update as the user types, powered by GitLab's search API.
 
 :::tip
-Completions work best when the MCP client supports the `completion/complete` protocol method. If your client does not support completions, you can still discover values by running the domain's list action: `project.list`, `branch.list` or `project.label_list` through `gitlab_execute_action` on the default surface, or the `list` action of the matching meta-tool with `TOOL_SURFACE=meta`.
+Completions work best when the MCP client supports the `completion/complete` protocol method. If your client does not support completions, you can still discover values by running the domain's list action: `project.list`, `branch.list` or `project.label_list` through `gitlab_execute_action` on the default surface, or the `list` action of the matching meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`.
 :::
 
 <FAQ />

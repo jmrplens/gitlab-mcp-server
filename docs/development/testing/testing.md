@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,276 |
-| Unit test functions                                   | 12,724 |
-| E2E test functions                                    |    552 |
-| cmd test functions                                    |  1,910 |
-| Test files (internal/)                                |    489 |
+| Total test functions                                  | 13,268 |
+| Unit test functions                                   | 12,726 |
+| E2E test functions                                    |    542 |
+| cmd test functions                                    |  1,904 |
+| Test files (internal/)                                |    490 |
 | Test files (cmd/)                                     |    103 |
-| Test files (test/e2e/)                                |    213 |
+| Test files (test/e2e/)                                |    210 |
 | Tool sub-packages tested                              |    173 |
 | Core packages tested                                  |     21 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  97.9% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,135 | 83.9% |
+| `TestFunc_Scenario` (2-part)           | 11,137 | 83.9% |
 | `TestFunc` (no underscore)             |    959 |  7.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,182 |  8.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,172 |  8.8% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,151 |        129 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,159 |        130 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            301 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (173) |          8,362 |        347 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            552 |        213 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          1,910 |        103 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,276** |    **805** |                                                                                                 |
+| E2E integration         |            542 |        210 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          1,904 |        103 | server entry point and developer command utilities                                              |
+| **Total**               |     **13,268** |    **803** |                                                                                                 |
 
 ### Core Packages
 
@@ -62,7 +62,7 @@
 | clientcompat  |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                            |
 | cmdutil       |         8 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                          |
 | completions   |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                           |
-| config        |        91 |    97.3% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
+| config        |        99 |    97.5% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
 | edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation   |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
@@ -77,7 +77,7 @@
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        35 |    89.8% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       787 |    98.4% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,151** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**  | **2,159** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -339,7 +339,7 @@
 | cmd/internal/auditshared                       |   100.0% |
 | cmd/internal/docgen                            |    99.6% |
 | cmd/internal/mcpsurface                        |   100.0% |
-| cmd/server                                     |    96.3% |
+| cmd/server                                     |    96.0% |
 
 ### Core Packages
 
@@ -351,7 +351,7 @@
 | clientcompat  |   100.0% |
 | cmdutil       |   100.0% |
 | completions   |   100.0% |
-| config        |    97.3% |
+| config        |    97.5% |
 | edition       |    87.0% |
 | elicitation   |    98.3% |
 | gatewaycompat |    99.4% |

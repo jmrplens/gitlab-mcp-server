@@ -913,7 +913,7 @@ func TestRenderReadmeTokenClaim_TiersAgree_StatesOneFigure(t *testing.T) {
 		t.Fatalf("renderReadmeTokenClaim() error: %v", err)
 	}
 	// 2,180 tool schema tokens + 31,758 shared (full) and + 1,088 shared (minimal).
-	wantPrefix := "**33,938 tokens of startup context by default, the same on every GitLab tier (3,268 with `CAPABILITY_SURFACE=minimal`).**"
+	wantPrefix := "**33,938 tokens of startup context by default, the same on every GitLab tier (3,268 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).**"
 	if !strings.HasPrefix(got, wantPrefix) {
 		t.Fatalf("renderReadmeTokenClaim() = %q, want prefix %q", got, wantPrefix)
 	}
@@ -949,11 +949,11 @@ func TestRenderReadmeTokenClaim_TiersDiffer_StatesTheSpan(t *testing.T) {
 	}{
 		{
 			name: "default total differs", tier: "Premium", configuration: dynamicDefaultConfiguration, sharedDelta: 100,
-			wantPrefix: "**From 33,938 to 34,038 tokens of startup context by default, depending on the GitLab tier (3,268 with `CAPABILITY_SURFACE=minimal`).**",
+			wantPrefix: "**From 33,938 to 34,038 tokens of startup context by default, depending on the GitLab tier (3,268 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).**",
 		},
 		{
 			name: "minimal total differs", tier: "Free/CE", configuration: dynamicMinimalConfiguration, sharedDelta: 7,
-			wantPrefix: "**33,938 tokens of startup context by default, the same on every GitLab tier (from 3,268 to 3,275 with `CAPABILITY_SURFACE=minimal`).**",
+			wantPrefix: "**33,938 tokens of startup context by default, the same on every GitLab tier (from 3,268 to 3,275 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).**",
 		},
 	}
 

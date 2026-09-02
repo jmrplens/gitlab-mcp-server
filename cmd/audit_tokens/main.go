@@ -91,9 +91,9 @@ type auditOptions struct {
 // main parses flags and hands the work to run, whose exit code it returns.
 func main() {
 	opts := auditOptions{}
-	flag.BoolVar(&opts.footprint, "footprint", false, "measure all tiers \u00d7 surfaces \u00d7 META_PARAM_SCHEMA modes and write the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json")
+	flag.BoolVar(&opts.footprint, "footprint", false, "measure all tiers \u00d7 surfaces \u00d7 GITLAB_MCP_META_PARAM_SCHEMA modes and write the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json")
 	flag.BoolVar(&opts.check, "check", false, "with -footprint, verify the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json are current without writing (exits non-zero on drift)")
-	flag.BoolVar(&opts.compareSchemas, "compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
+	flag.BoolVar(&opts.compareSchemas, "compare-schemas", false, "compare GITLAB_MCP_META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
 	flag.IntVar(&opts.topTools, "top-tools", 30, "number of individual tools to list by token cost")
 	flag.IntVar(&opts.topDomains, "top-domains", 20, "number of domains to list by token cost")
 	flag.BoolVar(&opts.jsonOut, "json", false, "emit JSON summary instead of markdown report")
@@ -107,7 +107,7 @@ func main() {
 //
 // With -compare-schemas it instead runs the meta-tool InputSchema sizing spike
 // (formerly the standalone audit_meta_schema binary), comparing the byte cost of
-// each META_PARAM_SCHEMA mode (opaque/full/compact); with -footprint it writes
+// each GITLAB_MCP_META_PARAM_SCHEMA mode (opaque/full/compact); with -footprint it writes
 // or verifies the tier x surface x mode matrix.
 //
 // It is the one place a failure is reported. The failures that reach it are
@@ -656,7 +656,7 @@ func fmtNum(n int) string {
 
 // runMetaSchemaSizing builds an in-memory MCP server with the full meta-tool
 // catalog and compares the generated action parameter schemas across all
-// supported META_PARAM_SCHEMA modes (opaque/full/compact), printing a sizing
+// supported GITLAB_MCP_META_PARAM_SCHEMA modes (opaque/full/compact), printing a sizing
 // table to stdout. Formerly the standalone audit_meta_schema binary.
 func runMetaSchemaSizing() {
 	client, cleanup := auditclient.NewMock()
@@ -759,7 +759,7 @@ func humanBytes(n int) string {
 
 // --- Token footprint mode (-footprint) ----------------------------------------
 //
-// The footprint mode measures every tier \u00d7 surface \u00d7 META_PARAM_SCHEMA
+// The footprint mode measures every tier \u00d7 surface \u00d7 GITLAB_MCP_META_PARAM_SCHEMA
 // combination and writes the README managed section plus the standalone
 // docs/development/token-footprint.md reference. It was previously the
 // standalone cmd/gen_readme binary.
@@ -1159,8 +1159,8 @@ func measureTierFootprintWithPrompts(client *gitlabclient.Client, tier edition.T
 // surface (dynamic) across all tiers, plus a link to the detailed doc.
 func renderReadmeFootprint(rows []tokenFootprintRow) string {
 	var b strings.Builder
-	b.WriteString("Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).\n\n")
-	b.WriteString("**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
+	b.WriteString("Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `GITLAB_MCP_META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).\n\n")
+	b.WriteString("**Default configuration**: with `GITLAB_MCP_TOOL_SURFACE` unset or `GITLAB_MCP_TOOL_SURFACE=dynamic`, `GITLAB_MCP_CAPABILITY_SURFACE=full`, `GITLAB_MCP_META_TOOLS` unset, `GITLAB_MCP_META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `GITLAB_MCP_TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `GITLAB_MCP_TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
 
 	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
@@ -1180,7 +1180,7 @@ func renderReadmeFootprint(rows []tokenFootprintRow) string {
 		})
 	}
 	b.WriteString(docgen.RenderMarkdownTable(
-		[]string{"Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`)", "Tier", "Visible tools", "Reachable actions", "`META_PARAM_SCHEMA`", "Tool schema tokens", "Shared tokens", "Total tokens"},
+		[]string{"Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`)", "Tier", "Visible tools", "Reachable actions", "`GITLAB_MCP_META_PARAM_SCHEMA`", "Tool schema tokens", "Shared tokens", "Total tokens"},
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight},
 		tableRows,
 	))
@@ -1213,7 +1213,7 @@ func renderReadmeTokenClaim(rows []tokenFootprintRow) (string, error) {
 		tierClause = "depending on the GitLab tier"
 	}
 	return fmt.Sprintf(
-		"**%s tokens of startup context by default, %s (%s with `CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)\n",
+		"**%s tokens of startup context by default, %s (%s with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)\n",
 		fmtTokenSpan(defaultLo, defaultHi, "From"),
 		tierClause,
 		fmtTokenSpan(minimalLo, minimalHi, "from"),
@@ -1247,7 +1247,7 @@ func fmtTokenSpan(lo, hi int, from string) string {
 }
 
 // renderDetailedFootprint renders the full token matrix to a standalone doc
-// with explanatory prose. All surfaces \u00d7 all META_PARAM_SCHEMA modes \u00d7 all tiers.
+// with explanatory prose. All surfaces \u00d7 all GITLAB_MCP_META_PARAM_SCHEMA modes \u00d7 all tiers.
 func renderDetailedFootprint(rows []tokenFootprintRow) string {
 	var b strings.Builder
 	b.WriteString("# Token Footprint Reference\n\n")
@@ -1267,11 +1267,11 @@ func renderDetailedFootprint(rows []tokenFootprintRow) string {
 		[]string{"Column", "Description"},
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft},
 		[][]string{
-			{"**Configuration**", "The `TOOL_SURFACE` / `CAPABILITY_SURFACE` combination. `dynamic` = find/execute (default); `meta` = domain-grouped dispatchers; `individual` = one tool per action."},
+			{"**Configuration**", "The `GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE` combination. `dynamic` = find/execute (default); `meta` = domain-grouped dispatchers; `individual` = one tool per action."},
 			{"**Tier**", "The GitLab licensing tier: Free/CE, Premium, or Ultimate. Higher tiers expose more actions."},
 			{"**Visible tools**", "How many MCP tool definitions the client receives at startup."},
 			{"**Reachable actions**", "How many distinct GitLab API actions the client can drive (may exceed visible tools in meta/dynamic mode via action routing)."},
-			{"**META_PARAM_SCHEMA**", "How meta-tool input schemas are generated: `opaque` (action enum + params:any, default), `compact` (property names + types only), `full` (full per-action schema with descriptions)."},
+			{"**GITLAB_MCP_META_PARAM_SCHEMA**", "How meta-tool input schemas are generated: `opaque` (action enum + params:any, default), `compact` (property names + types only), `full` (full per-action schema with descriptions)."},
 			{"**Tool schema tokens**", "Token cost of the visible tool definitions (InputSchema, annotations, description)."},
 			{"**Shared tokens**", "Token cost of MCP resources (`gitlab://tools`, templates, workflow guides) and prompt templates. `full` = all resources; `minimal` = only `gitlab://tools` for on-demand schema browsing."},
 			{"**Total tokens**", "Tool schema tokens + shared tokens. This is the approximate startup context-window cost."},
@@ -1296,14 +1296,14 @@ func renderDetailedFootprint(rows []tokenFootprintRow) string {
 		})
 	}
 	b.WriteString(docgen.RenderMarkdownTable(
-		[]string{"Configuration", "Tier", "Visible tools", "Reachable actions", "`META_PARAM_SCHEMA`", "Tool schema tokens", "Shared tokens", "Total tokens"},
+		[]string{"Configuration", "Tier", "Visible tools", "Reachable actions", "`GITLAB_MCP_META_PARAM_SCHEMA`", "Tool schema tokens", "Shared tokens", "Total tokens"},
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight},
 		tableRows,
 	))
 
 	b.WriteString("\n## Interpretation guide\n\n")
 	b.WriteString("- **Dynamic mode** (default) exposes only 2 tools (`gitlab_find_action` + `gitlab_execute_action`) but reaches all catalog actions via routing. This is the lowest-token surface.\n")
-	b.WriteString("- **Meta mode** exposes one dispatcher per domain (e.g. `gitlab_branch`, `gitlab_issue`). The `META_PARAM_SCHEMA` controls whether the action parameter's schema is generic (`opaque`) or detailed (`compact`/`full`). `full` doubles the token cost vs `opaque` but gives the LLM exact per-action input shapes.\n")
+	b.WriteString("- **Meta mode** exposes one dispatcher per domain (e.g. `gitlab_branch`, `gitlab_issue`). The `GITLAB_MCP_META_PARAM_SCHEMA` controls whether the action parameter's schema is generic (`opaque`) or detailed (`compact`/`full`). `full` doubles the token cost vs `opaque` but gives the LLM exact per-action input shapes.\n")
 	b.WriteString("- **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface. Suitable only for clients with large context windows.\n")
 	b.WriteString("- **Tier scaling**: Free/CE has the fewest actions. Premium adds enterprise features. Ultimate includes everything. The token cost scales with the number of available actions.\n")
 	b.WriteString("- **Shared tokens** are dominated by MCP resources (`gitlab://tools` template, workflow guides) and prompts. The `minimal` capability surface strips these to just `gitlab://tools`, cutting shared overhead by ~90%%.\n")

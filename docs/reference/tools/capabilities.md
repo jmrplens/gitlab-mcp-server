@@ -14,7 +14,7 @@
 
 The MCP capabilities domain covers special tools that leverage Model Context Protocol capabilities rather than standard GitLab REST API endpoints. These tools use **MCP elicitation** (interactive step-by-step user prompts for resource creation), and **health diagnostics** (server connectivity checks).
 
-On the default dynamic surface, these operations are the `interactive.*`, `server.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `interactive.*`, `server.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 Elicitation tools require the MCP client to support the elicitation capability. If the client does not support the required capability, the tool returns an informational message instead of failing.
 

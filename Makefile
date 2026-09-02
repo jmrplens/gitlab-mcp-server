@@ -1157,7 +1157,7 @@ inspector:
 			-e GITLAB_URL="$${GITLAB_URL:-https://gitlab.com}" \
 			-e GITLAB_TOKEN="$$GITLAB_TOKEN" \
 			-e GITLAB_SKIP_TLS_VERIFY="$${GITLAB_SKIP_TLS_VERIFY:-false}" \
-			-e META_TOOLS=true \
+			-e GITLAB_MCP_TOOL_SURFACE=meta \
 			-- $(INSPECTOR_BIN)
 
 ## inspector-stop: stop any running MCP Inspector and server processes.

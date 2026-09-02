@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Repository Storage Moves
 > **Individual tools**: 18
-> **Meta-tool**: `gitlab_storage_move` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_storage_move` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `storage_move.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Project Repository Storage Moves](https://docs.gitlab.com/ee/api/project_repository_storage_moves.html) · [Group Repository Storage Moves](https://docs.gitlab.com/ee/api/group_repository_storage_moves.html) · [Snippet Repository Storage Moves](https://docs.gitlab.com/ee/api/snippet_repository_storage_moves.html)
 > **Audience**: 👤 GitLab administrators
@@ -16,9 +16,9 @@ Repository storage moves allow GitLab administrators to migrate repositories bet
 
 All operations require **admin access**.
 
-On the default dynamic surface, these operations are the `storage_move.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `storage_move.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, repository storage move tools are consolidated into a single `gitlab_storage_move` meta-tool with an `action` parameter. Project and snippet storage move actions are available in the base catalog; group storage move actions require the Enterprise/Premium catalog.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, repository storage move tools are consolidated into a single `gitlab_storage_move` meta-tool with an `action` parameter. Project and snippet storage move actions are available in the base catalog; group storage move actions require the Enterprise/Premium catalog.
 
 ### Common Questions
 
@@ -265,7 +265,7 @@ Schedule repository storage moves for all snippets (admin only). Migrates all sn
 
 ## Meta-tool: `gitlab_storage_move`
 
-With `TOOL_SURFACE=meta`, storage move tools are available through a single `gitlab_storage_move` meta-tool. Use the `action` parameter to select the operation. Project and snippet actions are available in the base catalog; group actions require the Enterprise/Premium catalog.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, storage move tools are available through a single `gitlab_storage_move` meta-tool. Use the `action` parameter to select the operation. Project and snippet actions are available in the base catalog; group actions require the Enterprise/Premium catalog.
 
 ### Action Mapping
 
