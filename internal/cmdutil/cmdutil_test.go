@@ -160,3 +160,71 @@ func TestProgressf_WritesToStderrWithNewline(t *testing.T) {
 		t.Fatalf("Progressf() stderr = %q, want %q", got, want)
 	}
 }
+
+// TestMust_ReturnsValueWhenErrIsNil verifies that the happy path, the only one
+// a correct caller ever takes, returns the value untouched and does not panic.
+func TestMust_ReturnsValueWhenErrIsNil(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		got  func() any
+		want any
+	}{
+		{
+			name: "a value is returned unchanged",
+			got:  func() any { return Must("catalog", nil) },
+			want: "catalog",
+		},
+		{
+			name: "the zero value is returned as readily as any other",
+			got:  func() any { return Must(0, nil) },
+			want: 0,
+		},
+		{
+			name: "MustDo returns without panicking",
+			got:  func() any { MustDo(nil); return "returned" },
+			want: "returned",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.got(); got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMust_PanicsWithTheError verifies that a failure reaching Must stops the
+// program and says why. The message has to carry the error itself, because the
+// call site cannot add context: Go's f(g()) rule leaves no room for an extra
+// argument, so the error text is the only explanation a reader gets.
+func TestMust_PanicsWithTheError(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		invoke func()
+		want   string
+	}{
+		{
+			name:   "Must names itself and carries the error",
+			invoke: func() { _ = Must("", os.ErrNotExist) },
+			want:   "cmdutil.Must: file does not exist",
+		},
+		{
+			name:   "MustDo names itself and carries the error",
+			invoke: func() { MustDo(os.ErrPermission) },
+			want:   "cmdutil.MustDo: permission denied",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				raised := recover()
+				if raised == nil {
+					t.Fatal("no panic; a non-nil error must stop the program")
+				}
+				if got, ok := raised.(string); !ok || got != tc.want {
+					t.Errorf("panic = %v, want %q", raised, tc.want)
+				}
+			}()
+			tc.invoke()
+		})
+	}
+}
