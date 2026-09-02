@@ -28133,7 +28133,7 @@ Send a test event to a system hook. Returns: the delivery status of the test eve
 
 - `id` (integer) (required): System hook ID to test
 
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ### todo (3 tools)
 

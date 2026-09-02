@@ -276,15 +276,20 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 	}
 }
 
-// individualCatalogActionReadOnly reports whether the action is
-// read-only for individual tool registration. Honors the explicit
-// [toolutil.IndividualToolSpec.AnnotationOverrides.ReadOnly] override
-// when set so compatibility aliases can mark otherwise mutating actions
-// as read-only.
+// individualCatalogActionReadOnly reports whether the action is read-only for
+// individual tool registration.
+//
+// It reads the same annotation overrides the projection does, through the same
+// [toolutil.IndividualToolAnnotationOverrides.NarrowingOnly] rule, so the bit
+// safe mode branches on and the readOnlyHint the client is served can never
+// disagree. They did: an override could declare a mutating action read-only
+// here and nowhere else, and --read-only then kept on this surface an action it
+// removed on the other two.
 func individualCatalogActionReadOnly(action actioncatalog.Action) bool {
 	readOnly := action.ReadOnly
-	if action.IndividualTool.AnnotationOverrides.ReadOnly != nil {
-		readOnly = *action.IndividualTool.AnnotationOverrides.ReadOnly
+	overrides := action.IndividualTool.AnnotationOverrides.NarrowingOnly(action.ReadOnly, action.Idempotent)
+	if overrides.ReadOnly != nil {
+		readOnly = *overrides.ReadOnly
 	}
 	return readOnly
 }

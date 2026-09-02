@@ -20,4 +20,19 @@
 //	gitlab://tools/{id}
 //
 // [Register] wires the GitLab-backed resources into an MCP server.
+//
+// # Narrowing
+//
+// A GitLab-backed resource is a second request path to data a tool also
+// returns, with the same credential, so the operator's --exclude-tools must
+// reach it: [RegisterOptions] carries the excluded catalog actions and
+// resourceBackingActions is the table relating the two surfaces. Tool-manifest
+// and workflow-guide resources are static documents about this server and are
+// never narrowed.
+//
+// Two controls still do not reach this surface, both because they are applied
+// where tools are registered rather than here: the tools/call rate limiter,
+// which does not meter resources/read, and the prompt surface, which is a third
+// path to the same data and takes no options at all. Both are noted so the
+// silence does not read as coverage.
 package resources

@@ -469,9 +469,12 @@ func wrapErr(msg string, err error) error {
 // Register also returns a [HandlerIndex] keyed by URI template, so a caller
 // can re-read a resource through the same handler the MCP router dispatches
 // to. Callers that only need registration can ignore it.
-func Register(server *mcp.Server, client *gitlabclient.Client) HandlerIndex {
+// An optional [RegisterOptions] narrows the surface: a resource whose data an
+// excluded action also served is neither registered on the server nor placed in
+// the returned index, so it cannot be read and cannot be subscribed to either.
+func Register(server *mcp.Server, client *gitlabclient.Client, opts ...RegisterOptions) HandlerIndex {
 	rec := &recorder{server: server, index: make(HandlerIndex)}
-	registerAll(rec, client)
+	registerAll(registrarFor(rec, opts), client)
 	return rec.index
 }
 

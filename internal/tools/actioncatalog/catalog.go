@@ -482,28 +482,6 @@ func recordCatalogAlias(seenAliases map[string]ActionID, actionID ActionID, alia
 	return nil
 }
 
-// FilterExcludedTools returns a cloned catalog without excluded tool groups.
-func (c *Catalog) FilterExcludedTools(excludeTools []string) *Catalog {
-	if c == nil {
-		return nil
-	}
-	if len(excludeTools) == 0 {
-		return c.Clone()
-	}
-	excluded := make(map[string]struct{}, len(excludeTools))
-	for _, toolName := range excludeTools {
-		excluded[toolName] = struct{}{}
-	}
-	filtered := NewCatalog()
-	for _, group := range c.Groups() {
-		if _, ok := excluded[group.ToolName]; ok {
-			continue
-		}
-		mustAddCatalogGroup(filtered, group, "filter excluded tools")
-	}
-	return filtered
-}
-
 // FilterReadOnlyGroups returns a cloned catalog containing only read-only groups.
 func (c *Catalog) FilterReadOnlyGroups() *Catalog {
 	if c == nil {
