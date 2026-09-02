@@ -357,12 +357,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      # Still needed by the installer and packaging tests below, which are
+      # Python because what they test is. The auditor no longer is, so nothing
+      # here installs a package at run time any more.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.x"
-      - name: Ensure PyYAML
-        run: python3 -c "import yaml" || pip install --quiet pyyaml
+      - run: go mod download
       - name: Audit the supply chain configuration
-        run: python3 scripts/audit_supply_chain.py
+        run: make check-supply-chain
       - name: Test the auditor itself
+        run: go test ./cmd/audit_supply_chain/ -count=1
+      - name: Test the installer and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
