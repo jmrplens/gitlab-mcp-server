@@ -144,10 +144,25 @@ type session struct {
 // change which tool surface is under test.
 func startSession(t *testing.T, env map[string]string) *session {
 	t.Helper()
+	return startSessionInDir(t, "", env)
+}
+
+// startSessionInDir is startSession with the process's working directory
+// chosen by the caller. An empty dir keeps the Go default, which is this
+// package's own directory, so every existing caller is unaffected.
+//
+// It exists because the working directory is untrusted input on stdio: an MCP
+// client sets it to whatever workspace it has open, so its contents arrive
+// with a cloned repository rather than from the person running the server.
+// Whether the server reads anything out of it is a property of the process
+// and can only be tested by choosing one.
+func startSessionInDir(t *testing.T, dir string, env map[string]string) *session {
+	t.Helper()
 
 	bin := serverBinary(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin)
+	cmd.Dir = dir
 
 	environ := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
 	for k, v := range env {
