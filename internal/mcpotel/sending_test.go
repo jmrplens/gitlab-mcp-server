@@ -181,7 +181,7 @@ func TestSendingMiddleware_APanickingHandler_IsStillMeasured(t *testing.T) {
 
 	func() {
 		defer func() {
-			if recover() == nil {
+			if recovered := recover(); recovered == nil {
 				t.Error("the middleware swallowed the panic; whoever is below it must decide what a panic means")
 			}
 		}()

@@ -1979,7 +1979,7 @@ func TestStartRevalidation_PanickingEvictionCallback_DoesNotKillTheProcess(t *te
 	// what separates "recovered" from "about to crash the binary".
 	time.Sleep(50 * time.Millisecond)
 
-	if pool.Stats().RevalidationsFailed == 0 {
+	if got := pool.Stats().RevalidationsFailed; got == 0 {
 		t.Error("the failed revalidation was not counted")
 	}
 }
