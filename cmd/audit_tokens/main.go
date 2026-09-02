@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -113,17 +114,64 @@ func main() {
 	}
 	defer cleanup()
 
+	audit := measureTokenAudit(client)
+	if *jsonOut {
+		if encErr := writeTokenAuditJSON(os.Stdout, audit); encErr != nil {
+			fmt.Fprintf(os.Stderr, "encode json: %v\n", encErr)
+		}
+		return
+	}
+	printTokenAuditReport(audit, *topTools, *topDomains)
+}
+
+// exitProcess terminates the process after an unrecoverable failure has been
+// reported on stderr. It is a variable so tests can observe the exit path
+// instead of dying with it.
+var exitProcess = os.Exit
+
+// tokenAudit holds every measurement the default report and its -json form
+// print, gathered once by [measureTokenAudit] so both renderers read the same
+// numbers.
+//
+// The info slices are the per-tool measurements of each surface, sorted by
+// token cost. The resource token fields are the shared resource cost under
+// each surface's registration (the dynamic-minimal one keeps only the tool
+// manifest), promptTokens the prompt catalog cost. The action counts
+// distinguish catalog-only meta routes from the reachable set the dynamic
+// catalog folds standalone utilities into.
+type tokenAudit struct {
+	individualInfo        []toolTokenInfo
+	metaBaseInfo          []toolTokenInfo
+	metaEnterpriseInfo    []toolTokenInfo
+	dynamicBaseInfo       []toolTokenInfo
+	dynamicEnterpriseInfo []toolTokenInfo
+
+	individualResourceTokens     int
+	metaBaseResourceTokens       int
+	dynamicBaseResourceTokens    int
+	dynamicMinimalResourceTokens int
+	promptTokens                 int
+
+	metaBaseCatalogActions       int
+	metaEnterpriseCatalogActions int
+	baseReachableActions         int
+	enterpriseReachableActions   int
+}
+
+// measureTokenAudit registers the individual, meta and dynamic surfaces with
+// their resources and prompts and measures what each costs a model.
+func measureTokenAudit(client *gitlabclient.Client) tokenAudit {
 	metaBaseRoutes := buildMetaActionMaps(client, false)
 	metaEnterpriseRoutes := buildMetaActionMaps(client, true)
 	dynamicBaseCatalog, err := dynamictools.AddStandaloneCatalog(actioncatalog.FromActionMaps(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "add standalone base dynamic catalog: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit.
+		exitProcess(1)
 	}
 	dynamicEnterpriseCatalog, err := dynamictools.AddStandaloneCatalog(actioncatalog.FromActionMaps(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "add standalone enterprise dynamic catalog: %v\n", err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 	dynamicBaseRoutes := dynamicBaseCatalog.ActionMaps()
 	dynamicEnterpriseRoutes := dynamicEnterpriseCatalog.ActionMaps()
@@ -136,59 +184,67 @@ func main() {
 	dynamicEnterpriseTools := listDynamicTools(dynamicEnterpriseCatalog)
 
 	cmdutil.Progressf("audit_tokens: measuring token cost (tools, resources, prompts)...")
-	individualInfo := measureTools(individualTools)
-	metaBaseInfo := measureTools(metaBaseTools)
-	metaEnterpriseInfo := measureTools(metaEnterpriseTools)
-	dynamicBaseInfo := measureTools(dynamicBaseTools)
-	dynamicEnterpriseInfo := measureTools(dynamicEnterpriseTools)
+	return tokenAudit{
+		individualInfo:        measureTools(individualTools),
+		metaBaseInfo:          measureTools(metaBaseTools),
+		metaEnterpriseInfo:    measureTools(metaEnterpriseTools),
+		dynamicBaseInfo:       measureTools(dynamicBaseTools),
+		dynamicEnterpriseInfo: measureTools(dynamicEnterpriseTools),
 
-	individualResourceTokens := measureResources(client, nil, nil, individualTools, config.ToolSurfaceIndividual)
-	metaBaseResourceTokens := measureResources(client, metaBaseRoutes, actioncatalog.FromActionMaps(metaBaseRoutes), metaBaseTools, config.ToolSurfaceMeta)
-	dynamicBaseResourceTokens := measureResources(client, dynamicBaseRoutes, dynamicBaseCatalog, dynamicBaseTools, config.ToolSurfaceDynamic)
-	dynamicMinimalResourceTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{
-		ToolManifest: true,
-		ToolSurface:  config.ToolSurfaceDynamic,
-		ToolList:     dynamicBaseTools,
-		ToolCatalog:  dynamicBaseCatalog,
-	})
-	promptTokens := measurePrompts(client)
+		individualResourceTokens:  measureResources(client, nil, nil, individualTools, config.ToolSurfaceIndividual),
+		metaBaseResourceTokens:    measureResources(client, metaBaseRoutes, actioncatalog.FromActionMaps(metaBaseRoutes), metaBaseTools, config.ToolSurfaceMeta),
+		dynamicBaseResourceTokens: measureResources(client, dynamicBaseRoutes, dynamicBaseCatalog, dynamicBaseTools, config.ToolSurfaceDynamic),
+		dynamicMinimalResourceTokens: measureResourcesWithOptions(client, nil, resourceRegistrationOptions{
+			ToolManifest: true,
+			ToolSurface:  config.ToolSurfaceDynamic,
+			ToolList:     dynamicBaseTools,
+			ToolCatalog:  dynamicBaseCatalog,
+		}),
+		promptTokens: measurePrompts(client),
 
-	// Mode comparison
-	indTotal := totalTokens(individualInfo)
-	metaTotal := totalTokens(metaBaseInfo)
-	metaEntTotal := totalTokens(metaEnterpriseInfo)
-	dynamicTotal := totalTokens(dynamicBaseInfo)
-	dynamicEntTotal := totalTokens(dynamicEnterpriseInfo)
-	metaBaseCatalogActions := countActions(metaBaseRoutes)
-	metaEnterpriseCatalogActions := countActions(metaEnterpriseRoutes)
-	baseReachableActions := countActions(dynamicBaseRoutes)
-	enterpriseReachableActions := countActions(dynamicEnterpriseRoutes)
-
-	if *jsonOut {
-		summary := struct {
-			IndividualTools         int `json:"individual_tools"`
-			MetaBaseTools           int `json:"meta_base_tools"`
-			DynamicBaseTools        int `json:"dynamic_base_tools"`
-			IndividualTokens        int `json:"individual_tokens"`
-			MetaBaseTokens          int `json:"meta_base_tokens"`
-			MetaEnterpriseTokens    int `json:"meta_enterprise_tokens"`
-			DynamicBaseTokens       int `json:"dynamic_base_tokens"`
-			DynamicEnterpriseTokens int `json:"dynamic_enterprise_tokens"`
-			BaseReachableActions    int `json:"base_reachable_actions"`
-			ResourceTokens          int `json:"resource_tokens"`
-			PromptTokens            int `json:"prompt_tokens"`
-		}{
-			len(individualInfo), len(metaBaseInfo), len(dynamicBaseInfo),
-			indTotal, metaTotal, metaEntTotal, dynamicTotal, dynamicEntTotal,
-			baseReachableActions, individualResourceTokens, promptTokens,
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if encErr := enc.Encode(summary); encErr != nil {
-			fmt.Fprintf(os.Stderr, "encode json: %v\n", encErr)
-		}
-		return
+		metaBaseCatalogActions:       countActions(metaBaseRoutes),
+		metaEnterpriseCatalogActions: countActions(metaEnterpriseRoutes),
+		baseReachableActions:         countActions(dynamicBaseRoutes),
+		enterpriseReachableActions:   countActions(dynamicEnterpriseRoutes),
 	}
+}
+
+// writeTokenAuditJSON encodes the headline measurements as an indented JSON
+// object, the -json form of the report.
+func writeTokenAuditJSON(w io.Writer, audit tokenAudit) error {
+	summary := struct {
+		IndividualTools         int `json:"individual_tools"`
+		MetaBaseTools           int `json:"meta_base_tools"`
+		DynamicBaseTools        int `json:"dynamic_base_tools"`
+		IndividualTokens        int `json:"individual_tokens"`
+		MetaBaseTokens          int `json:"meta_base_tokens"`
+		MetaEnterpriseTokens    int `json:"meta_enterprise_tokens"`
+		DynamicBaseTokens       int `json:"dynamic_base_tokens"`
+		DynamicEnterpriseTokens int `json:"dynamic_enterprise_tokens"`
+		BaseReachableActions    int `json:"base_reachable_actions"`
+		ResourceTokens          int `json:"resource_tokens"`
+		PromptTokens            int `json:"prompt_tokens"`
+	}{
+		len(audit.individualInfo), len(audit.metaBaseInfo), len(audit.dynamicBaseInfo),
+		totalTokens(audit.individualInfo), totalTokens(audit.metaBaseInfo), totalTokens(audit.metaEnterpriseInfo),
+		totalTokens(audit.dynamicBaseInfo), totalTokens(audit.dynamicEnterpriseInfo),
+		audit.baseReachableActions, audit.individualResourceTokens, audit.promptTokens,
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(summary)
+}
+
+// printTokenAuditReport writes the Markdown token report to stdout: the
+// per-surface comparison, the shared overhead, the most expensive tools and
+// domains, and the grand totals a model sees at startup. topTools and
+// topDomains cap the individual-tool and domain rankings.
+func printTokenAuditReport(audit tokenAudit, topTools, topDomains int) {
+	indTotal := totalTokens(audit.individualInfo)
+	metaTotal := totalTokens(audit.metaBaseInfo)
+	metaEntTotal := totalTokens(audit.metaEnterpriseInfo)
+	dynamicTotal := totalTokens(audit.dynamicBaseInfo)
+	dynamicEntTotal := totalTokens(audit.dynamicEnterpriseInfo)
 
 	fmt.Println("=" + strings.Repeat("=", 69))
 	fmt.Println("  gitlab-mcp-server. Token Overhead Audit")
@@ -200,16 +256,16 @@ func main() {
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  Mode\tTools\tReachable actions\tTokens\tBytes\n")
 	fmt.Fprintf(tw, "  ----\t-----\t--------------\t------\t-----\n")
-	fmt.Fprintf(tw, "  Individual (all)\t%d\t%d\t%s\t%s\n", len(individualInfo), len(individualInfo), fmtNum(indTotal), fmtNum(totalBytes(individualInfo)))
-	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), baseReachableActions, fmtNum(metaTotal), fmtNum(totalBytes(metaBaseInfo)))
-	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), enterpriseReachableActions, fmtNum(metaEntTotal), fmtNum(totalBytes(metaEnterpriseInfo)))
-	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(dynamicBaseInfo), baseReachableActions, fmtNum(dynamicTotal), fmtNum(totalBytes(dynamicBaseInfo)))
-	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamicEnterpriseInfo), enterpriseReachableActions, fmtNum(dynamicEntTotal), fmtNum(totalBytes(dynamicEnterpriseInfo)))
+	fmt.Fprintf(tw, "  Individual (all)\t%d\t%d\t%s\t%s\n", len(audit.individualInfo), len(audit.individualInfo), fmtNum(indTotal), fmtNum(totalBytes(audit.individualInfo)))
+	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(audit.metaBaseInfo), audit.baseReachableActions, fmtNum(metaTotal), fmtNum(totalBytes(audit.metaBaseInfo)))
+	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(audit.metaEnterpriseInfo), audit.enterpriseReachableActions, fmtNum(metaEntTotal), fmtNum(totalBytes(audit.metaEnterpriseInfo)))
+	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(audit.dynamicBaseInfo), audit.baseReachableActions, fmtNum(dynamicTotal), fmtNum(totalBytes(audit.dynamicBaseInfo)))
+	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(audit.dynamicEnterpriseInfo), audit.enterpriseReachableActions, fmtNum(dynamicEntTotal), fmtNum(totalBytes(audit.dynamicEnterpriseInfo)))
 	_ = tw.Flush()
 	fmt.Println()
-	if addedStandalone := baseReachableActions - metaBaseCatalogActions; addedStandalone > 0 {
+	if addedStandalone := audit.baseReachableActions - audit.metaBaseCatalogActions; addedStandalone > 0 {
 		fmt.Printf("  Reachable action counts include %d standalone utility actions (project discovery + interactive flows) that are visible tools in meta mode and folded into the dynamic catalog.\n", addedStandalone)
-		fmt.Printf("  Catalog-only meta route counts: base %s / enterprise %s.\n", fmtNum(metaBaseCatalogActions), fmtNum(metaEnterpriseCatalogActions))
+		fmt.Printf("  Catalog-only meta route counts: base %s / enterprise %s.\n", fmtNum(audit.metaBaseCatalogActions), fmtNum(audit.metaEnterpriseCatalogActions))
 		fmt.Println()
 	}
 
@@ -227,16 +283,16 @@ func main() {
 	// Shared overhead (resources + prompts)
 	fmt.Println("## Shared Overhead (Resources + Prompts)")
 	fmt.Println()
-	fmt.Printf("  Resources (individual): ~%s tokens\n", fmtNum(individualResourceTokens))
-	fmt.Printf("  Resources (meta-tools): ~%s tokens\n", fmtNum(metaBaseResourceTokens))
-	fmt.Printf("  Resources (dynamic): ~%s tokens\n", fmtNum(dynamicBaseResourceTokens))
-	fmt.Printf("  Resources (dynamic-minimal): ~%s tokens\n", fmtNum(dynamicMinimalResourceTokens))
-	fmt.Printf("  Prompts (full): ~%s tokens\n", fmtNum(promptTokens))
+	fmt.Printf("  Resources (individual): ~%s tokens\n", fmtNum(audit.individualResourceTokens))
+	fmt.Printf("  Resources (meta-tools): ~%s tokens\n", fmtNum(audit.metaBaseResourceTokens))
+	fmt.Printf("  Resources (dynamic): ~%s tokens\n", fmtNum(audit.dynamicBaseResourceTokens))
+	fmt.Printf("  Resources (dynamic-minimal): ~%s tokens\n", fmtNum(audit.dynamicMinimalResourceTokens))
+	fmt.Printf("  Prompts (full): ~%s tokens\n", fmtNum(audit.promptTokens))
 	fmt.Println("  Prompts (dynamic-minimal): ~0 tokens (0 bytes)")
-	fmt.Printf("  Individual total: ~%s tokens\n", fmtNum(individualResourceTokens+promptTokens))
-	fmt.Printf("  Meta-tool total:  ~%s tokens\n", fmtNum(metaBaseResourceTokens+promptTokens))
-	fmt.Printf("  Dynamic total:    ~%s tokens\n", fmtNum(dynamicBaseResourceTokens+promptTokens))
-	fmt.Printf("  Dynamic-minimal total: ~%s tokens\n", fmtNum(dynamicMinimalResourceTokens))
+	fmt.Printf("  Individual total: ~%s tokens\n", fmtNum(audit.individualResourceTokens+audit.promptTokens))
+	fmt.Printf("  Meta-tool total:  ~%s tokens\n", fmtNum(audit.metaBaseResourceTokens+audit.promptTokens))
+	fmt.Printf("  Dynamic total:    ~%s tokens\n", fmtNum(audit.dynamicBaseResourceTokens+audit.promptTokens))
+	fmt.Printf("  Dynamic-minimal total: ~%s tokens\n", fmtNum(audit.dynamicMinimalResourceTokens))
 	fmt.Println()
 
 	fmt.Println("## Minimal Capability Candidate")
@@ -244,8 +300,8 @@ func main() {
 	fmt.Println("  Required for dynamic action use: `gitlab_find_action` returns exact schemas inline, and `gitlab_execute_action` performs execution.")
 	fmt.Println("  Retained minimal resource: `gitlab://tools` for action call shapes.")
 	fmt.Println("  Optional in minimal mode: static GitLab data resources, workflow guide resources, and prompt templates.")
-	if dynamicBaseResourceTokens+promptTokens > 0 {
-		savings := float64(dynamicBaseResourceTokens+promptTokens-dynamicMinimalResourceTokens) / float64(dynamicBaseResourceTokens+promptTokens) * 100
+	if audit.dynamicBaseResourceTokens+audit.promptTokens > 0 {
+		savings := float64(audit.dynamicBaseResourceTokens+audit.promptTokens-audit.dynamicMinimalResourceTokens) / float64(audit.dynamicBaseResourceTokens+audit.promptTokens) * 100
 		fmt.Printf("  Shared-overhead reduction: %.1f%% vs full dynamic resources+prompts\n", savings)
 	}
 	fmt.Println()
@@ -253,34 +309,34 @@ func main() {
 	// Top 30 individual tools by token cost
 	fmt.Println("## Top 30 Individual Tools by Token Cost")
 	fmt.Println()
-	printTopTools(individualInfo, *topTools)
+	printTopTools(audit.individualInfo, topTools)
 
 	// Top 20 meta-tools by token cost
 	fmt.Println("## Meta-Tools by Token Cost (base)")
 	fmt.Println()
-	printTopTools(metaBaseInfo, len(metaBaseInfo))
+	printTopTools(audit.metaBaseInfo, len(audit.metaBaseInfo))
 
 	// Dynamic tools by token cost
 	fmt.Println("## Dynamic Tools by Token Cost (base)")
 	fmt.Println()
-	printTopTools(dynamicBaseInfo, len(dynamicBaseInfo))
+	printTopTools(audit.dynamicBaseInfo, len(audit.dynamicBaseInfo))
 
 	// Domain aggregation for individual tools
 	fmt.Println("## Domain Totals (Individual Mode, Top 20)")
 	fmt.Println()
-	printDomainTotals(individualInfo, *topDomains)
+	printDomainTotals(audit.individualInfo, topDomains)
 
 	// Grand total
 	fmt.Println("## Grand Total (what an LLM sees)")
 	fmt.Println()
 	fmt.Printf("  Individual mode: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(indTotal), fmtNum(individualResourceTokens+promptTokens), fmtNum(indTotal+individualResourceTokens+promptTokens))
+		fmtNum(indTotal), fmtNum(audit.individualResourceTokens+audit.promptTokens), fmtNum(indTotal+audit.individualResourceTokens+audit.promptTokens))
 	fmt.Printf("  Meta-tool mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(metaTotal), fmtNum(metaBaseResourceTokens+promptTokens), fmtNum(metaTotal+metaBaseResourceTokens+promptTokens))
+		fmtNum(metaTotal), fmtNum(audit.metaBaseResourceTokens+audit.promptTokens), fmtNum(metaTotal+audit.metaBaseResourceTokens+audit.promptTokens))
 	fmt.Printf("  Dynamic mode:    ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(dynamicTotal), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamicTotal+dynamicBaseResourceTokens+promptTokens))
+		fmtNum(dynamicTotal), fmtNum(audit.dynamicBaseResourceTokens+audit.promptTokens), fmtNum(dynamicTotal+audit.dynamicBaseResourceTokens+audit.promptTokens))
 	fmt.Printf("  Dynamic minimal: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(dynamicTotal), fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamicTotal+dynamicMinimalResourceTokens))
+		fmtNum(dynamicTotal), fmtNum(audit.dynamicMinimalResourceTokens), fmtNum(dynamicTotal+audit.dynamicMinimalResourceTokens))
 	fmt.Println()
 }
 
@@ -294,14 +350,14 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 	case config.ToolSurfaceMeta:
 		if err := tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
 			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
-			os.Exit(1)
+			exitProcess(1)
 		}
 		tools.RegisterMCPMeta(server, client)
 	case config.ToolSurfaceIndividual:
 		tools.RegisterAll(server, client, edition.TierForEnterprise(enterprise))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown tool surface %q\n", toolSurface)
-		os.Exit(1)
+		exitProcess(1)
 	}
 	return listToolsFromServer(server)
 }
@@ -320,7 +376,7 @@ func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[strin
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build action catalog: %v\n", err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 	return catalog.ActionMaps()
 }
@@ -342,7 +398,7 @@ func connectInMemory(server *mcp.Server, what string) (session *mcp.ClientSessio
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "server connect (%s): %v\n", what, err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
@@ -350,7 +406,7 @@ func connectInMemory(server *mcp.Server, what string) (session *mcp.ClientSessio
 	if err != nil {
 		_ = serverSession.Close()
 		fmt.Fprintf(os.Stderr, "client connect (%s): %v\n", what, err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 	return session, func() {
 		_ = session.Close()
@@ -367,7 +423,7 @@ func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 	if err != nil {
 		closeBoth()
 		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 	closeBoth()
 	return result.Tools
@@ -381,7 +437,7 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 		b, err := marshalModelFacing(t)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "marshal tool %s: %v\n", t.Name, err)
-			os.Exit(1)
+			exitProcess(1)
 		}
 		tokens := countTokens(b)
 		domain := extractDomain(t.Name)
@@ -434,7 +490,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 	fatalWithSession := func(format string, args ...any) {
 		closeBoth()
 		fmt.Fprintf(os.Stderr, format, args...)
-		os.Exit(1)
+		exitProcess(1)
 	}
 
 	totalTokens := 0
@@ -492,7 +548,7 @@ func measurePrompts(client *gitlabclient.Client) int {
 			if mErr != nil {
 				closeBoth()
 				fmt.Fprintf(os.Stderr, "marshal prompt %s: %v\n", pr.Name, mErr)
-				os.Exit(1)
+				exitProcess(1)
 			}
 			totalTokens += countTokens(b)
 		}
@@ -822,6 +878,11 @@ func (r tokenFootprintRow) totalTokens() int {
 	return r.ToolSchemaTokens + r.SharedTokens
 }
 
+// measureFootprintRows is the measurement the footprint modes run. It is a
+// variable so tests can drive the write and check paths against known rows
+// without paying for the full tier x surface x mode measurement each time.
+var measureFootprintRows = measureTokenFootprintRows
+
 // runFootprintMode builds the mock-backed client and runs the full token
 // footprint measurement, mirroring the self-contained client pattern of
 // [runMetaSchemaSizing].
@@ -844,7 +905,7 @@ func runFootprintMode(check bool) error {
 // and the gen_stats -check gate. This restores the README-token-footprint half
 // of the former gen_readme -check (the stats half lives in gen_stats -check).
 func runFootprintCheck(client *gitlabclient.Client) error {
-	rows, err := measureTokenFootprintRows(client)
+	rows, err := measureFootprintRows(client)
 	if err != nil {
 		return fmt.Errorf("measuring token footprint: %w", err)
 	}
@@ -919,7 +980,7 @@ func footprintStaleTargets(readmeText, detailedText, siteText string, rows []tok
 // README managed sections (the headline claim and the footprint table) plus
 // the detailed reference doc and the site data file.
 func runFootprint(client *gitlabclient.Client) error {
-	rows, err := measureTokenFootprintRows(client)
+	rows, err := measureFootprintRows(client)
 	if err != nil {
 		return fmt.Errorf("measuring token footprint: %w", err)
 	}

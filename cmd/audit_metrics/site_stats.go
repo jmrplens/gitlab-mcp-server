@@ -147,7 +147,7 @@ func countCatalogGroupsForTier(client *gitlabclient.Client, tier edition.Tier) i
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: tier, IncludeMCP: true})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build catalog for tier %s: %v\n", tier, err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 	return catalog.CountGroups()
 }
@@ -161,10 +161,17 @@ func sumResources(client *gitlabclient.Client) int {
 // readVersionFile reads the repository VERSION file and returns the trimmed
 // semantic version string.
 func readVersionFile() string {
-	data, err := os.ReadFile(filepath.Join(repositoryRoot(), "VERSION"))
+	return readVersionFileAt(repositoryRoot())
+}
+
+// readVersionFileAt reads the VERSION file under root and returns the trimmed
+// semantic version string, exiting when the file cannot be read: a stats
+// payload without a version is not worth publishing.
+func readVersionFileAt(root string) string {
+	data, err := os.ReadFile(filepath.Join(root, "VERSION")) //#nosec G304 -- root is the repository root, not user input
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "read VERSION: %v\n", err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 	return strings.TrimSpace(string(data))
 }

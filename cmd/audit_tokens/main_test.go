@@ -2,48 +2,89 @@
 // a local GitLab version mock and exercise the resource token measurement path
 // that depends on the surface-aware tool manifest resources.
 //
-// Coverage focuses on the resource registration options (including the
-// minimal candidate) and the small pure helpers (domain parsing, total
-// tokens, number formatting, table printing) that compose the audit report.
+// Coverage spans the resource registration options (including the minimal
+// candidate), the small pure helpers (domain parsing, total tokens, number
+// formatting, table printing) that compose the audit report, the report and
+// JSON renderers driven by a real measurement, the schema sizing table, and
+// the footprint write and check modes driven through the measurement seam.
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// newAuditTokensClient creates a [gitlabclient.Client] backed by a mock
-// /api/v4/version endpoint for audit_tokens tests.
+// newAuditTokensClient returns the binary-lifetime [gitlabclient.Client]
+// backed by a mock /api/v4/version endpoint, the client main builds. It is
+// shared across tests (process teardown reclaims the httptest server) so the
+// schema caches keyed on the client serve every registration after the first.
 func newAuditTokensClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	t.Cleanup(srv.Close)
-
-	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "audit-token"})
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
+	sharedClientOnce.Do(func() {
+		sharedClient, _, errSharedClient = auditclient.NewMock()
+	})
+	if errSharedClient != nil {
+		t.Fatalf("auditclient.NewMock() error: %v", errSharedClient)
 	}
-	return client
+	return sharedClient
 }
+
+// measuredFootprintRows returns the full tier x surface x mode measurement,
+// taken once per process: it registers every surface three times over, so
+// tests share the result and treat it as read-only.
+func measuredFootprintRows(t *testing.T) []tokenFootprintRow {
+	t.Helper()
+	footprintOnce.Do(func() {
+		footprintShared, errFootprint = measureTokenFootprintRows(newAuditTokensClient(t))
+	})
+	if errFootprint != nil {
+		t.Fatalf("measureTokenFootprintRows() error: %v", errFootprint)
+	}
+	return footprintShared
+}
+
+// measuredTokenAudit returns the default report's measurement, taken once per
+// process and shared read-only for the same reason as the footprint rows.
+func measuredTokenAudit(t *testing.T) tokenAudit {
+	t.Helper()
+	tokenAuditOnce.Do(func() {
+		tokenAuditShared = measureTokenAudit(newAuditTokensClient(t))
+	})
+	return tokenAuditShared
+}
+
+var (
+	sharedClientOnce sync.Once
+	sharedClient     *gitlabclient.Client
+	errSharedClient  error
+	footprintOnce    sync.Once
+	footprintShared  []tokenFootprintRow
+	errFootprint     error
+	tokenAuditOnce   sync.Once
+	tokenAuditShared tokenAudit
+)
 
 // TestMeasureResources_IncludesToolManifest verifies the token audit measures
 // the surface-aware tool manifest in addition to static resources.
@@ -108,6 +149,25 @@ func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 	}
 }
 
+// TestListTools_UnknownSurface_ExitsWithMessage verifies a surface name the
+// audit does not know is reported on stderr and terminates the audit rather
+// than measuring an empty server as if it were a surface.
+func TestListTools_UnknownSurface_ExitsWithMessage(t *testing.T) {
+	client := newAuditTokensClient(t)
+
+	code := 0
+	stderr := captureStderrAudit(t, func() {
+		code = expectExit(t, func() { listTools(client, "bogus", false) })
+	})
+
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if stderr != "unknown tool surface \"bogus\"\n" {
+		t.Fatalf("stderr = %q, want the unknown surface message", stderr)
+	}
+}
+
 // TestExtractDomain_ParsesGitlabToolNames verifies the domain extractor returns
 // the second segment for gitlab_{domain}_{action} names and "unknown" for
 // malformed inputs.
@@ -151,6 +211,26 @@ func TestTotalTokens_SumsTokenEstimates(t *testing.T) {
 func TestTotalTokens_EmptyInput(t *testing.T) {
 	if got := totalTokens(nil); got != 0 {
 		t.Fatalf("totalTokens(nil) = %d, want 0", got)
+	}
+}
+
+// TestTotalBytes_MeasuredRecords_SumsByteSizes verifies the byte aggregator sums the Bytes
+// field, ignoring the token column, and yields zero for no records.
+func TestTotalBytes_MeasuredRecords_SumsByteSizes(t *testing.T) {
+	tests := []struct {
+		name  string
+		infos []toolTokenInfo
+		want  int
+	}{
+		{name: "three records", infos: []toolTokenInfo{{Bytes: 400, Tokens: 1}, {Bytes: 250, Tokens: 2}, {Bytes: 1, Tokens: 3}}, want: 651},
+		{name: "no records", infos: nil, want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := totalBytes(tt.infos); got != tt.want {
+				t.Fatalf("totalBytes() = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -250,6 +330,25 @@ func TestMeasureTools_EmptyInputReturnsEmpty(t *testing.T) {
 	got := measureTools(nil)
 	if len(got) != 0 {
 		t.Fatalf("measureTools(nil) = %d items, want 0", len(got))
+	}
+}
+
+// TestMeasureTools_UnserializableSchema_ExitsWithMessage verifies a tool
+// whose schema cannot be serialized is named on stderr and terminates the
+// audit instead of being counted as zero tokens.
+func TestMeasureTools_UnserializableSchema_ExitsWithMessage(t *testing.T) {
+	code := 0
+	stderr := captureStderrAudit(t, func() {
+		code = expectExit(t, func() {
+			measureTools([]*mcp.Tool{{Name: "gitlab_broken", InputSchema: make(chan int)}})
+		})
+	})
+
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.HasPrefix(stderr, "marshal tool gitlab_broken: ") {
+		t.Fatalf("stderr = %q, want the marshal failure naming the tool", stderr)
 	}
 }
 
@@ -354,30 +453,105 @@ func TestPrintDomainTotals_EmptyInput(t *testing.T) {
 	}
 }
 
-// captureStdoutAudit captures os.Stdout while fn runs and returns the result
-// as a string.
-func captureStdoutAudit(t *testing.T, fn func()) string {
+// captureStreamAudit redirects *stream (os.Stdout or os.Stderr) into a pipe
+// while fn runs and returns everything fn wrote. The pipe is drained
+// concurrently so a report larger than the pipe buffer cannot block the
+// writer; the reader goroutine only records, every assertion stays on the
+// test goroutine.
+func captureStreamAudit(t *testing.T, stream **os.File, fn func()) string {
 	t.Helper()
-	oldStdout := os.Stdout
+	original := *stream
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("os.Pipe() error: %v", err)
 	}
-	os.Stdout = w
+	*stream = w
+	t.Cleanup(func() { *stream = original })
+
+	var captured bytes.Buffer
+	var readErr error
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		_, readErr = captured.ReadFrom(r)
+	}()
 
 	fn()
 	if closeErr := w.Close(); closeErr != nil {
 		t.Fatalf("writer.Close() error: %v", closeErr)
 	}
-	os.Stdout = oldStdout
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("io.ReadAll() error: %v", err)
+	*stream = original
+	<-drained
+	if readErr != nil {
+		t.Fatalf("drain pipe: %v", readErr)
 	}
 	if closeErr := r.Close(); closeErr != nil {
 		t.Fatalf("reader.Close() error: %v", closeErr)
 	}
-	return string(out)
+	return captured.String()
+}
+
+// captureStdoutAudit captures os.Stdout while fn runs and returns the result
+// as a string.
+func captureStdoutAudit(t *testing.T, fn func()) string {
+	t.Helper()
+	return captureStreamAudit(t, &os.Stdout, fn)
+}
+
+// captureStderrAudit captures os.Stderr while fn runs and returns the result
+// as a string.
+func captureStderrAudit(t *testing.T, fn func()) string {
+	t.Helper()
+	return captureStreamAudit(t, &os.Stderr, fn)
+}
+
+// exitCode is the sentinel the exit seam panics with, so a test can observe
+// an audit failure that would otherwise terminate the test binary.
+type exitCode int
+
+// expectExit runs fn with exitProcess replaced by a panicking stand-in and
+// returns the status code fn tried to exit with. It fails the test when fn
+// returns without exiting, and re-raises any other panic untouched.
+func expectExit(t *testing.T, fn func()) (code int) {
+	t.Helper()
+	originalExit := exitProcess
+	exitProcess = func(code int) { panic(exitCode(code)) }
+	t.Cleanup(func() { exitProcess = originalExit })
+
+	exited := false
+	func() {
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+			sentinel, ok := recovered.(exitCode)
+			if !ok {
+				panic(recovered)
+			}
+			exited = true
+			code = int(sentinel)
+		}()
+		fn()
+	}()
+	if !exited {
+		t.Fatal("function returned instead of exiting")
+	}
+	return code
+}
+
+// assertInOrder verifies every marker occurs in s, each after the previous
+// one.
+func assertInOrder(t *testing.T, s string, markers ...string) {
+	t.Helper()
+	offset := 0
+	for _, marker := range markers {
+		index := strings.Index(s[offset:], marker)
+		if index < 0 {
+			t.Fatalf("%q not found after offset %d in:\n%s", marker, offset, s)
+		}
+		offset += index + len(marker)
+	}
 }
 
 // assertBefore verifies that the before substring occurs before the after
@@ -394,6 +568,254 @@ func assertBefore(t *testing.T, s, before, after string) {
 	}
 	if bi >= ai {
 		t.Fatalf("%q should appear before %q in:\n%s", before, after, s)
+	}
+}
+
+// lineFields returns the whitespace-separated fields of the first line of s
+// that starts with prefix, failing when no line does. It is how a tabwriter
+// row is asserted without depending on the column padding.
+func lineFields(t *testing.T, s, prefix string) []string {
+	t.Helper()
+	for line := range strings.SplitSeq(s, "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return strings.Fields(line)
+		}
+	}
+	t.Fatalf("no line starting with %q in:\n%s", prefix, s)
+	return nil
+}
+
+// TestMeasureTokenAudit_RealSurfaces_AgreesWithFootprint verifies the default
+// report's measurement against the footprint matrix, which measures the same
+// surfaces through its own registrations: the individual surface is the
+// Ultimate tier's, the dynamic surface is the base tier's with the same tool
+// schema and shared costs, the reachable action counts match, and the meta
+// surface carries the server maintenance tool.
+func TestMeasureTokenAudit_RealSurfaces_AgreesWithFootprint(t *testing.T) {
+	audit := measuredTokenAudit(t)
+	rows := measuredFootprintRows(t)
+	freeDynamic, freeMinimal, ultimateDynamic, ultimateIndividual := rows[0], rows[1], rows[18], rows[26]
+
+	tests := []struct {
+		name string
+		got  int
+		want int
+	}{
+		{name: "individual tools are the Ultimate individual surface", got: len(audit.individualInfo), want: ultimateIndividual.VisibleTools},
+		{name: "individual tool tokens match the Ultimate individual row", got: totalTokens(audit.individualInfo), want: ultimateIndividual.ToolSchemaTokens},
+		{name: "dynamic base is two tools", got: len(audit.dynamicBaseInfo), want: 2},
+		{name: "dynamic enterprise is two tools", got: len(audit.dynamicEnterpriseInfo), want: 2},
+		{name: "dynamic base tool tokens match the Free dynamic row", got: totalTokens(audit.dynamicBaseInfo), want: freeDynamic.ToolSchemaTokens},
+		{name: "dynamic full shared cost matches the Free dynamic row", got: audit.dynamicBaseResourceTokens + audit.promptTokens, want: freeDynamic.SharedTokens},
+		{name: "dynamic minimal shared cost matches the Free minimal row", got: audit.dynamicMinimalResourceTokens, want: freeMinimal.SharedTokens},
+		{name: "base reachable actions match the Free tier", got: audit.baseReachableActions, want: freeDynamic.ReachableActions},
+		{name: "enterprise reachable actions match the Ultimate tier", got: audit.enterpriseReachableActions, want: ultimateDynamic.ReachableActions},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Fatalf("got %d, want %d", tt.got, tt.want)
+			}
+		})
+	}
+
+	if audit.metaBaseCatalogActions >= audit.baseReachableActions || audit.metaEnterpriseCatalogActions >= audit.enterpriseReachableActions {
+		t.Fatalf("catalog-only route counts (%d, %d) must be below the reachable counts (%d, %d) that fold standalone actions in",
+			audit.metaBaseCatalogActions, audit.metaEnterpriseCatalogActions, audit.baseReachableActions, audit.enterpriseReachableActions)
+	}
+	if len(audit.metaBaseInfo) == 0 || len(audit.metaEnterpriseInfo) <= len(audit.metaBaseInfo) {
+		t.Fatalf("meta surfaces = (%d, %d) tools, want a populated base surface and a larger enterprise one", len(audit.metaBaseInfo), len(audit.metaEnterpriseInfo))
+	}
+	if !slices.ContainsFunc(audit.metaBaseInfo, func(info toolTokenInfo) bool { return info.Name == "gitlab_server" }) {
+		t.Fatal("meta base surface lacks gitlab_server, the MCP maintenance meta-tool")
+	}
+	if !slices.IsSortedFunc(audit.individualInfo, func(a, b toolTokenInfo) int { return b.Tokens - a.Tokens }) {
+		t.Fatal("individual measurements are not sorted by descending token cost")
+	}
+	if audit.individualResourceTokens <= 0 || audit.metaBaseResourceTokens <= 0 || audit.promptTokens <= 0 {
+		t.Fatalf("shared measurements (%d, %d, %d) must all be positive", audit.individualResourceTokens, audit.metaBaseResourceTokens, audit.promptTokens)
+	}
+}
+
+// TestWriteTokenAuditJSON_RealMeasurements_EmitsDocumentedShape verifies the
+// -json summary carries exactly the eleven documented keys, each holding the
+// figure the text report prints for the same measurement.
+func TestWriteTokenAuditJSON_RealMeasurements_EmitsDocumentedShape(t *testing.T) {
+	audit := measuredTokenAudit(t)
+
+	var out bytes.Buffer
+	if err := writeTokenAuditJSON(&out, audit); err != nil {
+		t.Fatalf("writeTokenAuditJSON() error: %v", err)
+	}
+	if !strings.HasPrefix(out.String(), "{\n  \"individual_tools\": ") || !strings.HasSuffix(out.String(), "}\n") {
+		t.Fatalf("writeTokenAuditJSON() is not an indented object with a trailing newline:\n%s", out.String())
+	}
+
+	var got map[string]int
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal summary: %v", err)
+	}
+	want := map[string]int{
+		"individual_tools":          len(audit.individualInfo),
+		"meta_base_tools":           len(audit.metaBaseInfo),
+		"dynamic_base_tools":        len(audit.dynamicBaseInfo),
+		"individual_tokens":         totalTokens(audit.individualInfo),
+		"meta_base_tokens":          totalTokens(audit.metaBaseInfo),
+		"meta_enterprise_tokens":    totalTokens(audit.metaEnterpriseInfo),
+		"dynamic_base_tokens":       totalTokens(audit.dynamicBaseInfo),
+		"dynamic_enterprise_tokens": totalTokens(audit.dynamicEnterpriseInfo),
+		"base_reachable_actions":    audit.baseReachableActions,
+		"resource_tokens":           audit.individualResourceTokens,
+		"prompt_tokens":             audit.promptTokens,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("summary keys = %v, want exactly %v", got, want)
+	}
+	for key, wantValue := range want {
+		t.Run(key, func(t *testing.T) {
+			gotValue, ok := got[key]
+			if !ok || gotValue != wantValue {
+				t.Fatalf("summary[%q] = %d (present=%t), want %d", key, gotValue, ok, wantValue)
+			}
+		})
+	}
+}
+
+// failingWriter fails every write so an encoder error can be observed.
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("disk full") }
+
+// TestWriteTokenAuditJSON_WriterFails_ReturnsError verifies an encoder
+// failure reaches the caller, which is what lets main report it.
+func TestWriteTokenAuditJSON_WriterFails_ReturnsError(t *testing.T) {
+	err := writeTokenAuditJSON(failingWriter{}, tokenAudit{})
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("writeTokenAuditJSON() error = %v, want the writer failure", err)
+	}
+}
+
+// TestPrintTokenAuditReport_RealMeasurements_PrintsTotals verifies the text
+// report prints the mode comparison rows, the savings percentages, the shared
+// overhead, the rankings and the grand totals with the figures of the
+// measurement it was handed, every section in its documented order.
+func TestPrintTokenAuditReport_RealMeasurements_PrintsTotals(t *testing.T) {
+	audit := measuredTokenAudit(t)
+	indTotal := totalTokens(audit.individualInfo)
+	metaTotal := totalTokens(audit.metaBaseInfo)
+	dynamicTotal := totalTokens(audit.dynamicBaseInfo)
+	sharedFull := audit.dynamicBaseResourceTokens + audit.promptTokens
+
+	output := captureStdoutAudit(t, func() {
+		printTokenAuditReport(audit, 5, 3)
+	})
+
+	sections := []string{
+		"  gitlab-mcp-server. Token Overhead Audit\n",
+		"## Mode Comparison\n",
+		"## Shared Overhead (Resources + Prompts)\n",
+		"## Minimal Capability Candidate\n",
+		"## Top 30 Individual Tools by Token Cost\n",
+		"## Meta-Tools by Token Cost (base)\n",
+		"## Dynamic Tools by Token Cost (base)\n",
+		"## Domain Totals (Individual Mode, Top 20)\n",
+		"## Grand Total (what an LLM sees)\n",
+	}
+	assertInOrder(t, output, sections...)
+
+	rows := []struct {
+		prefix string
+		want   []string
+	}{
+		{prefix: "  Individual (all)", want: []string{"Individual", "(all)", strconv.Itoa(len(audit.individualInfo)), strconv.Itoa(len(audit.individualInfo)), fmtNum(indTotal), fmtNum(totalBytes(audit.individualInfo))}},
+		{prefix: "  Meta-tools (base)", want: []string{"Meta-tools", "(base)", strconv.Itoa(len(audit.metaBaseInfo)), strconv.Itoa(audit.baseReachableActions), fmtNum(metaTotal), fmtNum(totalBytes(audit.metaBaseInfo))}},
+		{prefix: "  Meta-tools (enterprise)", want: []string{"Meta-tools", "(enterprise)", strconv.Itoa(len(audit.metaEnterpriseInfo)), strconv.Itoa(audit.enterpriseReachableActions), fmtNum(totalTokens(audit.metaEnterpriseInfo)), fmtNum(totalBytes(audit.metaEnterpriseInfo))}},
+		{prefix: "  Dynamic (base)", want: []string{"Dynamic", "(base)", "2", strconv.Itoa(audit.baseReachableActions), fmtNum(dynamicTotal), fmtNum(totalBytes(audit.dynamicBaseInfo))}},
+		{prefix: "  Dynamic (enterprise)", want: []string{"Dynamic", "(enterprise)", "2", strconv.Itoa(audit.enterpriseReachableActions), fmtNum(totalTokens(audit.dynamicEnterpriseInfo)), fmtNum(totalBytes(audit.dynamicEnterpriseInfo))}},
+	}
+	for _, row := range rows {
+		t.Run(strings.TrimSpace(row.prefix), func(t *testing.T) {
+			if got := lineFields(t, output, row.prefix); !slices.Equal(got, row.want) {
+				t.Fatalf("row fields = %v, want %v", got, row.want)
+			}
+		})
+	}
+
+	lines := []string{
+		fmt.Sprintf("  Reachable action counts include %d standalone utility actions (project discovery + interactive flows) that are visible tools in meta mode and folded into the dynamic catalog.\n", audit.baseReachableActions-audit.metaBaseCatalogActions),
+		fmt.Sprintf("  Catalog-only meta route counts: base %s / enterprise %s.\n", fmtNum(audit.metaBaseCatalogActions), fmtNum(audit.metaEnterpriseCatalogActions)),
+		fmt.Sprintf("  Meta-tools reduce token overhead by %.1f%% vs individual mode\n", float64(indTotal-metaTotal)/float64(indTotal)*100),
+		fmt.Sprintf("  Dynamic mode reduces visible tool token overhead by %.1f%% vs individual mode\n", float64(indTotal-dynamicTotal)/float64(indTotal)*100),
+		fmt.Sprintf("  Resources (individual): ~%s tokens\n", fmtNum(audit.individualResourceTokens)),
+		fmt.Sprintf("  Resources (dynamic-minimal): ~%s tokens\n", fmtNum(audit.dynamicMinimalResourceTokens)),
+		fmt.Sprintf("  Prompts (full): ~%s tokens\n", fmtNum(audit.promptTokens)),
+		"  Prompts (dynamic-minimal): ~0 tokens (0 bytes)\n",
+		fmt.Sprintf("  Meta-tool total:  ~%s tokens\n", fmtNum(audit.metaBaseResourceTokens+audit.promptTokens)),
+		fmt.Sprintf("  Shared-overhead reduction: %.1f%% vs full dynamic resources+prompts\n", float64(sharedFull-audit.dynamicMinimalResourceTokens)/float64(sharedFull)*100),
+		fmt.Sprintf("  Individual mode: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n", fmtNum(indTotal), fmtNum(audit.individualResourceTokens+audit.promptTokens), fmtNum(indTotal+audit.individualResourceTokens+audit.promptTokens)),
+		fmt.Sprintf("  Meta-tool mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n", fmtNum(metaTotal), fmtNum(audit.metaBaseResourceTokens+audit.promptTokens), fmtNum(metaTotal+audit.metaBaseResourceTokens+audit.promptTokens)),
+		fmt.Sprintf("  Dynamic mode:    ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n", fmtNum(dynamicTotal), fmtNum(sharedFull), fmtNum(dynamicTotal+sharedFull)),
+		fmt.Sprintf("  Dynamic minimal: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n", fmtNum(dynamicTotal), fmtNum(audit.dynamicMinimalResourceTokens), fmtNum(dynamicTotal+audit.dynamicMinimalResourceTokens)),
+	}
+	for _, line := range lines {
+		t.Run(strings.TrimSpace(strings.SplitN(line, ":", 2)[0]), func(t *testing.T) {
+			if !strings.Contains(output, line) {
+				t.Fatalf("report lacks %q in:\n%s", line, output)
+			}
+		})
+	}
+
+	// The individual ranking is capped at the requested five rows, the meta
+	// and dynamic rankings list every tool, and the domain ranking at three.
+	topTools := lineFields(t, output, "  1  ")
+	if len(topTools) != 4 || topTools[3] != audit.individualInfo[0].Name {
+		t.Fatalf("first ranked tool = %v, want the most expensive individual tool %s", topTools, audit.individualInfo[0].Name)
+	}
+	if strings.Count(output, "  5  ") < 1 || strings.Contains(output, "  6  "+fmtNum(audit.individualInfo[5].Tokens)) {
+		t.Fatalf("individual ranking is not capped at 5 rows:\n%s", output)
+	}
+	for _, info := range audit.dynamicBaseInfo {
+		if !strings.Contains(output, "  "+info.Name+"\n") {
+			t.Fatalf("dynamic ranking lacks %s:\n%s", info.Name, output)
+		}
+	}
+	if !strings.Contains(output, "  1  "+topDomain(audit.individualInfo)+"  ") {
+		t.Fatalf("domain ranking does not start with %s:\n%s", topDomain(audit.individualInfo), output)
+	}
+}
+
+// topDomain returns the domain with the highest summed token cost.
+func topDomain(infos []toolTokenInfo) string {
+	totals := map[string]int{}
+	for _, info := range infos {
+		totals[info.Domain] += info.Tokens
+	}
+	best, bestTokens := "", -1
+	for domain, tokens := range totals {
+		if tokens > bestTokens || (tokens == bestTokens && domain < best) {
+			best, bestTokens = domain, tokens
+		}
+	}
+	return best
+}
+
+// TestPrintTokenAuditReport_ZeroMeasurements_OmitsRatios verifies an empty
+// measurement prints the fixed sections and zero totals but none of the
+// derived percentages, which would divide by zero.
+func TestPrintTokenAuditReport_ZeroMeasurements_OmitsRatios(t *testing.T) {
+	output := captureStdoutAudit(t, func() {
+		printTokenAuditReport(tokenAudit{}, 30, 20)
+	})
+
+	for _, absent := range []string{"reduce token overhead", "reduces visible tool token overhead", "Reachable action counts include", "Shared-overhead reduction"} {
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(output, absent) {
+				t.Fatalf("report prints %q for an empty measurement:\n%s", absent, output)
+			}
+		})
+	}
+	if !strings.Contains(output, "  Individual mode: ~0 tokens (tools) + ~0 tokens (resources+prompts) = ~0 tokens\n") {
+		t.Fatalf("report lacks the zero grand total:\n%s", output)
 	}
 }
 
@@ -424,6 +846,23 @@ func TestRenderReadmeFootprint_DynamicOnlyRows_KeepsOneRowPerTier(t *testing.T) 
 	}
 	if strings.Contains(got, "`individual`") {
 		t.Fatal("renderReadmeFootprint() should not include individual rows")
+	}
+}
+
+// TestRenderReadmeFootprint_DynamicRowWithSchemaMode_RendersSchemaCell
+// verifies a dynamic row that carries a META_PARAM_SCHEMA value renders it in
+// the schema column instead of "n/a", so the column never hides a mode a
+// future measurement records.
+func TestRenderReadmeFootprint_DynamicRowWithSchemaMode_RendersSchemaCell(t *testing.T) {
+	rows := []tokenFootprintRow{
+		{Tier: "Free/CE", Configuration: "`dynamic` / `full` (default)", MetaParamSchema: "compact", VisibleTools: 2, ReachableActions: 851, ToolSchemaTokens: 1501, SharedTokens: 8832},
+	}
+	got := renderReadmeFootprint(rows)
+	if !strings.Contains(got, "| `compact`") {
+		t.Fatalf("renderReadmeFootprint() lacks the schema cell:\n%s", got)
+	}
+	if strings.Contains(got, "| n/a") {
+		t.Fatalf("renderReadmeFootprint() rendered n/a for a row with a schema mode:\n%s", got)
 	}
 }
 
@@ -487,6 +926,40 @@ func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testi
 			}
 			if len(stale) != 1 || stale[0] != tt.wantStale {
 				t.Fatalf("stale = %v, want only %q", stale, tt.wantStale)
+			}
+		})
+	}
+}
+
+// TestFootprintStaleTargets_UnrenderableRows_ReturnsError verifies the drift
+// detector fails rather than reporting drift when the rows cannot render the
+// token claim (no dynamic rows) or the site data (an individual tier
+// missing), since a comparison against nothing would mislabel the README.
+func TestFootprintStaleTargets_UnrenderableRows_ReturnsError(t *testing.T) {
+	readme := claimStartMarker + "\n" + claimEndMarker + "\n" + footprintStartMarker + "\n" + footprintEndMarker + "\n"
+	tests := []struct {
+		name string
+		rows []tokenFootprintRow
+		want string
+	}{
+		{
+			name: "no dynamic rows fails the claim",
+			rows: []tokenFootprintRow{{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698, SharedTokens: 31758}},
+			want: "token claim: no `dynamic` / `full` (default) row to quote",
+		},
+		{
+			name: "missing individual tier fails the site data",
+			rows: slices.DeleteFunc(completeFootprintRows(), func(r tokenFootprintRow) bool {
+				return r.Tier == "Premium" && r.Configuration == individualConfiguration
+			}),
+			want: "expected 3 individual-surface rows, found 2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stale, err := footprintStaleTargets(readme, "", "", tt.rows)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("footprintStaleTargets() = (%v, %v), want error containing %q", stale, err, tt.want)
 			}
 		})
 	}
@@ -612,6 +1085,94 @@ func completeFootprintRows() []tokenFootprintRow {
 	}
 }
 
+// fullMatrixFootprintRows returns a 27-row fixture in the exact order and
+// shape measureTokenFootprintRows produces: per tier, the two dynamic rows,
+// the full and minimal meta rows under each schema mode, then the individual
+// row.
+func fullMatrixFootprintRows() []tokenFootprintRow {
+	tiers := []struct {
+		label      string
+		reachable  int
+		individual int
+		tokens     int
+	}{
+		{"Free/CE", 851, 847, 494314},
+		{"Premium", 1003, 999, 592723},
+		{ultimateTierLabel, 1069, 1065, 621737},
+	}
+	metaTokens := map[string]int{"opaque": 136890, "compact": 210000, "full": 330000}
+	var rows []tokenFootprintRow
+	for _, tier := range tiers {
+		rows = append(rows,
+			tokenFootprintRow{Tier: tier.label, Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ReachableActions: tier.reachable, ToolSchemaTokens: 1501, SharedTokens: 8832},
+			tokenFootprintRow{Tier: tier.label, Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ReachableActions: tier.reachable, ToolSchemaTokens: 1501, SharedTokens: 170},
+		)
+		for _, mode := range []string{"opaque", "compact", "full"} {
+			rows = append(rows,
+				tokenFootprintRow{Tier: tier.label, Configuration: fmt.Sprintf("`meta` / `full` (%s)", mode), MetaParamSchema: mode, VisibleTools: 40, ReachableActions: tier.reachable, ToolSchemaTokens: metaTokens[mode], SharedTokens: 9000},
+				tokenFootprintRow{Tier: tier.label, Configuration: fmt.Sprintf("`meta` / `minimal` (%s)", mode), MetaParamSchema: mode, VisibleTools: 40, ReachableActions: tier.reachable, ToolSchemaTokens: metaTokens[mode], SharedTokens: 300},
+			)
+		}
+		rows = append(rows, tokenFootprintRow{Tier: tier.label, Configuration: individualConfiguration, VisibleTools: tier.individual, ReachableActions: tier.individual, ToolSchemaTokens: tier.tokens, SharedTokens: 8832})
+	}
+	return rows
+}
+
+// TestRenderDetailedFootprint_FullMatrix_RendersEveryRow verifies the
+// reference doc lists all 27 configurations with their schema mode in the
+// schema column (n/a for the surfaces without one) and the documented column
+// legend before the table.
+func TestRenderDetailedFootprint_FullMatrix_RendersEveryRow(t *testing.T) {
+	rows := fullMatrixFootprintRows()
+	got := renderDetailedFootprint(rows)
+
+	if !strings.HasPrefix(got, "# Token Footprint Reference\n\n") {
+		t.Fatalf("renderDetailedFootprint() does not start with the title:\n%s", got)
+	}
+	assertBefore(t, got, "## What each column means", "## Full matrix")
+	assertBefore(t, got, "## Full matrix", "## Interpretation guide")
+	for _, row := range rows {
+		t.Run(row.Tier+" "+row.Configuration, func(t *testing.T) {
+			schemaCell := "n/a"
+			if row.MetaParamSchema != "" {
+				schemaCell = "`" + row.MetaParamSchema + "`"
+			}
+			wantCells := []string{row.Configuration, row.Tier, fmtNum(row.VisibleTools), fmtNum(row.ReachableActions), schemaCell, fmtNum(row.ToolSchemaTokens), fmtNum(row.SharedTokens), fmtNum(row.totalTokens())}
+			if !containsTableRow(got, wantCells) {
+				t.Fatalf("renderDetailedFootprint() lacks the row %v:\n%s", wantCells, got)
+			}
+		})
+	}
+	if strings.Count(got, "\n| `") != len(rows) {
+		t.Fatalf("renderDetailedFootprint() rendered %d configuration rows, want %d", strings.Count(got, "\n| `"), len(rows))
+	}
+}
+
+// containsTableRow reports whether doc has a Markdown table row whose trimmed
+// cells equal cells.
+func containsTableRow(doc string, cells []string) bool {
+	for line := range strings.SplitSeq(doc, "\n") {
+		if !strings.HasPrefix(line, "| ") {
+			continue
+		}
+		parts := strings.Split(strings.Trim(line, "|"), "|")
+		if len(parts) != len(cells) {
+			continue
+		}
+		match := true
+		for i, part := range parts {
+			if strings.TrimSpace(part) != cells[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
 // TestRenderSiteFootprintJSON_CompleteMatrix_DerivesReductionFactor verifies the site-facing headline extract: the
 // dynamic surface is taken from the Ultimate tier, every tier gets an
 // individual-surface entry, and the reduction factor is derived rather than
@@ -657,35 +1218,44 @@ func TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError(t *testing.T) {
 	tests := []struct {
 		name string
 		rows []tokenFootprintRow
+		want string
 	}{
 		{
 			name: "missing the ultimate dynamic row",
 			rows: []tokenFootprintRow{
 				{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698},
 			},
+			want: "no `dynamic` / `full` (default) row found for the Ultimate tier",
 		},
 		{
-			name: "missing one individual tier",
+			name: "missing shared counts",
 			rows: []tokenFootprintRow{
 				{Tier: ultimateTierLabel, Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180},
 				{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698},
 			},
+			want: "missing shared token counts for the Ultimate tier (full=0, minimal=0)",
 		},
 		{
 			name: "missing the minimal capability-surface row",
-			rows: func() []tokenFootprintRow {
-				rows := completeFootprintRows()
-				return slices.DeleteFunc(rows, func(r tokenFootprintRow) bool {
-					return r.Configuration == dynamicMinimalConfiguration
-				})
-			}(),
+			rows: slices.DeleteFunc(completeFootprintRows(), func(r tokenFootprintRow) bool {
+				return r.Configuration == dynamicMinimalConfiguration
+			}),
+			want: "missing shared token counts for the Ultimate tier (full=31758, minimal=0)",
+		},
+		{
+			name: "missing one individual tier",
+			rows: slices.DeleteFunc(completeFootprintRows(), func(r tokenFootprintRow) bool {
+				return r.Tier == "Free/CE" && r.Configuration == individualConfiguration
+			}),
+			want: "expected 3 individual-surface rows, found 2",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := renderSiteFootprintJSON(tt.rows); err == nil {
-				t.Fatal("renderSiteFootprintJSON() error = nil, want error")
+			_, err := renderSiteFootprintJSON(tt.rows)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("renderSiteFootprintJSON() error = %v, want it to contain %q", err, tt.want)
 			}
 		})
 	}
@@ -735,12 +1305,7 @@ func TestRenderSiteFootprintJSON_TierDependentDynamic_ReturnsError(t *testing.T)
 // matrix: 3 tiers \u00d7 9 configurations, tier ordering, meta schema-mode token
 // scaling, and tier-based individual tool scaling.
 func TestMeasureTokenFootprintRows_AllTiersAllModes_CoversEveryCombination(t *testing.T) {
-	client := newAuditTokensClient(t)
-
-	rows, err := measureTokenFootprintRows(client)
-	if err != nil {
-		t.Fatalf("measureTokenFootprintRows() error = %v", err)
-	}
+	rows := measuredFootprintRows(t)
 	if len(rows) != 27 {
 		t.Fatalf("measureTokenFootprintRows() returned %d rows, want 27 (3 tiers \u00d7 9)", len(rows))
 	}
@@ -777,6 +1342,22 @@ func TestMeasureTokenFootprintRows_AllTiersAllModes_CoversEveryCombination(t *te
 	}
 }
 
+// TestMeasureTierFootprintWithPrompts_NegativePromptTokens_MeasuresPromptsItself
+// verifies a standalone caller that passes a negative prompt figure gets the
+// prompts measured in place, and that the tier's rows then equal the ones the
+// batch measurement produced with the prompt figure passed in.
+func TestMeasureTierFootprintWithPrompts_NegativePromptTokens_MeasuresPromptsItself(t *testing.T) {
+	want := measuredFootprintRows(t)[:9]
+
+	got, err := measureTierFootprintWithPrompts(newAuditTokensClient(t), edition.Free, "Free/CE", -1)
+	if err != nil {
+		t.Fatalf("measureTierFootprintWithPrompts() error: %v", err)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("standalone Free tier rows =\n%+v\nwant the batch measurement's\n%+v", got, want)
+	}
+}
+
 // TestMeasureToolSchemaTokens_RealTokenizer_ReturnsNonZeroCounts verifies the schema token
 // estimator runs the cl100k_base tokenizer, not the bytes/4 fallback. It counts
 // the same serialized tools both ways and asserts they differ, so a tokenizer
@@ -808,12 +1389,106 @@ func TestMeasureToolSchemaTokens_RealTokenizer_ReturnsNonZeroCounts(t *testing.T
 	}
 }
 
-// TestRunMetaSchemaSizing_DefaultOptions_CompletesWithoutError verifies the meta-schema sizing can build
-// the full base-plus-enterprise meta-tool registry and measure schema sizes.
+// TestMeasureToolSchemaTokens_UnserializableSchema_ReturnsError verifies the
+// footprint estimator names the tool whose schema cannot be serialized, so
+// the footprint run fails instead of publishing an undercount.
+func TestMeasureToolSchemaTokens_UnserializableSchema_ReturnsError(t *testing.T) {
+	_, err := measureToolSchemaTokens([]*mcp.Tool{{Name: "gitlab_ok"}, {Name: "gitlab_broken", InputSchema: make(chan int)}})
+	if err == nil || !strings.HasPrefix(err.Error(), "marshal tool gitlab_broken: ") {
+		t.Fatalf("measureToolSchemaTokens() error = %v, want the marshal failure naming gitlab_broken", err)
+	}
+}
+
+// TestRunMetaSchemaSizing_RealCatalog_PrintsSortedSizingTable verifies the
+// meta-schema sizing builds the full enterprise meta-tool registry and prints
+// one row per meta-tool sorted by full-schema size, a TOTAL row, and the two
+// ratios above one that the compact and full strategies cost over opaque.
 // Migrated from the former cmd/audit_meta_schema/main_test.go.
-func TestRunMetaSchemaSizing_DefaultOptions_CompletesWithoutError(t *testing.T) {
-	if err := runMetaSchemaSizing(); err != nil {
+func TestRunMetaSchemaSizing_RealCatalog_PrintsSortedSizingTable(t *testing.T) {
+	var err error
+	output := captureStdoutAudit(t, func() {
+		err = runMetaSchemaSizing()
+	})
+	if err != nil {
 		t.Fatalf("runMetaSchemaSizing() error: %v", err)
+	}
+
+	if !strings.Contains(output, " Meta-tool InputSchema sizing spike\n") {
+		t.Fatalf("sizing output lacks its title:\n%s", output)
+	}
+	header := lineFields(t, output, "meta-tool ")
+	if !slices.Equal(header, []string{"meta-tool", "actions", "opaque", "full", "compact", "delta", "full"}) {
+		t.Fatalf("header fields = %v", header)
+	}
+
+	var fullBytes []float64
+	names := map[string]bool{}
+	for line := range strings.SplitSeq(output, "\n") {
+		if !strings.HasPrefix(line, "gitlab_") {
+			continue
+		}
+		fields := strings.Fields(line)
+		// name, actions, then four "<n> <unit>" pairs (opaque, full, compact, delta).
+		if len(fields) != 10 {
+			t.Fatalf("row %q has %d fields, want 10", line, len(fields))
+		}
+		names[fields[0]] = true
+		if actions, convErr := strconv.Atoi(fields[1]); convErr != nil || actions <= 0 {
+			t.Fatalf("row %q has no positive action count", line)
+		}
+		fullBytes = append(fullBytes, parseHumanBytes(t, fields[4]+" "+fields[5]))
+	}
+	if len(fullBytes) < 30 {
+		t.Fatalf("sizing table has %d meta-tool rows, want the full enterprise registry", len(fullBytes))
+	}
+	for _, want := range []string{"gitlab_project", "gitlab_issue", "gitlab_merge_request", "gitlab_geo"} {
+		t.Run(want, func(t *testing.T) {
+			if !names[want] {
+				t.Fatalf("sizing table lacks %s", want)
+			}
+		})
+	}
+	if !slices.IsSortedFunc(fullBytes, func(a, b float64) int { return int(b - a) }) {
+		t.Fatalf("rows are not sorted by descending full-schema size: %v", fullBytes)
+	}
+
+	total := lineFields(t, output, "TOTAL")
+	if len(total) != 7 || total[0] != "TOTAL" {
+		t.Fatalf("TOTAL row fields = %v", total)
+	}
+	for _, ratioLine := range []string{"Full / opaque   ratio: ", "Compact / opaque ratio: "} {
+		t.Run(strings.TrimSpace(ratioLine), func(t *testing.T) {
+			fields := lineFields(t, output, ratioLine)
+			ratio, convErr := strconv.ParseFloat(strings.TrimSuffix(fields[len(fields)-1], "x"), 64)
+			if convErr != nil || ratio <= 1 {
+				t.Fatalf("%q ratio = %v (%v), want a factor above 1", ratioLine, fields[len(fields)-1], convErr)
+			}
+		})
+	}
+}
+
+// parseHumanBytes converts a humanBytes rendering back to a byte figure for
+// ordering comparisons.
+func parseHumanBytes(t *testing.T, s string) float64 {
+	t.Helper()
+	fields := strings.Fields(s)
+	if len(fields) != 2 {
+		t.Fatalf("%q is not a <number> <unit> size", s)
+	}
+	value, err := strconv.ParseFloat(strings.TrimPrefix(fields[0], "+"), 64)
+	if err != nil {
+		t.Fatalf("%q is not a size: %v", s, err)
+	}
+	switch fields[1] {
+	case "B":
+		return value
+	case "KB":
+		return value * 1024
+	case "MB":
+		return value * 1024 * 1024
+	default:
+		t.Fatalf("%q has an unknown unit", s)
+		return 0
 	}
 }
 
@@ -838,4 +1513,272 @@ func TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --- Footprint write and check modes ------------------------------------------
+
+// stubFootprintRows replaces the footprint measurement for the test with a
+// function returning rows and err, restoring the real one afterwards.
+func stubFootprintRows(t *testing.T, rows []tokenFootprintRow, err error) {
+	t.Helper()
+	original := measureFootprintRows
+	measureFootprintRows = func(*gitlabclient.Client) ([]tokenFootprintRow, error) { return rows, err }
+	t.Cleanup(func() { measureFootprintRows = original })
+}
+
+// footprintSkeleton is a README whose two managed blocks are empty.
+const footprintSkeleton = "# Fixture\n\n" + claimStartMarker + "\n" + claimEndMarker + "\n\n## Token Footprint\n\n" + footprintStartMarker + "\n" + footprintEndMarker + "\n"
+
+// renderedReadme returns the skeleton README with both managed blocks holding
+// the content rendered from rows.
+func renderedReadme(t *testing.T, rows []tokenFootprintRow) string {
+	t.Helper()
+	claim, err := renderReadmeTokenClaim(rows)
+	if err != nil {
+		t.Fatalf("renderReadmeTokenClaim() error: %v", err)
+	}
+	readme, err := docgen.ComputeReplacedSection(footprintSkeleton, claimStartMarker, claimEndMarker, claim)
+	if err != nil {
+		t.Fatalf("replace claim block: %v", err)
+	}
+	readme, err = docgen.ComputeReplacedSection(readme, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows))
+	if err != nil {
+		t.Fatalf("replace footprint block: %v", err)
+	}
+	return readme
+}
+
+// footprintReplica creates a directory laid out like the repository root for
+// the footprint targets, with the README, the detailed doc and the site data
+// holding the given contents, and makes it the working directory for the rest
+// of the test. An empty content leaves that file absent.
+func footprintReplica(t *testing.T, readme, detailed, site string) string {
+	t.Helper()
+	root := t.TempDir()
+	for _, dir := range []string{filepath.Dir(detailedFootprintPath), filepath.Dir(siteFootprintPath)} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o750); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	for path, content := range map[string]string{readmePath: readme, detailedFootprintPath: detailed, siteFootprintPath: site} {
+		if content == "" {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(root, path), []byte(content), 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	t.Chdir(root)
+	return root
+}
+
+// readReplica returns the content of path under root.
+func readReplica(t *testing.T, root, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, path)) //#nosec G304 -- temp path built by the test
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
+}
+
+// TestRunFootprintCheck_CommittedTargets_AreCurrent verifies the check mode
+// accepts the committed README blocks, reference doc and site data for the
+// live measurement, which is the exact call `make check-footprint` makes, and
+// says how many rows it compared.
+func TestRunFootprintCheck_CommittedTargets_AreCurrent(t *testing.T) {
+	rows := measuredFootprintRows(t)
+	stubFootprintRows(t, rows, nil)
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("locate repository root: %v", err)
+	}
+	t.Chdir(root)
+
+	var checkErr error
+	output := captureStdoutAudit(t, func() {
+		checkErr = runFootprintCheck(newAuditTokensClient(t))
+	})
+
+	if checkErr != nil {
+		t.Fatalf("runFootprintCheck() error: %v (regenerate with: go run ./cmd/audit_tokens/ -footprint)", checkErr)
+	}
+	if output != "Token footprint is current (27 rows across all tiers/surfaces/modes)\n" {
+		t.Fatalf("runFootprintCheck() output = %q", output)
+	}
+}
+
+// TestRunFootprintCheck_Failures_NameTheCause verifies each way the check can
+// fail is reported by name: the measurement itself, each target that cannot
+// be read, a README without footprint markers, and every stale target listed
+// together with the command that refreshes them.
+func TestRunFootprintCheck_Failures_NameTheCause(t *testing.T) {
+	rows := fullMatrixFootprintRows()
+	readme := renderedReadme(t, rows)
+	detailed := renderDetailedFootprint(rows)
+	siteJSON, err := renderSiteFootprintJSON(rows)
+	if err != nil {
+		t.Fatalf("renderSiteFootprintJSON() error: %v", err)
+	}
+	site := string(siteJSON)
+
+	tests := []struct {
+		name       string
+		measureErr error
+		readme     string
+		detailed   string
+		site       string
+		want       string
+	}{
+		{name: "measurement failure", measureErr: errors.New("registry exploded"), readme: readme, detailed: detailed, site: site, want: "measuring token footprint: registry exploded"},
+		{name: "README missing", detailed: detailed, site: site, want: "reading README.md: "},
+		{name: "detailed doc missing", readme: readme, site: site, want: "reading docs/development/token-footprint.md: "},
+		{name: "site data missing", readme: readme, detailed: detailed, want: "reading site/src/data/token-footprint.json: "},
+		{name: "README without footprint markers", readme: "# Fixture\n" + claimStartMarker + "\n" + claimEndMarker + "\n", detailed: detailed, site: site, want: "start marker " + footprintStartMarker + " not found"},
+		{name: "every target stale", readme: footprintSkeleton, detailed: "old reference\n", site: "{}\n", want: "token footprint is stale (README.md token-footprint section; README.md token-claim block; docs/development/token-footprint.md; site/src/data/token-footprint.json); run: go run ./cmd/audit_tokens/ -footprint"},
+		{name: "only the site data stale", readme: readme, detailed: detailed, site: "{}\n", want: "token footprint is stale (site/src/data/token-footprint.json); run: go run ./cmd/audit_tokens/ -footprint"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubFootprintRows(t, rows, tt.measureErr)
+			footprintReplica(t, tt.readme, tt.detailed, tt.site)
+
+			checkErr := runFootprintCheck(newAuditTokensClient(t))
+			if checkErr == nil || !strings.Contains(checkErr.Error(), tt.want) {
+				t.Fatalf("runFootprintCheck() error = %v, want it to contain %q", checkErr, tt.want)
+			}
+		})
+	}
+}
+
+// TestRunFootprint_EmptyReplica_WritesEveryTarget verifies the write mode
+// fills both README blocks, writes the reference doc and the site data from
+// the rows it measured, reports what it updated, and leaves the tree in the
+// state the check mode then accepts.
+func TestRunFootprint_EmptyReplica_WritesEveryTarget(t *testing.T) {
+	rows := fullMatrixFootprintRows()
+	stubFootprintRows(t, rows, nil)
+	root := footprintReplica(t, footprintSkeleton, "stale\n", "{}\n")
+
+	var runErr error
+	output := captureStdoutAudit(t, func() {
+		runErr = runFootprint(newAuditTokensClient(t))
+	})
+	if runErr != nil {
+		t.Fatalf("runFootprint() error: %v", runErr)
+	}
+	if output != "Updated README.md token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json (27 rows across all tiers/surfaces/modes)\n" {
+		t.Fatalf("runFootprint() output = %q", output)
+	}
+
+	if got, want := readReplica(t, root, readmePath), renderedReadme(t, rows); got != want {
+		t.Fatalf("README =\n%s\nwant\n%s", got, want)
+	}
+	if got, want := readReplica(t, root, detailedFootprintPath), renderDetailedFootprint(rows); got != want {
+		t.Fatalf("reference doc =\n%s\nwant\n%s", got, want)
+	}
+	wantSite, err := renderSiteFootprintJSON(rows)
+	if err != nil {
+		t.Fatalf("renderSiteFootprintJSON() error: %v", err)
+	}
+	if got := readReplica(t, root, siteFootprintPath); got != string(wantSite) {
+		t.Fatalf("site data =\n%s\nwant\n%s", got, wantSite)
+	}
+	if checkErr := runFootprintCheck(newAuditTokensClient(t)); checkErr != nil {
+		t.Fatalf("runFootprintCheck() after runFootprint() error: %v", checkErr)
+	}
+}
+
+// TestRunFootprint_Failures_ReturnErrors verifies each failure of the write
+// mode is returned rather than half-applied silently: the measurement, rows
+// the claim or the site data cannot be rendered from, a README that is
+// missing or lacks the footprint markers, and target directories that do not
+// exist.
+func TestRunFootprint_Failures_ReturnErrors(t *testing.T) {
+	rows := fullMatrixFootprintRows()
+	tests := []struct {
+		name       string
+		rows       []tokenFootprintRow
+		measureErr error
+		readme     string
+		removeDir  string
+		want       string
+	}{
+		{name: "measurement failure", rows: rows, measureErr: errors.New("registry exploded"), readme: footprintSkeleton, want: "measuring token footprint: registry exploded"},
+		{name: "rows without a dynamic surface", rows: rows[8:9], readme: footprintSkeleton, want: "token claim: no `dynamic` / `full` (default) row to quote"},
+		{name: "README missing", rows: rows, want: "reading README.md: "},
+		{name: "README without footprint markers", rows: rows, readme: "# Fixture\n" + claimStartMarker + "\n" + claimEndMarker + "\n", want: "start marker " + footprintStartMarker + " not found"},
+		{name: "reference doc directory missing", rows: rows, readme: footprintSkeleton, removeDir: filepath.Dir(detailedFootprintPath), want: "writing docs/development/token-footprint.md: "},
+		{name: "rows missing an individual tier", rows: rows[:26], readme: footprintSkeleton, want: "expected 3 individual-surface rows, found 2"},
+		{name: "site data directory missing", rows: rows, readme: footprintSkeleton, removeDir: filepath.Dir(siteFootprintPath), want: "writing site/src/data/token-footprint.json: "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubFootprintRows(t, tt.rows, tt.measureErr)
+			root := footprintReplica(t, tt.readme, "", "")
+			if tt.removeDir != "" {
+				if err := os.RemoveAll(filepath.Join(root, tt.removeDir)); err != nil {
+					t.Fatalf("remove %s: %v", tt.removeDir, err)
+				}
+			}
+
+			runErr := runFootprint(newAuditTokensClient(t))
+			if runErr == nil || !strings.Contains(runErr.Error(), tt.want) {
+				t.Fatalf("runFootprint() error = %v, want it to contain %q", runErr, tt.want)
+			}
+		})
+	}
+}
+
+// TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite verifies the entry point
+// behind -footprint builds its own client and dispatches on the check flag:
+// with it set the committed targets are verified and nothing is written,
+// without it the targets are written.
+func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
+	t.Run("check verifies the committed targets", func(t *testing.T) {
+		stubFootprintRows(t, measuredFootprintRows(t), nil)
+		root, err := cmdutil.RepositoryRoot(".")
+		if err != nil {
+			t.Fatalf("locate repository root: %v", err)
+		}
+		t.Chdir(root)
+		before := readReplica(t, root, readmePath)
+
+		var modeErr error
+		output := captureStdoutAudit(t, func() {
+			modeErr = runFootprintMode(true)
+		})
+		if modeErr != nil {
+			t.Fatalf("runFootprintMode(check) error: %v", modeErr)
+		}
+		if !strings.HasPrefix(output, "Token footprint is current (") {
+			t.Fatalf("runFootprintMode(check) output = %q", output)
+		}
+		if after := readReplica(t, root, readmePath); after != before {
+			t.Fatal("runFootprintMode(check) modified README.md")
+		}
+	})
+
+	t.Run("write fills the targets", func(t *testing.T) {
+		rows := fullMatrixFootprintRows()
+		stubFootprintRows(t, rows, nil)
+		root := footprintReplica(t, footprintSkeleton, "", "")
+
+		var modeErr error
+		output := captureStdoutAudit(t, func() {
+			modeErr = runFootprintMode(false)
+		})
+		if modeErr != nil {
+			t.Fatalf("runFootprintMode(write) error: %v", modeErr)
+		}
+		if !strings.HasPrefix(output, "Updated README.md token-claim block") {
+			t.Fatalf("runFootprintMode(write) output = %q", output)
+		}
+		if got, want := readReplica(t, root, readmePath), renderedReadme(t, rows); got != want {
+			t.Fatalf("README =\n%s\nwant\n%s", got, want)
+		}
+		if got, want := readReplica(t, root, detailedFootprintPath), renderDetailedFootprint(rows); got != want {
+			t.Fatalf("reference doc =\n%s\nwant\n%s", got, want)
+		}
+	})
 }

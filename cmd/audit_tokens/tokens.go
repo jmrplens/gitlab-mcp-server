@@ -25,11 +25,17 @@ func tokenCodec() tokenizer.Codec {
 	return defaultCodec
 }
 
+// activeCodec resolves the codec countTokens measures with. It is a variable
+// so a test can drive the bytes/4 fallback, which only a tokenizer failure
+// reaches in production and which every published figure would silently
+// depend on if it ever engaged unnoticed.
+var activeCodec = tokenCodec
+
 // countTokens returns the token count for the given data using the cl100k_base
 // tokenizer (GPT-4/GPT-3.5 encoding). Falls back to the bytes/4 heuristic if the
 // tokenizer is unavailable, matching the original audit approximation.
 func countTokens(data []byte) int {
-	codec := tokenCodec()
+	codec := activeCodec()
 	if codec == nil {
 		return len(data) / 4
 	}
