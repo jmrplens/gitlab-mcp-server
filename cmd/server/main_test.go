@@ -2577,7 +2577,7 @@ func TestServeHTTP_NoInstanceAndNoHeader_IsRefused(t *testing.T) {
 
 	// Refused, and refused for the caller's own reason. The request never
 	// reaches GitLab, so this stays hermetic without pinning the network
-	// behaviour the old fallback depended on.
+	// behavior the old fallback depended on.
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d: %s", resp.StatusCode, http.StatusBadRequest, respBody)
 	}
