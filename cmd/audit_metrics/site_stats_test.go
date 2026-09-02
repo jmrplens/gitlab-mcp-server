@@ -71,11 +71,7 @@ func TestSiteStatsTierOrdering(t *testing.T) {
 // site/src/data/stats.json equals the freshly generated payload. This is the
 // in-repo guard mirroring `audit_metrics -site-stats ... -check`.
 func TestSiteStatsMatchesCommittedFile(t *testing.T) {
-	stats := newSiteStats(t)
-	want, err := renderSiteStatsJSON(stats)
-	if err != nil {
-		t.Fatalf("render site stats: %v", err)
-	}
+	want := renderSiteStatsJSON(newSiteStats(t))
 	path := filepath.Join(repositoryRoot(), "site", "src", "data", "stats.json")
 	got, err := os.ReadFile(path) //#nosec G304 -- fixed in-repo path
 	if err != nil {
@@ -111,10 +107,7 @@ func TestWriteOrCheckSiteStats_WriteThenCheck_RoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read written stats: %v", err)
 	}
-	want, err := renderSiteStatsJSON(stats)
-	if err != nil {
-		t.Fatalf("render site stats: %v", err)
-	}
+	want := renderSiteStatsJSON(stats)
 	if string(written) != string(want) {
 		t.Fatalf("written stats =\n%s\nwant\n%s", written, want)
 	}

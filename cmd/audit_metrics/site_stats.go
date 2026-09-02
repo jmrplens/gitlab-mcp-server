@@ -26,6 +26,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -97,55 +98,27 @@ type siteCatalogGroups struct {
 // generateSiteStats derives every published statistic from the live MCP
 // surface, the canonical catalog, and the VERSION file. client is a
 // self-managed instance client; gitLabComClient targets GitLab.com so the
-// GitLab.com-only Orbit tools are included where relevant. The first
-// derivation that fails ends the payload: half a stats file is not worth
-// publishing, and the caller is where that is reported.
+// GitLab.com-only Orbit tools are included where relevant.
+//
+// Only the VERSION read can fail, and it ends the payload: half a stats file
+// is not worth publishing, and the caller is where that is reported. Every
+// other value is measured off surfaces this process registers in memory from
+// the catalog compiled into it, which is why those builders return a count
+// and not a count-or-failure.
 func generateSiteStats(client, gitLabComClient *gitlabclient.Client) (siteStats, error) {
 	version, err := readVersionFile()
 	if err != nil {
 		return siteStats{}, err
 	}
-	toolCounts, err := siteToolCountsFor(client, gitLabComClient)
-	if err != nil {
-		return siteStats{}, err
-	}
-	metaCounts, err := siteMetaCountsFor(client, gitLabComClient)
-	if err != nil {
-		return siteStats{}, err
-	}
-	dynamicCatalog, err := dynamicActionCatalog(client, false)
-	if err != nil {
-		return siteStats{}, err
-	}
-	dynamicTools, err := listDynamicTools(dynamicCatalog)
-	if err != nil {
-		return siteStats{}, err
-	}
-	catalogActions, err := siteCatalogActionsFor(client, gitLabComClient)
-	if err != nil {
-		return siteStats{}, err
-	}
-	catalogGroups, err := siteCatalogGroupsFor(client)
-	if err != nil {
-		return siteStats{}, err
-	}
-	resourceCount, err := sumResources(client)
-	if err != nil {
-		return siteStats{}, err
-	}
-	promptCount, err := countPrompts(client)
-	if err != nil {
-		return siteStats{}, err
-	}
 	return siteStats{
 		Version:        version,
-		Tools:          toolCounts,
-		Meta:           metaCounts,
-		Dynamic:        len(dynamicTools),
-		CatalogActions: catalogActions,
-		CatalogGroups:  catalogGroups,
-		Resources:      resourceCount,
-		Prompts:        promptCount,
+		Tools:          siteToolCountsFor(client, gitLabComClient),
+		Meta:           siteMetaCountsFor(client, gitLabComClient),
+		Dynamic:        len(listDynamicTools(dynamicActionCatalog(client, false))),
+		CatalogActions: siteCatalogActionsFor(client, gitLabComClient),
+		CatalogGroups:  siteCatalogGroupsFor(client),
+		Resources:      sumResources(client),
+		Prompts:        countPrompts(client),
 		Completions:    siteCompletionArgTypes,
 		Capabilities:   siteCapabilities,
 		ToolPackages:   countToolPackages(),
@@ -154,115 +127,69 @@ func generateSiteStats(client, gitLabComClient *gitlabclient.Client) (siteStats,
 
 // siteToolCountsFor sizes the individual tool surface for every published
 // tier.
-func siteToolCountsFor(client, gitLabComClient *gitlabclient.Client) (siteToolCounts, error) {
-	free, err := countIndividualTools(client, edition.Free)
-	if err != nil {
-		return siteToolCounts{}, err
+func siteToolCountsFor(client, gitLabComClient *gitlabclient.Client) siteToolCounts {
+	return siteToolCounts{
+		Free:                countIndividualTools(client, edition.Free),
+		Premium:             countIndividualTools(client, edition.Premium),
+		UltimateSelfManaged: countIndividualTools(client, edition.Ultimate),
+		GitLabCom:           countIndividualTools(gitLabComClient, edition.Ultimate),
 	}
-	premium, err := countIndividualTools(client, edition.Premium)
-	if err != nil {
-		return siteToolCounts{}, err
-	}
-	ultimate, err := countIndividualTools(client, edition.Ultimate)
-	if err != nil {
-		return siteToolCounts{}, err
-	}
-	gitLabCom, err := countIndividualTools(gitLabComClient, edition.Ultimate)
-	if err != nil {
-		return siteToolCounts{}, err
-	}
-	return siteToolCounts{Free: free, Premium: premium, UltimateSelfManaged: ultimate, GitLabCom: gitLabCom}, nil
 }
 
 // siteMetaCountsFor sizes the meta-tool surface for every published
 // deployment.
-func siteMetaCountsFor(client, gitLabComClient *gitlabclient.Client) (siteMetaCounts, error) {
-	base, err := listServerTools(client, true, false)
-	if err != nil {
-		return siteMetaCounts{}, err
+func siteMetaCountsFor(client, gitLabComClient *gitlabclient.Client) siteMetaCounts {
+	return siteMetaCounts{
+		Base:                  len(listServerTools(client, true, false)),
+		SelfManagedEnterprise: len(listServerTools(client, true, true)),
+		GitLabCom:             len(listServerTools(gitLabComClient, true, true)),
 	}
-	selfManaged, err := listServerTools(client, true, true)
-	if err != nil {
-		return siteMetaCounts{}, err
-	}
-	gitLabCom, err := listServerTools(gitLabComClient, true, true)
-	if err != nil {
-		return siteMetaCounts{}, err
-	}
-	return siteMetaCounts{Base: len(base), SelfManagedEnterprise: len(selfManaged), GitLabCom: len(gitLabCom)}, nil
 }
 
 // siteCatalogActionsFor counts the dynamic catalog action routes each
 // published tier exposes.
-func siteCatalogActionsFor(client, gitLabComClient *gitlabclient.Client) (siteCatalogActions, error) {
-	free, err := dynamicActionCatalog(client, false)
-	if err != nil {
-		return siteCatalogActions{}, err
-	}
-	selfManaged, err := dynamicActionCatalog(client, true)
-	if err != nil {
-		return siteCatalogActions{}, err
-	}
-	gitLabCom, err := dynamicActionCatalog(gitLabComClient, true)
-	if err != nil {
-		return siteCatalogActions{}, err
-	}
+func siteCatalogActionsFor(client, gitLabComClient *gitlabclient.Client) siteCatalogActions {
 	return siteCatalogActions{
-		Free:                  countActionRoutes(free.ActionMaps()),
-		SelfManagedEnterprise: countActionRoutes(selfManaged.ActionMaps()),
-		GitLabCom:             countActionRoutes(gitLabCom.ActionMaps()),
-	}, nil
+		Free:                  countActionRoutes(dynamicActionCatalog(client, false).ActionMaps()),
+		SelfManagedEnterprise: countActionRoutes(dynamicActionCatalog(client, true).ActionMaps()),
+		GitLabCom:             countActionRoutes(dynamicActionCatalog(gitLabComClient, true).ActionMaps()),
+	}
 }
 
 // siteCatalogGroupsFor counts the catalog groups each licensing tier
 // exposes.
-func siteCatalogGroupsFor(client *gitlabclient.Client) (siteCatalogGroups, error) {
-	free, err := countCatalogGroupsForTier(client, edition.Free)
-	if err != nil {
-		return siteCatalogGroups{}, err
+func siteCatalogGroupsFor(client *gitlabclient.Client) siteCatalogGroups {
+	return siteCatalogGroups{
+		Free:     countCatalogGroupsForTier(client, edition.Free),
+		Premium:  countCatalogGroupsForTier(client, edition.Premium),
+		Ultimate: countCatalogGroupsForTier(client, edition.Ultimate),
 	}
-	premium, err := countCatalogGroupsForTier(client, edition.Premium)
-	if err != nil {
-		return siteCatalogGroups{}, err
-	}
-	ultimate, err := countCatalogGroupsForTier(client, edition.Ultimate)
-	if err != nil {
-		return siteCatalogGroups{}, err
-	}
-	return siteCatalogGroups{Free: free, Premium: premium, Ultimate: ultimate}, nil
 }
 
 // countIndividualTools registers the individual tool surface for tier and
 // returns the number of advertised tools, mirroring how the text report
 // derives its per-surface individual-tool numbers.
-func countIndividualTools(client *gitlabclient.Client, tier edition.Tier) (int, error) {
+func countIndividualTools(client *gitlabclient.Client, tier edition.Tier) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 4000, Capabilities: &mcp.ServerCapabilities{}})
 	tools.RegisterAll(server, client, tier)
-	listed, err := listToolsFromServer(server)
-	if err != nil {
-		return 0, err
-	}
-	return len(listed), nil
+	return len(listToolsFromServer(server))
 }
 
 // countCatalogGroupsForTier builds the canonical action catalog for tier
 // (including the gitlab_server MCP group) and returns the number of catalog
-// groups, matching the documented per-tier catalog-group counts.
-func countCatalogGroupsForTier(client *gitlabclient.Client, tier edition.Tier) (int, error) {
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: tier, IncludeMCP: true})
-	if err != nil {
-		return 0, fmt.Errorf("build catalog for tier %s: %w", tier, err)
-	}
-	return catalog.CountGroups(), nil
+// groups, matching the documented per-tier catalog-group counts. The build
+// reads the compiled-in ActionSpecs, so it cannot fail here for a reason the
+// caller could do anything about; the error the catalog produces already
+// names the group or the check that rejected it.
+func countCatalogGroupsForTier(client *gitlabclient.Client, tier edition.Tier) int {
+	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: tier, IncludeMCP: true}))
+	return catalog.CountGroups()
 }
 
 // sumResources returns the total MCP resource count (static + templates).
-func sumResources(client *gitlabclient.Client) (int, error) {
-	static, templates, err := countResources(client)
-	if err != nil {
-		return 0, err
-	}
-	return static + templates, nil
+func sumResources(client *gitlabclient.Client) int {
+	static, templates := countResources(client)
+	return static + templates
 }
 
 // readVersionFile reads the repository VERSION file and returns the trimmed
@@ -284,23 +211,18 @@ func readVersionFileAt(root string) (string, error) {
 
 // renderSiteStatsJSON marshals stats to prettier-compatible JSON (2-space
 // indent, trailing newline) so the committed file passes the site's
-// `prettier --check` lint step without reformatting.
-func renderSiteStatsJSON(stats siteStats) ([]byte, error) {
-	raw, err := json.MarshalIndent(stats, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("marshal site stats: %w", err)
-	}
-	return append(raw, '\n'), nil
+// `prettier --check` lint step without reformatting. siteStats is a flat
+// struct of strings and ints built by this package, so the marshal has
+// nothing to refuse.
+func renderSiteStatsJSON(stats siteStats) []byte {
+	return append(cmdutil.Must(json.MarshalIndent(stats, "", "  ")), '\n')
 }
 
 // writeOrCheckSiteStats writes the generated stats JSON to path, or — when
 // checkOnly is set — verifies the committed file matches the freshly generated
 // content and returns an actionable error if it is stale.
 func writeOrCheckSiteStats(path string, stats siteStats, checkOnly bool) error {
-	content, err := renderSiteStatsJSON(stats)
-	if err != nil {
-		return err
-	}
+	content := renderSiteStatsJSON(stats)
 	if checkOnly {
 		existing, readErr := os.ReadFile(path) //#nosec G304 -- path is an operator-supplied generator target
 		if readErr != nil {
