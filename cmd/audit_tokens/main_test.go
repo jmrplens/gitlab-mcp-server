@@ -7,7 +7,8 @@
 // formatting, table printing) that compose the audit report, the report and
 // JSON renderers driven by a real measurement, the schema sizing table, the
 // footprint write and check modes driven through the measurement seam, and
-// the run entry point every measurement failure now travels back to.
+// every mode of the run entry point, whose reachable failures are the ones a
+// caller can act on.
 package main
 
 import (
@@ -55,11 +56,8 @@ func newAuditTokensClient(t *testing.T) *gitlabclient.Client {
 func measuredFootprintRows(t *testing.T) []tokenFootprintRow {
 	t.Helper()
 	footprintOnce.Do(func() {
-		footprintShared, errFootprint = measureTokenFootprintRows(newAuditTokensClient(t))
+		footprintShared = measureTokenFootprintRows(newAuditTokensClient(t))
 	})
-	if errFootprint != nil {
-		t.Fatalf("measureTokenFootprintRows() error: %v", errFootprint)
-	}
 	return footprintShared
 }
 
@@ -68,11 +66,8 @@ func measuredFootprintRows(t *testing.T) []tokenFootprintRow {
 func measuredTokenAudit(t *testing.T) tokenAudit {
 	t.Helper()
 	tokenAuditOnce.Do(func() {
-		tokenAuditShared, errTokenAudit = measureTokenAudit(newAuditTokensClient(t))
+		tokenAuditShared = measureTokenAudit(newAuditTokensClient(t))
 	})
-	if errTokenAudit != nil {
-		t.Fatalf("measureTokenAudit() error: %v", errTokenAudit)
-	}
 	return tokenAuditShared
 }
 
@@ -81,28 +76,18 @@ var (
 	sharedClient     *gitlabclient.Client
 	footprintOnce    sync.Once
 	footprintShared  []tokenFootprintRow
-	errFootprint     error
 	tokenAuditOnce   sync.Once
 	tokenAuditShared tokenAudit
-	errTokenAudit    error
 )
 
 // auditDynamicSurface returns the base action routes, the catalog built over
 // them, and the tools the dynamic surface advertises for it. The three
-// measurement tests all start from that trio, and each step now reports its
-// own failure instead of ending the process.
+// measurement tests all start from that trio.
 func auditDynamicSurface(t *testing.T, client *gitlabclient.Client) (map[string]toolutil.ActionMap, *actioncatalog.Catalog, []*mcp.Tool) {
 	t.Helper()
-	routes, err := buildMetaActionMaps(client, false)
-	if err != nil {
-		t.Fatalf("buildMetaActionMaps() error: %v", err)
-	}
+	routes := buildMetaActionMaps(client, false)
 	catalog := actioncatalog.FromActionMaps(routes)
-	toolList, err := listDynamicTools(catalog)
-	if err != nil {
-		t.Fatalf("listDynamicTools() error: %v", err)
-	}
-	return routes, catalog, toolList
+	return routes, catalog, listDynamicTools(catalog)
 }
 
 // TestMeasureResources_IncludesToolManifest verifies the token audit measures
@@ -110,19 +95,13 @@ func auditDynamicSurface(t *testing.T, client *gitlabclient.Client) (map[string]
 func TestMeasureResources_IncludesToolManifest(t *testing.T) {
 	client := newAuditTokensClient(t)
 	routes, dynamicCatalog, dynamicTools := auditDynamicSurface(t, client)
-	manifestTokens, err := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
+	manifestTokens := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
 		ToolManifest: true,
 		ToolSurface:  config.ToolSurfaceDynamic,
 		ToolList:     dynamicTools,
 		ToolCatalog:  dynamicCatalog,
 	})
-	if err != nil {
-		t.Fatalf("measureResourcesWithOptions(manifest) error: %v", err)
-	}
-	bareTokens, err := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{})
-	if err != nil {
-		t.Fatalf("measureResourcesWithOptions(bare) error: %v", err)
-	}
+	bareTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{})
 	if manifestTokens <= bareTokens {
 		t.Fatalf("manifest resource tokens = %d, want greater than bare server %d", manifestTokens, bareTokens)
 	}
@@ -134,19 +113,13 @@ func TestMeasureResources_IncludesToolManifest(t *testing.T) {
 func TestMeasureResourcesWithOptions_MinimalCandidate(t *testing.T) {
 	client := newAuditTokensClient(t)
 	routes, dynamicCatalog, dynamicTools := auditDynamicSurface(t, client)
-	fullDynamicTokens, err := measureResources(client, routes, dynamicCatalog, dynamicTools, config.ToolSurfaceDynamic)
-	if err != nil {
-		t.Fatalf("measureResources() error: %v", err)
-	}
-	minimalTokens, err := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
+	fullDynamicTokens := measureResources(client, routes, dynamicCatalog, dynamicTools, config.ToolSurfaceDynamic)
+	minimalTokens := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
 		ToolManifest: true,
 		ToolSurface:  config.ToolSurfaceDynamic,
 		ToolList:     dynamicTools,
 		ToolCatalog:  dynamicCatalog,
 	})
-	if err != nil {
-		t.Fatalf("measureResourcesWithOptions(minimal) error: %v", err)
-	}
 
 	if minimalTokens <= 0 {
 		t.Fatalf("minimal resource tokens = %d, want positive tool-manifest estimate", minimalTokens)
@@ -175,21 +148,24 @@ func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 	}
 }
 
-// TestListTools_UnknownSurface_ReturnsError verifies a surface name the audit
-// does not know is reported as an error the caller must handle, rather than
-// measuring an empty server as if it were a surface.
-func TestListTools_UnknownSurface_ReturnsError(t *testing.T) {
+// TestListTools_UnknownSurface_Panics verifies a surface name the audit does
+// not know stops the run instead of measuring an empty server as if it were a
+// surface. Every call site passes a config surface constant, so an
+// unrecognized one is a programming error, and the panic names it.
+func TestListTools_UnknownSurface_Panics(t *testing.T) {
 	client := newAuditTokensClient(t)
 
-	toolList, err := listTools(client, "bogus", false)
-	if err == nil {
-		t.Fatalf("listTools(bogus) = %d tools, want an error", len(toolList))
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		listTools(client, "bogus", false)
+	}()
+
+	if recovered == nil {
+		t.Fatal("listTools(bogus) returned, want a panic naming the surface")
 	}
-	if toolList != nil {
-		t.Errorf("listTools(bogus) tools = %v, want nil alongside the error", toolList)
-	}
-	if err.Error() != `unknown tool surface "bogus"` {
-		t.Fatalf("error = %q, want the unknown surface message", err)
+	if got := fmt.Sprint(recovered); got != `audit_tokens: unknown tool surface "bogus"` {
+		t.Fatalf("panic = %q, want the unknown surface message", got)
 	}
 }
 
@@ -321,10 +297,7 @@ func TestMeasureTools_AssignsDomainAndComputesTokens(t *testing.T) {
 		{Name: "gitlab_issue_create", Description: "Create an issue."},
 	}
 
-	got, err := measureTools(toolList)
-	if err != nil {
-		t.Fatalf("measureTools() error: %v", err)
-	}
+	got := measureTools(toolList)
 	if len(got) != 2 {
 		t.Fatalf("measureTools() returned %d items, want 2", len(got))
 	}
@@ -355,39 +328,15 @@ func TestMeasureTools_AssignsDomainAndComputesTokens(t *testing.T) {
 // TestMeasureTools_EmptyInputReturnsEmpty verifies the estimator returns an
 // empty slice for an empty tool list.
 func TestMeasureTools_EmptyInputReturnsEmpty(t *testing.T) {
-	got, err := measureTools(nil)
-	if err != nil {
-		t.Fatalf("measureTools(nil) error: %v", err)
-	}
-	if len(got) != 0 {
+	if got := measureTools(nil); len(got) != 0 {
 		t.Fatalf("measureTools(nil) = %d items, want 0", len(got))
-	}
-}
-
-// TestMeasureTools_UnserializableSchema_ReturnsError verifies a tool whose
-// schema cannot be serialized is named in an error the caller must handle,
-// instead of being counted as zero tokens.
-func TestMeasureTools_UnserializableSchema_ReturnsError(t *testing.T) {
-	got, err := measureTools([]*mcp.Tool{{Name: "gitlab_broken", InputSchema: make(chan int)}})
-	if err == nil {
-		t.Fatalf("measureTools(unserializable) = %+v, want an error", got)
-	}
-	if got != nil {
-		t.Errorf("measureTools(unserializable) infos = %+v, want nil alongside the error", got)
-	}
-	if !strings.HasPrefix(err.Error(), "marshal tool gitlab_broken: ") {
-		t.Fatalf("error = %q, want the marshal failure naming the tool", err)
 	}
 }
 
 // TestMeasurePrompts_ReturnsTokenEstimateForRegisteredPrompts verifies the
 // prompt token estimator produces a positive count for a real client.
 func TestMeasurePrompts_ReturnsTokenEstimateForRegisteredPrompts(t *testing.T) {
-	got, err := measurePrompts(newAuditTokensClient(t))
-	if err != nil {
-		t.Fatalf("measurePrompts() error: %v", err)
-	}
-	if got <= 0 {
+	if got := measurePrompts(newAuditTokensClient(t)); got <= 0 {
 		t.Fatalf("measurePrompts() = %d, want positive token estimate", got)
 	}
 }
@@ -1338,10 +1287,7 @@ func TestMeasureTokenFootprintRows_AllTiersAllModes_CoversEveryCombination(t *te
 func TestMeasureTierFootprintWithPrompts_NegativePromptTokens_MeasuresPromptsItself(t *testing.T) {
 	want := measuredFootprintRows(t)[:9]
 
-	got, err := measureTierFootprintWithPrompts(newAuditTokensClient(t), edition.Free, "Free/CE", -1)
-	if err != nil {
-		t.Fatalf("measureTierFootprintWithPrompts() error: %v", err)
-	}
+	got := measureTierFootprintWithPrompts(newAuditTokensClient(t), edition.Free, "Free/CE", -1)
 	if !slices.Equal(got, want) {
 		t.Fatalf("standalone Free tier rows =\n%+v\nwant the batch measurement's\n%+v", got, want)
 	}
@@ -1355,10 +1301,7 @@ func TestMeasureTierFootprintWithPrompts_NegativePromptTokens_MeasuresPromptsIts
 func TestMeasureToolSchemaTokens_RealTokenizer_ReturnsNonZeroCounts(t *testing.T) {
 	toolList := []*mcp.Tool{{Name: "a"}, {Name: "bb"}, {Name: "ccc"}}
 
-	got, err := measureToolSchemaTokens(toolList)
-	if err != nil {
-		t.Fatalf("measureToolSchemaTokens() error = %v", err)
-	}
+	got := measureToolSchemaTokens(toolList)
 	if got <= 0 {
 		t.Fatalf("measureToolSchemaTokens() = %d, want > 0", got)
 	}
@@ -1378,29 +1321,22 @@ func TestMeasureToolSchemaTokens_RealTokenizer_ReturnsNonZeroCounts(t *testing.T
 	}
 }
 
-// TestMeasureToolSchemaTokens_UnserializableSchema_ReturnsError verifies the
-// footprint estimator names the tool whose schema cannot be serialized, so
-// the footprint run fails instead of publishing an undercount.
-func TestMeasureToolSchemaTokens_UnserializableSchema_ReturnsError(t *testing.T) {
-	_, err := measureToolSchemaTokens([]*mcp.Tool{{Name: "gitlab_ok"}, {Name: "gitlab_broken", InputSchema: make(chan int)}})
-	if err == nil || !strings.HasPrefix(err.Error(), "marshal tool gitlab_broken: ") {
-		t.Fatalf("measureToolSchemaTokens() error = %v, want the marshal failure naming gitlab_broken", err)
-	}
-}
-
-// TestRunMetaSchemaSizing_RealCatalog_PrintsSortedSizingTable verifies the
+// TestRun_CompareSchemasMode_PrintsSortedSizingTable verifies the
 // meta-schema sizing builds the full enterprise meta-tool registry and prints
 // one row per meta-tool sorted by full-schema size, a TOTAL row, and the two
 // ratios above one that the compact and full strategies cost over opaque.
 // Migrated from the former cmd/audit_meta_schema/main_test.go.
-func TestRunMetaSchemaSizing_RealCatalog_PrintsSortedSizingTable(t *testing.T) {
-	var err error
+//
+// It drives the mode through [run] rather than calling the sizing directly:
+// the registry build is the expensive part and paying for it twice to cover
+// two more statements would be the wrong trade.
+func TestRun_CompareSchemasMode_PrintsSortedSizingTable(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := 0
 	output := captureStdoutAudit(t, func() {
-		err = runMetaSchemaSizing()
+		code = run(auditOptions{compareSchemas: true}, &stdout, &stderr)
 	})
-	if err != nil {
-		t.Fatalf("runMetaSchemaSizing() error: %v", err)
-	}
+	assertRunPrintedToStdout(t, code, &stdout, &stderr)
 
 	if !strings.Contains(output, " Meta-tool InputSchema sizing spike\n") {
 		t.Fatalf("sizing output lacks its title:\n%s", output)
@@ -1507,11 +1443,11 @@ func TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix(t *testing.T) {
 // --- Footprint write and check modes ------------------------------------------
 
 // stubFootprintRows replaces the footprint measurement for the test with a
-// function returning rows and err, restoring the real one afterwards.
-func stubFootprintRows(t *testing.T, rows []tokenFootprintRow, err error) {
+// function returning rows, restoring the real one afterwards.
+func stubFootprintRows(t *testing.T, rows []tokenFootprintRow) {
 	t.Helper()
 	original := measureFootprintRows
-	measureFootprintRows = func(*gitlabclient.Client) ([]tokenFootprintRow, error) { return rows, err }
+	measureFootprintRows = func(*gitlabclient.Client) []tokenFootprintRow { return rows }
 	t.Cleanup(func() { measureFootprintRows = original })
 }
 
@@ -1577,7 +1513,7 @@ func readReplica(t *testing.T, root, path string) string {
 // says how many rows it compared.
 func TestRunFootprintCheck_CommittedTargets_AreCurrent(t *testing.T) {
 	rows := measuredFootprintRows(t)
-	stubFootprintRows(t, rows, nil)
+	stubFootprintRows(t, rows)
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("locate repository root: %v", err)
@@ -1598,9 +1534,11 @@ func TestRunFootprintCheck_CommittedTargets_AreCurrent(t *testing.T) {
 }
 
 // TestRunFootprintCheck_Failures_NameTheCause verifies each way the check can
-// fail is reported by name: the measurement itself, each target that cannot
-// be read, a README without footprint markers, and every stale target listed
-// together with the command that refreshes them.
+// fail is reported by name: each target that cannot be read, a README without
+// footprint markers, and every stale target listed together with the command
+// that refreshes them. The measurement itself is not among them — it reads
+// nothing but the catalog compiled into this binary and panics rather than
+// returning.
 func TestRunFootprintCheck_Failures_NameTheCause(t *testing.T) {
 	rows := fullMatrixFootprintRows()
 	readme := renderedReadme(t, rows)
@@ -1612,14 +1550,12 @@ func TestRunFootprintCheck_Failures_NameTheCause(t *testing.T) {
 	site := string(siteJSON)
 
 	tests := []struct {
-		name       string
-		measureErr error
-		readme     string
-		detailed   string
-		site       string
-		want       string
+		name     string
+		readme   string
+		detailed string
+		site     string
+		want     string
 	}{
-		{name: "measurement failure", measureErr: errors.New("registry exploded"), readme: readme, detailed: detailed, site: site, want: "measuring token footprint: registry exploded"},
 		{name: "README missing", detailed: detailed, site: site, want: "reading README.md: "},
 		{name: "detailed doc missing", readme: readme, site: site, want: "reading docs/development/token-footprint.md: "},
 		{name: "site data missing", readme: readme, detailed: detailed, want: "reading site/src/data/token-footprint.json: "},
@@ -1629,7 +1565,7 @@ func TestRunFootprintCheck_Failures_NameTheCause(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stubFootprintRows(t, rows, tt.measureErr)
+			stubFootprintRows(t, rows)
 			footprintReplica(t, tt.readme, tt.detailed, tt.site)
 
 			checkErr := runFootprintCheck(newAuditTokensClient(t))
@@ -1646,7 +1582,7 @@ func TestRunFootprintCheck_Failures_NameTheCause(t *testing.T) {
 // state the check mode then accepts.
 func TestRunFootprint_EmptyReplica_WritesEveryTarget(t *testing.T) {
 	rows := fullMatrixFootprintRows()
-	stubFootprintRows(t, rows, nil)
+	stubFootprintRows(t, rows)
 	root := footprintReplica(t, footprintSkeleton, "stale\n", "{}\n")
 
 	var runErr error
@@ -1679,21 +1615,18 @@ func TestRunFootprint_EmptyReplica_WritesEveryTarget(t *testing.T) {
 }
 
 // TestRunFootprint_Failures_ReturnErrors verifies each failure of the write
-// mode is returned rather than half-applied silently: the measurement, rows
-// the claim or the site data cannot be rendered from, a README that is
-// missing or lacks the footprint markers, and target directories that do not
-// exist.
+// mode is returned rather than half-applied silently: rows the claim or the
+// site data cannot be rendered from, a README that is missing or lacks the
+// footprint markers, and target directories that do not exist.
 func TestRunFootprint_Failures_ReturnErrors(t *testing.T) {
 	rows := fullMatrixFootprintRows()
 	tests := []struct {
-		name       string
-		rows       []tokenFootprintRow
-		measureErr error
-		readme     string
-		removeDir  string
-		want       string
+		name      string
+		rows      []tokenFootprintRow
+		readme    string
+		removeDir string
+		want      string
 	}{
-		{name: "measurement failure", rows: rows, measureErr: errors.New("registry exploded"), readme: footprintSkeleton, want: "measuring token footprint: registry exploded"},
 		{name: "rows without a dynamic surface", rows: rows[8:9], readme: footprintSkeleton, want: "token claim: no `dynamic` / `full` (default) row to quote"},
 		{name: "README missing", rows: rows, want: "reading README.md: "},
 		{name: "README without footprint markers", rows: rows, readme: "# Fixture\n" + claimStartMarker + "\n" + claimEndMarker + "\n", want: "start marker " + footprintStartMarker + " not found"},
@@ -1703,7 +1636,7 @@ func TestRunFootprint_Failures_ReturnErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stubFootprintRows(t, tt.rows, tt.measureErr)
+			stubFootprintRows(t, tt.rows)
 			root := footprintReplica(t, tt.readme, "", "")
 			if tt.removeDir != "" {
 				if err := os.RemoveAll(filepath.Join(root, tt.removeDir)); err != nil {
@@ -1725,7 +1658,7 @@ func TestRunFootprint_Failures_ReturnErrors(t *testing.T) {
 // without it the targets are written.
 func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 	t.Run("check verifies the committed targets", func(t *testing.T) {
-		stubFootprintRows(t, measuredFootprintRows(t), nil)
+		stubFootprintRows(t, measuredFootprintRows(t))
 		root, err := cmdutil.RepositoryRoot(".")
 		if err != nil {
 			t.Fatalf("locate repository root: %v", err)
@@ -1750,7 +1683,7 @@ func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 
 	t.Run("write fills the targets", func(t *testing.T) {
 		rows := fullMatrixFootprintRows()
-		stubFootprintRows(t, rows, nil)
+		stubFootprintRows(t, rows)
 		root := footprintReplica(t, footprintSkeleton, "", "")
 
 		var modeErr error
@@ -1773,21 +1706,22 @@ func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 }
 
 // TestRun_FootprintMode_ReportsTheOutcomeAndExitCode verifies the one place
-// that reports a failure does report it: a measurement error reaches the
+// that reports a failure does report it: a target run cannot read reaches the
 // writer run was handed and becomes exit status 1, while a clean check writes
 // its confirmation to stdout and exits 0.
 func TestRun_FootprintMode_ReportsTheOutcomeAndExitCode(t *testing.T) {
-	t.Run("measurement failure names the cause and exits one", func(t *testing.T) {
-		stubFootprintRows(t, nil, errors.New("catalog unavailable"))
+	t.Run("unreadable target names the cause and exits one", func(t *testing.T) {
+		stubFootprintRows(t, fullMatrixFootprintRows())
+		footprintReplica(t, "", "", "")
 
 		var stdout, stderr bytes.Buffer
-		code := run(auditOptions{footprint: true}, &stdout, &stderr)
+		code := run(auditOptions{footprint: true, check: true}, &stdout, &stderr)
 
 		if code != 1 {
-			t.Fatalf("run(-footprint) = %d, want 1", code)
+			t.Fatalf("run(-footprint -check) = %d, want 1", code)
 		}
-		if got := stderr.String(); got != "measuring token footprint: catalog unavailable\n" {
-			t.Fatalf("stderr = %q, want the wrapped measurement failure", got)
+		if got := stderr.String(); !strings.HasPrefix(got, "reading README.md: ") {
+			t.Fatalf("stderr = %q, want the unreadable README named", got)
 		}
 		if stdout.Len() != 0 {
 			t.Errorf("stdout = %q, want nothing written on failure", stdout.String())
@@ -1795,7 +1729,7 @@ func TestRun_FootprintMode_ReportsTheOutcomeAndExitCode(t *testing.T) {
 	})
 
 	t.Run("current targets exit zero", func(t *testing.T) {
-		stubFootprintRows(t, measuredFootprintRows(t), nil)
+		stubFootprintRows(t, measuredFootprintRows(t))
 		root, err := cmdutil.RepositoryRoot(".")
 		if err != nil {
 			t.Fatalf("locate repository root: %v", err)
@@ -1822,9 +1756,9 @@ func TestRun_FootprintMode_ReportsTheOutcomeAndExitCode(t *testing.T) {
 
 // TestRun_JSONMode_WritesTheSummaryToItsWriter verifies the default audit path
 // measures every surface and encodes the summary to the writer run was given,
-// exiting 0. It exercises the whole chain this file rerouted: each measurement
-// helper now returns its failures to run rather than exiting from inside a
-// half-built session, so a clean run has to arrive back here intact.
+// exiting 0. It exercises the whole chain: the measurement now panics rather
+// than returning failures nothing could act on, so a clean run has to arrive
+// back here intact.
 func TestRun_JSONMode_WritesTheSummaryToItsWriter(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := run(auditOptions{jsonOut: true}, &stdout, &stderr)
@@ -1847,4 +1781,83 @@ func TestRun_JSONMode_WritesTheSummaryToItsWriter(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRun_JSONMode_EncoderFails_ReportsAndStillExitsZero verifies the one
+// documented asymmetry of the entry point: a stdout that refuses the summary
+// is named on stderr, and the exit code stays 0. That predates the error
+// rerouting and is deliberately preserved, so it needs a test of its own to
+// keep anyone from "fixing" it into a 1.
+func TestRun_JSONMode_EncoderFails_ReportsAndStillExitsZero(t *testing.T) {
+	var stderr bytes.Buffer
+	code := run(auditOptions{jsonOut: true}, failingWriter{}, &stderr)
+
+	if code != 0 {
+		t.Fatalf("run(-json) with a failing writer = %d, want 0", code)
+	}
+	if got := stderr.String(); got != "encode json: disk full\n" {
+		t.Fatalf("stderr = %q, want the encode failure named", got)
+	}
+}
+
+// TestRun_ReportMode_PrintsTheMarkdownReport verifies the default invocation,
+// the one with no flags at all: it measures every surface and prints the
+// Markdown report to os.Stdout, capped at the requested ranking lengths, and
+// exits 0 without writing to either writer it was handed.
+func TestRun_ReportMode_PrintsTheMarkdownReport(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := 0
+	output := captureStdoutAudit(t, func() {
+		code = run(auditOptions{topTools: 3, topDomains: 2}, &stdout, &stderr)
+	})
+	assertRunPrintedToStdout(t, code, &stdout, &stderr)
+
+	assertInOrder(t, output,
+		"  gitlab-mcp-server. Token Overhead Audit\n",
+		"## Mode Comparison\n",
+		"## Top 30 Individual Tools by Token Cost\n",
+		"## Grand Total (what an LLM sees)\n",
+	)
+	// The ranking caps come from the options, not from the section headings,
+	// which name the defaults whatever was asked for.
+	individual := sectionBetween(t, output, "## Top 30 Individual Tools by Token Cost\n", "## Meta-Tools by Token Cost (base)\n")
+	if !strings.Contains(individual, "  3  ") || strings.Contains(individual, "  4  ") {
+		t.Fatalf("individual ranking is not capped at the requested 3 rows:\n%s", individual)
+	}
+	domains := sectionBetween(t, output, "## Domain Totals (Individual Mode, Top 20)\n", "## Grand Total (what an LLM sees)\n")
+	if !strings.Contains(domains, "  2  ") || strings.Contains(domains, "  3  ") {
+		t.Fatalf("domain ranking is not capped at the requested 2 rows:\n%s", domains)
+	}
+}
+
+// assertRunPrintedToStdout verifies run exited zero having written nothing to
+// either writer it was handed: the modes that print a table or a report print
+// it to os.Stdout, and only a failure reaches the writers.
+func assertRunPrintedToStdout(t *testing.T, code int, stdout, stderr *bytes.Buffer) {
+	t.Helper()
+	if code != 0 {
+		t.Fatalf("run() = %d, want 0: %s", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("run() wrote %q to its stdout writer, want the output on os.Stdout", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("run() wrote %q to its stderr writer, want nothing", stderr.String())
+	}
+}
+
+// sectionBetween returns the part of s that follows start and precedes the
+// first end after it, failing when either marker is absent.
+func sectionBetween(t *testing.T, s, start, end string) string {
+	t.Helper()
+	from := strings.Index(s, start)
+	if from < 0 {
+		t.Fatalf("%q not found in:\n%s", start, s)
+	}
+	rest := s[from+len(start):]
+	to := strings.Index(rest, end)
+	if to < 0 {
+		t.Fatalf("%q not found after %q in:\n%s", end, start, s)
+	}
+	return rest[:to]
 }
