@@ -6,11 +6,16 @@ package gitlab
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
@@ -389,9 +394,24 @@ func TestDotUnescape_Transport(t *testing.T) {
 // returns http.DefaultTransport when TLS verification is enabled, and a
 // custom transport with InsecureSkipVerify when disabled.
 func TestBuildBaseTransport_DefaultAndTLS(t *testing.T) {
-	defTransport := buildBaseTransport(false)
-	if defTransport != http.DefaultTransport {
-		t.Errorf("buildBaseTransport(false) = %T, want http.DefaultTransport", defTransport)
+	defTransport, ok := buildBaseTransport(false).(*http.Transport)
+	if !ok {
+		t.Fatalf("buildBaseTransport(false) = %T, want *http.Transport", buildBaseTransport(false))
+	}
+	// It must not BE http.DefaultTransport: this package sets a response
+	// header timeout on it, and doing that to the shared default would
+	// change the behavior of every other package in the process.
+	if defTransport == http.DefaultTransport {
+		t.Error("buildBaseTransport(false) returned http.DefaultTransport itself; mutating it would leak into the whole process")
+	}
+	// It must be the SAME instance every time, because the connection pool
+	// lives in the transport and a per-client one would give every pool
+	// entry its own set of idle connections.
+	if second, _ := buildBaseTransport(false).(*http.Transport); second != defTransport {
+		t.Error("buildBaseTransport(false) returned a fresh transport; the connection pool must be shared")
+	}
+	if defTransport.ResponseHeaderTimeout != responseHeaderTimeout {
+		t.Errorf("ResponseHeaderTimeout = %v, want %v", defTransport.ResponseHeaderTimeout, responseHeaderTimeout)
 	}
 
 	tlsTransport := buildBaseTransport(true)
@@ -401,6 +421,9 @@ func TestBuildBaseTransport_DefaultAndTLS(t *testing.T) {
 	}
 	if !ht.TLSClientConfig.InsecureSkipVerify {
 		t.Error("buildBaseTransport(true) should have InsecureSkipVerify=true")
+	}
+	if ht.ResponseHeaderTimeout != responseHeaderTimeout {
+		t.Errorf("ResponseHeaderTimeout = %v, want %v", ht.ResponseHeaderTimeout, responseHeaderTimeout)
 	}
 }
 
@@ -1126,5 +1149,220 @@ func assertAuthScheme(t *testing.T, path, bearer, private, token string, wantBea
 	}
 	if (private == token) != wantPrivate {
 		t.Errorf("%s: PRIVATE-TOKEN = %q, want private=%v", path, private, wantPrivate)
+	}
+}
+
+// TestIsCredentialRejection_OnlyOn401And403 verifies that only GitLab's own
+// verdict on a credential counts as a rejection, and that every other way a
+// request can fail is reported as "no verdict".
+//
+// The distinction is what keeps a briefly unreachable instance, or one
+// answering 500 for a few seconds, from reading as a mass revocation and
+// evicting every pooled tenant at once.
+func TestIsCredentialRejection_OnlyOn401And403(t *testing.T) {
+	statusErr := func(code int) error {
+		return &gl.ErrorResponse{StatusCode: code, Message: strconv.Itoa(code)}
+	}
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil},
+		{name: "plain error", err: errors.New("dial tcp: connection refused")},
+		{name: "unauthorized", err: statusErr(http.StatusUnauthorized), want: true},
+		{name: "forbidden", err: statusErr(http.StatusForbidden), want: true},
+		{name: "wrapped unauthorized", err: fmt.Errorf("gitlab ping failed: %w", statusErr(http.StatusUnauthorized)), want: true},
+		{name: "not found", err: statusErr(http.StatusNotFound)},
+		{name: "sdk not found sentinel", err: gl.ErrNotFound},
+		{name: "server error", err: statusErr(http.StatusInternalServerError)},
+		{name: "bad gateway", err: statusErr(http.StatusBadGateway)},
+		{name: "too many requests", err: statusErr(http.StatusTooManyRequests)},
+		{name: "nil error response", err: (*gl.ErrorResponse)(nil)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsCredentialRejection(tt.err); got != tt.want {
+				t.Errorf("IsCredentialRejection(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+// redirectProbeToken is the fake personal access token the redirect tests look
+// for on the far side of a hop.
+const redirectProbeToken = "glpat-REDIRECT-PROBE"
+
+// redirectProbeOAuthToken is the fake OAuth access token used for the Bearer
+// half of the redirect table.
+const redirectProbeOAuthToken = "gloas-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+
+// redirectProbe starts a target server that records the headers it is sent and
+// an origin server that answers every request with a 302 to it. It returns the
+// origin's base URL as the client should be configured with it, and an
+// accessor for the headers the target saw.
+//
+// When crossHost is true the origin is addressed as "localhost" while both
+// servers listen on 127.0.0.1, which is what makes the hop genuinely
+// cross-hostname: two httptest servers are the same host to net/http however
+// many ports they use, so a test that uses their own URLs proves nothing.
+func redirectProbe(t *testing.T, tlsOrigin, crossHost bool) (baseURL string, seen func() http.Header) {
+	t.Helper()
+
+	var mu sync.Mutex
+	var got http.Header
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		got = r.Header.Clone()
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":1,"username":"probe-user","version":"18.0.0","path_with_namespace":"group/proj"}`)
+	}))
+	t.Cleanup(target.Close)
+
+	// The Location header is set by hand rather than through http.Redirect so
+	// that the destination, which is this test's own server, is not read as a
+	// caller-controlled redirect target.
+	redirector := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", target.URL+r.URL.EscapedPath())
+		w.WriteHeader(http.StatusFound)
+	})
+	var origin *httptest.Server
+	if tlsOrigin {
+		origin = httptest.NewTLSServer(redirector)
+	} else {
+		origin = httptest.NewServer(redirector)
+	}
+	t.Cleanup(origin.Close)
+
+	baseURL = origin.URL
+	if crossHost {
+		baseURL = strings.Replace(baseURL, "127.0.0.1", "localhost", 1)
+	}
+	return baseURL, func() http.Header {
+		mu.Lock()
+		defer mu.Unlock()
+		return got
+	}
+}
+
+// TestClient_CrossHostRedirect_DropsCredential verifies that a redirect which
+// leaves the configured GitLab instance does not carry this server's
+// credential with it, while a redirect that stays on the instance still does.
+//
+// It matters because net/http's own strip list covers Authorization and five
+// other standard headers and cannot cover PRIVATE-TOKEN, which is the only
+// credential stdio mode has and HTTP legacy mode's default. GitLab answers
+// artifact, trace and package downloads with a 302 to object storage whenever
+// object storage is configured, so this is a routine disclosure with no
+// adversary present.
+//
+// The table crosses both pooled constructors with both request paths — the SDK
+// client, and the raw health client, which has neither the SDK's transport
+// chain nor its base-URL guard — over three hop shapes: cross-host (strip),
+// same-host (keep, so the fix does not break GitLab's own redirects), and an
+// https-to-http downgrade on an unchanged hostname, which net/http does not
+// treat as leaving the host at all. Every case also asserts the redirect was
+// still followed and the body delivered, since refusing redirects would
+// "pass" this test while breaking six shipped download actions.
+func TestClient_CrossHostRedirect_DropsCredential(t *testing.T) {
+	constructors := []struct {
+		name   string
+		build  func(baseURL string, skipTLS bool) (*Client, error)
+		header string
+		token  string
+	}{
+		{
+			name: "pat client",
+			build: func(baseURL string, skipTLS bool) (*Client, error) {
+				return NewClientWithTokenRetries(baseURL, redirectProbeToken, skipTLS, true)
+			},
+			header: "PRIVATE-TOKEN",
+			token:  redirectProbeToken,
+		},
+		{
+			name: "oauth client",
+			build: func(baseURL string, skipTLS bool) (*Client, error) {
+				return NewOAuthClientWithToken(baseURL, redirectProbeOAuthToken, skipTLS)
+			},
+			header: "Authorization",
+			token:  "Bearer " + redirectProbeOAuthToken,
+		},
+	}
+
+	hops := []struct {
+		name           string
+		tlsOrigin      bool
+		crossHost      bool
+		wantCredential bool
+	}{
+		{name: "cross host", crossHost: true},
+		{name: "same host", wantCredential: true},
+		{name: "https downgraded to http", tlsOrigin: true},
+	}
+
+	calls := []struct {
+		name string
+		do   func(*Client) error
+	}{
+		{
+			name: "sdk call",
+			do: func(c *Client) error {
+				_, _, err := c.GL().Projects.GetProject("group/proj", nil)
+				return err
+			},
+		},
+		{
+			name: "health probe",
+			do: func(c *Client) error {
+				if c.CredentialRejected(context.Background()) {
+					return errors.New("CredentialRejected() = true against a 200 backend")
+				}
+				return nil
+			},
+		},
+	}
+
+	for _, ctor := range constructors {
+		for _, hop := range hops {
+			for _, call := range calls {
+				t.Run(ctor.name+"/"+hop.name+"/"+call.name, func(t *testing.T) {
+					baseURL, seen := redirectProbe(t, hop.tlsOrigin, hop.crossHost)
+
+					client, err := ctor.build(baseURL, hop.tlsOrigin)
+					if err != nil {
+						t.Fatalf("constructor error: %v", err)
+					}
+					if callErr := call.do(client); callErr != nil {
+						t.Fatalf("call after redirect failed, so the redirect was not followed: %v", callErr)
+					}
+
+					assertRedirectTargetSaw(t, seen(), ctor.header, ctor.token, hop.wantCredential)
+				})
+			}
+		}
+	}
+}
+
+// assertRedirectTargetSaw checks what the far side of a redirect received:
+// either exactly the expected credential, or none of them at all.
+func assertRedirectTargetSaw(t *testing.T, headers http.Header, header, token string, wantCredential bool) {
+	t.Helper()
+
+	if headers == nil {
+		t.Fatal("the redirect target was never reached")
+	}
+	if got := headers.Get(header); (got == token) != wantCredential {
+		t.Errorf("target saw %s = %q, want present=%v", header, got, wantCredential)
+	}
+	if wantCredential {
+		return
+	}
+	for _, name := range credentialHeaders {
+		if got := headers.Get(name); got != "" {
+			t.Errorf("target saw credential header %s = %q, want it stripped", name, got)
+		}
 	}
 }

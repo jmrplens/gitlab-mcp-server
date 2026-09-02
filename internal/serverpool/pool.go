@@ -70,6 +70,32 @@ const DefaultRevalidateInterval = 15 * time.Minute
 // and drawing a revalidation ping against GitLab every interval, forever.
 const DefaultIdleTimeout = 1 * time.Hour
 
+// DefaultMaxCredentialAge is the longest an entry keeps serving on the
+// strength of a credential check made that long ago.
+//
+// It exists because nothing else bounds the window between an operator
+// revoking a token and this server ceasing to answer for it. An entry is
+// verified once, when it is built; the fast path then returns it and refreshes
+// lastUsed with no re-verification, so an entry in continuous use never idles
+// out. Periodic revalidation normally keeps the window at the revalidation
+// interval, but --revalidate-interval 0 is a documented, supported setting,
+// and with it off an actively used entry survived for the life of the process.
+// This is the floor under that: whatever the operator turns off, a credential
+// is re-checked at least this often, because the entry is rebuilt from scratch
+// and the rebuild runs [verifyCredential].
+//
+// What survives inside the window is the *surface* — initialize, tools/list,
+// the catalog, the resource and prompt listings — not the tenant's data,
+// since every tool call forwards the token and GitLab answers 401 the moment
+// it dies. An hour bounds that disclosure while costing at most one rebuild
+// per hour per active credential.
+const DefaultMaxCredentialAge = 1 * time.Hour
+
+// maxCredentialAgeCeiling is the largest value [WithMaxCredentialAge] honors.
+// A ceiling that can be set arbitrarily high is not a ceiling; this is the
+// same upper bound the --revalidate-interval flag already documents.
+const maxCredentialAgeCeiling = 24 * time.Hour
+
 // idleSweepDivisor sets the sweep cadence as a fraction of the idle timeout,
 // bounded below by idleSweepMinInterval so a small timeout cannot turn the
 // sweep into a hot loop.
@@ -95,20 +121,31 @@ type Metrics struct {
 	IdleEvictions          atomic.Int64
 	RevalidationsFailed    atomic.Int64
 	RevalidationsSucceeded atomic.Int64
+	// RevalidationsTransient counts revalidation rounds that could not reach
+	// a verdict — the instance was unreachable, or answered 5xx — and left
+	// the entry in place. Separated from RevalidationsFailed so an operator
+	// can tell "tokens are being revoked" from "GitLab was down for a
+	// minute", which used to look identical and evict the same way.
+	RevalidationsTransient atomic.Int64
+	// StaleCredentialEvictions counts entries dropped because their
+	// credential had not been checked within [DefaultMaxCredentialAge].
+	StaleCredentialEvictions atomic.Int64
 }
 
 // Snapshot is a point-in-time copy of pool [Metrics] plus current state.
 // Safe for JSON serialization and cross-goroutine use.
 type Snapshot struct {
-	Hits                   int64     `json:"hits"`
-	Misses                 int64     `json:"misses"`
-	Evictions              int64     `json:"evictions"`
-	IdleEvictions          int64     `json:"idle_evictions"`
-	RevalidationsFailed    int64     `json:"revalidations_failed"`
-	RevalidationsSucceeded int64     `json:"revalidations_succeeded"`
-	CurrentSize            int       `json:"current_size"`
-	MaxSize                int       `json:"max_size"`
-	CreatedAt              time.Time `json:"created_at"`
+	Hits                     int64     `json:"hits"`
+	Misses                   int64     `json:"misses"`
+	Evictions                int64     `json:"evictions"`
+	IdleEvictions            int64     `json:"idle_evictions"`
+	RevalidationsFailed      int64     `json:"revalidations_failed"`
+	RevalidationsSucceeded   int64     `json:"revalidations_succeeded"`
+	RevalidationsTransient   int64     `json:"revalidations_transient"`
+	StaleCredentialEvictions int64     `json:"stale_credential_evictions"`
+	CurrentSize              int       `json:"current_size"`
+	MaxSize                  int       `json:"max_size"`
+	CreatedAt                time.Time `json:"created_at"`
 }
 
 // ServerPool maintains a bounded set of [*mcp.Server] instances keyed by
@@ -134,6 +171,7 @@ type ServerPool struct {
 	onEvict            func(*mcp.Server)
 	revalidateInterval time.Duration
 	idleTimeout        time.Duration
+	maxCredentialAge   time.Duration
 	metrics            Metrics
 	createdAt          time.Time
 	// building collapses concurrent first-requests for one key into a single
@@ -217,6 +255,25 @@ func WithIdleTimeout(d time.Duration) Option {
 	}
 }
 
+// WithMaxCredentialAge sets the ceiling on how long an entry serves without
+// its credential having been re-checked against GitLab.
+//
+// Unlike the other options here it cannot be turned off, which is the point of
+// it: see [DefaultMaxCredentialAge]. A value of zero or less keeps the
+// default, and a value above [maxCredentialAgeCeiling] is clamped down to it.
+func WithMaxCredentialAge(d time.Duration) Option {
+	return func(p *ServerPool) {
+		switch {
+		case d <= 0:
+			p.maxCredentialAge = DefaultMaxCredentialAge
+		case d > maxCredentialAgeCeiling:
+			p.maxCredentialAge = maxCredentialAgeCeiling
+		default:
+			p.maxCredentialAge = d
+		}
+	}
+}
+
 // New creates a [ServerPool]. The cfg provides shared server-wide settings
 // (GitLabURL, SkipTLSVerify, etc.). The factory function creates a fully
 // registered [*mcp.Server] for each new GitLab client.
@@ -229,6 +286,7 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		factory:            factory,
 		revalidateInterval: DefaultRevalidateInterval,
 		idleTimeout:        DefaultIdleTimeout,
+		maxCredentialAge:   DefaultMaxCredentialAge,
 		createdAt:          time.Now(),
 		baseContext:        context.Background,
 	}
@@ -281,18 +339,30 @@ func (p *ServerPool) GetOrCreateWithScopes(token, gitlabURL string, scopes []str
 
 	// Fast path: read lock to check existing entry.
 	p.mu.RLock()
-	if entry, ok := p.entries[key]; ok {
-		p.mu.RUnlock()
+	cached, ok := p.entries[key]
+	// Read under the same lock that guards the field: lastValidated is
+	// written by the revalidation goroutine.
+	stale := ok && p.maxCredentialAge > 0 && time.Since(cached.lastValidated) > p.maxCredentialAge
+	p.mu.RUnlock()
+
+	switch {
+	case ok && stale:
+		// The credential behind this entry has not been checked with GitLab
+		// inside the ceiling, so the entry stops being an answer. Dropping it
+		// sends this very request down the slow path, which rebuilds and
+		// re-runs verifyCredential — a revoked token is refused there rather
+		// than served from a cache nothing re-examines.
+		p.evictStaleCredential(key)
+	case ok:
 		p.mu.Lock()
-		p.lru.MoveToFront(entry.element)
+		p.lru.MoveToFront(cached.element)
 		// This is the hot path for every request on an established entry, so
 		// it is what keeps an active entry out of reach of idle eviction.
-		entry.lastUsed = time.Now()
+		cached.lastUsed = time.Now()
 		p.mu.Unlock()
 		p.metrics.Hits.Add(1)
-		return entry.server, nil
+		return cached.server, nil
 	}
-	p.mu.RUnlock()
 
 	// Slow path: build WITHOUT holding p.mu. Client creation, tier and scope
 	// detection and the factory all perform GitLab network I/O, and doing that
@@ -630,15 +700,17 @@ func (p *ServerPool) Stats() Snapshot {
 	p.mu.RUnlock()
 
 	return Snapshot{
-		Hits:                   p.metrics.Hits.Load(),
-		Misses:                 p.metrics.Misses.Load(),
-		Evictions:              p.metrics.Evictions.Load(),
-		IdleEvictions:          p.metrics.IdleEvictions.Load(),
-		RevalidationsFailed:    p.metrics.RevalidationsFailed.Load(),
-		RevalidationsSucceeded: p.metrics.RevalidationsSucceeded.Load(),
-		CurrentSize:            size,
-		MaxSize:                p.maxSize,
-		CreatedAt:              p.createdAt,
+		Hits:                     p.metrics.Hits.Load(),
+		Misses:                   p.metrics.Misses.Load(),
+		Evictions:                p.metrics.Evictions.Load(),
+		IdleEvictions:            p.metrics.IdleEvictions.Load(),
+		RevalidationsFailed:      p.metrics.RevalidationsFailed.Load(),
+		RevalidationsSucceeded:   p.metrics.RevalidationsSucceeded.Load(),
+		RevalidationsTransient:   p.metrics.RevalidationsTransient.Load(),
+		StaleCredentialEvictions: p.metrics.StaleCredentialEvictions.Load(),
+		CurrentSize:              size,
+		MaxSize:                  p.maxSize,
+		CreatedAt:                p.createdAt,
 	}
 }
 
@@ -825,7 +897,16 @@ func (p *ServerPool) StartRevalidation(ctx context.Context) {
 }
 
 // revalidateAll checks each pool entry's token by calling the GitLab version
-// endpoint. Entries that fail are evicted.
+// endpoint. Entries GitLab refuses are evicted; entries whose check could not
+// reach a verdict are left alone.
+//
+// The classification matters as much as the check. Evicting on any error at
+// all makes a GitLab that is briefly unreachable, or answers 500 for ten
+// seconds, drop every tenant's entry at once — and each is then rebuilt on its
+// next request with a fresh credential probe, tier lookup, scope lookup and
+// identity lookup, which is a thundering herd against an instance that has
+// only just come back. [verifyCredential] is careful about exactly this
+// distinction at admission time, and this path now inherits it.
 func (p *ServerPool) revalidateAll(ctx context.Context) {
 	p.mu.RLock()
 	snapshot := make(map[string]*poolEntry, len(p.entries))
@@ -842,8 +923,17 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 		cancel()
 
 		if err != nil {
+			if !gitlabclient.IsCredentialRejection(err) {
+				slog.WarnContext(ctx,
+					"server pool: token revalidation could not reach a verdict, keeping entry",
+					"error", err,
+					"age", time.Since(entry.createdAt).Round(time.Second),
+				)
+				p.metrics.RevalidationsTransient.Add(1)
+				continue
+			}
 			slog.WarnContext(ctx,
-				"server pool: token revalidation failed, evicting entry",
+				"server pool: gitlab rejected a pooled credential, evicting entry",
 				"error", err,
 				"age", time.Since(entry.createdAt).Round(time.Second),
 			)
@@ -858,6 +948,35 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 			p.mu.Unlock()
 		}
 	}
+}
+
+// evictStaleCredential removes an entry whose credential has not been checked
+// against GitLab inside [ServerPool.maxCredentialAge], counting it apart from
+// the evictions that mean GitLab said no.
+func (p *ServerPool) evictStaleCredential(key string) {
+	p.mu.Lock()
+	entry, ok := p.entries[key]
+	// Re-checked under the write lock, not just under the read lock that
+	// spotted it: a concurrent request may already have rebuilt this key
+	// between the two, and dropping that entry would throw away a check made
+	// a moment ago and send the next caller round again.
+	if !ok || p.maxCredentialAge <= 0 || time.Since(entry.lastValidated) <= p.maxCredentialAge {
+		p.mu.Unlock()
+		return
+	}
+	gitlabURL, _ := poolEntryConfigLogValues(entry)
+	age := time.Since(entry.lastValidated).Round(time.Second)
+	p.lru.Remove(entry.element)
+	p.dropEntry(key)
+	p.metrics.StaleCredentialEvictions.Add(1)
+	p.mu.Unlock()
+
+	slog.Info(
+		"server pool: credential not re-checked within the ceiling, rebuilding entry",
+		"unverified_for", age,
+		"ceiling", p.maxCredentialAge,
+		"gitlab_url", gitlabURL,
+	)
 }
 
 // evictByKey removes the entry with the given key from the pool.
