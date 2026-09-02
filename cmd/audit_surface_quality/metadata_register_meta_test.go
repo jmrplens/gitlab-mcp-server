@@ -219,6 +219,192 @@ func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
 	}
 }
 
+// TestRegisterMetaToolNames_CollectsOnlyQuotedGitlabNames verifies the tool
+// names are read from Name:"gitlab_*" string literals only: a non-identifier
+// key, a non-literal value, a non-string literal, a name outside the gitlab_
+// namespace and a repeated name are all ignored, and the survivors come back
+// sorted and deduplicated.
+func TestRegisterMetaToolNames_CollectsOnlyQuotedGitlabNames(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "internal/tools/register_meta.go", "package tools\n")
+	writeTestFile(t, root, "internal/tools/mixed/register.go", `package mixed
+
+func RegisterMeta() {
+	_ = struct{ Name string }{Name: "gitlab_zebra"}
+	_ = struct{ Name string }{Name: "gitlab_alpha"}
+	_ = struct{ Name string }{Name: "gitlab_alpha"}
+	_ = map[string]string{"Name": "gitlab_not_an_identifier_key"}
+	_ = struct{ Name string }{Name: other}
+	_ = struct{ Name int }{Name: 42}
+	_ = struct{ Name string }{Name: "helper_not_gitlab"}
+	_ = struct{ Other string }{Other: "gitlab_wrong_key"}
+}
+`)
+
+	definitions, err := auditRegisterMetaDefinitions(root)
+	if err != nil {
+		t.Fatalf("auditRegisterMetaDefinitions() error = %v", err)
+	}
+	if len(definitions) != 1 {
+		t.Fatalf("len(definitions) = %d, want 1: %#v", len(definitions), definitions)
+	}
+	got := definitions[0].ToolNames
+	if len(got) != 2 || got[0] != "gitlab_alpha" || got[1] != "gitlab_zebra" {
+		t.Fatalf("ToolNames = %#v, want [gitlab_alpha gitlab_zebra]", got)
+	}
+}
+
+// TestAuditRegisterMetaDefinitions_SkipsTestdataAndTestFiles verifies the
+// walk ignores testdata directories and _test.go files, so a RegisterMeta
+// written in either place is not reported as a package-level definition.
+func TestAuditRegisterMetaDefinitions_SkipsTestdataAndTestFiles(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "internal/tools/register_meta.go", "package tools\n")
+	writeTestFile(t, root, "internal/tools/testdata/register.go", `package testdata
+
+func RegisterMeta() {}
+`)
+	writeTestFile(t, root, "internal/tools/sample/register_test.go", `package sample
+
+func RegisterMeta() {}
+`)
+	writeTestFile(t, root, "internal/tools/sample/notes.md", "not Go\n")
+
+	definitions, err := auditRegisterMetaDefinitions(root)
+	if err != nil {
+		t.Fatalf("auditRegisterMetaDefinitions() error = %v", err)
+	}
+	if len(definitions) != 0 {
+		t.Fatalf("definitions = %#v, want none", definitions)
+	}
+}
+
+// TestAuditRegisterMetaDefinitions_ErrorPaths verifies the audit fails when
+// a source file under internal/tools cannot be parsed and when the central
+// register_meta.go hub is missing, rather than reporting a clean tree.
+func TestAuditRegisterMetaDefinitions_ErrorPaths(t *testing.T) {
+	testCases := []struct {
+		name    string
+		files   map[string]string
+		wantErr string
+	}{
+		{
+			name: "unparseable package file",
+			files: map[string]string{
+				"internal/tools/register_meta.go": "package tools\n",
+				"internal/tools/broken/broken.go": "package broken\n\nfunc (\n",
+			},
+			wantErr: "parse ",
+		},
+		{
+			name:    "missing central hub",
+			files:   map[string]string{"internal/tools/sample/register.go": "package sample\n"},
+			wantErr: "parse ",
+		},
+		{
+			name:    "missing tools tree",
+			files:   map[string]string{"go.mod": "module example.com/fixture\n"},
+			wantErr: "internal",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, content := range tc.files {
+				writeTestFile(t, root, name, content)
+			}
+
+			_, err := auditRegisterMetaDefinitions(root)
+			if err == nil {
+				t.Fatal("auditRegisterMetaDefinitions() error = nil, want an error")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error = %q, want it to contain %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestReferencedRegisterMetaPackages_IgnoresNonIdentifierReceivers verifies
+// the central hub scan records plain package identifiers only, so a
+// RegisterMeta reached through a nested selector or a call result is not
+// mistaken for a package reference.
+func TestReferencedRegisterMetaPackages_IgnoresNonIdentifierReceivers(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "register_meta.go")
+	writeTestFile(t, root, "register_meta.go", `package tools
+
+func registerAllMetaGroups() {
+	search.RegisterMeta(nil, nil)
+	pkg.nested.RegisterMeta(nil, nil)
+	builder().RegisterMeta(nil, nil)
+	other.Register(nil, nil)
+}
+`)
+
+	references, err := referencedRegisterMetaPackages(path)
+	if err != nil {
+		t.Fatalf("referencedRegisterMetaPackages() error = %v", err)
+	}
+	if len(references) != 1 {
+		t.Fatalf("references = %#v, want only search", references)
+	}
+	if _, ok := references["search"]; !ok {
+		t.Fatalf("references = %#v, want search", references)
+	}
+}
+
+// TestDelegatedRegisterMetaPackages_AllowListedDefinitions verifies the
+// allow-list path: a delegated package that the central hub references is
+// approved and reported as delegated, while a delegated package the hub
+// never calls is flagged with the unreferenced reason.
+func TestDelegatedRegisterMetaPackages_AllowListedDefinitions(t *testing.T) {
+	delegatedRegisterMetaPackages["approved"] = struct{}{}
+	delegatedRegisterMetaPackages["orphaned"] = struct{}{}
+	t.Cleanup(func() {
+		delete(delegatedRegisterMetaPackages, "approved")
+		delete(delegatedRegisterMetaPackages, "orphaned")
+	})
+
+	definitions := []registerMetaDefinition{
+		{Package: "approved", File: "internal/tools/approved/register.go", Referenced: true},
+		{Package: "orphaned", File: "internal/tools/orphaned/register.go", Referenced: false},
+	}
+
+	if !isDelegatedRegisterMetaDefinition(definitions[0]) {
+		t.Error("isDelegatedRegisterMetaDefinition(approved) = false, want true")
+	}
+	if isDelegatedRegisterMetaDefinition(definitions[1]) {
+		t.Error("isDelegatedRegisterMetaDefinition(orphaned) = true, want false")
+	}
+
+	unexpected := unexpectedRegisterMetaDefinitions(definitions)
+	if len(unexpected) != 1 {
+		t.Fatalf("unexpected = %#v, want only the orphaned definition", unexpected)
+	}
+	if unexpected[0].Package != "orphaned" {
+		t.Fatalf("unexpected package = %q, want orphaned", unexpected[0].Package)
+	}
+	if !strings.Contains(unexpected[0].Reason, "not referenced from internal/tools/register_meta.go") {
+		t.Fatalf("reason = %q, want the unreferenced reason", unexpected[0].Reason)
+	}
+
+	output := captureStdout(t, func() { printRegisterMetaDefinitions(definitions) })
+	for _, want := range []string{
+		"| Approved delegated definitions | 1 |",
+		"| Unexpected definitions | 1 |",
+		"| delegated | `approved` | `internal/tools/approved/register.go` | `-` |",
+		"| unexpected | `orphaned` | `internal/tools/orphaned/register.go` | `-` |",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Errorf("output missing %q:\n%s", want, output)
+			}
+		})
+	}
+}
+
 // writeTestFile writes test file fixture data for tests.
 func writeTestFile(t *testing.T, root, name, content string) {
 	t.Helper()

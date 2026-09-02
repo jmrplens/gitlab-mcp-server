@@ -36,6 +36,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -82,30 +83,37 @@ func main() {
 	check := flag.Bool("check", false, "exit non-zero when any abort (Fatal/FailNow) site exists; errorf sites stay advisory")
 	flag.Parse()
 
-	dirs := flag.Args()
+	os.Exit(run(flag.Args(), *jsonPath, *check, os.Stdout, os.Stderr))
+}
+
+// run scans dirs (the module's cmd, internal and test trees when empty),
+// prints the human report to stdout, writes the JSON work list when jsonPath
+// is set, and returns the process exit code: 2 when the scan or the write
+// fails, 1 when check is set and an abort site exists, 0 otherwise.
+func run(dirs []string, jsonPath string, check bool, stdout, stderr io.Writer) int {
 	if len(dirs) == 0 {
 		dirs = []string{"cmd", "internal", "test"}
 	}
 
 	report, err := scan(dirs)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "audit_test_goroutines: %v\n", err)
-		os.Exit(2)
+		fmt.Fprintf(stderr, "audit_test_goroutines: %v\n", err)
+		return 2
 	}
 
-	printHuman(report)
+	printHuman(stdout, report)
 
-	if *jsonPath != "" {
+	if jsonPath != "" {
 		data, marshalErr := json.MarshalIndent(report, "", "  ")
 		if marshalErr != nil {
-			fmt.Fprintf(os.Stderr, "audit_test_goroutines: marshal: %v\n", marshalErr)
-			os.Exit(2)
+			fmt.Fprintf(stderr, "audit_test_goroutines: marshal: %v\n", marshalErr)
+			return 2
 		}
-		if writeErr := os.WriteFile(*jsonPath, append(data, '\n'), 0o600); writeErr != nil {
-			fmt.Fprintf(os.Stderr, "audit_test_goroutines: write %s: %v\n", *jsonPath, writeErr)
-			os.Exit(2)
+		if writeErr := os.WriteFile(jsonPath, append(data, '\n'), 0o600); writeErr != nil {
+			fmt.Fprintf(stderr, "audit_test_goroutines: write %s: %v\n", jsonPath, writeErr)
+			return 2
 		}
-		fmt.Printf("work list written to %s\n", *jsonPath)
+		fmt.Fprintf(stdout, "work list written to %s\n", jsonPath)
 	}
 
 	// Pilot amendment (2026-08-17): only abort sites gate. The
@@ -114,15 +122,16 @@ func main() {
 	// handler still writes its canned response and no invalid state is used;
 	// rule 2 of the contract applies to converted Fatal guards, which review
 	// and the testutil helpers cover.
-	if *check && len(report.Fatal) > 0 {
-		fmt.Printf("check: FAIL. %d abort site(s) off the test goroutine (%d advisory errorf sites not gated)\n",
+	if check && len(report.Fatal) > 0 {
+		fmt.Fprintf(stdout, "check: FAIL. %d abort site(s) off the test goroutine (%d advisory errorf sites not gated)\n",
 			len(report.Fatal), len(report.ErrorfNoReturn))
-		os.Exit(1)
+		return 1
 	}
-	if *check {
-		fmt.Printf("check: PASS. No testing.T aborts off the test goroutine (%d advisory errorf site(s))\n",
+	if check {
+		fmt.Fprintf(stdout, "check: PASS. No testing.T aborts off the test goroutine (%d advisory errorf site(s))\n",
 			len(report.ErrorfNoReturn))
 	}
+	return 0
 }
 
 // scan walks every _test.go file under dirs and collects findings.
@@ -371,8 +380,8 @@ func sortFindings(findings []Finding) {
 	})
 }
 
-// printHuman writes the per-file tallies and the summary.
-func printHuman(report *Report) {
+// printHuman writes the per-file tallies and the summary to w.
+func printHuman(w io.Writer, report *Report) {
 	perFile := map[string][2]int{}
 	for _, f := range report.Fatal {
 		c := perFile[f.File]
@@ -391,9 +400,9 @@ func printHuman(report *Report) {
 	sort.Strings(files)
 	for _, f := range files {
 		c := perFile[f]
-		fmt.Printf("%-72s fatal=%-3d errorf_no_return=%d\n", f, c[0], c[1])
+		fmt.Fprintf(w, "%-72s fatal=%-3d errorf_no_return=%d\n", f, c[0], c[1])
 	}
-	fmt.Printf("\nsummary: %d fatal sites (A=%d tail-position, B=%d truncating) + %d advisory errorf-without-return across %d files\n",
+	fmt.Fprintf(w, "\nsummary: %d fatal sites (A=%d tail-position, B=%d truncating) + %d advisory errorf-without-return across %d files\n",
 		report.Summary.FatalSites, report.Summary.CategoryA, report.Summary.CategoryB,
 		report.Summary.ErrorfNoReturn, report.Summary.Files)
 }
