@@ -75,7 +75,9 @@ func streamDownloadPackageFile(
 		return 0, "", err
 	}
 
-	outFile, err := os.Create(outputPath) //#nosec G304 -- path is resolved through symlinks and confined to the allowed download directories, before and after its parents are created
+	// os.Create would follow whatever the leaf is when it runs, so the two
+	// resolutions above would only describe a path the write need not take.
+	outFile, err := toolutil.CreateDownloadOutputFile(outputPath)
 	if err != nil {
 		return 0, "", fmt.Errorf("create output file %s: %w", outputPath, err)
 	}

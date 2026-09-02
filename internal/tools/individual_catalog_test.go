@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
@@ -830,5 +834,59 @@ func TestRegisterIndividualCatalogTools_ReadOnlyRemovesSystemHookTest(t *testing
 				t.Errorf("%s registered = %t, want %t", toolName, registered, tt.wantRegister)
 			}
 		})
+	}
+}
+
+// TestIndividualCatalogHandler_UpstreamResponseBody_IsNotReflected verifies
+// that the individual-surface dispatcher contains a GitLab error before it
+// becomes tool output and before it is logged.
+//
+// It is the same hole the standalone dispatcher had, and it needs its own test
+// because it is a second copy of the same few lines: a route that wraps
+// client-go's error with fmt.Errorf never reaches the wrapping helpers, so
+// whatever a proxy answered, an nginx or WAF page naming hosts inside the
+// deployment, reached the model and the "tool call failed" line verbatim.
+func TestIndividualCatalogHandler_UpstreamResponseBody_IsNotReflected(t *testing.T) {
+	const internalHost = "gitlab-internal-11.corp.invalid"
+	target, parseErr := url.Parse("https://gitlab.example.com/api/v4/projects/42")
+	if parseErr != nil {
+		t.Fatalf("url.Parse() error = %v", parseErr)
+	}
+	// The prefix is verbatim what client-go writes into Message when the body
+	// is not JSON, which a proxy error page never is.
+	upstream := &gl.ErrorResponse{
+		Response: &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Request:    &http.Request{Method: http.MethodGet, URL: target},
+		},
+		Message: "failed to parse unknown error format: <html><body>nginx/1.25.3 upstream " + internalHost + ":8080</body></html>",
+	}
+	spec := toolutil.NewActionSpec("get", toolutil.RouteFunc(
+		func(context.Context, struct{}) (struct{}, error) {
+			return struct{}{}, fmt.Errorf("project %q not found on GitLab: %w", "group/project", upstream)
+		},
+	), toolutil.ActionSpecOptions{
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_get", Title: "Test Get", Description: "Test get."},
+	})
+	catalog := testIndividualCatalog(t, spec)
+	actions := catalog.Actions()
+	if len(actions) != 1 {
+		t.Fatalf("catalog.Actions() length = %d, want 1", len(actions))
+	}
+	handler := individualCatalogHandler("gitlab_test_get", actions[0], markdownForResult, IndividualCatalogRegisterOptions{})
+
+	_, _, err := handler(context.Background(), nil, map[string]any{})
+	if err == nil {
+		t.Fatal("handler() error = nil, want the route's failure")
+	}
+	if strings.Contains(err.Error(), internalHost) {
+		t.Errorf("handler() error = %q, want no upstream response body", err.Error())
+	}
+	if !strings.Contains(err.Error(), "not found on GitLab") {
+		t.Errorf("handler() error = %q, want the handler's own context kept", err.Error())
+	}
+	if !errors.Is(err, upstream) {
+		t.Error("errors.Is(handler() error, upstream) = false, want the cause still reachable")
 	}
 }

@@ -2,11 +2,14 @@
 
 // packages_stream_unix_test.go covers the destination-type rule of
 // streamDownloadPackageFile (packages_stream.go) against a named pipe (FIFO),
-// the one non-regular file a test can create without privileges.
-// syscall.Mkfifo has no Windows equivalent, hence the build tag.
+// the one non-regular file a test can create without privileges, and the
+// permissions the downloaded file is created with.
+// syscall.Mkfifo and umask have no Windows equivalent, hence the build tag.
 package packages
 
 import (
+	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,5 +65,49 @@ func TestStreamDownload_FIFOOutputPath_Refused(t *testing.T) {
 	}
 	if info.Mode()&os.ModeNamedPipe == 0 {
 		t.Errorf("os.Lstat(%q) mode = %v, want the pipe left as it was", fifoPath, info.Mode())
+	}
+}
+
+// TestStreamDownload_DownloadedFile_IsPrivateToTheOwner verifies that
+// package.download creates its destination readable by the owner alone, which
+// is the observable half of writing through toolutil.CreateDownloadOutputFile
+// instead of os.Create.
+//
+// The assertion is written against the action rather than against the helper on
+// purpose: a test that pins the primitive stays green when the caller stops
+// calling it, which is exactly the regression worth catching here, since the
+// helper shipped with a test and no caller. Mode 0o600 is only reachable
+// through the helper, because os.Create asks for 0o666.
+//
+// The umask is zeroed for the duration so the two modes cannot coincide. A
+// machine already running under umask 077 would otherwise see os.Create produce
+// 0o600 as well, and this test would pass against the defect.
+func TestStreamDownload_DownloadedFile_IsPrivateToTheOwner(t *testing.T) {
+	previousUmask := syscall.Umask(0)
+	t.Cleanup(func() { syscall.Umask(previousUmask) })
+
+	fileBody := "private-artifact-bytes"
+	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
+
+	outPath := filepath.Join(t.TempDir(), testOutputBin)
+	if _, err := Download(context.Background(), nil, client, DownloadInput{
+		ProjectID:      "42",
+		PackageName:    testPackageName,
+		PackageVersion: testPkgVersion,
+		FileName:       testAppBin,
+		OutputPath:     outPath,
+	}); err != nil {
+		t.Fatalf("Download() error = %v", err)
+	}
+
+	info, err := os.Lstat(outPath)
+	if err != nil {
+		t.Fatalf("os.Lstat(%q) error = %v", outPath, err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("os.Lstat(%q) permissions = %#o, want %#o", outPath, got, 0o600)
+	}
+	if !info.Mode().IsRegular() {
+		t.Errorf("os.Lstat(%q) mode = %v, want a regular file", outPath, info.Mode())
 	}
 }

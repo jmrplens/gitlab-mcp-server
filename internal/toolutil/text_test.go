@@ -690,3 +690,124 @@ func TestWrapGFMBody_DropsControlBytesAndDefusesTheHintMarker(t *testing.T) {
 		})
 	}
 }
+
+// TestEscapeMdTableCell_RawHTML_IsNeutralized verifies that a GitLab-authored
+// value cannot carry markup into a cell, so a client that renders HTML shows
+// the tag instead of obeying it.
+//
+// The escaper handled the pipe and the control bytes and let the angle bracket
+// through, and a Markdown renderer takes raw HTML ahead of whatever surrounds
+// it. A title of <a href="..."> therefore arrived as a working link to a host
+// that is not GitLab, and an <img src> as a request the reader's client made
+// on being shown the table.
+//
+// The closing bracket is deliberately left alone: nothing is obeyed that did
+// not open with '<', and callers compose cells holding an arrow the server
+// itself wrote. The last two cases pin both halves of that.
+func TestEscapeMdTableCell_RawHTML_IsNeutralized(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "anchor to another host",
+			in:   `<a href="http://attacker.invalid/x">Fix login</a>`,
+			want: `&lt;a href="http://attacker.invalid/x">Fix login&lt;/a>`,
+		},
+		{
+			name: "image beacon",
+			in:   `<img src="http://attacker.invalid/p.gif">`,
+			want: `&lt;img src="http://attacker.invalid/p.gif">`,
+		},
+		{
+			name: "autolink syntax",
+			in:   "<http://attacker.invalid>",
+			want: "&lt;http://attacker.invalid>",
+		},
+		{
+			name: "html comment",
+			in:   "<!-- hidden -->",
+			want: "&lt;!-- hidden -->",
+		},
+		{
+			name: "server-composed arrow survives",
+			in:   "feature/fix -> develop",
+			want: "feature/fix -> develop",
+		},
+		{
+			name: "no markup is left alone",
+			in:   "Fix login",
+			want: "Fix login",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EscapeMdTableCell(tt.in); got != tt.want {
+				t.Errorf("EscapeMdTableCell(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdTitleLink_WithoutURL_NeutralizesRawHTML verifies that the branch taken
+// when an item has no web URL is escaped too.
+//
+// TestMdTitleLink_TitleCannotCloseTheLink passes a target in every case, so it
+// exercises only the link half, and the escaping the label escaper added lives
+// on that half. MdTitleLink returns the bare cell when the URL is empty, which
+// is the ordinary shape for a milestone or a label with no page of its own, and
+// that cell reached the reader with its markup live.
+func TestMdTitleLink_WithoutURL_NeutralizesRawHTML(t *testing.T) {
+	const title = `<a href="http://attacker.invalid/x">Fix login</a>`
+	got := MdTitleLink(title, "")
+	if strings.Contains(got, "<a ") || strings.Contains(got, "</a>") {
+		t.Errorf("MdTitleLink(%q, \"\") = %q, want the tag neutralized", title, got)
+	}
+	if !strings.Contains(got, "Fix login") {
+		t.Errorf("MdTitleLink(%q, \"\") = %q, want the title still readable", title, got)
+	}
+}
+
+// TestEscapeMdHeading_RawHTML_IsNeutralized verifies that the heading escaper
+// neutralizes markup the same way the cell escaper does.
+//
+// A heading is the other place a formatter puts a GitLab-authored name, across
+// 44 call sites of the form "## Project: {name}", and it stripped the leading
+// '#' and the line breaks while passing a tag through. The same project name
+// would have been inert in a table and live in the heading above it.
+func TestEscapeMdHeading_RawHTML_IsNeutralized(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "anchor to another host",
+			in:   `<a href="http://attacker.invalid/x">My Project</a>`,
+			want: `&lt;a href="http://attacker.invalid/x">My Project&lt;/a>`,
+		},
+		{
+			name: "image beacon",
+			in:   `<img src="http://attacker.invalid/p.gif">`,
+			want: `&lt;img src="http://attacker.invalid/p.gif">`,
+		},
+		{
+			name: "heading promotion still stripped",
+			in:   "# <b>injected",
+			want: "&lt;b>injected",
+		},
+		{
+			name: "no markup is left alone",
+			in:   "My Project",
+			want: "My Project",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EscapeMdHeading(tt.in); got != tt.want {
+				t.Errorf("EscapeMdHeading(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

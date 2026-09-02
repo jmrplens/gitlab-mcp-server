@@ -3,6 +3,7 @@
 package modelregistry
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -292,4 +293,89 @@ type failingReader struct{}
 
 func (failingReader) Read([]byte) (int, error) {
 	return 0, errors.New("read failed")
+}
+
+// TestDownloadOutput_FileOverTheCeiling_IsRefusedNotTruncated verifies that the
+// file this action turns into base64 and copies into a JSON-RPC message is
+// bounded, and that a file above the bound produces an error naming the way out
+// rather than a partial file.
+//
+// The read was an unbounded io.ReadAll. The client-wide response ceiling bounds
+// what it costs to read and not what the answer becomes, and a caller can start
+// as many downloads as it likes. A prefix of a .safetensors loads no better
+// than a prefix of a .tar.gz imports, so the refusal is the whole answer here.
+// The exactly-at-the-ceiling case is present because an off-by-one in the limit
+// reader would refuse a file that fits.
+func TestDownloadOutput_FileOverTheCeiling_IsRefusedNotTruncated(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{name: "small file is returned whole", size: 1024},
+		{name: "file exactly at the ceiling is returned whole", size: maxModelFileBytes},
+		{name: "file one byte over the ceiling is refused", size: maxModelFileBytes + 1, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := DownloadInput{
+				ProjectID:      toolutil.StringOrInt("42"),
+				ModelVersionID: toolutil.StringOrInt("7"),
+				Path:           "models",
+				Filename:       "model.bin",
+			}
+			out, err := downloadOutput(in, bytes.NewReader(make([]byte, tt.size)))
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("downloadOutput(%d bytes) error = nil, want a refusal", tt.size)
+				}
+				if !strings.Contains(err.Error(), "download it from GitLab directly") {
+					t.Errorf("downloadOutput(%d bytes) error = %v, want it to name the way out", tt.size, err)
+				}
+				// A refusal must not double as a partial answer: content that
+				// looks like a whole file is worse than no content.
+				if out.ContentBase64 != "" {
+					t.Errorf("ContentBase64 length = %d, want no content alongside the refusal", len(out.ContentBase64))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("downloadOutput(%d bytes) error = %v", tt.size, err)
+			}
+			if out.SizeBytes != tt.size {
+				t.Errorf("SizeBytes = %d, want %d", out.SizeBytes, tt.size)
+			}
+		})
+	}
+}
+
+// TestDownload_ResponseOverTheClientCeiling_NamesTheWayOut verifies that a file
+// the client-wide response ceiling refuses to read produces the same actionable
+// message as one this action refuses to encode.
+//
+// The SDK buffers the whole body during the call, so that ceiling fails the
+// call rather than the later read, and it arrives as a transport error saying
+// nothing about model files. An operator whose weights file is simply too big
+// to travel this way otherwise sees only that something exceeded a maximum.
+func TestDownload_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(make([]byte, 4096))
+	})
+	client := testutil.NewTestClient(t, handler)
+	client.SetMaxResponseBytes(1024)
+
+	_, err := Download(t.Context(), client, DownloadInput{
+		ProjectID:      toolutil.StringOrInt("42"),
+		ModelVersionID: toolutil.StringOrInt("7"),
+		Path:           "models",
+		Filename:       "model.bin",
+	})
+	if err == nil {
+		t.Fatal("Download() error = nil, want an error for a response over the client ceiling")
+	}
+	if !strings.Contains(err.Error(), "download it from GitLab directly") {
+		t.Errorf("Download() error = %v, want it to name the way out", err)
+	}
 }

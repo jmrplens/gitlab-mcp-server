@@ -72,9 +72,33 @@ func isRenderControl(r rune) bool {
 // Pipes are replaced with the HTML entity &#124; and newlines/carriage-returns are
 // replaced with a space so the cell stays on a single row. Control characters are
 // dropped by [StripControlBytes].
+//
+// The opening angle bracket is an entity too, for the reason
+// [mdLinkLabelEscaper] gives: a renderer takes raw HTML ahead of whatever
+// surrounds it, so a title of
+//
+//	<a href="http://attacker.invalid/x">Fix login</a>
+//
+// arrives as a working link to a host that is not GitLab. [MdTitleLink] closed
+// that for the link case and returns this escaper's output untouched when the
+// item has no URL, which is the ordinary shape for something with no page of
+// its own, and around 266 formatters call this one directly.
+//
+// An entity rather than the backslash the label escaper uses, because
+// MdTitleLink pipes a cell through that escaper: a backslash arriving there
+// is escaped again into a visible one, where &lt; passes through untouched and
+// renders as the character it always was.
+//
+// Only '<' is escaped. Everything a renderer obeys instead of reading opens
+// with it (a tag, a comment, an autolink), so that is the whole of the
+// containment, and '>' is left alone because callers compose cells of their
+// own: a merge request's branch cell reads "feature/fix -> develop", and
+// entity-encoding the arrow the server itself wrote damages output that no
+// untrusted text ever touched.
 func EscapeMdTableCell(s string) string {
 	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "|", "&#124;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
 	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
@@ -233,8 +257,15 @@ func RichContentHint(features, webURL string) string {
 // into a Markdown heading (e.g. `## Project: {name}`). It strips leading '#'
 // characters that could promote/demote the heading level and collapses newlines
 // into spaces so the heading stays on one line.
+//
+// The opening angle bracket is escaped for the reason [EscapeMdTableCell]
+// gives, and in the same entity form: a heading is the other place a formatter
+// puts a GitLab-authored name, all 44 call sites interpolate one value into a
+// heading the server wrote, and the same name should not turn into a live tag
+// in a heading after being neutralized in a cell.
 func EscapeMdHeading(s string) string {
 	s = StripControlBytes(s)
+	s = strings.ReplaceAll(s, "<", "&lt;")
 	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")

@@ -62,11 +62,15 @@ These are checked by the elicitation subsystem. When the MCP client supports eli
 | ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `UPLOAD_MAX_FILE_SIZE` | `2GB`   | Maximum file size for upload tools. Supports human-friendly suffixes: `KB`, `MB`, `GB` (case-insensitive). Upper bound: 1 TB |
 
-## Optional — Local Import Files
+## Optional — Local File Paths
 
-| Variable                         | Default   | Description                                                                                                                                                                                                                                                                                                    |
-| -------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | *(empty)* | Additional OS path-list-separated directories allowed for `file_path`/`file` project and group import archives. The current working directory and OS temp directory are always allowed. Import archives must resolve inside an allowed directory after symlink resolution and must use the `.tar.gz` extension |
+| Variable                           | Default   | Description                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`   | *(empty)* | Additional OS path-list-separated directories allowed for `file_path`/`file` project and group import archives. The current working directory and OS temp directory are always allowed. Import archives must resolve inside an allowed directory after symlink resolution and must use the `.tar.gz` extension |
+| `GITLAB_MCP_ALLOWED_UPLOAD_DIRS`   | *(empty)* | Additional OS path-list-separated directories a tool may **read** a local file from (every `file_path` and `directory_path` input: uploads, secure files, avatars, package publish). The current working directory and OS temp directory are always allowed, and a path is resolved through symlinks first     |
+| `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS` | *(empty)* | Additional OS path-list-separated directories a tool may **write** a downloaded file into (`output_path`). Same syntax and same always-allowed roots. The destination is resolved twice, before its parent directories are created and again after, so the second check sees the directory being written to    |
+
+A server reached over HTTP refuses every caller-supplied local path whatever these say, since the caller has no files on the machine the server runs on. `content_base64` is the remote form.
 
 ---
 

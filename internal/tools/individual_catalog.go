@@ -261,6 +261,11 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		actionCtx := toolutil.ContextWithRequest(ctx, req)
 		start := time.Now()
 		result, err := action.Route.Handler(actionCtx, input)
+		// The containment the other two dispatchers apply, for the same reason:
+		// a handler that wraps a client-go error with %w itself never reaches
+		// the wrapping helpers, and its rendering carries the upstream response
+		// body. See [toolutil.SanitizeError].
+		err = toolutil.SanitizeError(err)
 		if inputResult, needsInput := toolutil.InputRequiredResultFromError(err); needsInput {
 			return inputResult, nil, nil
 		}

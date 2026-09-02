@@ -192,7 +192,7 @@ type DownloadInput struct {
 	PackageName    string               `json:"package_name" jsonschema:"Package name,required"`
 	PackageVersion string               `json:"package_version" jsonschema:"Package version,required"`
 	FileName       string               `json:"file_name" jsonschema:"File name to download. May include / to describe a directory structure (segments must not be empty or . or ..),required"`
-	OutputPath     string               `json:"output_path" jsonschema:"Absolute path where the file will be saved on the local filesystem,required"`
+	OutputPath     string               `json:"output_path" jsonschema:"Absolute path where the file will be saved on the local filesystem, confined to the current working directory, the OS temp directory, or a directory listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. Symlinks are resolved and destinations outside those roots are rejected,required"`
 }
 
 // DownloadOutput contains the result of a package file download.
