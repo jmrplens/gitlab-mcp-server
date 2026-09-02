@@ -10,10 +10,12 @@
 package mcpotel
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // metaCarrier adapts an MCP request's _meta field to the propagator interface,
@@ -47,8 +49,14 @@ import (
 // into a client's message: a response's _meta belongs to the response, and
 // writing a traceparent there would offer a client the identifiers of our
 // internal spans, which is exactly what the W3C security section warns about
-// leaking outward. Injection for our own outbound GitLab calls happens in the
-// HTTP transport, where the standard propagator handles it.
+// leaking outward.
+//
+// Nothing else injects either, and this comment used to say the HTTP transport
+// did. It does not: there is no Inject call anywhere in the non-test tree, and
+// an outbound GitLab request carries no traceparent, tracestate or baggage.
+// This server is a sink for trace context, which is worth stating plainly
+// because it is the reason bounding what arrives (see [sanitizeRemoteContext])
+// costs nothing downstream.
 type metaCarrier struct {
 	meta map[string]any
 }
@@ -88,6 +96,81 @@ func (c metaCarrier) Keys() []string {
 		}
 	}
 	return keys
+}
+
+// maxTraceStateBytes bounds the caller-chosen tracestate this server carries
+// onto its own spans.
+//
+// W3C permits 32 members of 256 characters of key plus 256 of value, so a
+// conforming caller can hand over about 16 KiB, and the SDK exports it verbatim
+// on every span in the trace. On the HTTP edge that caller has not
+// authenticated yet, so the value is bytes an anonymous party writes into the
+// operator's traces bill. 512 is enough for the vendor state a real gateway
+// carries and far below what a caller could otherwise choose.
+const maxTraceStateBytes = 512
+
+// sanitizeRemoteContext bounds what an upstream caller decides about this
+// server's own spans, without discarding the correlation they are for.
+//
+// Two rules, applied only to a span context that arrived from outside this
+// process — a locally created ambient parent is this server's own and is left
+// exactly as it is:
+//
+//   - The tracestate is truncated to [maxTraceStateBytes] by dropping whole
+//     entries from the end, which is what W3C section 3.3.1.5 requires of a
+//     truncation: "the vendor MUST truncate whole entries". Keeping the head
+//     preserves a fronting gateway's own vendor state, which is the reason to
+//     truncate rather than clear.
+//   - When keepCallerSampling is false, a cleared sampled flag is treated as
+//     the recommendation W3C says it is rather than as a veto. The trace id,
+//     span id and parent relationship are untouched, so the caller's trace
+//     still joins; what they no longer decide is whether this server records
+//     the work it did for them.
+//
+// The two live together because they answer the same question: how much
+// authority a value carries by virtue of having been sent to us.
+func sanitizeRemoteContext(ctx context.Context, keepCallerSampling bool) context.Context {
+	spanContext := trace.SpanContextFromContext(ctx)
+	if !spanContext.IsValid() || !spanContext.IsRemote() {
+		return ctx
+	}
+
+	changed := false
+	if bounded, truncated := boundTraceState(spanContext.TraceState()); truncated {
+		spanContext = spanContext.WithTraceState(bounded)
+		changed = true
+	}
+	if !keepCallerSampling && !spanContext.IsSampled() {
+		spanContext = spanContext.WithTraceFlags(spanContext.TraceFlags() | trace.FlagsSampled)
+		changed = true
+	}
+	if !changed {
+		return ctx
+	}
+	return trace.ContextWithRemoteSpanContext(ctx, spanContext)
+}
+
+// boundTraceState truncates a tracestate to the byte bound by dropping whole
+// entries from the end, reporting whether it changed anything.
+//
+// Entries rather than bytes, because a tracestate cut mid-entry is not a
+// shorter tracestate, it is a malformed one that the next hop's parser
+// discards in full. Delete is used rather than rebuilding with Insert, which
+// moves a key to the front and would reorder what survives.
+func boundTraceState(state trace.TraceState) (trace.TraceState, bool) {
+	if len(state.String()) <= maxTraceStateBytes {
+		return state, false
+	}
+
+	keys := make([]string, 0, state.Len())
+	state.Walk(func(key, _ string) bool {
+		keys = append(keys, key)
+		return true
+	})
+	for i := len(keys) - 1; i >= 0 && len(state.String()) > maxTraceStateBytes; i-- {
+		state = state.Delete(keys[i])
+	}
+	return state, true
 }
 
 // carrierFor builds a carrier over a request's _meta, or an empty one.

@@ -10,6 +10,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	nooptrace "go.opentelemetry.io/otel/trace/noop"
 )
@@ -848,6 +849,59 @@ func TestStart_EachSignalValidatesItsOwnProtocol(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("error = %q, want it to name %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestSpanLimits_BoundAnAttributeValueUnlessTheOperatorChose covers the floor
+// under every span attribute, and the guard that keeps it a floor.
+//
+// The specification leaves the attribute-value length unlimited by default, so
+// an attribute is as large as whatever produced it — which on this server's
+// pre-authentication HTTP span meant as large as an anonymous caller chose. The
+// individual carrier is bounded where it is written; this is the backstop for
+// the attributes nobody has written yet.
+//
+// The environment wins because a value passed as an option beats the
+// environment in this SDK, so an unconditional limit would silently override an
+// operator who set one, which is the thing this project refuses to do anywhere
+// in the OTEL_ namespace.
+func TestSpanLimits_BoundAnAttributeValueUnlessTheOperatorChose(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want int
+	}{
+		{
+			name: "nothing configured takes this server's floor",
+			want: defaultAttributeValueLength,
+		},
+		{
+			name: "an operator's own limit wins",
+			env:  "128",
+			want: 128,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.env != "" {
+				t.Setenv("OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT", tt.env)
+			}
+
+			limits := spanLimits()
+			if limits.AttributeValueLengthLimit != tt.want {
+				t.Errorf("AttributeValueLengthLimit = %d, want %d",
+					limits.AttributeValueLengthLimit, tt.want)
+			}
+			// The other limits must still come from the SDK's own reading of
+			// the environment: filling one field by hand is not a license to
+			// replace the rest with zero values, which would silently drop
+			// every attribute past the first.
+			if limits.AttributeCountLimit != sdktrace.NewSpanLimits().AttributeCountLimit {
+				t.Errorf("AttributeCountLimit = %d, want the SDK's %d: the other limits were replaced rather than kept",
+					limits.AttributeCountLimit, sdktrace.NewSpanLimits().AttributeCountLimit)
 			}
 		})
 	}

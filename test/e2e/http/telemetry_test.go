@@ -84,26 +84,68 @@ func TestTelemetry_ServerCardAnnouncesItWithoutNamingTheCollector(t *testing.T) 
 // must never print. A bearer token in a log line is a credential leak whether
 // or not it was ours to begin with, and an export failure is exactly when a
 // server is most tempted to log the request it was making.
+// The four shapes below are a table because the guarantee held for exactly one
+// of them, and that one is the shape that reaches no logging branch at all.
+//
+// The SDK prints what this server does not. Its header parser logs the raw pair
+// when one has no "=", logs the raw value when percent-decoding fails, and the
+// log exporter hands the error handler the *entire* variable, so a typo in a
+// non-credential pair prints every credential beside it. The third malformation
+// is the sharp one: the credential itself is perfectly well formed and only a
+// neighboring key is not.
 func TestTelemetry_CollectorCredentialsNeverReachTheLogs(t *testing.T) {
 	const secret = "s3cr3t-collector-token"
 
-	env := telemetryEnv()
-	// W3C Baggage syntax, so the space is percent-encoded. Writing it literally
-	// would make the pair unparseable and this test would prove nothing.
-	env["OTEL_EXPORTER_OTLP_HEADERS"] = "Authorization=Bearer%20" + secret
-	srv := startServer(t, env)
-
-	// Traffic, so the exporter has genuinely tried and failed.
-	for range 3 {
-		srv.do(t, request{body: `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`})
+	tests := []struct {
+		name  string
+		value string
+		// wellFormed says nothing about the variable should appear at all,
+		// which is only true when the SDK had no complaint to make. Once it
+		// has one, naming the variable is what an operator needs: the fix is
+		// that the line no longer quotes its value.
+		wellFormed bool
+	}{
+		{
+			// W3C Baggage syntax, so the space is percent-encoded. Writing it
+			// literally would make the pair unparseable, which is the next case
+			// rather than this one.
+			name:       "a well-formed credential",
+			value:      "Authorization=Bearer%20" + secret,
+			wellFormed: true,
+		},
+		{
+			name:  "a pair with no equals sign",
+			value: "Authorization: Bearer " + secret,
+		},
+		{
+			name:  "a value that does not percent-decode",
+			value: "authorization=Bearer%2" + secret,
+		},
+		{
+			name:  "a valid credential beside an invalid key",
+			value: "api-key=" + secret + ",x tenant=acme",
+		},
 	}
 
-	logs := srv.logs()
-	if strings.Contains(logs, secret) {
-		t.Errorf("the collector credential appears in the server's own logs: %s", logs)
-	}
-	if strings.Contains(logs, "OTEL_EXPORTER_OTLP_HEADERS") {
-		t.Errorf("the credential variable is named in the logs, which invites printing its value next: %s", logs)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := telemetryEnv()
+			env["OTEL_EXPORTER_OTLP_HEADERS"] = tt.value
+			srv := startServer(t, env)
+
+			// Traffic, so the exporter has genuinely tried and failed.
+			for range 3 {
+				srv.do(t, request{body: `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`})
+			}
+
+			logs := srv.logs()
+			if strings.Contains(logs, secret) {
+				t.Errorf("the collector credential appears in the server's own logs: %s", logs)
+			}
+			if tt.wellFormed && strings.Contains(logs, "OTEL_EXPORTER_OTLP_HEADERS") {
+				t.Errorf("the credential variable is named in the logs with nothing wrong with it, which invites printing its value next: %s", logs)
+			}
+		})
 	}
 }
 

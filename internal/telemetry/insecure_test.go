@@ -106,6 +106,56 @@ func TestInsecureCredentialSignals(t *testing.T) {
 			signals: AllSignals(),
 			want:    nil,
 		},
+		{
+			// The trap this detector missed entirely. The Go OTLP/HTTP trace
+			// and metric exporters apply INSECURE after the endpoint scheme, so
+			// an https endpoint is downgraded to plaintext and the credential
+			// leaves in the clear while the startup summary prints https. The
+			// logs exporter reads the same variable the way the specification
+			// describes — "only applies to OTLP/gRPC when an endpoint is
+			// provided without the http or https scheme" — so it does not.
+			name: "the insecure variable downgrades an https endpoint",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+				"OTEL_EXPORTER_OTLP_INSECURE": "true",
+			},
+			signals: AllSignals(),
+			want:    []string{"traces", "metrics"},
+		},
+		{
+			name: "a per-signal insecure variable names only its signal",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":         "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT":        "https://collector.example:4318",
+				"OTEL_EXPORTER_OTLP_TRACES_INSECURE": "true",
+			},
+			signals: AllSignals(),
+			want:    []string{"traces"},
+		},
+		{
+			// The inverse, which matters because a detector that is wrong in
+			// this direction names signals that are on TLS and teaches an
+			// operator to ignore the line.
+			name: "insecure false upgrades a plaintext endpoint for traces and metrics",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector.example:4318",
+				"OTEL_EXPORTER_OTLP_INSECURE": "false",
+			},
+			signals: AllSignals(),
+			want:    []string{"logs"},
+		},
+		{
+			name: "a downgrade to loopback is still not a disclosure",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "https://127.0.0.1:4318",
+				"OTEL_EXPORTER_OTLP_INSECURE": "true",
+			},
+			signals: AllSignals(),
+			want:    nil,
+		},
 	}
 
 	for _, tc := range tests {
@@ -115,6 +165,11 @@ func TestInsecureCredentialSignals(t *testing.T) {
 				"OTEL_EXPORTER_OTLP_TRACES_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
 				"OTEL_EXPORTER_OTLP_METRICS_HEADERS", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
 				"OTEL_EXPORTER_OTLP_LOGS_HEADERS", "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+				// Without these four an ambient value on the machine running
+				// the tests decides every case above, and the table would be
+				// grading the developer's shell.
+				"OTEL_EXPORTER_OTLP_INSECURE", "OTEL_EXPORTER_OTLP_TRACES_INSECURE",
+				"OTEL_EXPORTER_OTLP_METRICS_INSECURE", "OTEL_EXPORTER_OTLP_LOGS_INSECURE",
 			} {
 				t.Setenv(key, "")
 			}

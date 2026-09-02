@@ -2,6 +2,9 @@ package telemetry
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -26,6 +29,116 @@ import (
 // find it silently ignored. The one decision this server makes is which
 // transport to construct, because the Go exporters are separate packages and
 // nothing in them reads OTEL_EXPORTER_OTLP_PROTOCOL to choose between them.
+
+// validateTLSMaterial refuses a start whose configured exporter TLS material
+// cannot be loaded, for the signals that would actually read it.
+//
+// # Why this is not left to the exporters
+//
+// They read these variables themselves, and on a failure they log and carry on
+// **without** the material: withTLSConfig applies a tls.Config only when a pool
+// or a certificate was loaded, so an unreadable CA file leaves the client
+// verifying against the system roots and an unloadable client certificate
+// leaves mutual TLS silently unconfigured. Start does not observe that error,
+// so it returns a working provider and the server logs "telemetry enabled".
+// An operator who pinned a private CA is then verifying against public roots
+// and has been told the opposite. Reproduced against an impostor collector: the
+// batches, and the collector credential with them, went to the impostor.
+//
+// Worse and completely silent: WithClientCert reads its certificate and key
+// together and returns with no log at all when only one of the pair is set, so
+// a typo in one variable name disables mutual TLS without a word. That case is
+// treated as a refusal here for the reason cmd/server/listen.go already states
+// about this server's own listener: a cert without its key is a deployment that
+// thinks it is encrypting and is not.
+//
+// # Why per signal, and why the precedence matters
+//
+// A signal reads its own variable when it has one and the shared variable
+// otherwise. Checking every variable that is set would refuse a start over a
+// stale shared value that no enabled signal would ever read, which is a
+// failure the operator cannot act on. Checking only the shared one would miss
+// the per-signal file entirely.
+//
+// The specification permits this: an SDK may "fail fast and cause the
+// application to fail on initialization ... because of a bad user config". The
+// caller turns it into a disabled provider with a named message rather than a
+// dead server.
+func validateTLSMaterial(signals Signals) error {
+	for _, signal := range []struct {
+		name   string
+		prefix string
+		on     bool
+	}{
+		{"traces", "OTEL_EXPORTER_OTLP_TRACES_", signals.Traces},
+		{"metrics", "OTEL_EXPORTER_OTLP_METRICS_", signals.Metrics},
+		{"logs", "OTEL_EXPORTER_OTLP_LOGS_", signals.Logs},
+	} {
+		if !signal.on {
+			continue
+		}
+		if err := validateCertPool(signal.prefix); err != nil {
+			return fmt.Errorf("%s: %w", signal.name, err)
+		}
+		if err := validateClientCert(signal.prefix); err != nil {
+			return fmt.Errorf("%s: %w", signal.name, err)
+		}
+	}
+	return nil
+}
+
+// validateCertPool checks the CA a signal would verify its collector against.
+func validateCertPool(prefix string) error {
+	key, path := firstSetEnv(prefix, "", "CERTIFICATE")
+	if path == "" {
+		return nil
+	}
+	pem, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("%s=%s: %w", key, path, err)
+	}
+	if !x509.NewCertPool().AppendCertsFromPEM(pem) {
+		return fmt.Errorf("%s=%s: no certificate found; the collector would be verified against the system roots instead", key, path)
+	}
+	return nil
+}
+
+// validateClientCert checks the client certificate and key a signal would
+// present, and that both halves are there.
+func validateClientCert(prefix string) error {
+	certKey, certPath := firstSetEnv(prefix, "", "CLIENT_CERTIFICATE")
+	keyKey, keyPath := firstSetEnv(prefix, "", "CLIENT_KEY")
+	switch {
+	case certPath == "" && keyPath == "":
+		return nil
+	case keyPath == "":
+		return fmt.Errorf("%s is set without its key; mutual TLS would be silently disabled", certKey)
+	case certPath == "":
+		return fmt.Errorf("%s is set without its certificate; mutual TLS would be silently disabled", keyKey)
+	}
+	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
+		return fmt.Errorf("%s=%s with %s=%s: %w", certKey, certPath, keyKey, keyPath, err)
+	}
+	return nil
+}
+
+// firstSetEnv resolves one variable the way the exporters do: the signal's own
+// name first, the shared name second.
+//
+// It returns the name it read as well as the value, because a message naming
+// the variable an operator actually set is the difference between a fix and a
+// search.
+func firstSetEnv(signalPrefix, sharedPrefix, suffix string) (key, value string) {
+	if sharedPrefix == "" {
+		sharedPrefix = "OTEL_EXPORTER_OTLP_"
+	}
+	for _, name := range []string{signalPrefix + suffix, sharedPrefix + suffix} {
+		if configured := strings.TrimSpace(os.Getenv(name)); configured != "" {
+			return name, configured
+		}
+	}
+	return "", ""
+}
 
 // newTraceExporter builds the span exporter for the selected protocol.
 func newTraceExporter(ctx context.Context, protocol string) (sdktrace.SpanExporter, error) {

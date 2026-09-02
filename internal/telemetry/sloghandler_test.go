@@ -3,8 +3,10 @@ package telemetry
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -647,5 +649,183 @@ func TestSlogHandler_AResourceURIInsideAGroup_IsStillRedacted(t *testing.T) {
 	}
 	if !strings.Contains(exported, "30") {
 		t.Errorf("the group lost the attributes that were not URIs: %s", exported)
+	}
+}
+
+// apiError stands in for the shape client-go produces for a failed API call.
+//
+// The real type is gitlab.ErrorResponse and constructing one needs an
+// http.Response, which would test the dependency rather than this handler. What
+// matters here is the shape every such error has: an Error() string carrying
+// the request URL and the response body, reachable through the promotion the
+// otelslog bridge performs on any attribute whose value is an error.
+type apiError struct {
+	text string
+}
+
+func (e apiError) Error() string { return e.text }
+
+// bothLegs runs one log call through the fan-out handler and returns what each
+// leg carried: the exported record rendered as text, and the raw stderr JSON.
+//
+// Both are needed for every assertion here, because each of these fixes is a
+// redaction on one leg and not a removal: an operator debugging their own
+// deployment must keep the full text on their own terminal.
+func bothLegs(t *testing.T, identity *Redactor, write func(*slog.Logger)) (exported, terminal string) {
+	t.Helper()
+
+	exp := &recordingExporter{}
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
+	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
+
+	previous := global.GetLoggerProvider()
+	global.SetLoggerProvider(lp)
+	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+
+	var out bytes.Buffer
+	write(slog.New(NewSlogHandler(slog.NewJSONHandler(&out, nil), slog.LevelInfo, identity)))
+
+	records := exp.all()
+	if len(records) != 1 {
+		t.Fatalf("exported %d records, want 1", len(records))
+	}
+	return renderRecord(records[0]), out.String()
+}
+
+// TestSlogHandler_AnErrorValueExportsItsTypeAndNotItsText is the regression for
+// the leak the guide promises does not exist.
+//
+// Every failed tool call is logged at ERROR with the wrapped error, and the
+// otelslog bridge promotes any error-valued attribute into exception.message
+// equal to err.Error(). client-go formats an API failure as
+// "METHOD scheme://host/path: CODE body", so the collector received the
+// URL-encoded project path, the query string and GitLab's own response text —
+// under every identity policy, including the default one that records nobody.
+// docs/guides/telemetry.md states the opposite twice: "GitLab response bodies,
+// and GitLab error messages... never the text" and "Full URLs of GitLab calls".
+//
+// What is exported instead is the error's type, which is a compile-time
+// constant and therefore carries no request data, and it is enough to tell a
+// transport failure from an API refusal. The status code an operator wants next
+// is on the GitLab client span, which records it and never records the URL.
+func TestSlogHandler_AnErrorValueExportsItsTypeAndNotItsText(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		secrets  []string
+		wantType string
+	}{
+		{
+			name: "an api error carrying a path and a response body",
+			err: fmt.Errorf("mrList: access denied: %w", apiError{
+				text: "GET http://gitlab.test/api/v4/projects/private-group%2Fsuper-secret-project/merge_requests: 403 {message: 403 Forbidden - insufficient_scope for SECRET-BODY-MARKER}",
+			}),
+			secrets:  []string{"private-group%2Fsuper-secret-project", "SECRET-BODY-MARKER", "merge_requests"},
+			wantType: "apiError",
+		},
+		{
+			name: "a transport failure carrying a query string",
+			err: fmt.Errorf("searchCode: network error reaching GitLab (Get): %w", &url.Error{
+				Op:  "Get",
+				URL: "http://gitlab.test/api/v4/search?scope=blobs&search=quarterly-layoff-plan",
+				Err: io.EOF,
+			}),
+			secrets:  []string{"quarterly-layoff-plan", "scope=blobs"},
+			wantType: "url.Error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exported, terminal := bothLegs(t, nil, func(logger *slog.Logger) {
+				logger.Error("tool call failed", "tool", "gitlab_execute_action", "error", tt.err)
+			})
+
+			for _, secret := range tt.secrets {
+				if strings.Contains(exported, secret) {
+					t.Errorf("%q reached the collector: %s", secret, exported)
+				}
+				if !strings.Contains(terminal, secret) {
+					t.Errorf("stderr lost %q, which is where an operator diagnoses their own deployment: %s",
+						secret, terminal)
+				}
+			}
+			if !strings.Contains(exported, tt.wantType) {
+				t.Errorf("the exported record does not name the error type, so a failure is unclassifiable: %s", exported)
+			}
+		})
+	}
+}
+
+// TestSlogHandler_TheTokenSuffixIsNotExported closes the second instance of the
+// shape the identity policy exists to prevent.
+//
+// The pool and the refusal paths log token_suffix, the last four characters of
+// the caller's credential behind an ellipsis. Four characters authenticate
+// nothing, so this is not a credential leak; what it is is a stable per-caller
+// handle that survives both the none and the pseudonymous policies untouched,
+// in a store the policy says records nobody. The guide's line is unconditional:
+// "Your GitLab token, or any header a client sent" is never recorded.
+//
+// Grouped as well as flat, because slog.Group is an ordinary value a caller can
+// pass and a flat key check is how the identity fields escaped the first time.
+func TestSlogHandler_TheTokenSuffixIsNotExported(t *testing.T) {
+	tests := []struct {
+		name  string
+		write func(*slog.Logger)
+	}{
+		{
+			name: "flat",
+			write: func(logger *slog.Logger) {
+				logger.Info("server pool: created new entry", slog.String(LogFieldTokenSuffix, "...ZZZ9"))
+			},
+		},
+		{
+			name: "inside a group",
+			write: func(logger *slog.Logger) {
+				logger.Info("request rejected", slog.Group("client", slog.String(LogFieldTokenSuffix, "...ZZZ9")))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exported, terminal := bothLegs(t, newRedactor(t, IdentityNone), tt.write)
+
+			if strings.Contains(exported, "ZZZ9") {
+				t.Errorf("the masked token suffix reached the collector under the policy that records nobody: %s", exported)
+			}
+			if !strings.Contains(terminal, "ZZZ9") {
+				t.Errorf("stderr lost the suffix, which is what an operator correlates a refusal by: %s", terminal)
+			}
+		})
+	}
+}
+
+// TestSlogHandler_AnOversizedAttributeIsBoundedOnTheExportedLeg keeps a single
+// record from being sized by whoever supplied its content.
+//
+// Nothing in the SDK bounds an attribute value on the logs signal, so an
+// attribute built from a caller-controlled string is relayed to the collector
+// byte for byte. The cap is defense in depth rather than the fix for any one
+// call site: it applies to every attribute, including the ones nobody has
+// written yet.
+func TestSlogHandler_AnOversizedAttributeIsBoundedOnTheExportedLeg(t *testing.T) {
+	const marker = "TAILMARKERZZ"
+	huge := strings.Repeat("Q", 64*1024) + marker
+
+	exported, terminal := bothLegs(t, nil, func(logger *slog.Logger) {
+		logger.Info("request rejected", "host", huge)
+	})
+
+	if len(exported) > 4*maxExportedAttrValue {
+		t.Errorf("the exported record is %d bytes for a %d-byte attribute; the caller sizes the export",
+			len(exported), len(huge))
+	}
+	if strings.Contains(exported, marker) {
+		t.Errorf("the tail of an oversized value reached the collector, so nothing was truncated: %d bytes", len(exported))
+	}
+	if !strings.Contains(terminal, marker) {
+		t.Errorf("stderr lost the value, which is the leg with no size problem: %d bytes", len(terminal))
 	}
 }

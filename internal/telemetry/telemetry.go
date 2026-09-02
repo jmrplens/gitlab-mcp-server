@@ -232,6 +232,14 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 		}
 	}
 
+	// Before any exporter exists, for the same reason as the protocol above: a
+	// CA file that cannot be read is a configuration failure the operator can
+	// act on, and the exporters answer it by falling back to the system roots
+	// and saying nothing. See [validateTLSMaterial].
+	if err = validateTLSMaterial(signals); err != nil {
+		return nil, fmt.Errorf("otlp exporter TLS material: %w", err)
+	}
+
 	res, err := buildResource(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry resource: %w", err)
@@ -730,10 +738,41 @@ func (p *Provider) startTraces(ctx context.Context, res *resource.Resource, prot
 	provider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
+		sdktrace.WithRawSpanLimits(spanLimits()),
 	)
 	otel.SetTracerProvider(provider)
 	p.shutdowns = append(p.shutdowns, provider.Shutdown)
 	return nil
+}
+
+// defaultAttributeValueLength bounds one span attribute value when the operator
+// has not chosen a bound of their own.
+//
+// The SDK's default is unlimited, which means a single attribute is as large as
+// whatever produced it. The instrumentation in this tree is careful about that
+// at each call site, and a per-site rule is exactly the kind that holds until
+// somebody adds the next attribute: the HTTP method one was written with a
+// comment saying an unbounded value was affordable on a span, and twenty
+// anonymous requests then relayed ten megabytes to a collector. This is the
+// floor under every attribute, including the ones nobody has written yet.
+//
+// 4096 rather than something tight: it is a backstop, not the bound any
+// particular attribute should be relying on.
+const defaultAttributeValueLength = 4096
+
+// spanLimits returns the span limits to install, honoring the operator first.
+//
+// NewSpanLimits already reads every OTEL_SPAN_* variable, so this only fills in
+// the one the specification leaves unlimited, and only when nothing set it. The
+// guard is the same shape as envHasServiceName and exists for the same reason:
+// a value passed as an option beats the environment in this SDK, so an
+// unconditional limit would silently override an operator who chose one.
+func spanLimits() sdktrace.SpanLimits {
+	limits := sdktrace.NewSpanLimits()
+	if _, set := os.LookupEnv("OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT"); !set {
+		limits.AttributeValueLengthLimit = defaultAttributeValueLength
+	}
+	return limits
 }
 
 // startMetrics installs the meter provider.
