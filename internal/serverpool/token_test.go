@@ -141,10 +141,10 @@ func TestExtractGitLabURL(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name:       "no header and no default falls back to public gitlab.com",
+			name:       "no header and no default is refused",
 			header:     "",
 			defaultURL: "",
-			wantURL:    "https://gitlab.com",
+			wantErr:    true,
 		},
 		{
 			name:       "whitespace-only header falls back to default",
@@ -529,6 +529,30 @@ func TestResolveRequestOptionsFor_MalformedHeaderAgainstAnAllowList_IsRejected(t
 				t.Errorf("GitLabURL = %q, want nothing selected when the header cannot be read", options.GitLabURL)
 			}
 		})
+	}
+}
+
+// TestResolveRequestOptionsFor_NoInstanceAndNoHeader_IsRefused pins the one
+// case where nothing at all names an instance.
+//
+// An empty allow-list is --allow-any-gitlab-url: the operator has said any host
+// the caller names is acceptable, which is not the same as saying gitlab.com
+// is. Resolving to the public instance sent a self-managed deployment's
+// credential to a third party whenever a proxy stripped the header or a client
+// library could not set one, and the caller never learned it had happened.
+func TestResolveRequestOptionsFor_NoInstanceAndNoHeader_IsRefused(t *testing.T) {
+	t.Parallel()
+
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+	r.Header.Set(RequestOptionPrivateToken, "glpat-example")
+
+	options, err := ResolveRequestOptionsFor(r, nil)
+
+	if !errors.Is(err, ErrMissingGitLabURL) {
+		t.Fatalf("error = %v, want ErrMissingGitLabURL", err)
+	}
+	if options.GitLabURL != "" {
+		t.Errorf("GitLabURL = %q, want nothing selected when no instance was named", options.GitLabURL)
 	}
 }
 

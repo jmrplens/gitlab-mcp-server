@@ -4,6 +4,8 @@
 package gitlab
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,7 +15,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -109,6 +113,57 @@ func TestPing_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestPing_ContextDeadline_BoundsTheRequest verifies that the context handed
+// to [Client.Ping] bounds the GitLab round trip itself, not merely the check
+// made before it starts.
+//
+// The pool's revalidation loop gives each entry a ten-second budget and walks
+// the entries one after another. A deadline that stops at the pre-check leaves
+// the request bounded by the transport's response-header timeout instead, so a
+// handful of unreachable entries outlast several ticker periods and the loop's
+// own arithmetic stops meaning anything.
+func TestPing_ContextDeadline_BoundsTheRequest(t *testing.T) {
+	// Long enough that a Ping ignoring its deadline is unmistakable, short
+	// enough that the test still ends if it does.
+	const handlerGuard = 5 * time.Second
+
+	var abandoned atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(handlerGuard):
+			abandoned.Store(true)
+		}
+		w.WriteHeader(http.StatusGatewayTimeout)
+	}))
+	defer srv.Close()
+
+	cfg := newTestConfig(srv.URL, testValidToken)
+	// Retries would answer the deadline with five more attempts against a
+	// handler that is already refusing to reply.
+	cfg.DisableRetries = true
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	if _, err = client.Ping(ctx); err == nil {
+		t.Error("Ping() expected an error once its context expired, got nil")
+	}
+	elapsed := time.Since(start)
+
+	if abandoned.Load() {
+		t.Error("Ping() left the request running: GitLab never saw the context canceled")
+	}
+	if elapsed >= handlerGuard {
+		t.Errorf("Ping() returned after %v, want it bounded by its own 200ms deadline", elapsed)
+	}
+}
+
 // TestPing_EmptyVersion verifies that [Client.Ping] returns an error when the
 // GitLab Version API returns an empty version string.
 func TestPing_EmptyVersion(t *testing.T) {
@@ -128,6 +183,83 @@ func TestPing_EmptyVersion(t *testing.T) {
 
 	if _, err = client.Ping(context.Background()); err == nil {
 		t.Error("Ping() expected error for empty version, got nil")
+	}
+}
+
+// gzipVersionServer serves one gzip-compressed /api/v4/version document whose
+// decompressed form carries a version string of n bytes, and reports how many
+// compressed bytes went over the wire.
+func gzipVersionServer(t *testing.T, n int) (url string, wireBytes int) {
+	t.Helper()
+	payload := `{"version":"` + strings.Repeat("9", n) + `","enterprise":false}`
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write([]byte(payload)); err != nil {
+		t.Fatalf("gzip write unexpected error: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("gzip close unexpected error: %v", err)
+	}
+	body := buf.Bytes()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		if _, err := w.Write(body); err != nil {
+			t.Errorf("writing version body: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL, len(body)
+}
+
+// TestVersionDirect_OversizedResponse_IsBounded verifies that the version
+// probe honors the client's response ceiling, the same way every call the SDK
+// makes does.
+//
+// This probe is the first request the process makes in stdio mode and it runs
+// again on every SDK call while degraded, so a configured instance that is
+// hostile or intercepted gets to answer before a single tool call has been
+// served. The pairing matters: the bounded case only means something next to a
+// control that raises the ceiling above the payload and still receives the
+// whole decompressed document.
+func TestVersionDirect_OversizedResponse_IsBounded(t *testing.T) {
+	const decompressed = 4 << 20 // 4 MiB of version string from a few KB on the wire
+
+	tests := []struct {
+		name        string
+		limit       int64
+		wantBounded bool
+	}{
+		{name: "ceiling below the payload abandons it", limit: 64 << 10, wantBounded: true},
+		{name: "ceiling above the payload decodes it whole", limit: 8 << 20, wantBounded: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url, wireBytes := gzipVersionServer(t, decompressed)
+			client, err := NewClient(newTestConfig(url, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			client.SetMaxResponseBytes(tt.limit)
+
+			info, err := client.versionDirect(context.Background())
+
+			if tt.wantBounded {
+				if !errors.Is(err, ErrResponseTooLarge) {
+					t.Errorf("versionDirect() error = %v, want %v (%d wire bytes expanded to %d)",
+						err, ErrResponseTooLarge, wireBytes, decompressed)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("versionDirect() unexpected error: %v", err)
+			}
+			if len(info.Version) != decompressed {
+				t.Errorf("versionDirect() version length = %d, want %d", len(info.Version), decompressed)
+			}
+		})
 	}
 }
 

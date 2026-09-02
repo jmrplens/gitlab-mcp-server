@@ -102,6 +102,14 @@ func isDomainOrSubdomain(sub, parent string) bool {
 	if sub == "" || parent == "" {
 		return false
 	}
+	// An address literal is not a domain name, and one carrying an IPv6 zone
+	// can be spelled to end in any parent: url.Hostname() reduces
+	// "[::1%25.gitlab.example.com]" to "::1%.gitlab.example.com", which passes
+	// both the dot boundary and the suffix test while Go dials it as ::1. This
+	// is CVE-2023-45289, and net/http grew the same guard in the same place.
+	if strings.ContainsAny(sub, ":%") {
+		return false
+	}
 	if len(sub) <= len(parent) || sub[len(sub)-len(parent)-1] != '.' {
 		return false
 	}

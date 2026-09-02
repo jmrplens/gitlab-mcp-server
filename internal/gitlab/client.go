@@ -146,13 +146,13 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	base := buildBaseTransport(cfg.SkipTLSVerify)
 
 	c := &Client{
-		baseURL:      cfg.GitLabURL,
-		healthURL:    strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
-		token:        cfg.GitLabToken,
-		healthClient: newHealthClient(base, cfg.GitLabURL),
+		baseURL:   cfg.GitLabURL,
+		healthURL: strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
+		token:     cfg.GitLabToken,
 	}
 	c.SetTier(cfg.Tier)
 	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.healthClient = newHealthClient(base, cfg.GitLabURL, c)
 
 	sdkHTTPClient := &http.Client{
 		Transport:     apiTransport(base, c),
@@ -199,12 +199,12 @@ func NewClientWithTokenRetries(baseURL, token string, skipTLSVerify, disableRetr
 	base := buildBaseTransport(skipTLSVerify)
 
 	c := &Client{
-		baseURL:      baseURL,
-		healthURL:    strings.TrimRight(baseURL, "/") + versionAPIPath,
-		token:        token,
-		healthClient: newHealthClient(base, baseURL),
+		baseURL:   baseURL,
+		healthURL: strings.TrimRight(baseURL, "/") + versionAPIPath,
+		token:     token,
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.healthClient = newHealthClient(base, baseURL, c)
 
 	sdkHTTPClient := &http.Client{
 		Transport:     apiTransport(base, c),
@@ -243,13 +243,13 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 	base := buildBaseTransport(skipTLSVerify)
 
 	c := &Client{
-		baseURL:      baseURL,
-		healthURL:    strings.TrimRight(baseURL, "/") + versionAPIPath,
-		token:        token,
-		bearerAuth:   true,
-		healthClient: newHealthClient(base, baseURL),
+		baseURL:    baseURL,
+		healthURL:  strings.TrimRight(baseURL, "/") + versionAPIPath,
+		token:      token,
+		bearerAuth: true,
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.healthClient = newHealthClient(base, baseURL, c)
 
 	sdkHTTPClient := &http.Client{
 		Transport:     apiTransport(base, c),
@@ -288,7 +288,10 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	v, _, err := c.inner.Version.GetVersion()
+	// client-go builds every request from context.Background() and only
+	// WithContext replaces it, so without this the caller's deadline bounds
+	// the check above and nothing else.
+	v, _, err := c.inner.Version.GetVersion(gl.WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("gitlab ping failed: %w", err)
 	}
@@ -555,9 +558,16 @@ func IsCredentialRejection(err error) bool {
 // and runs at startup, before any tool call, so an instance answering
 // /api/v4/version with a redirect collects the credential before the server
 // has served a single request.
-func newHealthClient(base http.RoundTripper, baseURL string) *http.Client {
+//
+// The response ceiling is here for the same reason and not because these
+// bodies are large: the version probe is the first request the process makes
+// and it runs again on every SDK call while degraded, so it is the earliest
+// point at which a configured instance gets to answer with whatever it likes.
+// It is the client's own ceiling rather than a private one, so
+// [Client.SetMaxResponseBytes] means the same thing everywhere.
+func newHealthClient(base http.RoundTripper, baseURL string, c *Client) *http.Client {
 	return &http.Client{
-		Transport:     base,
+		Transport:     &responseLimitTransport{base: base, client: c},
 		Timeout:       healthTimeout,
 		CheckRedirect: credentialSafeRedirect(baseURL),
 	}

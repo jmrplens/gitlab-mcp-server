@@ -47,6 +47,8 @@ func TestCredentialSafeRedirect_StripsOutsideTheInstance(t *testing.T) {
 		{name: "parent of the instance", baseURL: "https://gitlab.example.com", dest: "https://example.com/x", want: false},
 		{name: "suffix without a dot boundary", baseURL: "https://gitlab.example.com", dest: "https://evilgitlab.example.com/x", want: false},
 		{name: "https downgraded to http", baseURL: "https://gitlab.example.com", dest: "http://gitlab.example.com/x", want: false},
+		{name: "ipv6 zone literal spelled as a subdomain", baseURL: "https://gitlab.example.com", dest: "https://[::1%25.gitlab.example.com]/x", want: false},
+		{name: "ipv6 zone literal on a plain http instance", baseURL: "http://gitlab.internal", dest: "http://[::1%25.gitlab.internal]:9102/x", want: false},
 		{name: "base url has no host", baseURL: "not a url at all", dest: "https://gitlab.example.com/x", want: false},
 		{name: "empty base url", baseURL: "", dest: "https://gitlab.example.com/x", want: false},
 	}
@@ -131,6 +133,9 @@ func TestIsDomainOrSubdomain_Boundaries(t *testing.T) {
 		{name: "unrelated", sub: "example.net", parent: "gitlab.com", want: false},
 		{name: "empty sub", sub: "", parent: "gitlab.com", want: false},
 		{name: "empty parent", sub: "gitlab.com", parent: "", want: false},
+		{name: "zone suffixed ipv6 literal", sub: "::1%.gitlab.com", parent: "gitlab.com", want: false},
+		{name: "bare ipv6 literal ending in the parent text", sub: "::1:gitlab.com", parent: "gitlab.com", want: false},
+		{name: "identical ipv6 literal", sub: "::1", parent: "::1", want: true},
 	}
 
 	for _, tt := range tests {
