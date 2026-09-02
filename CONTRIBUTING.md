@@ -272,22 +272,26 @@ Templates auto-apply the relevant labels listed in [Labels](#labels).
 
 ## Labels
 
-Issue templates auto-assign labels on submission. The repo uses a flat label set (no `type::`/`priority::` namespaces — those are GitLab conventions):
+Issue templates auto-assign labels on submission, and pull requests are labeled from the paths they touch by `.github/workflows/labeler.yml` against the map in `.github/labeler.yml`. The repo uses a flat label set (no `type::`/`priority::` namespaces — those are GitLab conventions):
 
-| Label              | Color     | Used by                                          |
-| ------------------ | --------- | ------------------------------------------------ |
-| `bug`              | `#d73a4a` | Bug Report template                              |
-| `feature`          | `#a2eeef` | Feature Request template                         |
-| `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)            |
-| `documentation`    | `#0075ca` | Documentation template (GitHub default)          |
-| `security`         | `#d73a4a` | Manual — applied to GitHub Security Advisories   |
-| `high-priority`    | `#b60205` | Manual — critical bugs and security advisories   |
-| `needs-triage`     | `#c2e0c6` | All issue templates (auto-applied on submission) |
-| `good first issue` | `#7057ff` | Manual — newcomer-friendly issues                |
-| `help wanted`      | `#008672` | Manual — community contributions welcome         |
-| `question`         | `#d876e3` | Manual — questions / discussions                 |
-| `duplicate`        | `#cfd3d7` | Manual — duplicates of existing issues           |
-| `invalid`          | `#e4e669` | Manual — out of scope                            |
-| `wontfix`          | `#ffffff` | Manual — accepted but won't implement            |
+| Label              | Color     | Used by                                                |
+| ------------------ | --------- | ------------------------------------------------------ |
+| `bug`              | `#d73a4a` | Bug Report template                                    |
+| `feature`          | `#a2eeef` | Feature Request template                               |
+| `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)                  |
+| `documentation`    | `#0075ca` | Documentation template; path labeler on docs-only PRs  |
+| `security`         | `#d73a4a` | Security Advisories; path labeler on security paths    |
+| `ci`               | `#bfdadc` | Path labeler — pipeline, workflows, lint configuration |
+| `distribution`     | `#fbca04` | Path labeler — release artifacts and install channels  |
+| `dependencies`     | `#0052cc` | Path labeler and Dependabot — dependency files         |
+| `release`          | `#0e8a16` | Manual — release tracking issues                       |
+| `high-priority`    | `#b60205` | Manual — critical bugs and security advisories         |
+| `needs-triage`     | `#c2e0c6` | All issue templates (auto-applied on submission)       |
+| `good first issue` | `#7057ff` | Manual — newcomer-friendly issues                      |
+| `help wanted`      | `#008672` | Manual — community contributions welcome               |
+| `question`         | `#d876e3` | Manual — questions / discussions                       |
+| `duplicate`        | `#cfd3d7` | Manual — duplicates of existing issues                 |
+| `invalid`          | `#e4e669` | Manual — out of scope                                  |
+| `wontfix`          | `#ffffff` | Manual — accepted but won't implement                  |
 
-Manage labels with `gh label list` / `gh label create`.
+The path labeler never removes a label (`sync-labels: false`), so anything applied by hand survives a later push. It also cannot create one: a label named in `.github/labeler.yml` that does not exist is skipped in silence. Manage labels with `gh label list` / `gh label create`.
