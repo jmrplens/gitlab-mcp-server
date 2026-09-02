@@ -66,7 +66,25 @@ Download URLs have two forms: `https://github.com/jmrplens/gitlab-mcp-server/rel
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 ```
 
-The script detects Linux or macOS on amd64 or arm64 (`x86_64` and `aarch64` are mapped), refuses anything else and tells Windows users to use the PowerShell installer. It needs `curl` or `wget`, downloads the asset for the platform, and **verifies its SHA-256 against the release's `checksums.txt`** with `sha256sum` or `shasum`; a mismatch, a missing entry or an unreachable `checksums.txt` aborts the install (`ALLOW_UNVERIFIED=1` bypasses that, at your own risk). It then **checks a signature**, because `checksums.txt` comes from the same release as the binary and proves only that the two agree: with `cosign` installed it verifies `checksums.txt.sigstore.json` against this repository's release workflow identity, and failing that it asks the `gh` CLI to verify the binary's build-provenance attestation. With neither tool present it warns and continues; set `REQUIRE_SIGNATURE=1` to make that fatal. It removes any existing binary first so re-installing over a running server does not fail with "Text file busy", installs the file with mode `0755` as `$INSTALL_DIR/gitlab-mcp-server`, and warns when the directory is not on your `PATH`.
+The script detects Linux or macOS on amd64 or arm64 (`x86_64` and `aarch64` are mapped), refuses anything else and tells Windows users to use the PowerShell installer. It needs `curl` or `wget`, resolves `latest` to its actual tag before downloading anything, fetches the asset for the platform, and **verifies its SHA-256 against the release's `checksums.txt`** with `sha256sum` or `shasum`; a mismatch, a missing entry or an unreachable `checksums.txt` aborts the install (`ALLOW_UNVERIFIED=1` bypasses that, at your own risk). Each download is retried when the server does not answer, and not retried when it answers that the asset is not there — a 404 has already told the script what it asked.
+
+It then **checks a signature**, because `checksums.txt` comes from the same release as the binary and proves only that the two agree. With `cosign` installed it verifies `checksums.txt.sigstore.json` against this repository's release workflow identity, pinned to the version being installed. The `gh` CLI is asked whenever that verified nothing — not only when `cosign` is absent, since the build-provenance attestation lives in GitHub's own store and is still checkable when the bundle is the asset that went missing. Because `gh` has to ask GitHub, the script first checks that it can (`gh auth status`): a `gh` that cannot reach GitHub produced no verdict and only warns, while a `gh` that reached GitHub and rejected the binary aborts.
+
+What each outcome does:
+
+| Outcome                                                                            | Result                                |
+| ---------------------------------------------------------------------------------- | ------------------------------------- |
+| `cosign` or `gh` verifies                                                          | Install proceeds                      |
+| `cosign` rejects `checksums.txt`                                                   | **Abort**                             |
+| `gh` reaches GitHub and finds no valid attestation                                 | **Abort**                             |
+| Release serves no `checksums.txt.sigstore.json` (a 404), and nothing else verified | **Abort**                             |
+| The bundle could not be fetched at all, after the retries                          | Warning; `REQUIRE_SIGNATURE=1` aborts |
+| `gh` is installed but cannot reach GitHub                                          | Warning; `REQUIRE_SIGNATURE=1` aborts |
+| Neither `cosign` nor `gh` is installed                                             | Warning; `REQUIRE_SIGNATURE=1` aborts |
+
+The two fatal middle rows are the reason a machine with `cosign` cannot be walked past by deleting one release asset: every release since signing began publishes the bundle, so its absence is not an old release, it is the single file whoever replaced the binary and `checksums.txt` together also has to remove. A download that simply never came back is a different fact and is reported as one — it says nothing about whether the release is signed, so it warns rather than claiming the release is unsigned.
+
+The script removes any existing binary first so re-installing over a running server does not fail with "Text file busy", installs the file with mode `0755` as `$INSTALL_DIR/gitlab-mcp-server`, and warns when the directory is not on your `PATH`.
 
 | Variable            | Default                      | Meaning                                               |
 | ------------------- | ---------------------------- | ----------------------------------------------------- |
@@ -75,6 +93,10 @@ The script detects Linux or macOS on amd64 or arm64 (`x86_64` and `aarch64` are 
 | `REPO`              | `jmrplens/gitlab-mcp-server` | The repository to download from                       |
 | `REQUIRE_SIGNATURE` | unset                        | `1` aborts unless a signature or attestation verifies |
 | `ALLOW_UNVERIFIED`  | unset                        | `1` skips verification entirely, at your own risk     |
+| `FETCH_ATTEMPTS`    | `3`                          | Tries per download before giving up                   |
+| `FETCH_RETRY_DELAY` | `2`                          | Seconds between those tries                           |
+
+Setting both `REQUIRE_SIGNATURE=1` and `ALLOW_UNVERIFIED=1` is refused rather than resolved in either direction: they ask for opposite things, and silently picking one would be worse than saying so.
 
 Its printed next step is the Claude Code registration, `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server` (add `--env GITLAB_URL=https://gitlab.example.com` for a self-managed instance), or the hand configuration in [Configure your client](#configure-your-client).
 
@@ -84,7 +106,7 @@ Its printed next step is the Claude Code registration, `claude mcp add gitlab --
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 ```
 
-The script detects AMD64 or ARM64 (reading `PROCESSOR_ARCHITEW6432` first, so a 32-bit PowerShell on a 64-bit machine still picks the right build) and refuses 32-bit x86, for which no build is published. It downloads `gitlab-mcp-server-windows-<arch>.exe`, verifies it against `checksums.txt` with `Get-FileHash`, verifies the release signature the same way the shell installer does (`cosign`, else `gh attestation verify`, else a warning that `REQUIRE_SIGNATURE=1` turns fatal; same `ALLOW_UNVERIFIED=1` bypass), installs it as `gitlab-mcp-server.exe` under `%LOCALAPPDATA%\Programs\gitlab-mcp-server` by default, and appends that directory to your user-scope `PATH`. Open a new PowerShell or Windows Terminal window before relying on the new `PATH`. `-Version`, `-InstallDir` and `-Repo` (or the `VERSION`, `INSTALL_DIR` and `REPO` environment variables) override the defaults.
+The script detects AMD64 or ARM64 (reading `PROCESSOR_ARCHITEW6432` first, so a 32-bit PowerShell on a 64-bit machine still picks the right build) and refuses 32-bit x86, for which no build is published. It downloads `gitlab-mcp-server-windows-<arch>.exe`, verifies it against `checksums.txt` with `Get-FileHash`, verifies the release signature by the same rules as the shell installer above — `cosign` over `checksums.txt.sigstore.json`, then `gh attestation verify` whenever that verified nothing, the same fatal and warning outcomes, the same `REQUIRE_SIGNATURE=1`, `ALLOW_UNVERIFIED=1`, `FETCH_ATTEMPTS` and `FETCH_RETRY_DELAY` — installs it as `gitlab-mcp-server.exe` under `%LOCALAPPDATA%\Programs\gitlab-mcp-server` by default, and appends that directory to your user-scope `PATH`. Open a new PowerShell or Windows Terminal window before relying on the new `PATH`. `-Version`, `-InstallDir` and `-Repo` (or the `VERSION`, `INSTALL_DIR` and `REPO` environment variables) override the defaults.
 
 ### Manual download
 
@@ -114,7 +136,7 @@ sha256sum --check --ignore-missing checksums.txt
 
 Two further artifacts are produced by the release workflow for **releases after v2.7.5**: one SPDX SBOM per binary (`<asset>.sbom.json`) and a SLSA build provenance attestation stored by GitHub, which `gh attestation verify <file> -R jmrplens/gitlab-mcp-server` checks. Both steps landed after the v2.7.5 tag, so that release carries neither; on v2.7.5 the checksum and signature above are the verification. Steps and background are in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity).
 
-Releases are created as drafts and published only after every asset is attached **and attested**, so a release you can see is never a partial one. Everything published downstream — npm, PyPI, the Homebrew formula, the MCP Registry entry — is built from those published assets after their signature has been checked, and a final job reads the npm and PyPI packages back out of the registries and compares the binaries inside them with the same signed `checksums.txt`.
+Releases are created as drafts and published only after every asset is attached **and attested**, so a release you can see is never a partial one. Everything published downstream — npm, PyPI, the Homebrew formula, the MCP Registry entry — is built from those published assets after their signature has been checked, and a separate job reads the npm and PyPI packages back out of the registries and compares the binaries inside them with the same signed `checksums.txt`. Nothing that advertises the version runs before that comparison passes: the Homebrew tap, the MCP Registry entry and the manifest commit to `main` all wait on it.
 
 ### Upgrade and uninstall
 

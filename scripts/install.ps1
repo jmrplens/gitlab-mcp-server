@@ -25,6 +25,17 @@
 
 .PARAMETER Repo
     owner/repo (default: jmrplens/gitlab-mcp-server).
+
+.NOTES
+    Environment overrides, matching scripts/install.sh:
+
+        REQUIRE_SIGNATURE   set to 1 to abort when no signature can be verified
+        ALLOW_UNVERIFIED    set to 1 to skip verification entirely (not recommended;
+                            refused when REQUIRE_SIGNATURE is also 1)
+        FETCH_ATTEMPTS      tries per download before giving up (default: 3)
+        FETCH_RETRY_DELAY   seconds between those tries (default: 2)
+        RELEASE_BASE_URL    override the release download base (used by the tests)
+        RELEASE_LATEST_URL  override the /releases/latest URL (used by the tests)
 #>
 [CmdletBinding()]
 # Write-Host is intentional: this is an interactive installer (run via irm | iex)
@@ -44,9 +55,61 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# PowerShell 7.4 made a native command's non-zero exit a terminating error
+# whenever $ErrorActionPreference is 'Stop'. Every verifier below is consulted
+# for its exit code instead - "cosign says no", "gh cannot reach GitHub" and
+# "gh says no" are three decisions this script has to tell apart, and an
+# exception unwinding past them collapses all three into one abort. Setting it
+# here scopes it to this script, and it is harmless on Windows PowerShell 5.1,
+# which has no such variable to read.
+$PSNativeCommandUseErrorActionPreference = $false
+
 function Write-Info { param([string]$Message) Write-Host "==> $Message" -ForegroundColor Cyan }
 
 $binName = 'gitlab-mcp-server'
+
+$fetchAttempts = if ($env:FETCH_ATTEMPTS) { [int]$env:FETCH_ATTEMPTS } else { 3 }
+$fetchRetryDelay = if ($env:FETCH_RETRY_DELAY) { [int]$env:FETCH_RETRY_DELAY } else { 2 }
+
+# Get-ReleaseAsset downloads one release asset and reports which of three
+# things happened:
+#   ok           the bytes are at OutFile
+#   absent       the server answered, and this asset is not published
+#   unavailable  no usable answer after $fetchAttempts tries
+#
+# The distinction is the point. "This release publishes no signature" and "the
+# server did not answer" are different facts, and only the first one may be
+# fatal: a proxy that returns 503 for one asset must not read as the one asset
+# an attacker has to remove. Only the second is retried, because a server that
+# answered 404 has already told us what we asked.
+function Get-ReleaseAsset {
+    param([string]$Url, [string]$OutFile)
+    for ($attempt = 1; ; $attempt++) {
+        try {
+            Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
+            return 'ok'
+        }
+        catch {
+            # Windows PowerShell 5.1 throws a WebException and PowerShell 7 an
+            # HttpResponseException; both carry the response, and a connection
+            # that never got one carries nothing, which is exactly the case
+            # worth retrying.
+            $status = 0
+            $exception = $_.Exception
+            if ($exception.PSObject.Properties['Response'] -and $exception.Response) {
+                if ($exception.Response.PSObject.Properties['StatusCode']) {
+                    $status = [int]$exception.Response.StatusCode
+                }
+            }
+            if ($status -eq 404 -or $status -eq 410) { return 'absent' }
+            if ($attempt -ge $fetchAttempts) { return 'unavailable' }
+            $seen = if ($status) { $status } else { 'no response' }
+            $name = $Url.Substring($Url.LastIndexOf('/') + 1)
+            Write-Info "${name}: no answer ($seen); retrying in ${fetchRetryDelay}s (attempt $attempt of $fetchAttempts)"
+            Start-Sleep -Seconds $fetchRetryDelay
+        }
+    }
+}
 
 # --- detect architecture ---------------------------------------------------
 # PROCESSOR_ARCHITECTURE reports the *process* architecture, so a 32-bit
@@ -119,7 +182,9 @@ New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 try {
     $assetPath = Join-Path $tmp $asset
     Write-Info "downloading $asset ($Version)"
-    Invoke-WebRequest -Uri "$base/$asset" -OutFile $assetPath -UseBasicParsing
+    $outcome = Get-ReleaseAsset -Url "$base/$asset" -OutFile $assetPath
+    if ($outcome -eq 'absent') { throw "release $Version publishes no ${asset}: $base/$asset" }
+    if ($outcome -ne 'ok') { throw "download failed after $fetchAttempts attempts: $base/$asset" }
 
     # --- verify checksum ---------------------------------------------------
     # Integrity verification is mandatory by default (fail closed). Set the
@@ -137,11 +202,9 @@ try {
     else {
         Write-Info 'verifying checksum'
         $sumsPath = Join-Path $tmp 'checksums.txt'
-        try {
-            Invoke-WebRequest -Uri "$base/checksums.txt" -OutFile $sumsPath -UseBasicParsing
-        }
-        catch {
-            throw "could not fetch checksums.txt to verify the download; aborting (set ALLOW_UNVERIFIED=1 to bypass)"
+        $outcome = Get-ReleaseAsset -Url "$base/checksums.txt" -OutFile $sumsPath
+        if ($outcome -ne 'ok') {
+            throw "could not fetch checksums.txt to verify the download ($outcome); aborting (set ALLOW_UNVERIFIED=1 to bypass)"
         }
         # checksums.txt is fetched from the same release as the binary, so on
         # its own it only proves the two agree — whoever can replace release
@@ -150,6 +213,7 @@ try {
         # attestation for the binary; verify whichever tool is present.
         $verifiedSignature = $false
         $bundleMissing = $false
+        $bundleUnreachable = $false
 
         # Both verifiers are told which release they are looking at. An
         # unresolved "latest" is the only case left with no tag to name, and its
@@ -168,14 +232,8 @@ try {
 
         if (Get-Command cosign -ErrorAction SilentlyContinue) {
             $bundlePath = Join-Path $tmp 'checksums.txt.sigstore.json'
-            try {
-                Invoke-WebRequest -Uri "$base/checksums.txt.sigstore.json" -OutFile $bundlePath -UseBasicParsing
-            }
-            catch {
-                $bundleMissing = $true
-                Write-Info 'WARNING: this release publishes no checksums.txt.sigstore.json'
-            }
-            if (-not $bundleMissing) {
+            $outcome = Get-ReleaseAsset -Url "$base/checksums.txt.sigstore.json" -OutFile $bundlePath
+            if ($outcome -eq 'ok') {
                 Write-Info 'verifying the cosign signature over checksums.txt'
                 & cosign verify-blob --bundle $bundlePath @identityArgs `
                     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' $sumsPath | Out-Null
@@ -185,25 +243,53 @@ try {
                 $verifiedSignature = $true
                 Write-Info 'signature OK'
             }
+            elseif ($outcome -eq 'absent') {
+                $bundleMissing = $true
+                Write-Info 'WARNING: this release publishes no checksums.txt.sigstore.json'
+            }
+            else {
+                # The server never said whether the bundle is there, so neither
+                # can this. Calling an unanswered request "the release has no
+                # signature" would abort an install that has nothing wrong with
+                # it, and would hide the case where that claim is true.
+                $bundleUnreachable = $true
+                Write-Info "WARNING: checksums.txt.sigstore.json could not be fetched after $fetchAttempts attempts; whether this release is signed is unknown"
+            }
         }
         # Not an elseif: when the bundle is the asset that went missing, gh
         # still has something to say, because the build-provenance attestation
         # lives in GitHub's own store rather than among the release assets.
         if (-not $verifiedSignature -and (Get-Command gh -ErrorAction SilentlyContinue)) {
-            Write-Info 'verifying the build-provenance attestation with gh'
-            # No `2>&1` here: on Windows PowerShell 5.1 - the host the documented
-            # one-liner lands in - merging a native command's stderr while
-            # $ErrorActionPreference is 'Stop' turns gh's first diagnostic line
-            # into a terminating error, so neither the warning below nor the
-            # REQUIRE_SIGNATURE gate was reachable on a failed attestation. The
-            # exit code decides, and gh's own message reaches the user.
-            & gh attestation verify $assetPath --repo $Repo @ghIdentityArgs | Out-Null
+            # No `2>&1` on any gh call here: on Windows PowerShell 5.1 - the host
+            # the documented one-liner lands in - merging a native command's
+            # stderr while $ErrorActionPreference is 'Stop' turns gh's first
+            # diagnostic line into a terminating error, so neither the warning
+            # below nor the REQUIRE_SIGNATURE gate was reachable on a failed
+            # attestation. The exit code decides, and gh's own message reaches
+            # the user.
+            #
+            # gh attestation verify has to ask GitHub, so a non-zero exit
+            # conflates "these bytes are not what that workflow built" with "I
+            # could not ask". Only the first is a verdict, and only a verdict
+            # may be fatal, so the ability to ask is established first.
+            & gh auth status | Out-Null
             if ($LASTEXITCODE -eq 0) {
-                $verifiedSignature = $true
-                Write-Info 'attestation OK'
+                Write-Info 'verifying the build-provenance attestation with gh'
+                & gh attestation verify $assetPath --repo $Repo @ghIdentityArgs | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    $verifiedSignature = $true
+                    Write-Info 'attestation OK'
+                }
+                else {
+                    # A verifier that ran and said no is the strongest signal
+                    # either tool produces - stronger than the absence of the
+                    # bundle a few lines above, which is already fatal. It
+                    # cannot be the warning while that is the error.
+                    throw "gh found no valid build-provenance attestation for $asset from $Repo's release workflow - these bytes are not what that workflow published, or the attestation that would prove it has been removed (set ALLOW_UNVERIFIED=1 to bypass at your own risk)"
+                }
             }
             else {
-                Write-Info "WARNING: gh found no valid build-provenance attestation for $asset"
+                Write-Info 'WARNING: gh is installed but cannot reach GitHub (try ''gh auth login''), so no build-provenance attestation could be checked'
             }
         }
         if (-not $verifiedSignature) {
@@ -214,7 +300,15 @@ try {
             if ($bundleMissing) {
                 throw 'no checksums.txt.sigstore.json is served for this release and no attestation could be verified; refusing to install unverified bytes (set ALLOW_UNVERIFIED=1 to bypass at your own risk)'
             }
-            $msg = "no signature was verified - install cosign or the gh CLI to check that these bytes came from $Repo's release workflow"
+            # An unanswered request makes no claim about the release, so it
+            # lands where every other "nothing could be checked" lands: loud by
+            # default, fatal under REQUIRE_SIGNATURE=1.
+            $msg = if ($bundleUnreachable) {
+                "the signature could not be fetched, so nothing about these bytes was verified - retry, or install from a network that can reach $base"
+            }
+            else {
+                "no signature was verified - install cosign or the gh CLI to check that these bytes came from $Repo's release workflow"
+            }
             if ($env:REQUIRE_SIGNATURE -eq '1') { throw "$msg (REQUIRE_SIGNATURE=1)" }
             Write-Info "WARNING: $msg"
         }

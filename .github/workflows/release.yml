@@ -525,7 +525,18 @@ jobs:
   homebrew:
     name: Homebrew tap
     runs-on: ubuntu-latest
-    needs: [release]
+    # verify-published, like mcp-registry and commit-manifests. The formula
+    # itself does not need it — it pins release-asset hashes taken from the
+    # cosign-verified checksums.txt in this job, which is a stronger check than
+    # the one it now waits for, and verify_published_packages.py never looks at
+    # a Homebrew artifact. What it buys is ordering: `brew install` is the
+    # fastest path from a tag to a running binary on someone's machine, so
+    # leaving this job on [release] alone made the tap the one channel that
+    # advertised a version before anything had read the registries back. The
+    # accepted cost is that a release whose npm or PyPI publish failed now
+    # leaves the tap on the previous version, which is the correct outcome for
+    # a release that is not fully out.
+    needs: [release, verify-published]
     environment: release
     permissions:
       contents: read # download the published release assets
@@ -690,8 +701,17 @@ jobs:
       # their packages after validating them, so this is the only step that
       # inspects the bytes a user installs, and it runs in a job holding no
       # publishing credential of any kind.
+      #
+      # The retry budget is the same allowance the mcp-registry publish step
+      # gives itself, and for the same reason: this runs minutes after the
+      # uploads, and a registry CDN that has not caught up answers 404. It is
+      # spent only on downloads — a digest that does not match the signed
+      # checksums fails on sight, with no second attempt.
       - name: Compare registry packages with the signed checksums
-        run: python3 scripts/verify_published_packages.py "${GITHUB_REF#refs/tags/v}" dist/checksums.txt
+        run: |
+          python3 scripts/verify_published_packages.py \
+            --retry-budget 480 --retry-delay 30 \
+            "${GITHUB_REF#refs/tags/v}" dist/checksums.txt
 
   commit-manifests:
     name: Commit manifests to main
