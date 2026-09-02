@@ -2515,14 +2515,22 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 	}
 }
 
-// TestServeHTTP_MissingGitLabURLDefaultsToPublic verifies that in HTTP mode with
-// no default --gitlab-url configured and no GITLAB-URL header, the request falls
-// back to the public gitlab.com instance instead of being rejected (see
-// serverpool.ResolveRequestOptions). TierExplicit and IgnoreScopes are set so the
-// server-pool entry skips live tier/scope detection against gitlab.com, keeping
-// the test hermetic (no outbound network) while still exercising the default-URL
-// resolution path end to end.
-func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
+// TestServeHTTP_NoInstanceAndNoHeader_IsRefused verifies that a deployment
+// publishing no instance refuses a request that names none either, rather than
+// resolving it to the public gitlab.com.
+//
+// The old contract, which this test asserted under its previous name, was that
+// an absent header fell back to gitlab.com. That put the caller's token on the
+// wire to a host they never named, which is the defect the multi-instance
+// refusal already closes, so the fallback is gone (see
+// serverpool.ErrMissingGitLabURL). Such a deployment can only exist at all with
+// --allow-any-gitlab-url, where the operator has said the header chooses.
+//
+// The refusal must also name the header rather than blame the operator's
+// configuration: with no header, an unresolvable instance used to mean only a
+// mistyped --gitlab-url, and that message would now send the caller looking for
+// someone else over an omission of their own.
+func TestServeHTTP_NoInstanceAndNoHeader_IsRefused(t *testing.T) {
 	cfg := &config.Config{
 		GitLabURL:      "",
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
@@ -2567,25 +2575,17 @@ func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
 	}
 	respBody := readAndCloseBody(t, resp)
 
-	// The assertion is that omitting GITLAB-URL is accepted rather than
-	// rejected as a missing or malformed instance URL. It deliberately does
-	// not assert 200.
-	//
-	// The default resolves to the public gitlab.com, so the outcome now
-	// depends on what that instance says about the test token: with network
-	// access the credential probe is refused and the gate answers 401,
-	// without it the probe fails open and the handshake succeeds. Pinning
-	// either one would make this test depend on the runner having internet.
-	// The resolution semantics themselves are covered hermetically by
-	// TestResolveRequestOptions in internal/serverpool.
-	if resp.StatusCode == http.StatusBadRequest {
-		t.Errorf("omitting GITLAB-URL was rejected as a bad request: %s", respBody)
+	// Refused, and refused for the caller's own reason. The request never
+	// reaches GitLab, so this stays hermetic without pinning the network
+	// behaviour the old fallback depended on.
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d: %s", resp.StatusCode, http.StatusBadRequest, respBody)
 	}
-	if strings.Contains(respBody, "GITLAB-URL") {
-		t.Errorf("response complains about the instance URL, so the default did not apply: %s", respBody)
+	if !strings.Contains(respBody, serverpool.RequestOptionGitLabURL) {
+		t.Errorf("the refusal must name the header the caller has to send: %s", respBody)
 	}
-	if resp.StatusCode == http.StatusOK {
-		closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	if strings.Contains(respBody, "contact the operator") {
+		t.Errorf("a caller who omitted the header is not looking at a broken deployment: %s", respBody)
 	}
 
 	cancel()

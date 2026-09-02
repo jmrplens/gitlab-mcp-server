@@ -452,6 +452,20 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 
 	options, err := serverpool.ResolveRequestOptionsFor(r, g.gitlabURLs)
 	if err != nil {
+		// A request that named no instance on a deployment that publishes none
+		// is the caller's omission, not a broken server. It reaches this branch
+		// with an empty header, which used to mean only one thing: a
+		// --gitlab-url the operator typed wrong. Kept apart so the caller is
+		// told to send the header rather than to go and find the operator, and
+		// logged at INFO because nothing here is the deployment's fault.
+		if errors.Is(err, serverpool.ErrMissingGitLabURL) {
+			slog.InfoContext(r.Context(), "request rejected: no instance selected and none is published")
+			return nil, &gateFailure{
+				status:  http.StatusBadRequest,
+				code:    errCodeInvalidRequest,
+				message: capitalizeFirst(err.Error()) + ".",
+			}
+		}
 		slog.ErrorContext(r.Context(), "request rejected: invalid GITLAB-URL header", "error", err)
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
