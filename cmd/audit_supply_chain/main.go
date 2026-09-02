@@ -580,10 +580,10 @@ func checkDependabotEntry(entry map[string]any) []string {
 	}
 
 	var problems []string
-	days, isInteger := pythonInt(cooldown["default-days"])
+	days, isInteger := pythonInt(cooldown[cooldownDefaultDaysKey])
 	if !isInteger || days < minCooldownDays {
 		problems = append(problems, fmt.Sprintf("%s: cooldown.default-days is %s, want an integer >= %d",
-			label, pythonRepr(cooldown["default-days"]), minCooldownDays))
+			label, pythonRepr(cooldown[cooldownDefaultDaysKey]), minCooldownDays))
 	}
 	if extra := semVerCooldownKeys(ecosystem, cooldown); len(extra) > 0 {
 		problems = append(problems, fmt.Sprintf(
@@ -594,6 +594,11 @@ func checkDependabotEntry(entry map[string]any) []string {
 	return problems
 }
 
+// cooldownDefaultDaysKey is the one cooldown sub-key every ecosystem accepts.
+// It is named because the docker check is defined against it: every other key
+// under cooldown is a SemVer key Dependabot refuses there.
+const cooldownDefaultDaysKey = "default-days"
+
 // semVerCooldownKeys returns the cooldown sub-keys Dependabot rejects for the
 // docker ecosystems, and nothing for any other ecosystem.
 func semVerCooldownKeys(ecosystem string, cooldown map[string]any) []string {
@@ -602,7 +607,7 @@ func semVerCooldownKeys(ecosystem string, cooldown map[string]any) []string {
 	}
 	extra := make([]string, 0, len(cooldown))
 	for key := range cooldown {
-		if key != "default-days" {
+		if key != cooldownDefaultDaysKey {
 			extra = append(extra, key)
 		}
 	}

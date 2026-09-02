@@ -61,9 +61,9 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 	)
 	if err != nil {
 		if errors.Is(err, gitlabclient.ErrResponseTooLarge) {
-			return DownloadOutput{}, toolutil.WrapErrWithHint("download ml model package", err, errModelFileTooLarge)
+			return DownloadOutput{}, toolutil.WrapErrWithHint(opDownloadModelPackage, err, errModelFileTooLarge)
 		}
-		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download ml model package", err, http.StatusNotFound, "verify project_id, model_version_id, path, and filename")
+		return DownloadOutput{}, toolutil.WrapErrWithStatusHint(opDownloadModelPackage, err, http.StatusNotFound, "verify project_id, model_version_id, path, and filename")
 	}
 
 	return downloadOutput(in, reader)
@@ -87,6 +87,10 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 // vocabulary reaches into the tens of MiB. A ceiling between that and the
 // hundreds of MiB a weights file occupies separates the files a caller can use
 // here from the ones they must fetch another way, and 32 MiB is in that gap.
+// opDownloadModelPackage names this action in every error it wraps, so a
+// reader sees one operation rather than three spellings of it.
+const opDownloadModelPackage = "download ml model package"
+
 const maxModelFileBytes = 32 << 20
 
 // errModelFileTooLarge is the hint for a file this action will not carry,
@@ -104,7 +108,7 @@ func downloadOutput(in DownloadInput, reader io.Reader) (DownloadOutput, error) 
 	}
 	if len(data) > maxModelFileBytes {
 		return DownloadOutput{}, toolutil.WrapErrWithHint(
-			"download ml model package",
+			opDownloadModelPackage,
 			fmt.Errorf("%s exceeds the %d MiB this action returns", in.Filename, maxModelFileBytes>>20),
 			errModelFileTooLarge,
 		)
