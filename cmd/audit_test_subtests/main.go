@@ -236,6 +236,16 @@ type site struct {
 	nameExpr   string            // subtest name expression when fixable
 }
 
+// testScan is what classifying a loop needs to know about the test function
+// it sits in: where the file is, and which literals are synctest bubbles.
+type testScan struct {
+	fset    *token.FileSet
+	file    *ast.File
+	path    string
+	test    string
+	bubbles []*ast.FuncLit
+}
+
 // scanFile returns every case loop in the file's Test functions.
 func scanFile(fset *token.FileSet, path string, file *ast.File) []site {
 	var sites []site
@@ -245,7 +255,7 @@ func scanFile(fset *token.FileSet, path string, file *ast.File) []site {
 			continue
 		}
 		tables := localTables(fn.Body)
-		bubbles := synctestBubbles(fn.Body)
+		scan := &testScan{fset: fset, file: file, path: path, test: fn.Name.Name, bubbles: synctestBubbles(fn.Body)}
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			loop, isLoop := n.(*ast.RangeStmt)
 			if !isLoop {
@@ -255,7 +265,7 @@ func scanFile(fset *token.FileSet, path string, file *ast.File) []site {
 			if lit == nil {
 				return true
 			}
-			s, keep := classify(fset, file, fn.Name.Name, path, loop, lit, kind, bubbles)
+			s, keep := scan.classify(loop, lit, kind)
 			if keep {
 				sites = append(sites, s)
 			}
@@ -268,12 +278,13 @@ func scanFile(fset *token.FileSet, path string, file *ast.File) []site {
 // classify decides what one table loop is: declared sequential, inside a
 // synctest bubble, already compliant, a non-asserting setup loop (dropped),
 // or a finding with the rewrite it qualifies for.
-func classify(fset *token.FileSet, file *ast.File, test, path string, loop *ast.RangeStmt, lit *ast.CompositeLit, kind string, bubbles []*ast.FuncLit) (s site, keep bool) {
-	s = site{loop: loop, finding: Finding{File: path, Line: fset.Position(loop.Pos()).Line, Test: test, Table: kind}}
+func (sc *testScan) classify(loop *ast.RangeStmt, lit *ast.CompositeLit, kind string) (s site, keep bool) {
+	fset, file := sc.fset, sc.file
+	s = site{loop: loop, finding: Finding{File: sc.path, Line: fset.Position(loop.Pos()).Line, Test: sc.test, Table: kind}}
 	switch {
 	case declaredSequential(fset, file, loop):
 		s.sequential = true
-	case insideAny(loop, bubbles):
+	case insideAny(loop, sc.bubbles):
 		s.synctest = true
 	case hasRun(loop.Body):
 		s.compliant = true
