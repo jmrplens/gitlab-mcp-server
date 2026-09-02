@@ -16,7 +16,7 @@ authoritative and edit the source, not the Markdown.
 
 | Reference                              | Covers                                                                                      |
 | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [Configuration](configuration.md)      | Transport modes, `.env` setup, and how settings are loaded                                  |
+| [Configuration](configuration.md)      | Transport modes, dotenv setup, and how settings are loaded                                  |
 | [Environment Variables](env.md)        | Every environment variable with defaults and descriptions                                   |
 | [CLI Reference](cli.md)                | All command-line flags with usage examples                                                  |
 | [Output Format](output-format.md)      | How responses are structured: Markdown + JSON, annotations, links, next-step hints          |

@@ -17,8 +17,8 @@ gitlab-mcp-server authenticates to GitLab using a Personal Access Token (PAT) pa
 
 ### Token Security
 
-- **Never commit tokens** — `.env` is gitignored; use environment variables in CI/production
-- **Keep the token out of client JSON** — Put `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env` or a local `.env`, both of which the server loads at startup, and give the client config only non-secret launch preferences. Restrict the file to the owner (`chmod 600`)
+- **Never commit tokens** — keep the token file out of version control; use environment variables in CI/production
+- **Keep the token out of client JSON** — Put `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env`, which the server loads at startup, and give the client config only non-secret launch preferences. Restrict the file to the owner (`chmod 600`)
 - **Never hardcode tokens in JSON** — MCP client configuration files (`.vscode/mcp.json`, `.cursor/mcp.json`) are often committed to version control. Use [input variables](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration#_input-variables-for-sensitive-data) (`${input:gitlab-token}`), [environment files](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration#_standard-io-stdio-servers) (`envFile`), or system environment variables instead. See [Configuration — Secure Token Configuration](../reference/configuration.md#secure-token-configuration) for examples
 - **Minimum scope** — Use `api` scope only; avoid `admin` scope unless required
 - **Token rotation** — Rotate tokens regularly and use expiring tokens where possible. Replace the value wherever it is configured: the env file, the client JSON, or the environment
@@ -26,9 +26,13 @@ gitlab-mcp-server authenticates to GitLab using a Personal Access Token (PAT) pa
 
 ### Where the token lives
 
-The server reads `GITLAB_TOKEN` from the environment, from a local `.env`, or
-from `~/.gitlab-mcp-server.env`, in that order of precedence. Whichever you use,
-it is a secret on disk and should be owner-readable only (`chmod 600` on Unix).
+The server reads `GITLAB_TOKEN` from the environment, then from the file
+`GITLAB_MCP_ENV_FILE` names, then from `~/.gitlab-mcp-server.env`, in that order
+of precedence. A `.env` in the working directory is not one of the sources: that
+directory comes from the client, so its contents were chosen by whoever wrote
+the repository the client opened rather than by the operator. Whichever file you
+use, it is a secret on disk and should be owner-readable only (`chmod 600` on
+Unix).
 
 Most MCP clients (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf,
 OpenCode, Crush, Zed) can reference an env file rather than embedding the token
@@ -346,11 +350,11 @@ The error handling system is designed to be informative for LLMs while avoiding 
 
 ## Dependencies
 
-| Dependency                               | Security Notes                                                        |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| `gitlab.com/gitlab-org/api/client-go/v2` | Official GitLab client; uses `retryablehttp` with exponential backoff |
-| `github.com/modelcontextprotocol/go-sdk` | Official MCP SDK; handles JSON-RPC transport                          |
-| `github.com/joho/godotenv`               | Loads `.env` files (CWD and `~/.gitlab-mcp-server.env` fallback)      |
+| Dependency                               | Security Notes                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| `gitlab.com/gitlab-org/api/client-go/v2` | Official GitLab client; uses `retryablehttp` with exponential backoff     |
+| `github.com/modelcontextprotocol/go-sdk` | Official MCP SDK; handles JSON-RPC transport                              |
+| `github.com/joho/godotenv`               | Loads dotenv files (`GITLAB_MCP_ENV_FILE` and `~/.gitlab-mcp-server.env`) |
 
 Run `go list -m all` to see all transitive dependencies. Use `govulncheck` for vulnerability scanning:
 

@@ -425,7 +425,7 @@ Every stdio channel is configured the same way: the client starts `gitlab-mcp-se
 
 Add `"GITLAB_URL": "https://gitlab.example.com"` to `env` only for a self-managed instance. VS Code uses `.vscode/mcp.json` with a `servers` map and `"type": "stdio"`, and its `promptString` inputs keep the token out of plain text; Claude Code takes `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`. Per-client file locations and shapes are in [IDE Configuration](ide-configuration.md) and on the site's [Getting Started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/#manual-configuration).
 
-To keep the token out of client JSON entirely, put it in `~/.gitlab-mcp-server.env` (one `KEY=value` per line): an explicit environment variable beats a `.env` in the working directory, which beats that file. Then ask your assistant "List my GitLab projects." or "Who am I on GitLab?" to confirm the connection.
+To keep the token out of client JSON entirely, put it in `~/.gitlab-mcp-server.env` (one `KEY=value` per line): an explicit environment variable beats the file `GITLAB_MCP_ENV_FILE` names, which beats that one, and a `.env` in the working directory is not read at all. Then ask your assistant "List my GitLab projects." or "Who am I on GitLab?" to confirm the connection.
 
 ---
 

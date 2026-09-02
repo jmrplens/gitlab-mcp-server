@@ -74,6 +74,17 @@ A server reached over HTTP refuses every caller-supplied local path whatever the
 
 ---
 
+## Optional — Transport Limits
+
+Both bound work the server does before any tool runs, so the tool surface makes no difference to them.
+
+| Variable                          | Default | Description                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_MCP_STDIO_MAX_LINE_BYTES` | 4 MiB   | Longest stdio message accepted, in bytes. A longer line is refused and answered, not buffered, so a client cannot grow the process by sending one. It matches the SDK's own default for an HTTP request body, so both transports refuse the same messages. Raise it only for a client that inlines large base64 payloads. A missing, unparseable or non-positive value warns and keeps the default   |
+| `GITLAB_MCP_MAX_LISTEN_STREAMS`   | `64`    | Concurrent `subscriptions/listen` streams one credential may hold open; `0` removes that ceiling. A listen is a request the client leaves open, costing a blocked goroutine and a file descriptor each, and a real client opens a handful. A second ceiling of 512 per process is not configurable, because the per-credential one multiplies by however many tokens a caller holds. Both transports |
+
+---
+
 ## Optional — HTTP Mode (Server Pool)
 
 These variables configure the HTTP server pool. Each has a CLI flag counterpart, and the flag wins when it is passed explicitly — see [HTTP Mode Equivalents](#http-mode-equivalents) below. In stdio mode they are parsed but unused, since stdio runs a single server with no pool.
@@ -97,15 +108,33 @@ These variables configure the HTTP server pool. Each has a CLI flag counterpart,
 
 Configuration is loaded by `internal/config/` in this precedence order (higher wins):
 
-1. **`.env` file** in the current working directory (loaded via `godotenv`)
-2. **`~/.gitlab-mcp-server.env`** in the user's home directory
-3. **Environment variables** (override both `.env` files)
+1. **The process environment**, which is what the MCP client passed to the server
+2. **The file `GITLAB_MCP_ENV_FILE` names**, when the process environment names one
+3. **`~/.gitlab-mcp-server.env`** in the user's home directory
 
-> **Note**: `godotenv` does not overwrite existing variables, so step 1 values take precedence over step 2, and explicit environment variables (step 3) override both.
+> **Note**: `godotenv` never overwrites a variable that is already set, so an earlier step always wins over a later one.
+
+A `.env` in the current working directory is **not** on that list. See [The working directory is not a configuration source](#the-working-directory-is-not-a-configuration-source) below.
+
+| Variable              | Default   | Description                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_MCP_ENV_FILE` | *(empty)* | Path of one dotenv file to load in addition to the home file. Read from the **process environment only**, which is what makes it an opt-in: a file this server loads cannot nominate another, so the working-directory `.env` cannot name itself. Give an absolute path. A relative one is resolved against the working directory the client chose, which is the load this replaced under another name, so startup warns when it sees one |
 
 ---
 
-## .env File Example
+## The working directory is not a configuration source
+
+A stdio server inherits its working directory from the MCP client, and every client that opens a workspace sets it to that workspace. Its contents therefore arrive with a cloned repository or an unpacked archive, chosen by whoever wrote them rather than by whoever runs the server.
+
+The `./.env` load used to come first, so two lines in a cloned repository could redirect your token to another host, turn off certificate verification so that redirection raised no error, and rewrite the tool descriptions the model reads. None of it needed a tool call or a model turn: the startup probe delivered the token. The variables that make it work are exactly the ones no MCP client sets, so they are always free for whichever file is read first.
+
+A dotenv file now configures this server only when someone put it where the server looks (`~/.gitlab-mcp-server.env`) or named it (`GITLAB_MCP_ENV_FILE`). Being in the working directory is not a decision anyone made, which is the same conclusion Git's `safe.directory`, direnv's `direnv allow` and VS Code Workspace Trust reached.
+
+A working-directory `.env` is still looked for, and reported at `WARN` with its absolute path and the names of the keys it wanted to set, so a repository-local file that stopped taking effect is a line in the startup log rather than an afternoon of debugging. Nothing in it reaches the environment.
+
+---
+
+## Dotenv File Example
 
 ```env
 # Required
@@ -118,9 +147,9 @@ LOG_LEVEL=info
 UPLOAD_MAX_FILE_SIZE=500MB
 ```
 
-For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
+Write that to `~/.gitlab-mcp-server.env`, or to any path you then name in `GITLAB_MCP_ENV_FILE`. For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
 
-> **Security**: The `.env` file is gitignored. Never commit tokens or credentials. Whichever file holds the token, restrict it to its owner (`chmod 600` on Unix).
+> **Security**: Never commit tokens or credentials. Whichever file holds the token, restrict it to its owner (`chmod 600` on Unix).
 
 ---
 
@@ -141,7 +170,7 @@ Nothing in this table is reachable from a request. Clients control only their Gi
 | Environment Variable          | CLI Flag                   | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ----------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GITLAB_URL`                  | `--gitlab-url`             | Optional in stdio mode; defaults to `https://gitlab.com`. **Required in HTTP mode** unless `--allow-any-gitlab-url` is passed. When set in HTTP mode it fixes the GitLab instance; with the escape hatch and no instance, `GITLAB-URL` selects per request and a request without it is refused. A comma-separated value (or a repeated `--gitlab-url`) publishes several instances: `GITLAB-URL` is then required and selects among them, refusing anything else |
-| *(none)*                      | `--allow-any-gitlab-url`   | CLI-only; start with no instance published and let `GITLAB-URL` name any host. For a single-user local deployment where the operator is the caller; it warns at startup and must not be used on a listener anyone else can reach                                                                                                                                                                                                                                 |
+| *(none)*                      | `--allow-any-gitlab-url`   | CLI-only, and deliberately so: this is the flag that lets a caller choose the host this server sends their token to, so it belongs in the command line that started the process rather than in an environment nobody reads back. Start with no instance published and let `GITLAB-URL` name any host. For a single-user local deployment where the operator is the caller; it warns at startup and must not be used on a listener anyone else can reach          |
 | `GITLAB_TOKEN`                | *(none)*                   | Not needed in HTTP mode — clients provide tokens per-request                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `GITLAB_SKIP_TLS_VERIFY`      | `--skip-tls-verify`        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `TOOL_SURFACE`                | `--tool-surface`           | Canonical selector: `meta`, `individual`, or `dynamic`                                                                                                                                                                                                                                                                                                                                                                                                           |

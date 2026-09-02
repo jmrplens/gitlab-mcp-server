@@ -324,7 +324,7 @@ For detached HTTP deployments, do not use a stdio client entry. Run the Docker i
 
 ## Alternative: Manual Configuration
 
-To keep credentials out of client config files, create a `.env` file next to the binary:
+To keep credentials out of client config files, create `~/.gitlab-mcp-server.env` (or any file you then name in `GITLAB_MCP_ENV_FILE`). A `.env` in the working directory is not read, because that directory is whatever workspace the client opened:
 
 ```env
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx

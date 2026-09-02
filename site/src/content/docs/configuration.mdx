@@ -11,7 +11,7 @@ faq:
   - q: "What is the minimum configuration?"
     a: "In stdio mode, a single `GITLAB_TOKEN` with the `api` scope is enough to start — every other variable is optional and defaults to a safe value. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only when connecting to a self-managed instance. For a read-only setup, use a `read_api` token and add `GITLAB_READ_ONLY=true`. In HTTP mode, no token is configured on the server at all; each client sends its own token with every request."
   - q: "stdio vs HTTP — which mode do I use?"
-    a: "Use **stdio mode** (the default) for local, single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables or a `.env` file. Use **HTTP mode** (`--http`) for shared or remote deployments such as Docker or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request."
+    a: "Use **stdio mode** (the default) for local, single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables, plus `~/.gitlab-mcp-server.env` or a file named in `GITLAB_MCP_ENV_FILE` for what the environment does not carry. Use **HTTP mode** (`--http`) for shared or remote deployments such as Docker or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request."
   - q: "How do I point at a self-managed GitLab instance?"
     a: "Set `GITLAB_URL` to your instance base URL, for example `GITLAB_URL=https://gitlab.example.com` (in HTTP mode, use the `--gitlab-url` flag instead). If the instance uses a self-signed or internal CA certificate, also set `GITLAB_SKIP_TLS_VERIFY=true` (or `--skip-tls-verify` in HTTP mode), but only on a trusted network — it disables certificate verification for all connections to GitLab."
   - q: "How do I pick a tool surface (dynamic, meta, or individual)?"
@@ -25,7 +25,8 @@ import Fact from "../../components/docs/Fact.astro";
 
 :::tip[At a glance]
 
-- **stdio mode reads environment variables** (or a `.env` file); **HTTP mode reads CLI flags**. The option names mirror each other.
+- **stdio mode reads environment variables** (plus `~/.gitlab-mcp-server.env`, and any file `GITLAB_MCP_ENV_FILE` names); **HTTP mode reads CLI flags**. The option names mirror each other.
+- **A `.env` in the working directory is not read.** That directory comes from whatever repository your editor opened, so its contents were chosen by someone else. One that exists is named in the startup log with the keys it wanted to set.
 - **Only `GITLAB_TOKEN` is always required.** `GITLAB_URL` defaults to `https://gitlab.com`, so self-managed instances are the only ones that must set it.
 - **Three switches shape behaviour**: `TOOL_SURFACE` picks dynamic, meta or individual; `GITLAB_READ_ONLY` removes every write operation; `GITLAB_SAFE_MODE` previews writes instead of performing them.
 
@@ -33,10 +34,10 @@ import Fact from "../../components/docs/Fact.astro";
 
 GitLab MCP Server needs almost nothing to start. In **stdio mode** — the default used by IDE integrations — you set just two things: which GitLab instance to talk to (`GITLAB_URL`) and a personal access token to talk with (`GITLAB_TOKEN`). On GitLab.com even the URL is optional, because `GITLAB_URL` defaults to `https://gitlab.com`, so a single `GITLAB_TOKEN` is enough; point `GITLAB_URL` at your own host for self-managed instances. In **HTTP mode** the server holds no credentials at all — each client sends its own token (and optionally its own GitLab URL) with every request. Everything else on this page is optional and ships with a safe default.
 
-Stdio mode reads its configuration from environment variables or a `.env` file; HTTP mode reads CLI flags. This page covers the options most users need; see the repository [environment reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/env.md) and [CLI reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/cli.md) for the exhaustive tables.
+Stdio mode reads its configuration from environment variables, falling back to `~/.gitlab-mcp-server.env` and to any file named in `GITLAB_MCP_ENV_FILE`; HTTP mode reads CLI flags. This page covers the options most users need; see the repository [environment reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/env.md) and [CLI reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/cli.md) for the exhaustive tables.
 
 :::tip[Quick orientation]
-**Stdio mode** (default) — configure via environment variables or a `.env` file. This is the mode used by IDE integrations (VS Code, Cursor, Claude Desktop, etc.).
+**Stdio mode** (default) — configure via environment variables, or via `~/.gitlab-mcp-server.env`. This is the mode used by IDE integrations (VS Code, Cursor, Claude Desktop, etc.).
 
 **HTTP mode** (`--http`) — configure via CLI flags. Used for shared/remote deployments (Docker, Kubernetes). Jump to [HTTP mode flags](#http-mode-flags).
 :::
@@ -82,20 +83,27 @@ For deployments using the dynamic tool surface where resources and prompts domin
 
 ## Admin options
 
-| Variable                               | Default | Description                                                                                                                                                                                    |
-| -------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CLIENT_COMPAT`                        | `auto`  | Per-client response compatibility: Codex sessions get fractional annotation priorities rounded to 0/1; `off` disables                                                                          |
-| `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | empty   | Rewrite listed descriptions and titles for strict MCP gateway validators: comma-separated `old=new` pairs applied in order (backslash escapes `\,` `\=` `\\`); malformed values refuse startup |
-| `UPLOAD_MAX_FILE_SIZE`                 | `2GB`   | Size cap for upload and file tools, including raw file reads (streamed and stopped at the limit); supports `KB`/`MB`/`GB` suffixes                                                             |
-| `YOLO_MODE`                            | `false` | Skip destructive action confirmations (not recommended)                                                                                                                                        |
-| `AUTOPILOT`                            | `false` | Same as `YOLO_MODE` — skip destructive confirmations                                                                                                                                           |
-| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`       | —       | Additional OS path-list-separated directories allowed for local project/group import archives                                                                                                  |
-| `RATE_LIMIT_RPS`                       | `0`     | Per-server tools/call rate limit in req/s (`0` disables it). Stdio only; HTTP mode defaults to `10` via `--rate-limit-rps`                                                                     |
-| `RATE_LIMIT_BURST`                     | `40`    | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                                                                                                              |
+| Variable                               | Default | Description                                                                                                                                                                                                                                                                           |
+| -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLIENT_COMPAT`                        | `auto`  | Per-client response compatibility: Codex sessions get fractional annotation priorities rounded to 0/1; `off` disables                                                                                                                                                                 |
+| `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | empty   | Rewrite listed descriptions and titles for strict MCP gateway validators: comma-separated `old=new` pairs applied in order (backslash escapes `\,` `\=` `\\`); malformed values refuse startup                                                                                        |
+| `UPLOAD_MAX_FILE_SIZE`                 | `2GB`   | Size cap for upload and file tools, including raw file reads (streamed and stopped at the limit); supports `KB`/`MB`/`GB` suffixes                                                                                                                                                    |
+| `YOLO_MODE`                            | `false` | Skip destructive action confirmations (not recommended)                                                                                                                                                                                                                               |
+| `AUTOPILOT`                            | `false` | Same as `YOLO_MODE` — skip destructive confirmations                                                                                                                                                                                                                                  |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`       | —       | Additional OS path-list-separated directories allowed for local project/group import archives                                                                                                                                                                                         |
+| `GITLAB_MCP_ALLOWED_UPLOAD_DIRS`       | —       | Additional OS path-list-separated directories a tool may **read** a local file from (every `file_path` and `directory_path` input). The working directory and the OS temp directory are always allowed, and a path is resolved through symlinks first                                 |
+| `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`     | —       | Additional OS path-list-separated directories a tool may **write** a downloaded file into (`output_path`). Same syntax and same always-allowed roots                                                                                                                                  |
+| `GITLAB_MCP_ENV_FILE`                  | —       | One dotenv file to load besides `~/.gitlab-mcp-server.env`. Read from the process environment only, so a file the server loads cannot nominate another. Give an absolute path; a relative one follows the client into every workspace it opens, and the server warns when it sees one |
+| `GITLAB_MCP_STDIO_MAX_LINE_BYTES`      | 4 MiB   | Longest stdio message accepted, in bytes. A longer line is refused and answered, not buffered. It matches the SDK's own HTTP body default, so both transports refuse the same messages; raise it only for a client that inlines large base64 payloads                                 |
+| `GITLAB_MCP_MAX_LISTEN_STREAMS`        | `64`    | Concurrent `subscriptions/listen` streams one credential may hold open; `0` removes that ceiling. A further 512 per process is not configurable, since the per-credential figure multiplies by however many tokens a caller holds. Applies to both transports                         |
+| `RATE_LIMIT_RPS`                       | `0`     | Per-server tools/call rate limit in req/s (`0` disables it). Stdio only; HTTP mode defaults to `10` via `--rate-limit-rps`                                                                                                                                                            |
+| `RATE_LIMIT_BURST`                     | `40`    | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                                                                                                                                                                                                     |
 
-## Example .env file
+## Example dotenv file
 
-```bash title=".env"
+Write it to `~/.gitlab-mcp-server.env`, or to any path you then name in `GITLAB_MCP_ENV_FILE`. A `.env` in the working directory is not loaded.
+
+```bash title="~/.gitlab-mcp-server.env"
 # Required
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
@@ -217,7 +225,7 @@ export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 
 Set `GITLAB_URL` here only for self-managed instances.
 
-Or use a `.env` file in the working directory.
+Or put them in `~/.gitlab-mcp-server.env`, which the server reads for values its environment does not already carry.
 
 </TabItem>
 <TabItem label="Continue">
@@ -336,10 +344,11 @@ Example:
   --max-http-clients=200 \
   --session-timeout=1h
 
-# Multi-instance (each client specifies their GitLab URL via GITLAB-URL header)
+# Several instances (the GITLAB-URL header is required, and must name one of them)
 ./gitlab-mcp-server \
   --http \
-  --http-addr=0.0.0.0:8080
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.com,https://gitlab.example.com
 ```
 
 ## Configuration load order
@@ -347,9 +356,15 @@ Example:
 The server loads configuration in the following order (later sources override earlier ones):
 
 1. **`~/.gitlab-mcp-server.env`** — User-level defaults (home directory)
-2. **`.env`** — Project-level configuration (current working directory)
-3. **System environment variables** — Exported variables in the shell
+2. **The file `GITLAB_MCP_ENV_FILE` names** — One extra dotenv file, if the environment names one
+3. **System environment variables** — What the MCP client passed, or the shell exported
 4. **CLI flags** — Command-line arguments (highest priority)
+
+:::caution[A `.env` in the working directory is not loaded]
+A stdio server takes its working directory from the client, and every editor sets it to the workspace it opened. The file therefore arrives with a cloned repository or an unpacked archive, written by someone other than you. Loading it first meant two lines in a repository could point your token at another host, switch off certificate verification so nothing complained, and rewrite the tool descriptions the model reads, before any tool ran.
+
+One that exists is still looked for and named at `WARN` on startup, with its absolute path and the keys it wanted to set, so a file that stopped taking effect shows up in the log rather than in an afternoon of debugging. To keep using it, name it by absolute path in `GITLAB_MCP_ENV_FILE`, which is read from the environment only, so no file the server loads can nominate another. A relative value there is resolved against the client's working directory and follows it into every workspace, which is the behaviour this replaced, so the server warns about it.
+:::
 
 :::note
 In HTTP mode, `GITLAB_TOKEN` is not loaded from environment variables. Each client provides their own token via the HTTP request. A `GITLAB-URL` header carries weight when the server starts with `--allow-any-gitlab-url` and no instance, or when it publishes several.

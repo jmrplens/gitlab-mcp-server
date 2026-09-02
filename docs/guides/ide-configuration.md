@@ -38,7 +38,7 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 
 | Mode            | Transport    | Token Management                                                                                 | Best For                                   |
 | --------------- | ------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| **Stdio**       | stdin/stdout | `GITLAB_TOKEN` env var or `.env` file                                                            | Single user, local development             |
+| **Stdio**       | stdin/stdout | `GITLAB_TOKEN` env var or `~/.gitlab-mcp-server.env`                                             | Single user, local development             |
 | **HTTP Legacy** | HTTP         | `PRIVATE-TOKEN` header per-request                                                               | Multi-user, simple setup                   |
 | **HTTP OAuth**  | HTTP         | Automatic OAuth 2.1 flow via [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery | Multi-user, production, zero-config tokens |
 

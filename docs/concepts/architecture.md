@@ -145,7 +145,7 @@ The `main()` function supports two runtime modes:
 
 ### Configuration (`internal/config`)
 
-Loads settings from environment variables with optional `.env` file support (via `godotenv`). Used by **stdio mode** to validate that `GITLAB_TOKEN` is present and to default `GITLAB_URL` to `https://gitlab.com` when omitted. HTTP mode uses CLI flags instead (see Transport Selection).
+Loads settings from environment variables, falling back to `~/.gitlab-mcp-server.env` and to the file `GITLAB_MCP_ENV_FILE` names (via `godotenv`); a `.env` in the working directory is deliberately not among them. Used by **stdio mode** to validate that `GITLAB_TOKEN` is present and to default `GITLAB_URL` to `https://gitlab.com` when omitted. HTTP mode uses CLI flags instead (see Transport Selection).
 
 | Variable                 | Required | Default              | Description                                                                              |
 | ------------------------ | -------- | -------------------- | ---------------------------------------------------------------------------------------- |
@@ -532,7 +532,7 @@ sequenceDiagram
     participant MCP as mcp.NewServer()
 
     OS->>Main: Launch binary
-    Main->>Config: Load .env + env vars
+    Main->>Config: Load env vars + dotenv files
     Config-->>Main: Config struct
     Main->>GL: Create GitLab client (GITLAB_TOKEN)
     GL-->>Main: Authenticated client

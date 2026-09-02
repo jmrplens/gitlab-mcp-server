@@ -53,6 +53,6 @@ Todos los canales terminan en el mismo sitio: tu cliente MCP lanza `gitlab-mcp-s
 Dos cosas que conviene saber antes de la primera ejecución:
 
 - Si arrancas el binario en una terminal, o le haces doble clic en Windows, sin `GITLAB_URL` y `GITLAB_TOKEN` definidos, imprime qué es y los dos valores que necesita, y espera a que pulses Enter. Un cliente MCP nunca ve esa pantalla, porque se conecta por tuberías y no por una terminal. No hay asistente de configuración.
-- El token puede quedarse fuera del JSON del cliente por completo: una variable de entorno explícita gana a un `.env` en el directorio de trabajo, que gana a `~/.gitlab-mcp-server.env` (un `CLAVE=valor` por línea). Consulta [Configuración](/gitlab-mcp-server/es/configuration/).
+- El token puede quedarse fuera del JSON del cliente por completo: una variable de entorno explícita gana al archivo que nombre `GITLAB_MCP_ENV_FILE`, que gana a `~/.gitlab-mcp-server.env` (un `CLAVE=valor` por línea). Un `.env` en el directorio de trabajo no se lee. Consulta [Configuración](/gitlab-mcp-server/es/configuration/).
 
 Después abre tu cliente y pregunta _"¿Quién soy en GitLab?"_. En la superficie `dynamic` por defecto, el asistente llama a `gitlab_find_action` y después a `gitlab_execute_action` con la acción `user.current`, y responde con tu perfil de GitLab.

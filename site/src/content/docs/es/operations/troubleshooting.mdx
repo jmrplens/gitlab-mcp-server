@@ -6,7 +6,7 @@ faq:
   - q: "¿Por qué mi cliente MCP muestra cientos de herramientas?"
     a: "El cliente usa la **superficie de herramientas individual**, que registra una herramienta por operación de GitLab. Establece `TOOL_SURFACE=meta` para consolidarlas en {{meta.base}} meta-herramientas de dominio, o usa la superficie **dinámica** predeterminada, que expone solo `gitlab_find_action` y `gitlab_execute_action`. Los nombres de herramientas también difieren por superficie: el modo individual usa `gitlab_issue_create`, el modo meta usa `gitlab_issue` con `action: create`, y el modo dinámico usa find y execute."
   - q: "¿Cómo soluciono errores 401 o 403 de GitLab?"
-    a: "Un **401 Unauthorized** significa que el Personal Access Token es inválido o ha expirado — genera un nuevo token con el scope `api` en GitLab → Preferences → Access Tokens. Un **403 Forbidden** en operaciones específicas significa que el token carece del scope requerido; asegúrate de que tiene el scope `api`, no solo `read_api`. Si el servidor no arranca con `GITLAB_TOKEN is required`, establece `GITLAB_TOKEN` en tu archivo `.env` o en el entorno."
+    a: "Un **401 Unauthorized** significa que el Personal Access Token es inválido o ha expirado — genera un nuevo token con el scope `api` en GitLab → Preferences → Access Tokens. Un **403 Forbidden** en operaciones específicas significa que el token carece del scope requerido; asegúrate de que tiene el scope `api`, no solo `read_api`. Si el servidor no arranca con `GITLAB_TOKEN is required`, establece `GITLAB_TOKEN` en el entorno del cliente o en `~/.gitlab-mcp-server.env` (un `.env` en el directorio de trabajo no se lee)."
   - q: "¿Por qué faltan las herramientas Enterprise?"
     a: "El **catálogo Enterprise/Premium está desactivado**. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`. En modo HTTP, establece `--tier=premium` o `--tier=ultimate` para forzar el catálogo, o deja que la autodetección CE/EE lo habilite cuando GitLab informe su edición. La variable deprecada `GITLAB_ENTERPRISE=true` sigue funcionando cuando `GITLAB_TIER` no está definida; no existe ningún flag `--enterprise`, usa `--tier`. Las herramientas Enterprise también requieren una licencia Premium o Ultimate en la instancia conectada."
   - q: "¿Cómo habilito el registro de depuración?"
@@ -22,7 +22,7 @@ import stats from "../../../../data/stats.json";
 ```mermaid
 flowchart TD
     A[El servidor no arranca] --> B{Mensaje de error?}
-    B -->|GITLAB_TOKEN required| C[Establece GITLAB_TOKEN<br/>en .env o entorno]
+    B -->|GITLAB_TOKEN required| C[Establece GITLAB_TOKEN<br/>en el entorno o ~/.gitlab-mcp-server.env]
     B -->|Invalid GITLAB_URL| D[Corrige GITLAB_URL<br/>autogestionado]
     B -->|401 Unauthorized| E[Regenera token<br/>con scope api]
     B -->|403 Forbidden| F[Verifica scope api<br/>del token]
@@ -44,20 +44,20 @@ flowchart TD
     style K fill:#3b82f6,color:#fff
 ```
 
-| Síntoma                                    | Causa                               | Solución                                                                      |
-| ------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------------- |
-| `GITLAB_TOKEN is required` al inicio       | Token no establecido                | Establece `GITLAB_TOKEN` en `.env` o en el entorno                            |
-| `GITLAB_URL is not a valid URL` al inicio  | La URL tiene sintaxis inválida      | Corrige `GITLAB_URL` u omítela para usar `https://gitlab.com` en modo stdio   |
-| `401 Unauthorized` de la API de GitLab     | PAT inválido o expirado             | Genera un nuevo token con scope `api` en GitLab → Preferences → Access Tokens |
-| `403 Forbidden` en operaciones específicas | El token carece del scope requerido | Asegúrate de que el token tiene scope `api` (no solo `read_api`)              |
-| Conexión rechazada o timeout               | Instancia de GitLab inaccesible     | Verifica que `GITLAB_URL` es accesible: `curl -s $GITLAB_URL/api/v4/version`  |
+| Síntoma                                    | Causa                               | Solución                                                                                                                                                                  |
+| ------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_TOKEN is required` al inicio       | Token no establecido                | Establece `GITLAB_TOKEN` en el entorno o en `~/.gitlab-mcp-server.env`; un `.env` en el directorio de trabajo no se lee, y si existe se nombra a nivel `WARN` al arrancar |
+| `GITLAB_URL is not a valid URL` al inicio  | La URL tiene sintaxis inválida      | Corrige `GITLAB_URL` u omítela para usar `https://gitlab.com` en modo stdio                                                                                               |
+| `401 Unauthorized` de la API de GitLab     | PAT inválido o expirado             | Genera un nuevo token con scope `api` en GitLab → Preferences → Access Tokens                                                                                             |
+| `403 Forbidden` en operaciones específicas | El token carece del scope requerido | Asegúrate de que el token tiene scope `api` (no solo `read_api`)                                                                                                          |
+| Conexión rechazada o timeout               | Instancia de GitLab inaccesible     | Verifica que `GITLAB_URL` es accesible: `curl -s $GITLAB_URL/api/v4/version`                                                                                              |
 
 ## TLS y certificados
 
-| Síntoma                                         | Causa                    | Solución                                                                                                                                                                             |
-| ----------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `x509: certificate signed by unknown authority` | Certificado autofirmado  | Primero intenta añadir el certificado CA al almacén de confianza del sistema. Si no es posible, establece `GITLAB_SKIP_TLS_VERIFY=true` en `.env` o `--skip-tls-verify` en modo HTTP |
-| `x509: certificate has expired`                 | Certificado TLS expirado | Renueva el certificado en el servidor de GitLab, o usa `GITLAB_SKIP_TLS_VERIFY=true` temporalmente                                                                                   |
+| Síntoma                                         | Causa                    | Solución                                                                                                                                                                                                                  |
+| ----------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x509: certificate signed by unknown authority` | Certificado autofirmado  | Primero intenta añadir el certificado CA al almacén de confianza del sistema. Si no es posible, establece `GITLAB_SKIP_TLS_VERIFY=true` en el entorno o en `~/.gitlab-mcp-server.env`, o `--skip-tls-verify` en modo HTTP |
+| `x509: certificate has expired`                 | Certificado TLS expirado | Renueva el certificado en el servidor de GitLab, o usa `GITLAB_SKIP_TLS_VERIFY=true` temporalmente                                                                                                                        |
 
 :::caution
 `GITLAB_SKIP_TLS_VERIFY=true` desactiva la verificación TLS completamente. Úsalo solo para instancias auto-alojadas con certificados autofirmados, y nunca en entornos de producción con instancias de GitLab públicas.
@@ -88,11 +88,11 @@ export HTTP_PROXY=http://proxy.corp.example.com:8080
 export NO_PROXY=localhost,127.0.0.1,.internal.corp
 ```
 
-| Síntoma                                              | Causa                                                 | Solución                                                                  |
-| ---------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| Timeout de conexión detrás de red corporativa        | Proxy no configurado                                  | Establece `HTTPS_PROXY` / `HTTP_PROXY`                                    |
-| El proxy funciona con `curl` pero no con el servidor | Vars de entorno no exportadas al proceso del servidor | Pásalas en `.env`, Docker `environment:`, o los secretos de tu plataforma |
-| GitLab interno enrutado a través de proxy externo    | Falta `NO_PROXY`                                      | Añade tu hostname de GitLab a `NO_PROXY`                                  |
+| Síntoma                                              | Causa                                                 | Solución                                                                                                                               |
+| ---------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Timeout de conexión detrás de red corporativa        | Proxy no configurado                                  | Establece `HTTPS_PROXY` / `HTTP_PROXY`                                                                                                 |
+| El proxy funciona con `curl` pero no con el servidor | Vars de entorno no exportadas al proceso del servidor | Pásalas en el bloque `env` del cliente, en `~/.gitlab-mcp-server.env`, en `environment:` de Docker, o en los secretos de tu plataforma |
+| GitLab interno enrutado a través de proxy externo    | Falta `NO_PROXY`                                      | Añade tu hostname de GitLab a `NO_PROXY`                                                                                               |
 
 ### Proxy inverso (modo HTTP)
 

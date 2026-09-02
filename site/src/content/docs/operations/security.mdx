@@ -22,7 +22,7 @@ import FAQ from "../../../components/FAQ.astro";
 ```mermaid
 flowchart TB
     subgraph Local["Local Machine"]
-        Token["GitLab Token<br/>(env var / .env file)"]
+        Token["GitLab Token<br/>(env var / ~/.gitlab-mcp-server.env)"]
         Server["MCP Server Process"]
         Client["MCP Client<br/>(VS Code, etc.)"]
     end
@@ -46,19 +46,21 @@ flowchart TB
 
 ### Recommended: Environment file
 
-Store your token in a `.env` file with restricted permissions:
+Store your token in `~/.gitlab-mcp-server.env` with restricted permissions:
 
 ```bash
-# Create .env file
-echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > .env
+# Create the home env file
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
 # Add GITLAB_URL here only for self-managed instances.
 
 # Restrict permissions (owner read/write only)
-chmod 600 .env
+chmod 600 ~/.gitlab-mcp-server.env
 ```
 
+To keep the file elsewhere, name it by absolute path in `GITLAB_MCP_ENV_FILE`.
+
 :::danger
-Never commit `.env` files to version control. Add `.env` to your `.gitignore` file.
+A `.env` in your working directory is **not** read, so putting the token there does nothing. That directory belongs to whatever repository your editor opened. Never commit a file holding a token to version control.
 :::
 
 ### VS Code input variables
@@ -314,8 +316,8 @@ A useful report includes the affected version (`gitlab-mcp-server --version`), t
 ### Token security
 
 - ☐ Use a dedicated GitLab token with minimum required scopes
-- ☐ Store tokens in `.env` files with `chmod 600` permissions
-- ☐ Add `.env` to `.gitignore`
+- ☐ Store tokens in `~/.gitlab-mcp-server.env` with `chmod 600` permissions
+- ☐ Keep any file holding a token out of version control
 - ☐ Rotate tokens periodically
 - ☐ Use `read_api` scope when write access is not needed
 

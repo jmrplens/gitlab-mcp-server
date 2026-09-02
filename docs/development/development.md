@@ -107,7 +107,7 @@ graph TD
     PROMPTS --> GL
 ```
 
-1. **Config** loads settings from `.env` + environment variables
+1. **Config** loads settings from environment variables, then `GITLAB_MCP_ENV_FILE`, then `~/.gitlab-mcp-server.env`; the repository's own `.env` is for the Makefile targets, not for the server
 2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
 3. **Tools** are projected from domain-local `ActionSpecs` through the canonical action catalog
 4. **Meta-tools** group catalog actions into 32 base tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)

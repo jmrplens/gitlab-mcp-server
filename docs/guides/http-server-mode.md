@@ -804,16 +804,16 @@ The **GitLab token** always varies per client. The **GitLab URL** can vary per c
 
 ## Comparison with Stdio Mode
 
-| Aspect                    | Stdio Mode                     | HTTP Mode                              |
-| ------------------------- | ------------------------------ | -------------------------------------- |
-| Configuration source      | Environment variables / `.env` | CLI flags                              |
-| Token required at startup | Yes (`GITLAB_TOKEN`)           | No — per-request                       |
-| Clients per process       | 1                              | Many (bounded by `--max-http-clients`) |
-| Process lifecycle         | AI client spawns/kills         | Long-running daemon                    |
-| Memory per client         | ~50 MB (full process)          | ~130 KB (pool entry)                   |
-| Client isolation          | Process-level                  | Pool entry-level (same guarantees)     |
-| Network requirement       | None (stdio pipes)             | TCP/HTTP                               |
-| Session management        | SDK handles                    | SDK + server pool                      |
+| Aspect                    | Stdio Mode                           | HTTP Mode                              |
+| ------------------------- | ------------------------------------ | -------------------------------------- |
+| Configuration source      | Environment variables / dotenv files | CLI flags                              |
+| Token required at startup | Yes (`GITLAB_TOKEN`)                 | No — per-request                       |
+| Clients per process       | 1                                    | Many (bounded by `--max-http-clients`) |
+| Process lifecycle         | AI client spawns/kills               | Long-running daemon                    |
+| Memory per client         | ~50 MB (full process)                | ~130 KB (pool entry)                   |
+| Client isolation          | Process-level                        | Pool entry-level (same guarantees)     |
+| Network requirement       | None (stdio pipes)                   | TCP/HTTP                               |
+| Session management        | SDK handles                          | SDK + server pool                      |
 
 ## Monitoring
 
