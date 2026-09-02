@@ -149,6 +149,32 @@ func TestValidateTLSMaterial_RefusesWhatWouldSilentlyFallBack(t *testing.T) {
 			signals: AllSignals(),
 		},
 		{
+			// The half-pair with both halves present. The exporters pair a
+			// certificate with the key of its own prefix and nothing else, so
+			// neither pair is complete to them: mutual TLS is not configured
+			// and, as with a missing half, nothing is logged about it.
+			name: "a certificate and key under different prefixes are refused",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE": certPath,
+				"OTEL_EXPORTER_OTLP_CLIENT_KEY":                keyPath,
+			},
+			signals: Signals{Traces: true},
+			wantErr: "different prefixes",
+		},
+		{
+			// The other side of that rule, and the reason it is not "refuse
+			// whenever one prefix is incomplete": the exporters fall back to
+			// the shared pair, which is complete, so mutual TLS is configured
+			// and a refusal here would be a start denied over nothing.
+			name: "a stale per-signal certificate does not refuse a complete shared pair",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE": certPath,
+				"OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE":        certPath,
+				"OTEL_EXPORTER_OTLP_CLIENT_KEY":                keyPath,
+			},
+			signals: Signals{Traces: true},
+		},
+		{
 			// The precedence rule, and the reason validation is per signal: a
 			// stale shared variable no enabled signal would ever read must not
 			// refuse a start the operator cannot fix by fixing what they use.

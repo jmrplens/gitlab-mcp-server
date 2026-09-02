@@ -125,14 +125,26 @@ func isPlaintextRemoteForSignal(signal, endpoint string) bool {
 // insecureFromEnv reads the insecure variables for one signal, most specific
 // first, reporting whether any of them decided.
 //
-// Parsed the way the exporters parse it: case-insensitively, and only "true" or
-// "false". An unset or unrecognized value leaves the decision to the scheme,
-// which is what the exporters' own reader does when the conversion fails.
+// Parsed the way each signal's own exporter parses it, and the two exporters
+// agree on nothing but "true" and "false". The trace and metric ones read it
+// through envconfig.WithBool, where any non-empty value decides and only "true"
+// case-insensitively means insecure, so INSECURE=1 upgrades an http endpoint to
+// TLS as surely as "false" does. The log one converts strictly, rejects every
+// other spelling, and falls through to the next variable and finally to the
+// endpoint's scheme.
+//
+// Parsing strictly for all three named traces and metrics as plaintext while
+// they were on TLS, which is the direction this warning can least afford to be
+// wrong in: naming a signal that is fine is how an operator learns to skip the
+// line.
 func insecureFromEnv(signal string) (insecure, decided bool) {
 	for _, key := range insecureKeys[signal] {
 		value := strings.TrimSpace(os.Getenv(key))
 		if value == "" {
 			continue
+		}
+		if signal != "logs" {
+			return strings.EqualFold(value, "true"), true
 		}
 		switch strings.ToLower(value) {
 		case "true":

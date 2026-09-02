@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel/log/global"
@@ -249,7 +250,7 @@ func redactAttr(attr slog.Attr) slog.Attr {
 	text := attr.Value.String()
 	if strings.Contains(text, resourceURIScheme) {
 		text = RedactResourceURIs(text)
-	} else if len(text) <= maxExportedAttrValue {
+	} else if len(text) <= maxExportedAttrValue && utf8.ValidString(text) {
 		// Nothing to change: hand back the original so a typed value keeps its
 		// type on the wire rather than becoming a string.
 		return attr
@@ -267,16 +268,25 @@ func redactAttr(attr slog.Attr) slog.Attr {
 // a flood of them is a rounding error on the operator's bill.
 const maxExportedAttrValue = 1024
 
-// truncateForExport bounds a value, saying so where it was cut.
+// truncateForExport bounds a value, saying so where it was cut, and hands back
+// something a proto3 string field will accept.
 //
 // The marker matters more than the bound: a value that was silently shortened
 // reads as the whole value, and somebody eventually debugs the difference
 // between a truncated host name and a wrong one.
+//
+// The bound is a byte count, so the cut can land inside a multi-byte character,
+// and that costs more than the character. The OTLP log exporters serialize with
+// proto.Marshal, which validates every string field, so one partial rune fails
+// the upload for the entire batch: every record in it, from every caller, is
+// dropped and an SDK error line is all that is left. The value is caller-chosen
+// on reachable paths, a refused tools/call being logged with the name the
+// caller sent, so the repair covers what arrives as well as what is cut here.
 func truncateForExport(text string) string {
 	if len(text) <= maxExportedAttrValue {
-		return text
+		return strings.ToValidUTF8(text, string(utf8.RuneError))
 	}
-	return text[:maxExportedAttrValue] + "[truncated]"
+	return strings.ToValidUTF8(text[:maxExportedAttrValue], string(utf8.RuneError)) + "[truncated]"
 }
 
 // errorTypeName reports the type an error should be classified as, and is the

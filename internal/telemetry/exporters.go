@@ -87,6 +87,10 @@ func validateTLSMaterial(signals Signals) error {
 	return nil
 }
 
+// sharedEnvPrefix is the prefix every signal falls back to when it has no
+// variable of its own.
+const sharedEnvPrefix = "OTEL_EXPORTER_OTLP_"
+
 // validateCertPool checks the CA a signal would verify its collector against.
 func validateCertPool(prefix string) error {
 	key, path := firstSetEnv(prefix, "", "CERTIFICATE")
@@ -105,21 +109,51 @@ func validateCertPool(prefix string) error {
 
 // validateClientCert checks the client certificate and key a signal would
 // present, and that both halves are there.
+//
+// The pair is resolved per prefix rather than half by half, because that is how
+// the exporters resolve it: WithClientCert takes the two names of one prefix
+// together and returns when either is unset, so a certificate under the signal
+// prefix and a key under the shared one is two incomplete pairs, not one
+// complete one. Resolving each half independently accepted exactly that, which
+// is the silent no-mutual-TLS this function exists to refuse.
+//
+// A prefix whose pair is complete settles it, signal first, matching the order
+// the exporters apply the two options in. So an incomplete signal pair beside a
+// complete shared one is accepted: the exporters use the shared pair, mutual
+// TLS is configured, and refusing there would deny a start over a variable that
+// changes nothing.
 func validateClientCert(prefix string) error {
-	certKey, certPath := firstSetEnv(prefix, "", "CLIENT_CERTIFICATE")
-	keyKey, keyPath := firstSetEnv(prefix, "", "CLIENT_KEY")
+	// Whichever half is seen first, for a message that names a variable the
+	// operator actually set.
+	var certKey, keyKey string
+	for _, p := range []string{prefix, sharedEnvPrefix} {
+		certName, keyName := p+"CLIENT_CERTIFICATE", p+"CLIENT_KEY"
+		certPath := strings.TrimSpace(os.Getenv(certName))
+		keyPath := strings.TrimSpace(os.Getenv(keyName))
+		if certPath != "" && keyPath != "" {
+			if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
+				return fmt.Errorf("%s=%s with %s=%s: %w", certName, certPath, keyName, keyPath, err)
+			}
+			return nil
+		}
+		if certPath != "" && certKey == "" {
+			certKey = certName
+		}
+		if keyPath != "" && keyKey == "" {
+			keyKey = keyName
+		}
+	}
+
 	switch {
-	case certPath == "" && keyPath == "":
+	case certKey == "" && keyKey == "":
 		return nil
-	case keyPath == "":
+	case keyKey == "":
 		return fmt.Errorf("%s is set without its key; mutual TLS would be silently disabled", certKey)
-	case certPath == "":
+	case certKey == "":
 		return fmt.Errorf("%s is set without its certificate; mutual TLS would be silently disabled", keyKey)
+	default:
+		return fmt.Errorf("%s and %s are under different prefixes, and the exporters pair a certificate only with the key of its own prefix; mutual TLS would be silently disabled", certKey, keyKey)
 	}
-	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
-		return fmt.Errorf("%s=%s with %s=%s: %w", certKey, certPath, keyKey, keyPath, err)
-	}
-	return nil
 }
 
 // firstSetEnv resolves one variable the way the exporters do: the signal's own
@@ -130,7 +164,7 @@ func validateClientCert(prefix string) error {
 // search.
 func firstSetEnv(signalPrefix, sharedPrefix, suffix string) (key, value string) {
 	if sharedPrefix == "" {
-		sharedPrefix = "OTEL_EXPORTER_OTLP_"
+		sharedPrefix = sharedEnvPrefix
 	}
 	for _, name := range []string{signalPrefix + suffix, sharedPrefix + suffix} {
 		if configured := strings.TrimSpace(os.Getenv(name)); configured != "" {

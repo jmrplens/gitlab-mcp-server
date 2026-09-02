@@ -147,6 +147,22 @@ func TestInsecureCredentialSignals(t *testing.T) {
 			want:    []string{"logs"},
 		},
 		{
+			// The same inverse, spelled the way an operator reaches for it.
+			// envconfig.WithBool lets any non-empty value decide and treats
+			// everything but "true" as false, so "1" upgrades traces and
+			// metrics to TLS exactly as "false" does. The log exporter
+			// converts strictly and rejects the spelling, so its endpoint's
+			// scheme still decides.
+			name: "an unrecognized insecure value still decides for traces and metrics",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector.example:4318",
+				"OTEL_EXPORTER_OTLP_INSECURE": "1",
+			},
+			signals: AllSignals(),
+			want:    []string{"logs"},
+		},
+		{
 			name: "a downgrade to loopback is still not a disclosure",
 			env: map[string]string{
 				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",

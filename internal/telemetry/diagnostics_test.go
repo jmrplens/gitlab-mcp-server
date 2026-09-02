@@ -272,8 +272,20 @@ func TestSetDiagnosticSinks_AMalformedHeaderVariableIsNotPrinted(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = logExporter.Shutdown(context.Background()) })
 
-			if strings.Contains(buf.String(), secret) {
-				t.Errorf("the collector credential was printed by the SDK's own diagnostics: %s", buf.String())
+			printed := buf.String()
+			if strings.Contains(printed, secret) {
+				t.Errorf("the collector credential was printed by the SDK's own diagnostics: %s", printed)
+			}
+			// The absence above proves nothing on its own: an SDK that stopped
+			// logging these shapes, a level mapping that dropped them, or a
+			// sink that was never installed all leave it green. The variable
+			// name is kept in the line on purpose, so the pair below is the
+			// positive signal that the branch ran and the substitution with it.
+			if !strings.Contains(printed, "OTEL_EXPORTER_OTLP_HEADERS") {
+				t.Errorf("nothing named the malformed variable, so this row proves no redaction: %s", printed)
+			}
+			if !strings.Contains(printed, redactedPlaceholder) {
+				t.Errorf("nothing was substituted, so the credential was never in the line to begin with: %s", printed)
 			}
 		})
 	}

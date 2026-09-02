@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log/global"
@@ -827,5 +828,48 @@ func TestSlogHandler_AnOversizedAttributeIsBoundedOnTheExportedLeg(t *testing.T)
 	}
 	if !strings.Contains(terminal, marker) {
 		t.Errorf("stderr lost the value, which is the leg with no size problem: %d bytes", len(terminal))
+	}
+}
+
+// TestSlogHandler_ATruncatedAttributeIsStillValidUTF8 is the regression for a
+// bound that could take the whole batch down with it.
+//
+// The cut is a byte index, so a value whose last included byte sits inside a
+// multi-byte character leaves a partial rune on the wire. The OTLP log
+// exporters serialize with proto.Marshal and proto3 validates string fields on
+// marshal, so one such attribute fails the upload for every record in the
+// batch, from every caller, and the operator is left with an SDK error line and
+// no logs. The attribute is caller-chosen on reachable paths: a refused
+// tools/call is logged with the name the caller sent, before any lookup.
+//
+// The second row is the same failure arriving rather than being made, which is
+// why the repair covers the input and not only the cut.
+func TestSlogHandler_ATruncatedAttributeIsStillValidUTF8(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{
+			// The byte the cut lands on is the second of the two-byte
+			// character, so a byte index splits it.
+			name:  "a multi-byte character straddles the bound",
+			value: strings.Repeat("Q", maxExportedAttrValue-1) + "é" + strings.Repeat("Q", 64),
+		},
+		{
+			name:  "a short value arrives already invalid",
+			value: "host" + string([]byte{0xff, 0xfe}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exported, _ := bothLegs(t, nil, func(logger *slog.Logger) {
+				logger.Info("request rejected", "tool", tt.value)
+			})
+
+			if !utf8.ValidString(exported) {
+				t.Errorf("the exported record is not valid UTF-8, so proto.Marshal would refuse the whole batch: %q", exported)
+			}
+		})
 	}
 }
