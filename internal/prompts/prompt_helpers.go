@@ -267,7 +267,7 @@ func writeMRTable(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 		branch := fmt.Sprintf("%s -> %s", mr.SourceBranch, mr.TargetBranch)
 		status := mrStatus(mr)
 		fmt.Fprintf(b, "| !%d | %s | %s | %s | %s | %s |\n",
-			mr.IID, mr.Title, author, branch, mrAge(mr), status)
+			mr.IID, mdInline(mr.Title), mdInline(author), mdInline(branch), mrAge(mr), status)
 	}
 }
 
@@ -293,7 +293,7 @@ func writeIssueTable(b *strings.Builder, issues []*gl.Issue) {
 			due = time.Time(*issue.DueDate).Format("2006-01-02")
 		}
 		fmt.Fprintf(b, "| #%d | %s | %s | %s | %s | %s |\n",
-			issue.IID, issue.Title, labels, milestone, issueAge(issue), due)
+			issue.IID, mdInline(issue.Title), mdInline(labels), mdInline(milestone), issueAge(issue), due)
 	}
 }
 

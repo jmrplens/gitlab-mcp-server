@@ -2,7 +2,10 @@
 // verifying that literal escape sequences are converted to real characters.
 package toolutil
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestNormalizeText uses table-driven subtests to verify NormalizeText handles
 // literal backslash-n, backslash-t, mixed escapes, no-op inputs, and empty strings.
@@ -492,6 +495,7 @@ func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
 		{name: "a run of backticks is exceeded", in: "a```b", want: "````a```b````"},
 		{name: "a leading backtick is padded", in: "`a", want: "`` `a ``"},
 		{name: "a trailing backtick is padded", in: "a`", want: "`` a` ``"},
+		{name: "a control sequence is dropped", in: "demo\x1b[2Jproj", want: "`demo[2Jproj`"},
 	}
 
 	for _, tt := range tests {
@@ -500,6 +504,176 @@ func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
 
 			if got := EscapeConsentValue(tt.in); got != tt.want {
 				t.Errorf("EscapeConsentValue(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestStripControlBytes verifies that the C0 and C1 control ranges and DEL are
+// removed from GitLab-authored text while tab, newline and carriage return —
+// the three controls Markdown actually uses — survive unchanged.
+func TestStripControlBytes(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty string", in: "", want: ""},
+		{name: "plain text unchanged", in: "ordinary title", want: "ordinary title"},
+		{name: "tab newline carriage return survive", in: "a\tb\nc\rd", want: "a\tb\nc\rd"},
+		{name: "escape sequence loses its escape", in: "before\x1b[2Jafter", want: "before[2Jafter"},
+		{name: "operating system command", in: "\x1b]0;pwned\x07rest", want: "]0;pwnedrest"},
+		{name: "vertical tab and form feed", in: "a\x0bb\x0cc", want: "abc"},
+		{name: "null and backspace", in: "a\x00b\x08c", want: "abc"},
+		{name: "delete", in: "a\x7fb", want: "ab"},
+		{name: "c1 control", in: "a\u009bb", want: "ab"},
+		{name: "multibyte text preserved", in: "café naïve 日本語", want: "café naïve 日本語"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StripControlBytes(tt.in); got != tt.want {
+				t.Errorf("StripControlBytes(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdTitleLink_TitleCannotCloseTheLink verifies that a GitLab-authored title
+// can no longer end the link it is rendered inside. A title carrying "](" used
+// to close the label early, so the rendered link pointed at whatever host the
+// title named while the visible text still read like the issue's title. Each
+// case asserts that exactly one link is produced, that its destination is the
+// URL the caller passed, and that no control byte survives into the cell.
+func TestMdTitleLink_TitleCannotCloseTheLink(t *testing.T) {
+	const target = "https://gitlab.example.com/g/p/-/issues/1"
+	tests := []struct {
+		name  string
+		title string
+	}{
+		{name: "plain title", title: "Fix login"},
+		{name: "title closes the link and opens another", title: "Fix login](http://attacker.invalid/x)"},
+		{name: "title opens a bracket", title: "Fix [login"},
+		{name: "title closes a bracket", title: "Fix login]"},
+		{name: "title is a full markdown link", title: "[click here](http://attacker.invalid)"},
+		{name: "title carries a backtick run", title: "Fix ``` login"},
+		{name: "title carries a backslash", title: `Fix \] login`},
+		{name: "title carries an escape byte", title: "Fix \x1b[2Jlogin"},
+		{name: "title carries a pipe", title: "Fix | login"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MdTitleLink(tt.title, target)
+			dest := linkDestinations(got)
+			if len(dest) != 1 || dest[0] != target {
+				t.Errorf("MdTitleLink(%q, target) = %q, destinations %v, want exactly [%s]", tt.title, got, dest, target)
+			}
+			if i := strings.IndexFunc(got, isControlRune); i >= 0 {
+				t.Errorf("MdTitleLink(%q, target) = %q, carries a control byte at offset %d", tt.title, got, i)
+			}
+		})
+	}
+}
+
+// linkDestinations returns the destination of every Markdown inline link in s,
+// skipping brackets and parentheses that carry a backslash escape. It is a
+// deliberately small reader: the property under test is that a title cannot
+// introduce a second destination, which needs no full CommonMark parser.
+func linkDestinations(s string) []string {
+	var out []string
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++ // the escaped character is literal text, never structure
+		case '[':
+			closing := indexUnescaped(s[i+1:], ']')
+			if closing < 0 {
+				continue
+			}
+			rest := s[i+1+closing+1:]
+			if !strings.HasPrefix(rest, "(") {
+				continue
+			}
+			end := indexUnescaped(rest[1:], ')')
+			if end < 0 {
+				continue
+			}
+			out = append(out, rest[1:1+end])
+		}
+	}
+	return out
+}
+
+// indexUnescaped returns the offset of the first unescaped occurrence of want.
+func indexUnescaped(s string, want byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' {
+			i++
+			continue
+		}
+		if s[i] == want {
+			return i
+		}
+	}
+	return -1
+}
+
+// isControlRune reports whether r is one of the control characters that must
+// never reach a terminal through rendered tool output.
+func isControlRune(r rune) bool {
+	switch r {
+	case '\t', '\n', '\r':
+		return false
+	}
+	return r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f)
+}
+
+// TestEscapeMdTableCell_DropsControlBytes verifies that the shared table-cell
+// escaper strips terminal control sequences as well as pipes and line breaks,
+// so a GitLab-authored value cannot clear a reader's screen or set its title.
+func TestEscapeMdTableCell_DropsControlBytes(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "clear screen", in: "title\x1b[2J", want: "title[2J"},
+		{name: "set terminal title", in: "\x1b]0;pwned\x07ok", want: "]0;pwnedok"},
+		{name: "bell only", in: "ding\x07", want: "ding"},
+		{name: "pipe still escaped", in: "a|b", want: "a&#124;b"},
+		{name: "newline still collapsed", in: "a\nb", want: "a b"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EscapeMdTableCell(tt.in); got != tt.want {
+				t.Errorf("EscapeMdTableCell(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWrapGFMBody_DropsControlBytesAndDefusesTheHintMarker verifies that the
+// blockquote helper both strips control bytes and breaks the server's own
+// next-steps marker, so quoted GitLab text cannot impersonate the guidance
+// section even before WriteHints runs.
+func TestWrapGFMBody_DropsControlBytesAndDefusesTheHintMarker(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    string
+		notWant string
+	}{
+		{name: "control byte dropped", in: "a\x1b[2Jb", want: "> a[2Jb"},
+		{name: "hint marker defused", in: hintsHeading, want: "> " + defusedHintsHeading, notWant: hintsHeading},
+		{name: "ordinary body unchanged", in: "hello", want: "> hello"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := WrapGFMBody(tt.in)
+			if got != tt.want {
+				t.Errorf("WrapGFMBody(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+			if tt.notWant != "" && strings.Contains(got, tt.notWant) {
+				t.Errorf("WrapGFMBody(%q) = %q, must not contain %q", tt.in, got, tt.notWant)
 			}
 		})
 	}

@@ -36,7 +36,7 @@ func (e *ToolError) Error() string {
 // so connectivity and auth problems are reported consistently.
 func WrapErr(operation string, err error) error {
 	semantic := ClassifyError(err)
-	return fmt.Errorf("%s: %s: %w", operation, semantic, err)
+	return fmt.Errorf("%s: %s: %w", operation, semantic, sanitize(err))
 }
 
 // ClassifyError inspects the error chain and returns a short, human-friendly
@@ -196,19 +196,27 @@ func NewDetailedError(domain, action string, err error) *DetailedError {
 		Message: ClassifyError(err),
 	}
 
-	// Safely extract details — gl.ErrorResponse.Error() can panic with nil Body
+	// Safely extract details — gl.ErrorResponse.Error() can panic with nil Body.
+	// Sanitized for the same reason the wrappers are: Details is rendered into
+	// the Markdown of an error result, which is model-facing text, so it carries
+	// the request line and status plus GitLab's own message when the body
+	// actually parsed as one — and never the body itself.
 	func() {
 		defer func() { recover() }() //nolint:errcheck // intentional panic recovery
-		de.Details = err.Error()
+		de.Details = sanitize(err).Error()
 	}()
+	if msg := ExtractGitLabMessage(err); msg != "" {
+		if de.Details == "" {
+			de.Details = msg
+		} else {
+			de.Details += " (" + msg + ")"
+		}
+	}
 
 	var glErr *gl.ErrorResponse
 	if errors.As(err, &glErr) && glErr.Response != nil {
 		de.GitLabStatus = glErr.Response.StatusCode
-		de.RequestID = glErr.Response.Header.Get("X-Request-Id")
-		if de.Details == "" {
-			de.Details = glErr.Message
-		}
+		de.RequestID = EscapeMdTableCell(glErr.Response.Header.Get("X-Request-Id"))
 	}
 
 	return de
@@ -267,18 +275,34 @@ func IsNotFound(err error) bool {
 	return ContainsAny(err, "404 Not Found")
 }
 
+// unparsedBodyPrefix is what client-go puts in ErrorResponse.Message when the
+// upstream body is not JSON it recognizes: the prefix, then the whole body.
+//
+// The body is whatever answered between this server and GitLab. On a pinned
+// deployment that is still not necessarily GitLab — an nginx 502, a WAF block
+// page, a captive portal — and those carry internal hostnames, request
+// identifiers and the operator's own error detail. None of it is a message for
+// a model to read, and none of it should be in a tenant's context or in the
+// server's logs, so a message wearing this prefix is dropped rather than
+// truncated.
+const unparsedBodyPrefix = "failed to parse unknown error format:"
+
 // ExtractGitLabMessage extracts the specific error message from a GitLab
-// ErrorResponse in the error chain. Returns empty string if not found or if
-// the message only repeats the HTTP status text (e.g., "405 Method Not Allowed").
-// The extracted message is truncated to 300 characters to prevent overly verbose
-// error output from user-generated content.
+// ErrorResponse in the error chain. Returns empty string if not found, if the
+// message only repeats the HTTP status text (e.g. "405 Method Not Allowed"), or
+// if it is an unparsed upstream response body rather than a GitLab message.
+//
+// What survives is flattened onto one line and truncated to 300 characters.
+// GitLab's messages routinely quote input an attacker chose — a branch name, a
+// path, a title — so the span has to stay a span: with its newlines intact it
+// could add structure to the error text a model reads.
 func ExtractGitLabMessage(err error) string {
 	var glErr *gl.ErrorResponse
 	if !errors.As(err, &glErr) {
 		return ""
 	}
 	msg := glErr.Message
-	if msg == "" {
+	if msg == "" || strings.HasPrefix(strings.TrimSpace(msg), unparsedBodyPrefix) {
 		return ""
 	}
 	// Filter out messages that are just the HTTP status text — they add no information
@@ -300,11 +324,147 @@ func ExtractGitLabMessage(err error) string {
 			}
 		}
 	}
-	const maxLen = 300
-	if len(msg) > maxLen {
-		msg = msg[:maxLen] + "..."
+	return boundedGitLabMessage(msg)
+}
+
+// maxGitLabMessageLen caps how much of GitLab's own message is reflected.
+const maxGitLabMessageLen = 300
+
+// boundedGitLabMessage renders ErrorResponse.Message for a reader: an unparsed
+// upstream body is dropped entirely, what remains is flattened onto one line
+// and capped. It is the only path by which any part of an upstream response
+// body reaches a model or a log line.
+func boundedGitLabMessage(msg string) string {
+	if msg == "" || strings.HasPrefix(strings.TrimSpace(msg), unparsedBodyPrefix) {
+		return ""
+	}
+	msg = flattenErrorText(msg)
+	if len(msg) > maxGitLabMessageLen {
+		msg = strings.ToValidUTF8(msg[:maxGitLabMessageLen], "") + "..."
 	}
 	return msg
+}
+
+// flattenErrorText renders error text as a single line with no control
+// characters: runs of whitespace collapse to one space, and everything else in
+// the C0 and C1 ranges is dropped.
+func flattenErrorText(s string) string {
+	return strings.Join(strings.Fields(StripControlBytes(s)), " ")
+}
+
+// sanitizedCauseError is an error that renders a bounded, control-free summary of
+// the error it wraps while leaving the original reachable through
+// [errors.As] and [errors.Is].
+//
+// It exists because the %w verb renders as well as wraps. Every tool error in
+// this package ends with the cause, and for a GitLab failure that cause is
+// *gl.ErrorResponse, whose Error() appends Message — which, for a body
+// client-go could not parse, is the entire body. So the raw upstream bytes
+// arrived in the text a model reads and in the slog "tool call failed" line,
+// uncapped, even though ExtractGitLabMessage was capping its own copy of them
+// at 300 characters a few lines earlier.
+type sanitizedCauseError struct {
+	text  string
+	cause error
+}
+
+// Error returns the sanitized rendering.
+func (e *sanitizedCauseError) Error() string { return e.text }
+
+// Unwrap returns the original error, so status checks and sentinel comparisons
+// behave exactly as they did before the wrapper existed.
+func (e *sanitizedCauseError) Unwrap() error { return e.cause }
+
+// sanitize returns err with a rendering that reflects no upstream response
+// body.
+//
+// The GitLab response's own rendering is swapped for the bounded one inside the
+// text rather than replacing the text wholesale, because the handlers wrap
+// before they hand the error over — "could not read .gitmodules from project
+// 42: %w" — and that context is the useful half of the message. Only the
+// dangerous substring changes. If the swap does not land, which would mean a
+// wrapper rendered the cause some way other than %w or %v, the safe rendering
+// replaces the lot rather than letting the body through.
+func sanitize(err error) error {
+	if err == nil {
+		return nil
+	}
+	// Formatted through fmt rather than by calling Error() directly: fmt
+	// recovers a panic inside an Error method and renders a placeholder, and
+	// client-go's dereferences the request without checking it. Calling it here
+	// would turn an error into a crash.
+	original := fmt.Sprintf("%v", err) //nolint:perfsprint // err.Error() is exactly what must not be called here
+	text := original
+	if glErr, ok := errors.AsType[*gl.ErrorResponse](err); ok {
+		raw, safe := renderGitLabResponse(glErr)
+		if raw != safe {
+			text = strings.ReplaceAll(text, raw, safe)
+			if unsafe := unreflectableMessage(glErr); unsafe != "" && strings.Contains(text, unsafe) {
+				text = safe
+			}
+		}
+	}
+	text = flattenErrorText(text)
+	if text == original {
+		return err
+	}
+	return &sanitizedCauseError{text: text, cause: err}
+}
+
+// renderGitLabResponse returns client-go's own rendering of a GitLab error
+// response and the bounded rendering that replaces it. The first is recovered
+// rather than trusted: ErrorResponse.Error() dereferences the request without
+// checking it.
+func renderGitLabResponse(glErr *gl.ErrorResponse) (raw, safe string) {
+	safe = describeGitLabResponse(glErr)
+	func() {
+		defer func() { recover() }() //nolint:errcheck // intentional panic recovery
+		raw = glErr.Error()
+	}()
+	if raw == "" {
+		raw = safe
+	}
+	return raw, safe
+}
+
+// unreflectableMessage returns the response message when no part of it may be
+// reflected verbatim: an unparsed upstream body, or one long enough that
+// [boundedGitLabMessage] would have to cut it.
+func unreflectableMessage(glErr *gl.ErrorResponse) string {
+	msg := strings.TrimSpace(glErr.Message)
+	if msg == "" || boundedGitLabMessage(msg) == flattenErrorText(msg) {
+		return ""
+	}
+	return msg
+}
+
+// describeGitLabResponse renders a GitLab error response the way client-go's
+// own Error() does — request line, status, message — with the message put
+// through [boundedGitLabMessage] first. That is the whole difference: a body
+// client-go could not parse is dropped instead of being pasted in full, and a
+// message it could parse is flattened and capped.
+func describeGitLabResponse(glErr *gl.ErrorResponse) string {
+	status := glErr.StatusCode
+	if glErr.Response != nil {
+		status = glErr.Response.StatusCode
+	}
+	msg := boundedGitLabMessage(glErr.Message)
+	if glErr.Response == nil || glErr.Response.Request == nil || glErr.Response.Request.URL == nil {
+		if msg == "" {
+			return fmt.Sprintf("HTTP %d", status)
+		}
+		return fmt.Sprintf("%d %s", status, msg)
+	}
+	req := glErr.Response.Request
+	path := req.URL.RawPath
+	if path == "" {
+		path = req.URL.Path
+	}
+	line := fmt.Sprintf("%s %s://%s%s: %d", req.Method, req.URL.Scheme, req.URL.Host, path, status)
+	if msg == "" {
+		return line
+	}
+	return line + " " + msg
 }
 
 // WrapErrWithMessage works like WrapErr but also includes the specific GitLab
@@ -320,9 +480,9 @@ func WrapErrWithMessage(operation string, err error) error {
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {
-		return fmt.Errorf("%s: %s (%s): %w", operation, semantic, glMsg, err)
+		return fmt.Errorf("%s: %s (%s): %w", operation, semantic, glMsg, sanitize(err))
 	}
-	return fmt.Errorf("%s: %s: %w", operation, semantic, err)
+	return fmt.Errorf("%s: %s: %w", operation, semantic, sanitize(err))
 }
 
 // WrapErrWithHint works like WrapErrWithMessage but appends an actionable hint
@@ -337,9 +497,9 @@ func WrapErrWithHint(operation string, err error, hint string) error {
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {
-		return fmt.Errorf("%s: %s (%s). Suggestion: %s: %w", operation, semantic, glMsg, hint, err)
+		return fmt.Errorf("%s: %s (%s). Suggestion: %s: %w", operation, semantic, glMsg, hint, sanitize(err))
 	}
-	return fmt.Errorf("%s: %s. Suggestion: %s: %w", operation, semantic, hint, err)
+	return fmt.Errorf("%s: %s. Suggestion: %s: %w", operation, semantic, hint, sanitize(err))
 }
 
 // WrapErrWithStatusHint returns WrapErrWithHint(operation, err, hint) when err

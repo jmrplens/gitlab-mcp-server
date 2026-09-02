@@ -68,7 +68,7 @@ func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Merge Velocity: %s (last %d days)\n\n", toolutil.EscapeMdHeading(projectID), days)
+	fmt.Fprintf(&b, "# Merge Velocity: %s (last %d days)\n\n", mdHeading(projectID), days)
 
 	if len(mrs) == 0 {
 		b.WriteString("No merged MRs found in the period.\n")
@@ -174,7 +174,7 @@ func handleReleaseReadiness(ctx context.Context, client *gitlabclient.Client, re
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Release Readiness: %s -> %s\n\n", toolutil.EscapeMdHeading(projectID), toolutil.EscapeMdHeading(branch))
+	fmt.Fprintf(&b, "# Release Readiness: %s -> %s\n\n", mdHeading(projectID), mdHeading(branch))
 
 	if len(mrs) == 0 {
 		b.WriteString("No open MRs targeting this branch. The branch appears ready for release.\n")
@@ -280,7 +280,7 @@ func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req 
 	filtered := filterRecentReleases(releases, since)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Release Cadence: %s (last %d days)\n\n", toolutil.EscapeMdHeading(projectID), days)
+	fmt.Fprintf(&b, "# Release Cadence: %s (last %d days)\n\n", mdHeading(projectID), days)
 
 	if len(filtered) == 0 {
 		b.WriteString("No releases found in the analysis period.\n")
@@ -409,7 +409,7 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Weekly Team Recap: %s (last %d days)\n\n", toolutil.EscapeMdHeading(groupID), days)
+	fmt.Fprintf(&b, "# Weekly Team Recap: %s (last %d days)\n\n", mdHeading(groupID), days)
 
 	// Summary
 	b.WriteString(mdSummaryHeader)
@@ -424,7 +424,7 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 		b.WriteString("## Merged MRs\n\n")
 		byProject := groupMRsByProject(mergedMRs)
 		for _, k := range sortedKeys(byProject) {
-			fmt.Fprintf(&b, "### %s\n\n", toolutil.EscapeMdHeading(k))
+			fmt.Fprintf(&b, "### %s\n\n", mdHeading(k))
 			writeMRTable(&b, byProject[k])
 			b.WriteString("\n")
 		}

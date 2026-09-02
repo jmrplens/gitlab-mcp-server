@@ -70,7 +70,7 @@ func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MRs targeting %s in %s (%d %s)\n\n", toolutil.EscapeMdHeading(targetBranch), toolutil.EscapeMdHeading(projectID), len(mrs), state)
+	fmt.Fprintf(&b, "# MRs targeting %s in %s (%d %s)\n\n", mdHeading(targetBranch), mdHeading(projectID), len(mrs), state)
 
 	if len(mrs) == 0 {
 		b.WriteString("No merge requests found matching the criteria.\n")
@@ -155,7 +155,7 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Activity Report: %s (last %d days)\n\n", toolutil.EscapeMdHeading(projectID), days)
+	fmt.Fprintf(&b, "# Project Activity Report: %s (last %d days)\n\n", mdHeading(projectID), days)
 
 	// Summary
 	b.WriteString(mdSummaryHeader)
@@ -234,7 +234,7 @@ func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, 
 	infos := collectMRDiscussionInfos(ctx, client, projectID, mrs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Discussion Health: %s (%d open MRs)\n\n", toolutil.EscapeMdHeading(projectID), len(mrs))
+	fmt.Fprintf(&b, "# MR Discussion Health: %s (%d open MRs)\n\n", mdHeading(projectID), len(mrs))
 
 	if len(infos) == 0 {
 		b.WriteString("No open merge requests found.\n")
@@ -262,7 +262,7 @@ func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, 
 	b.WriteString("| MR | Title | Author | Threads | Unresolved |\n")
 	b.WriteString("|----|-------|--------|---------|------------|\n")
 	for _, info := range infos {
-		fmt.Fprintf(&b, "| !%d | %s | @%s | %d | %d |\n", info.iid, info.title, info.author, info.threads, info.unresolved)
+		fmt.Fprintf(&b, "| !%d | %s | @%s | %d | %d |\n", info.iid, mdInline(info.title), mdInline(info.author), info.threads, info.unresolved)
 	}
 	b.WriteString("\n")
 
@@ -347,7 +347,7 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Unassigned Items: %s\n\n", toolutil.EscapeMdHeading(projectID))
+	fmt.Fprintf(&b, "# Unassigned Items: %s\n\n", mdHeading(projectID))
 
 	b.WriteString(mdSummaryHeader)
 	b.WriteString(mdCategoryTableHeader)
@@ -416,7 +416,7 @@ func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, re
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Stale Items Report: %s (no updates in %d+ days)\n\n", toolutil.EscapeMdHeading(projectID), staleDays)
+	fmt.Fprintf(&b, "# Stale Items Report: %s (no updates in %d+ days)\n\n", mdHeading(projectID), staleDays)
 
 	b.WriteString(mdSummaryHeader)
 	b.WriteString(mdCategoryTableHeader)

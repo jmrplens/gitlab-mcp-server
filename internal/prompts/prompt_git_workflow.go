@@ -63,7 +63,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Commit Hygiene Audit: %s -> %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
+	fmt.Fprintf(&b, "# Commit Hygiene Audit: %s -> %s\n\n", mdHeading(from), mdHeading(to))
 
 	if comparison.CompareSameRef || len(comparison.Commits) == 0 {
 		b.WriteString("No commits found between these refs.\n")
@@ -85,7 +85,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 	b.WriteString("| Commit | Title | Author | Hygiene |\n")
 	b.WriteString("|--------|-------|--------|---------|\n")
 	for _, commit := range comparison.Commits {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", shortSHA(commit.ID), firstLine(commit.Title), commit.AuthorName, commitHygieneLabel(commit))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", shortSHA(commit.ID), mdInline(firstLine(commit.Title)), mdInline(commit.AuthorName), commitHygieneLabel(commit))
 	}
 
 	b.WriteString("\n---\nPlease assess the history quality for release/readiness review. Highlight commits that should be squashed, reworded, linked to issues, or marked as breaking changes. Use Conventional Commits categories such as feat, fix, docs, refactor, test, build, ci, chore, perf, and revert.\n")
@@ -135,8 +135,8 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 	metrics := computeDiffMetrics(diffs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Description Quality: !%d - %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
-	fmt.Fprintf(&b, "**Branch**: %s -> %s\n", mr.SourceBranch, mr.TargetBranch)
+	fmt.Fprintf(&b, "# MR Description Quality: !%d - %s\n\n", mr.IID, mdHeading(mr.Title))
+	fmt.Fprintf(&b, "**Branch**: %s -> %s\n", mdInline(mr.SourceBranch), mdInline(mr.TargetBranch))
 	fmt.Fprintf(&b, "**Description length**: %d characters\n", len(strings.TrimSpace(mr.Description)))
 	fmt.Fprintf(&b, "**Files changed**: %d | **Tests changed**: %d | **Docs changed**: %d | **Sensitive files touched**: %d\n\n", len(diffs), countMatchingDiffs(diffs, isTestPath), countMatchingDiffs(diffs, isDocPath), metrics.sensitiveFiles)
 
@@ -151,13 +151,13 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 
 	if strings.TrimSpace(mr.Description) != "" {
 		b.WriteString("## Current Description\n\n")
-		b.WriteString(mr.Description)
-		b.WriteString("\n\n")
+		writeQuotedBlock(&b, mr.Description)
+		b.WriteString("\n")
 	}
 
 	b.WriteString("## Changed Files\n\n")
 	for _, diff := range diffs {
-		fmt.Fprintf(&b, fmtListItem, diff.NewPath, changeType(diff))
+		fmt.Fprintf(&b, fmtListItem, mdInline(diff.NewPath), changeType(diff))
 	}
 
 	b.WriteString("\n---\nPlease score this MR description from 0-100 for reviewer readiness. Identify missing context, test evidence, rollout/risk information, screenshots/UI evidence when relevant, and linked work. Then propose a concise improved MR description template for this change.\n")

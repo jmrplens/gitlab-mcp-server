@@ -29,10 +29,51 @@ func NormalizeText(s string) string {
 	return s
 }
 
+// StripControlBytes removes the C0 and C1 control ranges and DEL from s,
+// keeping the three controls Markdown actually uses: tab, newline and carriage
+// return.
+//
+// Everything this package renders is GitLab-authored: an issue title, a file, a
+// job log, a note somebody left on a merge request. None of it is written by
+// the caller, and a good deal of it is written by whoever can open an issue or
+// push a branch, which on a public project is anybody. It reaches the model as
+// text and frequently reaches a person's terminal unchanged, where an escape
+// sequence is not text but an instruction: ESC[2J clears the screen, ESC]0;…BEL
+// renames the window. Nothing downstream filters them, so they are dropped
+// here, at the point the text becomes part of a response.
+//
+// Dropping rather than escaping is deliberate. A rendered escape would still
+// have to be un-rendered by something to be read, and the sequences that matter
+// carry no information a reader loses by not seeing them: what survives of
+// ESC[2J is "[2J", which says plainly that the content tried something.
+func StripControlBytes(s string) string {
+	if strings.IndexFunc(s, isRenderControl) < 0 {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		if isRenderControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// isRenderControl reports whether r is a control character with no place in
+// rendered Markdown.
+func isRenderControl(r rune) bool {
+	switch r {
+	case '\t', '\n', '\r':
+		return false
+	}
+	return r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f)
+}
+
 // EscapeMdTableCell escapes characters in s that would break a Markdown table row.
 // Pipes are replaced with the HTML entity &#124; and newlines/carriage-returns are
-// replaced with a space so the cell stays on a single row.
+// replaced with a space so the cell stays on a single row. Control characters are
+// dropped by [StripControlBytes].
 func EscapeMdTableCell(s string) string {
+	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "|", "&#124;")
 	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
@@ -40,14 +81,44 @@ func EscapeMdTableCell(s string) string {
 	return s
 }
 
+// mdLinkLabelEscaper backslash-escapes the characters that let text inside a
+// link label end the label, or open a construct of its own.
+var mdLinkLabelEscaper = strings.NewReplacer(`\`, `\\`, "[", `\[`, "]", `\]`, "`", "\\`")
+
+// EscapeMdLinkLabel renders s as the visible text of a Markdown link.
+//
+// A label is not a cell: escaping the pipe keeps the row intact and does
+// nothing about the bracket. An issue titled
+//
+//	Fix login](http://attacker.invalid/x)
+//
+// closed the label after "Fix login" and opened a destination of its own, so a
+// reader saw the issue's title linking to a host that is not GitLab — on this
+// server's own instruction, since [HintPreserveLinks] tells the model to keep
+// the clickable links so the user can navigate to GitLab.
+func EscapeMdLinkLabel(s string) string {
+	return mdLinkLabelEscaper.Replace(StripControlBytes(s))
+}
+
+// mdLinkDestEscaper percent-encodes the characters that would end a link
+// destination early or split it in two. Each encoding resolves to the same
+// resource, so the link still works.
+var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", ">", "%3E", " ", "%20", `"`, "%22")
+
+// EscapeMdLinkDestination renders url as the destination of a Markdown link.
+func EscapeMdLinkDestination(url string) string {
+	return mdLinkDestEscaper.Replace(StripControlBytes(url))
+}
+
 // MdTitleLink returns the title as a Markdown link if url is non-empty,
-// otherwise returns the escaped title. Suitable for table cells.
+// otherwise returns the escaped title. Suitable for table cells. Both halves
+// are escaped, so neither the title nor the URL can end the link they are in.
 func MdTitleLink(title, url string) string {
 	escaped := EscapeMdTableCell(title)
 	if url == "" {
 		return escaped
 	}
-	return fmt.Sprintf("[%s](%s)", escaped, url)
+	return fmt.Sprintf("[%s](%s)", EscapeMdLinkLabel(escaped), EscapeMdLinkDestination(url))
 }
 
 // BuildTargetURL constructs a GitLab web URL for a target resource.
@@ -94,10 +165,18 @@ func FormatTarget(targetType string, targetIID int64, targetTitle, targetURL str
 // WrapGFMBody wraps user-generated GFM content in a Markdown blockquote to prevent
 // heading hierarchy conflicts and structural breaks in the formatted output.
 // Empty bodies return an empty string.
+//
+// The quote is the containment: every line of the body is a line of a quote, so
+// the body cannot add a heading, a list item or a section to the document it
+// sits in. Two things happen before it. Control characters are dropped, and the
+// server's own guidance heading is defused, so a body carrying that heading is
+// shown as the text it is rather than parsed back out as the server's
+// suggestions. See [DefuseHintsHeading].
 func WrapGFMBody(body string) string {
 	if body == "" {
 		return ""
 	}
+	body = DefuseHintsHeading(StripControlBytes(body))
 	lines := strings.Split(body, "\n")
 	for i, line := range lines {
 		if line == "" {
@@ -141,6 +220,7 @@ func RichContentHint(features, webURL string) string {
 // characters that could promote/demote the heading level and collapses newlines
 // into spaces so the heading stays on one line.
 func EscapeMdHeading(s string) string {
+	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
@@ -279,6 +359,7 @@ var consentURLScheme = regexp.MustCompile(`(?i)\b(https?)://`)
 // since a project path they cannot read is no use to them deciding. What it can
 // no longer do is impersonate the server asking the question.
 func EscapeConsentValue(s string) string {
+	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
