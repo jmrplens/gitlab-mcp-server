@@ -49,11 +49,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
 	if *view == "metadata" || *view == "all" {

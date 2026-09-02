@@ -34,10 +34,7 @@ type outputJSONReport struct {
 // against, closing its backing server when the test ends.
 func stubClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		t.Fatalf("auditclient.NewMock() error = %v", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	t.Cleanup(cleanup)
 	return client
 }

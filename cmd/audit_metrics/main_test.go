@@ -39,11 +39,8 @@ import (
 func newAuditMetricsClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	sharedClientOnce.Do(func() {
-		sharedClient, _, errSharedClient = auditclient.NewMock()
+		sharedClient, _ = auditclient.NewMock()
 	})
-	if errSharedClient != nil {
-		t.Fatalf("auditclient.NewMock() error: %v", errSharedClient)
-	}
 	return sharedClient
 }
 
@@ -81,7 +78,6 @@ func collectedMetrics(t *testing.T) auditMetrics {
 var (
 	sharedClientOnce    sync.Once
 	sharedClient        *gitlabclient.Client
-	errSharedClient     error
 	gitLabComClientOnce sync.Once
 	gitLabComClient     *gitlabclient.Client
 	errGitLabComClient  error

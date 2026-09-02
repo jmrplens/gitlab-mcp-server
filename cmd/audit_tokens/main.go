@@ -131,11 +131,7 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		fmt.Fprintf(stderr, "failed to create client: %v\n", err)
-		return 1
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
 	audit, err := measureTokenAudit(client)
@@ -741,10 +737,7 @@ func fmtNum(n int) string {
 // supported META_PARAM_SCHEMA modes (opaque/full/compact), printing a sizing
 // table to stdout. Formerly the standalone audit_meta_schema binary.
 func runMetaSchemaSizing() error {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		return fmt.Errorf("client: %w", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
@@ -968,10 +961,7 @@ var measureFootprintRows = measureTokenFootprintRows
 // footprint measurement, mirroring the self-contained client pattern of
 // [runMetaSchemaSizing].
 func runFootprintMode(check bool) error {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		return fmt.Errorf("client: %w", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 	if check {
 		return runFootprintCheck(client)

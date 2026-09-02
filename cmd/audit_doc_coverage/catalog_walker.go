@@ -40,10 +40,7 @@ type catalogSnapshot struct {
 // capabilities doc's gitlab_server_status is included.
 func loadCatalog(repoRoot string) (*catalogSnapshot, error) {
 	_ = repoRoot // reserved for future repo-root-aware catalog options.
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		return nil, fmt.Errorf("create audit client: %w", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{

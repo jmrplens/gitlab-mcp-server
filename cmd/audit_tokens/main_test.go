@@ -44,11 +44,8 @@ import (
 func newAuditTokensClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	sharedClientOnce.Do(func() {
-		sharedClient, _, errSharedClient = auditclient.NewMock()
+		sharedClient, _ = auditclient.NewMock()
 	})
-	if errSharedClient != nil {
-		t.Fatalf("auditclient.NewMock() error: %v", errSharedClient)
-	}
 	return sharedClient
 }
 
@@ -82,7 +79,6 @@ func measuredTokenAudit(t *testing.T) tokenAudit {
 var (
 	sharedClientOnce sync.Once
 	sharedClient     *gitlabclient.Client
-	errSharedClient  error
 	footprintOnce    sync.Once
 	footprintShared  []tokenFootprintRow
 	errFootprint     error

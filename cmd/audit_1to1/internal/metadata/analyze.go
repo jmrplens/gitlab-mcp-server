@@ -71,10 +71,7 @@ func Run(gapsOnly bool) ([]byte, error) {
 }
 
 func buildReport(gapsOnly bool) (report, error) {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		return report{}, fmt.Errorf("create audit client: %w", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
 	projected, err := auditshared.CachedIndividualDescriptions(client)

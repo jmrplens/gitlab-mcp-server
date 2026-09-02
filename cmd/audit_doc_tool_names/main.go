@@ -156,10 +156,7 @@ func run(check bool, roots []string, collectNames func() (map[string]struct{}, e
 // registeredToolNames builds every surface in memory and returns the union of
 // the tool names they advertise.
 func registeredToolNames() (map[string]struct{}, error) {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		return nil, fmt.Errorf("create audit client: %w", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
 	names := make(map[string]struct{})

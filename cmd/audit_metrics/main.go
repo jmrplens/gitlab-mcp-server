@@ -83,11 +83,7 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 	}
 
 	cmdutil.Progressf("audit_metrics: building catalog and counting tools/resources/prompts across surfaces...")
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		fmt.Fprintf(stderr, "failed to create client: %v\n", err)
-		return 1
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token

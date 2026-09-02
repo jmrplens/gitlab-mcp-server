@@ -496,10 +496,7 @@ func cachedFullReport(t *testing.T) report {
 // in either direction (a check that no longer detects the gap, or a
 // regression in the source that re-introduces it) are caught.
 func TestBuildReport_LinkCreateBatchGoldStandard(t *testing.T) {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		t.Fatalf("auditclient.NewMock: %v", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 	_ = client // silence unused warning; client reserved for future live-catalog assertions.
 
@@ -570,10 +567,7 @@ func TestBuildReport_LinkCreateBatchGoldStandard(t *testing.T) {
 	// registry corroboration) so future changes to the source packages are
 	// visible in CI. The result is informational only (t.Logf) — the gold
 	// standard is pinned above against the synthetic spec.
-	client2, cleanup2, err := auditclient.NewMock()
-	if err != nil {
-		t.Fatalf("auditclient.NewMock: %v", err)
-	}
+	client2, cleanup2 := auditclient.NewMock()
 	defer cleanup2()
 	rep := cachedFullReport(t)
 	var liveFlags []string

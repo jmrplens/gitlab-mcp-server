@@ -290,10 +290,7 @@ func (r report) check(threshold int) error {
 
 func buildReport(gapsOnly bool, minAliases int) (report, error) {
 	cmdutil.Progressf("audit_discovery_completeness: building catalog and analyzing discovery metadata...")
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		return report{}, fmt.Errorf("create audit client: %w", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
 	projected, err := auditshared.CachedIndividualDescriptions(client)
