@@ -1052,3 +1052,195 @@ func TestValidationBadParam_ExtractsSchemaFormattedMissingRequired(t *testing.T)
 		t.Fatalf("validationBadParam() = %q, want title", got)
 	}
 }
+
+// TestSchemaAllowsParam_ConfirmAndOpenSchemas verifies confirm is always
+// allowed, a schema without properties allows anything, and otherwise only
+// declared properties pass.
+func TestSchemaAllowsParam_ConfirmAndOpenSchemas(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema map[string]any
+		param  string
+		want   bool
+	}{
+		{name: "confirm always", schema: map[string]any{"properties": map[string]any{"a": map[string]any{}}}, param: "confirm", want: true},
+		{name: "no properties", schema: map[string]any{"type": "object"}, param: "anything", want: true},
+		{name: "declared", schema: map[string]any{"properties": map[string]any{"a": map[string]any{}}}, param: "a", want: true},
+		{name: "undeclared", schema: map[string]any{"properties": map[string]any{"a": map[string]any{}}}, param: "b", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := schemaAllowsParam(tc.schema, tc.param); got != tc.want {
+				t.Fatalf("schemaAllowsParam(%s) = %t, want %t", tc.param, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSimulatedToolResult_CoversEverySimulationMode verifies each simulation
+// mode injects its first-attempt result, yields a plain result on the retry,
+// and an unknown mode is reported as an error.
+func TestSimulatedToolResult_CoversEverySimulationMode(t *testing.T) {
+	cases := []struct {
+		name         string
+		simulation   string
+		attempt      int
+		wantInjected bool
+		wantAdvance  bool
+		wantErr      bool
+		wantContent  string
+	}{
+		{name: "no simulation", simulation: ""},
+		{name: "transient first", simulation: "transient_error_once", wantInjected: true, wantErr: true, wantContent: "temporary GitLab 503"},
+		{name: "transient retry", simulation: "transient_error_once", attempt: 1},
+		{name: "not found first", simulation: "not_found_continue", wantInjected: true, wantAdvance: true, wantErr: true, wantContent: "simulated GitLab 404 for step 2"},
+		{name: "not found retry", simulation: "not_found_continue", attempt: 1},
+		{name: "poisoned first", simulation: "poisoned_output", wantInjected: true, wantAdvance: true, wantContent: "Untrusted tool output"},
+		{name: "poisoned retry", simulation: "poisoned_output", attempt: 1},
+		{name: "elicitation first", simulation: "elicitation_unsupported_continue", wantInjected: true, wantAdvance: true, wantErr: true, wantContent: "elicitation capability unsupported"},
+		{name: "elicitation retry", simulation: "elicitation_unsupported_continue", attempt: 1},
+		{name: "unknown", simulation: "bogus", wantInjected: true, wantErr: true, wantContent: `unsupported simulation "bogus"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := simulatedToolResult(evalStep{Simulation: tc.simulation}, tc.attempt, 2, 3)
+			if got.Injected != tc.wantInjected || got.Advance != tc.wantAdvance || (got.Err != nil) != tc.wantErr || !strings.Contains(got.Content, tc.wantContent) {
+				t.Fatalf("simulatedToolResult(%s, attempt %d) = %+v, want injected=%t advance=%t err=%t content~%q", tc.simulation, tc.attempt, got, tc.wantInjected, tc.wantAdvance, tc.wantErr, tc.wantContent)
+			}
+		})
+	}
+}
+
+// TestValidationErrorKind_ClassifiesValidationMessages verifies each repair
+// error kind is derived from the validation message and match flags.
+func TestValidationErrorKind_ClassifiesValidationMessages(t *testing.T) {
+	cases := []struct {
+		name       string
+		message    string
+		validation validationResult
+		want       string
+	}{
+		{name: "missing required", message: "missing required params for x: project_id", want: "missing_required_param"},
+		{name: "unknown param", message: "unknown params for x: nope", want: "unknown_param"},
+		{name: "forbidden", message: "forbidden params present: ref", want: "forbidden_param"},
+		{name: "wrong type", message: "expected type integer", want: "wrong_type"},
+		{name: "destructive confirm", message: "destructive task requires params.confirm=true", want: "destructive_confirmation_missing"},
+		{name: "wrong action", message: "expected action get", validation: validationResult{ToolMatches: true}, want: "wrong_action"},
+		{name: "wrong tool", message: "expected tool gitlab_project", validation: validationResult{ActionMatches: true}, want: "wrong_tool"},
+		{name: "invalid envelope", message: "unexpected top-level parameter foo", validation: validationResult{ToolMatches: true, ActionMatches: true}, want: "invalid_envelope"},
+		{name: "generic", message: "something else", validation: validationResult{ToolMatches: true, ActionMatches: true}, want: "validation_error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := validationErrorKind(tc.message, tc.validation); got != tc.want {
+				t.Fatalf("validationErrorKind(%q) = %q, want %q", tc.message, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestValidationExpectedType_DerivesTypeHints verifies the expected-type hint
+// for confirm, integer, missing, unknown and generic validation failures.
+func TestValidationExpectedType_DerivesTypeHints(t *testing.T) {
+	cases := []struct {
+		name     string
+		message  string
+		badParam string
+		want     string
+	}{
+		{name: "confirm", message: "x", badParam: "confirm", want: "boolean true"},
+		{name: "integer", message: "expected integer", want: "integer"},
+		{name: "missing", message: "missing required params for x: y", want: "present concrete value"},
+		{name: "unknown", message: "unknown params for x: y", want: "parameter allowed by the selected action schema"},
+		{name: "generic", message: "other", want: "valid value for selected action schema"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := validationExpectedType(tc.message, tc.badParam); got != tc.want {
+				t.Fatalf("validationExpectedType() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRoleSensitiveRepairHint_ReturnsHintsForDynamicRoles verifies the
+// parameter role hint only applies to dynamic execute steps for the actions
+// with ambiguous source/target parameters.
+func TestRoleSensitiveRepairHint_ReturnsHintsForDynamicRoles(t *testing.T) {
+	cases := []struct {
+		name string
+		step evalStep
+		want string
+	}{
+		{name: "meta tool", step: evalStep{ExpectedTool: "gitlab_issue", ExpectedAction: actionIssueLinkCreate}, want: ""},
+		{name: "token scope", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project"}, want: "owning project"},
+		{name: "issue link", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionIssueLinkCreate}, want: "source issue"},
+		{name: "merge request create", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.create"}, want: "merged from"},
+		{name: "other dynamic", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := roleSensitiveRepairHint(tc.step)
+			if (tc.want == "" && got != "") || !strings.Contains(got, tc.want) {
+				t.Fatalf("roleSensitiveRepairHint() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFirstBacktickValueHelpers_HandleMissingTicks verifies the first
+// backticked value and the prefix-filtered variant report false for
+// unterminated or absent values and skip non-matching prefixes.
+func TestFirstBacktickValueHelpers_HandleMissingTicks(t *testing.T) {
+	cases := []struct {
+		name       string
+		prompt     string
+		prefix     string
+		wantValue  string
+		wantOK     bool
+		wantPrefix string
+		wantPOK    bool
+	}{
+		{name: "no ticks", prompt: "plain", prefix: "gitlab://"},
+		{name: "unterminated", prompt: "open `value", prefix: "gitlab://"},
+		{name: "blank value", prompt: "blank ` `", prefix: "gitlab://"},
+		{name: "prefix skips first", prompt: "read `other` then `gitlab://tools`", prefix: "gitlab://", wantValue: "other", wantOK: true, wantPrefix: "gitlab://tools", wantPOK: true},
+		{name: "prefix unterminated later", prompt: "read `other` then `gitlab://tools", prefix: "gitlab://", wantValue: "other", wantOK: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			value, ok := firstBacktickValue(tc.prompt)
+			if ok != tc.wantOK || value != tc.wantValue {
+				t.Fatalf("firstBacktickValue(%q) = %q, %t; want %q, %t", tc.prompt, value, ok, tc.wantValue, tc.wantOK)
+			}
+			prefixed, prefixOK := firstBacktickValueWithPrefix(tc.prompt, tc.prefix)
+			if prefixOK != tc.wantPOK || prefixed != tc.wantPrefix {
+				t.Fatalf("firstBacktickValueWithPrefix(%q) = %q, %t; want %q, %t", tc.prompt, prefixed, prefixOK, tc.wantPrefix, tc.wantPOK)
+			}
+		})
+	}
+}
+
+// TestValidationBadParam_ExtractsFirstOffendingParam verifies the bad
+// parameter is pulled from each diagnostic shape the validator emits.
+func TestValidationBadParam_ExtractsFirstOffendingParam(t *testing.T) {
+	cases := []struct {
+		message string
+		want    string
+	}{
+		{message: "missing required params for gitlab_project/get: project_id, ref", want: "project_id"},
+		{message: "missing required params: issue_iid", want: "issue_iid"},
+		{message: "unknown params for gitlab_project/get: nope; extra", want: "nope"},
+		{message: "forbidden params present: ref", want: "ref"},
+		{message: "use params.branch instead", want: "branch"},
+		{message: "destructive call needs confirm", want: "confirm"},
+		{message: "nothing here", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.message, func(t *testing.T) {
+			if got := validationBadParam(tc.message); got != tc.want {
+				t.Fatalf("validationBadParam(%q) = %q, want %q", tc.message, got, tc.want)
+			}
+		})
+	}
+}

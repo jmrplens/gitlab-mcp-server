@@ -7,6 +7,7 @@ package evaluator
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestShouldAutoStartDockerRuntime_RequiresDockerPresetAndGitLabBackend
@@ -74,6 +75,138 @@ func TestDockerRuntimeEnv_EnterpriseImageDefault(t *testing.T) {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(env, want) {
 				t.Fatalf("dockerRuntimeEnv() = %q, want %q", env, want)
+			}
+		})
+	}
+}
+
+// TestEnsureDockerRuntimeIfNeeded_AutoStartDisabled_ReturnsNil verifies no
+// Docker command runs when auto-start is off.
+func TestEnsureDockerRuntimeIfNeeded_AutoStartDisabled_ReturnsNil(t *testing.T) {
+	if err := ensureDockerRuntimeIfNeeded(t.Context(), options{Preset: presetDockerRead, Backend: backendGitLab}); err != nil {
+		t.Fatalf("ensureDockerRuntimeIfNeeded() error = %v, want nil", err)
+	}
+}
+
+// TestEnsureDockerRuntimeIfNeeded_ComposeFails_ReturnsDockerUpError verifies
+// the first compose step failing aborts the runtime bootstrap with the step
+// name. The compose command is the `false` binary, so nothing Docker-related
+// is touched.
+func TestEnsureDockerRuntimeIfNeeded_ComposeFails_ReturnsDockerUpError(t *testing.T) {
+	t.Setenv("DOCKER_COMPOSE", "")
+	opts := options{Preset: presetDockerRead, Backend: backendGitLab, DockerAutoStart: true, DockerCompose: "false", DockerWaitTimeout: time.Second}
+	err := ensureDockerRuntimeIfNeeded(t.Context(), opts)
+	if err == nil || !strings.Contains(err.Error(), "docker-up") {
+		t.Fatalf("ensureDockerRuntimeIfNeeded() error = %v, want docker-up failure", err)
+	}
+}
+
+// TestDockerGitLabURL_PrefersFlagThenEnvThenDefault verifies the Docker
+// GitLab URL resolution order.
+func TestDockerGitLabURL_PrefersFlagThenEnvThenDefault(t *testing.T) {
+	cases := []struct {
+		name string
+		flag string
+		env  string
+		want string
+	}{
+		{name: "flag", flag: "http://flag:1", env: "http://env:2", want: "http://flag:1"},
+		{name: "env", env: "http://env:2", want: "http://env:2"},
+		{name: "default", want: defaultDockerGitLabURL},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("EVAL_DOCKER_GITLAB_URL", tc.env)
+			if got := dockerGitLabURL(options{DockerGitLabURL: tc.flag}); got != tc.want {
+				t.Fatalf("dockerGitLabURL() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnvBool_ParsesTruthyValues verifies the accepted truthy spellings and
+// that everything else is false.
+func TestEnvBool_ParsesTruthyValues(t *testing.T) {
+	cases := []struct {
+		value string
+		want  bool
+	}{
+		{value: "1", want: true},
+		{value: " TRUE ", want: true},
+		{value: "yes", want: true},
+		{value: "y", want: true},
+		{value: "on", want: true},
+		{value: "0", want: false},
+		{value: "", want: false},
+		{value: "maybe", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Setenv("EVAL_TEST_ENV_BOOL", tc.value)
+			if got := envBool("EVAL_TEST_ENV_BOOL"); got != tc.want {
+				t.Fatalf("envBool(%q) = %t, want %t", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDockerEnterpriseRuntime_DetectsEditionPresetAndEnvironment verifies the
+// enterprise runtime is selected from the edition flag, an enterprise preset,
+// GITLAB_TIER, the legacy GITLAB_ENTERPRISE toggle, or an EE image name.
+func TestDockerEnterpriseRuntime_DetectsEditionPresetAndEnvironment(t *testing.T) {
+	cases := []struct {
+		name string
+		opts options
+		env  map[string]string
+		want bool
+	}{
+		{name: "edition flag", opts: options{Edition: editionEnterprise}, want: true},
+		{name: "enterprise preset", opts: options{Preset: presetDockerEnterpriseRead}, want: true},
+		{name: "tier ultimate", env: map[string]string{"GITLAB_TIER": "ultimate"}, want: true},
+		{name: "tier free", env: map[string]string{"GITLAB_TIER": "free"}, want: false},
+		{name: "legacy enterprise toggle", env: map[string]string{"GITLAB_ENTERPRISE": "true"}, want: true},
+		{name: "ee image", env: map[string]string{"GITLAB_IMAGE": "gitlab/gitlab-ee:latest"}, want: true},
+		{name: "eval ee image", env: map[string]string{"EVAL_DOCKER_GITLAB_IMAGE": "gitlab/gitlab-ee:16"}, want: true},
+		{name: "ce default", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, key := range []string{"GITLAB_TIER", "GITLAB_ENTERPRISE", "GITLAB_IMAGE", "EVAL_DOCKER_GITLAB_IMAGE"} {
+				t.Setenv(key, tc.env[key])
+			}
+			if got := dockerEnterpriseRuntime(tc.opts); got != tc.want {
+				t.Fatalf("dockerEnterpriseRuntime() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRunDockerRuntimeCommand_ReportsFailureAndTimeout verifies a failing
+// command is reported under its step name and a command that outlives its
+// timeout is reported as timed out. Both use plain shell utilities.
+func TestRunDockerRuntimeCommand_ReportsFailureAndTimeout(t *testing.T) {
+	cases := []struct {
+		name    string
+		timeout time.Duration
+		command string
+		args    []string
+		want    string
+	}{
+		{name: "exit status", timeout: 5 * time.Second, command: "false", want: "step-name: exit status 1"},
+		{name: "timeout", timeout: 20 * time.Millisecond, command: "sleep", args: []string{"5"}, want: "step-name timed out after"},
+		{name: "success", timeout: 5 * time.Second, command: "true"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := runDockerRuntimeCommand(t.Context(), tc.timeout, nil, "step-name", tc.command, tc.args...)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("runDockerRuntimeCommand() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("runDockerRuntimeCommand() error = %v, want %q", err, tc.want)
 			}
 		})
 	}

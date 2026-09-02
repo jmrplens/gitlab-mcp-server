@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -330,5 +331,83 @@ func TestResolveEvalServerMode_FlagBeatsEnvironment(t *testing.T) {
 
 	if _, invalidErr := resolveEvalServerMode("bogus"); invalidErr == nil {
 		t.Error("resolveEvalServerMode(bogus) error = nil, want validation error")
+	}
+}
+
+// TestApplyPresetDefaults_EveryPreset_SetsEditionPartitionAndFilters verifies
+// each named preset resolves to its edition, partition and destructive or
+// mutating filters, and that the schema preset stays a dry run.
+func TestApplyPresetDefaults_EveryPreset_SetsEditionPartitionAndFilters(t *testing.T) {
+	cases := []struct {
+		preset          string
+		wantEdition     string
+		wantPartition   string
+		wantDryRun      bool
+		wantExecute     bool
+		wantSkipMut     bool
+		wantOnlyMut     bool
+		wantSkipDestr   bool
+		wantOnlyDestr   bool
+		wantSkipUnavail bool
+	}{
+		{preset: presetSchemaEnterprise, wantEdition: editionEnterprise, wantDryRun: true, wantSkipUnavail: true},
+		{preset: presetDockerRead, wantEdition: editionCE, wantPartition: partitionBaseRead, wantExecute: true, wantSkipMut: true, wantSkipDestr: true, wantSkipUnavail: true},
+		{preset: presetDockerMutatingSafe, wantEdition: editionCE, wantPartition: partitionBaseMutating, wantExecute: true, wantOnlyMut: true, wantSkipDestr: true, wantSkipUnavail: true},
+		{preset: presetDockerDestructiveSafe, wantEdition: editionCE, wantPartition: partitionBaseDestructive, wantExecute: true, wantOnlyDestr: true, wantSkipUnavail: true},
+		{preset: presetDockerEnterpriseRead, wantEdition: editionEnterprise, wantPartition: partitionEnterpriseRead, wantExecute: true, wantSkipMut: true, wantSkipDestr: true, wantSkipUnavail: true},
+		{preset: presetDockerEnterpriseMutatingSafe, wantEdition: editionEnterprise, wantPartition: partitionEnterpriseMutating, wantExecute: true, wantOnlyMut: true, wantSkipDestr: true, wantSkipUnavail: true},
+		{preset: presetDockerEnterpriseDestructiveSafe, wantEdition: editionEnterprise, wantPartition: partitionEnterpriseDestructive, wantExecute: true, wantOnlyDestr: true, wantSkipUnavail: true},
+		{preset: presetDockerCapabilityDiscovery, wantEdition: editionCE, wantPartition: partitionCapabilityFallback, wantExecute: true, wantSkipMut: true, wantSkipDestr: true, wantSkipUnavail: true},
+		{preset: presetDockerErrorRecovery, wantEdition: editionCE, wantPartition: partitionErrorRecovery, wantExecute: true, wantSkipMut: true, wantSkipDestr: true, wantSkipUnavail: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.preset, func(t *testing.T) {
+			opts, err := applyPresetDefaults(options{Preset: " " + tc.preset + " ", explicitFlags: map[string]bool{}})
+			if err != nil {
+				t.Fatalf("applyPresetDefaults(%s) error = %v", tc.preset, err)
+			}
+			got := []bool{opts.DryRun, opts.Execute, opts.SkipMutating, opts.OnlyMutating, opts.SkipDestructive, opts.OnlyDestructive, opts.SkipUnavailable}
+			want := []bool{tc.wantDryRun, tc.wantExecute, tc.wantSkipMut, tc.wantOnlyMut, tc.wantSkipDestr, tc.wantOnlyDestr, tc.wantSkipUnavail}
+			if opts.Preset != tc.preset || opts.Edition != tc.wantEdition || opts.Partition != tc.wantPartition || !reflect.DeepEqual(got, want) {
+				t.Fatalf("applyPresetDefaults(%s) = %+v, want edition %s partition %s flags %v", tc.preset, opts, tc.wantEdition, tc.wantPartition, want)
+			}
+		})
+	}
+}
+
+// TestNormalizeEvalEdition_RejectsUnknownEdition verifies an unsupported
+// edition selector is refused with the accepted values in the message.
+func TestNormalizeEvalEdition_RejectsUnknownEdition(t *testing.T) {
+	if _, err := normalizeEvalEdition("premium"); err == nil || !strings.Contains(err.Error(), "--edition must be") {
+		t.Fatalf("normalizeEvalEdition(premium) error = %v, want rejection", err)
+	}
+}
+
+// TestNormalizeEvalToolSurface_RejectsIndividualAndInvalidSurfaces verifies the
+// evaluator only accepts the meta and dynamic surfaces: the individual surface
+// parses but is refused, and an unparseable value fails in the parser.
+func TestNormalizeEvalToolSurface_RejectsIndividualAndInvalidSurfaces(t *testing.T) {
+	cases := []struct {
+		surface string
+		want    string
+	}{
+		{surface: config.ToolSurfaceIndividual, want: "--tool-surface must be"},
+		{surface: "bogus", want: "TOOL_SURFACE"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.surface, func(t *testing.T) {
+			_, err := normalizeEvalToolSurface(tc.surface)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("normalizeEvalToolSurface(%s) error = %v, want %q", tc.surface, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestDefaultTraceDir_NoExtension_AppendsSuffix verifies a report path without
+// an extension still gets the .traces suffix.
+func TestDefaultTraceDir_NoExtension_AppendsSuffix(t *testing.T) {
+	if got := defaultTraceDir("dist/report"); got != "dist/report.traces" {
+		t.Fatalf("defaultTraceDir() = %q, want dist/report.traces", got)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -652,5 +653,423 @@ func TestWriteRepairDiagnostics_IgnoresFailedFinalOutcome(t *testing.T) {
 	}})
 	if b.Len() != 0 {
 		t.Fatalf("writeRepairDiagnostics() wrote %q, want empty diagnostics", b.String())
+	}
+}
+
+// TestDynamicRankerMiss_ClassifiesRankerText verifies the ranker-miss bucket
+// accepts explicit ranker-miss notes and search-corpus notes that mention a
+// ranking symptom, and rejects other text.
+func TestDynamicRankerMiss_ClassifiesRankerText(t *testing.T) {
+	cases := []struct {
+		text string
+		want bool
+	}{
+		{text: "dynamic ranker miss for issue.list", want: true},
+		{text: "ranker miss", want: true},
+		{text: "search corpus ranker demoted the action", want: true},
+		{text: "search corpus expected top action issue.list", want: true},
+		{text: "search corpus returned no results", want: true},
+		{text: "search corpus looked fine", want: false},
+		{text: "unrelated failure", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.text, func(t *testing.T) {
+			if got := dynamicRankerMiss(tc.text); got != tc.want {
+				t.Fatalf("dynamicRankerMiss(%q) = %t, want %t", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCapabilityBridgeEventTarget_MapsBridgeTools verifies every bridge tool
+// resolves to its capability kind and a target derived from the call input,
+// falling back to "unknown" when the input lacks the identifying field.
+func TestCapabilityBridgeEventTarget_MapsBridgeTools(t *testing.T) {
+	cases := []struct {
+		name       string
+		event      traceEvent
+		wantKind   string
+		wantTarget string
+	}{
+		{name: "capabilities", event: traceEvent{Tool: capabilityListTool}, wantKind: "capabilities", wantTarget: "initialize"},
+		{name: "resource list", event: traceEvent{Tool: resourceListTool}, wantKind: "resources", wantTarget: "resources/list"},
+		{name: "resource read", event: traceEvent{Tool: resourceReadTool, Input: map[string]any{"uri": "gitlab://tools"}}, wantKind: "resources", wantTarget: "gitlab://tools"},
+		{name: "resource read without uri", event: traceEvent{Tool: resourceReadTool}, wantKind: "resources", wantTarget: "unknown"},
+		{name: "prompt list", event: traceEvent{Tool: promptListTool}, wantKind: "prompts", wantTarget: "prompts/list"},
+		{name: "prompt get", event: traceEvent{Tool: promptGetTool, Input: map[string]any{"name": "my_open_mrs"}}, wantKind: "prompts", wantTarget: "my_open_mrs"},
+		{name: "completion by name and argument", event: traceEvent{Tool: completionTool, Input: map[string]any{"ref_type": "ref/prompt", "name": "my_issues", "argument_name": "state"}}, wantKind: "completion:ref/prompt", wantTarget: "my_issues#state"},
+		{name: "completion by uri without argument", event: traceEvent{Tool: completionTool, Input: map[string]any{"ref_type": "ref/resource", "uri": "gitlab://projects/{id}"}}, wantKind: "completion:ref/resource", wantTarget: "gitlab://projects/{id}"},
+		{name: "completion without fields", event: traceEvent{Tool: completionTool}, wantKind: "completion:unknown", wantTarget: "unknown"},
+		{name: "unknown tool", event: traceEvent{Tool: "gitlab_project"}, wantKind: "unknown", wantTarget: "unknown"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kind, target := capabilityBridgeEventTarget(tc.event)
+			if kind != tc.wantKind || target != tc.wantTarget {
+				t.Fatalf("capabilityBridgeEventTarget() = %q, %q; want %q, %q", kind, target, tc.wantKind, tc.wantTarget)
+			}
+		})
+	}
+}
+
+// TestCalculateMetrics_CountsRepairAndDestructiveOutcomes verifies repair
+// success is measured only over attempted repairs and destructive safety only
+// over tasks with a destructive step.
+func TestCalculateMetrics_CountsRepairAndDestructiveOutcomes(t *testing.T) {
+	destructiveTask := evalTask{ID: "MT-D", Steps: []evalStep{{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", Destructive: true}}}
+	readTask := evalTask{ID: "MT-R", Steps: []evalStep{{ExpectedTool: "gitlab_issue", ExpectedAction: "list"}}}
+	results := []taskResult{
+		{Task: destructiveTask, RepairAttempted: true, RepairSuccess: true, DestructiveSafe: true, FinalSuccess: true},
+		{Task: destructiveTask, DestructiveSafe: false},
+		{Task: readTask, RepairAttempted: true, RepairSuccess: false, DestructiveSafe: true, FinalSuccess: true},
+	}
+	got := calculateMetrics(results)
+	if got.RepairSuccess != 50 || got.DestructiveSafety != 50 {
+		t.Fatalf("metrics = %+v, want 50%% repair success and 50%% destructive safety", got)
+	}
+	if got.FinalSuccess < 66 || got.FinalSuccess > 67 {
+		t.Fatalf("metrics.FinalSuccess = %.1f, want two of three", got.FinalSuccess)
+	}
+}
+
+// TestWriteTraceArtifacts_EmptyDirectory_WritesNothing verifies an empty trace
+// directory disables trace artifacts without error.
+func TestWriteTraceArtifacts_EmptyDirectory_WritesNothing(t *testing.T) {
+	if err := writeTraceArtifacts("", []taskResult{{Trace: taskTrace{TaskID: "MT-1"}}}, false); err != nil {
+		t.Fatalf("writeTraceArtifacts() error = %v, want nil", err)
+	}
+}
+
+// TestWriteTraceArtifacts_SkipsUnnamedTracesAndDescribesBodies verifies traces
+// without a task ID are skipped, a trace without a model uses the run-only
+// file name, and the index describes raw provider bodies when requested.
+func TestWriteTraceArtifacts_SkipsUnnamedTracesAndDescribesBodies(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "traces")
+	results := []taskResult{
+		{Trace: taskTrace{}},
+		{Trace: taskTrace{TaskID: "MT-1", Run: 2, Summary: traceSummary{FinalSuccess: true}}},
+	}
+	if err := writeTraceArtifacts(dir, results, true); err != nil {
+		t.Fatalf("writeTraceArtifacts() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "run-002-MT-1.json")); err != nil {
+		t.Fatalf("trace file missing: %v", err)
+	}
+	jsonl, err := os.ReadFile(filepath.Join(dir, "traces.jsonl"))
+	if err != nil {
+		t.Fatalf("read traces.jsonl: %v", err)
+	}
+	if lines := strings.Count(string(jsonl), "\n"); lines != 1 {
+		t.Fatalf("traces.jsonl lines = %d, want 1 (unnamed trace skipped)", lines)
+	}
+	index, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatalf("read index.md: %v", err)
+	}
+	if !strings.Contains(string(index), "provider HTTP request/response bodies") || !strings.Contains(string(index), "run-002-MT-1.json") {
+		t.Fatalf("index = %s, want body description and trace link", index)
+	}
+}
+
+// TestWriteTraceArtifacts_DirectoryIsFile_ReturnsError verifies a trace
+// directory that cannot be created surfaces the create error.
+func TestWriteTraceArtifacts_DirectoryIsFile_ReturnsError(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+	err := writeTraceArtifacts(filepath.Join(blocker, "traces"), nil, false)
+	if err == nil || !strings.Contains(err.Error(), "create trace directory") {
+		t.Fatalf("writeTraceArtifacts() error = %v, want create trace directory error", err)
+	}
+}
+
+// TestTraceFileName_FormatsModelRunAndTask verifies trace file names sanitize
+// separators and drop the model prefix when no model was recorded.
+func TestTraceFileName_FormatsModelRunAndTask(t *testing.T) {
+	cases := []struct {
+		name  string
+		trace taskTrace
+		want  string
+	}{
+		{name: "with model", trace: taskTrace{Model: "openai:gpt/4", Run: 3, TaskID: "MS 1"}, want: "openai-gpt-4-run-003-MS-1.json"},
+		{name: "without model", trace: taskTrace{Run: 1, TaskID: "MT-1"}, want: "run-001-MT-1.json"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := traceFileName(tc.trace); got != tc.want {
+				t.Fatalf("traceFileName() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestValueOrUnknown_BlankReturnsUnknown verifies blank values render as
+// "unknown" and other values are trimmed.
+func TestValueOrUnknown_BlankReturnsUnknown(t *testing.T) {
+	cases := []struct {
+		value string
+		want  string
+	}{
+		{value: "  ", want: "unknown"},
+		{value: " gitlab://tools ", want: "gitlab://tools"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.want, func(t *testing.T) {
+			if got := valueOrUnknown(tc.value); got != tc.want {
+				t.Fatalf("valueOrUnknown(%q) = %q, want %q", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestStepDisplay_FormatsToolAndAction verifies the Markdown step label for
+// empty, standalone and action-based steps.
+func TestStepDisplay_FormatsToolAndAction(t *testing.T) {
+	cases := []struct {
+		name   string
+		tool   string
+		action string
+		want   string
+	}{
+		{name: "empty", want: "-"},
+		{name: "standalone", tool: "gitlab_discover_project", want: "`gitlab_discover_project`"},
+		{name: "action", tool: "gitlab_project", action: "get", want: "`gitlab_project` / `get`"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stepDisplay(tc.tool, tc.action); got != tc.want {
+				t.Fatalf("stepDisplay() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUniqueStrings_DropsBlanksAndDuplicates verifies blank entries and
+// repeats are removed while first-seen order is preserved.
+func TestUniqueStrings_DropsBlanksAndDuplicates(t *testing.T) {
+	got := uniqueStrings([]string{"b", "", "a", "b", "a"})
+	if strings.Join(got, ",") != "b,a" {
+		t.Fatalf("uniqueStrings() = %v, want [b a]", got)
+	}
+}
+
+// TestResultsByModel_GroupsBlankModelsAsDefault verifies results without a
+// model label are grouped under "default".
+func TestResultsByModel_GroupsBlankModelsAsDefault(t *testing.T) {
+	grouped := resultsByModel([]taskResult{{Model: " "}, {Model: "a:b"}, {Model: "a:b"}})
+	if len(grouped["default"]) != 1 || len(grouped["a:b"]) != 2 {
+		t.Fatalf("resultsByModel() = %v, want default and a:b groups", grouped)
+	}
+}
+
+// TestRouteDomainName_HandlesLegacyAndDispatcherRoutes verifies the domain
+// label for legacy meta-tools, the unified dispatcher, and dynamic action IDs
+// with or without a dot.
+func TestRouteDomainName_HandlesLegacyAndDispatcherRoutes(t *testing.T) {
+	cases := []struct {
+		name   string
+		tool   string
+		action string
+		want   string
+	}{
+		{name: "legacy meta tool", tool: "gitlab_project", action: "get", want: "project"},
+		{name: "dispatcher without action", tool: "gitlab", want: "gitlab"},
+		{name: "dispatcher dotted action", tool: "gitlab", action: "issue.list", want: "issue"},
+		{name: "dispatcher plain action", tool: "gitlab", action: "health", want: "health"},
+		{name: "dynamic without action", tool: dynamicExecuteActionTool, want: "execute_action"},
+		{name: "dynamic plain action", tool: dynamicExecuteActionTool, action: "nodot", want: "nodot"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := routeDomainName(tc.tool, tc.action); got != tc.want {
+				t.Fatalf("routeDomainName(%s, %s) = %q, want %q", tc.tool, tc.action, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWriteReportHeader_IncludesOptionalMetadata verifies edition, terminal
+// log, preset, tools file, partition and the per-capability access states are
+// rendered when the options carry them.
+func TestWriteReportHeader_IncludesOptionalMetadata(t *testing.T) {
+	var b strings.Builder
+	writeReportHeader(&b, options{
+		ToolSurface:            config.ToolSurfaceMeta,
+		Edition:                editionCE,
+		TerminalLog:            "term.log",
+		Preset:                 presetDockerRead,
+		ToolsFile:              "tools.json",
+		Partition:              partitionBaseRead,
+		ExposeResources:        true,
+		CapabilityAccessActive: true,
+		PromptAccessActive:     true,
+	}, false)
+	header := b.String()
+	for _, want := range []string{"Edition: `ce`", "Terminal output: `term.log`", "Preset: `docker-read`", "Tools file: `tools.json`", "Partition: `base-read`", "MCP capability bridge: `enabled`", "Resource access: `requested but not active`", "Prompt access: `enabled`", "Completion access: `requested but not active`"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(header, want) {
+				t.Fatalf("header = %s, want %q", header, want)
+			}
+		})
+	}
+}
+
+// TestWriteReport_MultiModelRepeat_RendersModelColumnAndTraceDir verifies a
+// multi-model, multi-run report adds the Model column, per-run metrics and the
+// trace artifact pointer.
+func TestWriteReport_MultiModelRepeat_RendersModelColumnAndTraceDir(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.md")
+	task := evalTask{ID: "MT-1", Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}}
+	results := []taskResult{
+		{Task: task, Run: 1, Model: "a:one", FinalSuccess: true, RepairAttempted: true, RepairSuccess: true},
+		{Task: task, Run: 2, Model: "b:two"},
+	}
+	opts := options{ToolSurface: config.ToolSurfaceMeta, Repeat: 2, TraceDir: "traces", Model: "a:one,b:two"}
+	if err := writeReport(path, opts, results, nil, nil, false); err != nil {
+		t.Fatalf("writeReport() error = %v", err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	for _, want := range []string{"| Model | Run | Task |", "Trace artifacts: `traces`", "`a:one`", "`b:two`", "Runs: 2"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(string(content), want) {
+				t.Fatalf("report = %s, want %q", content, want)
+			}
+		})
+	}
+}
+
+// TestWriteStatusReport_DirectoryIsFile_ReturnsError verifies the status
+// report surfaces a directory creation failure.
+func TestWriteStatusReport_DirectoryIsFile_ReturnsError(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+	err := writeStatusReport(filepath.Join(blocker, "report.md"), options{}, "running", "message", nil)
+	if err == nil || !strings.Contains(err.Error(), "create report directory") {
+		t.Fatalf("writeStatusReport() error = %v, want create report directory error", err)
+	}
+}
+
+// TestWriteCoverageReportIfRequested_DirectoryIsFile_ReturnsError verifies the
+// coverage report surfaces a directory creation failure.
+func TestWriteCoverageReportIfRequested_DirectoryIsFile_ReturnsError(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+	err := writeCoverageReportIfRequested(options{CoverageReport: filepath.Join(blocker, "coverage.md")}, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "create coverage report directory") {
+		t.Fatalf("writeCoverageReportIfRequested() error = %v, want create coverage report directory error", err)
+	}
+}
+
+// TestFailureDiagnosticCategoryForResult_ClassifiesBySurface verifies each
+// dynamic-surface and meta-surface bucket is reachable from the notes that
+// name it, including the shared provider, GitLab and not-found buckets.
+func TestFailureDiagnosticCategoryForResult_ClassifiesBySurface(t *testing.T) {
+	cases := []struct {
+		name    string
+		surface string
+		notes   []string
+		want    string
+	}{
+		{name: "dynamic empty notes", surface: config.ToolSurfaceDynamic, want: "other"},
+		{name: "dynamic ce limitation", surface: config.ToolSurfaceDynamic, notes: []string{"requires premium license"}, want: "ce_limitation"},
+		{name: "dynamic standalone unavailable", surface: config.ToolSurfaceDynamic, notes: []string{"expected tool gitlab_discover_project missing"}, want: "standalone_unavailable"},
+		{name: "dynamic ranker miss", surface: config.ToolSurfaceDynamic, notes: []string{"ranker miss"}, want: "ranker_miss"},
+		{name: "dynamic alias miss", surface: config.ToolSurfaceDynamic, notes: []string{"expected action repository_file.get got repository.file_get"}, want: "alias_miss"},
+		{name: "dynamic params shape", surface: config.ToolSurfaceDynamic, notes: []string{"unknown params for x"}, want: "params_shape_miss"},
+		{name: "dynamic multi step order", surface: config.ToolSurfaceDynamic, notes: []string{"tool-call step limit reached after 2/4 scenario steps"}, want: "multi_step_order_miss"},
+		{name: "dynamic discovery miss", surface: config.ToolSurfaceDynamic, notes: []string{"model returned no tool_use block"}, want: "true_discovery_miss"},
+		{name: "dynamic destructive", surface: config.ToolSurfaceDynamic, notes: []string{"destructive call without confirm:true"}, want: "destructive_safety"},
+		{name: "dynamic other", surface: config.ToolSurfaceDynamic, notes: []string{"something odd"}, want: "other"},
+		{name: "dynamic provider auth", surface: config.ToolSurfaceDynamic, notes: []string{"anthropic status 401: invalid_api_key"}, want: "model_provider_auth"},
+		{name: "dynamic model unavailable", surface: config.ToolSurfaceDynamic, notes: []string{"not_found_error: model x"}, want: "model_provider_model_unavailable"},
+		{name: "dynamic implementation bug", surface: config.ToolSurfaceDynamic, notes: []string{"json: cannot unmarshal number"}, want: "mcp_implementation_bug"},
+		{name: "dynamic transient", surface: config.ToolSurfaceDynamic, notes: []string{"502 Bad Gateway"}, want: "transient_gitlab_5xx"},
+		{name: "dynamic exhaustion", surface: config.ToolSurfaceDynamic, notes: []string{"context deadline exceeded"}, want: "timeout_resource_exhaustion"},
+		{name: "dynamic not found", surface: config.ToolSurfaceDynamic, notes: []string{"404 Project Not Found"}, want: "not_found"},
+		{name: "meta ce limitation", surface: config.ToolSurfaceMeta, notes: []string{"feature unavailable on ce"}, want: "gitlab_ce_limitation"},
+		{name: "meta fixture setup", surface: config.ToolSurfaceMeta, notes: []string{"fixture unavailable"}, want: "fixture_setup_failure"},
+		{name: "meta route miss", surface: config.ToolSurfaceMeta, notes: []string{"expected tool gitlab_project"}, want: "model_route_selection_miss"},
+		{name: "meta params shape", surface: config.ToolSurfaceMeta, notes: []string{"standalone tool uses top-level fields"}, want: "model_parameter_shape_miss"},
+		{name: "meta destructive", surface: config.ToolSurfaceMeta, notes: []string{"destructive step skipped"}, want: "destructive_safety"},
+		{name: "meta other", surface: config.ToolSurfaceMeta, notes: []string{"something odd"}, want: "other"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := failureDiagnosticCategoryForResult(options{ToolSurface: tc.surface}, taskResult{Notes: tc.notes})
+			if got != tc.want {
+				t.Fatalf("failureDiagnosticCategoryForResult() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFixtureActionCoverage_EmptyRoutes_ReturnsZeroCoverage verifies an empty
+// route map yields zero totals rather than a division by nothing later.
+func TestFixtureActionCoverage_EmptyRoutes_ReturnsZeroCoverage(t *testing.T) {
+	got := fixtureActionCoverage(nil, nil)
+	if got.Total != 0 || got.Covered != 0 || len(got.Missing) != 0 {
+		t.Fatalf("fixtureActionCoverage(nil) = %+v, want zero coverage", got)
+	}
+}
+
+// TestWriteFixtureCoverage_ListsMissingToolsAndRoutes verifies the coverage
+// section names uncovered tools and, when few enough, uncovered routes.
+func TestWriteFixtureCoverage_ListsMissingToolsAndRoutes(t *testing.T) {
+	var b strings.Builder
+	catalog := []modelTool{{Name: "gitlab_project"}, {Name: "gitlab_issue"}}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": {}, "list": {}}}
+	results := []taskResult{{Task: evalTask{Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}}}}
+	writeFixtureCoverage(&b, catalog, results, routes)
+	content := b.String()
+	for _, want := range []string{"| Catalog tools | 2 |", "| Tools covered by expected steps | 1 |", "Missing: `gitlab_issue`", "Missing action routes: `gitlab_project/list`"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Fatalf("coverage = %s, want %q", content, want)
+			}
+		})
+	}
+}
+
+// TestUncoveredHighRiskRoutes_SkipsCoveredAndLowRiskRoutes verifies covered
+// routes and routes with no risk class are excluded and the remainder sorted.
+func TestUncoveredHighRiskRoutes_SkipsCoveredAndLowRiskRoutes(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project": {"delete": {}, "list": {}},
+		"gitlab_server":  {"version": {}},
+	}
+	covered := coveredRouteSet([]taskResult{{Task: evalTask{Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "list"}, {ExpectedTool: "gitlab_discover_project"}}}}})
+	uncovered := uncoveredHighRiskRoutes(routes, covered)
+	if len(uncovered) != 1 || uncovered[0].Tool != "gitlab_project" || uncovered[0].Action != "delete" {
+		t.Fatalf("uncoveredHighRiskRoutes() = %+v, want only gitlab_project/delete", uncovered)
+	}
+	if !slices.Contains(uncovered[0].Risks, "destructive") {
+		t.Fatalf("risks = %v, want destructive", uncovered[0].Risks)
+	}
+}
+
+// TestWriteUsageSummary_PricingFlags_RendersCostAndSource verifies configured
+// pricing produces an estimated cost line and names the flags as its source,
+// while a dry run renders no usage section at all.
+func TestWriteUsageSummary_PricingFlags_RendersCostAndSource(t *testing.T) {
+	var b strings.Builder
+	opts := options{Model: "a:b", Pricing: pricingOptions{InputPerMTok: 1}}
+	results := []taskResult{{Model: "a:b", ModelCalls: 1, Usage: modelUsage{InputTokens: 1_000_000}}}
+	writeUsageSummary(&b, opts, results, false)
+	content := b.String()
+	if !strings.Contains(content, "| Estimated cost | $1.0000 |") || !strings.Contains(content, "| Pricing source | flags |") {
+		t.Fatalf("usage summary = %s, want cost and pricing source", content)
+	}
+	var dry strings.Builder
+	writeUsageSummary(&dry, opts, results, true)
+	if dry.Len() != 0 {
+		t.Fatalf("dry-run usage summary = %q, want empty", dry.String())
 	}
 }

@@ -125,3 +125,88 @@ func TestRecordRealStepContent_OnlyCapturesRealBackendOutput(t *testing.T) {
 		t.Fatalf("mock-mode content captured = %v, want skipped", mockState.realStepContent)
 	}
 }
+
+// TestGradeCaseAssertions_GradesOnlyRealOutputContainsSteps verifies the
+// grader ignores a nil state, non output_contains assertions and steps that
+// never ran for real, fails the case when evidence is missing from real
+// output, and records a passing result when it is present.
+func TestGradeCaseAssertions_GradesOnlyRealOutputContainsSteps(t *testing.T) {
+	runner := &modelRunner{}
+	prepared := PreparedCase{
+		Case: EvalCase{ID: "MT-A", Assertions: []CaseAssertion{
+			{Type: CaseAssertionExpectedAction, Step: 1},
+			{Type: CaseAssertionOutputContains, Step: 2, Inputs: []string{"never ran"}},
+			{Type: CaseAssertionOutputContains, Step: 1, Name: "sha evidence", Inputs: []string{"{{ .Values.deployment_sha }}", " "}},
+		}},
+		FixtureOutputs: FixtureOutput{"deployment_sha": "abc123"},
+	}
+	cases := []struct {
+		name        string
+		state       *modelEvaluationState
+		wantResults int
+		wantSuccess bool
+		wantNote    string
+	}{
+		{name: "nil state", state: nil, wantResults: 0, wantSuccess: true},
+		{name: "evidence present", state: &modelEvaluationState{realStepContent: map[int]string{1: "deployment ABC123 running"}}, wantResults: 1, wantSuccess: true},
+		{name: "evidence missing", state: &modelEvaluationState{realStepContent: map[int]string{1: "no sha here"}}, wantResults: 1, wantSuccess: false, wantNote: "step 1 output missing expected evidence: abc123"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := taskResult{FinalSuccess: true}
+			runner.gradeCaseAssertions(prepared, &result, tc.state)
+			if len(result.AssertionResults) != tc.wantResults || result.FinalSuccess != tc.wantSuccess {
+				t.Fatalf("result = %+v, want %d assertion results and success %t", result, tc.wantResults, tc.wantSuccess)
+			}
+			if tc.wantNote != "" && (len(result.Notes) != 1 || result.Notes[0] != tc.wantNote) {
+				t.Fatalf("notes = %v, want %q", result.Notes, tc.wantNote)
+			}
+			if tc.wantResults == 1 && (result.AssertionResults[0].Name != "sha evidence" || result.AssertionResults[0].Passed != tc.wantSuccess) {
+				t.Fatalf("assertion result = %+v, want named result with passed=%t", result.AssertionResults[0], tc.wantSuccess)
+			}
+		})
+	}
+}
+
+// TestGradeOutputContainsAssertion_DefaultsName verifies an unnamed assertion
+// is reported under the generic "output contains" label.
+func TestGradeOutputContainsAssertion_DefaultsName(t *testing.T) {
+	result := taskResult{FinalSuccess: true}
+	gradeOutputContainsAssertion(PreparedCase{}, &result, CaseAssertion{Type: CaseAssertionOutputContains, Step: 3, Inputs: []string{"ok"}}, "all OK")
+	if len(result.AssertionResults) != 1 || result.AssertionResults[0].Name != "output contains" || !result.AssertionResults[0].Passed {
+		t.Fatalf("assertion results = %+v, want passing default-named result", result.AssertionResults)
+	}
+}
+
+// TestRenderAssertionInput_ReturnsInputOnTemplateErrors verifies plain text
+// passes through, a template that fails to parse or execute is returned as
+// written, and a valid template renders against fixture data.
+func TestRenderAssertionInput_ReturnsInputOnTemplateErrors(t *testing.T) {
+	data := promptTemplateDataMap(promptDataFromOutputs(FixtureOutput{"project_path": "my-org/app"}))
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "plain text", input: "plain", want: "plain"},
+		{name: "parse error", input: "{{ .Project.Path", want: "{{ .Project.Path"},
+		{name: "missing key", input: "{{ .Nope.Field }}", want: "{{ .Nope.Field }}"},
+		{name: "rendered", input: "{{ .Project.Path }}", want: "my-org/app"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := renderAssertionInput("MT-A", tc.input, data); got != tc.want {
+				t.Fatalf("renderAssertionInput(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMissingOutputSubstrings_IgnoresBlanksAndCase verifies blank inputs are
+// skipped and matching is case-insensitive.
+func TestMissingOutputSubstrings_IgnoresBlanksAndCase(t *testing.T) {
+	missing := missingOutputSubstrings("Pipeline SUCCESS on main", []string{"success", " ", "failed"})
+	if strings.Join(missing, ",") != "failed" {
+		t.Fatalf("missingOutputSubstrings() = %v, want [failed]", missing)
+	}
+}

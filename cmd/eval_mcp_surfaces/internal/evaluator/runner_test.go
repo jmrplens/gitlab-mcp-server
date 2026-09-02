@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -1063,4 +1064,1080 @@ func repositoryFileGetRoute() toolutil.ActionRoute {
 			"ref":        map[string]any{"type": "string"},
 		},
 	}}
+}
+
+// TestRecordModelCallError_AttachesProviderTrace verifies a provider call
+// error is recorded as a model_error event carrying the provider exchange, and
+// a plain error is recorded without one.
+func TestRecordModelCallError_AttachesProviderTrace(t *testing.T) {
+	cases := []struct {
+		name         string
+		err          error
+		wantProvider bool
+	}{
+		{name: "plain error", err: errors.New("boom")},
+		{name: "provider error", err: &modelProviderCallError{err: errors.New("anthropic status 401"), Trace: &modelProviderTrace{Provider: providerAnthropic, ResponseStatus: 401}}, wantProvider: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := taskResult{ModelCalls: 2}
+			recordModelCallError(&result, tc.err)
+			if len(result.Notes) != 1 || result.Notes[0] != tc.err.Error() {
+				t.Fatalf("notes = %v, want %q", result.Notes, tc.err.Error())
+			}
+			event := result.Trace.Events[0]
+			if event.Kind != "model_error" || !event.IsError || event.Turn != 2 {
+				t.Fatalf("event = %+v, want model_error on turn 2", event)
+			}
+			if (event.Provider != nil) != tc.wantProvider {
+				t.Fatalf("event.Provider = %+v, want provider trace = %t", event.Provider, tc.wantProvider)
+			}
+		})
+	}
+}
+
+// TestEvaluateTask_ExpectedDynamicFindStep_AdvancesThenExecutes verifies the
+// dynamic find-then-execute path: the find call is validated against the
+// routes, its result is checked for the action the next step expects, and the
+// scenario advances into the execute step.
+func TestEvaluateTask_ExpectedDynamicFindStep_AdvancesThenExecutes(t *testing.T) {
+	runner := newScriptedRunner(
+		t,
+		toolUseResponse("find", dynamicFindTool, map[string]any{"query": "get project metadata"}),
+		toolUseResponse("exec", dynamicExecuteActionTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my-org/app"}}),
+	)
+	runner.toolSurface = config.ToolSurfaceDynamic
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: projectGetRoute()}}
+	task := evalTask{ID: "MS-FIND", Prompt: "Get project `my-org/app`.", Steps: []evalStep{
+		{ExpectedTool: dynamicFindTool, RequiredParams: []string{"query"}},
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}},
+	}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, routes)
+
+	if !result.FinalSuccess || result.CompletedSteps != 2 || !result.SchemaLookupUsed {
+		t.Fatalf("result = %+v, want find-then-execute success", result)
+	}
+	if result.FirstTool != dynamicFindTool || result.FinalTool != dynamicExecuteActionTool {
+		t.Fatalf("first/final tool = %s/%s, want find then execute", result.FirstTool, result.FinalTool)
+	}
+}
+
+// TestHandleExpectedDynamicFindStep_MissingExpectedAction_DoesNotAdvance
+// verifies a valid find call whose results do not surface the action the next
+// step needs records the miss as a note, sends the payload back as an errored
+// tool result, and leaves the scenario on the find step.
+func TestHandleExpectedDynamicFindStep_MissingExpectedAction_DoesNotAdvance(t *testing.T) {
+	runner := &modelRunner{toolSurface: config.ToolSurfaceDynamic}
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {"issue.list": {InputSchema: map[string]any{"type": "object"}}}}
+	steps := []evalStep{
+		{ExpectedTool: dynamicFindTool, RequiredParams: []string{"query"}},
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.approve", RequiredParams: []string{"project_id"}},
+	}
+	result := &taskResult{}
+	followups := &[]modelContentBlock{}
+	state := &modelEvaluationState{firstFinalAttempt: true}
+	auxCtx := auxiliaryToolUseContext{
+		task:      evalTask{ID: "MS-FIND-MISS", Prompt: "Do something."},
+		steps:     steps,
+		toolUse:   modelContentBlock{Type: "tool_use", ID: "find", Name: dynamicFindTool, Input: map[string]any{"query": "totally unrelated words"}},
+		routes:    routes,
+		result:    result,
+		state:     state,
+		followups: followups,
+	}
+
+	if stop := runner.handleExpectedDynamicFindStep(t.Context(), auxCtx); stop {
+		t.Fatal("handleExpectedDynamicFindStep() = true, want the attempt to continue")
+	}
+	if state.stepIndex != 0 || result.CompletedSteps != 0 || !result.SchemaLookupUsed {
+		t.Fatalf("state = %+v result = %+v, want no progress past the find step", state, result)
+	}
+	if !strings.Contains(strings.Join(result.Notes, "; "), "did not include expected action merge_request.approve") {
+		t.Fatalf("notes = %v, want missing-action note", result.Notes)
+	}
+	if len(*followups) != 1 || !(*followups)[0].IsError {
+		t.Fatalf("followups = %+v, want one errored tool result", *followups)
+	}
+}
+
+// TestHandleExpectedDynamicFindStep_MatchingResult_AdvancesScenario verifies a
+// find call whose results include the next step's action advances the
+// scenario, records the schema lookup, and returns a non-error tool result.
+func TestHandleExpectedDynamicFindStep_MatchingResult_AdvancesScenario(t *testing.T) {
+	runner := &modelRunner{toolSurface: config.ToolSurfaceDynamic}
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: projectGetRoute()}}
+	steps := []evalStep{
+		{ExpectedTool: dynamicFindTool, RequiredParams: []string{"query"}},
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}},
+	}
+	result := &taskResult{}
+	followups := &[]modelContentBlock{}
+	state := &modelEvaluationState{firstFinalAttempt: true}
+	auxCtx := auxiliaryToolUseContext{
+		task:      evalTask{ID: "MS-FIND-HIT"},
+		steps:     steps,
+		toolUse:   modelContentBlock{Type: "tool_use", ID: "find", Name: dynamicFindTool, Input: map[string]any{"query": "get project metadata"}},
+		routes:    routes,
+		result:    result,
+		state:     state,
+		followups: followups,
+	}
+
+	if stop := runner.handleExpectedDynamicFindStep(t.Context(), auxCtx); stop {
+		t.Fatal("handleExpectedDynamicFindStep() = true, want the scenario to continue into the execute step")
+	}
+	if state.stepIndex != 1 || result.CompletedSteps != 1 || !result.SchemaLookupUsed {
+		t.Fatalf("state = %+v result = %+v, want the find step completed", state, result)
+	}
+	if len(*followups) != 1 || (*followups)[0].IsError {
+		t.Fatalf("followups = %+v, want one successful tool result", *followups)
+	}
+}
+
+// TestEvaluateTask_InvalidDynamicFindCall_SendsRepairThenStopsOnRepeat
+// verifies an invalid find call gets one repair message and a byte-identical
+// retry ends the attempt instead of looping.
+func TestEvaluateTask_InvalidDynamicFindCall_SendsRepairThenStopsOnRepeat(t *testing.T) {
+	invalid := toolUseResponse("find", dynamicFindTool, map[string]any{})
+	runner := newScriptedRunner(t, invalid, invalid)
+	runner.toolSurface = config.ToolSurfaceDynamic
+	task := evalTask{ID: "MS-FIND-INVALID", Steps: []evalStep{
+		{ExpectedTool: dynamicFindTool, RequiredParams: []string{"query"}},
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet},
+	}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, nil)
+
+	if result.FinalSuccess || !result.RepairAttempted {
+		t.Fatalf("result = %+v, want repaired but failed attempt", result)
+	}
+	if !strings.Contains(strings.Join(result.Notes, "; "), "repeated invalid retry") {
+		t.Fatalf("notes = %v, want repeated invalid retry note", result.Notes)
+	}
+}
+
+// TestHandleInvalidCapabilityBridgeCall_RepairsThenStops verifies an invalid
+// capability bridge call produces one repair follow-up, that an identical
+// retry stops the attempt, and that an exhausted repair budget stops it too.
+func TestHandleInvalidCapabilityBridgeCall_RepairsThenStops(t *testing.T) {
+	toolUse := modelContentBlock{Type: "tool_use", ID: "read", Name: resourceReadTool, Input: map[string]any{}}
+	validation := validationResult{Message: "missing required uri"}
+	newContext := func(repairAlreadySent bool, state *modelEvaluationState) (capabilityBridgeStepContext, *taskResult, *[]modelContentBlock) {
+		result := &taskResult{}
+		followups := &[]modelContentBlock{}
+		return capabilityBridgeStepContext{
+			steps:             []evalStep{{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}},
+			toolUse:           toolUse,
+			result:            result,
+			repairAlreadySent: repairAlreadySent,
+			state:             state,
+			followups:         followups,
+		}, result, followups
+	}
+
+	t.Run("first invalid call repairs", func(t *testing.T) {
+		bridgeCtx, result, followups := newContext(false, &modelEvaluationState{})
+		if stop := handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation); stop {
+			t.Fatal("handleInvalidCapabilityBridgeCall() = true, want continue after repair")
+		}
+		if !result.RepairAttempted || len(*followups) != 1 || !(*followups)[0].IsError {
+			t.Fatalf("result = %+v followups = %+v, want one repair follow-up", result, *followups)
+		}
+	})
+	t.Run("repeated fingerprint stops", func(t *testing.T) {
+		state := &modelEvaluationState{lastInvalidFingerprint: invalidToolUseFingerprint(toolUse)}
+		bridgeCtx, _, followups := newContext(false, state)
+		if stop := handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation); !stop {
+			t.Fatal("handleInvalidCapabilityBridgeCall() = false, want stop on repeated invalid retry")
+		}
+		if len(*followups) != 0 {
+			t.Fatalf("followups = %+v, want none", *followups)
+		}
+	})
+	t.Run("repair budget exhausted stops", func(t *testing.T) {
+		bridgeCtx, _, _ := newContext(true, &modelEvaluationState{})
+		if stop := handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation); !stop {
+			t.Fatal("handleInvalidCapabilityBridgeCall() = false, want stop when repair budget is spent")
+		}
+	})
+}
+
+// TestAppendDynamicPreludeFollowup_RecordsFirstCallAndSuccessResult verifies
+// an accepted prelude call is recorded as the first (passing) call and gets a
+// successful simulated tool result.
+func TestAppendDynamicPreludeFollowup_RecordsFirstCallAndSuccessResult(t *testing.T) {
+	result := &taskResult{}
+	state := &modelEvaluationState{firstFinalAttempt: true}
+	followups := &[]modelContentBlock{}
+	steps := []evalStep{{ExpectedTool: dynamicFindTool}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}}
+	toolUse := modelContentBlock{Type: "tool_use", ID: "find", Name: dynamicFindTool, Input: map[string]any{"query": "project"}}
+
+	appendDynamicPreludeFollowup(steps, 0, toolUse, validationResult{Valid: true, Action: ""}, result, state, followups)
+
+	if result.FirstTool != dynamicFindTool || !result.FirstPass || state.firstFinalAttempt {
+		t.Fatalf("result = %+v state = %+v, want first call recorded as passing", result, state)
+	}
+	if len(*followups) != 1 || (*followups)[0].IsError || !strings.Contains((*followups)[0].Content, `"ok":true`) {
+		t.Fatalf("followups = %+v, want one successful tool result", *followups)
+	}
+}
+
+// TestIsRedundantDiscoveryTool_ClassifiesDiscoveryTools verifies the discovery
+// budget only suppresses the find, dispatcher and server tools.
+func TestIsRedundantDiscoveryTool_ClassifiesDiscoveryTools(t *testing.T) {
+	cases := []struct {
+		tool string
+		want bool
+	}{
+		{tool: dynamicFindTool, want: true},
+		{tool: "gitlab", want: true},
+		{tool: "gitlab_server", want: true},
+		{tool: dynamicExecuteActionTool, want: false},
+		{tool: "gitlab_project", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tool, func(t *testing.T) {
+			if got := isRedundantDiscoveryTool(tc.tool); got != tc.want {
+				t.Fatalf("isRedundantDiscoveryTool(%s) = %t, want %t", tc.tool, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestExactDynamicCallAvailable_RequiresOneSafeExecuteStep verifies the exact
+// dynamic call is only claimed for a single execute step whose parameters all
+// bind to concrete prompt values.
+func TestExactDynamicCallAvailable_RequiresOneSafeExecuteStep(t *testing.T) {
+	cases := []struct {
+		name string
+		task evalTask
+		want bool
+	}{
+		{name: "safe single execute", task: evalTask{Prompt: "Get project `my-org/app`.", Steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}}}}, want: true},
+		{name: "unresolved param", task: evalTask{Prompt: "Get a project.", Steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}}}}, want: false},
+		{name: "two steps", task: evalTask{Steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectList}}}, want: false},
+		{name: "not an execute step", task: evalTask{Steps: []evalStep{{ExpectedTool: dynamicFindTool}}}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := exactDynamicCallAvailable(tc.task, taskSteps(tc.task)); got != tc.want {
+				t.Fatalf("exactDynamicCallAvailable() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDiscoveryBudgetFeedback_SuppressesRedundantDiscovery verifies the
+// discovery budget only blocks a redundant discovery call when the exact
+// dynamic call is already provable from the prompt.
+func TestDiscoveryBudgetFeedback_SuppressesRedundantDiscovery(t *testing.T) {
+	exactStep := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}}
+	task := evalTask{Prompt: "Get project `my-org/app`.", Steps: []evalStep{exactStep}}
+	cases := []struct {
+		name    string
+		budget  taskCallBudget
+		toolUse modelContentBlock
+		step    evalStep
+		want    bool
+	}{
+		{name: "suppression off", budget: taskCallBudget{}, toolUse: modelContentBlock{Name: dynamicFindTool}, step: exactStep},
+		{name: "not a discovery tool", budget: taskCallBudget{SuppressDiscovery: true}, toolUse: modelContentBlock{Name: dynamicExecuteActionTool}, step: exactStep},
+		{name: "exact call unavailable", budget: taskCallBudget{SuppressDiscovery: true}, toolUse: modelContentBlock{Name: dynamicFindTool}, step: evalStep{ExpectedTool: dynamicFindTool}},
+		{name: "blocked", budget: taskCallBudget{SuppressDiscovery: true}, toolUse: modelContentBlock{Name: dynamicFindTool}, step: exactStep, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			message, blocked := discoveryBudgetFeedback(task, tc.step, tc.toolUse, tc.budget)
+			if blocked != tc.want {
+				t.Fatalf("discoveryBudgetFeedback() blocked = %t, want %t", blocked, tc.want)
+			}
+			if blocked && !strings.Contains(message, actionProjectGet) {
+				t.Fatalf("message = %q, want the exact action", message)
+			}
+		})
+	}
+}
+
+// TestNoToolUseRepairMessage_NamesTheNextExpectedCall verifies the repair
+// prompt names the next tool and action when the step index is in range, the
+// tool alone for a standalone step, and stays generic when it is not.
+func TestNoToolUseRepairMessage_NamesTheNextExpectedCall(t *testing.T) {
+	steps := []evalStep{{ExpectedTool: dynamicFindTool}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}}
+	cases := []struct {
+		name      string
+		stepIndex int
+		want      string
+	}{
+		{name: "standalone step", stepIndex: 0, want: "calling " + dynamicFindTool + " now"},
+		{name: "action step", stepIndex: 1, want: "with action " + actionProjectGet},
+		{name: "out of range", stepIndex: 5, want: "calling the next required tool now"},
+		{name: "negative", stepIndex: -1, want: "calling the next required tool now"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := noToolUseRepairMessage(tc.stepIndex, steps); !strings.Contains(got, tc.want) {
+				t.Fatalf("noToolUseRepairMessage(%d) = %q, want %q", tc.stepIndex, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNextDynamicExecuteAction_RequiresAFollowingExecuteStep verifies the
+// action a find step must surface comes from the immediately following execute
+// step, and is empty at the end of a scenario or before a non-execute step.
+func TestNextDynamicExecuteAction_RequiresAFollowingExecuteStep(t *testing.T) {
+	cases := []struct {
+		name  string
+		steps []evalStep
+		index int
+		want  string
+	}{
+		{name: "execute follows", steps: []evalStep{{ExpectedTool: dynamicFindTool}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}}, want: actionProjectGet},
+		{name: "last step", steps: []evalStep{{ExpectedTool: dynamicFindTool}}},
+		{name: "non execute follows", steps: []evalStep{{ExpectedTool: dynamicFindTool}, {ExpectedTool: resourceListTool}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := nextDynamicExecuteAction(tc.steps, tc.index); got != tc.want {
+				t.Fatalf("nextDynamicExecuteAction() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDynamicFindPayloadIncludesAction_AcceptsJSONAndMarkdownShapes verifies
+// the find-result check recognizes the structured results array as well as the
+// backticked and inline-JSON text renderings.
+func TestDynamicFindPayloadIncludesAction_AcceptsJSONAndMarkdownShapes(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		want    bool
+	}{
+		{name: "structured results", payload: `{"results":[{"id":"project.get"}]}`, want: true},
+		{name: "structured mismatch", payload: `{"results":[{"id":"issue.list"}]}`, want: false},
+		{name: "backticked text", payload: "matched `project.get` for you", want: true},
+		{name: "inline json text", payload: `prefix "id":"project.get" suffix`, want: true},
+		{name: "absent", payload: "no matches", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dynamicFindPayloadIncludesAction(tc.payload, actionProjectGet); got != tc.want {
+				t.Fatalf("dynamicFindPayloadIncludesAction(%q) = %t, want %t", tc.payload, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDynamicFindExchangeIncludesAction_RequiresStructuredResponse verifies the
+// MCP exchange check tolerates a missing or unparseable response.
+func TestDynamicFindExchangeIncludesAction_RequiresStructuredResponse(t *testing.T) {
+	cases := []struct {
+		name     string
+		exchange *traceMCPExchange
+		want     bool
+	}{
+		{name: "nil exchange"},
+		{name: "empty response", exchange: &traceMCPExchange{}},
+		{name: "invalid json", exchange: &traceMCPExchange{Response: []byte("not json")}},
+		{name: "matching action", exchange: &traceMCPExchange{Response: []byte(`{"structuredContent":{"results":[{"id":"project.get"}]}}`)}, want: true},
+		{name: "other action", exchange: &traceMCPExchange{Response: []byte(`{"structuredContent":{"results":[{"id":"issue.list"}]}}`)}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dynamicFindExchangeIncludesAction(tc.exchange, actionProjectGet); got != tc.want {
+				t.Fatalf("dynamicFindExchangeIncludesAction() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestExecutionErrorKindAndBadParam_ClassifyGitLabFailures verifies live
+// execution failures map to their repair kinds, and that the role-confusion
+// kind is the only one that names the ambiguous parameters.
+func TestExecutionErrorKindAndBadParam_ClassifyGitLabFailures(t *testing.T) {
+	dynamicStep := func(action string) evalStep {
+		return evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: action}
+	}
+	cases := []struct {
+		name         string
+		step         evalStep
+		err          error
+		wantKind     string
+		wantBadParam string
+	}{
+		{name: "role confusion", step: dynamicStep(actionIssueLinkCreate), err: errors.New("400 Bad Request"), wantKind: "gitlab_bad_request_role_confusion", wantBadParam: "project_id,issue_iid,target_project_id,target_issue_iid"},
+		{name: "role confusion token scope", step: dynamicStep("job.token_scope_remove_project"), err: errors.New("400 Bad Request"), wantKind: "gitlab_bad_request_role_confusion", wantBadParam: "project_id,target_project_id"},
+		{name: "role confusion merge request", step: dynamicStep("merge_request.create"), err: errors.New("400"), wantKind: "gitlab_bad_request_role_confusion", wantBadParam: "source_branch,target_branch"},
+		{name: "role confusion without mapping", step: dynamicStep("merge_request.approve"), err: errors.New("400"), wantKind: "gitlab_bad_request"},
+		{name: "plain bad request", step: evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "get"}, err: errors.New("400 bad request"), wantKind: "gitlab_bad_request"},
+		{name: "not found", step: evalStep{}, err: errors.New("404 Project Not Found"), wantKind: "gitlab_not_found"},
+		{name: "forbidden", step: evalStep{}, err: errors.New("403 Forbidden"), wantKind: "gitlab_forbidden"},
+		{name: "other", step: evalStep{}, err: errors.New("connection reset"), wantKind: "mcp_execution_error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := executionErrorKind(tc.step, tc.err); got != tc.wantKind {
+				t.Fatalf("executionErrorKind() = %q, want %q", got, tc.wantKind)
+			}
+			if got := executionErrorBadParam(tc.step, tc.err); got != tc.wantBadParam {
+				t.Fatalf("executionErrorBadParam() = %q, want %q", got, tc.wantBadParam)
+			}
+		})
+	}
+}
+
+// TestToolExecutionNote_SimulatedStep_UsesPlainText verifies a simulated step
+// records a readable note while a live execution failure records the JSON
+// repair payload.
+func TestToolExecutionNote_SimulatedStep_UsesPlainText(t *testing.T) {
+	simulated := toolExecutionNote(2, evalStep{Simulation: "transient_error_once"}, errors.New("simulated 503"))
+	if simulated != "step 2 simulation transient_error_once: simulated 503" {
+		t.Fatalf("toolExecutionNote(simulated) = %q, want plain simulation note", simulated)
+	}
+	live := toolExecutionNote(1, evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "get"}, errors.New("404 not found"))
+	var payload repairPayload
+	if err := json.Unmarshal([]byte(live), &payload); err != nil {
+		t.Fatalf("unmarshal live note %q: %v", live, err)
+	}
+	if payload.ErrorKind != "gitlab_not_found" || !payload.RetryAllowed || payload.FailedAction != "get" {
+		t.Fatalf("payload = %+v, want gitlab_not_found repair payload", payload)
+	}
+}
+
+// TestIntFromAny_ConvertsJSONNumericShapes verifies each numeric encoding the
+// providers emit converts to int, and anything else falls back.
+func TestIntFromAny_ConvertsJSONNumericShapes(t *testing.T) {
+	cases := []struct {
+		name  string
+		value any
+		want  int
+	}{
+		{name: "int", value: 7, want: 7},
+		{name: "int64", value: int64(8), want: 8},
+		{name: "float64", value: float64(9), want: 9},
+		{name: "json number", value: json.Number("10"), want: 10},
+		{name: "invalid json number", value: json.Number("abc"), want: 20},
+		{name: "string", value: "12", want: 20},
+		{name: "nil", value: nil, want: 20},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := intFromAny(tc.value, 20); got != tc.want {
+				t.Fatalf("intFromAny(%#v) = %d, want %d", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSchemaLookupAlias_MapsLegacyToolsOntoUnifiedActions verifies a legacy
+// meta-tool schema request is rewritten onto the unified dispatcher when it
+// carries the action, filtered to that domain when it does not, and passed
+// through when there is no dispatcher or no matching action.
+func TestSchemaLookupAlias_MapsLegacyToolsOntoUnifiedActions(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab":         {"project.get": projectGetRoute(), "project.list": {}, "issue.list": {}},
+		"gitlab_project": {"get": projectGetRoute()},
+	}
+	cases := []struct {
+		name       string
+		routes     map[string]toolutil.ActionMap
+		tool       string
+		action     string
+		wantTool   string
+		wantAction string
+		wantKeys   []string
+	}{
+		{name: "no dispatcher", routes: map[string]toolutil.ActionMap{"gitlab_project": {"get": {}}}, tool: "gitlab_project", action: "get", wantTool: "gitlab_project", wantAction: "get"},
+		{name: "dispatcher itself", routes: routes, tool: "gitlab", action: "project.get", wantTool: "gitlab", wantAction: "project.get"},
+		{name: "server tool", routes: routes, tool: "gitlab_server", action: "schema_index", wantTool: "gitlab_server", wantAction: "schema_index"},
+		{name: "legacy with action", routes: routes, tool: "gitlab_project", action: "get", wantTool: "gitlab", wantAction: "project.get"},
+		{name: "legacy unknown action", routes: routes, tool: "gitlab_project", action: "nope", wantTool: "gitlab_project", wantAction: "nope"},
+		{name: "legacy index", routes: routes, tool: "gitlab_project", wantTool: "gitlab_project", wantKeys: []string{"get", "list"}},
+		{name: "legacy index without matches", routes: routes, tool: "gitlab_nothing", wantTool: "gitlab_nothing"},
+		{name: "non prefixed tool", routes: routes, tool: "custom", action: "get", wantTool: "custom", wantAction: "get"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lookupRoutes, lookupTool, lookupAction := schemaLookupAlias(tc.routes, tc.tool, tc.action)
+			if lookupTool != tc.wantTool || lookupAction != tc.wantAction {
+				t.Fatalf("schemaLookupAlias() = %s/%s, want %s/%s", lookupTool, lookupAction, tc.wantTool, tc.wantAction)
+			}
+			if len(tc.wantKeys) == 0 {
+				return
+			}
+			for _, key := range tc.wantKeys {
+				if _, ok := lookupRoutes[lookupTool][key]; !ok {
+					t.Fatalf("filtered routes = %v, want key %q", lookupRoutes[lookupTool], key)
+				}
+			}
+		})
+	}
+}
+
+// TestSchemaLookupResult_RejectsUnknownActionsAndSchemas verifies the schema
+// lookup surface reports an unsupported action, an unknown tool for
+// schema_index, and an unknown action for schema_get.
+func TestSchemaLookupResult_RejectsUnknownActionsAndSchemas(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+	cases := []struct {
+		name  string
+		input map[string]any
+		want  string
+	}{
+		{name: "unsupported action", input: map[string]any{"action": "nope"}, want: `unsupported schema action "nope"`},
+		{name: "unknown index tool", input: map[string]any{"action": "schema_index", "params": map[string]any{"tool": "gitlab_missing"}}, want: `schema_index: unknown tool "gitlab_missing"`},
+		{name: "unknown get action", input: map[string]any{"action": "schema_get", "params": map[string]any{"tool": "gitlab_project", "action": "nope"}}, want: `schema_get: unknown action "nope"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := schemaLookupResult(routes, tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("schemaLookupResult() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestSchemaLookupResult_ToolOnlySchemaGet_ReturnsDiscoveryIndex verifies a
+// schema_get without an action returns that tool's discovery index.
+func TestSchemaLookupResult_ToolOnlySchemaGet_ReturnsDiscoveryIndex(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+	payload, err := schemaLookupResult(routes, map[string]any{"action": "schema_get", "params": map[string]any{"tool": "gitlab_project"}})
+	if err != nil {
+		t.Fatalf("schemaLookupResult() error = %v", err)
+	}
+	if !strings.Contains(payload, "get") {
+		t.Fatalf("payload = %s, want the tool's action index", payload)
+	}
+}
+
+// TestDynamicDiscoveryResult_UnsupportedTool_ReturnsError verifies only the
+// dynamic find tool is served by the simulated discovery path.
+func TestDynamicDiscoveryResult_UnsupportedTool_ReturnsError(t *testing.T) {
+	_, err := dynamicDiscoveryResult(t.Context(), nil, modelContentBlock{Name: "gitlab_project"})
+	if err == nil || !strings.Contains(err.Error(), `unsupported dynamic discovery tool "gitlab_project"`) {
+		t.Fatalf("dynamicDiscoveryResult() error = %v, want unsupported tool error", err)
+	}
+}
+
+// TestDynamicFindResultWithRegistry_EmptyRegistry_ReturnsZeroResults verifies
+// a find against an empty registry yields a serializable zero-result payload
+// rather than failing the attempt.
+func TestDynamicFindResultWithRegistry_EmptyRegistry_ReturnsZeroResults(t *testing.T) {
+	registry := dynamictools.NewRegistry(nil)
+	payload, err := marshalToolResult(dynamicFindResultWithRegistry(t.Context(), registry, "project get", 3))
+	if err != nil {
+		t.Fatalf("marshalToolResult() error = %v", err)
+	}
+	if !strings.Contains(payload, `"count":0`) {
+		t.Fatalf("payload = %s, want zero results", payload)
+	}
+}
+
+// TestProjectPathFromRemoteURL_HandlesEveryRemoteShape verifies HTTPS, SSH and
+// bare paths all reduce to the namespace path.
+func TestProjectPathFromRemoteURL_HandlesEveryRemoteShape(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{name: "https", url: "https://gitlab.example.com/my-org/app.git", want: "my-org/app"},
+		{name: "ssh", url: "git@gitlab.example.com:my-org/app.git", want: "my-org/app"},
+		{name: "scheme without path", url: "https://gitlab.example.com", want: "//gitlab.example.com"},
+		{name: "bare path", url: "my-org/app", want: "my-org/app"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := projectPathFromRemoteURL(tc.url); got != tc.want {
+				t.Fatalf("projectPathFromRemoteURL(%q) = %q, want %q", tc.url, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestProjectNameFromPath_TakesLastSegment verifies the project name is the
+// final path segment, with a stable default for an empty path.
+func TestProjectNameFromPath_TakesLastSegment(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{path: "my-org/tools/app", want: "app"},
+		{path: "/", want: "gitlab-mcp-server"},
+		{path: "app", want: "app"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := projectNameFromPath(tc.path); got != tc.want {
+				t.Fatalf("projectNameFromPath(%q) = %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSimulatedProjectPath_PrefersParamsThenInput verifies the simulated
+// project path is read from params before input, resolves remote URLs, ignores
+// values without a namespace separator, and defaults to the fixture project.
+func TestSimulatedProjectPath_PrefersParamsThenInput(t *testing.T) {
+	cases := []struct {
+		name   string
+		input  map[string]any
+		params map[string]any
+		want   string
+	}{
+		{name: "params project id", params: map[string]any{"project_id": "my-org/app"}, want: "my-org/app"},
+		{name: "params remote url", params: map[string]any{"remote_url": "https://gitlab.example.com/my-org/app.git"}, want: "my-org/app"},
+		{name: "input fallback", input: map[string]any{"full_path": "my-org/other"}, want: "my-org/other"},
+		{name: "git suffix", params: map[string]any{"search": "my-org/app.git"}, want: "my-org/app"},
+		{name: "no separator", params: map[string]any{"query": "app"}, want: liveFixtureProjectPath},
+		{name: "empty", want: liveFixtureProjectPath},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := simulatedProjectPath(tc.input, tc.params); got != tc.want {
+				t.Fatalf("simulatedProjectPath() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAddSimulatedResourceIDs_InjectsIDsForCreateActions verifies every
+// create-style action seeds the identifier downstream steps reuse.
+func TestAddSimulatedResourceIDs_InjectsIDsForCreateActions(t *testing.T) {
+	params := map[string]any{"project_id": "my-org/app", "group_id": "my-org", "issue_iid": 3, "merge_request_iid": 4, "tag_name": "v1"}
+	cases := []struct {
+		action  string
+		wantKey string
+		wantID  int
+		object  string
+	}{
+		{action: actionIssueCreate, wantKey: "issue_iid", wantID: 123, object: "issue"},
+		{action: actionIssueLinkCreate, wantKey: "issue_link_id", wantID: 124, object: "issue_link"},
+		{action: "pipeline.trigger_create", wantKey: "trigger_id", wantID: 119, object: "trigger"},
+		{action: "release.link_create", wantKey: "link_id", wantID: 121, object: "link"},
+		{action: "group.group_label_create", wantKey: "label_id", wantID: 120, object: "label"},
+		{action: "admin.broadcast_message_create", wantKey: "id", wantID: 125, object: "broadcast_message"},
+		{action: "project.hook_add", wantKey: "hook_id", wantID: 101, object: "hook"},
+		{action: "project.badge_add", wantKey: "badge_id", wantID: 102, object: "badge"},
+		{action: "snippet.project_create", wantKey: "snippet_id", wantID: 103, object: "snippet"},
+		{action: "mr_review.note_create", wantKey: "note_id", wantID: 104, object: "note"},
+		{action: "mr_review.draft_note_create", wantKey: "note_id", wantID: 104, object: "note"},
+		{action: "access.deploy_token_create_project", wantKey: "deploy_token_id", wantID: 105, object: "deploy_token"},
+		{action: "access.deploy_key_add", wantKey: "deploy_key_id", wantID: 106, object: "deploy_key"},
+		{action: "project.member_add", wantKey: "user_id", wantID: 107, object: "member"},
+		{action: "group.group_milestone_create", wantKey: "milestone_iid", wantID: 108, object: "milestone"},
+		{action: "pipeline.schedule_create", wantKey: "schedule_id", wantID: 109, object: "schedule"},
+		{action: "merge_request.emoji_mr_create", wantKey: "award_id", wantID: 110, object: "award"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			result := map[string]any{}
+			addSimulatedResourceIDs(result, tc.action, params)
+			if result[tc.wantKey] != tc.wantID || result["id"] != tc.wantID {
+				t.Fatalf("result = %#v, want %s = %d", result, tc.wantKey, tc.wantID)
+			}
+			if _, ok := result[tc.object].(map[string]any); !ok {
+				t.Fatalf("result = %#v, want %s object", result, tc.object)
+			}
+		})
+	}
+	t.Run("wiki.create", func(t *testing.T) {
+		result := map[string]any{}
+		addSimulatedResourceIDs(result, "wiki.create", map[string]any{"project_id": "my-org/app"})
+		wiki, ok := result["wiki"].(map[string]any)
+		if !ok || wiki["slug"] != "eval-wiki-page" {
+			t.Fatalf("result = %#v, want default wiki slug", result)
+		}
+	})
+	t.Run("unknown action", func(t *testing.T) {
+		result := map[string]any{}
+		addSimulatedResourceIDs(result, "project.get", params)
+		if len(result) != 0 {
+			t.Fatalf("result = %#v, want no injected IDs", result)
+		}
+	})
+}
+
+// TestSnippetFilePathFromParams_PrefersFileNameThenFiles verifies the
+// simulated snippet path comes from file_name, then the first files entry,
+// then a stable default.
+func TestSnippetFilePathFromParams_PrefersFileNameThenFiles(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]any
+		want   string
+	}{
+		{name: "file name", params: map[string]any{"file_name": "notes.md"}, want: "notes.md"},
+		{name: "files entry", params: map[string]any{"files": []any{map[string]any{"file_path": "src/a.go"}}}, want: "src/a.go"},
+		{name: "malformed files", params: map[string]any{"files": []any{"nope", map[string]any{}}}, want: "snippet.txt"},
+		{name: "empty", params: map[string]any{}, want: "snippet.txt"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := snippetFilePathFromParams(tc.params); got != tc.want {
+				t.Fatalf("snippetFilePathFromParams() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestApplyActionSimulation_ShapesResultsPerAction verifies every simulated
+// read action returns the collection or object downstream steps read, and an
+// unsimulated action reports that it was not handled.
+func TestApplyActionSimulation_ShapesResultsPerAction(t *testing.T) {
+	params := map[string]any{"project_id": "my-org/app", "group_id": "my-org", "pipeline_id": 12, "tag_name": "v1", "file_path": "a.txt", "ref": "main", "package_name": "pkg", "package_version": "1.0"}
+	cases := []struct {
+		action  string
+		wantKey string
+	}{
+		{action: actionProjectGet, wantKey: "project"},
+		{action: actionProjectList, wantKey: "projects"},
+		{action: "pipeline.trigger_list", wantKey: "triggers"},
+		{action: "package.publish_directory", wantKey: "published"},
+		{action: "publish_directory", wantKey: "published"},
+		{action: "group.group_label_list", wantKey: "labels"},
+		{action: "wiki.list", wantKey: "pages"},
+		{action: "release.get", wantKey: "release"},
+		{action: "environment.list", wantKey: "environments"},
+		{action: actionEnvironmentProtectedList, wantKey: "protected_environments"},
+		{action: "repository.file_get", wantKey: "file"},
+		{action: actionPipelineGet, wantKey: "pipeline"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			result := map[string]any{}
+			if !applyActionSimulation(result, modelContentBlock{Input: map[string]any{"params": params}}, tc.action, params) {
+				t.Fatalf("applyActionSimulation(%s) = false, want handled", tc.action)
+			}
+			if result[tc.wantKey] == nil {
+				t.Fatalf("result = %#v, want key %q", result, tc.wantKey)
+			}
+		})
+	}
+	t.Run("unsimulated action", func(t *testing.T) {
+		result := map[string]any{}
+		if applyActionSimulation(result, modelContentBlock{}, "issue.list", params) {
+			t.Fatalf("applyActionSimulation(issue.list) = true, want unhandled")
+		}
+	})
+}
+
+// TestSimulatedPackageDirectoryItems_DefaultsPackageCoordinates verifies the
+// simulated publish list falls back to the fixture package name, version and
+// project when the call omits them, and escapes them into the file URLs.
+func TestSimulatedPackageDirectoryItems_DefaultsPackageCoordinates(t *testing.T) {
+	items := simulatedPackageDirectoryItems(map[string]any{})
+	if len(items) != len(packageReleaseFixtureFiles) {
+		t.Fatalf("items = %d, want %d", len(items), len(packageReleaseFixtureFiles))
+	}
+	url, _ := items[0]["url"].(string)
+	if !strings.Contains(url, "my-org%2Ftools%2Fgitlab-mcp-server") || !strings.Contains(url, liveFixturePackageReleaseName) {
+		t.Fatalf("url = %q, want escaped fixture coordinates", url)
+	}
+	custom := simulatedPackageDirectoryItems(map[string]any{"project_id": "a/b", "package_name": "pkg", "package_version": "9.9"})
+	customURL, _ := custom[0]["url"].(string)
+	if !strings.Contains(customURL, "projects/a%2Fb/packages/generic/pkg/9.9") {
+		t.Fatalf("url = %q, want supplied coordinates", customURL)
+	}
+}
+
+// TestRecordRealStepContent_OnlyRecordsLiveSteps verifies real tool output is
+// captured for live steps and skipped without a session, for simulated steps,
+// and for a nil state.
+func TestRecordRealStepContent_OnlyRecordsLiveSteps(t *testing.T) {
+	simulation := simulationResult{Content: "real output"}
+	t.Run("no session", func(t *testing.T) {
+		state := &modelEvaluationState{}
+		(&modelRunner{}).recordRealStepContent(evalStep{}, state, 1, simulation)
+		if len(state.realStepContent) != 0 {
+			t.Fatalf("realStepContent = %v, want empty without a session", state.realStepContent)
+		}
+	})
+	t.Run("simulated step", func(t *testing.T) {
+		runner := &modelRunner{mcpSession: newProjectGetSession(t)}
+		state := &modelEvaluationState{}
+		runner.recordRealStepContent(evalStep{Simulation: "transient_error_once"}, state, 1, simulation)
+		if len(state.realStepContent) != 0 {
+			t.Fatalf("realStepContent = %v, want empty for a simulated step", state.realStepContent)
+		}
+	})
+	t.Run("nil state", func(t *testing.T) {
+		runner := &modelRunner{mcpSession: newProjectGetSession(t)}
+		runner.recordRealStepContent(evalStep{}, nil, 1, simulation)
+	})
+	t.Run("live step", func(t *testing.T) {
+		runner := &modelRunner{mcpSession: newProjectGetSession(t)}
+		state := &modelEvaluationState{}
+		runner.recordRealStepContent(evalStep{}, state, 2, simulation)
+		if state.realStepContent[2] != "real output" {
+			t.Fatalf("realStepContent = %v, want step 2 recorded", state.realStepContent)
+		}
+	})
+}
+
+// TestIsTransientMCPToolResult_DetectsGitRefContention verifies only the
+// known transient git reference failures are retried.
+func TestIsTransientMCPToolResult_DetectsGitRefContention(t *testing.T) {
+	cases := []struct {
+		name   string
+		result simulationResult
+		want   bool
+	}{
+		{name: "no error", result: simulationResult{Content: "packed-refs locked"}},
+		{name: "packed refs", result: simulationResult{Content: "packed-refs locked", Err: errors.New("boom")}, want: true},
+		{name: "reference update", result: simulationResult{Err: errors.New("Reference update failed")}, want: true},
+		{name: "tag removal", result: simulationResult{Err: errors.New("Failed to remove tag")}, want: true},
+		{name: "other error", result: simulationResult{Err: errors.New("404 not found")}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isTransientMCPToolResult(tc.result); got != tc.want {
+				t.Fatalf("isTransientMCPToolResult() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSetResponse_RecordsMarshalFailureAsText verifies an MCP result that
+// cannot be marshaled records a diagnostic instead of a raw response, and a
+// nil exchange or result is ignored.
+func TestSetResponse_RecordsMarshalFailureAsText(t *testing.T) {
+	var nilExchange *traceMCPExchange
+	nilExchange.setResponse(&mcp.CallToolResult{})
+	exchange := &traceMCPExchange{}
+	exchange.setResponse(nil)
+	if exchange.Response != nil || exchange.ResponseText != "" {
+		t.Fatalf("exchange = %+v, want untouched for a nil result", exchange)
+	}
+	exchange.setResponse(&mcp.CallToolResult{IsError: true, StructuredContent: make(chan int)})
+	if !exchange.IsError || !strings.Contains(exchange.ResponseText, "marshal MCP result") {
+		t.Fatalf("exchange = %+v, want marshal failure recorded as text", exchange)
+	}
+}
+
+// TestPreparedCaseFromTask_UsesTaskCaseAndSteps verifies a prepared case is
+// synthesized from a bare task and keeps the task's own prompt over the case
+// prompt. A task carrying only case steps still yields one synthesized step,
+// because taskSteps always produces at least one from the task's own fields.
+func TestPreparedCaseFromTask_UsesTaskCaseAndSteps(t *testing.T) {
+	cases := []struct {
+		name       string
+		task       evalTask
+		wantPrompt string
+		wantSteps  int
+		wantID     string
+	}{
+		{name: "bare task", task: evalTask{ID: "MT-1", Prompt: "p", ExpectedTool: "gitlab_project", ExpectedAction: "get"}, wantPrompt: "p", wantSteps: 1, wantID: "MT-1"},
+		{name: "task prompt overrides case", task: evalTask{ID: "MT-2", Prompt: "task prompt", Case: &EvalCase{ID: "MT-2", Prompt: "case prompt", Steps: []ExpectedStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}}}, wantPrompt: "task prompt", wantSteps: 1, wantID: "MT-2"},
+		{name: "case without task steps", task: evalTask{ID: "MT-3", Case: &EvalCase{ID: "MT-3", Prompt: "case prompt", Steps: []ExpectedStep{{ExpectedTool: "gitlab_issue", ExpectedAction: "list"}, {ExpectedTool: "gitlab_issue", ExpectedAction: "get"}}}}, wantPrompt: "case prompt", wantSteps: 1, wantID: "MT-3"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prepared := preparedCaseFromTask(tc.task)
+			if prepared.Prompt != tc.wantPrompt || len(prepared.Steps) != tc.wantSteps || string(prepared.Case.ID) != tc.wantID {
+				t.Fatalf("preparedCaseFromTask() = %+v, want prompt %q with %d steps", prepared, tc.wantPrompt, tc.wantSteps)
+			}
+		})
+	}
+}
+
+// TestAcceptDirectDynamicExecuteStep_RejectsUnacceptableShapes verifies the
+// direct-execute shortcut is declined when the call already validated, the
+// index is out of range, the current step is not a find, the scenario has no
+// following execute step, or the call does not match that next step.
+func TestAcceptDirectDynamicExecuteStep_RejectsUnacceptableShapes(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: projectGetRoute()}}
+	execute := modelContentBlock{Name: dynamicExecuteActionTool, Input: map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my-org/app"}}}
+	findThenExecute := []evalStep{{ExpectedTool: dynamicFindTool}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}}}
+	cases := []struct {
+		name       string
+		steps      []evalStep
+		index      int
+		validation validationResult
+		toolUse    modelContentBlock
+		want       bool
+	}{
+		{name: "already valid", steps: findThenExecute, validation: validationResult{Valid: true}, toolUse: execute},
+		{name: "index out of range", steps: findThenExecute, index: 9, toolUse: execute},
+		{name: "current step not a find", steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}}, toolUse: execute},
+		{name: "no following step", steps: []evalStep{{ExpectedTool: dynamicFindTool}}, toolUse: execute},
+		{name: "next step not execute", steps: []evalStep{{ExpectedTool: dynamicFindTool}, {ExpectedTool: resourceListTool}}, toolUse: execute},
+		{name: "next step mismatch", steps: findThenExecute, toolUse: modelContentBlock{Name: dynamicExecuteActionTool, Input: map[string]any{"action": "issue.list"}}},
+		{name: "accepted", steps: findThenExecute, toolUse: execute, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			state := &modelEvaluationState{stepIndex: tc.index}
+			_, _, accepted := acceptDirectDynamicExecuteStep(tc.steps, tc.index, tc.toolUse, tc.validation, routes, state)
+			if accepted != tc.want {
+				t.Fatalf("acceptDirectDynamicExecuteStep() accepted = %t, want %t", accepted, tc.want)
+			}
+		})
+	}
+}
+
+// TestAcceptOptionalBridgeStep_RejectsNonSkippableShapes verifies the optional
+// bridge skip only applies to an optional bridge step followed by another
+// bridge step that the call actually satisfies.
+func TestAcceptOptionalBridgeStep_RejectsNonSkippableShapes(t *testing.T) {
+	toolUse := modelContentBlock{Name: resourceListTool, Input: map[string]any{}}
+	cases := []struct {
+		name       string
+		steps      []evalStep
+		validation validationResult
+		want       bool
+	}{
+		{name: "step not optional", steps: []evalStep{{ExpectedTool: capabilityListTool}, {ExpectedTool: resourceListTool}}},
+		{name: "already valid", steps: []evalStep{{ExpectedTool: capabilityListTool, OptionalStep: true}, {ExpectedTool: resourceListTool}}, validation: validationResult{Valid: true}},
+		{name: "no next step", steps: []evalStep{{ExpectedTool: capabilityListTool, OptionalStep: true}}},
+		{name: "next not a bridge step", steps: []evalStep{{ExpectedTool: capabilityListTool, OptionalStep: true}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}}},
+		{name: "next mismatch", steps: []evalStep{{ExpectedTool: capabilityListTool, OptionalStep: true}, {ExpectedTool: promptListTool}}},
+		{name: "accepted", steps: []evalStep{{ExpectedTool: capabilityListTool, OptionalStep: true}, {ExpectedTool: resourceListTool}}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bridgeCtx := capabilityBridgeStepContext{steps: tc.steps, toolUse: toolUse, result: &taskResult{}, state: &modelEvaluationState{}}
+			_, _, accepted := bridgeCtx.acceptOptionalBridgeStep(tc.steps[0], tc.validation)
+			if accepted != tc.want {
+				t.Fatalf("acceptOptionalBridgeStep() = %t, want %t", accepted, tc.want)
+			}
+		})
+	}
+}
+
+// TestIsReadOnlyUnexpectedAction_ClassifiesLeafActions verifies the harmless
+// read-only classification covers the named leaves, the get/list prefixes and
+// suffixes, and rejects mutating leaves.
+func TestIsReadOnlyUnexpectedAction_ClassifiesLeafActions(t *testing.T) {
+	cases := []struct {
+		action string
+		want   bool
+	}{
+		{action: "user.current", want: true},
+		{action: "gitlab_server.health_check", want: true},
+		{action: "job.trace", want: true},
+		{action: "search.projects", want: true},
+		{action: "project.get", want: true},
+		{action: "issue.list", want: true},
+		{action: "project.get_protected", want: true},
+		{action: "project.list_hooks", want: true},
+		{action: "project.hook_get", want: true},
+		{action: "project.hook_list", want: true},
+		{action: "issue.create", want: false},
+		{action: "project.delete", want: false},
+		{action: "nodot", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			if got := isReadOnlyUnexpectedAction(tc.action); got != tc.want {
+				t.Fatalf("isReadOnlyUnexpectedAction(%s) = %t, want %t", tc.action, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestToolResultBlock_UsesErrorTextWhenContentIsEmpty verifies an errored tool
+// result block is flagged and falls back to the error text only when no
+// content was produced.
+func TestToolResultBlock_UsesErrorTextWhenContentIsEmpty(t *testing.T) {
+	cases := []struct {
+		name        string
+		content     string
+		err         error
+		wantContent string
+		wantIsError bool
+	}{
+		{name: "success", content: "ok", wantContent: "ok"},
+		{name: "error with content", content: "detail", err: errors.New("boom"), wantContent: "detail", wantIsError: true},
+		{name: "error without content", err: errors.New("boom"), wantContent: "boom", wantIsError: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			block := toolResultBlock("id", tc.content, tc.err)
+			if block.Content != tc.wantContent || block.IsError != tc.wantIsError || block.ToolUseID != "id" {
+				t.Fatalf("toolResultBlock() = %+v, want content %q error %t", block, tc.wantContent, tc.wantIsError)
+			}
+		})
+	}
+}
+
+// TestMarshalToolResult_UnmarshalableValue_ReturnsError verifies a value the
+// JSON encoder rejects surfaces as a marshal error.
+func TestMarshalToolResult_UnmarshalableValue_ReturnsError(t *testing.T) {
+	if _, err := marshalToolResult(make(chan int)); err == nil || !strings.Contains(err.Error(), "marshal tool result") {
+		t.Fatalf("marshalToolResult() error = %v, want marshal failure", err)
+	}
+}
+
+// TestInvalidToolUseFingerprint_UnmarshalableInput_FallsBackToToolName
+// verifies a tool call whose input cannot be marshaled still yields a stable
+// fingerprint.
+func TestInvalidToolUseFingerprint_UnmarshalableInput_FallsBackToToolName(t *testing.T) {
+	got := invalidToolUseFingerprint(modelContentBlock{Name: "gitlab_project", Input: map[string]any{"bad": make(chan int)}})
+	if got != "gitlab_project" {
+		t.Fatalf("invalidToolUseFingerprint() = %q, want tool name fallback", got)
+	}
+}
+
+// TestCall_RetriesUntilBudgetExhausted verifies a retryable provider failure
+// is retried up to the configured budget and the last error is returned.
+func TestCall_RetriesUntilBudgetExhausted(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	var attempts int
+	runner := &modelRunner{
+		apiKey:  "test-key",
+		model:   "m",
+		retries: 2,
+		client: &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+			attempts++
+			return &http.Response{StatusCode: http.StatusTooManyRequests, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"error":{"type":"rate_limit","message":"slow down"}}`))}, nil
+		})},
+	}
+	_, err := runner.call(t.Context(), "system", nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "status 429") {
+		t.Fatalf("call() error = %v, want rate limit error", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3 (initial plus two retries)", attempts)
+	}
+}
+
+// TestCall_ContextCanceledDuringRetryWait_ReturnsContextError verifies a
+// canceled context between retries stops the loop with the context error.
+func TestCall_ContextCanceledDuringRetryWait_ReturnsContextError(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	runner := &modelRunner{
+		apiKey:    "test-key",
+		model:     "m",
+		retries:   1,
+		retryWait: time.Hour,
+		client: &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+			cancel()
+			return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+		})},
+	}
+	_, err := runner.call(ctx, "system", nil, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("call() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestLookupToolResult_DynamicFindWithoutSession_UsesSimulatedRegistry
+// verifies the schema/discovery lookup falls back to the simulated registry
+// when no MCP session is available, and answers meta schema lookups directly.
+func TestLookupToolResult_DynamicFindWithoutSession_UsesSimulatedRegistry(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: projectGetRoute()}}
+	runner := &modelRunner{}
+	payload, exchange, err := runner.lookupToolResult(t.Context(), routes, modelContentBlock{Name: dynamicFindTool, Input: map[string]any{"query": "project get"}}, true)
+	if err != nil || exchange != nil || !strings.Contains(payload, actionProjectGet) {
+		t.Fatalf("lookupToolResult(dynamic) = %q, %+v, %v; want simulated find result", payload, exchange, err)
+	}
+	metaRoutes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+	payload, exchange, err = runner.lookupToolResult(t.Context(), metaRoutes, modelContentBlock{Name: "gitlab_server", Input: map[string]any{"action": "schema_index"}}, false)
+	if err != nil || exchange != nil || !strings.Contains(payload, "gitlab_project") {
+		t.Fatalf("lookupToolResult(schema) = %q, %+v, %v; want schema index", payload, exchange, err)
+	}
 }

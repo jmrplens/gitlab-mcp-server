@@ -5,6 +5,9 @@
 package evaluator
 
 import (
+	"context"
+	"errors"
+	"maps"
 	"strings"
 	"testing"
 )
@@ -220,5 +223,128 @@ func TestFixtureOutputCache_ReusesClonedOutputForSameKey(t *testing.T) {
 	}
 	if got := second["project_id"]; got != "123" {
 		t.Fatalf("cached project_id = %q, want original cloned value", got)
+	}
+}
+
+// TestValidateAttemptNameFixtureOutput_RequiresEveryAttemptName verifies the
+// attempt-name fixture validator accepts a complete output and names the first
+// missing key, so a case prompt never interpolates a blank resource name.
+func TestValidateAttemptNameFixtureOutput_RequiresEveryAttemptName(t *testing.T) {
+	complete := attemptNameFixtureOutput(FixtureContext{ModelName: "model", RunIndex: 1, RunSuffix: "suffix"})
+	if err := validateAttemptNameFixtureOutput(t.Context(), FixtureContext{}, complete); err != nil {
+		t.Fatalf("validateAttemptNameFixtureOutput(complete) error = %v", err)
+	}
+	incomplete := maps.Clone(complete)
+	incomplete["wiki_title"] = "  "
+	err := validateAttemptNameFixtureOutput(t.Context(), FixtureContext{}, incomplete)
+	if err == nil || !strings.Contains(err.Error(), `missing output "wiki_title"`) {
+		t.Fatalf("validateAttemptNameFixtureOutput(incomplete) error = %v, want the missing key", err)
+	}
+}
+
+// TestValidateLiveCaseFixtureOutput_RequiresProjectOrStandaloneResource
+// verifies a live fixture output is accepted when it names a project or a
+// standalone resource and rejected when it names neither.
+func TestValidateLiveCaseFixtureOutput_RequiresProjectOrStandaloneResource(t *testing.T) {
+	cases := []struct {
+		name    string
+		output  FixtureOutput
+		wantErr bool
+	}{
+		{name: "project", output: FixtureOutput{"project_id": "101"}},
+		{name: "snippet", output: FixtureOutput{"snippet_id": "9"}},
+		{name: "neither", output: FixtureOutput{"branch_name": "feature/x"}, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateLiveCaseFixtureOutput(t.Context(), FixtureContext{}, tc.output)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validateLiveCaseFixtureOutput(%v) error = %v, want error = %t", tc.output, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestNoopCaseFixtureCleanup_ReturnsNil verifies the shared cleanup used by
+// fixtures that leave their resources in place reports no error.
+func TestNoopCaseFixtureCleanup_ReturnsNil(t *testing.T) {
+	if err := noopCaseFixtureCleanup(t.Context(), FixtureContext{}, FixtureOutput{}); err != nil {
+		t.Fatalf("noopCaseFixtureCleanup() error = %v, want nil", err)
+	}
+}
+
+// TestFixtureNames_RendersRegisteredNames verifies the diagnostic used when a
+// fixture lookup misses lists the registered names.
+func TestFixtureNames_RendersRegisteredNames(t *testing.T) {
+	got := fixtureNames([]CaseFixtureSpec{{Name: "branch"}, {Name: "issue"}})
+	if got != "[branch issue]" {
+		t.Fatalf("fixtureNames() = %q, want [branch issue]", got)
+	}
+}
+
+// TestFixtureOutputFromLiveState_NilState_ReturnsEmptyOutput verifies a
+// missing preparer state yields an empty output rather than panicking.
+func TestFixtureOutputFromLiveState_NilState_ReturnsEmptyOutput(t *testing.T) {
+	if got := fixtureOutputFromLiveState(nil); len(got) != 0 {
+		t.Fatalf("fixtureOutputFromLiveState(nil) = %v, want empty output", got)
+	}
+}
+
+// TestFormatInt64_ZeroBecomesEmpty verifies unset numeric fixture identifiers
+// render as an empty string so validation catches them.
+func TestFormatInt64_ZeroBecomesEmpty(t *testing.T) {
+	cases := []struct {
+		name  string
+		value int64
+		want  string
+	}{
+		{name: "zero", value: 0, want: ""},
+		{name: "positive", value: 42, want: "42"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatInt64(tc.value); got != tc.want {
+				t.Fatalf("formatInt64(%d) = %q, want %q", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNewLiveCaseFixturePreparer_WithoutClient_ReturnsError verifies the typed
+// fixture preparer refuses to bootstrap without a GitLab client.
+func TestNewLiveCaseFixturePreparer_WithoutClient_ReturnsError(t *testing.T) {
+	if _, err := newLiveCaseFixturePreparer(t.Context(), FixtureContext{}); err == nil || !strings.Contains(err.Error(), "typed live fixture requires GitLab client") {
+		t.Fatalf("newLiveCaseFixturePreparer() error = %v, want missing client error", err)
+	}
+}
+
+// TestLiveCaseFixture_EnsureFailure_PropagatesError verifies the shared live
+// fixture builder reports a provisioning failure instead of a partial output.
+func TestLiveCaseFixture_EnsureFailure_PropagatesError(t *testing.T) {
+	client := newDestructiveFixtureClient(t)
+	fixture := liveCaseFixture("boom", FixtureScopeCase, []string{"project_id"}, func(context.Context, *liveFixturePreparer) error {
+		return errors.New("provisioning failed")
+	})
+	if _, err := fixture.Ensure(t.Context(), FixtureContext{Client: client}); err == nil || !strings.Contains(err.Error(), "provisioning failed") {
+		t.Fatalf("Ensure() error = %v, want provisioning failure", err)
+	}
+}
+
+// TestAttemptCaseSuffix_KeepsAlphanumericsOnly verifies the per-case suffix is
+// reduced to characters GitLab accepts in a resource name.
+func TestAttemptCaseSuffix_KeepsAlphanumericsOnly(t *testing.T) {
+	cases := []struct {
+		id   EvalCaseID
+		want string
+	}{
+		{id: "MS-ENT-DYN-10", want: "msentdyn10"},
+		{id: "", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.id), func(t *testing.T) {
+			if got := attemptCaseSuffix(tc.id); got != tc.want {
+				t.Fatalf("attemptCaseSuffix(%q) = %q, want %q", tc.id, got, tc.want)
+			}
+		})
 	}
 }

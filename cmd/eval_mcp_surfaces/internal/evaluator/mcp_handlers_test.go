@@ -178,3 +178,87 @@ func TestEvalElicitationSchemaValue_TypeAwareDefaults(t *testing.T) {
 		t.Fatalf("array default = %#v, want empty array", got)
 	}
 }
+
+// TestConfigureEvalElicitationFromOutput_SetsAndDefaultsValues verifies the
+// elicitation handler picks up the release tag and MR source branch produced
+// by a fixture, and falls back to the shared fixture constants when the
+// output lacks them.
+func TestConfigureEvalElicitationFromOutput_SetsAndDefaultsValues(t *testing.T) {
+	t.Cleanup(func() {
+		setEvalElicitationReleaseTag("")
+		setEvalElicitationSourceBranch("")
+	})
+	cases := []struct {
+		name       string
+		output     FixtureOutput
+		wantTag    string
+		wantBranch string
+	}{
+		{name: "fixture values", output: FixtureOutput{"release_tag_name": "v1.2.3-eval", "mr_source_branch": "feature/eval-x"}, wantTag: "v1.2.3-eval", wantBranch: "feature/eval-x"},
+		{name: "defaults", output: FixtureOutput{}, wantTag: liveFixtureElicitationTag, wantBranch: liveFixtureFeatureRef},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			configureEvalElicitationFromOutput(tc.output)
+			if got := evalElicitationReleaseTagName(); got != tc.wantTag {
+				t.Fatalf("evalElicitationReleaseTagName() = %q, want %q", got, tc.wantTag)
+			}
+			if got := evalElicitationSourceBranchName(); got != tc.wantBranch {
+				t.Fatalf("evalElicitationSourceBranchName() = %q, want %q", got, tc.wantBranch)
+			}
+			if got := evalElicitationTextValue("source_branch"); got != tc.wantBranch {
+				t.Fatalf("evalElicitationTextValue(source_branch) = %q, want %q", got, tc.wantBranch)
+			}
+			if got := evalElicitationTextValue("tag_name"); got != tc.wantTag {
+				t.Fatalf("evalElicitationTextValue(tag_name) = %q, want %q", got, tc.wantTag)
+			}
+		})
+	}
+}
+
+// TestEvalElicitationTextValue_ReturnsStableFieldValues verifies each known
+// elicitation field renders its Docker-fixture-compatible value and unknown
+// fields get a prefixed placeholder.
+func TestEvalElicitationTextValue_ReturnsStableFieldValues(t *testing.T) {
+	cases := []struct {
+		field string
+		want  string
+	}{
+		{field: "title", want: "Evaluation elicitation test"},
+		{field: "description", want: "Created by eval_mcp_surfaces elicitation handler"},
+		{field: "target_branch", want: liveFixtureDefaultRef},
+		{field: "default_branch", want: liveFixtureDefaultRef},
+		{field: "labels", want: "evaluation"},
+		{field: "other", want: "eval-elicit-other"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.field, func(t *testing.T) {
+			if got := evalElicitationTextValue(tc.field); got != tc.want {
+				t.Fatalf("evalElicitationTextValue(%s) = %q, want %q", tc.field, got, tc.want)
+			}
+		})
+	}
+	if got := evalElicitationTextValue("name"); !strings.HasPrefix(got, "eval-elicit-resource-") {
+		t.Fatalf("evalElicitationTextValue(name) = %q, want unique resource name", got)
+	}
+}
+
+// TestEvalElicitationObjectValue_SkipsNonObjectProperties verifies nested
+// object schemas render their child values and ignore malformed entries.
+func TestEvalElicitationObjectValue_SkipsNonObjectProperties(t *testing.T) {
+	cases := []struct {
+		name string
+		prop map[string]any
+		want map[string]any
+	}{
+		{name: "no properties", prop: map[string]any{"type": "object"}, want: map[string]any{}},
+		{name: "mixed children", prop: map[string]any{"properties": map[string]any{"count": map[string]any{"type": "integer"}, "bad": "not-a-schema"}}, want: map[string]any{"count": 0}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := evalElicitationObjectValue(tc.prop); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("evalElicitationObjectValue() = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}

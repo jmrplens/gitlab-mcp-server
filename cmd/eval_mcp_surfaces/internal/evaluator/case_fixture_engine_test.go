@@ -233,3 +233,151 @@ func TestPrepareTaskAttempt_UsesTypedFixtureEngineForTypedFixtureCases(t *testin
 		t.Fatalf("attempt = %+v, want prepared case and rendered task prompt", attempt)
 	}
 }
+
+// TestFixtureIdempotencyKey_EncodesScopeAndRuntime verifies the idempotency
+// key changes with the fixture scope (bootstrap, run, case, attempt), uses the
+// fixture's required runtime over the environment edition, and ends with the
+// fixture's own key parts.
+func TestFixtureIdempotencyKey_EncodesScopeAndRuntime(t *testing.T) {
+	env := FixtureContext{RuntimeEdition: EvalCaseEdition(editionCE), RunSuffix: "abc", ModelName: "m", RunIndex: 2}
+	evalCase := EvalCase{ID: "MT-KEY"}
+	cases := []struct {
+		name    string
+		fixture CaseFixtureSpec
+		want    string
+	}{
+		{name: "bootstrap", fixture: CaseFixtureSpec{Name: "project", Scope: FixtureScopeBootstrap}, want: "ce:bootstrap:project"},
+		{name: "run", fixture: CaseFixtureSpec{Name: "project", Scope: FixtureScopeRun}, want: "ce:run:abc:project"},
+		{name: "case", fixture: CaseFixtureSpec{Name: "project", Scope: FixtureScopeCase, IdempotencyKeyParts: []string{"x"}}, want: "ce:case:MT-KEY:project:x"},
+		{name: "attempt", fixture: CaseFixtureSpec{Name: "project", Scope: FixtureScopeAttempt}, want: "ce:attempt:MT-KEY:m:2:abc:project"},
+		{name: "required runtime wins", fixture: CaseFixtureSpec{Name: "project", Scope: FixtureScopeBootstrap, RequiredRuntime: EvalCaseEdition(editionEnterprise)}, want: "enterprise:bootstrap:project"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fixtureIdempotencyKey(env, evalCase, tc.fixture); got != tc.want {
+				t.Fatalf("fixtureIdempotencyKey() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFirstPositiveInt_PrefersPositiveValues verifies the first positive
+// argument wins and the fallback is one.
+func TestFirstPositiveInt_PrefersPositiveValues(t *testing.T) {
+	cases := []struct {
+		name   string
+		first  int
+		second int
+		want   int
+	}{
+		{name: "first positive", first: 3, second: 2, want: 3},
+		{name: "second positive", first: 0, second: 2, want: 2},
+		{name: "neither", first: -1, second: 0, want: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := firstPositiveInt(tc.first, tc.second); got != tc.want {
+				t.Fatalf("firstPositiveInt(%d, %d) = %d, want %d", tc.first, tc.second, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCopyNonEmptyFixtureOutput_SkipsBlankValues verifies blank fixture
+// outputs never overwrite values already collected from earlier fixtures.
+func TestCopyNonEmptyFixtureOutput_SkipsBlankValues(t *testing.T) {
+	dst := FixtureOutput{"project_id": "1"}
+	copyNonEmptyFixtureOutput(dst, FixtureOutput{"project_id": " ", "issue_iid": "7"})
+	if dst["project_id"] != "1" || dst["issue_iid"] != "7" {
+		t.Fatalf("dst = %v, want project_id kept and issue_iid copied", dst)
+	}
+}
+
+// TestCleanupPreparedFixtures_SkipsNilAndJoinsErrors verifies nil cleanup
+// handles are ignored, cleanups run in reverse order, and every error is
+// joined into the returned error.
+func TestCleanupPreparedFixtures_SkipsNilAndJoinsErrors(t *testing.T) {
+	var order []string
+	cleanups := []PreparedFixtureCleanup{
+		func(context.Context) error { order = append(order, "first"); return errors.New("first failed") },
+		nil,
+		func(context.Context) error { order = append(order, "second"); return nil },
+	}
+	err := cleanupPreparedFixtures(t.Context(), cleanups)
+	if err == nil || !strings.Contains(err.Error(), "first failed") {
+		t.Fatalf("cleanupPreparedFixtures() error = %v, want joined first failure", err)
+	}
+	if strings.Join(order, ",") != "second,first" {
+		t.Fatalf("cleanup order = %v, want reverse order", order)
+	}
+}
+
+// TestErrWithPreparedFixtureCleanup_WrapsCleanupFailure verifies a cleanup
+// failure during error unwinding is appended to the original error.
+func TestErrWithPreparedFixtureCleanup_WrapsCleanupFailure(t *testing.T) {
+	original := errors.New("ensure failed")
+	err := errWithPreparedFixtureCleanup(t.Context(), original, []PreparedFixtureCleanup{
+		func(context.Context) error { return errors.New("cleanup failed") },
+	})
+	if !errors.Is(err, original) || !strings.Contains(err.Error(), "cleanup prepared fixtures: cleanup failed") {
+		t.Fatalf("errWithPreparedFixtureCleanup() error = %v, want original plus cleanup failure", err)
+	}
+	if got := errWithPreparedFixtureCleanup(t.Context(), original, nil); !errors.Is(got, original) || got.Error() != original.Error() {
+		t.Fatalf("errWithPreparedFixtureCleanup(no cleanups) = %v, want original", got)
+	}
+}
+
+// TestCleanupHandle_NilCleanupAndFallbackContext verifies a fixture without a
+// cleanup yields no handle, and a handle invoked with a nil context falls back
+// to the preparation context.
+func TestCleanupHandle_NilCleanupAndFallbackContext(t *testing.T) {
+	if handle := cleanupHandle(t.Context(), FixtureContext{}, CaseFixtureSpec{}, nil); handle != nil {
+		t.Fatal("cleanupHandle() = non-nil, want nil for fixture without cleanup")
+	}
+	type ctxKey struct{}
+	prepareCtx := context.WithValue(t.Context(), ctxKey{}, "prepare")
+	var seen any
+	handle := cleanupHandle(prepareCtx, FixtureContext{}, CaseFixtureSpec{Cleanup: func(ctx context.Context, _ FixtureContext, _ FixtureOutput) error {
+		seen = ctx.Value(ctxKey{})
+		return nil
+	}}, nil)
+	// A nil context here exercises the documented fallback to the preparation context.
+	if err := handle(nil); err != nil { //nolint:staticcheck,nolintlint // deliberate nil context
+		t.Fatalf("handle(nil) error = %v", err)
+	}
+	if seen != "prepare" {
+		t.Fatalf("cleanup context value = %v, want prepare context", seen)
+	}
+}
+
+// TestPrepareCaseFixture_MissingEnsure_ReturnsError verifies a fixture spec
+// without an Ensure callback is rejected before any attempt runs.
+func TestPrepareCaseFixture_MissingEnsure_ReturnsError(t *testing.T) {
+	_, _, _, err := prepareCaseFixture(t.Context(), FixtureContext{}, EvalCase{ID: "MT-X"}, CaseFixtureSpec{Name: "broken"})
+	if err == nil || !strings.Contains(err.Error(), "fixture broken has no ensure function") {
+		t.Fatalf("prepareCaseFixture() error = %v, want missing ensure error", err)
+	}
+}
+
+// TestCaseUsesTypedFixtureEngine_DetectsFixturesOrTemplate verifies a task
+// routes through the typed engine when its case declares fixtures or a prompt
+// template, and not otherwise.
+func TestCaseUsesTypedFixtureEngine_DetectsFixturesOrTemplate(t *testing.T) {
+	cases := []struct {
+		name string
+		task evalTask
+		want bool
+	}{
+		{name: "no case", want: false},
+		{name: "plain case", task: evalTask{Case: &EvalCase{Prompt: "x"}}, want: false},
+		{name: "fixtures", task: evalTask{Case: &EvalCase{Fixtures: []CaseFixtureSpec{{Name: "f"}}}}, want: true},
+		{name: "template", task: evalTask{Case: &EvalCase{PromptTemplate: CasePromptTemplate{Text: "t"}}}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := caseUsesTypedFixtureEngine(tc.task); got != tc.want {
+				t.Fatalf("caseUsesTypedFixtureEngine() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
