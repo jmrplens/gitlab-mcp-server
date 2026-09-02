@@ -44,8 +44,7 @@
                 "CLIENT_COMPAT",
                 "-e",
                 "LOG_LEVEL",
-                "ghcr.io/jmrplens/gitlab-mcp-server:latest",
-                "--http=false"
+                "ghcr.io/jmrplens/gitlab-mcp-server:latest"
             ]
         }
     }

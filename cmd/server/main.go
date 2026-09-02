@@ -340,12 +340,12 @@ func main() {
 	// Before applyLocalFilesystemPolicy, which asks what transport this
 	// process is serving: a caller reached over HTTP has no files here, so an
 	// inferred transport has to be settled before the answer is used.
-	resolvedHTTP, transportErr := resolveTransport(transport, useHTTP, flagWasSet("http"))
+	transportChoice, transportErr := resolveTransport(transport, useHTTP, flagWasSet("http"))
 	if transportErr != nil {
 		fmt.Fprintln(os.Stderr, transportErr)
 		os.Exit(2)
 	}
-	useHTTP = resolvedHTTP
+	useHTTP = transportChoice.HTTP
 
 	applyLocalFilesystemPolicy(useHTTP)
 	hcfg.setFlags = make(map[string]bool)
@@ -418,6 +418,10 @@ func main() {
 		Level: parseLogLevel(os.Getenv("LOG_LEVEL")),
 	})
 	slog.SetDefault(slog.New(baseLogHandler))
+
+	// Held back until here: the transport had to be settled before the handler
+	// that formats this could be built, and the operator asked for JSON.
+	transportChoice.explain()
 
 	health.SetServerInfo(health.ServerInfo{
 		Version:    version,

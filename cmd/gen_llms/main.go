@@ -267,14 +267,14 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("  \"mcpServers\": {\n")
 	b.WriteString("    \"gitlab\": {\n")
 	b.WriteString("      \"command\": \"docker\",\n")
-	b.WriteString("      \"args\": [\"run\", \"-i\", \"--rm\", \"-e\", \"GITLAB_TOKEN\", \"ghcr.io/jmrplens/gitlab-mcp-server:latest\", \"--http=false\"],\n")
+	b.WriteString("      \"args\": [\"run\", \"-i\", \"--rm\", \"-e\", \"GITLAB_TOKEN\", \"ghcr.io/jmrplens/gitlab-mcp-server:latest\"],\n")
 	b.WriteString("      \"env\": { \"GITLAB_TOKEN\": \"<GitLab personal access token, api scope>\" }\n")
 	b.WriteString("    }\n")
 	b.WriteString("  }\n")
 	b.WriteString("}\n")
 	b.WriteString("```\n\n")
 	b.WriteString("Native binary instead of Docker: download the release asset for the user's OS and architecture from the Releases page, then use its path as `command` with no `args` and the same `env`.\n\n")
-	b.WriteString("Claude Code (CLI): `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false` (Docker), or `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).\n\n")
+	b.WriteString("Claude Code (CLI): `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest` (Docker), or `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).\n\n")
 	fmt.Fprintf(&b, "The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](%s).\n\n",
 		absoluteLLMSTarget("docs/guides/ide-configuration.md"))
 

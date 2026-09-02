@@ -137,7 +137,7 @@ Docker (no install — pulls the image on first run):
 
 ```bash
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
-  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
 Any other channel registers the same way once `gitlab-mcp-server` is on your PATH: `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`.
@@ -145,7 +145,7 @@ Any other channel registers the same way once `gitlab-mcp-server` is on your PAT
 <LinkCard
   title="Docker"
   href="/gitlab-mcp-server/install/docker/"
-  description="stdio with --http=false, HTTP mode on a port, environment variables, tags, the Docker Hub mirror, updating"
+  description="stdio for a desktop client, HTTP mode on a port, environment variables, tags, the Docker Hub mirror, updating"
 />
 
 ### npm / npx (any platform)
@@ -322,7 +322,7 @@ This repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifes
 /plugin install jmrplens/gitlab-mcp-server
 ```
 
-The plugin runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest` through `docker run -i --rm`, with `--http=false` after the image name, so you need [Docker](https://docs.docker.com/get-docker/) installed and running. Keep that override if you copy the Docker configuration into VS Code or another stdio client; otherwise the container starts an HTTP listener and the client waits forever for a stdio `initialize` response.
+The plugin runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest` through `docker run -i --rm` and passes no transport flag, so you need [Docker](https://docs.docker.com/get-docker/) installed and running. The image reads the transport off stdin and `-i` is what puts a pipe there, so keep the `-i` if you copy the Docker configuration into VS Code or another stdio client; without it the container gets `/dev/null`, starts an HTTP listener, and the client waits forever for a stdio `initialize` response.
 
 <LinkCard
   title="Agent Plugins"

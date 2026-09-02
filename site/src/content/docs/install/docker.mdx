@@ -1,6 +1,6 @@
 ---
 title: Docker
-description: Run GitLab MCP Server from the ghcr.io container image, over stdio with --http=false for a desktop client or as an HTTP service on a port, pass settings through environment variables, pick a tag, and update with docker pull.
+description: Run GitLab MCP Server from the ghcr.io container image, over stdio for a desktop client or as an HTTP service on a port, pass settings through environment variables, pick a tag, and update with docker pull.
 datePublished: "2026-09-01"
 ---
 
@@ -8,21 +8,21 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 The image is published as [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) and mirrored as `docker.io/jmrplens/gitlab-mcp-server` on [Docker Hub](https://hub.docker.com/r/jmrplens/gitlab-mcp-server), with a `<version>` tag and `latest` on both registries, for `linux/amd64` and `linux/arm64`. Every release builds it with provenance and SBOM attestations and signs it by digest with Cosign. Inside: an Alpine base with CA certificates and time zone data, the binary at `/usr/local/bin/gitlab-mcp-server`, a non-root `appuser` (UID 10001), port 8080 exposed, and a health check against `/health`.
 
-:::caution[The image starts in HTTP mode]
-Its entrypoint is `gitlab-mcp-server` and its default command is `--http --http-addr 0.0.0.0:8080`. Any argument after the image name replaces that command wholesale, so for a desktop client you pass `--http=false` to get the stdio transport. Without it, the container starts an HTTP listener and a stdio client waits forever for the `initialize` response. Keep `docker run -i` in that mode and do not publish port 8080.
+:::note[The image picks its transport from stdin]
+Its entrypoint is `gitlab-mcp-server` and its default command is `--transport auto --http-addr 0.0.0.0:8080`. `auto` asks whether anything was connected to the container's standard input: `docker run -i` gives it a pipe, which is a client speaking JSON-RPC, so it runs stdio; `docker run` without `-i`, and Compose without `stdin_open`, give it `/dev/null`, which nobody speaks down, so it listens on HTTP. Neither mode needs a flag. Keep `docker run -i` for a desktop client and do not publish port 8080 in that mode. To say the transport outright instead, pass `--transport stdio` or `--transport http` after the image name, repeating `--http-addr 0.0.0.0:8080` alongside it because any argument there replaces the default command wholesale.
 :::
 
 ## Stdio: the image as a local MCP server
 
 ```bash
-docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
 `-e GITLAB_TOKEN` with no value forwards the variable from the environment the client gives `docker`, so the token lives in the client's `env` block rather than on the command line. Docker pulls the image on the first run. The client entry that launches this command is under [Configure your client](#configure-your-client) below; with Claude Code it is one line:
 
 ```bash
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
-  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
 The one-click buttons for VS Code, Cursor, LM Studio and Kiro on the [Quick Start](/gitlab-mcp-server/getting-started/#one-click-buttons) register exactly this entry, and the [Agent Plugins](/gitlab-mcp-server/install/agent-plugin/) manifest runs it too.
@@ -37,7 +37,7 @@ The container has its own CA store, so a certificate your host trusts is still u
 ```bash
 docker run -i --rm -e GITLAB_TOKEN -e GITLAB_URL \
   -v /path/to/ca-bundle.crt:/certs/ca-bundle.crt:ro -e SSL_CERT_FILE=/certs/ca-bundle.crt \
-  ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+  ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
 `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative: it disables certificate verification for every GitLab request, and OAuth mode refuses it for a non-loopback instance.
@@ -45,7 +45,7 @@ docker run -i --rm -e GITLAB_TOKEN -e GITLAB_URL \
 
 ## HTTP: the image as a service
 
-The container's default command listens on port 8080, but it will not start until you say which GitLab it serves:
+Started without `-i`, the container has no stdin to speak on and listens on port 8080, but it will not start until you say which GitLab it serves:
 
 ```bash
 docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest \
@@ -121,7 +121,7 @@ The stdio entry for a desktop client is the `docker run` command from above, spl
   "mcpServers": {
     "gitlab": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"],
+      "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest"],
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }

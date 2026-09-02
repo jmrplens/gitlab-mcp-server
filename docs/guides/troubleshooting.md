@@ -89,12 +89,12 @@ See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) for the fu
 
 ## MCP Transport (Stdio)
 
-| Symptom                                                                               | Cause                                                     | Solution                                                                                                                            |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| No output from server                                                                 | MCP client not sending JSON-RPC to stdin                  | Verify the client is configured for stdio transport and sends `initialize` as the first message                                     |
-| Garbled output or parse errors                                                        | Debug logs mixed with JSON-RPC on stdout                  | Ensure `LOG_LEVEL` is not `debug` in production; logs go to stderr, JSON-RPC to stdout                                              |
-| Server exits immediately                                                              | Stdin closed prematurely                                  | The server exits when stdin is closed — ensure the MCP client keeps the pipe open                                                   |
-| VS Code waits on `initialize` and Docker logs show `starting MCP server in HTTP mode` | Docker image HTTP default is running under a stdio client | Add `--http=false` after the image name in the Docker args, or change the client entry to HTTP mode with URL `http://host:8080/mcp` |
+| Symptom                                                                               | Cause                                                  | Solution                                                                                                                                            |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No output from server                                                                 | MCP client not sending JSON-RPC to stdin               | Verify the client is configured for stdio transport and sends `initialize` as the first message                                                     |
+| Garbled output or parse errors                                                        | Debug logs mixed with JSON-RPC on stdout               | Ensure `LOG_LEVEL` is not `debug` in production; logs go to stderr, JSON-RPC to stdout                                                              |
+| Server exits immediately                                                              | Stdin closed prematurely                               | The server exits when stdin is closed — ensure the MCP client keeps the pipe open                                                                   |
+| VS Code waits on `initialize` and Docker logs show `starting MCP server in HTTP mode` | The container has no stdin, so the image inferred HTTP | Add `-i` to the `docker run` args so the container gets a pipe to speak on, or change the client entry to HTTP mode with URL `http://host:8080/mcp` |
 
 ## IDE-Specific Issues
 

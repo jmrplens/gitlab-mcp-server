@@ -513,3 +513,86 @@ func TestStdio_AliveReportsADeadProcess(t *testing.T) {
 		t.Error("alive() still reports the process as running after it exited, so every assertion resting on it is vacuous")
 	}
 }
+
+// TestTransportAuto_WithAPipeOnStdin_SpeaksStdio pins the half of the
+// transport inference a container image depends on, against a real process.
+//
+// The image's CMD is --transport auto, so what a client gets when it runs
+// `docker run -i` is decided by what auto reads off file descriptor 0. An MCP
+// client connects a pipe there, which is exactly what exec.Cmd's StdinPipe
+// gives this session, so the shape under test is the shape that ships. The
+// unit tests in cmd/server/transport_test.go cover the decision against every
+// kind of stdin, including the /dev/null that means HTTP; what they cannot
+// cover is the decision actually reaching the transport the process then
+// serves, since they never start one.
+//
+// Both halves are asserted, because either alone would pass while the feature
+// was broken: the log line says what was inferred, and the JSON-RPC answers
+// coming back down stdout say the server went on to serve it. An HTTP listener
+// answers nothing here whatever it logged.
+func TestTransportAuto_WithAPipeOnStdin_SpeaksStdio(t *testing.T) {
+	gitlab := startFakeGitLab(t)
+	s := startSessionWithArgs(t, baseEnv(gitlab.URL), "--transport", "auto")
+
+	// The same path TestStdout_CarriesNothingButJSONRPC walks, for the same
+	// reason: the handshake, the catalog and a call that reaches GitLab are
+	// where a stray write to stdout would land, and readMessage fails on
+	// anything that is not JSON.
+	for _, tc := range []struct {
+		name    string
+		request string
+	}{
+		// The legacy handshake, spelled raw: initialize is removed in
+		// 2026-07-28, so the per-request _meta that request() attaches would
+		// make the server refuse it.
+		{name: "initialize", request: `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"c","version":"1"}}}`},
+		{name: "tools/list", request: request(2, "tools/list", "")},
+		{name: "tools/call", request: request(3, "tools/call", `{"name":"gitlab_execute_action","arguments":{"action":"user.get_current"}}`)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := s.call(t, tc.request)
+			if got["jsonrpc"] != "2.0" {
+				t.Errorf("%s was not answered with JSON-RPC 2.0: %v", tc.name, got)
+			}
+			if got["error"] != nil {
+				t.Errorf("%s failed: %v", tc.name, got["error"])
+			}
+		})
+	}
+
+	inferred := findLogRecord(t, s.stderrText(), "transport inferred from stdin")
+	if got, _ := inferred["transport"].(string); got != "stdio" {
+		t.Errorf("the transport was inferred as %q, want stdio: %v", got, inferred)
+	}
+	// The reason is asserted too: inferring stdio from a stdin it failed to
+	// examine would satisfy the line above while meaning the inference never
+	// looked at anything.
+	if reason, _ := inferred["reason"].(string); !strings.Contains(reason, "pipe") {
+		t.Errorf("stdio was inferred for reason %q, want the pipe the client connected: %v", reason, inferred)
+	}
+
+	if !s.alive() {
+		t.Error("the server exited during the session")
+	}
+}
+
+// findLogRecord returns the first JSON log record on stderr whose msg matches,
+// failing the test when there is none.
+func findLogRecord(t *testing.T, logs, msg string) map[string]any {
+	t.Helper()
+
+	for line := range strings.SplitSeq(strings.TrimSpace(logs), "\n") {
+		if line == "" {
+			continue
+		}
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			continue
+		}
+		if got, _ := record["msg"].(string); got == msg {
+			return record
+		}
+	}
+	t.Fatalf("no log record with msg %q was written:\n%s", msg, logs)
+	return nil
+}

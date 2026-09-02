@@ -60,7 +60,7 @@ sequenceDiagram
 </Steps>
 
 :::caution
-No ejecutes el binario publicado de Linux sobre una imagen Alpine. Los binarios de Linux son ejecutables independientes de posición que usan el cargador dinámico de glibc (`/lib64/ld-linux-x86-64.so.2`), que musl no proporciona, así que `./gitlab-mcp-server` falla con un engañoso `not found` aunque el archivo exista y sea ejecutable. Usa una imagen base con glibc (`debian:stable-slim`, `ubuntu`, `python:3.12-slim`) o la imagen de contenedor `ghcr.io/jmrplens/gitlab-mcp-server`, compilada contra musl — arranca en modo HTTP por defecto, así que pasa `--http=false` para un job por stdio.
+No ejecutes el binario publicado de Linux sobre una imagen Alpine. Los binarios de Linux son ejecutables independientes de posición que usan el cargador dinámico de glibc (`/lib64/ld-linux-x86-64.so.2`), que musl no proporciona, así que `./gitlab-mcp-server` falla con un engañoso `not found` aunque el archivo exista y sea ejecutable. Usa una imagen base con glibc (`debian:stable-slim`, `ubuntu`, `python:3.12-slim`) o la imagen de contenedor `ghcr.io/jmrplens/gitlab-mcp-server`, compilada contra musl. Deduce su transporte a partir de la entrada estándar, y un runner de CI no promete nada sobre la forma de esa entrada, así que indica `--transport stdio` de forma explícita para un job por stdio.
 :::
 
 ## Modo 1: Determinista (Sin LLM)

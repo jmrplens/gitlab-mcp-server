@@ -84,8 +84,8 @@ ENTRYPOINT ["gitlab-mcp-server"]
 # Any argument after the image name replaces CMD wholesale, so while this said
 # --http, an MCP client running `docker run -i <image>` got an HTTP listener
 # and waited at initialize forever. The documented cure was --http=false in
-# every client configuration, which is a flag copied into three dozen files to
-# work around this line.
+# every client configuration, a flag that had been copied into three dozen
+# files to work around this line and is in none of them now.
 #
 # auto reads the transport off file descriptor 0: `docker run` without -i, and
 # Compose without stdin_open, connect /dev/null, which nobody speaks JSON-RPC

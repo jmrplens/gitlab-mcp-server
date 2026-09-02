@@ -91,7 +91,7 @@ export interface HomeContent {
 const INSTALL = `claude mcp add gitlab --env GITLAB_URL=https://gitlab.example.com \\
   --env GITLAB_TOKEN=glpat-xxxx --transport stdio \\
   -- docker run -i --rm -e GITLAB_URL -e GITLAB_TOKEN \\
-  ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`;
+  ghcr.io/jmrplens/gitlab-mcp-server:latest`;
 
 export const en: HomeContent = {
 	numberLocale: "en-US",

@@ -149,6 +149,25 @@ func TestInferTransport_UnreadableInputs_ChooseStdio(t *testing.T) {
 	}
 }
 
+// assertRefusalNamesEverySelector checks that a refused --transport value is
+// answered with an error listing what would have been accepted.
+//
+// Naming them is the whole value of refusing rather than guessing: an operator
+// who mistyped one selector learns the set from the message instead of the
+// documentation.
+func assertRefusalNamesEverySelector(t *testing.T, err error) {
+	t.Helper()
+
+	if err == nil {
+		t.Fatal("resolveTransport() error = nil, want an error naming the accepted values")
+	}
+	for _, want := range []string{transportStdio, transportHTTP, transportAuto} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+}
+
 // TestResolveTransport_SelectorPrecedence verifies that --http keeps exactly
 // the meaning it always had, that --transport wins when both are given, and
 // that an unknown value is refused rather than guessed at.
@@ -160,12 +179,13 @@ func TestResolveTransport_SelectorPrecedence(t *testing.T) {
 	withStdin(t, os.DevNull)
 
 	for _, tc := range []struct {
-		name      string
-		transport string
-		useHTTP   bool
-		httpSet   bool
-		wantHTTP  bool
-		wantErr   bool
+		name          string
+		transport     string
+		useHTTP       bool
+		httpSet       bool
+		wantHTTP      bool
+		wantInference bool
+		wantErr       bool
 	}{
 		{name: "unset defers to --http false", transport: "", useHTTP: false, wantHTTP: false},
 		{name: "unset defers to --http true", transport: "", useHTTP: true, httpSet: true, wantHTTP: true},
@@ -173,28 +193,26 @@ func TestResolveTransport_SelectorPrecedence(t *testing.T) {
 		{name: "http is obeyed", transport: "http", wantHTTP: true},
 		{name: "stdio overrides an explicit --http", transport: "stdio", useHTTP: true, httpSet: true, wantHTTP: false},
 		{name: "http overrides an explicit --http=false", transport: "http", useHTTP: false, httpSet: true, wantHTTP: true},
-		{name: "auto infers, here from the null device", transport: "auto", wantHTTP: true},
-		{name: "case and spacing are forgiven", transport: "  AUTO ", wantHTTP: true},
+		{name: "auto infers, here from the null device", transport: "auto", wantHTTP: true, wantInference: true},
+		{name: "case and spacing are forgiven", transport: "  AUTO ", wantHTTP: true, wantInference: true},
 		{name: "an unknown selector is refused", transport: "tcp", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gotHTTP, err := resolveTransport(tc.transport, tc.useHTTP, tc.httpSet)
+			decision, err := resolveTransport(tc.transport, tc.useHTTP, tc.httpSet)
 			if tc.wantErr {
-				if err == nil {
-					t.Fatal("resolveTransport() error = nil, want an error naming the accepted values")
-				}
-				for _, want := range []string{transportStdio, transportHTTP, transportAuto} {
-					if !strings.Contains(err.Error(), want) {
-						t.Errorf("error %q does not name %q", err, want)
-					}
-				}
+				assertRefusalNamesEverySelector(t, err)
 				return
 			}
 			if err != nil {
 				t.Fatalf("resolveTransport() error = %v", err)
 			}
-			if gotHTTP != tc.wantHTTP {
-				t.Errorf("resolveTransport(%q, %v) = %v, want %v", tc.transport, tc.useHTTP, gotHTTP, tc.wantHTTP)
+			if decision.HTTP != tc.wantHTTP {
+				t.Errorf("resolveTransport(%q, %v) = %v, want %v", tc.transport, tc.useHTTP, decision.HTTP, tc.wantHTTP)
+			}
+			// Only auto has an observation to report; a stated transport that
+			// claimed to have inferred one would be lying to the operator.
+			if inferred := decision.Inference != ""; inferred != tc.wantInference {
+				t.Errorf("resolveTransport(%q) reported inference %q, want reported = %v", tc.transport, decision.Inference, tc.wantInference)
 			}
 		})
 	}

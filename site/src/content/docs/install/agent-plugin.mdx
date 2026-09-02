@@ -46,8 +46,7 @@ Docker image, so Docker has to be installed and running:
         "-e", "GITLAB_TOKEN",
         "-e", "GITLAB_SKIP_TLS_VERIFY",
         "-e", "TOOL_SURFACE",
-        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
-        "--http=false"
+        "ghcr.io/jmrplens/gitlab-mcp-server:latest"
       ]
     }
   }
@@ -68,11 +67,12 @@ variable is described in [Configuration](/gitlab-mcp-server/configuration/).
 
 Two details of that entry are load-bearing:
 
-- **`--http=false` after the image name.** The image's default command
-  starts an HTTP listener, and any argument placed after the image name
-  replaces that default wholesale. Without the flag a stdio client waits
-  forever for the `initialize` response. Keep it if you copy this entry into
-  a client's own JSON.
+- **The `-i` in `docker run`.** The image's default command infers the
+  transport from stdin, and `-i` is what puts a pipe there. Without it the
+  container is handed `/dev/null`, reads that as nobody speaking to it,
+  starts an HTTP listener, and a stdio client waits forever for the
+  `initialize` response. Keep it if you copy this entry into a client's own
+  JSON.
 - **The Agent Plugins specification starts every entry automatically** and
   has no per-runtime variants, which is why the bundled entry uses Docker:
   it is the one command that behaves the same on every platform.
@@ -105,7 +105,7 @@ instead of your token. It also lets the host choose the base environment
        "gitlab": {
          "type": "stdio",
          "command": "docker",
-         "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"],
+         "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest"],
          "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
        }
      }

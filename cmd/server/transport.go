@@ -25,9 +25,41 @@ var stdinStat = func() (os.FileInfo, error) { return os.Stdin.Stat() }
 // stdinStat so a case can make the two the same file or not.
 var devNullStat = func() (os.FileInfo, error) { return os.Stat(os.DevNull) }
 
+// transportDecision is how the transport was settled, carried as data so it
+// can be logged once the real handler is installed.
+//
+// The decision itself cannot wait for that handler: applyLocalFilesystemPolicy
+// asks what transport this process serves, and it runs before the environment
+// files carrying LOG_LEVEL have been read. Logging through whatever handler is
+// in place at that moment put one plain-text line onto a stream that is
+// otherwise JSON records, in exactly the configuration the container image
+// ships, where --transport auto is the default command.
+type transportDecision struct {
+	// HTTP is the resolved transport.
+	HTTP bool
+	// Override is what to tell an operator who gave both selectors, or empty.
+	Override string
+	// Inference is the observation auto rested on, or empty when the operator
+	// stated the transport rather than leaving it to be read.
+	Inference string
+}
+
+// explain writes the decision to the log.
+//
+// Called once the real handler is in place. A run that exits before then never
+// started a transport, so there is nothing to explain.
+func (d transportDecision) explain() {
+	if d.Override != "" {
+		slog.Warn(d.Override)
+	}
+	if d.Inference != "" {
+		slog.Info("transport inferred from stdin", "transport", transportName(d.HTTP), "reason", d.Inference)
+	}
+}
+
 // resolveTransport turns the two transport selectors into the single boolean
-// the rest of the program uses, and explains itself when it inferred rather
-// than obeyed.
+// the rest of the program uses, along with the explanation of how it got there
+// when it inferred rather than obeyed.
 //
 // --http stays exactly what it was, so every existing invocation keeps its
 // meaning. --transport is the newer, three-valued spelling; when both are
@@ -38,31 +70,33 @@ var devNullStat = func() (os.FileInfo, error) { return os.Stat(os.DevNull) }
 // that is what a container published on a port is for, and an MCP client that
 // runs the same image with `docker run -i` and no arguments then gets an HTTP
 // listener and waits at initialize forever. Every client configuration in the
-// documentation therefore carries --http=false, which is a papercut copied
-// into every one of them.
-func resolveTransport(transport string, useHTTP bool, httpSet bool) (bool, error) {
+// documentation carried --http=false to undo that, a papercut copied into
+// three dozen files, and none of them needs it now.
+func resolveTransport(transport string, useHTTP, httpSet bool) (transportDecision, error) {
 	switch strings.TrimSpace(strings.ToLower(transport)) {
 	case "":
-		return useHTTP, nil
+		return transportDecision{HTTP: useHTTP}, nil
 	case transportStdio:
+		d := transportDecision{HTTP: false}
 		if httpSet && useHTTP {
-			slog.Warn("--transport=stdio overrides --http")
+			d.Override = "--transport=stdio overrides --http"
 		}
-		return false, nil
+		return d, nil
 	case transportHTTP:
+		d := transportDecision{HTTP: true}
 		if httpSet && !useHTTP {
-			slog.Warn("--transport=http overrides --http=false")
+			d.Override = "--transport=http overrides --http=false"
 		}
-		return true, nil
+		return d, nil
 	case transportAuto:
-		if httpSet {
-			slog.Warn("--transport=auto ignores --http; remove one of them to say plainly which transport you meant")
-		}
 		http, why := inferTransport()
-		slog.Info("transport inferred from stdin", "transport", transportName(http), "reason", why)
-		return http, nil
+		d := transportDecision{HTTP: http, Inference: why}
+		if httpSet {
+			d.Override = "--transport=auto ignores --http; remove one of them to say plainly which transport you meant"
+		}
+		return d, nil
 	default:
-		return false, fmt.Errorf("--transport %q is not one of %s, %s, %s", transport, transportStdio, transportHTTP, transportAuto)
+		return transportDecision{}, fmt.Errorf("--transport %q is not one of %s, %s, %s", transport, transportStdio, transportHTTP, transportAuto)
 	}
 }
 

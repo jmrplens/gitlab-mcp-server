@@ -16,6 +16,9 @@
 set -euo pipefail
 
 SERVER_JSON="${1:-server.json}"
+# Read for the OCI transport check: the published image lags this repository by
+# a release, so the Dockerfile is what says where the next one lands.
+DOCKERFILE="$(dirname "$SERVER_JSON")/Dockerfile"
 
 for tool in jq curl python3 sha256sum; do
   if ! command -v "$tool" &> /dev/null; then
@@ -245,21 +248,43 @@ while read -r identifier; do
   fi
   echo "  checked $platforms_checked platform manifest(s)"
 
-  # The image's own CMD starts an HTTP listener. An MCP client speaks stdio to
-  # the container, so an entry that does not override it hangs at initialize.
+  # An MCP client speaks stdio to the container over the pipe `docker run -i`
+  # gives it, so this entry has to end up on stdio or the client hangs at
+  # initialize. The image's CMD reads the transport off that pipe, which is why
+  # no argument is needed; but any argument after the image name replaces CMD
+  # wholesale, so an entry that declares packageArguments has to name the
+  # transport itself.
   cmd=$(echo "$config" | jq -r '.config.Cmd // [] | join(" ")')
   args=$(jq -r --arg id "$identifier" \
     '[.packages[] | select(.identifier == $id) | .packageArguments // [] | .[].value] | join(" ")' \
     "$SERVER_JSON")
-  if [[ "$cmd" == *"--http"* && "$args" != *"--http=false"* ]]; then
-    fail "image CMD is \"$cmd\" but the package declares no --http=false override"
+  if [[ -n "$args" ]]; then
+    if [[ "$args" != *"--http=false"* && "$args" != *"--transport stdio"* && "$args" != *"--transport auto"* ]]; then
+      fail "package arguments \"$args\" replace CMD but name no stdio transport"
+      continue
+    fi
+    transport_source="package arguments name the transport"
+  elif [[ "$cmd" == *"--transport auto"* || "$cmd" == *"--transport stdio"* ]]; then
+    transport_source="CMD infers the transport"
+  # The pinned image is a published one, so it lags the repository by a
+  # release. An argument-free entry is correct for the image this Dockerfile
+  # builds and wrong for the one still on the registry, which is a transition
+  # rather than a defect, the same shape as the npm branch's mcpName note
+  # below. Excused only while this repository's own CMD does reach stdio: a
+  # Dockerfile regressed back to a bare --http fails here, published image or
+  # not.
+  elif [[ "$(grep -c '^CMD.*--transport", *"\(auto\|stdio\)' "$DOCKERFILE" 2> /dev/null || true)" != "0" ]]; then
+    echo "  NOTE: published CMD is \"$cmd\"; the argument-free entry is correct from the next release, whose image infers the transport"
+    transport_source="the next release's CMD infers the transport"
+  else
+    fail "image CMD is \"$cmd\", which never reaches stdio, and neither the package nor $DOCKERFILE names one"
     continue
   fi
 
   if [[ -n "$digest" ]]; then
-    echo "  OK: digest resolves, tag agrees, ownership label matches, stdio override declared"
+    echo "  OK: digest resolves, tag agrees, ownership label matches, $transport_source"
   else
-    echo "  OK: ownership label matches, stdio override declared"
+    echo "  OK: ownership label matches, $transport_source"
   fi
 done < <(jq -r '.packages[] | select(.registryType == "oci") | .identifier' "$SERVER_JSON")
 

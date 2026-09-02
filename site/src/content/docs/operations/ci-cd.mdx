@@ -60,7 +60,7 @@ sequenceDiagram
 </Steps>
 
 :::caution
-Do not run the released Linux binary on Alpine. The Linux assets are position-independent executables that use the glibc dynamic loader (`/lib64/ld-linux-x86-64.so.2`), which musl does not provide, so `./gitlab-mcp-server` fails with a misleading `not found` even though the file is there and executable. Use a glibc base image (`debian:stable-slim`, `ubuntu`, `python:3.12-slim`), or the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl — it starts in HTTP mode by default, so pass `--http=false` for a stdio job.
+Do not run the released Linux binary on Alpine. The Linux assets are position-independent executables that use the glibc dynamic loader (`/lib64/ld-linux-x86-64.so.2`), which musl does not provide, so `./gitlab-mcp-server` fails with a misleading `not found` even though the file is there and executable. Use a glibc base image (`debian:stable-slim`, `ubuntu`, `python:3.12-slim`), or the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl. It infers its transport from stdin, and a CI runner promises nothing about the shape of stdin, so say `--transport stdio` outright for a stdio job.
 :::
 
 ## Mode 1: Deterministic (No LLM)

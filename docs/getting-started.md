@@ -38,7 +38,7 @@ Docker (no install — pulls the image on first run):
 
 ```bash
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
-  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
 ### npm / npx (any platform)
@@ -65,7 +65,7 @@ Point any MCP client at `npx` with no install at all:
 }
 ```
 
-Update with `npm update -g @jmrp.io/gitlab-mcp-server`: npm owns the binary, as every distribution channel does, and the server never replaces itself on disk. The Linux packages declare `libc: ["glibc"]` because the prebuilt binaries need the glibc dynamic loader, so npm skips them on musl systems such as Alpine; there, run the Docker image (`docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`) or build from source.
+Update with `npm update -g @jmrp.io/gitlab-mcp-server`: npm owns the binary, as every distribution channel does, and the server never replaces itself on disk. The Linux packages declare `libc: ["glibc"]` because the prebuilt binaries need the glibc dynamic loader, so npm skips them on musl systems such as Alpine; there, run the Docker image (`docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest`) or build from source.
 
 ### PyPI / uvx (any platform)
 
@@ -278,7 +278,7 @@ The repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifest
 /plugin install jmrplens/gitlab-mcp-server
 ```
 
-The bundled `mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest`, so [Docker](https://docs.docker.com/get-docker/) must be installed. It is configured for stdio MCP clients and passes `--http=false` after the image name to override the Docker image's HTTP default. Keep that override if you copy the Docker configuration into VS Code or another stdio client; otherwise the container will start an HTTP listener and the client will wait forever for a stdio `initialize` response.
+The bundled `mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest`, so [Docker](https://docs.docker.com/get-docker/) must be installed. It is configured for stdio MCP clients and needs no transport flag: the image reads the transport off stdin, and `docker run -i` is what puts a pipe there. Keep the `-i` if you copy the Docker configuration into VS Code or another stdio client; without it the container is handed `/dev/null`, reads that as nobody speaking to it, starts an HTTP listener, and the client waits forever for a stdio `initialize` response.
 
 The bundled config forwards these environment variables into the container, but
 the host has to put them in the plugin's environment first. Agent Plugins §9.1

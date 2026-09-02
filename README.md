@@ -107,7 +107,7 @@ Docker (no install — pulls the image on first run):
 
 ```bash
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
-  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
 Or install the native binary first, then register it:
@@ -182,7 +182,7 @@ Docker variant — replace `"command"`/`"args"` with:
 
 ```json
 "command": "docker",
-"args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"]
+"args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest"]
 ```
 
 Cline (VS Code) — open the Cline sidebar → MCP servers icon → **Edit Global MCP**, or edit the settings file directly:

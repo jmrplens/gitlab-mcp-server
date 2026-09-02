@@ -210,14 +210,14 @@ A winget release is not published by this repository directly. The release workf
 
 The image is published to two registries with identical content: `ghcr.io/jmrplens/gitlab-mcp-server` and the mirror `docker.io/jmrplens/gitlab-mcp-server` (shown as `jmrplens/gitlab-mcp-server` on Docker Hub). Each release pushes the `<version>` tag and moves `latest`, for `linux/amd64` and `linux/arm64`, with provenance and SBOM attestations and a Cosign signature on the digest. Both variants are started and asked for their version before the manifest is pushed, so neither can ship unable to execute — which is what happened to the `linux/arm64` image of v2.7.5, whose binary requested a dynamic loader the Alpine runtime does not carry. The image runs as the non-root user `appuser` (uid 10001) on Alpine, has the binary at `/usr/local/bin/gitlab-mcp-server`, exposes port 8080, and carries a `HEALTHCHECK` against `http://localhost:8080/health`.
 
-Its `ENTRYPOINT` is `gitlab-mcp-server` and its `CMD` is `--http --http-addr 0.0.0.0:8080`, which is why the two ways to run it look different.
+Its `ENTRYPOINT` is `gitlab-mcp-server` and its `CMD` is `--transport auto --http-addr 0.0.0.0:8080`. `auto` reads the transport off the container's standard input, so the same command line serves both ways of running it: a client that gives the container a pipe with `docker run -i` gets stdio, and a container started without one gets `/dev/null`, which nobody speaks JSON-RPC down, and listens on HTTP.
 
 ### stdio: a client starts the container
 
-Any argument after the image name replaces the `CMD` wholesale, so pass `--http=false` to get the stdio transport a desktop client expects. Without it the container starts an HTTP listener and the client waits forever for the `initialize` response. Keep `-i` so stdin stays open, and do not publish port 8080 in this mode.
+The image's default command infers the transport from stdin, so a desktop client needs no flag: `docker run -i` gives the container a pipe, and a pipe means a client is speaking. Keep the `-i`, because without it the container is handed `/dev/null`, starts an HTTP listener, and the client waits forever for the `initialize` response. Do not publish port 8080 in this mode.
 
 ```bash
-docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
 ```json
@@ -225,18 +225,18 @@ docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --h
   "mcpServers": {
     "gitlab": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"],
+      "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest"],
       "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxx" }
     }
   }
 }
 ```
 
-`-e GITLAB_TOKEN` with no value forwards the variable from the client's `env` block into the container. For a self-managed instance add `-e GITLAB_URL` to `args` and `GITLAB_URL` to `env`. Claude Code takes the same command line: `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`. The image is pulled on first use. The one-click buttons for VS Code, Cursor, LM Studio and Kiro register exactly this configuration, which is why they need Docker installed.
+`-e GITLAB_TOKEN` with no value forwards the variable from the client's `env` block into the container. For a self-managed instance add `-e GITLAB_URL` to `args` and `GITLAB_URL` to `env`. Claude Code takes the same command line: `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest`. The image is pulled on first use. The one-click buttons for VS Code, Cursor, LM Studio and Kiro register exactly this configuration, which is why they need Docker installed.
 
 ### HTTP: a long-running container on a port
 
-The container's default mode serves HTTP on `:8080`, where each client sends its own token per request. It has to be told which GitLab it serves, so the simplest form names one:
+Started without `-i`, the container has no stdin to speak on and serves HTTP on `:8080`, where each client sends its own token per request. It has to be told which GitLab it serves, so the simplest form names one:
 
 ```bash
 docker run --rm -p 8080:8080 -e GITLAB_URL=https://gitlab.com ghcr.io/jmrplens/gitlab-mcp-server:latest
@@ -244,7 +244,7 @@ docker run --rm -p 8080:8080 -e GITLAB_URL=https://gitlab.com ghcr.io/jmrplens/g
 
 The `CMD` carries no instance, so `docker run -p 8080:8080 <image>` with nothing else exits immediately with `--gitlab-url is required in HTTP mode`. That refusal is deliberate: a deployment that names no instance makes requests to whatever host a caller puts in the `GITLAB-URL` header, with whatever token that caller supplied. `-e GITLAB_URL=` fills the list without replacing the `CMD`; a comma-separated value publishes several, among which the header then chooses. For a local single-user run where you are the only caller, `--allow-any-gitlab-url` starts with no instance published and warns in the log that it did.
 
-To fix the instance on the command line, and for the hardening flags a shared deployment should have, pass the flags explicitly (any argument after the image name replaces the `CMD`, so `--http` and `--http-addr` come back with them):
+To fix the instance on the command line, and for the hardening flags a shared deployment should have, pass the flags explicitly (any argument after the image name replaces the `CMD`, so `--http` and `--http-addr` come back with them rather than being inferred):
 
 ```bash
 docker run -d --name gitlab-mcp \
@@ -356,7 +356,7 @@ To check the install, ask Claude "What GitLab user am I authenticated as?"; on t
 
 The repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifest at the root (`plugin.json` and `mcp.json`) and keeps the legacy Open Plugins manifest (`.plugin/plugin.json`) for older hosts, so a conformant host (Cursor, Claude Code, VS Code, OpenCode, when your version supports it) installs the server in one step. `make check-openplugin` validates both.
 
-The bundled `mcp.json` has a single stdio entry that runs `docker run -i --rm -e <variables> ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`, forwarding the variable set listed under [Docker](#environment-variables), so Docker must be installed and running. The spec starts every entry automatically and has no runtime variants, which is why there is one entry and it is Docker.
+The bundled `mcp.json` has a single stdio entry that runs `docker run -i --rm -e <variables> ghcr.io/jmrplens/gitlab-mcp-server:latest`, forwarding the variable set listed under [Docker](#environment-variables), so Docker must be installed and running. The spec starts every entry automatically and has no runtime variants, which is why there is one entry and it is Docker.
 
 **The token cannot travel inside `mcp.json`.** Agent Plugins expands only `${PLUGIN_ROOT}` and `${PLUGIN_DATA}`; `"${GITLAB_TOKEN}"` reaches the server as that literal string. The spec also lets a host inherit, omit or sanitize ambient variables (§9.1), so how `GITLAB_TOKEN` arrives is decided by the host: set it the way the host documents, or put it in the `env` block of the installed plugin's local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`), a file that is yours and should stay out of version control.
 

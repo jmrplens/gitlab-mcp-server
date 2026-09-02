@@ -43,8 +43,7 @@ MCP configuration (Cline `cline_mcp_settings.json`, Claude Desktop
         "run", "-i", "--rm",
         "-e", "GITLAB_URL",
         "-e", "GITLAB_TOKEN",
-        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
-        "--http=false"
+        "ghcr.io/jmrplens/gitlab-mcp-server:latest"
       ],
       "env": {
         "GITLAB_URL": "https://gitlab.com",
