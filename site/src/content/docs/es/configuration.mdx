@@ -282,7 +282,8 @@ En modo HTTP (`--http`), los ajustes se resuelven en tres capas, de mayor a meno
 | `--http-addr`              | `:8080`           | Dirección de escucha. `host:puerto` abre un socket TCP; un valor con separador de rutas (p. ej. `/run/gitlab-mcp.sock`) abre un socket unix. Sin equivalente en entorno                                                                      |
 | `--http-socket-mode`       | `0660`            | Modo de permisos en octal del socket unix indicado en `--http-addr`: pueden conectar el propietario y el grupo, nadie más. Sin equivalente en entorno                                                                                        |
 | `--tls-cert` / `--tls-key` | _(vacío)_         | Certificado y clave PEM. Sirve HTTPS en el propio listener (mínimo TLS 1.2; se negocia 1.3). Ambos o ninguno, cargados al arrancar. Sin equivalente en entorno                                                                               |
-| `--gitlab-url`             | —                 | URL de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición; repítela (o sepárala por comas) para publicar varias instancias: la primera es la predeterminada y la cabecera elige entre ellas                         |
+| `--gitlab-url`             | —                 | URL de la instancia de GitLab. Obligatoria salvo que se pase `--allow-any-gitlab-url`; repítela (o sepárala por comas) para publicar varias instancias, entre las que la cabecera `GITLAB-URL` pasa a ser obligatoria                        |
+| `--allow-any-gitlab-url`   | `false`           | Arranca sin publicar ninguna instancia y deja que `GITLAB-URL` nombre cualquier host. Solo para despliegues locales de un único usuario; avisa al arrancar                                                                                   |
 | `--skip-tls-verify`        | `false`           | Omitir verificación TLS                                                                                                                                                                                                                      |
 | `--tool-surface`           | `dynamic`         | Selector canónico del catálogo: `dynamic`, `meta` o `individual`                                                                                                                                                                             |
 | `--meta-tools`             | _(sin definir)_   | Flag de compatibilidad deprecado. Usa `--tool-surface=individual` en lugar de `--meta-tools=false`                                                                                                                                           |
@@ -351,9 +352,9 @@ El servidor carga la configuración en el siguiente orden (las fuentes posterior
 4. **Flags de CLI** — Argumentos de línea de comandos (prioridad más alta)
 
 :::note
-En modo HTTP, `GITLAB_TOKEN` no se carga desde variables de entorno. Cada cliente proporciona su propio token mediante la petición HTTP. La cabecera `GITLAB-URL` cuenta cuando el servidor arranca sin `--gitlab-url`, o cuando publica varias instancias.
+En modo HTTP, `GITLAB_TOKEN` no se carga desde variables de entorno. Cada cliente proporciona su propio token mediante la petición HTTP. La cabecera `GITLAB-URL` cuenta cuando el servidor arranca con `--allow-any-gitlab-url` y sin instancia, o cuando publica varias.
 
-Cuando hay exactamente una `--gitlab-url` configurada es autoritativa, y los valores `GITLAB-URL` enviados por clientes se ignoran y se registran; cuando se publican varias, la cabecera elige entre ellas y cualquier otro valor se rechaza. Otras opciones de política del servidor, incluido el tamaño de esquema (`--meta-param-schema`) y los límites de tasa (`--rate-limit-rps`, `--rate-limit-burst`), no se pueden sobreescribir por petición.
+Cuando hay exactamente una `--gitlab-url` configurada es autoritativa, y los valores `GITLAB-URL` enviados por clientes se ignoran y se registran; cuando se publican varias, la cabecera es obligatoria para elegir entre ellas, y se rechazan tanto su ausencia como cualquier otro valor. Otras opciones de política del servidor, incluido el tamaño de esquema (`--meta-param-schema`) y los límites de tasa (`--rate-limit-rps`, `--rate-limit-burst`), no se pueden sobreescribir por petición.
 :::
 
 ## Certificados autofirmados
