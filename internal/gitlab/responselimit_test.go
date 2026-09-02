@@ -157,7 +157,7 @@ func assertErrorResponseSize(t *testing.T, err error, wantStatus int, wantBounde
 		t.Errorf("ErrorResponse.StatusCode = %d, want %d", errResp.StatusCode, wantStatus)
 	}
 	const bounded = 4 << 10
-	if gotBounded := len(errResp.Error()) <= bounded; gotBounded != wantBounded {
+	if (len(errResp.Error()) <= bounded) != wantBounded {
 		t.Errorf("error message is %d bytes, want bounded under %d = %v",
 			len(errResp.Error()), bounded, wantBounded)
 	}
@@ -230,7 +230,7 @@ func TestLimitedBody_DeliversUpToTheCeiling(t *testing.T) {
 			}
 			read, err := readInChunks(body, tt.chunk)
 
-			if gotErr := errors.Is(err, ErrResponseTooLarge); gotErr != tt.wantErr {
+			if errors.Is(err, ErrResponseTooLarge) != tt.wantErr {
 				t.Errorf("error = %v, want ErrResponseTooLarge = %v", err, tt.wantErr)
 			}
 			if read > limit {

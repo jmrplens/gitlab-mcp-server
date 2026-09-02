@@ -97,7 +97,7 @@ func TestCredentialSafeRedirect_StopsAfterTenHops(t *testing.T) {
 			req := newRedirectRequest(t, "https://gitlab.example.com/x")
 
 			err := policy(req, via)
-			if gotErr := err != nil; gotErr != tt.wantErr {
+			if (err != nil) != tt.wantErr {
 				t.Errorf("policy() error = %v, want error %v", err, tt.wantErr)
 			}
 		})

@@ -1467,7 +1467,7 @@ func TestVerificationRedirect_Policy(t *testing.T) {
 			via[0] = redirectRequest(t, tt.origin)
 
 			err := verificationRedirect(redirectRequest(t, tt.dest), via)
-			if gotErr := err != nil; gotErr != tt.wantErr {
+			if (err != nil) != tt.wantErr {
 				t.Errorf("verificationRedirect() error = %v, want error %v", err, tt.wantErr)
 			}
 		})
@@ -1521,7 +1521,7 @@ func TestVerificationRedirect_MissingContext(t *testing.T) {
 			}
 
 			err := verificationRedirect(dest, via)
-			if gotErr := err != nil; gotErr != tt.wantErr {
+			if (err != nil) != tt.wantErr {
 				t.Errorf("verificationRedirect() error = %v, want error %v", err, tt.wantErr)
 			}
 		})

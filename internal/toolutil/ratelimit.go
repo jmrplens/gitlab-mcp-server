@@ -60,6 +60,11 @@ type RateLimiter struct {
 // that a burst is visible while it is happening.
 const defaultThrottleWindow = 10 * time.Second
 
+// methodToolsCall is the JSON-RPC method this limiter meters. It is also the
+// name a refusal is logged under when the call was refused before the tool it
+// names could be read.
+const methodToolsCall = "tools/call"
+
 // NewRateLimiter builds a RateLimiter with the given rate (requests per
 // second) and burst (maximum concurrent tokens in the bucket). Returns nil
 // if rps <= 0, which the middleware treats as "disabled". Burst is clamped
@@ -112,7 +117,7 @@ func (r *RateLimiter) reportRefusal(ctx context.Context, tool string) {
 	r.reportMu.Unlock()
 
 	if tool == "" {
-		tool = "tools/call"
+		tool = methodToolsCall
 	}
 	slog.WarnContext(ctx, "tool call refused: rate limit exceeded",
 		"tool", tool,
@@ -165,7 +170,7 @@ func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			switch method {
-			case "tools/call":
+			case methodToolsCall:
 				if !limiter.allow() {
 					result := rateLimitedResult(req)
 					limiter.reportRefusal(ctx, extractToolName(req))
@@ -285,7 +290,7 @@ func AttachArgumentLimits(server *mcp.Server, maxDepth int) {
 	}
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-			if method == "tools/call" {
+			if method == methodToolsCall {
 				if raw, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok && raw != nil &&
 					ExceedsJSONDepth(raw.Arguments, maxDepth) {
 					mcpotel.RecordRefusal(ctx, RefusalInvalidParams)

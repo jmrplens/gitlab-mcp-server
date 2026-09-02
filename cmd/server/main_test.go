@@ -8077,7 +8077,7 @@ func TestSecurityHeaders_BodyCapFollowsConfiguration(t *testing.T) {
 			handler.ServeHTTP(httptest.NewRecorder(), req)
 
 			var tooBig *http.MaxBytesError
-			if gotTooBig := errors.As(observed, &tooBig); gotTooBig != tc.wantTooBig {
+			if errors.As(observed, &tooBig) != tc.wantTooBig {
 				t.Fatalf("body read error = %v, want too-big %v", observed, tc.wantTooBig)
 			}
 			if !tc.wantTooBig {
