@@ -113,6 +113,217 @@ func TestGate_MalformedGitLabURLHeader_IsRejectedWithDetail(t *testing.T) {
 	}
 }
 
+// TestGate_PublishedInstances_HeaderCannotRedirectTheCredential pins the
+// instance allow-list over the wire, in legacy mode.
+//
+// A deployment now names the GitLab instances it serves, and the GITLAB-URL
+// header selects among them rather than naming a host of its own. Before that,
+// a header the caller wrote decided where the request went: the token was
+// POSTed to whatever host it named, that host's answer was returned, and a
+// server nobody misconfigured was a request-forgery pivot with a credential
+// attached.
+//
+// It has to be driven over the wire because the header is the input. The unit
+// tests in cmd/server build an mcpServerGate directly and set gitlabURLs on the
+// struct, which proves the branch and not that the flag reaches it: a
+// --gitlab-url that never made it into the gate, or a resolver mounted behind
+// something that answers first, leaves every one of them passing.
+//
+// The call counters are the load-bearing half of each assertion. A status code
+// says what the caller was told; only a fake instance that was never contacted
+// says the credential stayed where the operator put it.
+func TestGate_PublishedInstances_HeaderCannotRedirectTheCredential(t *testing.T) {
+	first := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	second := startFakeGitLab(t, http.StatusOK, `{"id":8,"username":"someone"}`)
+
+	// Two published instances, because with exactly one the header is ignored
+	// by design and never reaches the refusal under test. That shape is pinned
+	// separately below.
+	srv := startServer(t, nil, "--gitlab-url="+first.url, "--gitlab-url="+second.url)
+
+	t.Run("an unpublished instance is refused, not silently replaced", func(t *testing.T) {
+		hostile := startFakeGitLab(t, http.StatusOK, `{"id":9,"username":"nobody"}`)
+
+		got := srv.do(t, mcpPOST(map[string]string{
+			"PRIVATE-TOKEN": "glpat-whatever",
+			"GITLAB-URL":    hostile.url,
+		}))
+
+		if got.status != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusBadRequest, truncate(got.body))
+		}
+		if hostile.calls() != 0 {
+			t.Error("the token was sent to an instance this deployment does not publish")
+		}
+		body := decodeJSONRPCError(t, got.body)
+		if !strings.Contains(body.Error.Message, "does not serve") {
+			t.Errorf("the caller was not told what went wrong, got %q", body.Error.Message)
+		}
+		// Legacy mode publishes no metadata document, and this refusal is
+		// decided before the credential is judged, so the published hostnames
+		// must not be echoed: any non-empty token would otherwise enumerate
+		// the operator's instances. oauth mode already serves the same list
+		// unauthenticated as RFC 9728 authorization_servers and says it out
+		// loud, which is pinned in oauth_test.go.
+		if strings.Contains(body.Error.Message, first.url) || strings.Contains(body.Error.Message, second.url) {
+			t.Errorf("the refusal enumerates the operator's instances to an unauthenticated caller: %q", body.Error.Message)
+		}
+	})
+
+	t.Run("naming no instance is refused rather than defaulted", func(t *testing.T) {
+		firstBefore, secondBefore := first.calls(), second.calls()
+
+		got := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": "glpat-whatever"}))
+
+		if got.status != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusBadRequest, truncate(got.body))
+		}
+		// Both counters, not just the default's. Serving the first published
+		// instance, the last one, or trying each in turn all put the token on
+		// the wire to a host its holder never named, and watching one counter
+		// catches only the first of those.
+		if first.calls() != firstBefore {
+			t.Error("a request naming no instance still reached the first published one")
+		}
+		if second.calls() != secondBefore {
+			t.Error("a request naming no instance still reached the second published one")
+		}
+		body := decodeJSONRPCError(t, got.body)
+		if !strings.Contains(strings.ToUpper(body.Error.Message), "GITLAB-URL") {
+			t.Errorf("the refusal should name the header the client must set, got %q", body.Error.Message)
+		}
+		if strings.Contains(body.Error.Message, first.url) || strings.Contains(body.Error.Message, second.url) {
+			t.Errorf("the refusal enumerates the operator's instances to an unauthenticated caller: %q", body.Error.Message)
+		}
+	})
+
+	t.Run("a published instance may be selected", func(t *testing.T) {
+		before := second.calls()
+
+		got := srv.do(t, mcpPOST(map[string]string{
+			"PRIVATE-TOKEN": "glpat-whatever",
+			"GITLAB-URL":    second.url,
+		}))
+
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, truncate(got.body))
+		}
+		if second.calls() == before {
+			t.Error("the selected instance was never contacted; the header was ignored")
+		}
+	})
+}
+
+// TestGate_SinglePublishedInstance_IgnoresTheHeader pins the shape a pinned
+// deployment has always had, now that it sits beside one that refuses.
+//
+// With exactly one instance published there is nothing to choose, so the header
+// is recorded as ignored rather than refused. What matters is the property the
+// multi-instance case protects by refusing: the host the caller named is never
+// contacted, so a header cannot aim the operator's token anywhere. A status
+// code alone cannot tell "ignored" from "honored, and it happened to work",
+// which is why the other instance is a real listener with a counter.
+func TestGate_SinglePublishedInstance_IgnoresTheHeader(t *testing.T) {
+	published := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	elsewhere := startFakeGitLab(t, http.StatusOK, `{"id":9,"username":"nobody"}`)
+
+	srv := startServer(t, nil, "--gitlab-url="+published.url)
+
+	got := srv.do(t, mcpPOST(map[string]string{
+		"PRIVATE-TOKEN": "glpat-whatever",
+		"GITLAB-URL":    elsewhere.url,
+	}))
+
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, truncate(got.body))
+	}
+	if elsewhere.calls() != 0 {
+		t.Error("the header redirected the credential to a host the deployment does not publish")
+	}
+	if published.calls() == 0 {
+		t.Error("the published instance was never contacted, so nothing here says where the request went")
+	}
+}
+
+// TestGate_InstanceEscapeHatch_AcceptsAHeaderNamedInstance pins the other half
+// of the policy: --allow-any-gitlab-url restores per-request selection, and
+// says so.
+//
+// The hatch is for the single-user local deployment where the operator is the
+// caller, and it is the configuration the refusal above made the non-default.
+// Two things about it are worth pinning. That it works at all: a policy with no
+// escape hatch is one operators route around, and a hatch that quietly fails to
+// restore the old behavior is worse than no hatch. And the warning, which is
+// the only thing standing between this flag and a listener that proxies
+// requests for anyone who can reach it. The warning is emitted by startup code
+// no request-level assertion would ever look at, so it is read out of the
+// process's own output.
+func TestGate_InstanceEscapeHatch_AcceptsAHeaderNamedInstance(t *testing.T) {
+	named := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+
+	srv := startServer(t, nil, "--allow-any-gitlab-url")
+
+	t.Run("the header names the instance and the call is served", func(t *testing.T) {
+		got := srv.do(t, mcpPOST(map[string]string{
+			"PRIVATE-TOKEN": "glpat-whatever",
+			"GITLAB-URL":    named.url,
+		}))
+
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, truncate(got.body))
+		}
+		if named.calls() == 0 {
+			t.Error("the named instance was never contacted, so the hatch did not restore per-request selection")
+		}
+	})
+
+	t.Run("a request naming nothing is still refused", func(t *testing.T) {
+		got := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": "glpat-whatever"}))
+
+		if got.status != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusBadRequest, truncate(got.body))
+		}
+		body := decodeJSONRPCError(t, got.body)
+		if !strings.Contains(strings.ToUpper(body.Error.Message), "GITLAB-URL") {
+			t.Errorf("the refusal should name the header the client must set, got %q", body.Error.Message)
+		}
+	})
+
+	t.Run("the operator is told what the hatch turned off", func(t *testing.T) {
+		if !strings.Contains(srv.logs(), "allow-any-gitlab-url") {
+			t.Errorf("the hatch started quietly; an operator who reached for it on a reachable listener has no way to find out why their server is being used as a proxy. Output:\n%s", srv.logs())
+		}
+	})
+}
+
+// TestGate_NoPublishedInstanceAndNoHatch_RefusesToStart pins the default that
+// makes the two tests above mean anything.
+//
+// Every request-level assertion here is about which instances a deployment
+// published, and all of them are vacuous if a deployment can publish none and
+// still serve. That was the shipped default, and the container CMD names no
+// instance either, so the request-forgery pivot was reachable without anybody
+// misconfiguring anything.
+//
+// Startup validation cannot be observed from a served request by definition:
+// the process either runs or it does not. This module is the only place that
+// starts the real binary and can watch it refuse to.
+func TestGate_NoPublishedInstanceAndNoHatch_RefusesToStart(t *testing.T) {
+	out, err := runServerExpectingExit(t, serverBinary(t),
+		"--http", "--http-addr=127.0.0.1:0",
+	)
+
+	if err == nil {
+		t.Fatalf("HTTP mode started without naming any GitLab instance; output:\n%s", out)
+	}
+	if !strings.Contains(out, "--gitlab-url is required in HTTP mode") {
+		t.Errorf("the refusal should say which flag is missing; output:\n%s", out)
+	}
+	if !strings.Contains(out, "--allow-any-gitlab-url") {
+		t.Errorf("the refusal should name the escape hatch, or an operator who wants the old behavior has nowhere to go; output:\n%s", out)
+	}
+}
+
 // TestGate_RepeatedFailuresBlockTheAddress verifies the per-address failure
 // budget: a stream of invented tokens is cut off with 429 and a Retry-After,
 // rather than relayed upstream one for one.
@@ -189,6 +400,112 @@ func TestGate_FailureBudgetIsPerAddress(t *testing.T) {
 	if got.status == http.StatusTooManyRequests {
 		t.Error("a second address inherited the first one's exhausted budget; the limiter is counting the proxy, not the client")
 	}
+}
+
+// gateAttemptsUntilBlocked issues unauthenticated requests, each claiming the
+// address claimedFor returns for it, and reports how many it took to be cut off
+// with 429. It returns 0 when limit requests went by without one, which is a
+// finding rather than a stopping condition.
+//
+// No credential is sent on purpose. The budget is charged on the
+// missing-credential path exactly as it is on the rejected-credential one, and
+// a request with no token is decided inside the gate without reaching GitLab,
+// which is what keeps several hundred of them cheap.
+func gateAttemptsUntilBlocked(t *testing.T, srv *server, limit int, claimedFor func(int) string) int {
+	t.Helper()
+
+	for i := range limit {
+		got := srv.do(t, mcpPOST(map[string]string{"X-Real-IP": claimedFor(i)}))
+		if got.status == http.StatusTooManyRequests {
+			return i + 1
+		}
+		if got.status != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: status = %d, want 401 or 429: %s", i+1, got.status, truncate(got.body))
+		}
+	}
+	return 0
+}
+
+// TestGate_RotatingProxyHeader_IsBoundedByTheTransportSource pins the second
+// budget, the one charged to the address the connection actually came from.
+//
+// --trusted-proxy-header exists so a deployment behind a proxy charges failures
+// to the real client rather than to the proxy, and it does that by taking the
+// key out of a header. A caller who can also reach the listener directly writes
+// that header themselves, and one who writes a different value on every request
+// mints a fresh key each time: the ten-a-minute allowance the test above pins is
+// never spent, because no key is ever used twice. Each invented token was then
+// relayed to GitLab as a /user verification, one for one, spending the
+// deployment's own upstream throttle from a client that pays nothing.
+//
+// The fix charges every failure to the transport source as well, at a much
+// coarser budget counted once per distinct claimed identity. Coarser
+// deliberately: a genuine proxy carries a whole fleet, and a budget tight
+// enough to stop rotation quickly would refuse a busy proxy's next request
+// before its credential was read. So rotation does not buy the small allowance
+// a fixed address gets, and it no longer buys a fresh one on every request
+// either; it buys one bounded allowance for the connection.
+//
+// The last assertion is the one that fails without the fix, and it is
+// deliberately not "a 429 appeared somewhere". A claimed address that has never
+// been seen before is refused because of where the connection came from, which
+// is the one thing header rotation cannot change.
+func TestGate_RotatingProxyHeader_IsBoundedByTheTransportSource(t *testing.T) {
+	// Never reached: every request here is refused for having no credential.
+	const unreachable = "--gitlab-url=https://gitlab.example.com"
+
+	t.Run("a fixed claimed address spends its own small allowance", func(t *testing.T) {
+		srv := startServer(t, nil, unreachable, "--trusted-proxy-header=X-Real-IP")
+
+		attempts := gateAttemptsUntilBlocked(t, srv, 40, func(int) string { return "203.0.113.10" })
+
+		if attempts == 0 {
+			t.Fatal("a fixed claimed address was never cut off")
+		}
+		// The per-client budget is ten a minute. The bound is loose because
+		// the number is the implementation's to choose; what this case is for
+		// is the comparison the next one makes against it.
+		if attempts > 20 {
+			t.Errorf("a fixed claimed address bought %d attempts, which is not a per-client budget", attempts)
+		}
+		t.Logf("a fixed claimed address was cut off after %d requests", attempts)
+	})
+
+	t.Run("rotating the claimed address does not mint a fresh allowance", func(t *testing.T) {
+		srv := startServer(t, nil, unreachable, "--trusted-proxy-header=X-Real-IP")
+
+		// Comfortably past the coarse budget, so a walk that ends without a
+		// 429 means rotation is unbounded rather than that the walk was short.
+		// Two octets vary, because one gives only 256 distinct addresses and
+		// the budget is larger than that.
+		const walk = 700
+		attempts := gateAttemptsUntilBlocked(t, srv, walk, func(i int) string {
+			return "198.51." + strconv.Itoa(i/256) + "." + strconv.Itoa(i%256)
+		})
+
+		if attempts == 0 {
+			t.Fatalf("%d requests, each claiming a different client address, were never cut off: rotating the header mints a fresh allowance per request", walk)
+		}
+		t.Logf("a rotating claimed address was cut off after %d requests", attempts)
+
+		// A claimed address this deployment has never seen, over the same
+		// connection. Without the transport budget this is a clean bucket and
+		// the answer is 401 for as long as the caller keeps inventing values,
+		// which is the whole defect: the block has to follow the transport
+		// source, the one thing a header cannot change.
+		fresh := srv.do(t, mcpPOST(map[string]string{"X-Real-IP": "192.0.2.77"}))
+		if fresh.status != http.StatusTooManyRequests {
+			t.Fatalf("a never-seen claimed address was answered %d once the source was exhausted; the budget is keyed on the header alone: %s",
+				fresh.status, truncate(fresh.body))
+		}
+		if fresh.header.Get("Retry-After") == "" {
+			t.Error("a 429 must tell the caller when to come back")
+		}
+		body := decodeJSONRPCError(t, fresh.body)
+		if body.Error.Code != -42900 {
+			t.Errorf("error code = %d, want -42900 (mirrors HTTP 429)", body.Error.Code)
+		}
+	})
 }
 
 // TestGate_NonPostMethodsReachTheSDK verifies that GET and DELETE are answered
