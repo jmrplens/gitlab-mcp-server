@@ -2,7 +2,7 @@
   "name": "gitlab-mcp-server-docs",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.24.0+sha512.bd27e345e976dcb0be0b7a1228217b049a817e21b1f355c90dbe7dc46671895a8bc1e6d06c24554505ea93ea0b45f489a27ec1bfbc8de6a9659fca0f16fa0000",
+  "packageManager": "pnpm@11.25.0+sha512.5cde925b4f075f725eb71fbae18a42ffe784524789f19b61c731cb8721ec28aaee160e01a8d5af4fedb2a42cdbf300efe23db356b0d4a17b4d63e11f8ab7c956",
   "engines": {
     "node": ">=24.18.0"
   },
@@ -32,19 +32,19 @@
   },
   "type": "module",
   "dependencies": {
-    "@astrojs/starlight": "^0.41.10",
-    "astro": "^7.2.9",
+    "@astrojs/starlight": "^0.41.11",
+    "astro": "^7.2.10",
     "mermaid": "^11.17.2",
     "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
-    "@typescript-eslint/eslint-plugin": "^8.68.0",
-    "@typescript-eslint/parser": "^8.68.0",
+    "@typescript-eslint/eslint-plugin": "^8.69.0",
+    "@typescript-eslint/parser": "^8.69.0",
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-astro": "^3.1.0",
-    "html-validate": "^11.10.0",
+    "html-validate": "^11.12.0",
     "htmlhint": "^1.9.2",
     "pa11y-ci": "^4.1.1",
     "playwright": "^1.62.1",
