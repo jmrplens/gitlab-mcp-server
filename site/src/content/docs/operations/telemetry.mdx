@@ -134,9 +134,16 @@ The value is W3C Baggage format and is percent-decoded.
 
 </Aside>
 
-This server never reads, logs or transforms that variable. Whatever you set is
-what your collector receives, and an end-to-end test asserts the credential
-never appears in this server's own log output, including when an export fails.
+This server never transforms that variable. Whatever you set is what your
+collector receives, and it is never logged: a test asserts the credential never
+appears in this server's own log output, including when an export fails.
+
+It is read, once, and only in order to keep it out of that output. The SDK's own
+header parser prints what it could not parse, and the log exporter hands the
+entire variable to the error handler, so one malformed non-credential pair is
+enough to print a perfectly well formed credential beside it. This server reads
+the same variables the exporters do at startup and redacts those values, and
+their percent-decoded spellings, out of every SDK diagnostic it emits.
 
 ## What is recorded
 

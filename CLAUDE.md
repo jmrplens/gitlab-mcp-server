@@ -361,7 +361,7 @@ make analyze-report                        # generate LLM-consumable report
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode it is `--gitlab-url`, which is **required** unless `--allow-any-gitlab-url` is passed, and the count decides the header's meaning: none (with the escape hatch) lets `GITLAB-URL` select freely per request, falling back to `https://gitlab.com` when it is absent; exactly one fixes the instance and the header is ignored; several publish an allow-list among which the header is required, since choosing for the caller would send their token to an instance they never named. A comma-separated value spells the list |
+| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode it is `--gitlab-url`, which is **required** unless `--allow-any-gitlab-url` is passed, and the count decides the header's meaning: none (with the escape hatch) lets `GITLAB-URL` select freely per request, and a request that omits it is refused rather than resolved to `https://gitlab.com`; exactly one fixes the instance and the header is ignored; several publish an allow-list among which the header is required, since choosing for the caller would send their token to an instance they never named. A comma-separated value spells the list |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs |
@@ -429,7 +429,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
 | `--oauth-client-uid`  | _(empty)_ | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts |
 | `--pool-idle-timeout` | `1h` | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h) |
-| `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
+| `--revalidate-interval` | `15m` | Token re-validation interval; `0` stops the periodic check, but an entry whose credential is older than 1h is still rebuilt, which re-runs the probe. Upper bound 24h |
 | `--trusted-proxy-header` | _(empty)_ | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`) |
 | `--rate-limit-rps` | `10` | Per-server tools/call rate limit in req/s (`0` disables it). On by default in HTTP mode; the `RATE_LIMIT_RPS` env var used by stdio still defaults to `0` |
 | `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |

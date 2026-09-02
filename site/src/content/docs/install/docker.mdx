@@ -45,13 +45,14 @@ docker run -i --rm -e GITLAB_TOKEN -e GITLAB_URL \
 
 ## HTTP: the image as a service
 
-Run it without extra arguments and the container's default command listens on port 8080:
+The container's default command listens on port 8080, but it will not start until you say which GitLab it serves:
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest
+docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
-That form passes no `--gitlab-url`, which is multi-instance mode: each request chooses the instance with a `GITLAB-URL` header and falls back to `https://gitlab.com` when it has none. Each client also sends its own GitLab token on every request, and the server stores none of them. To fix the instance and harden the container the way the reference deployment does:
+A deployment that names no instance would make requests to whatever host a caller puts in the `GITLAB-URL` header, carrying whatever token that caller supplied, so it is refused at startup. `--allow-any-gitlab-url` accepts that for a single-user local deployment and warns; on a listener anyone else can reach, publish the instances instead. Each client sends its own GitLab token on every request, and the server stores none of them. To harden the container the way the reference deployment does:
 
 <Tabs>
 <TabItem label="Single instance">
@@ -74,7 +75,8 @@ docker run -d \
 <TabItem label="Multi-instance">
 
 ```bash
-# Omit --gitlab-url; clients send the GITLAB-URL header per request
+# Publish each instance; the GITLAB-URL header then selects among them and is
+# required, since choosing for the caller would send their token elsewhere
 docker run -d \
   --name gitlab-mcp \
   --read-only \
@@ -84,7 +86,9 @@ docker run -d \
   -p 8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
-  --http-addr=0.0.0.0:8080
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.com \
+  --gitlab-url=https://gitlab.example.com
 ```
 
 </TabItem>

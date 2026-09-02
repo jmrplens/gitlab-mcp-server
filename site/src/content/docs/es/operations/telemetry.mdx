@@ -137,10 +137,18 @@ El valor usa el formato W3C Baggage y se decodifica en porcentaje.
 
 </Aside>
 
-Este servidor nunca lee, registra ni transforma esa variable. Lo que configures
+Este servidor nunca transforma esa variable, y nunca la registra. Lo que configures
 es lo que recibe tu colector, y una prueba de extremo a extremo verifica que la
 credencial no aparece nunca en los logs del propio servidor, ni siquiera cuando
 falla una exportación.
+
+Sí la lee, una vez, y solo para mantenerla fuera de esa salida. El analizador de
+cabeceras del SDK imprime lo que no supo interpretar, y el exportador de logs
+entrega la variable entera al manejador de errores, así que un solo par
+malformado que no sea la credencial basta para imprimir al lado una credencial
+perfectamente formada. Este servidor lee al arrancar las mismas variables que
+leen los exportadores y redacta esos valores, y sus formas decodificadas, de
+cada diagnóstico del SDK que emite.
 
 ## Qué se registra
 

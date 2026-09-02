@@ -25,10 +25,11 @@ Stdio transport (for desktop MCP clients such as Claude Desktop, Cursor, or VS C
 }
 ```
 
-HTTP transport (remote/shared use — the container's default mode, listening on `:8080`):
+HTTP transport (remote/shared use — the container's default mode, listening on `:8080`). Name the GitLab instance this deployment serves, or it refuses to start rather than making requests to whatever host a caller names:
 
 ```bash
-docker run --rm -p 8080:8080 jmrplens/gitlab-mcp-server:latest
+docker run --rm -p 8080:8080 jmrplens/gitlab-mcp-server:latest \
+  --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
 Images are multi-arch (`linux/amd64`, `linux/arm64`), published for every release with provenance and SBOM attestations, and signed with Cosign. The same image is also available as `ghcr.io/jmrplens/gitlab-mcp-server`.
