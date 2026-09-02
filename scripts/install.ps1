@@ -63,7 +63,12 @@ $arch = switch ($procArch) {
 $asset = "$binName-windows-$arch.exe"
 
 # --- resolve download base -------------------------------------------------
-$base = if ($Version -eq 'latest') {
+# RELEASE_BASE_URL exists so the installer can be driven against a local
+# fixture server in tests; leave it unset for real installs.
+$base = if ($env:RELEASE_BASE_URL) {
+    $env:RELEASE_BASE_URL
+}
+elseif ($Version -eq 'latest') {
     "https://github.com/$Repo/releases/latest/download"
 }
 else {
@@ -92,6 +97,60 @@ try {
         catch {
             throw "could not fetch checksums.txt to verify the download; aborting (set ALLOW_UNVERIFIED=1 to bypass)"
         }
+        # checksums.txt is fetched from the same release as the binary, so on
+        # its own it only proves the two agree — whoever can replace release
+        # assets replaces both. Every release also publishes a keyless cosign
+        # signature over checksums.txt, and GitHub holds a build-provenance
+        # attestation for the binary; verify whichever tool is present.
+        $verifiedSignature = $false
+        if (Get-Command cosign -ErrorAction SilentlyContinue) {
+            $bundlePath = Join-Path $tmp 'checksums.txt.sigstore.json'
+            $haveBundle = $true
+            try {
+                Invoke-WebRequest -Uri "$base/checksums.txt.sigstore.json" -OutFile $bundlePath -UseBasicParsing
+            }
+            catch {
+                $haveBundle = $false
+                Write-Info 'WARNING: this release publishes no checksums.txt.sigstore.json'
+            }
+            if ($haveBundle) {
+                Write-Info 'verifying the cosign signature over checksums.txt'
+                # /releases/latest/download never reveals the tag, so pin the
+                # workflow identity and let the tag be any release version.
+                $identityArgs = if ($Version -eq 'latest') {
+                    @('--certificate-identity-regexp',
+                        ('^https://github\.com/' + $Repo + '/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'))
+                }
+                else {
+                    @('--certificate-identity',
+                        "https://github.com/$Repo/.github/workflows/release.yml@refs/tags/$Version")
+                }
+                & cosign verify-blob --bundle $bundlePath @identityArgs `
+                    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' $sumsPath | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    throw 'checksums.txt failed cosign verification - the release assets do not carry this project''s signature'
+                }
+                $verifiedSignature = $true
+                Write-Info 'signature OK'
+            }
+        }
+        elseif (Get-Command gh -ErrorAction SilentlyContinue) {
+            Write-Info 'verifying the build-provenance attestation with gh'
+            & gh attestation verify $assetPath --repo $Repo 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $verifiedSignature = $true
+                Write-Info 'attestation OK'
+            }
+            else {
+                Write-Info "WARNING: gh found no valid build-provenance attestation for $asset"
+            }
+        }
+        if (-not $verifiedSignature) {
+            $msg = "no signature was verified - install cosign or the gh CLI to check that these bytes came from $Repo's release workflow"
+            if ($env:REQUIRE_SIGNATURE -eq '1') { throw "$msg (REQUIRE_SIGNATURE=1)" }
+            Write-Info "WARNING: $msg"
+        }
+
         $want = (Get-Content $sumsPath |
                 Where-Object { $_ -match "\s$([regex]::Escape($asset))$" } |
                 ForEach-Object { ($_ -split '\s+')[0] } |

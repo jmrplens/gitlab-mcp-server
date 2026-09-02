@@ -5,9 +5,12 @@
 #   curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 #
 # Environment overrides:
-#   INSTALL_DIR   target directory (default: $HOME/.local/bin)
-#   VERSION       release tag to install (default: latest)
-#   REPO          owner/repo (default: jmrplens/gitlab-mcp-server)
+#   INSTALL_DIR        target directory (default: $HOME/.local/bin)
+#   VERSION            release tag to install (default: latest)
+#   REPO               owner/repo (default: jmrplens/gitlab-mcp-server)
+#   REQUIRE_SIGNATURE  set to 1 to abort when no signature can be verified
+#   RELEASE_BASE_URL   override the release download base (used by the tests)
+#   ALLOW_UNVERIFIED   set to 1 to skip verification entirely (not recommended)
 #
 # After install, register the server with Claude Code:
 #   claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
@@ -42,7 +45,11 @@ esac
 asset="${BIN_NAME}-${os}-${arch}"
 
 # --- resolve download base -------------------------------------------------
-if [ "$VERSION" = "latest" ]; then
+# RELEASE_BASE_URL exists so the installer can be driven against a local
+# fixture server in tests; leave it unset for real installs.
+if [ -n "${RELEASE_BASE_URL:-}" ]; then
+	base="$RELEASE_BASE_URL"
+elif [ "$VERSION" = "latest" ]; then
 	base="https://github.com/$REPO/releases/latest/download"
 else
 	base="https://github.com/$REPO/releases/download/$VERSION"
@@ -82,6 +89,53 @@ else
 	got=$(sha256 "$tmp/$asset")
 	[ -n "$got" ] || err "no sha256 tool (need sha256sum or shasum) to verify the download; install one or re-run with ALLOW_UNVERIFIED=1"
 	dl "$base/checksums.txt" "$tmp/checksums.txt" 2>/dev/null || err "could not fetch checksums.txt to verify the download; aborting (set ALLOW_UNVERIFIED=1 to bypass)"
+
+	# checksums.txt comes from the same release as the binary, so on its own it
+	# only proves the two files agree — a principal who can replace release
+	# assets replaces both. Every release also publishes a keyless cosign
+	# signature over checksums.txt, and GitHub holds a build-provenance
+	# attestation for the binary itself; verify whichever the machine can.
+	verified_signature=0
+	if command -v cosign >/dev/null 2>&1; then
+		if dl "$base/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json" 2>/dev/null; then
+			info "verifying the cosign signature over checksums.txt"
+			# /releases/latest/download never reveals the tag, so pin the
+			# workflow identity and let the tag itself be any release version.
+			if [ "$VERSION" = "latest" ]; then
+				identity_arg="--certificate-identity-regexp"
+				identity="^https://github\\.com/${REPO}/\\.github/workflows/release\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+\$"
+			else
+				identity_arg="--certificate-identity"
+				identity="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${VERSION}"
+			fi
+			cosign verify-blob \
+				--bundle "$tmp/checksums.txt.sigstore.json" \
+				"$identity_arg" "$identity" \
+				--certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+				"$tmp/checksums.txt" >/dev/null ||
+				err "checksums.txt failed cosign verification — the release assets do not carry this project's signature"
+			verified_signature=1
+			info "signature OK"
+		else
+			info "WARNING: this release publishes no checksums.txt.sigstore.json"
+		fi
+	elif command -v gh >/dev/null 2>&1; then
+		info "verifying the build-provenance attestation with gh"
+		if gh attestation verify "$tmp/$asset" --repo "$REPO" >/dev/null 2>&1; then
+			verified_signature=1
+			info "attestation OK"
+		else
+			info "WARNING: gh found no valid build-provenance attestation for $asset"
+		fi
+	fi
+	if [ "$verified_signature" -eq 0 ]; then
+		msg="no signature was verified — install cosign or the gh CLI to check that these bytes came from ${REPO}'s release workflow"
+		if [ "${REQUIRE_SIGNATURE:-0}" = "1" ]; then
+			err "$msg (REQUIRE_SIGNATURE=1)"
+		fi
+		info "WARNING: $msg"
+	fi
+
 	# Strip CR so a checksums.txt saved with CRLF still matches the $-anchored grep.
 	want=$(tr -d '\r' <"$tmp/checksums.txt" | grep " ${asset}\$" | cut -d' ' -f1 || true)
 	[ -n "$want" ] || err "$asset is not listed in checksums.txt; aborting (set ALLOW_UNVERIFIED=1 to bypass)"

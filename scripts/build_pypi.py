@@ -14,14 +14,21 @@ Usage:
     python3 scripts/build_pypi.py --binaries dist --version 2.7.5 [--out pypi/dist]
 
 The binaries directory must hold the GoReleaser release assets under their
-exact release names (gitlab-mcp-server-<os>-<arch>[.exe]). Wheels land in
---out (default pypi/dist), which is wiped first so a rebuild cannot mix
-versions.
+exact release names (gitlab-mcp-server-<os>-<arch>[.exe]) together with the
+release's own checksums.txt, which is cosign-signed at build time. Every
+binary is checked against it before it goes into a wheel: the wheels used to
+be assembled from an unverified copy of the build directory, and a published
+PyPI file name is burned forever. Pass --allow-unverified only when there is
+genuinely no manifest (never in CI).
+
+Wheels land in --out (default pypi/dist), which is wiped first so a rebuild
+cannot mix versions.
 """
 
 import argparse
 import base64
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -147,6 +154,37 @@ def wheel_file(tag):
     )
 
 
+def read_checksums(binaries_dir):
+    """Parse `<sha256>  <name>` lines from the release's checksums.txt.
+
+    Returns None when the file is absent, so the caller decides whether an
+    unverified build is acceptable.
+    """
+    path = os.path.join(binaries_dir, "checksums.txt")
+    if not os.path.isfile(path):
+        return None
+    entries = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            parts = line.replace("\r", "").strip().split(None, 1)
+            if len(parts) == 2 and re.fullmatch(r"[0-9a-f]{64}", parts[0]):
+                entries[parts[1].lstrip("*")] = parts[0]
+    return entries
+
+
+def verify_binary(binary_path, checksums):
+    """Abort unless the file matches the digest the signed manifest names."""
+    name = os.path.basename(binary_path)
+    want = checksums.get(name)
+    if want is None:
+        sys.exit("build_pypi: {} is not listed in checksums.txt".format(name))
+    with open(binary_path, "rb") as fh:
+        got = hashlib.sha256(fh.read()).hexdigest()
+    if got != want:
+        sys.exit("build_pypi: {} is sha256 {}, but checksums.txt says {}".format(name, got, want))
+    return got
+
+
 def record_hash(data):
     digest = hashlib.sha256(data).digest()
     return "sha256=" + base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
@@ -206,6 +244,11 @@ def main():
     parser.add_argument("--binaries", required=True, help="directory holding the release binaries")
     parser.add_argument("--version", required=True, help="release version, e.g. 2.7.5")
     parser.add_argument("--out", default="pypi/dist", help="wheelhouse output directory")
+    parser.add_argument(
+        "--allow-unverified",
+        action="store_true",
+        help="build without a checksums.txt manifest (never in CI)",
+    )
     args = parser.parse_args()
 
     if not re.fullmatch(r"\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?", args.version):
@@ -217,17 +260,35 @@ def main():
     if "mcp-name: io.github.jmrplens/gitlab-mcp-server" not in readme:
         sys.exit("build_pypi: pypi/README.md lost the mcp-name ownership token the MCP Registry validates")
 
+    checksums = read_checksums(args.binaries)
+    if checksums is None and not args.allow_unverified:
+        sys.exit(
+            "build_pypi: {} not found — refusing to package unverified binaries "
+            "(pass --allow-unverified to override)".format(os.path.join(args.binaries, "checksums.txt"))
+        )
+    if checksums is None:
+        sys.stderr.write("WARNING: --allow-unverified — wheels are being built without a checksum manifest\n")
+
     if os.path.isdir(args.out):
         shutil.rmtree(args.out)
     os.makedirs(args.out)
 
     built = []
+    digests = {}
     for plat_key, tag in PLATFORMS.items():
         suffix = ".exe" if plat_key.startswith("windows") else ""
         binary_path = os.path.join(args.binaries, "{}-{}{}".format(COMMAND, plat_key, suffix))
         if not os.path.isfile(binary_path):
             sys.exit("build_pypi: missing release binary {}".format(binary_path))
+        if checksums is not None:
+            digests[plat_key] = verify_binary(binary_path, checksums)
         built.append(build_wheel(args.out, args.version, plat_key, tag, binary_path, readme))
+
+    # Record what was verified so validate_pypi.py can confirm the wheels still
+    # carry those exact bytes. Written beside the wheels, never inside one.
+    with open(os.path.join(args.out, "verified-binaries.json"), "w", encoding="utf-8") as fh:
+        json.dump({"version": args.version, "verified": checksums is not None, "binaries": digests}, fh, indent=2)
+        fh.write("\n")
 
     for name in built:
         print("built", os.path.join(args.out, name))

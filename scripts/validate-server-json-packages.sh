@@ -50,6 +50,10 @@ fail() {
   failures=$((failures + 1))
 }
 
+warn() {
+  echo "  WARNING: $1" >&2
+}
+
 server_name=$(jq -r '.name' "$SERVER_JSON")
 
 # --- mcpb packages -----------------------------------------------------------
@@ -175,25 +179,56 @@ while read -r identifier; do
     fi
   fi
 
-  # A multi-arch tag resolves to an index; follow it to any one platform, since
-  # the labels this checks are identical across them.
-  child=$(echo "$index" | jq -r '.manifests[0].digest // ""')
-  if [[ -n "$child" ]]; then
-    manifest=$(curl "${CURL_META[@]}" -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
-      "https://ghcr.io/v2/${repo}/manifests/${child}")
+  # A multi-arch tag resolves to an index. Check EVERY runnable manifest, not
+  # just the first: reading .manifests[0] means only linux/amd64 was ever
+  # inspected, which is how a linux/arm64 image that could not exec at all
+  # stayed published and digest-pinned here across a whole release. Attestation
+  # manifests (buildkit's provenance/SBOM entries, platform unknown/unknown)
+  # carry no runtime config and are skipped.
+  mapfile -t children < <(echo "$index" | jq -r '
+    (.manifests // []) | .[]
+    | select((.platform.os // "") != "unknown")
+    | "\(.digest)\t\(.platform.os // "?")/\(.platform.architecture // "?")"')
+  if [[ ${#children[@]} -eq 0 ]]; then
+    children=("$(echo "$index" | jq -r '.config.digest // ""')\tsingle")
+    manifests_are_index=0
   else
-    manifest="$index"
+    manifests_are_index=1
   fi
 
-  config_digest=$(echo "$manifest" | jq -r '.config.digest')
-  config=$(curl "${CURL_META[@]}" -fsSL -H "Authorization: Bearer $token" \
-    "https://ghcr.io/v2/${repo}/blobs/${config_digest}")
+  platforms_checked=0
+  entry_failed=0
+  for child_entry in "${children[@]}"; do
+    child=${child_entry%%$'\t'*}
+    child_platform=${child_entry##*$'\t'}
+    [[ -n "$child" ]] || continue
+    if [[ "$manifests_are_index" -eq 1 ]]; then
+      manifest=$(curl "${CURL_META[@]}" -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
+        "https://ghcr.io/v2/${repo}/manifests/${child}")
+    else
+      manifest="$index"
+    fi
 
-  label=$(echo "$config" | jq -r '.config.Labels["io.modelcontextprotocol.server.name"] // ""')
-  if [[ "$label" != "$server_name" ]]; then
-    fail "ownership label is \"$label\", expected \"$server_name\""
+    config_digest=$(echo "$manifest" | jq -r '.config.digest')
+    config=$(curl "${CURL_META[@]}" -fsSL -H "Authorization: Bearer $token" \
+      "https://ghcr.io/v2/${repo}/blobs/${config_digest}")
+
+    label=$(echo "$config" | jq -r '.config.Labels["io.modelcontextprotocol.server.name"] // ""')
+    if [[ "$label" != "$server_name" ]]; then
+      fail "$child_platform: ownership label is \"$label\", expected \"$server_name\""
+      entry_failed=1
+      continue
+    fi
+    platforms_checked=$((platforms_checked + 1))
+  done
+  if [[ "$entry_failed" -eq 1 ]]; then
     continue
   fi
+  if [[ "$platforms_checked" -eq 0 ]]; then
+    fail "the index declares no runnable platform manifest"
+    continue
+  fi
+  echo "  checked $platforms_checked platform manifest(s)"
 
   # The image's own CMD starts an HTTP listener. An MCP client speaks stdio to
   # the container, so an entry that does not override it hangs at initialize.
@@ -306,6 +341,35 @@ while IFS=$'\t' read -r identifier version; do
     echo "  OK: published version carries the mcp-name ownership token"
   fi
 done < <(jq -r '.packages[] | select(.registryType == "pypi") | [.identifier, (.version // "null")] | @tsv' "$SERVER_JSON")
+
+# --- release immutability ----------------------------------------------------
+# Every other artefact this script checks is pinned by a hash or an immutable
+# registry version. The GitHub Release is not: unless immutable releases are
+# enabled on the repository, anyone holding contents: write can replace a
+# published binary AND its checksums.txt together, and both installers accept
+# the pair. This is a drift alarm, not a merge gate — the setting lives in the
+# repository, releases published before it was turned on stay mutable forever,
+# and the installer-side signature check is the part that travels.
+release_repo="${GITHUB_REPOSITORY:-jmrplens/gitlab-mcp-server}"
+release_version=$(jq -r '[.packages[] | select(.registryType == "npm") | .version] | first // ""' "$SERVER_JSON")
+if [[ -n "$release_version" && "$release_version" != "null" ]]; then
+  echo "release: v${release_version}"
+  gh_auth=()
+  if [[ -n "${GH_TOKEN:-}" ]]; then
+    gh_auth=(-H "Authorization: Bearer ${GH_TOKEN}")
+  fi
+  release_meta=$(curl "${CURL_META[@]}" -fsSL \
+    -H "Accept: application/vnd.github+json" \
+    "${gh_auth[@]}" \
+    "https://api.github.com/repos/${release_repo}/releases/tags/v${release_version}" || true)
+  if [[ -z "$release_meta" ]]; then
+    warn "could not read the v${release_version} release metadata; immutability not checked"
+  elif [[ "$(echo "$release_meta" | jq -r '.immutable // false')" != "true" ]]; then
+    warn "release v${release_version} is mutable — its assets and checksums.txt can be replaced together. Enable immutable releases in the repository settings; the workflow already publishes drafts, which the feature requires."
+  else
+    echo "  OK: release v${release_version} is immutable"
+  fi
+fi
 
 if [[ "$checked" -eq 0 ]]; then
   echo "ERROR: no mcpb, oci, npm or pypi packages found in $SERVER_JSON" >&2

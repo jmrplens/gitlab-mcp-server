@@ -1,9 +1,28 @@
 # Release pipeline for gitlab-mcp-server
 #
 # Triggers: tag push matching v*
-# Pipeline: E2E → Docker → GoReleaser (npm, Homebrew, MCP Registry) → Winget
+# Pipeline: E2E → Docker → GoReleaser → per-publisher jobs → Winget
 # If E2E tests fail, nothing is released.
 #
+# One job per credential. Until 2.7.5 a single `release` job held the OIDC
+# identity that npm, PyPI, cosign, the MCP Registry and the attestation store
+# all trust, a write-scoped GITHUB_TOKEN, the Homebrew tap deploy key and the
+# main-branch deploy key — and ran code resolved at run time in the middle of
+# it. Anything with execution in that job owned every channel this project
+# publishes through. Now GoReleaser builds and attests, and each publisher runs
+# afterwards in its own job holding only its own permission, fetching the
+# published assets and verifying them rather than trusting a directory another
+# job left behind.
+#
+# Invariants that must survive any edit here:
+#   * the release stays a draft until every artefact is attached AND attested;
+#   * release assets are staged under the exact names dist/artifacts.json gives
+#     them, because installers and package managers match names literally;
+#   * server.json's OCI entry is stamped with the digest the docker job pushed,
+#     never with a tag alone;
+#   * npm publishes the platform packages before the launcher that pins them;
+#   * the MCP Registry publish runs after npm and after the image push, because
+#     it validates both by fetching them.
 name: Release
 
 on:
@@ -27,6 +46,11 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: jmrplens/gitlab-mcp-server
   DOCKERHUB_IMAGE: jmrplens/gitlab-mcp-server
+  # Pinned exactly, not by range: goreleaser-action and sbom-action download
+  # these binaries at run time into a job that holds the signing identity, so
+  # SHA-pinning the action alone leaves the code that actually runs unpinned.
+  GORELEASER_VERSION: "v2.18.0"
+  SYFT_VERSION: "v1.51.1"
 
 jobs:
   e2e:
@@ -36,7 +60,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # The docker job tags ghcr.io from VERSION while everything else uses
       # the git tag; server.json pins the OCI tag from the git tag and
@@ -52,7 +76,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -92,7 +116,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: e2e-test-results
           path: test-results/
@@ -103,341 +127,14 @@ jobs:
         working-directory: test/e2e
         run: docker compose down -v --remove-orphans
 
-  release:
-    name: GoReleaser
-    runs-on: ubuntu-latest
-    environment: release
-    # docker is a prerequisite because the MCP Registry publish below validates
-    # the server.json OCI entry by fetching ghcr.io for this version's tag —
-    # a tag only the docker job pushes. Racing it 404s the registry publish.
-    needs: [e2e, docker]
-    permissions:
-      contents: write # GoReleaser creates the release; gh uploads/publishes the .mcpb
-      id-token: write # npm trusted publishing + mcp-publisher github-oidc login
-      attestations: write # actions/attest-build-provenance
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - uses: sigstore/cosign-installer@v4.1.2
-
-      - uses: anchore/sbom-action/download-syft@v0
-
-      - uses: goreleaser/goreleaser-action@v7
-        with:
-          # "~> v2": track v2 minors/patches, never auto-adopt a config-breaking
-          # GoReleaser v3 mid-release (.goreleaser.yml is a version: 2 config).
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # GoReleaser leaves binaries only in per-target subdirectories
-      # (dist/gitlab-mcp-server_linux_amd64_v1/gitlab-mcp-server); the release
-      # asset names exist only in dist/artifacts.json. build-npm.mjs and
-      # publish-npm.sh read dist/<release-name> directly, so stage every
-      # uploadable binary at the dist root under its exact asset name.
-      - name: Stage release-named binaries at dist root
-        run: |
-          set -euo pipefail
-          jq -r '.[] | select(.type == "Binary" and (.name | startswith("gitlab-mcp-server-"))) | [.name, .path] | @tsv' dist/artifacts.json \
-            | while IFS=$'\t' read -r name path; do
-                cp "$path" "dist/$name"
-              done
-          ls -1 dist/
-
-      # The bundle is built before the stamp because server.json declares it and
-      # needs its SHA256. GoReleaser does not produce it, so it is absent from
-      # the signed checksums.txt and its hash cannot be appended there.
-      - name: Build and upload Claude Desktop extension (.mcpb)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          bash scripts/build-mcpb.sh "${VERSION}"
-          sha256sum dist/gitlab-mcp-server.mcpb
-          gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
-
-      # SLSA build provenance for every GoReleaser artifact, keyed by the exact
-      # asset names in checksums.txt, plus the .mcpb built outside GoReleaser.
-      # Stored in GitHub's attestation store — no release asset changes.
-      # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
-      - name: Attest build provenance (release binaries)
-        uses: actions/attest-build-provenance@v4
-        with:
-          subject-checksums: dist/checksums.txt
-
-      - name: Attest build provenance (Claude Desktop extension)
-        uses: actions/attest-build-provenance@v4
-        with:
-          subject-path: dist/gitlab-mcp-server.mcpb
-
-      # Every asset (binaries, checksums.txt + signature, SBOMs, .mcpb) is
-      # attached before the release becomes visible: go-selfupdate never sees
-      # a partial release, and this is the draft-then-publish flow immutable
-      # releases require. GoReleaser creates the release as a draft
-      # (.goreleaser.yml: draft: true).
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "v${GITHUB_REF#refs/tags/v}" --draft=false
-
-      # The OCI digest comes from the docker job (a prerequisite of this one),
-      # so server.json pins the exact image this release published rather than a
-      # tag that could later be moved.
-      - name: Update server.json with SHA256 hashes
-        env:
-          OCI_DIGEST: ${{ needs.docker.outputs.digest }}
-        run: |
-          set -euo pipefail
-          if [ -z "${OCI_DIGEST}" ]; then
-            echo "::error::the docker job published no image digest; server.json cannot be pinned"
-            exit 1
-          fi
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
-
-      # npm publish via OIDC trusted publisher — no stored token. The staging
-      # step above copied the binaries to dist/<release-name>, which is what
-      # build-npm.mjs reads. The job's id-token: write permission lets npm mint
-      # the OIDC token; npm >= 11.5.1 performs the exchange, so setup-node's
-      # Node 22 is upgraded to the current npm first. Provenance is attached
-      # automatically under trusted publishing (no --provenance flag), and
-      # publish-npm.sh skips any version already on the registry, so re-running
-      # this job is safe.
-      #
-      # Bootstrap: a package cannot have a trusted publisher configured until it
-      # exists, so v2.7.5's seven packages are created by a one-time tokened
-      # publish; from the next tag on, this runs with no credential. The
-      # trusted publisher on npmjs.com must name this workflow file
-      # (release.yml) and, because this job runs in the `release` environment,
-      # that same environment.
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-
-      # Validate the assembled packages before anything is published. A
-      # published npm version is permanent, so a broken tarball must fail the
-      # release here, not after it is irreversibly on the registry. Runs on the
-      # ephemeral runner (already disposable); `make validate-npm` runs the same
-      # check in Docker for a developer's own machine.
-      - name: Validate npm packages
-        run: make validate-npm-local NPM_BINARIES=dist
-
-      - name: Publish to npm
-        run: |
-          set -euo pipefail
-          # Pinned, not @latest: this CLI runs npm publish under the job's
-          # id-token: write, so a compromised or surprising `latest` could push
-          # altered packages. 11.5.1 is the floor npm trusted publishing
-          # requires; bump deliberately.
-          npm install -g npm@11.5.1
-          bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}"
-
-      # PyPI wheels are assembled from the same staged dist/ binaries the npm
-      # step reads: one wheel per platform with the native binary in
-      # .data/scripts (the uv/ruff model), validated before upload because a
-      # published PyPI file name is burned forever even if the release is
-      # deleted.
-      - name: Build and validate PyPI wheels
-        run: make validate-pypi-local PYPI_BINARIES=dist
-
-      # OIDC trusted publisher — no stored token, PEP 740 attestations
-      # attached automatically, and skip-existing means a re-run of this job
-      # lands on already-uploaded files without failing. SHA-pinned: the
-      # action receives the job's OIDC credential and uploads artifacts.
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: pypi/dist
-          skip-existing: true
-
-      - name: Update Homebrew tap formula
-        env:
-          TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}
-        run: |
-          set -euo pipefail
-          if [ -z "${TAP_DEPLOY_KEY_B64}" ]; then
-            echo "::warning::TAP_DEPLOY_KEY_B64 secret is not configured — skipping Homebrew tap update"
-            exit 0
-          fi
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          KEY_FILE="${RUNNER_TEMP}/tap_deploy_key"
-          KNOWN_HOSTS_FILE="${RUNNER_TEMP}/tap_known_hosts"
-          echo "${TAP_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
-          chmod 600 "${KEY_FILE}"
-          ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
-          export GIT_SSH_COMMAND="ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
-          bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
-
-      - name: Publish to MCP Registry
-        env:
-          # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
-          # Bump when a new mcp-publisher release is verified. Server version published comes from
-          # the git tag (handled in the previous step by update-server-json-sha.sh).
-          MCP_PUBLISHER_VERSION: "v1.8.1"
-          MCP_PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
-        run: |
-          set -euo pipefail
-          TARBALL="mcp-publisher_linux_amd64.tar.gz"
-          SIGSTORE_BUNDLE="${TARBALL}.sigstore.json"
-          URL="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${TARBALL}"
-          echo "Downloading ${URL}"
-          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${URL}"
-          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${SIGSTORE_BUNDLE}" "${URL}.sigstore.json"
-          if [ -n "${MCP_PUBLISHER_SHA256}" ]; then
-            echo "${MCP_PUBLISHER_SHA256}  ${TARBALL}" | sha256sum -c -
-          else
-            echo "::warning::MCP_PUBLISHER_SHA256 not set — skipping checksum verification"
-          fi
-          cosign verify-blob \
-            --bundle "${SIGSTORE_BUNDLE}" \
-            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            "${TARBALL}"
-          tar xzf "${TARBALL}" mcp-publisher
-          ./mcp-publisher login github-oidc
-          set +e
-          PUBLISH_STATUS=1
-          for attempt in 1 2 3 4 5 6 7 8; do
-            ./mcp-publisher publish 2>&1 | tee mcp-publisher-publish.log
-            PUBLISH_STATUS=${PIPESTATUS[0]}
-            [ "${PUBLISH_STATUS}" -eq 0 ] && break
-            if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
-              break
-            fi
-            # The registry validates the npm entry by fetching the version this
-            # same job published minutes ago, and the oci entry by fetching the
-            # image tag the docker job pushed. Retry only errors the registry
-            # itself labels transient, plus the not-yet-visible npm version,
-            # which is indistinguishable from registry-side propagation lag.
-            # Strings are quoted from the v1.8.1 validators (internal/validators/
-            # registries/{npm,oci}.go); a genuine "not found (status: 404)" is
-            # deliberately absent, so a truly unpublished package fails fast.
-            # The OCI validator's own 404 text — "does not exist in the
-            # registry" — is absent for the same reason: the image is pushed by
-            # the docker job this one depends on, so its absence is a broken
-            # release rather than propagation lag, and retrying it would spend
-            # ten minutes hiding that.
-            if grep -qE "take a moment to appear|retry later|retry shortly|validation timed out" mcp-publisher-publish.log; then
-              echo "::notice::Registry-side validation not yet consistent (attempt ${attempt}); retrying in 60s"
-              sleep 60
-              continue
-            fi
-            break
-          done
-          set -e
-          if [ "${PUBLISH_STATUS}" -ne 0 ]; then
-            if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
-              echo "::notice::MCP Registry version ${GITHUB_REF#refs/tags/v} is already published; continuing"
-            else
-              exit "${PUBLISH_STATUS}"
-            fi
-          fi
-
-      - name: Commit updated server.json and plugin.json to main
-        env:
-          RELEASE_DEPLOY_KEY_B64: ${{ secrets.RELEASE_DEPLOY_KEY_B64 }}
-          OCI_DIGEST: ${{ needs.docker.outputs.digest }}
-        run: |
-          set -euo pipefail
-
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          if [ -z "${RELEASE_DEPLOY_KEY_B64}" ]; then
-            echo "::error::RELEASE_DEPLOY_KEY_B64 secret is not configured"
-            exit 1
-          fi
-
-          KEY_FILE="${RUNNER_TEMP}/release_deploy_key"
-          KNOWN_HOSTS_FILE="${RUNNER_TEMP}/known_hosts"
-          echo "${RELEASE_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
-          chmod 600 "${KEY_FILE}"
-          ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
-
-          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
-          git config core.sshCommand "ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
-
-          git config user.name "José M. Requena Plens"
-          git config user.email "jmrplens@gmail.com"
-
-          git fetch origin main
-          git checkout main
-
-          # Re-apply updates on top of latest main (the script is idempotent
-          # and reads checksums.txt + version + the bundle, so re-running
-          # produces the same result as the artifact built earlier in this
-          # job). The .mcpb third argument re-derives that hash from the
-          # artifact instead of inheriting it from the dirty working tree.
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
-
-          git add server.json
-          [ -f plugin.json ] && git add plugin.json
-          [ -f .plugin/plugin.json ] && git add .plugin/plugin.json
-          [ -f mcpb/manifest.json ] && git add mcpb/manifest.json
-          [ -f lhm.plugin.json ] && git add lhm.plugin.json
-          [ -f npm/gitlab-mcp-server/package.json ] && git add npm/gitlab-mcp-server/package.json
-
-          if git diff --cached --quiet; then
-            echo "::notice::No manifest changes to commit"
-            exit 0
-          fi
-
-          git commit -m "chore: update manifests for v${VERSION}
-
-          Updates server.json (MCP Registry) with version ${VERSION} and
-          pinned SHA256 hashes, and stamps version ${VERSION} into
-          plugin.json (Agent Plugins), .plugin/plugin.json (legacy Open
-          Plugins), mcpb/manifest.json (Claude Desktop extension), and
-          lhm.plugin.json (LobeHub Marketplace)."
-          git push origin main
-
-  winget:
-    name: Winget
-    runs-on: windows-latest
-    needs: [release]
-    permissions: {} # both steps authenticate with WINGET_TOKEN, not GITHUB_TOKEN
-    steps:
-      # Publishes a version-update PR to microsoft/winget-pkgs via the
-      # jmrplens/winget-pkgs fork. Only works once the initial package
-      # manifest (jmrplens.gitlab-mcp-server) has been merged upstream —
-      # continue-on-error keeps releases green until then and if Microsoft's
-      # validation service hiccups.
-      #
-      # The fork MUST be synced first: komac creates its branch on the fork,
-      # and a stale fork fails with "Ref cannot be created" — which the
-      # releaser's continue-on-error then hides. That exact combination
-      # silently skipped the 2.7.2 and 2.7.3 submissions (fork 24 days
-      # behind). This step is deliberately blocking: if the sync fails
-      # (409 divergence, 422), the releaser would fail against the stale
-      # fork anyway and hide it — a red winget job is the visibility that
-      # was missing, and nothing downstream depends on this job.
-      - name: Sync winget-pkgs fork with upstream
-        env:
-          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
-        run: gh api -X POST repos/jmrplens/winget-pkgs/merge-upstream -f branch=master
-      # Pinned to a commit SHA (same policy as dockerhub-description in the
-      # docker job): an individually-maintained action that receives
-      # WINGET_TOKEN — a mutable tag would let a compromised release
-      # exfiltrate it.
-      - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
-        continue-on-error: true
-        with:
-          identifier: jmrplens.gitlab-mcp-server
-          installers-regex: '-windows-(amd64|arm64)\.exe$'
-          release-tag: ${{ github.ref_name }}
-          token: ${{ secrets.WINGET_TOKEN }}
-
   docker:
     name: Docker
     runs-on: ubuntu-latest
     needs: [e2e]
-    # server.json pins the image by digest, and the release job stamps it.
+    # No `environment:` — this job never ran under one, and adding it would
+    # subject the image publish to whatever protection rules the release
+    # environment carries.
+    # server.json pins the image by digest, and the stamping jobs read it.
     outputs:
       digest: ${{ steps.docker-push.outputs.digest }}
     permissions:
@@ -445,15 +142,17 @@ jobs:
       packages: write # ghcr.io push via GITHUB_TOKEN login
       id-token: write # cosign keyless signing
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Extract version
         id: version
         run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
-      - uses: sigstore/cosign-installer@v4.1.2
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -473,7 +172,7 @@ jobs:
           fi
 
       - if: steps.dockerhub-login.outputs.skip == 'false'
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -484,12 +183,53 @@ jobs:
         run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
-      - uses: docker/build-push-action@v7
+      # Build each platform on its own and RUN it before anything is pushed.
+      # The published linux/arm64 image of 2.7.5 could not exec at all — the
+      # cross-compiled PIE binary asked for the glibc loader while the runtime
+      # image ships only musl's — and nothing in this pipeline could notice,
+      # because the multi-platform build was pushed without either variant ever
+      # being started. An image never executed on the platform it claims to
+      # support is not a tested artefact. `load: true` needs one platform per
+      # build; the push below reuses the same layers from the gha cache.
+      - name: Build linux/amd64 for smoke test
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          load: true
+          platforms: linux/amd64
+          tags: gitlab-mcp-server:smoke-amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.build-date.outputs.date }}
+
+      - name: Build linux/arm64 for smoke test
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          load: true
+          platforms: linux/arm64
+          tags: gitlab-mcp-server:smoke-arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.build-date.outputs.date }}
+
+      - name: Smoke test both architectures
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: bash scripts/smoke-test-image.sh "${EXPECTED_VERSION}" gitlab-mcp-server:smoke-amd64=linux/amd64 gitlab-mcp-server:smoke-arm64=linux/arm64
+
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         id: docker-push
         with:
           context: .
@@ -497,6 +237,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           provenance: true
           sbom: true
+          cache-from: type=gha
           # GHCR reads a multi-arch image's package-page description from the
           # INDEX annotations, not from per-manifest Docker LABELs — without
           # these the package page shows no description. The description string
@@ -553,7 +294,7 @@ jobs:
       # narrower ones.
       - name: Update Docker Hub description
         if: steps.dockerhub-login.outputs.skip == 'false'
-        # Pinned to a commit SHA (unlike the org-owned actions above) because
+        # Pinned to a commit SHA (like every other action here) because
         # this is an individually-maintained action that receives
         # DOCKERHUB_TOKEN — a mutable tag would let a compromised release
         # exfiltrate it.
@@ -564,3 +305,473 @@ jobs:
           repository: ${{ env.DOCKERHUB_IMAGE }}
           short-description: "MCP server exposing 1,000+ GitLab operations as AI-accessible tools. By jmrp.io"
           readme-filepath: ./.github/dockerhub-description.md
+
+  release:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    environment: release
+    # docker is a prerequisite because the release is what downstream publishers
+    # fetch, and the MCP Registry publish validates the server.json OCI entry by
+    # fetching ghcr.io for this version's tag — a tag only the docker job
+    # pushes. Racing it 404s the registry publish.
+    needs: [e2e, docker]
+    permissions:
+      contents: write # GoReleaser creates the release; gh uploads/publishes the .mcpb
+      id-token: write # cosign keyless signing of checksums.txt
+      attestations: write # actions/attest-build-provenance
+    steps:
+      # persist-credentials: false — this job's GITHUB_TOKEN can rewrite the
+      # repository, and nothing here talks to the remote through git. GoReleaser
+      # reads its token from the environment instead.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
+
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          # Exact, not "~> v2": this binary runs in the job that mints the
+          # release's signature. Bump deliberately, and never past v2 — the
+          # config is a version: 2 config.
+          version: ${{ env.GORELEASER_VERSION }}
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # GoReleaser leaves binaries only in per-target subdirectories
+      # (dist/gitlab-mcp-server_linux_amd64_v1/gitlab-mcp-server); the release
+      # asset names exist only in dist/artifacts.json. Stage every uploadable
+      # binary at the dist root under its exact asset name so the .mcpb builder
+      # and the release assets agree on names.
+      - name: Stage release-named binaries at dist root
+        run: |
+          set -euo pipefail
+          jq -r '.[] | select(.type == "Binary" and (.name | startswith("gitlab-mcp-server-"))) | [.name, .path] | @tsv' dist/artifacts.json \
+            | while IFS=$'\t' read -r name path; do
+                cp "$path" "dist/$name"
+              done
+          ls -1 dist/
+
+      # The bundle is built before the stamp because server.json declares it and
+      # needs its SHA256. GoReleaser does not produce it, so it is absent from
+      # the signed checksums.txt and its hash cannot be appended there; its
+      # integrity comes from the build-provenance attestation below instead.
+      - name: Build and upload Claude Desktop extension (.mcpb)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          bash scripts/build-mcpb.sh "${VERSION}"
+          sha256sum dist/gitlab-mcp-server.mcpb
+          gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
+
+      # SLSA build provenance for every GoReleaser artifact, keyed by the exact
+      # asset names in checksums.txt, plus the .mcpb built outside GoReleaser.
+      # Stored in GitHub's attestation store — no release asset changes.
+      # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
+      - name: Attest build provenance (release binaries)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-checksums: dist/checksums.txt
+
+      - name: Attest build provenance (Claude Desktop extension)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: dist/gitlab-mcp-server.mcpb
+
+      # Every asset (binaries, checksums.txt + signature, SBOMs, .mcpb) is
+      # attached and attested before the release becomes visible: a client
+      # never sees a partial release, and this is the draft-then-publish flow
+      # immutable releases require. GoReleaser creates the release as a draft
+      # (.goreleaser.yml: draft: true). Everything downstream of this job reads
+      # the published assets, so this step is also the handoff.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v${GITHUB_REF#refs/tags/v}" --draft=false
+
+  npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [release]
+    environment: release
+    permissions:
+      contents: read # download the published release assets
+      id-token: write # npm trusted publishing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # This job produces no binaries of its own: it downloads what the release
+      # actually published and verifies it against the cosign-signed
+      # checksums.txt before packing anything. build-npm.mjs re-checks each
+      # binary against the same manifest as it copies.
+      - name: Fetch and verify release binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/fetch-release-assets.sh "${GITHUB_REF#refs/tags/v}" dist
+
+      # npm >= 11.5.1 performs the OIDC exchange that trusted publishing needs;
+      # setup-node's Node 22 ships an older npm, so it is upgraded below.
+      # Provenance is attached automatically under trusted publishing (no
+      # --provenance flag), and publish-npm.sh skips any version already on the
+      # registry, so re-running this job is safe.
+      #
+      # The trusted publisher on npmjs.com must name this workflow file
+      # (release.yml) and, because this job runs in the `release` environment,
+      # that same environment. The job id is not part of the binding.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # A published npm version is permanent, so a broken tarball must fail the
+      # release here, not after it is irreversibly on the registry.
+      - name: Validate npm packages
+        run: make validate-npm-local NPM_BINARIES=dist
+
+      - name: Publish to npm
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.5.1
+          bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}"
+
+  pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [release]
+    environment: release
+    permissions:
+      contents: read # download the published release assets
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Fetch and verify release binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/fetch-release-assets.sh "${GITHUB_REF#refs/tags/v}" dist
+
+      # One wheel per platform with the native binary in .data/scripts (the
+      # uv/ruff model), validated before upload because a published PyPI file
+      # name is burned forever even if the release is deleted.
+      - name: Build and validate PyPI wheels
+        run: make validate-pypi-local PYPI_BINARIES=dist
+
+      # OIDC trusted publisher — no stored token, PEP 740 attestations
+      # attached automatically, and skip-existing means a re-run of this job
+      # lands on already-uploaded files without failing.
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: pypi/dist
+          skip-existing: true
+
+  homebrew:
+    name: Homebrew tap
+    runs-on: ubuntu-latest
+    needs: [release]
+    environment: release
+    permissions:
+      contents: read # download the published release assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Fetch and verify checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/fetch-release-assets.sh --checksums-only "${GITHUB_REF#refs/tags/v}" dist
+
+      # The tap deploy key writes to another repository, so it lives in a job
+      # that runs no third-party code and holds nothing else.
+      - name: Update Homebrew tap formula
+        env:
+          TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_DEPLOY_KEY_B64}" ]; then
+            echo "::warning::TAP_DEPLOY_KEY_B64 secret is not configured — skipping Homebrew tap update"
+            exit 0
+          fi
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          KEY_FILE="${RUNNER_TEMP}/tap_deploy_key"
+          KNOWN_HOSTS_FILE="${RUNNER_TEMP}/tap_known_hosts"
+          echo "${TAP_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
+          chmod 600 "${KEY_FILE}"
+          ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
+          export GIT_SSH_COMMAND="ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
+          bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
+
+  mcp-registry:
+    name: Publish to MCP Registry
+    runs-on: ubuntu-latest
+    # npm because the registry validates the npm package entry by fetching the
+    # version this release published; docker because it validates the OCI entry
+    # by fetching the image tag and digest.
+    needs: [release, npm, docker]
+    environment: release
+    permissions:
+      contents: read # download the published release assets
+      id-token: write # mcp-publisher login github-oidc
+      attestations: read # verify the .mcpb provenance before hashing it
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Fetch and verify release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/fetch-release-assets.sh "${GITHUB_REF#refs/tags/v}" dist "gitlab-mcp-server.mcpb"
+
+      # Stamp the working tree only — the commit to main is a separate job with
+      # a separate credential. The OCI digest comes from the docker job, so
+      # server.json pins the exact image this release published rather than a
+      # tag that could later be moved.
+      - name: Stamp server.json with this release's hashes and digest
+        env:
+          OCI_DIGEST: ${{ needs.docker.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OCI_DIGEST}" ]; then
+            echo "::error::the docker job published no image digest; server.json cannot be pinned"
+            exit 1
+          fi
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
+
+      - name: Publish to MCP Registry
+        env:
+          # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
+          # Bump when a new mcp-publisher release is verified. Server version published comes from
+          # the git tag (handled in the previous step by update-server-json-sha.sh).
+          MCP_PUBLISHER_VERSION: "v1.8.1"
+          MCP_PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+        run: |
+          set -euo pipefail
+          TARBALL="mcp-publisher_linux_amd64.tar.gz"
+          SIGSTORE_BUNDLE="${TARBALL}.sigstore.json"
+          URL="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${TARBALL}"
+          echo "Downloading ${URL}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${URL}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${SIGSTORE_BUNDLE}" "${URL}.sigstore.json"
+          echo "${MCP_PUBLISHER_SHA256}  ${TARBALL}" | sha256sum -c -
+          cosign verify-blob \
+            --bundle "${SIGSTORE_BUNDLE}" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${TARBALL}"
+          tar xzf "${TARBALL}" mcp-publisher
+          ./mcp-publisher login github-oidc
+          set +e
+          PUBLISH_STATUS=1
+          for attempt in 1 2 3 4 5 6 7 8; do
+            ./mcp-publisher publish 2>&1 | tee mcp-publisher-publish.log
+            PUBLISH_STATUS=${PIPESTATUS[0]}
+            [ "${PUBLISH_STATUS}" -eq 0 ] && break
+            if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
+              break
+            fi
+            # The registry validates the npm entry by fetching the version the
+            # npm job published minutes ago, and the oci entry by fetching the
+            # image tag the docker job pushed. Retry only errors the registry
+            # itself labels transient, plus the not-yet-visible npm version,
+            # which is indistinguishable from registry-side propagation lag.
+            # Strings are quoted from the v1.8.1 validators (internal/validators/
+            # registries/{npm,oci}.go); a genuine "not found (status: 404)" is
+            # deliberately absent, so a truly unpublished package fails fast.
+            # The OCI validator's own 404 text — "does not exist in the
+            # registry" — is absent for the same reason: the image is pushed by
+            # the docker job this one depends on, so its absence is a broken
+            # release rather than propagation lag, and retrying it would spend
+            # ten minutes hiding that.
+            if grep -qE "take a moment to appear|retry later|retry shortly|validation timed out" mcp-publisher-publish.log; then
+              echo "::notice::Registry-side validation not yet consistent (attempt ${attempt}); retrying in 60s"
+              sleep 60
+              continue
+            fi
+            break
+          done
+          set -e
+          if [ "${PUBLISH_STATUS}" -ne 0 ]; then
+            if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
+              echo "::notice::MCP Registry version ${GITHUB_REF#refs/tags/v} is already published; continuing"
+            else
+              exit "${PUBLISH_STATUS}"
+            fi
+          fi
+
+  verify-published:
+    name: Verify published packages
+    runs-on: ubuntu-latest
+    needs: [npm, pypi]
+    permissions:
+      contents: read # download the published release assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Fetch and verify the signed checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/fetch-release-assets.sh --checksums-only "${GITHUB_REF#refs/tags/v}" dist
+
+      # Downloads what npm and PyPI actually serve and compares the embedded
+      # binaries with the signed checksums.txt. The publishers re-assemble
+      # their packages after validating them, so this is the only step that
+      # inspects the bytes a user installs, and it runs in a job holding no
+      # publishing credential of any kind.
+      - name: Compare registry packages with the signed checksums
+        run: python3 scripts/verify_published_packages.py "${GITHUB_REF#refs/tags/v}" dist/checksums.txt
+
+  commit-manifests:
+    name: Commit manifests to main
+    runs-on: ubuntu-latest
+    # Last, deliberately. The commit lands the stamped server.json on main, and
+    # a push to main runs check-server-json-packages, which fetches every
+    # package the manifest declares. Committing before npm and PyPI have
+    # published would fail that gate on a version that is merely not there yet.
+    # Depending on the publishers also preserves the old single-job semantics:
+    # a failed publish aborted before the commit ever happened.
+    needs: [release, docker, npm, pypi, homebrew, mcp-registry]
+    environment: release
+    permissions:
+      contents: read # download the published release assets
+      attestations: read # verify the .mcpb provenance before hashing it
+    steps:
+      # A fresh checkout of main in a job that runs no third-party code. The
+      # deploy key pushes straight to a protected branch, so nothing that ran
+      # earlier in some other job can have rewritten what it commits.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Fetch and verify release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/fetch-release-assets.sh "${GITHUB_REF#refs/tags/v}" dist "gitlab-mcp-server.mcpb"
+
+      - name: Commit updated server.json and plugin.json to main
+        env:
+          RELEASE_DEPLOY_KEY_B64: ${{ secrets.RELEASE_DEPLOY_KEY_B64 }}
+          OCI_DIGEST: ${{ needs.docker.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ -z "${RELEASE_DEPLOY_KEY_B64}" ]; then
+            echo "::error::RELEASE_DEPLOY_KEY_B64 secret is not configured"
+            exit 1
+          fi
+          if [ -z "${OCI_DIGEST}" ]; then
+            echo "::error::the docker job published no image digest; server.json cannot be pinned"
+            exit 1
+          fi
+
+          KEY_FILE="${RUNNER_TEMP}/release_deploy_key"
+          KNOWN_HOSTS_FILE="${RUNNER_TEMP}/known_hosts"
+          echo "${RELEASE_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
+          chmod 600 "${KEY_FILE}"
+          ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
+
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          git config core.sshCommand "ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
+
+          git config user.name "José M. Requena Plens"
+          git config user.email "jmrplens@gmail.com"
+
+          # The checkout is already main; refresh it in case another release
+          # step landed something while this job waited.
+          git fetch origin main
+          git reset --hard origin/main
+
+          # The script is idempotent and reads checksums.txt + version + the
+          # bundle, all of which were verified against the release's cosign
+          # signature above, so re-running it on the current main produces the
+          # same result without inheriting anything from a dirty tree.
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
+
+          git add server.json
+          [ -f plugin.json ] && git add plugin.json
+          [ -f .plugin/plugin.json ] && git add .plugin/plugin.json
+          [ -f mcpb/manifest.json ] && git add mcpb/manifest.json
+          [ -f lhm.plugin.json ] && git add lhm.plugin.json
+          [ -f npm/gitlab-mcp-server/package.json ] && git add npm/gitlab-mcp-server/package.json
+
+          if git diff --cached --quiet; then
+            echo "::notice::No manifest changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore: update manifests for v${VERSION}
+
+          Updates server.json (MCP Registry) with version ${VERSION} and
+          pinned SHA256 hashes, and stamps version ${VERSION} into
+          plugin.json (Agent Plugins), .plugin/plugin.json (legacy Open
+          Plugins), mcpb/manifest.json (Claude Desktop extension), and
+          lhm.plugin.json (LobeHub Marketplace)."
+          git push origin main
+
+  winget:
+    name: Winget
+    runs-on: windows-latest
+    needs: [release]
+    permissions: {} # both steps authenticate with WINGET_TOKEN, not GITHUB_TOKEN
+    steps:
+      # Publishes a version-update PR to microsoft/winget-pkgs via the
+      # jmrplens/winget-pkgs fork. Only works once the initial package
+      # manifest (jmrplens.gitlab-mcp-server) has been merged upstream —
+      # continue-on-error keeps releases green until then and if Microsoft's
+      # validation service hiccups.
+      #
+      # The fork MUST be synced first: komac creates its branch on the fork,
+      # and a stale fork fails with "Ref cannot be created" — which the
+      # releaser's continue-on-error then hides. That exact combination
+      # silently skipped the 2.7.2 and 2.7.3 submissions (fork 24 days
+      # behind). This step is deliberately blocking: if the sync fails
+      # (409 divergence, 422), the releaser would fail against the stale
+      # fork anyway and hide it — a red winget job is the visibility that
+      # was missing, and nothing downstream depends on this job.
+      - name: Sync winget-pkgs fork with upstream
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: gh api -X POST repos/jmrplens/winget-pkgs/merge-upstream -f branch=master
+      # Pinned to a commit SHA (like every other action here): an
+      # individually-maintained action that receives WINGET_TOKEN — a mutable
+      # tag would let a compromised release exfiltrate it.
+      - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        continue-on-error: true
+        with:
+          identifier: jmrplens.gitlab-mcp-server
+          installers-regex: '-windows-(amd64|arm64)\.exe$'
+          release-tag: ${{ github.ref_name }}
+          token: ${{ secrets.WINGET_TOKEN }}

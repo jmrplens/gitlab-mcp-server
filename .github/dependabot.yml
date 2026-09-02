@@ -1,5 +1,26 @@
 # Dependabot configuration — gitlab-mcp-server
 # Docs: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+#
+# Every ecosystem states its own cooldown. GitHub has applied a three-day
+# default since July 2026, but a default is a property of the platform, not of
+# this repository: it can be changed, and an absent key would then mean
+# something different without anything here changing. A week is long enough for
+# a compromised release to be yanked (the September 2025 npm maintainer
+# phishing that hit `debug`, `chalk` and 16 other packages was caught in
+# hours), and security updates ignore cooldown entirely, so this delays
+# convenience, not fixes.
+#
+# Two deliberate omissions:
+#   * docker-compose carries no cooldown — its images are :latest test fixtures
+#     that generate no pull request. SemVer sub-keys are also left off the
+#     docker entries: Dependabot scopes them to SemVer-aware managers and
+#     rejects the whole configuration otherwise, which would stop that
+#     ecosystem's updates completely.
+#   * npm/gitlab-mcp-server, the published launcher, has no entry on purpose.
+#     Its only dependencies are the per-platform packages, pinned to the exact
+#     release version by scripts/update-server-json-sha.sh; a Dependabot bump
+#     there would fight the release stamp and desynchronise the launcher from
+#     the binaries it resolves.
 
 version: 2
 
@@ -11,6 +32,10 @@ updates:
       interval: "weekly"
       day: "monday"
       timezone: "Europe/Madrid"
+    cooldown:
+      default-days: 7
+      semver-minor-days: 14
+      semver-major-days: 30
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -32,6 +57,10 @@ updates:
       interval: "weekly"
       day: "monday"
       timezone: "Europe/Madrid"
+    cooldown:
+      default-days: 7
+      semver-minor-days: 14
+      semver-major-days: 30
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -53,6 +82,11 @@ updates:
       interval: "weekly"
       day: "monday"
       timezone: "Europe/Madrid"
+    # No SemVer sub-keys: an action pin is a commit SHA with a version comment,
+    # and the cooldown that matters is the flat one before a hijacked tag is
+    # adopted.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -72,6 +106,8 @@ updates:
       interval: "weekly"
       day: "monday"
       timezone: "Europe/Madrid"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore"
       include: "scope"

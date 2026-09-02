@@ -213,12 +213,6 @@ To accept a new advisory, add its OSV ID to `ALLOWLIST` in
 `scripts/govulncheck.sh` and add a row here with the justification. To retire one
 (e.g. once a fix ships), remove it from both.
 
-The only way to drop `openpgp` from the build is an upstream change in
-`go-selfupdate` — either migrating to the maintained
-`github.com/ProtonMail/go-crypto/openpgp` fork that the advisory recommends, or
-moving the PGP validators into a separate package so consumers that do not use
-them never link it.
-
 ### markdownlint-cli2
 
 `markdownlint-cli2` checks Markdown style and consistency.

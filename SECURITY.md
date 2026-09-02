@@ -108,11 +108,11 @@ under *Out of scope* below.
 
 Security fixes are issued for the latest stable release line on `main`. Older releases do not receive backports.
 
-| Version                | Supported          |
-| ---------------------- | ------------------ |
-| Latest `1.x` release   | :white_check_mark: |
-| Older `1.x` releases   | :x: (please update) |
-| `0.x` (pre-1.0)        | :x:                |
+| Version                | Supported           |
+| ---------------------- | ------------------- |
+| Latest `2.x` release   | :white_check_mark:  |
+| Older `2.x` releases   | :x: (please update) |
+| `1.x` and `0.x`        | :x:                 |
 
 We strongly recommend running the most recent release. Updates arrive through whichever channel you installed from (npm, Homebrew, the container image, the Claude Desktop extension, winget, or a fresh download); the server never replaces its own binary.
 
