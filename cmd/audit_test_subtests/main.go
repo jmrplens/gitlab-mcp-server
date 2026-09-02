@@ -85,6 +85,18 @@ type Summary struct {
 // sequentialMarker declares a loop of dependent steps rather than cases.
 const sequentialMarker = "sequential:"
 
+// The Fix vocabulary: the first three name a rewrite -fix can perform, the
+// rest name why it cannot.
+const (
+	fixElement     = "element"    // a []string table: the element is the name
+	fixKey         = "key"        // a map[string]... table: the key is the name
+	fixFieldPrefix = "field:"     // a struct table: the named string field
+	fixNeedsName   = "needs-name" // no name-like field to derive a name from
+	fixBlankVar    = "blank-var"  // the loop variable is blank or absent
+	fixBreak       = "break"      // a break aimed at the loop cannot cross a closure
+	fixGoto        = "goto"       // a goto or a label cannot cross a closure
+)
+
 // nameFields are the struct fields, in order of preference, that name a case.
 var nameFields = []string{"name", "desc", "description", "label", "title", "id"}
 
@@ -425,19 +437,19 @@ func subtestName(loop *ast.RangeStmt, lit *ast.CompositeLit, file *ast.File) (ex
 	case *ast.ArrayType:
 		return arrayCaseName(loop, typ, file)
 	}
-	return "", "needs-name"
+	return "", fixNeedsName
 }
 
 // mapCaseName names a case after the key of a map[string]... table.
 func mapCaseName(loop *ast.RangeStmt, typ *ast.MapType) (expr, fix string) {
 	if !isString(typ.Key) {
-		return "", "needs-name"
+		return "", fixNeedsName
 	}
 	key, _ := loop.Key.(*ast.Ident)
 	if key == nil || key.Name == "_" {
-		return "", "blank-var"
+		return "", fixBlankVar
 	}
-	return key.Name, "key"
+	return key.Name, fixKey
 }
 
 // arrayCaseName names a case after the element of a []string table or after
@@ -447,18 +459,18 @@ func arrayCaseName(loop *ast.RangeStmt, typ *ast.ArrayType, file *ast.File) (exp
 	blank := value == nil || value.Name == "_"
 	if isString(typ.Elt) {
 		if blank {
-			return "", "blank-var"
+			return "", fixBlankVar
 		}
-		return value.Name, "element"
+		return value.Name, fixElement
 	}
 	field := nameField(structFields(typ.Elt, file))
 	if field == "" {
-		return "", "needs-name"
+		return "", fixNeedsName
 	}
 	if blank {
-		return "", "blank-var"
+		return "", fixBlankVar
 	}
-	return value.Name + "." + field, "field:" + field
+	return value.Name + "." + field, fixFieldPrefix + field
 }
 
 // nameField picks the preferred name-like string field, or "" when none.
@@ -560,7 +572,7 @@ func (c *controlFlow) walk(n ast.Node, nested, inSwitch bool) {
 			c.walk(v, nested, true)
 			return false
 		case *ast.LabeledStmt:
-			c.reason = "goto"
+			c.reason = fixGoto
 			return false
 		case *ast.BranchStmt:
 			c.branch(v, nested, inSwitch)
@@ -573,9 +585,9 @@ func (c *controlFlow) walk(n ast.Node, nested, inSwitch bool) {
 func (c *controlFlow) branch(b *ast.BranchStmt, nested, inSwitch bool) {
 	switch {
 	case b.Tok == token.GOTO || b.Label != nil:
-		c.reason = "goto"
+		c.reason = fixGoto
 	case b.Tok == token.BREAK && !nested && !inSwitch:
-		c.reason = "break"
+		c.reason = fixBreak
 	case b.Tok == token.CONTINUE && !nested:
 		c.continues = append(c.continues, b)
 	}
@@ -583,7 +595,7 @@ func (c *controlFlow) branch(b *ast.BranchStmt, nested, inSwitch bool) {
 
 // fixable reports whether a Fix value names a rewrite rather than a blocker.
 func fixable(fix string) bool {
-	return fix == "element" || fix == "key" || strings.HasPrefix(fix, "field:")
+	return fix == fixElement || fix == fixKey || strings.HasPrefix(fix, fixFieldPrefix)
 }
 
 // fixAll rewrites every fixable site under dirs and returns how many.
