@@ -92,10 +92,7 @@ func TestWeakIndividualDescription(t *testing.T) {
 // fix-agnostic invariants plus the presence of the known generic-Usage backlog.
 // This is the R-META methodology regression guard.
 func TestBuildReport_DetectsKnownMetadataGaps(t *testing.T) {
-	rep, err := buildReport(false)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := buildReport(false)
 	if rep.Summary.Actions == 0 {
 		t.Fatalf("no actions analyzed: %+v", rep.Summary)
 	}
@@ -115,14 +112,8 @@ func TestBuildReport_DetectsKnownMetadataGaps(t *testing.T) {
 
 // TestBuildReport_Deterministic verifies repeated runs are identical.
 func TestBuildReport_Deterministic(t *testing.T) {
-	first, err := buildReport(true)
-	if err != nil {
-		t.Fatalf("first buildReport: %v", err)
-	}
-	second, err := buildReport(true)
-	if err != nil {
-		t.Fatalf("second buildReport: %v", err)
-	}
+	first := buildReport(true)
+	second := buildReport(true)
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("buildReport is not deterministic across runs")
 	}
@@ -315,10 +306,7 @@ func assertPackageShape(t *testing.T, pr packageReport) {
 // schema version, and lists the packages as an array even when the catalog
 // raises no finding, which is the state the curated metadata is held to.
 func TestRun_GapsOnly_EmitsIndentedJSON(t *testing.T) {
-	content, err := Run(true)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+	content := Run(true)
 	if !strings.HasSuffix(string(content), "}\n") {
 		t.Error("report lacks the trailing newline")
 	}

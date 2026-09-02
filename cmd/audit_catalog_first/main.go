@@ -257,10 +257,7 @@ func buildCoverageReport(root string) (coverageReport, error) {
 	if invariantErr := assertCoverageInvariants(domains); invariantErr != nil {
 		return coverageReport{}, invariantErr
 	}
-	client, err := clientForAudit()
-	if err != nil {
-		return coverageReport{}, err
-	}
+	client := clientForAudit()
 	if projectionErr := assertCatalogActionsHaveIndividualProjectionPolicy(client); projectionErr != nil {
 		return coverageReport{}, projectionErr
 	}
@@ -811,10 +808,7 @@ func referencedPackages(path, selectorName string) (map[string]bool, error) {
 }
 
 func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
-	client, err := clientForAudit()
-	if err != nil {
-		return nil, err
-	}
+	client := clientForAudit()
 
 	coverage := make(map[string]packageActionCoverage)
 	for _, group := range auditshared.CachedActionSpecs(client, true) {
@@ -857,15 +851,14 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	return coverage, nil
 }
 
-func clientForAudit() (*gitlabclient.Client, error) {
-	client, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- audit-only dummy token.
+// clientForAudit builds the offline client the catalog is registered against.
+// Its URL is the compiled-in default and its token is a literal, so the only
+// thing construction validates is fixed at build time.
+func clientForAudit() *gitlabclient.Client {
+	return cmdutil.Must(gitlabclient.NewClient(&config.Config{ //#nosec G101 -- audit-only dummy token.
 		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: "audit-token",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create audit GitLab client: %w", err)
-	}
-	return client, nil
+	}))
 }
 
 func collectSurfaceSpecs(client *gitlabclient.Client) []actioncatalog.SurfaceToolSpec {

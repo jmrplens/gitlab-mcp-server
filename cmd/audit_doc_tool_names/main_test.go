@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,18 +21,14 @@ import (
 var realRegistry struct {
 	once  sync.Once
 	names map[string]struct{}
-	err   error
 }
 
 // registeredNames returns the memoized registered name set.
 func registeredNames(t *testing.T) map[string]struct{} {
 	t.Helper()
 	realRegistry.once.Do(func() {
-		realRegistry.names, realRegistry.err = registeredToolNames()
+		realRegistry.names = registeredToolNames()
 	})
-	if realRegistry.err != nil {
-		t.Fatalf("registeredToolNames: %v", realRegistry.err)
-	}
 	return realRegistry.names
 }
 
@@ -309,13 +304,13 @@ func TestScanDocs_Roots_AggregatesAcrossRoots(t *testing.T) {
 // contract: a clean tree prints the all-clear and exits 0, findings are
 // listed most-referenced first and then alphabetically with their files
 // sorted, -check turns findings into an error on stderr and exit 1, and a
-// registry or scan failure exits 1 with its cause.
+// scan failure exits 1 with its cause.
 func TestRun_Findings_ReportsSortedAndReturnsExitCode(t *testing.T) {
-	okRegistry := func() (map[string]struct{}, error) { return stubRegistry, nil }
+	okRegistry := func() map[string]struct{} { return stubRegistry }
 	cases := []struct {
 		name     string
 		setup    func(t *testing.T, root string) []string
-		collect  func() (map[string]struct{}, error)
+		collect  func() map[string]struct{}
 		check    bool
 		wantCode int
 		wantOut  string
@@ -361,13 +356,6 @@ func TestRun_Findings_ReportsSortedAndReturnsExitCode(t *testing.T) {
 			wantCode: 1,
 			wantOut:  "  gitlab_list_issues                     1 file(s)\n",
 			wantErr:  "\nERROR: the documentation names 1 tool(s) the server does not register\n",
-		},
-		{
-			name:     "registry_failure",
-			setup:    func(_ *testing.T, _ string) []string { return nil },
-			collect:  func() (map[string]struct{}, error) { return nil, errors.New("boom") },
-			wantCode: 1,
-			wantErr:  "collect tool names: boom\n",
 		},
 		{
 			name: "scan_failure",
@@ -418,7 +406,7 @@ func TestRun_RepositoryDocs_NameOnlyRegisteredTools(t *testing.T) {
 	t.Chdir(root)
 
 	var out, errOut bytes.Buffer
-	got := run(true, docRoots, func() (map[string]struct{}, error) { return names, nil }, &out, &errOut)
+	got := run(true, docRoots, func() map[string]struct{} { return names }, &out, &errOut)
 	if got != 0 {
 		t.Fatalf("run(-check) on the repository docs = %d, want 0\nstdout:\n%s\nstderr:\n%s", got, out.String(), errOut.String())
 	}

@@ -141,10 +141,7 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 		return nil, fmt.Errorf("action report: %w", err)
 	}
 	cmdutil.Progressf("audit_1to1: [3/3] analyzing discovery metadata (R-META)...")
-	metadataBytes, err := metadata.Run(gapsOnly)
-	if err != nil {
-		return nil, fmt.Errorf("metadata report: %w", err)
-	}
+	metadataBytes := metadata.Run(gapsOnly)
 	cmdutil.Progressf("audit_1to1: merging backlog...")
 	return merge.BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes)
 }
@@ -162,7 +159,9 @@ func runSingle(scope string, gapsOnly bool) ([]byte, error) {
 		}
 		return actions.Run(root, gapsOnly)
 	case "metadata":
-		return metadata.Run(gapsOnly)
+		// The metadata analyzer reads the in-memory catalog, not the tree, so
+		// unlike the two filesystem scanners it has nothing to fail at.
+		return metadata.Run(gapsOnly), nil
 	default:
 		return nil, fmt.Errorf("unknown scope %q (valid: structs, actions, metadata)", scope)
 	}

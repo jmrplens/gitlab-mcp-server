@@ -22,6 +22,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
@@ -55,7 +56,7 @@ const StubToken = "gen-surface-token" //#nosec G101 -- not a real credential, in
 // answers every request with a fixed version payload, plus the cleanup func that
 // shuts the stub down. Catalog construction needs a client but performs no real
 // request, so this keeps generation offline and identical on every machine.
-func NewStubClient() (*gitlabclient.Client, func(), error) {
+func NewStubClient() (client *gitlabclient.Client, cleanup func()) {
 	return auditshared.NewStubGitLabClient(StubToken)
 }
 
@@ -63,90 +64,75 @@ func NewStubClient() (*gitlabclient.Client, func(), error) {
 // catalog registers the GitLab.com-only tools (Orbit) against it, so generated
 // documentation can describe the full capability set rather than whatever the
 // ambient GITLAB_URL points at.
-func NewGitLabComClient() (*gitlabclient.Client, error) {
-	client, err := gitlabclient.NewClient(&config.Config{
+//
+// The URL is the compiled-in default and the token is a constant, so the only
+// thing client construction validates is already fixed at build time.
+func NewGitLabComClient() *gitlabclient.Client {
+	return cmdutil.Must(gitlabclient.NewClient(&config.Config{
 		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: StubToken,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create gitlab.com client: %w", err)
-	}
-	return client, nil
+	}))
 }
 
 // Session creates an in-memory MCP server+client pair, applies setup to the
 // server, and returns the connected client session together with a cleanup
 // function the caller must invoke.
-func Session(setup func(*mcp.Server) error) (session *mcp.ClientSession, cleanup func(), err error) {
+//
+// Both ends of an in-memory transport are this process, so neither connect can
+// fail; setup registers the catalog compiled into this binary. Reporting either
+// as an error would add a return path to every generator that lists a surface
+// and none of them could ever take it.
+func Session(setup func(*mcp.Server)) (session *mcp.ClientSession, cleanup func()) {
 	opts := &mcp.ServerOptions{PageSize: listPageSize, Capabilities: &mcp.ServerCapabilities{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: "mcpsurface", Version: "0.0.1"}, opts)
-	if setupErr := setup(server); setupErr != nil {
-		return nil, nil, fmt.Errorf("set up MCP server: %w", setupErr)
-	}
+	setup(server)
 	toolutil.LockdownInputSchemas(server)
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("server connect: %w", err)
-	}
+	serverSession := cmdutil.Must(server.Connect(ctx, serverTransport, nil))
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "mcpsurface-client", Version: "0.0.1"}, nil)
-	session, err = mcpClient.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		_ = serverSession.Close()
-		_ = serverSession.Wait()
-		return nil, nil, fmt.Errorf("client connect: %w", err)
-	}
+	session = cmdutil.Must(mcpClient.Connect(ctx, clientTransport, nil))
 
 	return session, func() {
 		_ = session.Close()
 		_ = serverSession.Wait()
-	}, nil
+	}
 }
 
 // DynamicCatalog builds the canonical action catalog behind the dynamic
 // find/execute surface, including the standalone actions that are not part of
 // any domain meta-tool. enterprise selects the Premium/Ultimate catalog.
-func DynamicCatalog(client *gitlabclient.Client, enterprise bool) (*actioncatalog.Catalog, error) {
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
-	if err != nil {
-		return nil, fmt.Errorf("build dynamic action catalog: %w", err)
-	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("add dynamic standalone catalog: %w", err)
-	}
-	return catalog, nil
+//
+// Both steps assemble the ActionSpecs compiled into this binary, so a failure
+// means the committed catalog is malformed, which no generator run can fix and
+// every caller would only print.
+func DynamicCatalog(client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
+	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true}))
+	return cmdutil.Must(dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}))
 }
 
 // DynamicTools returns the visible two-tool dynamic catalog from a real MCP
 // tools/list session, in find-then-execute order.
-func DynamicTools(client *gitlabclient.Client) ([]*mcp.Tool, error) {
-	catalog, err := DynamicCatalog(client, true)
-	if err != nil {
-		return nil, err
-	}
-	session, cleanup, err := Session(func(server *mcp.Server) error {
+//
+// The contract check is an assertion about compiled-in registration, not about
+// anything this run encountered: only an edit to the dynamic surface can break
+// it, and it must abort generation rather than rewrite every artifact.
+// [ValidateDynamicToolContract] stays exported so the rule itself is tested
+// directly.
+func DynamicTools(client *gitlabclient.Client) []*mcp.Tool {
+	catalog := DynamicCatalog(client, true)
+	session, cleanup := Session(func(server *mcp.Server) {
 		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 	defer cleanup()
 
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("list dynamic tools: %w", err)
-	}
+	result := cmdutil.Must(session.ListTools(context.Background(), nil))
 	SortDynamicTools(result.Tools)
-	if contractErr := ValidateDynamicToolContract(result.Tools); contractErr != nil {
-		return nil, contractErr
-	}
-	return result.Tools, nil
+	cmdutil.MustDo(ValidateDynamicToolContract(result.Tools))
+	return result.Tools
 }
 
 // SortDynamicTools orders the dynamic surface find-then-execute, which is the
@@ -190,16 +176,10 @@ func ValidateDynamicToolContract(dynamicTools []*mcp.Tool) error {
 // the MCP server, including the surface-aware tool manifest template. The
 // manifest is rendered for the dynamic surface because that is what a user gets
 // by default.
-func Resources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
-	dynamicCatalog, err := DynamicCatalog(client, false)
-	if err != nil {
-		return nil, nil, err
-	}
-	dynamicTools, err := DynamicTools(client)
-	if err != nil {
-		return nil, nil, err
-	}
-	session, cleanup, err := Session(func(server *mcp.Server) error {
+func Resources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate) {
+	dynamicCatalog := DynamicCatalog(client, false)
+	dynamicTools := DynamicTools(client)
+	session, cleanup := Session(func(server *mcp.Server) {
 		resources.Register(server, client)
 		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
 			Surface: config.ToolSurfaceDynamic,
@@ -207,42 +187,24 @@ func Resources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTem
 			Catalog: dynamicCatalog,
 		})
 		resources.RegisterWorkflowGuides(server)
-		return nil
 	})
-	if err != nil {
-		return nil, nil, err
-	}
 	defer cleanup()
 
 	ctx := context.Background()
-	res, err := session.ListResources(ctx, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("list resources: %w", err)
-	}
-	tpl, err := session.ListResourceTemplates(ctx, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("list resource templates: %w", err)
-	}
-	return res.Resources, tpl.ResourceTemplates, nil
+	res := cmdutil.Must(session.ListResources(ctx, nil))
+	tpl := cmdutil.Must(session.ListResourceTemplates(ctx, nil))
+	return res.Resources, tpl.ResourceTemplates
 }
 
 // Prompts returns every registered MCP prompt definition over a real
 // prompts/list round-trip.
-func Prompts(client *gitlabclient.Client) ([]*mcp.Prompt, error) {
-	session, cleanup, err := Session(func(server *mcp.Server) error {
+func Prompts(client *gitlabclient.Client) []*mcp.Prompt {
+	session, cleanup := Session(func(server *mcp.Server) {
 		prompts.Register(server, client)
-		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 	defer cleanup()
 
-	result, err := session.ListPrompts(context.Background(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("list prompts: %w", err)
-	}
-	return result.Prompts, nil
+	return cmdutil.Must(session.ListPrompts(context.Background(), nil)).Prompts
 }
 
 // ProjectRoot walks up from the working directory to the directory holding

@@ -170,14 +170,13 @@ func run(checkOnly bool) error {
 var surfaceCache struct {
 	once       sync.Once
 	registered surface
-	err        error
 }
 
-func cachedSurface() (surface, error) {
+func cachedSurface() surface {
 	surfaceCache.once.Do(func() {
-		surfaceCache.registered, surfaceCache.err = readSurface()
+		surfaceCache.registered = readSurface()
 	})
-	return surfaceCache.registered, surfaceCache.err
+	return surfaceCache.registered
 }
 
 func generate(current []byte) (out []byte, counts string, err error) {
@@ -186,10 +185,7 @@ func generate(current []byte) (out []byte, counts string, err error) {
 		return nil, "", err
 	}
 
-	registered, err := cachedSurface()
-	if err != nil {
-		return nil, "", err
-	}
+	registered := cachedSurface()
 	m.Tools = registered.tools
 	m.Prompts = registered.prompts
 	m.Resources = registered.resources
@@ -251,30 +247,22 @@ func requireManifestFields(m manifest) error {
 
 // readSurface introspects the registered capabilities over real MCP list
 // round-trips against an offline stub client.
-func readSurface() (surface, error) {
-	client, closeStub, err := mcpsurface.NewStubClient()
-	if err != nil {
-		return surface{}, fmt.Errorf("create client: %w", err)
-	}
+//
+// Every step here is in-process: the client points at a stub this call started,
+// and the three lists come from the catalog compiled into this binary. Nothing
+// the manifest is generated from depends on the outside world.
+func readSurface() surface {
+	client, closeStub := mcpsurface.NewStubClient()
 	defer closeStub()
 
-	toolList, err := mcpsurface.DynamicTools(client)
-	if err != nil {
-		return surface{}, err
-	}
-	promptList, err := mcpsurface.Prompts(client)
-	if err != nil {
-		return surface{}, err
-	}
-	resourceList, _, err := mcpsurface.Resources(client)
-	if err != nil {
-		return surface{}, err
-	}
+	toolList := mcpsurface.DynamicTools(client)
+	promptList := mcpsurface.Prompts(client)
+	resourceList, _ := mcpsurface.Resources(client)
 	return surface{
 		tools:     manifestTools(toolList),
 		prompts:   manifestPrompts(promptList),
 		resources: manifestResources(resourceList),
-	}, nil
+	}
 }
 
 // manifestTools converts the tools/list result into manifest entries. The

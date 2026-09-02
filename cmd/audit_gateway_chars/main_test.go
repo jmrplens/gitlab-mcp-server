@@ -245,10 +245,7 @@ func TestRun_ApplyWithoutUsableSubstitutions_Fails(t *testing.T) {
 // dynamic pair, the meta domain tools, and nothing for a surface name the
 // server does not know.
 func TestListSurface_Surfaces_ReturnTheirRegisteredTools(t *testing.T) {
-	client, cleanup, err := mcpsurface.NewStubClient()
-	if err != nil {
-		t.Fatalf("stub client: %v", err)
-	}
+	client, cleanup := mcpsurface.NewStubClient()
 	t.Cleanup(cleanup)
 
 	cases := []struct {
@@ -263,10 +260,7 @@ func TestListSurface_Surfaces_ReturnTheirRegisteredTools(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			listed, listErr := listSurface(client, tc.surface)
-			if listErr != nil {
-				t.Fatalf("listSurface(%q): %v", tc.surface, listErr)
-			}
+			listed := listSurface(client, tc.surface)
 			if tc.wantEmpty {
 				if len(listed) != 0 {
 					t.Fatalf("listSurface(%q) returned %d tools, want none", tc.surface, len(listed))

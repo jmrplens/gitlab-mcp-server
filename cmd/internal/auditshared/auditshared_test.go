@@ -122,14 +122,8 @@ func TestOwnerPackage_Scenarios_ResolvesInPrecedenceOrder(t *testing.T) {
 // the stub answers the version endpoint with its fixed payload through the
 // returned client, and that the cleanup shuts the stub down so a later
 // connection to it is refused.
-//
-// The creation error branch is unreachable: the client is built from the
-// URL httptest just allocated, which client-go always accepts.
 func TestNewStubGitLabClient_Default_AnswersVersionAndClosesOnCleanup(t *testing.T) {
-	client, cleanup, err := NewStubGitLabClient("stub-token")
-	if err != nil {
-		t.Fatalf("NewStubGitLabClient() error = %v", err)
-	}
+	client, cleanup := NewStubGitLabClient("stub-token")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -160,10 +154,7 @@ func TestNewStubGitLabClient_Default_AnswersVersionAndClosesOnCleanup(t *testing
 // backing slice, the two tiers are collected independently, and the
 // enterprise collection is at least as large as the free one.
 func TestCachedActionSpecs_RepeatedCalls_ShareOneCollection(t *testing.T) {
-	client, cleanup, err := NewStubGitLabClient("stub-token")
-	if err != nil {
-		t.Fatalf("NewStubGitLabClient() error = %v", err)
-	}
+	client, cleanup := NewStubGitLabClient("stub-token")
 	t.Cleanup(cleanup)
 
 	enterprise := CachedActionSpecs(client, true)
@@ -183,31 +174,18 @@ func TestCachedActionSpecs_RepeatedCalls_ShareOneCollection(t *testing.T) {
 // projection registers the individual surface over a real tools/list
 // round-trip once per process: the map carries the model-facing text of a
 // well-known tool, and a second call hands back the very same map.
-//
-// The connect and list error branches of ProjectIndividualDescriptions are
-// unreachable: the in-memory transport pair never fails to connect, and a
-// server that connected answers tools/list.
 func TestCachedIndividualDescriptions_RepeatedCalls_ProjectOnce(t *testing.T) {
-	client, cleanup, err := NewStubGitLabClient("stub-token")
-	if err != nil {
-		t.Fatalf("NewStubGitLabClient() error = %v", err)
-	}
+	client, cleanup := NewStubGitLabClient("stub-token")
 	t.Cleanup(cleanup)
 
-	descriptions, err := CachedIndividualDescriptions(client)
-	if err != nil {
-		t.Fatalf("CachedIndividualDescriptions() error = %v", err)
-	}
+	descriptions := CachedIndividualDescriptions(client)
 	if len(descriptions) < 800 {
 		t.Fatalf("projected %d descriptions, want the full individual surface", len(descriptions))
 	}
 	if description := descriptions["gitlab_project_get"]; !strings.Contains(description, "Returns:") {
 		t.Fatalf("gitlab_project_get description = %q, want the projected Returns section", description)
 	}
-	again, err := CachedIndividualDescriptions(client)
-	if err != nil {
-		t.Fatalf("CachedIndividualDescriptions() second error = %v", err)
-	}
+	again := CachedIndividualDescriptions(client)
 	if reflect.ValueOf(again).Pointer() != reflect.ValueOf(descriptions).Pointer() {
 		t.Fatal("second call returned a different map, want the shared cached map")
 	}

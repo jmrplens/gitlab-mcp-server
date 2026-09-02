@@ -471,17 +471,13 @@ func TestEmptyParamDescription_FlagsBoilerplate(t *testing.T) {
 var (
 	fullReportOnce sync.Once
 	fullReport     report
-	errFullReport  error
 )
 
 func cachedFullReport(t *testing.T) report {
 	t.Helper()
 	fullReportOnce.Do(func() {
-		fullReport, errFullReport = buildReport(false, 3)
+		fullReport = buildReport(false, 3)
 	})
-	if errFullReport != nil {
-		t.Fatalf("buildReport: %v", errFullReport)
-	}
 	return fullReport
 }
 
@@ -591,14 +587,8 @@ func TestBuildReport_LinkCreateBatchGoldStandard(t *testing.T) {
 
 // TestBuildReport_Deterministic verifies repeated runs are identical.
 func TestBuildReport_Deterministic(t *testing.T) {
-	first, err := buildReport(true, 3)
-	if err != nil {
-		t.Fatalf("first buildReport: %v", err)
-	}
-	second, err := buildReport(true, 3)
-	if err != nil {
-		t.Fatalf("second buildReport: %v", err)
-	}
+	first := buildReport(true, 3)
+	second := buildReport(true, 3)
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("buildReport is not deterministic across runs")
 	}
@@ -1517,10 +1507,7 @@ func TestSummarize_EveryFlag_CountsPerFlagAndSeverity(t *testing.T) {
 func TestBuildReport_GapsOnly_DropsCleanPackages(t *testing.T) {
 	full := cachedFullReport(t)
 
-	gapsOnly, err := buildReport(true, 3)
-	if err != nil {
-		t.Fatalf("buildReport(gapsOnly) error = %v", err)
-	}
+	gapsOnly := buildReport(true, 3)
 	if len(gapsOnly.Packages) > len(full.Packages) {
 		t.Fatalf("gaps-only reports %d packages, full reports %d", len(gapsOnly.Packages), len(full.Packages))
 	}

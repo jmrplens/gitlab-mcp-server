@@ -129,34 +129,34 @@ type canned struct {
 func newCanned(catalog llmsCatalog) *canned {
 	c := &canned{stub: new(gitlabclient.Client), gitLabCom: new(gitlabclient.Client)}
 	c.surface = llmsSurface{
-		newStubClient: func() (*gitlabclient.Client, func(), error) {
-			return c.stub, func() { c.closed = true }, nil
+		newStubClient: func() (*gitlabclient.Client, func()) {
+			return c.stub, func() { c.closed = true }
 		},
-		newGitLabComClient: func() (*gitlabclient.Client, error) { return c.gitLabCom, nil },
-		resources: func(*gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
-			return catalog.Resources, catalog.ResourceTemplates, nil
+		newGitLabComClient: func() *gitlabclient.Client { return c.gitLabCom },
+		resources: func(*gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate) {
+			return catalog.Resources, catalog.ResourceTemplates
 		},
-		listTools: func(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
+		listTools: func(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 			switch {
 			case meta:
-				return catalog.MetaBase, nil
+				return catalog.MetaBase
 			case client == c.gitLabCom:
-				return catalog.Individual, nil
+				return catalog.Individual
 			default:
-				return catalog.IndividualSelfManaged, nil
+				return catalog.IndividualSelfManaged
 			}
 		},
-		listToolsEnterprise: func(client *gitlabclient.Client) ([]*mcp.Tool, error) {
+		listToolsEnterprise: func(client *gitlabclient.Client) []*mcp.Tool {
 			if client == c.gitLabCom {
-				return catalog.MetaGitLabComEnterprise, nil
+				return catalog.MetaGitLabComEnterprise
 			}
-			return catalog.MetaEnterprise, nil
+			return catalog.MetaEnterprise
 		},
-		dynamicTools: func(*gitlabclient.Client) ([]*mcp.Tool, error) { return catalog.Dynamic, nil },
-		actionCatalog: func(*gitlabclient.Client) (*actioncatalog.Catalog, error) {
-			return actioncatalog.FromActionMaps(catalog.MetaRoutes), nil
+		dynamicTools: func(*gitlabclient.Client) []*mcp.Tool { return catalog.Dynamic },
+		actionCatalog: func(*gitlabclient.Client) *actioncatalog.Catalog {
+			return actioncatalog.FromActionMaps(catalog.MetaRoutes)
 		},
-		prompts: func(*gitlabclient.Client) ([]*mcp.Prompt, error) { return catalog.Prompts, nil },
+		prompts: func(*gitlabclient.Client) []*mcp.Prompt { return catalog.Prompts },
 	}
 	return c
 }
@@ -477,107 +477,6 @@ func TestRun_RequiresProjectRoot(t *testing.T) {
 	}
 	if c.closed {
 		t.Error("run() opened the stub client before locating the project root")
-	}
-}
-
-// surfaceFailure is one introspection call made to fail.
-type surfaceFailure struct {
-	name       string
-	fail       func(c *canned, err error)
-	wantPrefix string
-	opensStub  bool
-}
-
-// failListTools makes the canned listTools fail when the predicate holds.
-func failListTools(c *canned, err error, when func(client *gitlabclient.Client, meta bool) bool) {
-	inner := c.surface.listTools
-	c.surface.listTools = func(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
-		if when(client, meta) {
-			return nil, err
-		}
-		return inner(client, meta)
-	}
-}
-
-// failListToolsEnterprise makes the canned listToolsEnterprise fail for one
-// client.
-func failListToolsEnterprise(c *canned, err error, failing *gitlabclient.Client) {
-	inner := c.surface.listToolsEnterprise
-	c.surface.listToolsEnterprise = func(client *gitlabclient.Client) ([]*mcp.Tool, error) {
-		if client == failing {
-			return nil, err
-		}
-		return inner(client)
-	}
-}
-
-// surfaceFailures lists every introspection call in the order run makes
-// them, each with the context run adds to its error, if any, and whether the
-// stub client has been opened, and so must be released, by the time it fails.
-func surfaceFailures() []surfaceFailure {
-	return []surfaceFailure{
-		{name: "stub client", wantPrefix: "create client: ", fail: func(c *canned, err error) {
-			c.surface.newStubClient = func() (*gitlabclient.Client, func(), error) { return nil, nil, err }
-		}},
-		{name: "gitlab.com client", opensStub: true, fail: func(c *canned, err error) {
-			c.surface.newGitLabComClient = func() (*gitlabclient.Client, error) { return nil, err }
-		}},
-		{name: "resources", opensStub: true, fail: func(c *canned, err error) {
-			c.surface.resources = func(*gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) { return nil, nil, err }
-		}},
-		{name: "self-managed individual tools", opensStub: true, fail: func(c *canned, err error) {
-			failListTools(c, err, func(client *gitlabclient.Client, meta bool) bool { return !meta && client == c.stub })
-		}},
-		{name: "gitlab.com individual tools", opensStub: true, fail: func(c *canned, err error) {
-			failListTools(c, err, func(client *gitlabclient.Client, meta bool) bool { return !meta && client == c.gitLabCom })
-		}},
-		{name: "base meta-tools", opensStub: true, fail: func(c *canned, err error) {
-			failListTools(c, err, func(_ *gitlabclient.Client, meta bool) bool { return meta })
-		}},
-		{name: "self-managed enterprise meta-tools", opensStub: true, fail: func(c *canned, err error) {
-			failListToolsEnterprise(c, err, c.stub)
-		}},
-		{name: "gitlab.com enterprise meta-tools", opensStub: true, fail: func(c *canned, err error) {
-			failListToolsEnterprise(c, err, c.gitLabCom)
-		}},
-		{name: "dynamic tools", opensStub: true, fail: func(c *canned, err error) {
-			c.surface.dynamicTools = func(*gitlabclient.Client) ([]*mcp.Tool, error) { return nil, err }
-		}},
-		{name: "action catalog", opensStub: true, wantPrefix: "build meta action catalog: ", fail: func(c *canned, err error) {
-			c.surface.actionCatalog = func(*gitlabclient.Client) (*actioncatalog.Catalog, error) { return nil, err }
-		}},
-		{name: "prompts", opensStub: true, fail: func(c *canned, err error) {
-			c.surface.prompts = func(*gitlabclient.Client) ([]*mcp.Prompt, error) { return nil, err }
-		}},
-	}
-}
-
-// TestRun_PropagatesSurfaceErrors verifies each introspection failure aborts
-// generation with that error, wrapped where run adds context, that the stub
-// client is released on every path that opened it, and that no file is
-// written.
-func TestRun_PropagatesSurfaceErrors(t *testing.T) {
-	for _, tt := range surfaceFailures() {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := projectRootWithVersion(t, cannedVersion)
-			sentinel := errors.New("surface unavailable: " + tt.name)
-			c := newCanned(cannedCatalog())
-			tt.fail(c, sentinel)
-
-			err := run(c.surface, false)
-			if !errors.Is(err, sentinel) {
-				t.Fatalf("run() error = %v, want it to wrap %v", err, sentinel)
-			}
-			if !strings.HasPrefix(err.Error(), tt.wantPrefix) {
-				t.Errorf("run() error = %q, want prefix %q", err, tt.wantPrefix)
-			}
-			if c.closed != tt.opensStub {
-				t.Errorf("stub client released = %v, want %v", c.closed, tt.opensStub)
-			}
-			if _, statErr := os.Stat(filepath.Join(dir, llmsFileName)); !errors.Is(statErr, fs.ErrNotExist) {
-				t.Errorf("llms.txt written after a surface failure (stat error %v)", statErr)
-			}
-		})
 	}
 }
 

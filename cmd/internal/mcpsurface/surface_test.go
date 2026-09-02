@@ -4,7 +4,7 @@
 package mcpsurface
 
 import (
-	"errors"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,10 +22,7 @@ import (
 // against and registers its shutdown with the test.
 func newStubClientForTest(t *testing.T) *gitlabclient.Client {
 	t.Helper()
-	client, cleanup, err := NewStubClient()
-	if err != nil {
-		t.Fatalf("NewStubClient() error: %v", err)
-	}
+	client, cleanup := NewStubClient()
 	t.Cleanup(cleanup)
 	return client
 }
@@ -37,10 +34,7 @@ func newStubClientForTest(t *testing.T) *gitlabclient.Client {
 // the execute input schema for action, params, and confirm fields. This protects
 // the low-token dynamic contract every generated artifact describes.
 func TestDynamicTools_ExposesFindAndExecute(t *testing.T) {
-	dynamicTools, err := DynamicTools(newStubClientForTest(t))
-	if err != nil {
-		t.Fatalf("DynamicTools() error: %v", err)
-	}
+	dynamicTools := DynamicTools(newStubClientForTest(t))
 	if len(dynamicTools) != 2 {
 		t.Fatalf("len(DynamicTools()) = %d, want 2", len(dynamicTools))
 	}
@@ -151,10 +145,7 @@ func TestValidateDynamicToolContract_RejectsDrift(t *testing.T) {
 // TestResources_IncludesToolManifestTemplate verifies resource discovery sees
 // the unified tool manifest template alongside the regular resources.
 func TestResources_IncludesToolManifestTemplate(t *testing.T) {
-	res, templates, err := Resources(newStubClientForTest(t))
-	if err != nil {
-		t.Fatalf("Resources() error: %v", err)
-	}
+	res, templates := Resources(newStubClientForTest(t))
 	if len(res) == 0 {
 		t.Fatal("Resources() returned no static resources")
 	}
@@ -182,10 +173,7 @@ func TestResources_IncludesToolManifestTemplate(t *testing.T) {
 // Every prompt must carry a name and a description, because a blank one would
 // ship to the marketplace listing and to llms.txt as an empty entry.
 func TestPrompts_ReturnsDescribedPrompts(t *testing.T) {
-	list, err := Prompts(newStubClientForTest(t))
-	if err != nil {
-		t.Fatalf("Prompts() error: %v", err)
-	}
+	list := Prompts(newStubClientForTest(t))
 	if len(list) == 0 {
 		t.Fatal("Prompts() returned no prompts, want the registered set")
 	}
@@ -196,16 +184,28 @@ func TestPrompts_ReturnsDescribedPrompts(t *testing.T) {
 	}
 }
 
-// TestSession_SetupError verifies a failing setup aborts before any connection
-// is made, rather than returning a session the caller would have to clean up.
-func TestSession_SetupError(t *testing.T) {
-	want := errors.New("setup failed")
-	session, cleanup, err := Session(func(*mcp.Server) error { return want })
-	if !errors.Is(err, want) {
-		t.Fatalf("Session() error = %v, want %v", err, want)
+// TestSession_ListsWhatSetupRegistered verifies the session is connected to the
+// server setup ran against, and that the returned cleanup shuts both ends down.
+//
+// The setup callback registers one throwaway tool rather than a real catalog, so
+// this asserts the wiring alone: what setup put on the server is what a
+// tools/list over the returned session comes back with.
+func TestSession_ListsWhatSetupRegistered(t *testing.T) {
+	session, cleanup := Session(func(server *mcp.Server) {
+		mcp.AddTool(server,
+			&mcp.Tool{Name: "probe", Description: "A tool registered only by this test."},
+			func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+				return nil, nil, nil
+			})
+	})
+	defer cleanup()
+
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error: %v", err)
 	}
-	if session != nil || cleanup != nil {
-		t.Fatal("Session() returned a session or cleanup after a failed setup")
+	if len(result.Tools) != 1 || result.Tools[0].Name != "probe" {
+		t.Fatalf("ListTools() = %v, want only the tool setup registered", result.Tools)
 	}
 }
 
@@ -215,10 +215,7 @@ func TestSession_SetupError(t *testing.T) {
 func TestNewGitLabComClient_UsesPublicHost(t *testing.T) {
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 
-	client, err := NewGitLabComClient()
-	if err != nil {
-		t.Fatalf("NewGitLabComClient() error: %v", err)
-	}
+	client := NewGitLabComClient()
 	if !client.IsGitLabDotCom() {
 		t.Error("NewGitLabComClient() is not configured for GitLab.com")
 	}

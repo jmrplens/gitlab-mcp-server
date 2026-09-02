@@ -35,6 +35,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
@@ -104,11 +105,7 @@ func run(check, apply bool) int {
 		appliedSubstitutions = subs
 	}
 
-	client, cleanup, err := mcpsurface.NewStubClient()
-	if err != nil {
-		fmt.Fprintf(stderr, "stub client: %v\n", err)
-		return 1
-	}
+	client, cleanup := mcpsurface.NewStubClient()
 	defer cleanup()
 
 	var found []offender
@@ -154,12 +151,7 @@ func scanTools(client *gitlabclient.Client) []offender {
 	var found []offender
 
 	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
-		listed, err := listSurface(client, surface)
-		if err != nil {
-			fmt.Fprintf(stderr, "listing %s tools: %v\n", surface, err)
-			os.Exit(1)
-		}
-		for _, tool := range listed {
+		for _, tool := range listSurface(client, surface) {
 			found = append(found, scanText(surface, "tool "+tool.Name+fieldDescription, tool.Description)...)
 			found = append(found, scanText(surface, "tool "+tool.Name+" title", tool.Title)...)
 			found = append(found, scanSchema(surface, "tool "+tool.Name+" input schema", tool.InputSchema)...)
@@ -171,59 +163,46 @@ func scanTools(client *gitlabclient.Client) []offender {
 
 // listSurface publishes one surface on an in-memory server and returns its
 // tools, the same way the token and manifest generators do.
-func listSurface(client *gitlabclient.Client, surface string) ([]*mcp.Tool, error) {
+//
+// Registering a surface and listing it in memory cannot fail here: the catalog
+// is the one compiled into this binary and both ends of the transport are this
+// process. An audit that cannot build the surface it audits has nothing to
+// report either way, so the failure aborts rather than reaching the exit code,
+// which is reserved for what the -check gate found.
+func listSurface(client *gitlabclient.Client, surface string) []*mcp.Tool {
 	if surface == config.ToolSurfaceDynamic {
 		return mcpsurface.DynamicTools(client)
 	}
 
-	session, cleanup, err := mcpsurface.Session(func(server *mcp.Server) error {
+	session, cleanup := mcpsurface.Session(func(server *mcp.Server) {
 		switch surface {
 		case config.ToolSurfaceMeta:
-			if registerErr := tools.RegisterAllMeta(server, client, edition.TierForEnterprise(true)); registerErr != nil {
-				return registerErr
-			}
+			cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.TierForEnterprise(true)))
 			tools.RegisterMCPMeta(server, client)
 		case config.ToolSurfaceIndividual:
 			tools.RegisterAll(server, client, edition.TierForEnterprise(true))
 		}
-		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 	defer cleanup()
 
 	// One ListTools call, not the Tools iterator: the session's page size
 	// holds the whole surface, and the iterator left the connection with
 	// state that made the deferred Close wait forever.
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return result.Tools, nil
+	return cmdutil.Must(session.ListTools(context.Background(), nil)).Tools
 }
 
 // scanPromptsAndResources covers the two shared list surfaces.
 func scanPromptsAndResources(client *gitlabclient.Client) []offender {
 	var found []offender
 
-	prompts, err := mcpsurface.Prompts(client)
-	if err != nil {
-		fmt.Fprintf(stderr, "listing prompts: %v\n", err)
-		os.Exit(1)
-	}
-	for _, prompt := range prompts {
+	for _, prompt := range mcpsurface.Prompts(client) {
 		found = append(found, scanText("prompts", "prompt "+prompt.Name+fieldDescription, prompt.Description)...)
 		for _, arg := range prompt.Arguments {
 			found = append(found, scanText("prompts", "prompt "+prompt.Name+" argument "+arg.Name, arg.Description)...)
 		}
 	}
 
-	resources, templates, err := mcpsurface.Resources(client)
-	if err != nil {
-		fmt.Fprintf(stderr, "listing resources: %v\n", err)
-		os.Exit(1)
-	}
+	resources, templates := mcpsurface.Resources(client)
 	for _, resource := range resources {
 		found = append(found, scanText("resources", "resource "+resource.Name+fieldDescription, resource.Description)...)
 	}

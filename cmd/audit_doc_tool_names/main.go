@@ -32,6 +32,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -102,14 +103,14 @@ func main() {
 }
 
 // run audits roots against the names collectNames returns and reports on stdout,
-// returning the process exit code: 1 when a name set or the scan cannot be
-// built, 1 under check when any unregistered name is referenced, 0 otherwise.
-func run(check bool, roots []string, collectNames func() (map[string]struct{}, error), stdout, stderr io.Writer) int {
-	registered, err := collectNames()
-	if err != nil {
-		fmt.Fprintf(stderr, "collect tool names: %v\n", err)
-		return 1
-	}
+// returning the process exit code: 1 when the scan cannot be built, 1 under
+// check when any unregistered name is referenced, 0 otherwise.
+//
+// collectNames reads registration compiled into this binary and so cannot fail;
+// the documentation tree is the only thing here that lives outside the process,
+// and it is the only thing that can send run home with a 1 it did not intend.
+func run(check bool, roots []string, collectNames func() map[string]struct{}, stdout, stderr io.Writer) int {
+	registered := collectNames()
 
 	findings, scanned, err := scanDocs(roots, registered)
 	if err != nil {
@@ -155,7 +156,11 @@ func run(check bool, roots []string, collectNames func() (map[string]struct{}, e
 
 // registeredToolNames builds every surface in memory and returns the union of
 // the tool names they advertise.
-func registeredToolNames() (map[string]struct{}, error) {
+//
+// Every step registers the catalog compiled into this binary onto a server this
+// function just made, so a failure here would mean the committed catalog is
+// broken, which the docs audit can neither report usefully nor work around.
+func registeredToolNames() map[string]struct{} {
 	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
@@ -167,72 +172,44 @@ func registeredToolNames() (map[string]struct{}, error) {
 	individual := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion},
 		&mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 	tools.RegisterAll(individual, client, edition.Ultimate)
-	if collectErr := collect(individual, names); collectErr != nil {
-		return nil, collectErr
-	}
+	collect(individual, names)
 
 	meta := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion},
 		&mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
-	if metaErr := tools.RegisterAllMeta(meta, client, edition.Ultimate); metaErr != nil {
-		return nil, fmt.Errorf("register meta tools: %w", metaErr)
-	}
+	cmdutil.MustDo(tools.RegisterAllMeta(meta, client, edition.Ultimate))
 	tools.RegisterMCPMeta(meta, client)
 	tools.RegisterMetaStandaloneTools(meta, client)
-	if collectErr := collect(meta, names); collectErr != nil {
-		return nil, collectErr
-	}
+	collect(meta, names)
 
-	dynamic, dynErr := dynamicServer(client)
-	if dynErr != nil {
-		return nil, dynErr
-	}
-	if collectErr := collect(dynamic, names); collectErr != nil {
-		return nil, collectErr
-	}
+	collect(dynamicServer(client), names)
 
-	return names, nil
+	return names
 }
 
 // dynamicServer registers the two-tool dynamic surface.
-func dynamicServer(client *gitlabclient.Client) (*mcp.Server, error) {
+func dynamicServer(client *gitlabclient.Client) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion},
 		&mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
-	if err != nil {
-		return nil, fmt.Errorf("build action catalog: %w", err)
-	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("add standalone catalog: %w", err)
-	}
+	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true}))
+	catalog = cmdutil.Must(dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}))
 	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-	return server, nil
+	return server
 }
 
 // collect connects to server in memory and adds its tool names to names.
-func collect(server *mcp.Server, names map[string]struct{}) error {
+func collect(server *mcp.Server, names map[string]struct{}) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		return fmt.Errorf("server connect: %w", err)
-	}
+	cmdutil.Must(server.Connect(ctx, st, nil))
 	client := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
-	session, err := client.Connect(ctx, ct, nil)
-	if err != nil {
-		return fmt.Errorf("client connect: %w", err)
-	}
+	session := cmdutil.Must(client.Connect(ctx, ct, nil))
 	defer session.Close()
 
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("list tools: %w", err)
-	}
-	for _, tool := range result.Tools {
+	for _, tool := range cmdutil.Must(session.ListTools(ctx, nil)).Tools {
 		names[tool.Name] = struct{}{}
 	}
-	return nil
 }
 
 // scanDocs walks the documentation roots and returns unregistered names mapped

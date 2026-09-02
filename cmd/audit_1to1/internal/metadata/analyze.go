@@ -14,13 +14,13 @@ package metadata
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -58,33 +58,26 @@ type reportSummary struct {
 // Run builds the report and returns it as indented JSON (with a trailing
 // newline). gapsOnly filters to actions that raise at least one flag, matching
 // the original -gaps-only flag.
-func Run(gapsOnly bool) ([]byte, error) {
-	rep, err := buildReport(gapsOnly)
-	if err != nil {
-		return nil, err
-	}
-	content, err := json.MarshalIndent(rep, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("marshal report: %w", err)
-	}
-	return append(content, '\n'), nil
+//
+// Nothing here can fail: the report is analyzed out of the catalog compiled
+// into this binary, and the JSON encodes a struct built a line earlier from
+// strings and ints.
+func Run(gapsOnly bool) []byte {
+	content := cmdutil.Must(json.MarshalIndent(buildReport(gapsOnly), "", "  "))
+	return append(content, '\n')
 }
 
-func buildReport(gapsOnly bool) (report, error) {
+func buildReport(gapsOnly bool) report {
 	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
-	projected, err := auditshared.CachedIndividualDescriptions(client)
-	if err != nil {
-		return report{}, err
-	}
-
+	projected := auditshared.CachedIndividualDescriptions(client)
 	packagesOut := collectPackages(auditshared.CachedActionSpecs(client, true), projected, gapsOnly)
 	return report{
 		SchemaVersion: shared.SchemaVersion,
 		Summary:       summarize(packagesOut),
 		Packages:      packagesOut,
-	}, nil
+	}
 }
 
 // collectPackages analyzes every spec of every group and returns the per-owner
