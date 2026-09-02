@@ -166,12 +166,13 @@ def check_credentialed_job(path, job_id, job, root, doc=None):
                     "pinning the action does not pin the binary it downloads"
                 )
         if uses.startswith("anchore/sbom-action"):
-            syft = resolve_env(with_.get("syft-version", ""), doc)
-            if not re.fullmatch(r"v\d+\.\d+\.\d+", syft):
-                problems.append(
-                    f"{where}: anchore/sbom-action syft-version is {syft!r}, want an exact vX.Y.Z — "
-                    "pinning the action does not pin the syft binary it downloads"
-                )
+            problems.append(
+                f"{where}: anchore/sbom-action must not run in a credentialed job. Even SHA-pinned, "
+                "on Linux it downloads raw.githubusercontent.com/anchore/syft/main/install.sh and "
+                "runs it with sh, so the code executing here comes from a branch head. syft-version "
+                "only selects the tarball that mutable script fetches. Download the release tarball "
+                "directly, pinned by SHA256 and verified with cosign, as the Install syft step does"
+            )
 
         run_text = step_run_text(step)
         for pattern, why in UNLOCKED_CODE:

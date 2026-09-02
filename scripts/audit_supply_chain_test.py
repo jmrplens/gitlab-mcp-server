@@ -114,9 +114,12 @@ class DownloadedToolPinTest(unittest.TestCase):
             ("goreleaser range", "goreleaser/goreleaser-action", {"version": "~> v2"}, True),
             ("goreleaser latest", "goreleaser/goreleaser-action", {"version": "latest"}, True),
             ("goreleaser exact", "goreleaser/goreleaser-action", {"version": "v2.13.0"}, False),
+            # No pinned case for sbom-action: the action is refused outright in
+            # a credentialed job whatever syft-version says, because on Linux it
+            # fetches install.sh from syft's main branch and runs it.
             ("syft unpinned", "anchore/sbom-action/download-syft", {}, True),
             ("syft floating major", "anchore/sbom-action/download-syft", {"syft-version": "v1"}, True),
-            ("syft pinned", "anchore/sbom-action/download-syft", {"syft-version": "v1.36.0"}, False),
+            ("syft version pinned, action still refused", "anchore/sbom-action/download-syft", {"syft-version": "v1.36.0"}, True),
         ]
         for name, action, with_, want_problem in cases:
             with self.subTest(name):
