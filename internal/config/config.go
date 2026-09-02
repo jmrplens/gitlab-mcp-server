@@ -21,13 +21,10 @@ import (
 	"math"
 	"net/url"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/joho/godotenv"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 )
@@ -362,36 +359,13 @@ func (s *ServerConfig) Enterprise() bool {
 	return s.Tier.IsEnterprise()
 }
 
-// EnvFileName is the name of the env file this server reads credentials from.
-const EnvFileName = ".gitlab-mcp-server.env"
-
 // DefaultGitLabURL is the GitLab instance used when GITLAB_URL is unset.
 const DefaultGitLabURL = "https://gitlab.com"
 
-// Load reads configuration from environment variables.
-// It attempts to load a .env file from the current directory first, then
-// falls back to ~/.gitlab-mcp-server.env (written by hand) for
-// secrets not provided via the environment or CWD .env.
-// LoadEnvFiles populates the process environment from the dotenv files this
-// server reads, and is safe to call more than once.
-//
-// It is separate from [Load] because something has to consult these values
-// before a full configuration exists. The startup path decides whether to show
-// a first-run screen instead of serving, and that decision must be made against
-// the same environment Load will see: a deployment that put its credentials in
-// ~/.gitlab-mcp-server.env is configured, and a check reading only os.Getenv
-// would conclude the opposite and refuse to start.
-//
-// Both loads are best-effort. A missing file is the normal case, and godotenv
-// does not overwrite a variable that is already set, so the precedence is:
-// explicit environment beats a CWD .env beats the file in $HOME.
-func LoadEnvFiles() {
-	_ = godotenv.Load()
-	if home, err := os.UserHomeDir(); err == nil {
-		_ = godotenv.Load(filepath.Join(home, EnvFileName))
-	}
-}
-
+// Load reads configuration from environment variables, after populating that
+// environment from the dotenv files [LoadEnvFiles] accepts: the file
+// [EnvFileVar] names and ~/.gitlab-mcp-server.env, in that order, neither of
+// them overwriting a variable the client already passed.
 func Load() (*Config, error) {
 	LoadEnvFiles()
 
