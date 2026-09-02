@@ -76,58 +76,85 @@ type resourceRegistrationOptions struct {
 	WorkflowGuides bool
 }
 
-// main creates the mock GitLab-backed client, measures all MCP catalog modes,
-// and prints token overhead comparisons for tools, resources, and prompts.
-//
-// With --compare-schemas it instead runs the meta-tool InputSchema sizing spike
-// (formerly the standalone audit_meta_schema binary), comparing the byte cost of
-// each META_PARAM_SCHEMA mode (opaque/full/compact).
+// auditOptions is what the command line selects: which mode to run and how
+// long the ranking tables are. Parsing it is separate from acting on it so
+// the modes are testable.
+type auditOptions struct {
+	footprint      bool
+	check          bool
+	compareSchemas bool
+	topTools       int
+	topDomains     int
+	jsonOut        bool
+}
+
+// main parses flags and hands the work to run, whose exit code it returns.
 func main() {
-	footprint := flag.Bool("footprint", false, "measure all tiers \u00d7 surfaces \u00d7 META_PARAM_SCHEMA modes and write the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json")
-	check := flag.Bool("check", false, "with -footprint, verify the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json are current without writing (exits non-zero on drift)")
-	compareSchemas := flag.Bool("compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
-	topTools := flag.Int("top-tools", 30, "number of individual tools to list by token cost")
-	topDomains := flag.Int("top-domains", 20, "number of domains to list by token cost")
-	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
+	opts := auditOptions{}
+	flag.BoolVar(&opts.footprint, "footprint", false, "measure all tiers \u00d7 surfaces \u00d7 META_PARAM_SCHEMA modes and write the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json")
+	flag.BoolVar(&opts.check, "check", false, "with -footprint, verify the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json are current without writing (exits non-zero on drift)")
+	flag.BoolVar(&opts.compareSchemas, "compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
+	flag.IntVar(&opts.topTools, "top-tools", 30, "number of individual tools to list by token cost")
+	flag.IntVar(&opts.topDomains, "top-domains", 20, "number of domains to list by token cost")
+	flag.BoolVar(&opts.jsonOut, "json", false, "emit JSON summary instead of markdown report")
 	flag.Parse()
 
-	if *footprint {
-		if err := runFootprintMode(*check); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+	os.Exit(run(opts, os.Stdout, os.Stderr))
+}
+
+// run creates the mock GitLab-backed client, measures all MCP catalog modes,
+// and prints token overhead comparisons for tools, resources, and prompts.
+//
+// With -compare-schemas it instead runs the meta-tool InputSchema sizing spike
+// (formerly the standalone audit_meta_schema binary), comparing the byte cost of
+// each META_PARAM_SCHEMA mode (opaque/full/compact); with -footprint it writes
+// or verifies the tier x surface x mode matrix.
+//
+// It is the one place a failure is reported: every measurement helper below
+// returns its error here instead of writing to stderr and ending the process
+// from inside a helper, which in a test merely returned and left the caller
+// measuring a half-built session.
+func run(opts auditOptions, stdout, stderr io.Writer) int {
+	if opts.footprint {
+		if err := runFootprintMode(opts.check); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
 		}
-		return
+		return 0
 	}
 
-	if *compareSchemas {
+	if opts.compareSchemas {
 		if err := runMetaSchemaSizing(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			fmt.Fprintln(stderr, err)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "failed to create client: %v\n", err)
+		return 1
 	}
 	defer cleanup()
 
-	audit := measureTokenAudit(client)
-	if *jsonOut {
-		if encErr := writeTokenAuditJSON(os.Stdout, audit); encErr != nil {
-			fmt.Fprintf(os.Stderr, "encode json: %v\n", encErr)
-		}
-		return
+	audit, err := measureTokenAudit(client)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
-	printTokenAuditReport(audit, *topTools, *topDomains)
+	if opts.jsonOut {
+		// A failed encode keeps the status it has always had: the message is
+		// reported and the exit code stays 0. Changing that is a behavior
+		// change, which this refactor deliberately does not make.
+		if encErr := writeTokenAuditJSON(stdout, audit); encErr != nil {
+			fmt.Fprintf(stderr, "encode json: %v\n", encErr)
+		}
+		return 0
+	}
+	printTokenAuditReport(audit, opts.topTools, opts.topDomains)
+	return 0
 }
-
-// exitProcess terminates the process after an unrecoverable failure has been
-// reported on stderr. It is a variable so tests can observe the exit path
-// instead of dying with it.
-var exitProcess = os.Exit
 
 // tokenAudit holds every measurement the default report and its -json form
 // print, gathered once by [measureTokenAudit] so both renderers read the same
@@ -158,55 +185,118 @@ type tokenAudit struct {
 	enterpriseReachableActions   int
 }
 
-// measureTokenAudit registers the individual, meta and dynamic surfaces with
-// their resources and prompts and measures what each costs a model.
-func measureTokenAudit(client *gitlabclient.Client) tokenAudit {
-	metaBaseRoutes := buildMetaActionMaps(client, false)
-	metaEnterpriseRoutes := buildMetaActionMaps(client, true)
-	dynamicBaseCatalog, err := dynamictools.AddStandaloneCatalog(actioncatalog.FromActionMaps(metaBaseRoutes), client, dynamictools.StandaloneOptions{})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "add standalone base dynamic catalog: %v\n", err)
-		exitProcess(1)
+// auditSurfaces is the registered material every measurement pass reads: the
+// route catalogs behind meta and dynamic mode, and the tool definitions each
+// surface publishes.
+type auditSurfaces struct {
+	metaBaseRoutes           map[string]toolutil.ActionMap
+	metaEnterpriseRoutes     map[string]toolutil.ActionMap
+	dynamicBaseCatalog       *actioncatalog.Catalog
+	dynamicEnterpriseCatalog *actioncatalog.Catalog
+	dynamicBaseRoutes        map[string]toolutil.ActionMap
+	dynamicEnterpriseRoutes  map[string]toolutil.ActionMap
+
+	individualTools        []*mcp.Tool
+	metaBaseTools          []*mcp.Tool
+	metaEnterpriseTools    []*mcp.Tool
+	dynamicBaseTools       []*mcp.Tool
+	dynamicEnterpriseTools []*mcp.Tool
+}
+
+// buildAuditSurfaces builds the base and enterprise action catalogs and
+// enumerates the tools the individual, meta and dynamic surfaces advertise
+// over them.
+func buildAuditSurfaces(client *gitlabclient.Client) (auditSurfaces, error) {
+	var s auditSurfaces
+	var err error
+
+	if s.metaBaseRoutes, err = buildMetaActionMaps(client, false); err != nil {
+		return auditSurfaces{}, err
 	}
-	dynamicEnterpriseCatalog, err := dynamictools.AddStandaloneCatalog(actioncatalog.FromActionMaps(metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "add standalone enterprise dynamic catalog: %v\n", err)
-		exitProcess(1)
+	if s.metaEnterpriseRoutes, err = buildMetaActionMaps(client, true); err != nil {
+		return auditSurfaces{}, err
 	}
-	dynamicBaseRoutes := dynamicBaseCatalog.ActionMaps()
-	dynamicEnterpriseRoutes := dynamicEnterpriseCatalog.ActionMaps()
+	if s.dynamicBaseCatalog, err = dynamictools.AddStandaloneCatalog(actioncatalog.FromActionMaps(s.metaBaseRoutes), client, dynamictools.StandaloneOptions{}); err != nil {
+		return auditSurfaces{}, fmt.Errorf("add standalone base dynamic catalog: %w", err)
+	}
+	if s.dynamicEnterpriseCatalog, err = dynamictools.AddStandaloneCatalog(actioncatalog.FromActionMaps(s.metaEnterpriseRoutes), client, dynamictools.StandaloneOptions{}); err != nil {
+		return auditSurfaces{}, fmt.Errorf("add standalone enterprise dynamic catalog: %w", err)
+	}
+	s.dynamicBaseRoutes = s.dynamicBaseCatalog.ActionMaps()
+	s.dynamicEnterpriseRoutes = s.dynamicEnterpriseCatalog.ActionMaps()
 
 	cmdutil.Progressf("audit_tokens: enumerating tools across individual/meta/dynamic surfaces...")
-	individualTools := listTools(client, config.ToolSurfaceIndividual, true)
-	metaBaseTools := listTools(client, config.ToolSurfaceMeta, false)
-	metaEnterpriseTools := listTools(client, config.ToolSurfaceMeta, true)
-	dynamicBaseTools := listDynamicTools(dynamicBaseCatalog)
-	dynamicEnterpriseTools := listDynamicTools(dynamicEnterpriseCatalog)
+	if s.individualTools, err = listTools(client, config.ToolSurfaceIndividual, true); err != nil {
+		return auditSurfaces{}, err
+	}
+	if s.metaBaseTools, err = listTools(client, config.ToolSurfaceMeta, false); err != nil {
+		return auditSurfaces{}, err
+	}
+	if s.metaEnterpriseTools, err = listTools(client, config.ToolSurfaceMeta, true); err != nil {
+		return auditSurfaces{}, err
+	}
+	if s.dynamicBaseTools, err = listDynamicTools(s.dynamicBaseCatalog); err != nil {
+		return auditSurfaces{}, err
+	}
+	if s.dynamicEnterpriseTools, err = listDynamicTools(s.dynamicEnterpriseCatalog); err != nil {
+		return auditSurfaces{}, err
+	}
+	return s, nil
+}
+
+// measureTokenAudit registers the individual, meta and dynamic surfaces with
+// their resources and prompts and measures what each costs a model.
+func measureTokenAudit(client *gitlabclient.Client) (tokenAudit, error) {
+	s, err := buildAuditSurfaces(client)
+	if err != nil {
+		return tokenAudit{}, err
+	}
 
 	cmdutil.Progressf("audit_tokens: measuring token cost (tools, resources, prompts)...")
-	return tokenAudit{
-		individualInfo:        measureTools(individualTools),
-		metaBaseInfo:          measureTools(metaBaseTools),
-		metaEnterpriseInfo:    measureTools(metaEnterpriseTools),
-		dynamicBaseInfo:       measureTools(dynamicBaseTools),
-		dynamicEnterpriseInfo: measureTools(dynamicEnterpriseTools),
-
-		individualResourceTokens:  measureResources(client, nil, nil, individualTools, config.ToolSurfaceIndividual),
-		metaBaseResourceTokens:    measureResources(client, metaBaseRoutes, actioncatalog.FromActionMaps(metaBaseRoutes), metaBaseTools, config.ToolSurfaceMeta),
-		dynamicBaseResourceTokens: measureResources(client, dynamicBaseRoutes, dynamicBaseCatalog, dynamicBaseTools, config.ToolSurfaceDynamic),
-		dynamicMinimalResourceTokens: measureResourcesWithOptions(client, nil, resourceRegistrationOptions{
-			ToolManifest: true,
-			ToolSurface:  config.ToolSurfaceDynamic,
-			ToolList:     dynamicBaseTools,
-			ToolCatalog:  dynamicBaseCatalog,
-		}),
-		promptTokens: measurePrompts(client),
-
-		metaBaseCatalogActions:       countActions(metaBaseRoutes),
-		metaEnterpriseCatalogActions: countActions(metaEnterpriseRoutes),
-		baseReachableActions:         countActions(dynamicBaseRoutes),
-		enterpriseReachableActions:   countActions(dynamicEnterpriseRoutes),
+	audit := tokenAudit{
+		metaBaseCatalogActions:       countActions(s.metaBaseRoutes),
+		metaEnterpriseCatalogActions: countActions(s.metaEnterpriseRoutes),
+		baseReachableActions:         countActions(s.dynamicBaseRoutes),
+		enterpriseReachableActions:   countActions(s.dynamicEnterpriseRoutes),
 	}
+
+	if audit.individualInfo, err = measureTools(s.individualTools); err != nil {
+		return tokenAudit{}, err
+	}
+	if audit.metaBaseInfo, err = measureTools(s.metaBaseTools); err != nil {
+		return tokenAudit{}, err
+	}
+	if audit.metaEnterpriseInfo, err = measureTools(s.metaEnterpriseTools); err != nil {
+		return tokenAudit{}, err
+	}
+	if audit.dynamicBaseInfo, err = measureTools(s.dynamicBaseTools); err != nil {
+		return tokenAudit{}, err
+	}
+	if audit.dynamicEnterpriseInfo, err = measureTools(s.dynamicEnterpriseTools); err != nil {
+		return tokenAudit{}, err
+	}
+
+	if audit.individualResourceTokens, err = measureResources(client, nil, nil, s.individualTools, config.ToolSurfaceIndividual); err != nil {
+		return tokenAudit{}, err
+	}
+	if audit.metaBaseResourceTokens, err = measureResources(client, s.metaBaseRoutes, actioncatalog.FromActionMaps(s.metaBaseRoutes), s.metaBaseTools, config.ToolSurfaceMeta); err != nil {
+		return tokenAudit{}, err
+	}
+	if audit.dynamicBaseResourceTokens, err = measureResources(client, s.dynamicBaseRoutes, s.dynamicBaseCatalog, s.dynamicBaseTools, config.ToolSurfaceDynamic); err != nil {
+		return tokenAudit{}, err
+	}
+	if audit.dynamicMinimalResourceTokens, err = measureResourcesWithOptions(client, nil, resourceRegistrationOptions{
+		ToolManifest: true,
+		ToolSurface:  config.ToolSurfaceDynamic,
+		ToolList:     s.dynamicBaseTools,
+		ToolCatalog:  s.dynamicBaseCatalog,
+	}); err != nil {
+		return tokenAudit{}, err
+	}
+	if audit.promptTokens, err = measurePrompts(client); err != nil {
+		return tokenAudit{}, err
+	}
+	return audit, nil
 }
 
 // writeTokenAuditJSON encodes the headline measurements as an indented JSON
@@ -342,29 +432,27 @@ func printTokenAuditReport(audit tokenAudit, topTools, topDomains int) {
 
 // listTools registers either individual tools or meta-tools on an in-memory MCP
 // server and returns the published tool definitions for measurement.
-func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool) []*mcp.Tool {
+func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool) ([]*mcp.Tool, error) {
 	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, opts)
 
 	switch toolSurface {
 	case config.ToolSurfaceMeta:
 		if err := tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
-			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
-			exitProcess(1)
+			return nil, fmt.Errorf("register meta tools: %w", err)
 		}
 		tools.RegisterMCPMeta(server, client)
 	case config.ToolSurfaceIndividual:
 		tools.RegisterAll(server, client, edition.TierForEnterprise(enterprise))
 	default:
-		fmt.Fprintf(os.Stderr, "unknown tool surface %q\n", toolSurface)
-		exitProcess(1)
+		return nil, fmt.Errorf("unknown tool surface %q", toolSurface)
 	}
 	return listToolsFromServer(server)
 }
 
 // listDynamicTools registers the low-token dynamic public toolset backed by
 // action routes and returns the advertised tool definitions.
-func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
+func listDynamicTools(catalog *actioncatalog.Catalog) ([]*mcp.Tool, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	return listToolsFromServer(server)
@@ -372,72 +460,67 @@ func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
 
 // buildMetaActionMaps builds the action route catalog that backs both
 // meta-tools and the dynamic toolset.
-func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
+func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) (map[string]toolutil.ActionMap, error) {
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "build action catalog: %v\n", err)
-		exitProcess(1)
+		return nil, fmt.Errorf("build action catalog: %w", err)
 	}
-	return catalog.ActionMaps()
+	return catalog.ActionMaps(), nil
 }
 
-// connectInMemory pairs an in-memory client session with server, or exits.
+// connectInMemory pairs an in-memory client session with server.
 //
 // The three measurement passes below each need the same six-line handshake and
 // differed only in the label their failure message carried, which is exactly
 // the shape a helper exists for. The returned close function tears both
-// sessions down in the order they were opened.
-//
-// Callers close explicitly rather than with defer: every failure path here
-// ends in os.Exit, which does not run deferred functions, so a defer would
-// read as cleanup that never happens.
-func connectInMemory(server *mcp.Server, what string) (session *mcp.ClientSession, closeBoth func()) {
+// sessions down in the order they were opened, and callers defer it: a failure
+// travels back to [run] instead of ending the process from in here, so a
+// deferred close is cleanup that actually happens.
+func connectInMemory(server *mcp.Server, what string) (*mcp.ClientSession, func(), error) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "server connect (%s): %v\n", what, err)
-		exitProcess(1)
+		return nil, nil, fmt.Errorf("server connect (%s): %w", what, err)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
-	session, err = mcpClient.Connect(ctx, ct, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
 		_ = serverSession.Close()
-		fmt.Fprintf(os.Stderr, "client connect (%s): %v\n", what, err)
-		exitProcess(1)
+		return nil, nil, fmt.Errorf("client connect (%s): %w", what, err)
 	}
 	return session, func() {
 		_ = session.Close()
 		_ = serverSession.Close()
-	}
+	}, nil
 }
 
 // listToolsFromServer connects to server in-memory and returns the advertised
 // tool definitions.
-func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
-	session, closeBoth := connectInMemory(server, "tools")
+func listToolsFromServer(server *mcp.Server) ([]*mcp.Tool, error) {
+	session, closeBoth, err := connectInMemory(server, "tools")
+	if err != nil {
+		return nil, err
+	}
+	defer closeBoth()
 
 	result, err := session.ListTools(context.Background(), nil)
 	if err != nil {
-		closeBoth()
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		exitProcess(1)
+		return nil, fmt.Errorf("ListTools: %w", err)
 	}
-	closeBoth()
-	return result.Tools
+	return result.Tools, nil
 }
 
 // measureTools serializes each tool definition to JSON and estimates its token
 // cost using the audit's byte-based heuristic.
-func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
+func measureTools(toolList []*mcp.Tool) ([]toolTokenInfo, error) {
 	infos := make([]toolTokenInfo, 0, len(toolList))
 	for _, t := range toolList {
 		b, err := marshalModelFacing(t)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "marshal tool %s: %v\n", t.Name, err)
-			exitProcess(1)
+			return nil, fmt.Errorf("marshal tool %s: %w", t.Name, err)
 		}
 		tokens := countTokens(b)
 		domain := extractDomain(t.Name)
@@ -451,12 +534,12 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 	sort.Slice(infos, func(i, j int) bool {
 		return infos[i].Tokens > infos[j].Tokens
 	})
-	return infos
+	return infos, nil
 }
 
 // measureResources registers static, template, workflow, and tool manifest MCP
 // resources, then estimates the token cost of their advertised definitions.
-func measureResources(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, catalog *actioncatalog.Catalog, toolList []*mcp.Tool, toolSurface string) int {
+func measureResources(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, catalog *actioncatalog.Catalog, toolList []*mcp.Tool, toolSurface string) (int, error) {
 	return measureResourcesWithOptions(client, metaRoutes, resourceRegistrationOptions{
 		Core:           true,
 		ToolManifest:   true,
@@ -467,7 +550,7 @@ func measureResources(client *gitlabclient.Client, metaRoutes map[string]tooluti
 	})
 }
 
-func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) int {
+func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) (int, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	if opts.Core {
 		resources.Register(server, client)
@@ -484,43 +567,40 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		resources.RegisterWorkflowGuides(server)
 	}
 
-	session, closeBoth := connectInMemory(server, "resources")
-	ctx := context.Background()
-
-	fatalWithSession := func(format string, args ...any) {
-		closeBoth()
-		fmt.Fprintf(os.Stderr, format, args...)
-		exitProcess(1)
+	session, closeBoth, err := connectInMemory(server, "resources")
+	if err != nil {
+		return 0, err
 	}
+	defer closeBoth()
+	ctx := context.Background()
 
 	totalTokens := 0
 
 	res, err := session.ListResources(ctx, nil)
 	if err != nil {
-		fatalWithSession("list resources: %v\n", err)
+		return 0, fmt.Errorf("list resources: %w", err)
 	}
 	for _, r := range res.Resources {
 		b, mErr := marshalModelFacing(r)
 		if mErr != nil {
-			fatalWithSession("marshal resource %s: %v\n", r.Name, mErr)
+			return 0, fmt.Errorf("marshal resource %s: %w", r.Name, mErr)
 		}
 		totalTokens += countTokens(b)
 	}
 
 	tpl, err := session.ListResourceTemplates(ctx, nil)
 	if err != nil {
-		fatalWithSession("list resource templates: %v\n", err)
+		return 0, fmt.Errorf("list resource templates: %w", err)
 	}
 	for _, t := range tpl.ResourceTemplates {
 		b, mErr := marshalModelFacing(t)
 		if mErr != nil {
-			fatalWithSession("marshal template %s: %v\n", t.Name, mErr)
+			return 0, fmt.Errorf("marshal template %s: %w", t.Name, mErr)
 		}
 		totalTokens += countTokens(b)
 	}
 
-	closeBoth()
-	return totalTokens
+	return totalTokens, nil
 }
 
 // countActions returns the number of actions in a route catalog.
@@ -534,11 +614,15 @@ func countActions(routes map[string]toolutil.ActionMap) int {
 
 // measurePrompts registers MCP prompts and estimates the token cost of their
 // advertised definitions.
-func measurePrompts(client *gitlabclient.Client) int {
+func measurePrompts(client *gitlabclient.Client) (int, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
 
-	session, closeBoth := connectInMemory(server, "prompts")
+	session, closeBoth, err := connectInMemory(server, "prompts")
+	if err != nil {
+		return 0, err
+	}
+	defer closeBoth()
 
 	totalTokens := 0
 	p, err := session.ListPrompts(context.Background(), nil)
@@ -546,15 +630,12 @@ func measurePrompts(client *gitlabclient.Client) int {
 		for _, pr := range p.Prompts {
 			b, mErr := marshalModelFacing(pr)
 			if mErr != nil {
-				closeBoth()
-				fmt.Fprintf(os.Stderr, "marshal prompt %s: %v\n", pr.Name, mErr)
-				exitProcess(1)
+				return 0, fmt.Errorf("marshal prompt %s: %w", pr.Name, mErr)
 			}
 			totalTokens += countTokens(b)
 		}
 	}
-	closeBoth()
-	return totalTokens
+	return totalTokens, nil
 }
 
 // extractDomain returns the GitLab tool domain from names like
@@ -1427,9 +1508,14 @@ func listIndividualToolsAtTier(client *gitlabclient.Client, tier edition.Tier) (
 	return fpListToolsFromServer(server)
 }
 
-// fpListDynamicTools is the footprint variant of [listDynamicTools]: it returns
-// an error instead of calling os.Exit so the footprint runner can surface
-// measurement failures cleanly.
+// fpListDynamicTools is the footprint variant of [listDynamicTools].
+//
+// The two now do the same thing: the audit path returns its failures too, so
+// the only difference left is which handshake helper they reach through and
+// the wording of the errors that produces. Folding the family into one is a
+// separate change, because [fpMeasurePrompts] and [measurePrompts] disagree
+// about what a failed prompt listing means and that disagreement is a
+// behavior decision, not a rename.
 func fpListDynamicTools(catalog *actioncatalog.Catalog) ([]*mcp.Tool, error) {
 	server := newFootprintServer()
 	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
@@ -1440,8 +1526,8 @@ func newFootprintServer() *mcp.Server {
 	return mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 }
 
-// fpListToolsFromServer is the footprint variant of [listToolsFromServer]: it
-// returns an error instead of calling os.Exit.
+// fpListToolsFromServer is the footprint variant of [listToolsFromServer],
+// differing from it only in the wording of the errors it returns.
 func fpListToolsFromServer(server *mcp.Server) ([]*mcp.Tool, error) {
 	return withFootprintSession(server, "tools", func(ctx context.Context, session *mcp.ClientSession) ([]*mcp.Tool, error) {
 		result, err := session.ListTools(ctx, nil)
@@ -1483,8 +1569,8 @@ func measureSharedTokens(client *gitlabclient.Client, opts sharedTokenMeasureOpt
 }
 
 // fpMeasureResourcesWithOptions is the footprint variant of
-// [measureResourcesWithOptions]: it returns an error instead of calling
-// os.Exit so measurement failures propagate to the footprint runner.
+// [measureResourcesWithOptions], differing from it only in the wording of the
+// errors it returns.
 func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) (int, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	if opts.Core {
@@ -1531,8 +1617,10 @@ func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[strin
 	})
 }
 
-// fpMeasurePrompts is the footprint variant of [measurePrompts]: it returns an
-// error instead of calling os.Exit.
+// fpMeasurePrompts is the footprint variant of [measurePrompts]. It is the one
+// pair that still disagrees: a prompt listing that fails is an error here and
+// a silent zero there, and a silent zero would reach the generated
+// token-footprint targets as a real number.
 func fpMeasurePrompts(client *gitlabclient.Client) (int, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
@@ -1555,8 +1643,9 @@ func fpMeasurePrompts(client *gitlabclient.Client) (int, error) {
 }
 
 // withFootprintSession connects server in-memory, runs fn against a fresh
-// client session, and returns fn's result. It is the error-returning analog
-// of the inline connect-and-exit pattern used by the rest of the audit.
+// client session, and returns fn's result. It is the callback-shaped sibling
+// of [connectInMemory], which hands the session and its closer back to the
+// caller instead.
 func withFootprintSession[T any](server *mcp.Server, label string, fn func(context.Context, *mcp.ClientSession) (T, error)) (T, error) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

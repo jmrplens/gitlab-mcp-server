@@ -5,8 +5,9 @@
 // Coverage spans the resource registration options (including the minimal
 // candidate), the small pure helpers (domain parsing, total tokens, number
 // formatting, table printing) that compose the audit report, the report and
-// JSON renderers driven by a real measurement, the schema sizing table, and
-// the footprint write and check modes driven through the measurement seam.
+// JSON renderers driven by a real measurement, the schema sizing table, the
+// footprint write and check modes driven through the measurement seam, and
+// the run entry point every measurement failure now travels back to.
 package main
 
 import (
@@ -70,8 +71,11 @@ func measuredFootprintRows(t *testing.T) []tokenFootprintRow {
 func measuredTokenAudit(t *testing.T) tokenAudit {
 	t.Helper()
 	tokenAuditOnce.Do(func() {
-		tokenAuditShared = measureTokenAudit(newAuditTokensClient(t))
+		tokenAuditShared, errTokenAudit = measureTokenAudit(newAuditTokensClient(t))
 	})
+	if errTokenAudit != nil {
+		t.Fatalf("measureTokenAudit() error: %v", errTokenAudit)
+	}
 	return tokenAuditShared
 }
 
@@ -84,22 +88,45 @@ var (
 	errFootprint     error
 	tokenAuditOnce   sync.Once
 	tokenAuditShared tokenAudit
+	errTokenAudit    error
 )
+
+// auditDynamicSurface returns the base action routes, the catalog built over
+// them, and the tools the dynamic surface advertises for it. The three
+// measurement tests all start from that trio, and each step now reports its
+// own failure instead of ending the process.
+func auditDynamicSurface(t *testing.T, client *gitlabclient.Client) (map[string]toolutil.ActionMap, *actioncatalog.Catalog, []*mcp.Tool) {
+	t.Helper()
+	routes, err := buildMetaActionMaps(client, false)
+	if err != nil {
+		t.Fatalf("buildMetaActionMaps() error: %v", err)
+	}
+	catalog := actioncatalog.FromActionMaps(routes)
+	toolList, err := listDynamicTools(catalog)
+	if err != nil {
+		t.Fatalf("listDynamicTools() error: %v", err)
+	}
+	return routes, catalog, toolList
+}
 
 // TestMeasureResources_IncludesToolManifest verifies the token audit measures
 // the surface-aware tool manifest in addition to static resources.
 func TestMeasureResources_IncludesToolManifest(t *testing.T) {
 	client := newAuditTokensClient(t)
-	routes := buildMetaActionMaps(client, false)
-	dynamicCatalog := actioncatalog.FromActionMaps(routes)
-	dynamicTools := listDynamicTools(dynamicCatalog)
-	manifestTokens := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
+	routes, dynamicCatalog, dynamicTools := auditDynamicSurface(t, client)
+	manifestTokens, err := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
 		ToolManifest: true,
 		ToolSurface:  config.ToolSurfaceDynamic,
 		ToolList:     dynamicTools,
 		ToolCatalog:  dynamicCatalog,
 	})
-	bareTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{})
+	if err != nil {
+		t.Fatalf("measureResourcesWithOptions(manifest) error: %v", err)
+	}
+	bareTokens, err := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{})
+	if err != nil {
+		t.Fatalf("measureResourcesWithOptions(bare) error: %v", err)
+	}
 	if manifestTokens <= bareTokens {
 		t.Fatalf("manifest resource tokens = %d, want greater than bare server %d", manifestTokens, bareTokens)
 	}
@@ -110,16 +137,20 @@ func TestMeasureResources_IncludesToolManifest(t *testing.T) {
 // heavier optional resource groups.
 func TestMeasureResourcesWithOptions_MinimalCandidate(t *testing.T) {
 	client := newAuditTokensClient(t)
-	routes := buildMetaActionMaps(client, false)
-	dynamicCatalog := actioncatalog.FromActionMaps(routes)
-	dynamicTools := listDynamicTools(dynamicCatalog)
-	fullDynamicTokens := measureResources(client, routes, dynamicCatalog, dynamicTools, config.ToolSurfaceDynamic)
-	minimalTokens := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
+	routes, dynamicCatalog, dynamicTools := auditDynamicSurface(t, client)
+	fullDynamicTokens, err := measureResources(client, routes, dynamicCatalog, dynamicTools, config.ToolSurfaceDynamic)
+	if err != nil {
+		t.Fatalf("measureResources() error: %v", err)
+	}
+	minimalTokens, err := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
 		ToolManifest: true,
 		ToolSurface:  config.ToolSurfaceDynamic,
 		ToolList:     dynamicTools,
 		ToolCatalog:  dynamicCatalog,
 	})
+	if err != nil {
+		t.Fatalf("measureResourcesWithOptions(minimal) error: %v", err)
+	}
 
 	if minimalTokens <= 0 {
 		t.Fatalf("minimal resource tokens = %d, want positive tool-manifest estimate", minimalTokens)
@@ -133,12 +164,11 @@ func TestMeasureResourcesWithOptions_MinimalCandidate(t *testing.T) {
 // measures the find/execute tools backed by the canonical action catalog.
 func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 	client := newAuditTokensClient(t)
-	routes := buildMetaActionMaps(client, false)
+	routes, _, toolList := auditDynamicSurface(t, client)
 	if countActions(routes) == 0 {
 		t.Fatal("buildMetaActionMaps() returned no actions")
 	}
 
-	toolList := listDynamicTools(actioncatalog.FromActionMaps(routes))
 	names := make([]string, 0, len(toolList))
 	for _, tool := range toolList {
 		names = append(names, tool.Name)
@@ -149,22 +179,21 @@ func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 	}
 }
 
-// TestListTools_UnknownSurface_ExitsWithMessage verifies a surface name the
-// audit does not know is reported on stderr and terminates the audit rather
-// than measuring an empty server as if it were a surface.
-func TestListTools_UnknownSurface_ExitsWithMessage(t *testing.T) {
+// TestListTools_UnknownSurface_ReturnsError verifies a surface name the audit
+// does not know is reported as an error the caller must handle, rather than
+// measuring an empty server as if it were a surface.
+func TestListTools_UnknownSurface_ReturnsError(t *testing.T) {
 	client := newAuditTokensClient(t)
 
-	code := 0
-	stderr := captureStderrAudit(t, func() {
-		code = expectExit(t, func() { listTools(client, "bogus", false) })
-	})
-
-	if code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	toolList, err := listTools(client, "bogus", false)
+	if err == nil {
+		t.Fatalf("listTools(bogus) = %d tools, want an error", len(toolList))
 	}
-	if stderr != "unknown tool surface \"bogus\"\n" {
-		t.Fatalf("stderr = %q, want the unknown surface message", stderr)
+	if toolList != nil {
+		t.Errorf("listTools(bogus) tools = %v, want nil alongside the error", toolList)
+	}
+	if err.Error() != `unknown tool surface "bogus"` {
+		t.Fatalf("error = %q, want the unknown surface message", err)
 	}
 }
 
@@ -296,7 +325,10 @@ func TestMeasureTools_AssignsDomainAndComputesTokens(t *testing.T) {
 		{Name: "gitlab_issue_create", Description: "Create an issue."},
 	}
 
-	got := measureTools(toolList)
+	got, err := measureTools(toolList)
+	if err != nil {
+		t.Fatalf("measureTools() error: %v", err)
+	}
 	if len(got) != 2 {
 		t.Fatalf("measureTools() returned %d items, want 2", len(got))
 	}
@@ -327,35 +359,38 @@ func TestMeasureTools_AssignsDomainAndComputesTokens(t *testing.T) {
 // TestMeasureTools_EmptyInputReturnsEmpty verifies the estimator returns an
 // empty slice for an empty tool list.
 func TestMeasureTools_EmptyInputReturnsEmpty(t *testing.T) {
-	got := measureTools(nil)
+	got, err := measureTools(nil)
+	if err != nil {
+		t.Fatalf("measureTools(nil) error: %v", err)
+	}
 	if len(got) != 0 {
 		t.Fatalf("measureTools(nil) = %d items, want 0", len(got))
 	}
 }
 
-// TestMeasureTools_UnserializableSchema_ExitsWithMessage verifies a tool
-// whose schema cannot be serialized is named on stderr and terminates the
-// audit instead of being counted as zero tokens.
-func TestMeasureTools_UnserializableSchema_ExitsWithMessage(t *testing.T) {
-	code := 0
-	stderr := captureStderrAudit(t, func() {
-		code = expectExit(t, func() {
-			measureTools([]*mcp.Tool{{Name: "gitlab_broken", InputSchema: make(chan int)}})
-		})
-	})
-
-	if code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+// TestMeasureTools_UnserializableSchema_ReturnsError verifies a tool whose
+// schema cannot be serialized is named in an error the caller must handle,
+// instead of being counted as zero tokens.
+func TestMeasureTools_UnserializableSchema_ReturnsError(t *testing.T) {
+	got, err := measureTools([]*mcp.Tool{{Name: "gitlab_broken", InputSchema: make(chan int)}})
+	if err == nil {
+		t.Fatalf("measureTools(unserializable) = %+v, want an error", got)
 	}
-	if !strings.HasPrefix(stderr, "marshal tool gitlab_broken: ") {
-		t.Fatalf("stderr = %q, want the marshal failure naming the tool", stderr)
+	if got != nil {
+		t.Errorf("measureTools(unserializable) infos = %+v, want nil alongside the error", got)
+	}
+	if !strings.HasPrefix(err.Error(), "marshal tool gitlab_broken: ") {
+		t.Fatalf("error = %q, want the marshal failure naming the tool", err)
 	}
 }
 
 // TestMeasurePrompts_ReturnsTokenEstimateForRegisteredPrompts verifies the
 // prompt token estimator produces a positive count for a real client.
 func TestMeasurePrompts_ReturnsTokenEstimateForRegisteredPrompts(t *testing.T) {
-	got := measurePrompts(newAuditTokensClient(t))
+	got, err := measurePrompts(newAuditTokensClient(t))
+	if err != nil {
+		t.Fatalf("measurePrompts() error: %v", err)
+	}
 	if got <= 0 {
 		t.Fatalf("measurePrompts() = %d, want positive token estimate", got)
 	}
@@ -496,48 +531,6 @@ func captureStreamAudit(t *testing.T, stream **os.File, fn func()) string {
 func captureStdoutAudit(t *testing.T, fn func()) string {
 	t.Helper()
 	return captureStreamAudit(t, &os.Stdout, fn)
-}
-
-// captureStderrAudit captures os.Stderr while fn runs and returns the result
-// as a string.
-func captureStderrAudit(t *testing.T, fn func()) string {
-	t.Helper()
-	return captureStreamAudit(t, &os.Stderr, fn)
-}
-
-// exitCode is the sentinel the exit seam panics with, so a test can observe
-// an audit failure that would otherwise terminate the test binary.
-type exitCode int
-
-// expectExit runs fn with exitProcess replaced by a panicking stand-in and
-// returns the status code fn tried to exit with. It fails the test when fn
-// returns without exiting, and re-raises any other panic untouched.
-func expectExit(t *testing.T, fn func()) (code int) {
-	t.Helper()
-	originalExit := exitProcess
-	exitProcess = func(code int) { panic(exitCode(code)) }
-	t.Cleanup(func() { exitProcess = originalExit })
-
-	exited := false
-	func() {
-		defer func() {
-			recovered := recover()
-			if recovered == nil {
-				return
-			}
-			sentinel, ok := recovered.(exitCode)
-			if !ok {
-				panic(recovered)
-			}
-			exited = true
-			code = int(sentinel)
-		}()
-		fn()
-	}()
-	if !exited {
-		t.Fatal("function returned instead of exiting")
-	}
-	return code
 }
 
 // assertInOrder verifies every marker occurs in s, each after the previous
@@ -1781,4 +1774,81 @@ func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 			t.Fatalf("reference doc =\n%s\nwant\n%s", got, want)
 		}
 	})
+}
+
+// TestRun_FootprintMode_ReportsTheOutcomeAndExitCode verifies the one place
+// that reports a failure does report it: a measurement error reaches the
+// writer run was handed and becomes exit status 1, while a clean check writes
+// its confirmation to stdout and exits 0.
+func TestRun_FootprintMode_ReportsTheOutcomeAndExitCode(t *testing.T) {
+	t.Run("measurement failure names the cause and exits one", func(t *testing.T) {
+		stubFootprintRows(t, nil, errors.New("catalog unavailable"))
+
+		var stdout, stderr bytes.Buffer
+		code := run(auditOptions{footprint: true}, &stdout, &stderr)
+
+		if code != 1 {
+			t.Fatalf("run(-footprint) = %d, want 1", code)
+		}
+		if got := stderr.String(); got != "measuring token footprint: catalog unavailable\n" {
+			t.Fatalf("stderr = %q, want the wrapped measurement failure", got)
+		}
+		if stdout.Len() != 0 {
+			t.Errorf("stdout = %q, want nothing written on failure", stdout.String())
+		}
+	})
+
+	t.Run("current targets exit zero", func(t *testing.T) {
+		stubFootprintRows(t, measuredFootprintRows(t), nil)
+		root, err := cmdutil.RepositoryRoot(".")
+		if err != nil {
+			t.Fatalf("locate repository root: %v", err)
+		}
+		t.Chdir(root)
+
+		code := 0
+		var stderr bytes.Buffer
+		output := captureStdoutAudit(t, func() {
+			code = run(auditOptions{footprint: true, check: true}, os.Stdout, &stderr)
+		})
+
+		if code != 0 {
+			t.Fatalf("run(-footprint -check) = %d, want 0: %s", code, stderr.String())
+		}
+		if !strings.HasPrefix(output, "Token footprint is current (") {
+			t.Fatalf("stdout = %q, want the currency confirmation", output)
+		}
+		if stderr.Len() != 0 {
+			t.Errorf("stderr = %q, want nothing written on success", stderr.String())
+		}
+	})
+}
+
+// TestRun_JSONMode_WritesTheSummaryToItsWriter verifies the default audit path
+// measures every surface and encodes the summary to the writer run was given,
+// exiting 0. It exercises the whole chain this file rerouted: each measurement
+// helper now returns its failures to run rather than exiting from inside a
+// half-built session, so a clean run has to arrive back here intact.
+func TestRun_JSONMode_WritesTheSummaryToItsWriter(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run(auditOptions{jsonOut: true}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("run(-json) = %d, want 0: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want nothing written on success", stderr.String())
+	}
+
+	var summary map[string]int
+	if err := json.Unmarshal(stdout.Bytes(), &summary); err != nil {
+		t.Fatalf("decode run(-json) output %q: %v", stdout.String(), err)
+	}
+	for _, key := range []string{"individual_tools", "meta_base_tools", "dynamic_base_tools", "individual_tokens", "base_reachable_actions", "resource_tokens", "prompt_tokens"} {
+		t.Run(key, func(t *testing.T) {
+			if summary[key] <= 0 {
+				t.Errorf("%s = %d, want a positive measurement", key, summary[key])
+			}
+		})
+	}
 }
