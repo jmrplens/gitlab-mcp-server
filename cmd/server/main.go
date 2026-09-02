@@ -2603,7 +2603,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		instances:          cfg.InstanceURLs(),
 		rejected:           rejectedTokens,
 		limiter:            authLimiter,
-		sourceLimiter:      sourceBudget.rateLimiter(),
+		sourceBudget:       sourceBudget,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		metadataURL:        resourceMetadataURL,
 		// The door asks only for what every action needs. Whether a

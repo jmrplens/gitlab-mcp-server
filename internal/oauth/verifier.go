@@ -279,6 +279,26 @@ func sameVerificationHost(origin, dest *url.URL) bool {
 	if destHost == originHost {
 		return true
 	}
+	// An address literal is not a subdomain of anything, and one carrying an
+	// IPv6 zone can be spelled to end in any parent: url.Hostname() reduces
+	// "[::1%25.gitlab.example.com]" to "::1%.gitlab.example.com", which clears
+	// both tests below while Go dials ::1. That is CVE-2023-45289, and net/http
+	// grew the same guard in the same place.
+	//
+	// It sits after the equality test, not before it, so an instance that
+	// genuinely is an address literal still matches itself. What it rules out
+	// is only the subdomain relation, which an address literal can never
+	// legitimately stand in.
+	//
+	// The consequence here is harsher than in the GitLab clients' redirect
+	// policy, which strips the credential and follows the hop: this refuses it.
+	// There the credential is the asset and the body is data; here the body is
+	// the asset, since a 200 is accepted as the caller's identity and cached
+	// under their token, and a loopback service can answer that with no
+	// credential at all.
+	if strings.ContainsAny(destHost, ":%") {
+		return false
+	}
 	return len(destHost) > len(originHost) &&
 		destHost[len(destHost)-len(originHost)-1] == '.' &&
 		strings.HasSuffix(destHost, originHost)

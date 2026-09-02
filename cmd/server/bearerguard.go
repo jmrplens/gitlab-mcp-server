@@ -66,10 +66,12 @@ type bearerGuard struct {
 	verify   auth.TokenVerifier
 	rejected *oauth.RejectedTokens
 	limiter  *serverpool.AuthRateLimiter
-	// sourceLimiter is the coarse secondary budget charged to the transport
+	// sourceBudget is the coarse secondary budget charged to the transport
 	// source, set only when trustedProxyHeader makes the primary key
-	// caller-controlled. Shared with [mcpServerGate].
-	sourceLimiter *serverpool.AuthRateLimiter
+	// caller-controlled. Shared with [mcpServerGate], and shared as the budget
+	// rather than as its limiter: the accounting is the point of it, and this
+	// guard is the layer that spends it first.
+	sourceBudget *transportBudget
 	// trustedProxyHeader names the header carrying the real client IP, so
 	// the limiter counts per caller rather than per reverse proxy.
 	trustedProxyHeader string
@@ -134,7 +136,11 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 	// Ordered before everything else on purpose: a blocked caller must cost
 	// nothing, least of all an upstream call.
 	if g.blockedByBudget(ip, source) {
-		slog.WarnContext(r.Context(), "request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
+		// Both addresses, because the refusal may be either one's doing. The
+		// budget charged to the transport source is shared by everything
+		// behind one proxy, so ip is frequently just whoever arrived next;
+		// naming it alone pointed an operator at an innocent machine.
+		slog.WarnContext(r.Context(), "request blocked: too many authentication failures", "ip", ip, "source", source) //#nosec G706 -- slog structured args are not interpolated
 		return &gateFailure{
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
@@ -385,15 +391,19 @@ func (g *bearerGuard) invalidTokenFailure(message string) *gateFailure {
 
 // recordFailure charges an authentication failure to both budgets: the
 // caller's key, and — behind a trusted proxy header, where that key is
-// caller-controlled — the transport source it arrived from. See
+// caller-controlled — the transport source it arrived from.
+//
+// The source is charged through [transportBudget] rather than against its
+// limiter directly, and that is the whole of the accounting: once per distinct
+// key inside a window, never once per failure. Charging per failure here undid
+// the correction the gate had already made, because this guard runs in front
+// of the gate and so spends the shared budget first. See
 // [transportFailureLimit].
 func (g *bearerGuard) recordFailure(key, source string) {
 	if g.limiter != nil {
 		g.limiter.RecordFailure(key)
 	}
-	if g.sourceLimiter != nil {
-		g.sourceLimiter.RecordFailure(source)
-	}
+	g.sourceBudget.charge(source, key)
 }
 
 // blockedByBudget reports whether either budget is exhausted.
@@ -401,7 +411,7 @@ func (g *bearerGuard) blockedByBudget(key, source string) bool {
 	if g.limiter != nil && g.limiter.IsBlocked(key) {
 		return true
 	}
-	return g.sourceLimiter != nil && g.sourceLimiter.IsBlocked(source)
+	return g.sourceBudget.blocked(source)
 }
 
 // challenge builds the WWW-Authenticate value, appending the given key/value

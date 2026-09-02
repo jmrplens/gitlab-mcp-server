@@ -93,8 +93,23 @@ func TestTelemetry_ServerCardAnnouncesItWithoutNamingTheCollector(t *testing.T) 
 // non-credential pair prints every credential beside it. The third malformation
 // is the sharp one: the credential itself is perfectly well formed and only a
 // neighboring key is not.
+//
+// Each malformed row therefore asserts in both directions. "The secret is not
+// in the log" is satisfied by a log that was never written, so it is paired
+// with the two marks the SDK's complaint leaves behind: the variable's name,
+// which the redaction deliberately keeps so an operator knows what to fix, and
+// the placeholder that stands where its value was.
 func TestTelemetry_CollectorCredentialsNeverReachTheLogs(t *testing.T) {
 	const secret = "s3cr3t-collector-token"
+	// Restated rather than imported: the server's placeholder is unexported in
+	// internal/telemetry, and this test only ever sees the process's output.
+	// Its literal value is therefore the one thing about the redaction a test
+	// on this side can observe, so a change to it must break here rather than
+	// pass silently.
+	const (
+		headersVariable     = "OTEL_EXPORTER_OTLP_HEADERS"
+		redactedPlaceholder = "[redacted]"
+	)
 
 	tests := []struct {
 		name  string
@@ -142,8 +157,24 @@ func TestTelemetry_CollectorCredentialsNeverReachTheLogs(t *testing.T) {
 			if strings.Contains(logs, secret) {
 				t.Errorf("the collector credential appears in the server's own logs: %s", logs)
 			}
-			if tt.wellFormed && strings.Contains(logs, "OTEL_EXPORTER_OTLP_HEADERS") {
-				t.Errorf("the credential variable is named in the logs with nothing wrong with it, which invites printing its value next: %s", logs)
+			if tt.wellFormed {
+				if strings.Contains(logs, headersVariable) {
+					t.Errorf("the credential variable is named in the logs with nothing wrong with it, which invites printing its value next: %s", logs)
+				}
+				return
+			}
+			// The absence above proves nothing on its own for a malformed row:
+			// an SDK that stopped logging these shapes, a level mapping that
+			// dropped them, a sink that was never installed, or a server that
+			// failed to start telemetry at all would each leave it green,
+			// because a line nobody wrote contains no secret either. The pair
+			// below is the positive signal: the branch ran, and the
+			// substitution ran with it.
+			if !strings.Contains(logs, headersVariable) {
+				t.Errorf("nothing named the malformed variable, so this row proves no redaction: %s", logs)
+			}
+			if !strings.Contains(logs, redactedPlaceholder) {
+				t.Errorf("nothing was substituted, so the credential was never in the line to begin with: %s", logs)
 			}
 		})
 	}

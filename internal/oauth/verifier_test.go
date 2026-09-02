@@ -1438,7 +1438,16 @@ func TestNewGitLabVerifier_CrossHostRedirect_IsRefused(t *testing.T) {
 
 // TestVerificationRedirect_Policy verifies which hops a verification request
 // may follow: the instance itself and its subdomains, never another host,
-// never an https-to-http downgrade, and never more than ten in a row.
+// never an https-to-http downgrade, never an address literal wearing the
+// instance's name, and never more than ten in a row.
+//
+// The address-literal rows are CVE-2023-45289. url.Hostname reduces
+// "[::1%25.gitlab.example.com]" to "::1%.gitlab.example.com", which clears
+// both the dot boundary and the suffix test while Go dials ::1, so a
+// loopback service would answer the question "who is this caller" and its
+// reply would be cached as the caller's identity. The last row is the
+// regression that guard must not cause: an instance that genuinely is an
+// address literal still matches itself.
 func TestVerificationRedirect_Policy(t *testing.T) {
 	t.Parallel()
 
@@ -1456,6 +1465,9 @@ func TestVerificationRedirect_Policy(t *testing.T) {
 		{name: "parent domain", origin: "https://gitlab.example.com/api/v4/user", dest: "https://example.com/api/v4/user", wantErr: true},
 		{name: "suffix without a dot boundary", origin: "https://gitlab.example.com/api/v4/user", dest: "https://evilgitlab.example.com/x", wantErr: true},
 		{name: "https downgraded to http", origin: "https://gitlab.example.com/api/v4/user", dest: "http://gitlab.example.com/api/v4/user", wantErr: true},
+		{name: "ipv6 zone literal spelled as a subdomain", origin: "https://gitlab.example.com/api/v4/user", dest: "https://[::1%25.gitlab.example.com]/api/v4/user", wantErr: true},
+		{name: "ipv6 zone literal on a plain http instance", origin: "http://gitlab.internal/api/v4/user", dest: "http://[::1%25.gitlab.internal]:9102/api/v4/user", wantErr: true},
+		{name: "the instance is itself an ipv6 literal", origin: "https://[2001:db8::1]/api/v4/user", dest: "https://[2001:db8::1]/api/v4/user/"},
 		{name: "ten hops already made", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user", hops: 10, wantErr: true},
 	}
 
