@@ -2,18 +2,25 @@ package apidocs
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
+// realSleepCtx keeps the production sleep so TestSleepCtx can exercise it
+// after TestMain swaps the package variable for the instant version.
+var realSleepCtx func(ctx context.Context, d time.Duration) error
+
 // TestMain makes backoff/spacing instant so retry tests run fast, while still
 // honoring cancellation so the context-aware paths stay covered.
 func TestMain(m *testing.M) {
+	realSleepCtx = sleepCtx
 	sleepCtx = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
 	os.Exit(m.Run())
 }
@@ -265,5 +272,150 @@ func TestBackoffDelay(t *testing.T) {
 	}
 	if d := backoffDelay(3, 0); d < 4*time.Second || d >= 6*time.Second {
 		t.Errorf("attempt 3 backoff: %v", d)
+	}
+}
+
+// TestSleepCtx_Scenarios_WaitsOrHonorsCancellation verifies the production
+// sleep (the one TestMain replaces for the other tests): a non-positive
+// duration returns at once with the context's state, a short wait elapses,
+// and a long wait is cut short by cancellation.
+func TestSleepCtx_Scenarios_WaitsOrHonorsCancellation(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		d       time.Duration
+		wantErr error
+	}{
+		{name: "zero duration returns immediately", ctx: context.Background(), d: 0, wantErr: nil},
+		{name: "negative duration reports cancellation", ctx: cancelled, d: -time.Second, wantErr: context.Canceled},
+		{name: "short wait elapses", ctx: context.Background(), d: time.Millisecond, wantErr: nil},
+		{name: "long wait aborted by cancellation", ctx: cancelled, d: time.Hour, wantErr: context.Canceled},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start := time.Now()
+			err := realSleepCtx(tt.ctx, tt.d)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("sleepCtx() error = %v, want %v", err, tt.wantErr)
+			}
+			if elapsed := time.Since(start); elapsed > 10*time.Second {
+				t.Errorf("sleepCtx() took %v, want a prompt return", elapsed)
+			}
+		})
+	}
+}
+
+// TestNew_EmptyOptions_UsesDefaults verifies the zero Options fill in the
+// documented base URL, freshness window and HTTP client.
+func TestNew_EmptyOptions_UsesDefaults(t *testing.T) {
+	f := New(t.TempDir(), Options{})
+	if f.baseURL != DefaultBaseURL {
+		t.Errorf("baseURL = %q, want %q", f.baseURL, DefaultBaseURL)
+	}
+	if f.maxAge != DefaultMaxAge {
+		t.Errorf("maxAge = %v, want %v", f.maxAge, DefaultMaxAge)
+	}
+	if f.client == nil {
+		t.Error("client = nil, want the default HTTP client")
+	}
+}
+
+// TestFetch_UnusableCache_ReturnsError verifies the two cache write failures
+// are reported instead of being masked by a successful download: a cache
+// directory that cannot be created because its parent is a file, and a cache
+// entry that is a directory. Neither depends on permission bits.
+func TestFetch_UnusableCache_ReturnsError(t *testing.T) {
+	srv, _ := newServer(t, "fresh body")
+	tests := []struct {
+		name     string
+		cacheDir func(t *testing.T) string
+		wantErr  string
+	}{
+		{
+			name: "cache directory parent is a file",
+			cacheDir: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				blocker := filepath.Join(dir, "blocker")
+				if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+					t.Fatalf("write blocker: %v", err)
+				}
+				return filepath.Join(blocker, "cache")
+			},
+			wantErr: "create cache dir",
+		},
+		{
+			name: "cache entry is a directory",
+			cacheDir: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				if err := os.Mkdir(filepath.Join(dir, "branches.md"), 0o750); err != nil {
+					t.Fatalf("mkdir cache entry: %v", err)
+				}
+				return dir
+			},
+			wantErr: "write cache",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := New(t.TempDir(), Options{BaseURL: srv.URL + "/", CacheDir: tt.cacheDir(t)})
+			_, err := f.Fetch(context.Background(), "branches")
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Fetch() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestDownload_CancelledContext_ReturnsRetryAborted verifies that a request
+// failing under an already-cancelled context does not spin through the
+// retry loop: the backoff wait observes the cancellation and the error
+// names both the request failure and the abort.
+func TestDownload_CancelledContext_ReturnsRetryAborted(t *testing.T) {
+	srv, hits := newServer(t, "never read")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	f := New(t.TempDir(), Options{BaseURL: srv.URL + "/"})
+	_, err := f.download(ctx, "branches")
+	if err == nil || !strings.Contains(err.Error(), "branches retry aborted") || !errors.Is(err, context.Canceled) {
+		t.Fatalf("download() error = %v, want the retry-aborted error wrapping context.Canceled", err)
+	}
+	if atomic.LoadInt32(hits) != 0 {
+		t.Errorf("server hits = %d, want 0 for a request cancelled before it was sent", *hits)
+	}
+}
+
+// TestFetchOnce_Failures_ReturnErrors verifies the two fetchOnce failures
+// that are not HTTP statuses: a URL the request constructor rejects, and a
+// response whose body ends before its declared Content-Length, which the
+// body read reports as an unexpected EOF.
+func TestFetchOnce_Failures_ReturnErrors(t *testing.T) {
+	truncated := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		_, _ = w.Write([]byte("short"))
+	}))
+	t.Cleanup(truncated.Close)
+	tests := []struct {
+		name       string
+		url        string
+		wantStatus int
+	}{
+		{name: "unparsable url", url: "::not-a-url", wantStatus: 0},
+		{name: "body shorter than content length", url: truncated.URL + "/branches.md", wantStatus: http.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, status, _, err := fetchOnce(context.Background(), truncated.Client(), tt.url)
+			if err == nil {
+				t.Fatalf("fetchOnce() = %q, %d, nil; want an error", body, status)
+			}
+			if status != tt.wantStatus {
+				t.Errorf("fetchOnce() status = %d, want %d", status, tt.wantStatus)
+			}
+		})
 	}
 }

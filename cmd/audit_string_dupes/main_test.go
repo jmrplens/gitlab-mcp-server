@@ -372,6 +372,22 @@ func f() {
 	}
 }
 
+// TestCollectStringValues_TypeDeclaration_IgnoresNonValueSpecs verifies that
+// a GenDecl carrying type specs rather than value specs contributes nothing:
+// the collector only reads const and var initializers.
+func TestCollectStringValues_TypeDeclaration_IgnoresNonValueSpecs(t *testing.T) {
+	node := parseSource(t, "package sample\ntype (\n\tName string\n\tOther = string\n)\n")
+	genDecl, ok := node.Decls[0].(*ast.GenDecl)
+	if !ok {
+		t.Fatalf("Decls[0] = %T, want *ast.GenDecl", node.Decls[0])
+	}
+	dest := map[string]bool{}
+	collectStringValues(genDecl, dest)
+	if len(dest) != 0 {
+		t.Errorf("dest = %v, want empty for a type declaration", dest)
+	}
+}
+
 func parseSource(t *testing.T, source string) *ast.File {
 	t.Helper()
 	node, err := parser.ParseFile(token.NewFileSet(), "sample.go", source, 0)

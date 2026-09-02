@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -246,5 +247,28 @@ func TestProjectRoot_NotFound(t *testing.T) {
 
 	if _, err := ProjectRoot(); err == nil {
 		t.Fatal("ProjectRoot() error = nil, want an error in a tree without go.mod")
+	}
+}
+
+// TestProjectRoot_RemovedWorkingDirectory_ReturnsError verifies the walk
+// reports the os.Getwd failure when the process's working directory was
+// removed: getcwd(3) then fails with ENOENT regardless of privilege, which
+// is what makes the branch reproducible in a test.
+func TestProjectRoot_RemovedWorkingDirectory_ReturnsError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows getcwd does not fail when the current directory is removed")
+	}
+	gone := filepath.Join(t.TempDir(), "gone")
+	if err := os.Mkdir(gone, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Chdir(gone)
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatalf("remove working directory: %v", err)
+	}
+
+	_, err := ProjectRoot()
+	if err == nil || !strings.Contains(err.Error(), "get working directory") {
+		t.Fatalf("ProjectRoot() error = %v, want the working-directory error", err)
 	}
 }

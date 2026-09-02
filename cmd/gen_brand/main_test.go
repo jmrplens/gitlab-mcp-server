@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -126,5 +127,151 @@ func TestEmbeddedBackgrounds_AreValidJPEGs(t *testing.T) {
 func TestRun_Check_MissingAssetFails(t *testing.T) {
 	if err := run(t.TempDir(), true); err == nil {
 		t.Fatal("run(check) on an empty tree = nil, want a staleness error")
+	}
+}
+
+// TestRun_Write_UnwritableTree_ReturnsError verifies a write run reports the
+// filesystem failure it hits instead of continuing with the next asset: a
+// regular file where an asset's directory must be created, and a directory
+// where the asset file itself must be written. Neither depends on permission
+// bits, so both reproduce as root.
+func TestRun_Write_UnwritableTree_ReturnsError(t *testing.T) {
+	first := assets()[0].path
+	tests := []struct {
+		name    string
+		block   func(t *testing.T, root string)
+		wantErr []string
+	}{
+		{
+			name: "asset directory is a file",
+			block: func(t *testing.T, root string) {
+				t.Helper()
+				top, _, _ := strings.Cut(first, string(filepath.Separator))
+				if err := os.WriteFile(filepath.Join(root, top), []byte("x"), 0o600); err != nil {
+					t.Fatalf("write blocker: %v", err)
+				}
+			},
+			wantErr: []string{"create ", filepath.Dir(first), "not a directory"},
+		},
+		{
+			name: "asset path is a directory",
+			block: func(t *testing.T, root string) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Join(root, first), 0o750); err != nil {
+					t.Fatalf("mkdir blocker: %v", err)
+				}
+			},
+			wantErr: []string{"write " + first, "is a directory"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			tt.block(t, root)
+			err := run(root, false)
+			if err == nil {
+				t.Fatal("run(write) error = nil, want a filesystem failure")
+			}
+			for _, want := range tt.wantErr {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("run(write) error = %v, want containing %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+// chdirIntoFixtureRepo makes a temporary directory holding go.mod the
+// working directory (from a nested subdirectory) and returns that root, so
+// repoRoot's walk has an ancestor to find.
+func chdirIntoFixtureRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module fixture\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	nested := filepath.Join(root, "cmd", "gen_brand")
+	if err := os.MkdirAll(nested, 0o750); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
+	t.Chdir(nested)
+	return root
+}
+
+// chdirIntoRootlessDir makes a temporary directory with no go.mod anywhere
+// above it the working directory, skipping the test when the sandbox happens
+// to hold a go.mod in an ancestor.
+func chdirIntoRootlessDir(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	for ancestor := dir; ; ancestor = filepath.Dir(ancestor) {
+		if _, err := os.Stat(filepath.Join(ancestor, "go.mod")); err == nil {
+			t.Skipf("%s holds a go.mod above the temp dir", ancestor)
+		}
+		if filepath.Dir(ancestor) == ancestor {
+			break
+		}
+	}
+	t.Chdir(dir)
+}
+
+// chdirIntoRemovedDir makes a directory the working directory and then
+// removes it, so os.Getwd fails with ENOENT regardless of privilege.
+func chdirIntoRemovedDir(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows getcwd does not fail when the current directory is removed")
+	}
+	gone := filepath.Join(t.TempDir(), "gone")
+	if err := os.Mkdir(gone, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Chdir(gone)
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatalf("remove working directory: %v", err)
+	}
+}
+
+// TestRepoRoot_Scenarios_WalksUpToGoMod verifies the root lookup returns the
+// nearest ancestor holding go.mod, fails when no ancestor holds one, and
+// fails when the working directory itself cannot be read because it was
+// removed from under the process.
+func TestRepoRoot_Scenarios_WalksUpToGoMod(t *testing.T) {
+	tests := []struct {
+		name    string
+		prepare func(t *testing.T) (want string)
+		wantErr string
+	}{
+		{name: "go.mod in an ancestor", prepare: chdirIntoFixtureRepo},
+		{
+			name:    "no go.mod above the working directory",
+			prepare: func(t *testing.T) string { t.Helper(); chdirIntoRootlessDir(t); return "" },
+			wantErr: "no go.mod found above",
+		},
+		{
+			name:    "working directory removed",
+			prepare: func(t *testing.T) string { t.Helper(); chdirIntoRemovedDir(t); return "" },
+			wantErr: "get working directory",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := tt.prepare(t)
+			got, err := repoRoot()
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("repoRoot() error = %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("repoRoot() error = %v", err)
+			}
+			wantResolved, _ := filepath.EvalSymlinks(want)
+			gotResolved, _ := filepath.EvalSymlinks(got)
+			if gotResolved != wantResolved {
+				t.Errorf("repoRoot() = %q, want %q", gotResolved, wantResolved)
+			}
+		})
 	}
 }

@@ -538,6 +538,434 @@ func TestSorted_Diff(t *testing.T) {
 	}
 }
 
+// docFixture is a synthetic README plus docs tree for buildReport tests. The
+// README claims every row in rows (Domain, count, meta-tool, doc link); docs
+// maps a doc basename to its content and is written under docsRoot.
+type docFixture struct {
+	rows      string
+	docs      map[string]string
+	ownership string
+}
+
+// writeDocFixture materializes the fixture and returns the repo root, the
+// docs root and the README path.
+func writeDocFixture(t *testing.T, fx docFixture) (repoRoot, docsRoot, readme string) {
+	t.Helper()
+	repoRoot = t.TempDir()
+	docsRoot = filepath.Join(repoRoot, "docs")
+	readme = filepath.Join(repoRoot, "README.md")
+	if err := os.MkdirAll(docsRoot, 0o750); err != nil {
+		t.Fatalf("mkdir docs: %v", err)
+	}
+	content := "## Domains\n\n| Domain | Tools | Meta-tool | Document |\n| --- | ---: | --- | --- |\n" + fx.rows
+	if err := os.WriteFile(readme, []byte(content), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+	for name, body := range fx.docs {
+		if err := os.WriteFile(filepath.Join(docsRoot, name), []byte(body), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	if fx.ownership != "" {
+		if err := os.WriteFile(filepath.Join(repoRoot, "doc-ownership.json"), []byte(fx.ownership), 0o600); err != nil {
+			t.Fatalf("write ownership: %v", err)
+		}
+	}
+	return repoRoot, docsRoot, readme
+}
+
+// overlongLine is longer than bufio.Scanner's default token limit, so any
+// line-scanning parser that meets it reports a scan error.
+var overlongLine = strings.Repeat("x", 70_000)
+
+// TestBuildReport_UnusableInputs_ReturnsError verifies each input failure
+// of buildReport is reported with the stage that failed: a README that is
+// missing, an ownership file that does not parse, a docs directory that is
+// missing, and a doc whose line the scanner cannot buffer.
+func TestBuildReport_UnusableInputs_ReturnsError(t *testing.T) {
+	branchRow := "| Branches | 1 | `gitlab_branch` | [branches.md](branches.md) |\n"
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get": {Name: "gitlab_branch_get", Group: "gitlab_branch"},
+	}}
+	tests := []struct {
+		name    string
+		fixture docFixture
+		mutate  func(t *testing.T, repoRoot, docsRoot, readme string) (docs, readmePath string)
+		wantErr string
+	}{
+		{
+			name:    "readme missing",
+			fixture: docFixture{rows: branchRow, docs: map[string]string{"branches.md": ""}},
+			mutate: func(_ *testing.T, repoRoot, docsRoot, _ string) (string, string) {
+				return docsRoot, filepath.Join(repoRoot, "absent.md")
+			},
+			wantErr: "load doc mapping from",
+		},
+		{
+			name:    "ownership rules do not parse",
+			fixture: docFixture{rows: branchRow, docs: map[string]string{"branches.md": ""}, ownership: "{"},
+			wantErr: "load ownership rules",
+		},
+		{
+			name:    "docs directory missing",
+			fixture: docFixture{rows: branchRow},
+			mutate: func(_ *testing.T, repoRoot, _, readme string) (string, string) {
+				return filepath.Join(repoRoot, "absent"), readme
+			},
+			wantErr: "discover docs under",
+		},
+		{
+			name:    "doc line exceeds the scanner buffer",
+			fixture: docFixture{rows: branchRow, docs: map[string]string{"branches.md": "## Tools\n" + overlongLine + "\n"}},
+			wantErr: "parse docs/branches.md: scan doc",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repoRoot, docsRoot, readme := writeDocFixture(t, tt.fixture)
+			if tt.mutate != nil {
+				docsRoot, readme = tt.mutate(t, repoRoot, docsRoot, readme)
+			}
+			_, err := buildReport(repoRoot, docsRoot, readme, catalog)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("buildReport() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestBuildReport_ReadmeRowWithoutDoc_ReportsEveryExpectedToolMissing
+// verifies a README row whose doc file does not exist still produces an
+// entry, under its canonical path, with every expected tool missing and
+// nothing documented.
+func TestBuildReport_ReadmeRowWithoutDoc_ReportsEveryExpectedToolMissing(t *testing.T) {
+	repoRoot, docsRoot, readme := writeDocFixture(t, docFixture{
+		rows: "| Branches | 1 | `gitlab_branch` | [branches.md](branches.md) |\n| Tags | 1 | `gitlab_tag` | [tags.md](tags.md) |\n",
+		docs: map[string]string{"branches.md": "### `gitlab_branch_get`\n"},
+	})
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get": {Name: "gitlab_branch_get", Group: "gitlab_branch"},
+		"gitlab_tag_get":    {Name: "gitlab_tag_get", Group: "gitlab_tag"},
+	}}
+
+	rep, err := buildReport(repoRoot, docsRoot, readme, catalog)
+	if err != nil {
+		t.Fatalf("buildReport() error = %v", err)
+	}
+	if len(rep.Files) != 2 {
+		t.Fatalf("Files = %d, want 2", len(rep.Files))
+	}
+	byDoc := map[string]fileFinding{}
+	for _, f := range rep.Files {
+		byDoc[f.DocPath] = f
+	}
+	tags, ok := byDoc["docs/reference/tools/tags.md"]
+	if !ok {
+		t.Fatalf("Files = %+v, want an entry under the README row's canonical path", rep.Files)
+	}
+	if tags.Domain != "Tags" {
+		t.Errorf("tags entry = %+v, want the canonical path of the README row", tags)
+	}
+	if !reflect.DeepEqual(tags.Missing, []string{"gitlab_tag_get"}) || tags.DocumentedCount != 0 || tags.Orphan != nil {
+		t.Errorf("tags findings = %+v, want every expected tool missing", tags)
+	}
+	if tags.CountMatches || !tags.ReadmeCountMatches {
+		t.Errorf("tags counts = %+v, want doc count mismatch and README count match", tags)
+	}
+	if rep.Summary.MissingTotal != 1 || rep.Summary.CleanDocs != 1 {
+		t.Errorf("summary = %+v, want one missing tool and one clean doc", rep.Summary)
+	}
+}
+
+// TestBuildReport_TierBadgeDisagrees_ReportsMismatch verifies a doc badge
+// that contradicts the catalog tier surfaces as a tier_mismatch finding with
+// both labels.
+func TestBuildReport_TierBadgeDisagrees_ReportsMismatch(t *testing.T) {
+	repoRoot, docsRoot, readme := writeDocFixture(t, docFixture{
+		rows: "| Branches | 2 | `gitlab_branch` | [branches.md](branches.md) |\n",
+		docs: map[string]string{"branches.md": "### `gitlab_branch_list`\n\n**Read** | **Ultimate**\n\n### `gitlab_branch_get`\n\n**Read** | **Premium**\n"},
+	})
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get":  {Name: "gitlab_branch_get", Group: "gitlab_branch", Tier: "ultimate"},
+		"gitlab_branch_list": {Name: "gitlab_branch_list", Group: "gitlab_branch", Tier: "premium"},
+	}}
+
+	rep, err := buildReport(repoRoot, docsRoot, readme, catalog)
+	if err != nil {
+		t.Fatalf("buildReport() error = %v", err)
+	}
+	want := []tierMismatch{
+		{Tool: "gitlab_branch_get", Catalog: "Ultimate", Documented: "Premium"},
+		{Tool: "gitlab_branch_list", Catalog: "Premium", Documented: "Ultimate"},
+	}
+	if len(rep.Files) != 1 || !reflect.DeepEqual(rep.Files[0].TierMismatch, want) {
+		t.Fatalf("Files = %+v, want the two tier mismatches sorted by tool %+v", rep.Files, want)
+	}
+	if rep.Summary.TierMismatchTotal != 2 || rep.Summary.DocsWithFindings != 1 {
+		t.Errorf("summary = %+v, want two tier mismatch findings", rep.Summary)
+	}
+}
+
+// TestBuildReport_UnclaimedCatalogTool_ReportsUnassignedEntry verifies a
+// catalog tool no README row claims lands in the "(unassigned)" pseudo-entry,
+// counts as a finding, and blocks the check gate.
+func TestBuildReport_UnclaimedCatalogTool_ReportsUnassignedEntry(t *testing.T) {
+	repoRoot, docsRoot, readme := writeDocFixture(t, docFixture{
+		rows: "| Branches | 1 | `gitlab_branch` | [branches.md](branches.md) |\n",
+		docs: map[string]string{"branches.md": "### `gitlab_branch_get`\n"},
+	})
+	catalog := &catalogSnapshot{Tools: map[string]catalogTool{
+		"gitlab_branch_get":  {Name: "gitlab_branch_get", Group: "gitlab_branch"},
+		"gitlab_zzz_list":    {Name: "gitlab_zzz_list", Group: "gitlab_zzz"},
+		"gitlab_zzz_archive": {Name: "gitlab_zzz_archive", Group: "gitlab_zzz"},
+	}}
+
+	rep, err := buildReport(repoRoot, docsRoot, readme, catalog)
+	if err != nil {
+		t.Fatalf("buildReport() error = %v", err)
+	}
+	if len(rep.Files) != 2 {
+		t.Fatalf("Files = %d, want the doc entry plus the unassigned entry", len(rep.Files))
+	}
+	unassigned := rep.Files[1]
+	if unassigned.DocPath != unassignedDocPath || !reflect.DeepEqual(unassigned.UnassignedExpected, []string{"gitlab_zzz_archive", "gitlab_zzz_list"}) {
+		t.Errorf("unassigned entry = %+v, want both gitlab_zzz tools sorted", unassigned)
+	}
+	if rep.Summary.UnassignedTotal != 2 || rep.Summary.DocsWithFindings != 1 || rep.Summary.CleanDocs != 1 {
+		t.Errorf("summary = %+v, want two unassigned tools counted as one finding doc", rep.Summary)
+	}
+	if msg := rep.check(); !strings.Contains(msg, "2 unassigned") {
+		t.Errorf("check() = %q, want the unassigned count", msg)
+	}
+}
+
+// TestFilterGapsOnly_MixedFiles_KeepsOnlyFindings verifies the gaps-only
+// filter drops clean files, keeps each kind of finding, and recomputes the
+// summary over what remains.
+func TestFilterGapsOnly_MixedFiles_KeepsOnlyFindings(t *testing.T) {
+	rep := report{SchemaVersion: schemaVersion, Files: []fileFinding{
+		{DocPath: "docs/clean.md", ReadmeCountMatches: true},
+		{DocPath: "docs/missing.md", Missing: []string{"gitlab_a"}, ReadmeCountMatches: true},
+		{DocPath: "docs/orphan.md", Orphan: []string{"gitlab_b"}},
+		{DocPath: "docs/tier.md", TierMismatch: []tierMismatch{{Tool: "gitlab_c"}}, ReadmeCountMatches: true},
+	}}
+
+	got := rep.filterGapsOnly()
+	paths := make([]string, 0, len(got.Files))
+	for _, f := range got.Files {
+		paths = append(paths, f.DocPath)
+	}
+	if !reflect.DeepEqual(paths, []string{"docs/missing.md", "docs/orphan.md", "docs/tier.md"}) {
+		t.Errorf("filtered paths = %v, want the three files with findings", paths)
+	}
+	want := reportSummary{Docs: 3, DocsWithFindings: 3, MissingTotal: 1, OrphanTotal: 1, TierMismatchTotal: 1, ReadmeCountDriftDocs: 1}
+	if got.Summary != want || got.SchemaVersion != schemaVersion {
+		t.Errorf("filtered report = %+v, want summary %+v", got, want)
+	}
+}
+
+// TestBuildDocEntries_UnrelatablePath_KeepsAbsolutePath verifies a doc path
+// that cannot be expressed relative to the repo root is keyed as-is.
+func TestBuildDocEntries_UnrelatablePath_KeepsAbsolutePath(t *testing.T) {
+	abs := filepath.Join(t.TempDir(), "doc.md")
+	entries, absByRel, relByBase := buildDocEntries("relative-root", []string{abs})
+	if entries[abs] == nil || absByRel[abs] != abs || relByBase["doc.md"] != abs {
+		t.Fatalf("entries = %v, absByRel = %v, relByBase = %v; want the absolute path kept", entries, absByRel, relByBase)
+	}
+}
+
+// captureStdout swaps os.Stdout for a temporary file until the test ends and
+// returns a reader for what was written, so the "-" output path can be
+// observed.
+func captureStdout(t *testing.T) func() string {
+	t.Helper()
+	file, err := os.Create(filepath.Join(t.TempDir(), "stdout"))
+	if err != nil {
+		t.Fatalf("create stdout capture: %v", err)
+	}
+	previous := os.Stdout
+	os.Stdout = file
+	t.Cleanup(func() {
+		os.Stdout = previous
+		_ = file.Close()
+	})
+	return func() string {
+		data, readErr := os.ReadFile(file.Name())
+		if readErr != nil {
+			t.Fatalf("read stdout capture: %v", readErr)
+		}
+		return string(data)
+	}
+}
+
+// TestWriteReport_Scenarios_WritesStdoutOrFile verifies the "-" sentinel
+// writes to stdout, a nested output path gets its directories created, and a
+// parent that is a file is reported as an error.
+func TestWriteReport_Scenarios_WritesStdoutOrFile(t *testing.T) {
+	t.Run("stdout sentinel", func(t *testing.T) {
+		stdout := captureStdout(t)
+		if err := writeReport("-", []byte("{}\n")); err != nil {
+			t.Fatalf("writeReport(-) error = %v", err)
+		}
+		if got := stdout(); got != "{}\n" {
+			t.Errorf("stdout = %q, want the report", got)
+		}
+	})
+	t.Run("nested file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "plan", "nested", "backlog.json")
+		if err := writeReport(path, []byte("{}\n")); err != nil {
+			t.Fatalf("writeReport() error = %v", err)
+		}
+		if data, err := os.ReadFile(path); err != nil || string(data) != "{}\n" {
+			t.Errorf("written report = %q, %v; want the content", data, err)
+		}
+	})
+	t.Run("parent is a file", func(t *testing.T) {
+		blocker := filepath.Join(t.TempDir(), "blocker")
+		if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+			t.Fatalf("write blocker: %v", err)
+		}
+		if err := writeReport(filepath.Join(blocker, "backlog.json"), []byte("{}\n")); err == nil {
+			t.Fatal("writeReport() error = nil, want the directory creation failure")
+		}
+	})
+}
+
+// TestParseDocTools_UnreadableDoc_ReturnsError verifies the doc parser
+// reports a doc it cannot open and a doc whose line the scanner cannot
+// buffer.
+func TestParseDocTools_UnreadableDoc_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		absent  bool
+		wantErr string
+	}{
+		{name: "missing doc", absent: true, wantErr: "open doc"},
+		{name: "overlong line", content: overlongLine + "\n", wantErr: "scan doc"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "doc.md")
+			if !tt.absent {
+				if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
+					t.Fatalf("write doc: %v", err)
+				}
+			}
+			_, err := parseDocTools(path)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("parseDocTools() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestParseTierBadge_MissingDoc_ReportsNoBadge verifies a doc that cannot be
+// opened yields no badge rather than an error, matching the best-effort
+// contract of the badge lookup.
+func TestParseTierBadge_MissingDoc_ReportsNoBadge(t *testing.T) {
+	badge, found := parseTierBadge(filepath.Join(t.TempDir(), "absent.md"), "gitlab_branch_get")
+	if found || badge != "" {
+		t.Fatalf("parseTierBadge() = %q, %v; want no badge", badge, found)
+	}
+}
+
+// writeEmptyDoc creates an empty file at path for the discovery fixtures.
+func writeEmptyDoc(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(""), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// TestDiscoverDocFiles_Scenarios_ListsMarkdownOnly verifies discovery skips
+// subdirectories, non-Markdown files and the README, and reports a missing
+// docs root.
+func TestDiscoverDocFiles_Scenarios_ListsMarkdownOnly(t *testing.T) {
+	t.Run("missing root", func(t *testing.T) {
+		if _, err := discoverDocFiles(filepath.Join(t.TempDir(), "absent")); err == nil || !strings.Contains(err.Error(), "read docs root") {
+			t.Fatalf("discoverDocFiles() error = %v, want read docs root", err)
+		}
+	})
+	t.Run("mixed entries", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.Mkdir(filepath.Join(root, "nested"), 0o750); err != nil {
+			t.Fatalf("mkdir nested: %v", err)
+		}
+		writeEmptyDoc(t, filepath.Join(root, "README.md"))
+		writeEmptyDoc(t, filepath.Join(root, "notes.txt"))
+		writeEmptyDoc(t, filepath.Join(root, "branches.md"))
+		got, err := discoverDocFiles(root)
+		if err != nil {
+			t.Fatalf("discoverDocFiles() error = %v", err)
+		}
+		if !reflect.DeepEqual(got, []string{filepath.Join(root, "branches.md")}) {
+			t.Errorf("discoverDocFiles() = %v, want branches.md only", got)
+		}
+	})
+}
+
+// TestLoadOwnershipRules_PathIsDirectory_ReturnsReadError verifies a read
+// failure other than "not found" is reported instead of being treated as an
+// absent rule file.
+func TestLoadOwnershipRules_PathIsDirectory_ReturnsReadError(t *testing.T) {
+	_, err := loadOwnershipRules(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "read ") {
+		t.Fatalf("loadOwnershipRules(directory) error = %v, want a read error", err)
+	}
+}
+
+// TestParseDomainsTable_MalformedTables_ReturnError verifies the README
+// parser reports a README it cannot open, a tool count that does not fit an
+// int, a row the scanner cannot buffer, and a README without Domains rows.
+func TestParseDomainsTable_MalformedTables_ReturnError(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		absent  bool
+		wantErr string
+	}{
+		{name: "missing readme", absent: true, wantErr: "open readme"},
+		{name: "tool count overflows", content: "## Domains\n| Branches | 99999999999999999999 | `gitlab_branch` | [branches.md](branches.md) |\n", wantErr: "invalid tool count"},
+		{name: "overlong row", content: "## Domains\n| " + overlongLine + " |\n", wantErr: "scan readme"},
+		{name: "no rows", content: "## Domains\n\nNothing tabulated.\n", wantErr: "no Domains rows parsed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "README.md")
+			if !tt.absent {
+				if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
+					t.Fatalf("write readme: %v", err)
+				}
+			}
+			_, err := parseDomainsTable(path)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("parseDomainsTable() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestSortedUnique_Scenarios_DedupesAndSorts verifies duplicates collapse,
+// the result is sorted, and an empty input yields nil.
+func TestSortedUnique_Scenarios_DedupesAndSorts(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		want   []string
+	}{
+		{name: "empty", values: nil, want: nil},
+		{name: "duplicates", values: []string{"b", "a", "b"}, want: []string{"a", "b"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sortedUnique(tt.values); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("sortedUnique(%v) = %v, want %v", tt.values, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestResolveOutputPath_ByPathKind verifies the -output resolution rules:
 // relative paths anchor to the repo root, while the "-" stdout sentinel and
 // absolute paths pass through verbatim (the absolute case is the guard that
