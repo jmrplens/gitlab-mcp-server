@@ -46,8 +46,16 @@ const EnvFileName = ".gitlab-mcp-server.env"
 //
 // It exists so the convenience the working-directory load used to provide
 // survives as a deliberate act. A developer who keeps credentials in a
-// repository-local file passes GITLAB_MCP_ENV_FILE=.env once, in the client
+// repository-local file names that file, by absolute path, in the client
 // configuration or the shell that launches the server, and says so.
+//
+// The absolute path is the recommendation and not a formality. A relative
+// value is resolved against the working directory, which the MCP client
+// chooses and changes with every workspace it opens, so one relative line in a
+// user-level client configuration nominates a different file in every
+// repository the developer later opens. That is the working-directory load
+// again, and it is why a relative value is announced as one at startup.
+// A relative value belongs in a launcher that exists for a single workspace.
 const EnvFileVar = "GITLAB_MCP_ENV_FILE"
 
 // workingDirEnvFileName is the file this server deliberately does not load. It
@@ -74,6 +82,19 @@ const (
 // mode, but what it reports is a property of the process, not of the call.
 var envFileAnnounceOnce sync.Once
 
+// explicitEnvFile resolves EnvFileVar once per process, before any file this
+// server loads has had a chance to write it.
+//
+// LoadEnvFiles runs more than once, and godotenv sets every key the
+// environment does not already carry. Reading the variable afresh on a later
+// call would therefore honor a value the first call's own home file supplied,
+// which is how a home file naming ".env" loaded the working-directory file the
+// same run had just announced it was ignoring. Resolving once is what keeps
+// "read from the process environment only" true.
+var explicitEnvFile = sync.OnceValue(func() string {
+	return strings.TrimSpace(os.Getenv(EnvFileVar))
+})
+
 // EnvFileReport describes what LoadEnvFiles did, so a caller can render it
 // itself instead of parsing logs. LoadEnvFiles already announces the
 // security-relevant parts.
@@ -83,6 +104,10 @@ type EnvFileReport struct {
 	ExplicitPath string
 	// ExplicitErr is why the file EnvFileVar named could not be read.
 	ExplicitErr error
+	// ExplicitRelative records that EnvFileVar named a relative path, so the
+	// file that was loaded is whichever one sits in the working directory the
+	// client chose. Meaningless when ExplicitPath is empty.
+	ExplicitRelative bool
 	// HomePath is the home file that was loaded. Empty when there is none.
 	HomePath string
 	// IgnoredPath is the absolute path of a working-directory .env that was
@@ -116,9 +141,10 @@ type EnvFileReport struct {
 func LoadEnvFiles() EnvFileReport {
 	var report EnvFileReport
 
-	explicit := strings.TrimSpace(os.Getenv(EnvFileVar))
+	explicit := explicitEnvFile()
 	if explicit != "" {
 		report.ExplicitPath = absolutePath(explicit)
+		report.ExplicitRelative = !filepath.IsAbs(explicit)
 		if err := godotenv.Load(explicit); err != nil {
 			report.ExplicitErr = err
 		}
@@ -187,7 +213,7 @@ func absolutePath(path string) string {
 
 // announce writes the startup record of where configuration came from.
 //
-// Both lines are WARN rather than INFO on purpose. They are the only local
+// Every line is WARN rather than INFO on purpose. They are the only local
 // evidence that this process took configuration from a file outside the client
 // configuration, and LOG_LEVEL is itself one of the settings such a file would
 // like to set.
@@ -199,6 +225,12 @@ func (r EnvFileReport) announce() {
 		} else {
 			slog.Warn("loading configuration from the env file named by "+EnvFileVar,
 				"env", EnvFileVar, "path", r.ExplicitPath)
+		}
+		if r.ExplicitRelative {
+			slog.Warn(EnvFileVar+" names a relative path, resolved against the working directory the client chose",
+				"env", EnvFileVar, "path", r.ExplicitPath,
+				"reason", "a relative value follows the client into every workspace it opens, and each one offers a different file",
+				"hint", "name an absolute path unless this server is launched for a single workspace")
 		}
 	}
 	if r.IgnoredPath != "" {

@@ -38,6 +38,9 @@ var envFileKeys = []string{
 // on emptiness, so an empty-but-present variable would suppress the very load
 // the assertions are about and every row would pass against a vulnerable
 // build. t.Setenv is still called first, purely to register the restore.
+// It also rearms the once-per-process resolution of GITLAB_MCP_ENV_FILE, which
+// production resolves before any dotenv file can write it and which a test
+// process would otherwise freeze at whatever the first row happened to set.
 func clearEnvFileKeys(t *testing.T) {
 	t.Helper()
 	for _, key := range envFileKeys {
@@ -46,6 +49,18 @@ func clearEnvFileKeys(t *testing.T) {
 			t.Fatalf("os.Unsetenv(%q) error: %v", key, err)
 		}
 	}
+	resetExplicitEnvFile(t)
+}
+
+// resetExplicitEnvFile rearms the once-per-process read of EnvFileVar so a row
+// observes the value it set rather than an earlier row's.
+func resetExplicitEnvFile(t *testing.T) {
+	t.Helper()
+	newOnce := func() func() string {
+		return sync.OnceValue(func() string { return strings.TrimSpace(os.Getenv(EnvFileVar)) })
+	}
+	explicitEnvFile = newOnce()
+	t.Cleanup(func() { explicitEnvFile = newOnce() })
 }
 
 // writeEnvFile writes a dotenv file with the given lines and returns its path.
@@ -559,5 +574,107 @@ func TestAbsolutePath_UnresolvableRelativePath_ReturnsWhatItWasGiven(t *testing.
 
 	if got := absolutePath(workingDirEnvFileName); got != workingDirEnvFileName {
 		t.Errorf("absolutePath(%q) = %q, want it unchanged", workingDirEnvFileName, got)
+	}
+}
+
+// TestLoadEnvFiles_HomeFileNamingWorkingDirDotenv_IsNotHonored verifies that
+// the opt-in stays an opt-in across the repeated calls the startup path makes.
+// LoadEnvFiles runs twice before the server serves, and godotenv sets every key
+// a file offers that the environment does not already carry, GITLAB_MCP_ENV_FILE
+// among them. A home file naming ".env" would otherwise make the second call
+// load the working-directory file the first call announced it was ignoring, and
+// the announcement, already spent, would never be corrected.
+func TestLoadEnvFiles_HomeFileNamingWorkingDirDotenv_IsNotHonored(t *testing.T) {
+	clearEnvFileKeys(t)
+	resetEnvFileAnnouncement(t)
+	logged := captureLogs(t)
+	home := t.TempDir()
+	useHomeDir(t, home)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	writeEnvFile(t, home, EnvFileName, EnvFileVar+"=.env", "GITLAB_TOKEN=glpat-home-file-token")
+	writeEnvFile(t, work, ".env",
+		"GITLAB_URL=https://attacker.example",
+		"GITLAB_SKIP_TLS_VERIFY=true",
+		"GITLAB_MCP_TELEMETRY=true")
+
+	LoadEnvFiles()
+	report := LoadEnvFiles()
+
+	for _, key := range []string{"GITLAB_URL", "GITLAB_SKIP_TLS_VERIFY", "GITLAB_MCP_TELEMETRY"} {
+		t.Run(key, func(t *testing.T) {
+			if got := os.Getenv(key); got != "" {
+				t.Errorf("%s = %q after two LoadEnvFiles calls, want it unset", key, got)
+			}
+		})
+	}
+	t.Run("the home file is still loaded", func(t *testing.T) {
+		if got := os.Getenv("GITLAB_TOKEN"); got != "glpat-home-file-token" {
+			t.Errorf("GITLAB_TOKEN = %q, want the home file value", got)
+		}
+	})
+	t.Run("the announcement still describes what happened", func(t *testing.T) {
+		if report.ExplicitPath != "" {
+			t.Errorf("ExplicitPath = %q, want none: nothing in the process environment named a file", report.ExplicitPath)
+		}
+		if report.IgnoredPath == "" {
+			t.Error("IgnoredPath is empty, want the working-directory file still reported as ignored")
+		}
+		if !strings.Contains(logged(), "ignoring the .env file in the working directory") {
+			t.Errorf("log = %q, want the ignored file announced", logged())
+		}
+	})
+}
+
+// TestLoadEnvFiles_RelativeExplicitEnvFile_IsAnnouncedAsRelative verifies that
+// the opt-in says which of its two shapes it took. An absolute path names one
+// file for the life of the configuration; a relative one names whatever sits in
+// the directory the client picked, so a single relative line in a user-level
+// client configuration reinstates the working-directory load for every
+// workspace the developer later opens. The value is honored either way, since
+// naming the file is still a deliberate act, but only one of them is quiet.
+func TestLoadEnvFiles_RelativeExplicitEnvFile_IsAnnouncedAsRelative(t *testing.T) {
+	const relativeWarning = "names a relative path, resolved against the working directory the client chose"
+
+	tests := []struct {
+		name         string
+		point        func(work string) string
+		wantRelative bool
+	}{
+		{
+			name:         "a relative value is announced as relative",
+			point:        func(string) string { return "custom.env" },
+			wantRelative: true,
+		},
+		{
+			name:  "an absolute value is not",
+			point: func(work string) string { return filepath.Join(work, "custom.env") },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearEnvFileKeys(t)
+			resetEnvFileAnnouncement(t)
+			logged := captureLogs(t)
+			useHomeDir(t, t.TempDir())
+			work := t.TempDir()
+			t.Chdir(work)
+			writeEnvFile(t, work, "custom.env", "GITLAB_URL=https://named.example.com")
+			t.Setenv(EnvFileVar, tt.point(work))
+
+			report := LoadEnvFiles()
+
+			if got := os.Getenv("GITLAB_URL"); got != "https://named.example.com" {
+				t.Errorf("GITLAB_URL = %q, want the named file loaded either way", got)
+			}
+			if report.ExplicitRelative != tt.wantRelative {
+				t.Errorf("ExplicitRelative = %v, want %v", report.ExplicitRelative, tt.wantRelative)
+			}
+			if got := strings.Contains(logged(), relativeWarning); got != tt.wantRelative {
+				t.Errorf("log mentions the relative warning = %v, want %v (log: %q)", got, tt.wantRelative, logged())
+			}
+		})
 	}
 }
