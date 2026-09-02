@@ -181,3 +181,15 @@ test/e2e/.bitbucket-admin-pass
 # prevent.
 __pycache__/
 *.py[cod]
+
+# Binaries left at the root by `go build ./cmd/<name>/`, which names its output
+# after the package directory. One of these was committed by an `add -A` that
+# followed a build, and 3.6 MB of compiled Go is both invisible in review and
+# exactly the kind of artifact this repository's supply-chain work exists to
+# keep out of the tree. Build into dist/ instead.
+/audit_*
+/eval_*
+/format_md_tables
+/gen_*
+/godoc_tool
+/server
