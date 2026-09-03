@@ -61,6 +61,7 @@ gitlab-mcp-server/
 │   ├── audit_e2e_gaps/          # Reports catalog actions not exercised by the e2e suite (make audit-e2e-gaps)
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
 │   ├── audit_gateway_chars/     # Audits served descriptions/titles for characters MCP gateway validators reject (make check-gateway-chars)
+│   ├── audit_install_buttons/  # Decodes every one-click install payload (base64 or percent-encoded JSON) and holds the buttons to one configuration per command (make check-install-buttons)
 │   ├── godoc_tool/              # Consolidated Go doc auditor + fixer (was audit_godocs + add_docs)
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_supply_chain/      # Audits five release-configuration invariants: SHA-pinned uses:, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current SECURITY.md, signature-verifying installers (make check-supply-chain)
