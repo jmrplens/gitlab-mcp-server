@@ -106,9 +106,15 @@ Each button registers the **Docker**-based server (auto-pulls the image on first
 Docker (no install — pulls the image on first run):
 
 ```bash
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+export GITLAB_TOKEN=glpat-xxxx
+claude mcp add gitlab --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
+
+The registration command carries no token: `-e GITLAB_TOKEN` with no value forwards the
+variable from the environment Claude Code hands `docker`, so export it where you launch
+the client. A container never reads `~/.gitlab-mcp-server.env`, which is where every
+other channel below puts it.
 
 Or install the native binary first, then register it:
 
@@ -131,13 +137,19 @@ winget install --id jmrplens.gitlab-mcp-server -e
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+claude mcp add gitlab -- gitlab-mcp-server
 ```
 
 Clients that launch servers with `npx` need no install at all — point them at
 `npx -y @jmrp.io/gitlab-mcp-server`.
 
-Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and, for a self-signed certificate, mount the CA and set `--env SSL_CERT_FILE=/path/to/ca-bundle.crt`; `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, and OAuth mode refuses it for a non-loopback instance).
+The server reads `~/.gitlab-mcp-server.env` for values its environment does not already
+carry, one `KEY=value` per line, which is why no registration command above names the
+token. Self-managed GitLab? Add `GITLAB_URL=https://gitlab.example.com` to that same file
+(and, for a self-signed certificate, mount the CA and set `SSL_CERT_FILE=/path/to/ca-bundle.crt`;
+`GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, and OAuth mode refuses it for a
+non-loopback instance).
 
 ### Run it once to check the install
 

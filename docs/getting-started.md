@@ -37,9 +37,15 @@ Each registers a **Docker**-based server (auto-pulls the image on first run; nee
 Docker (no install — pulls the image on first run):
 
 ```bash
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+export GITLAB_TOKEN=glpat-xxxx
+claude mcp add gitlab --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
+
+The registration command carries no token: `-e GITLAB_TOKEN` with no value forwards the
+variable from the environment Claude Code hands `docker`, so export it where you launch
+the client. A container never reads `~/.gitlab-mcp-server.env`, which is where the
+native-binary paths below put it.
 
 ### npm / npx (any platform)
 
@@ -104,7 +110,8 @@ winget install --id jmrplens.gitlab-mcp-server -e
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+claude mcp add gitlab -- gitlab-mcp-server
 ```
 
 ### Claude Desktop one-click extension (.mcpb)
@@ -114,7 +121,7 @@ Claude Desktop users can skip all of the above: download
 and open it with Claude Desktop — see the
 [Claude Desktop Extension guide](guides/claude-desktop-extension.md).
 
-Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs). The per-client JSON for every supported client is in [Step 2](#step-2-configure-your-mcp-client).
+The server reads `~/.gitlab-mcp-server.env` for values its environment does not already carry, one `KEY=value` per line, which is why the registration command names no token. Self-managed GitLab? Add `GITLAB_URL=https://gitlab.example.com` to that same file (and `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs). The per-client JSON for every supported client is in [Step 2](#step-2-configure-your-mcp-client).
 
 ### Try it without installing anything (hosted endpoint)
 

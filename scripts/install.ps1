@@ -9,9 +9,10 @@
 
         irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 
-    After install, register the server with Claude Code:
+    After install, put the token where the server reads it and register with Claude Code:
 
-        claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+        Set-Content -Path "$env:USERPROFILE\.gitlab-mcp-server.env" -Value 'GITLAB_TOKEN=glpat-xxxx'
+        claude mcp add gitlab -- gitlab-mcp-server
 
     or configure another MCP client by hand:
 
@@ -350,9 +351,12 @@ finally {
 Write-Host @"
 
 Next steps:
-  1. Register with Claude Code:
-       claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- $binName
-     (self-managed GitLab: add  --env GITLAB_URL=https://gitlab.example.com)
+  1. Write the token where the server reads it, then register with Claude Code:
+       Set-Content -Path "$env:USERPROFILE\.gitlab-mcp-server.env" -Value 'GITLAB_TOKEN=glpat-xxxx'
+       claude mcp add gitlab -- $binName
+     (self-managed GitLab: add  GITLAB_URL=https://gitlab.example.com  to that file)
+     Nothing names the token on the command line, so it stays out of the process
+     arguments and out of the client's own configuration file.
   2. Or configure another MCP client by hand:
        https://jmrp.io/docs/gitlab-mcp-server/configuration/
 "@

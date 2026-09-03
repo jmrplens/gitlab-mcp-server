@@ -18,12 +18,15 @@ Su entrypoint es `gitlab-mcp-server` y su comando por defecto es `--transport au
 docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-`-e GITLAB_TOKEN` sin valor reenvía la variable desde el entorno que el cliente le da a `docker`, de modo que el token vive en el bloque `env` del cliente y no en la línea de comandos. Docker descarga la imagen en la primera ejecución. La entrada de cliente que lanza este comando está en [Configura tu cliente](#configura-tu-cliente) más abajo; con Claude Code es una línea:
+`-e GITLAB_TOKEN` sin valor reenvía la variable desde el entorno que el cliente le da a `docker`, de modo que el token vive en el bloque `env` del cliente y no en la línea de comandos. Docker descarga la imagen en la primera ejecución. La entrada de cliente que lanza este comando está en [Configura tu cliente](#configura-tu-cliente) más abajo; con Claude Code el registro es esa misma línea de comandos, y tampoco lleva token:
 
 ```bash
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+export GITLAB_TOKEN=glpat-xxxx
+claude mcp add gitlab --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
+
+Claude Code le pasa su propio entorno a `docker`, que es de donde `-e GITLAB_TOKEN` toma el valor, así que expórtalo en la shell desde la que lanzas el cliente (tu perfil de shell lo hace duradero) o añádelo después al bloque `env` de la entrada. Un contenedor tiene su propio sistema de archivos y nunca lee `~/.gitlab-mcp-server.env`, que es como el resto de canales aportan el token; el reenvío es el equivalente del contenedor.
 
 Los botones de un clic para VS Code, Cursor, LM Studio y Kiro del [Inicio rápido](/gitlab-mcp-server/es/getting-started/#botones-de-un-clic) registran exactamente esta entrada, y el manifiesto de [Plugins de agente](/gitlab-mcp-server/es/install/agent-plugin/) también la ejecuta.
 

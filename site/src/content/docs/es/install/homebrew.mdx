@@ -41,7 +41,7 @@ Homebrew instala en su prefijo: `/opt/homebrew` en Apple Silicon, `/usr/local` e
 }
 ```
 
-Sustituye el comando por tu prefijo si no es `/opt/homebrew`, y añade `"GITLAB_URL": "https://gitlab.example.com"` a `env` para una instancia autogestionada. Con Claude Code el paso es `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`. Las pestañas por cliente están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
+Sustituye el comando por tu prefijo si no es `/opt/homebrew`, y añade `"GITLAB_URL": "https://gitlab.example.com"` a `env` para una instancia autogestionada. Con Claude Code el token va en `~/.gitlab-mcp-server.env`, que el servidor lee por sí mismo, y el registro no lo nombra en ninguna parte: `echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env` y después `claude mcp add gitlab -- gitlab-mcp-server`. Las pestañas por cliente están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
 
 ## Actualizar y desinstalar
 

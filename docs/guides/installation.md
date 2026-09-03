@@ -98,7 +98,7 @@ The script removes any existing binary first so re-installing over a running ser
 
 Setting both `REQUIRE_SIGNATURE=1` and `ALLOW_UNVERIFIED=1` is refused rather than resolved in either direction: they ask for opposite things, and silently picking one would be worse than saying so.
 
-Its printed next step is the Claude Code registration, `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server` (add `--env GITLAB_URL=https://gitlab.example.com` for a self-managed instance), or the hand configuration in [Configure your client](#configure-your-client).
+Its printed next step is the Claude Code registration, `claude mcp add gitlab -- gitlab-mcp-server`, preceded by writing the token to `~/.gitlab-mcp-server.env` (add `GITLAB_URL=https://gitlab.example.com` to that file for a self-managed instance), or the hand configuration in [Configure your client](#configure-your-client). The registration command names no token, so nothing puts it in `argv` or in Claude Code's own configuration file.
 
 ### PowerShell installer (Windows)
 
@@ -182,7 +182,7 @@ Open a new PowerShell or Windows Terminal window after the install: `PATH` chang
 
 ### Where the binary and its alias land
 
-winget installs a user-scope portable package into a per-package folder under `%LOCALAPPDATA%\Microsoft\WinGet\Packages\` (`%PROGRAMFILES%\WinGet\Packages\` for machine scope). It then creates a symlink in `%LOCALAPPDATA%\Microsoft\WinGet\Links\` (`%PROGRAMFILES%\WinGet\Links\` for machine scope), adds that `Links` directory to `PATH` if it is not there already, and names the symlink after the manifest's command, which is `gitlab-mcp-server`. That is the same command name every other channel installs, so `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server` works unchanged, and so does any client JSON that names the command without a path. `winget install --rename <name>` (`-r`) chooses a different alias.
+winget installs a user-scope portable package into a per-package folder under `%LOCALAPPDATA%\Microsoft\WinGet\Packages\` (`%PROGRAMFILES%\WinGet\Packages\` for machine scope). It then creates a symlink in `%LOCALAPPDATA%\Microsoft\WinGet\Links\` (`%PROGRAMFILES%\WinGet\Links\` for machine scope), adds that `Links` directory to `PATH` if it is not there already, and names the symlink after the manifest's command, which is `gitlab-mcp-server`. That is the same command name every other channel installs, so `claude mcp add gitlab -- gitlab-mcp-server` works unchanged, with the token in `%USERPROFILE%\.gitlab-mcp-server.env` (Windows for the `~/.gitlab-mcp-server.env` used elsewhere in this guide), and so does any client JSON that names the command without a path. `winget install --rename <name>` (`-r`) chooses a different alias.
 
 ### Upgrade
 
@@ -232,7 +232,7 @@ docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 }
 ```
 
-`-e GITLAB_TOKEN` with no value forwards the variable from the client's `env` block into the container. For a self-managed instance add `-e GITLAB_URL` to `args` and `GITLAB_URL` to `env`. Claude Code takes the same command line: `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest`. The image is pulled on first use. The one-click buttons for VS Code, Cursor, LM Studio and Kiro register exactly this configuration, which is why they need Docker installed.
+`-e GITLAB_TOKEN` with no value forwards the variable from the client's `env` block into the container. For a self-managed instance add `-e GITLAB_URL` to `args` and `GITLAB_URL` to `env`. Claude Code takes the same command line and carries no token on it either: `export GITLAB_TOKEN=glpat-xxxx`, then `claude mcp add gitlab --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest`, since the value it forwards comes from the environment Claude Code hands `docker`. A container has its own filesystem and never reads `~/.gitlab-mcp-server.env`, which is how the native-binary channels supply the token; forwarding is the container's equivalent. The image is pulled on first use. The one-click buttons for VS Code, Cursor, LM Studio and Kiro register exactly this configuration, which is why they need Docker installed.
 
 ### HTTP: a long-running container on a port
 
@@ -423,7 +423,7 @@ Every stdio channel is configured the same way: the client starts `gitlab-mcp-se
 }
 ```
 
-Add `"GITLAB_URL": "https://gitlab.example.com"` to `env` only for a self-managed instance. VS Code uses `.vscode/mcp.json` with a `servers` map and `"type": "stdio"`, and its `promptString` inputs keep the token out of plain text; Claude Code takes `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`. Per-client file locations and shapes are in [IDE Configuration](ide-configuration.md) and on the site's [Getting Started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/#manual-configuration).
+Add `"GITLAB_URL": "https://gitlab.example.com"` to `env` only for a self-managed instance. VS Code uses `.vscode/mcp.json` with a `servers` map and `"type": "stdio"`, and its `promptString` inputs keep the token out of plain text; Claude Code takes `claude mcp add gitlab -- gitlab-mcp-server`, with the token written to `~/.gitlab-mcp-server.env` instead of onto that command line. Per-client file locations and shapes are in [IDE Configuration](ide-configuration.md) and on the site's [Getting Started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/#manual-configuration).
 
 To keep the token out of client JSON entirely, put it in `~/.gitlab-mcp-server.env` (one `KEY=value` per line): an explicit environment variable beats the file `GITLAB_MCP_ENV_FILE` names, which beats that one, and a `.env` in the working directory is not read at all. Then ask your assistant "List my GitLab projects." or "Who am I on GitLab?" to confirm the connection.
 

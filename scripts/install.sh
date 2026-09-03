@@ -15,8 +15,9 @@
 #   FETCH_RETRY_DELAY  seconds between those tries (default: 2)
 #   ALLOW_UNVERIFIED   set to 1 to skip verification entirely (not recommended)
 #
-# After install, register the server with Claude Code:
-#   claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+# After install, put the token where the server reads it and register with Claude Code:
+#   echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+#   claude mcp add gitlab -- gitlab-mcp-server
 set -eu
 
 REPO="${REPO:-jmrplens/gitlab-mcp-server}"
@@ -367,9 +368,13 @@ fi
 cat >&2 <<EOF
 
 Next steps:
-  1. Register with Claude Code:
-       claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- $BIN_NAME
-     (self-managed GitLab: add  --env GITLAB_URL=https://gitlab.example.com)
+  1. Write the token where the server reads it, then register with Claude Code:
+       echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+       chmod 600 ~/.gitlab-mcp-server.env
+       claude mcp add gitlab -- $BIN_NAME
+     (self-managed GitLab: add  GITLAB_URL=https://gitlab.example.com  to that file)
+     Nothing names the token on the command line, so it stays out of the process
+     arguments and out of the client's own configuration file.
   2. Or configure another MCP client by hand:
        https://jmrp.io/docs/gitlab-mcp-server/configuration/
 
