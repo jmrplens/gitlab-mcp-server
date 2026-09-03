@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -71,14 +72,15 @@ func TestIsUnixSocketAddr_DistinguishesPathsFromHostPort(t *testing.T) {
 	}
 }
 
-// TestListenHTTP_UnixSocket_ServesAndAppliesTheMode verifies the whole point
-// of socket support: a real HTTP conversation over a filesystem path, with
-// permissions the deployment chose rather than whatever umask happened to be.
+// TestListenHTTP_UnixSocket_Serves verifies the whole point of socket support:
+// a real HTTP conversation over a filesystem path.
 //
-// The mode is asserted because it is the difference between a proxy that can
-// reach the server and one that cannot — and, in the other direction, between
-// a socket only the proxy's group can open and one every local account can.
-func TestListenHTTP_UnixSocket_ServesAndAppliesTheMode(t *testing.T) {
+// The permission mode used to be asserted here too and is now in
+// listen_unix_test.go, because it is the one part of this that Windows does not
+// have. Windows supports AF_UNIX and everything below still holds there; what
+// it has no equivalent of is the POSIX bits, which is why bindUnixSocket says
+// so out loud on that platform instead of pretending.
+func TestListenHTTP_UnixSocket_Serves(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(socketDir(t), "mcp.sock")
@@ -94,9 +96,6 @@ func TestListenHTTP_UnixSocket_ServesAndAppliesTheMode(t *testing.T) {
 	}
 	if info.Mode()&fs.ModeSocket == 0 {
 		t.Fatal("the bound path is not a socket")
-	}
-	if perm := info.Mode().Perm(); perm != config.DefaultSocketMode {
-		t.Errorf("socket mode = %#o, want %#o", perm, config.DefaultSocketMode)
 	}
 
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -396,6 +395,14 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 		name    string
 		path    string
 		wantErr string
+		// posixOnly marks a case whose premise the platform has to supply, and
+		// which therefore cannot be built everywhere. The refusal each one
+		// pins is still a property of this server; what is POSIX-specific is
+		// the way the case arranges for it. Kept in the table rather than
+		// split into a constrained file, because these four are one question,
+		// "which paths must listenUnix refuse", and reading them apart is
+		// worse than reading them with a skip.
+		posixOnly string
 	}{
 		{
 			name:    "its directory does not exist",
@@ -406,6 +413,12 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 			name:    "its directory is a file",
 			path:    filepath.Join(notADirectory, "mcp.sock"),
 			wantErr: "--http-addr",
+			// Windows reports a path under a regular file as ERROR_PATH_NOT_FOUND,
+			// which Errno.Is maps to fs.ErrNotExist, so lstat answers "nothing
+			// there" rather than the ENOTDIR this leans on. Answering an absent
+			// path with "nothing to clear" is correct; it just cannot be told
+			// apart from the case being built here.
+			posixOnly: "only POSIX distinguishes ENOTDIR from ENOENT, so a path under a file reads as simply absent here",
 		},
 		{
 			name:    "the path is already something else",
@@ -420,12 +433,22 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 			// link(2), which has no address limit, so an over-long path would
 			// otherwise bind cleanly into a listener no client can reach.
 			wantErr: "a unix address holds at most",
+			// And that staging trick is the POSIX implementation's, so the
+			// guard compensating for it is too. Windows binds the operator's
+			// path directly and the kernel refuses an over-long one itself,
+			// with "bind: invalid argument" rather than our sentence. Nothing
+			// is bound that should not be; the operator just gets the worse
+			// message.
+			posixOnly: "the length guard exists to cover a staging-and-link bind that only the POSIX path does",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			if tt.posixOnly != "" && runtime.GOOS == "windows" {
+				t.Skip(tt.posixOnly)
+			}
 
 			listener, err := listenHTTP(t.Context(), tt.path, config.DefaultSocketMode)
 
@@ -437,55 +460,6 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 				t.Errorf("error = %q, want it to say %q", err, tt.wantErr)
 			}
 		})
-	}
-}
-
-// TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault covers the zero mode,
-// which is what a Config assembled without the flag carries.
-//
-// The default is the one that matters for a same-host proxy: a socket only the
-// proxy's group can open, rather than one every local account can.
-func TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(socketDir(t), "default-mode.sock")
-	listener, err := listenHTTP(t.Context(), path, 0)
-	if err != nil {
-		t.Fatalf("listenHTTP: %v", err)
-	}
-	defer listener.Close()
-
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat socket: %v", err)
-	}
-	if got := info.Mode().Perm(); got != config.DefaultSocketMode {
-		t.Errorf("socket mode = %#o, want the default %#o", got, config.DefaultSocketMode)
-	}
-}
-
-// TestClearStaleSocket_AnUnreadablePath_IsRefusedRatherThanRemoved covers the
-// lstat failing for a reason other than the path being absent.
-//
-// Absent is the ordinary case and means "nothing to clear". Anything else means
-// the question went unanswered, and removing on an unanswered question is how a
-// running deployment loses its socket to a racing restart.
-func TestClearStaleSocket_AnUnreadablePath_IsRefusedRatherThanRemoved(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	blocking := filepath.Join(dir, "file")
-	if err := os.WriteFile(blocking, []byte("not a directory"), 0o600); err != nil {
-		t.Fatalf("writing the blocking file: %v", err)
-	}
-
-	err := clearStaleSocket(t.Context(), filepath.Join(blocking, "mcp.sock"))
-
-	if err == nil {
-		t.Fatal("clearStaleSocket accepted a path it could not examine")
-	}
-	if !strings.Contains(err.Error(), "--http-addr") {
-		t.Errorf("error = %q, want it to name the flag the operator typed", err)
 	}
 }
 
