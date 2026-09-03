@@ -1000,9 +1000,11 @@ func TestAllowedLocalDirs_SaysWhyTheHomeRootWasDropped(t *testing.T) {
 		DownloadDirAllowlistEnv,
 		ImportArchiveAllowlistEnv,
 	} {
-		if !strings.Contains(logged, want) {
-			t.Errorf("warning = %q, want it to mention %q", logged, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(logged, want) {
+				t.Errorf("warning = %q, want it to mention %q", logged, want)
+			}
+		})
 	}
 	if lines := strings.Count(strings.TrimSpace(logged), "\n") + 1; lines != 1 {
 		t.Errorf("warning lines = %d, want exactly 1 for two allowlist lookups: %s", lines, logged)

@@ -260,9 +260,11 @@ func TestCredentialSafeRedirect_RecordsTheHopThatLostTheHeaders(t *testing.T) {
 	})
 	t.Run("carries no credential value and no signed URL", func(t *testing.T) {
 		for _, secret := range []string{"glpat-test", "gloas-test", "job-test", "X-Amz-Signature", "deadbeefsignature"} {
-			if strings.Contains(buf.String(), secret) {
-				t.Errorf("log record leaked %q: %s", secret, buf.String())
-			}
+			t.Run(secret, func(t *testing.T) {
+				if strings.Contains(buf.String(), secret) {
+					t.Errorf("log record leaked %q: %s", secret, buf.String())
+				}
+			})
 		}
 	})
 }
