@@ -459,20 +459,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,021 |     215,449 |
-| Unit tests (`_test.go`)  |       593 |     353,521 |
+| Source (`.go`, non-test) |     1,021 |     215,458 |
+| Unit tests (`_test.go`)  |       593 |     353,662 |
 | End-to-end tests         |       215 |      58,596 |
-| **Total**                | **1,829** | **627,566** |
+| **Total**                | **1,829** | **627,716** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,112 |
+| Source functions                |  8,113 |
 | . Exported (public)             |  2,752 |
-| . Unexported (private)          |  5,360 |
-| Unit test functions (`TestXxx`) | 12,730 |
-| Subtests (`t.Run(...)`)         |  4,648 |
+| . Unexported (private)          |  5,361 |
+| Unit test functions (`TestXxx`) | 12,736 |
+| Subtests (`t.Run(...)`)         |  4,649 |
 | End-to-end test functions       |    552 |
 
 ### Ratios worth noting
@@ -482,14 +482,14 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.64× more tests than code |
 | Average source file length         |                 ~211 lines |
 | Average test file length           |                 ~596 lines |
-| Comment lines in source            |  31,043 (~14.4% of source) |
+| Comment lines in source            |  31,046 (~14.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,843 |
+| `if err != nil` checks             | 6,845 |
 | `defer` statements                 | 1,106 |
 | `struct` types defined             | 2,797 |
 | `//nolint` suppressions            |   259 |
