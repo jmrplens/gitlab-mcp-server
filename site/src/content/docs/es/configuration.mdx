@@ -241,21 +241,18 @@ Crea `.cursor/mcp.json` en tu proyecto:
 </TabItem>
 <TabItem label="Claude Code">
 
+Escribe el token donde el servidor lo lee y registra después el comando:
+
 ```bash
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
+chmod 600 ~/.gitlab-mcp-server.env
+
 claude mcp add gitlab \
   --transport stdio \
   -- /ruta/a/gitlab-mcp-server
 ```
 
-Establece las variables de entorno antes de iniciar:
-
-```bash
-export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
-```
-
-Establece `GITLAB_URL` aquí solo para instancias autogestionadas.
-
-O ponlas en `~/.gitlab-mcp-server.env`, que el servidor lee para los valores que su entorno no traiga ya.
+Añade `GITLAB_URL=https://gitlab.example.com` a ese mismo archivo solo para instancias autogestionadas. El comando de registro no nombra ningún token, así que nada lo pone en `argv` ni en el propio archivo de configuración de Claude Code.
 
 </TabItem>
 <TabItem label="Continue">

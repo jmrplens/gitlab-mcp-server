@@ -51,7 +51,7 @@ head:
             "@type": "HowToStep",
             "position": 3,
             "name": "Registrar el servidor en tu cliente MCP",
-            "text": "Añade el servidor a la configuración MCP de tu cliente con GITLAB_TOKEN en su entorno. En Claude Code todo el paso es un solo comando: claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server. Para una instancia autogestionada pasa también GITLAB_URL, y GITLAB_SKIP_TLS_VERIFY=true si usa certificados autofirmados. Para mantener el token fuera de los archivos JSON del cliente, pon GITLAB_URL y GITLAB_TOKEN en ~/.gitlab-mcp-server.env, que el servidor lee cuando no los tiene ya en su entorno.",
+            "text": "Pon GITLAB_TOKEN en ~/.gitlab-mcp-server.env, que el servidor lee para los valores que no tiene ya en su entorno, y registra después el servidor sin nombrar el token. En Claude Code todo el paso es claude mcp add gitlab -- gitlab-mcp-server. Para una instancia autogestionada añade GITLAB_URL al mismo archivo, y GITLAB_SKIP_TLS_VERIFY=true si usa certificados autofirmados. Docker es la única excepción: un contenedor tiene su propio sistema de archivos y nunca lee ese archivo, así que exporta GITLAB_TOKEN donde lances el cliente y deja que el -e GITLAB_TOKEN del comando docker run lo reenvíe.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#configuración-manual"
           },
           {
@@ -137,11 +137,19 @@ Todos los botones ejecutan la imagen del contenedor; la página [Docker](/gitlab
 Docker (sin instalar nada — descarga la imagen en la primera ejecución):
 
 ```bash
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+export GITLAB_TOKEN=glpat-xxxx
+claude mcp add gitlab --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-Cualquier otro canal se registra igual en cuanto `gitlab-mcp-server` está en tu PATH: `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`.
+El comando de registro nunca lleva el token. `-e GITLAB_TOKEN` sin valor reenvía la variable desde el entorno que Claude Code le da a `docker`, así que expórtala donde lances el cliente (tu perfil de shell lo hace duradero) o añádela después al bloque `env` de la entrada.
+
+Cualquier otro canal se registra igual en cuanto `gitlab-mcp-server` está en tu PATH, y ahí el token va en un archivo que el servidor lee:
+
+```bash
+echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+claude mcp add gitlab -- gitlab-mcp-server
+```
 
 <LinkCard
   title="Docker"
@@ -211,7 +219,8 @@ Instala el binario en tu PATH y lo registra. Las actualizaciones vienen de lo qu
 # Linux/macOS (script; comprueba el SHA-256 contra checksums.txt antes de instalar)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+claude mcp add gitlab -- gitlab-mcp-server
 ```
 
 Homebrew, winget y el instalador de PowerShell dejan el mismo binario en tu PATH; cada uno tiene su propia página con el comando, dónde queda el binario y cómo actualizarlo y desinstalarlo:
@@ -234,7 +243,7 @@ Homebrew, winget y el instalador de PowerShell dejan el mismo binario en tu PATH
   />
 </CardGrid>
 
-¿GitLab autoalojado? Añade `--env GITLAB_URL=https://gitlab.example.com` (y `--env GITLAB_SKIP_TLS_VERIFY=true` para certificados autofirmados).
+¿GitLab autoalojado? Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo (y `GITLAB_SKIP_TLS_VERIFY=true` para certificados autofirmados), un `CLAVE=valor` por línea.
 
 ### Pruébalo sin instalar nada (endpoint alojado)
 
@@ -304,7 +313,7 @@ No hay asistente de configuración. La configuración MCP va en el propio archiv
 Ejecutar el binario en una terminal sin `GITLAB_TOKEN` ni `GITLAB_URL` definidos, o hacer doble clic sobre él, imprime qué es el servidor, los dos valores que necesita y dónde está documentado el JSON de cada cliente, y después espera a que pulses Enter para que una ventana abierta con doble clic en Windows no se cierre antes de que puedas leerla. Un cliente MCP nunca ve esa pantalla: un cliente conecta tuberías en lugar de una terminal, así que el servidor arranca con normalidad.
 
 :::tip[Mantener el token fuera del JSON del cliente]
-El servidor sigue leyendo `~/.gitlab-mcp-server.env` para los valores que no tenga ya en su entorno, un `CLAVE=valor` por línea. Escríbelo tú y deja `env` fuera de la configuración del cliente:
+Es el archivo en el que escribe cada comando de registro de esta página. El servidor lee `~/.gitlab-mcp-server.env` para los valores que no tenga ya en su entorno, un `CLAVE=valor` por línea, así que nada necesita un bloque `env` en la configuración del cliente:
 
 ```bash
 GITLAB_URL=https://gitlab.com
@@ -436,21 +445,18 @@ Crea o edita `.cursor/mcp.json` en la raíz de tu proyecto:
 </TabItem>
 <TabItem label="Claude Code">
 
-Añade el servidor usando la CLI:
+Escribe el token donde el servidor lo lee y añade después el servidor usando la CLI:
 
 ```bash
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
+chmod 600 ~/.gitlab-mcp-server.env
+
 claude mcp add gitlab \
   --transport stdio \
   -- /ruta/a/gitlab-mcp-server
 ```
 
-Luego establece el token requerido:
-
-```bash
-export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
-```
-
-Establece `GITLAB_URL` aquí solo para instancias autogestionadas, o pon las variables anteriores en `~/.gitlab-mcp-server.env`.
+Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo para una instancia autogestionada. Nada nombra el token en la línea de comandos, así que queda fuera de `argv` y fuera del propio archivo de configuración de Claude Code.
 
 </TabItem>
 <TabItem label="Windsurf">

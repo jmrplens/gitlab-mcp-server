@@ -56,7 +56,14 @@ The alias is on PATH, so the bare command works once your client has been restar
 }
 ```
 
-If a client still cannot find it, use the full path that `(Get-Command gitlab-mcp-server).Source` prints, with the backslashes doubled in JSON. Add `"GITLAB_URL": "https://gitlab.example.com"` to `env` for a self-managed instance. With Claude Code the step is `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`, unchanged from every other channel. The per-client tabs are on the [Quick Start](/gitlab-mcp-server/getting-started/#manual-configuration).
+If a client still cannot find it, use the full path that `(Get-Command gitlab-mcp-server).Source` prints, with the backslashes doubled in JSON. Add `"GITLAB_URL": "https://gitlab.example.com"` to `env` for a self-managed instance. With Claude Code the step is `claude mcp add gitlab -- gitlab-mcp-server`, unchanged from every other channel, and the token goes in `%USERPROFILE%\.gitlab-mcp-server.env` (the `~/.gitlab-mcp-server.env` of the other pages) rather than on that command line:
+
+```powershell
+Set-Content -Path "$env:USERPROFILE\.gitlab-mcp-server.env" -Value 'GITLAB_TOKEN=glpat-xxxx'
+claude mcp add gitlab -- gitlab-mcp-server
+```
+
+The per-client tabs are on the [Quick Start](/gitlab-mcp-server/getting-started/#manual-configuration).
 
 ## Upgrade and uninstall
 

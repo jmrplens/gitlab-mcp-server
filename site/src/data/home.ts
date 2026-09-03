@@ -88,8 +88,8 @@ export interface HomeContent {
 	start: { title: string; lead: string; steps: Step[] };
 }
 
-const INSTALL = `claude mcp add gitlab --env GITLAB_URL=https://gitlab.example.com \\
-  --env GITLAB_TOKEN=glpat-xxxx --transport stdio \\
+const INSTALL = `export GITLAB_TOKEN=glpat-xxxx
+claude mcp add gitlab --env GITLAB_URL=https://gitlab.example.com --transport stdio \\
   -- docker run -i --rm -e GITLAB_URL -e GITLAB_TOKEN \\
   ghcr.io/jmrplens/gitlab-mcp-server:latest`;
 
@@ -144,7 +144,7 @@ export const en: HomeContent = {
 		lead: "One command to connect it, plain sentences after that.",
 		installTitle: "Connect it to Claude Code",
 		installNote:
-			"Docker keeps it zero-install; a native binary works the same way. Other clients take the same server over stdio or HTTP.",
+			"Docker keeps it zero-install; a native binary works the same way. The token is never on the registration command line: the container reads it from the environment, and a native binary also reads ~/.gitlab-mcp-server.env. Other clients take the same server over stdio or HTTP.",
 		install: INSTALL,
 		promptsTitle: "Then just ask",
 		promptsNote:
@@ -209,7 +209,7 @@ export const en: HomeContent = {
 			},
 			{
 				title: "Point it at GitLab",
-				body: "A personal access token and your instance URL are the whole configuration. Both go in your MCP client's own JSON.",
+				body: "A personal access token and your instance URL are the whole configuration. Both go in ~/.gitlab-mcp-server.env, which the server reads for what its environment does not already carry.",
 				code: "GITLAB_URL=https://gitlab.example.com\nGITLAB_TOKEN=glpat-xxxx",
 				href: "/gitlab-mcp-server/configuration/",
 				linkText: "Client configuration",
@@ -276,7 +276,7 @@ export const es: HomeContent = {
 		lead: "Un comando para conectarlo; frases normales después.",
 		installTitle: "Conéctalo a Claude Code",
 		installNote:
-			"Docker lo deja en cero instalación; un binario nativo funciona igual. Otros clientes usan el mismo servidor por stdio o HTTP.",
+			"Docker lo deja en cero instalación; un binario nativo funciona igual. El token nunca va en la línea de registro: el contenedor lo toma del entorno, y un binario nativo además lee ~/.gitlab-mcp-server.env. Otros clientes usan el mismo servidor por stdio o HTTP.",
 		install: INSTALL,
 		promptsTitle: "Y después, solo pide",
 		promptsNote:
@@ -341,7 +341,7 @@ export const es: HomeContent = {
 			},
 			{
 				title: "Apúntalo a GitLab",
-				body: "Un token de acceso personal y la URL de tu instancia son toda la configuración. Ambos van en el propio JSON de tu cliente MCP.",
+				body: "Un token de acceso personal y la URL de tu instancia son toda la configuración. Ambos van en ~/.gitlab-mcp-server.env, que el servidor lee para lo que su entorno no traiga ya.",
 				code: "GITLAB_URL=https://gitlab.example.com\nGITLAB_TOKEN=glpat-xxxx",
 				href: "/gitlab-mcp-server/es/configuration/",
 				linkText: "Configuración del cliente",

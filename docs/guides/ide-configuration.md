@@ -276,19 +276,18 @@ Claude Desktop supports remote MCP servers with OAuth via the **Custom Connector
 
 ### Stdio Mode
 
+Write the token where the server reads it, then register the command:
+
 ```bash
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
+chmod 600 ~/.gitlab-mcp-server.env
+
 claude mcp add gitlab \
   --transport stdio \
   -- /path/to/gitlab-mcp-server
 ```
 
-Set environment variables before launching:
-
-```bash
-export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
-```
-
-Set `GITLAB_URL` here only for self-managed instances.
+Add `GITLAB_URL=https://gitlab.example.com` to that same file only for self-managed instances. The registration command names no token, so nothing puts it in `argv` or in Claude Code's own configuration file.
 
 ### HTTP OAuth Mode
 

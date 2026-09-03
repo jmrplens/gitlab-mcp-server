@@ -41,7 +41,7 @@ Homebrew installs into its prefix: `/opt/homebrew` on Apple Silicon, `/usr/local
 }
 ```
 
-Replace the command with your prefix if it is not `/opt/homebrew`, and add `"GITLAB_URL": "https://gitlab.example.com"` to `env` for a self-managed instance. With Claude Code the step is `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`. The per-client tabs are on the [Quick Start](/gitlab-mcp-server/getting-started/#manual-configuration).
+Replace the command with your prefix if it is not `/opt/homebrew`, and add `"GITLAB_URL": "https://gitlab.example.com"` to `env` for a self-managed instance. With Claude Code the token goes in `~/.gitlab-mcp-server.env`, which the server reads itself, and the registration names it nowhere: `echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env` then `claude mcp add gitlab -- gitlab-mcp-server`. The per-client tabs are on the [Quick Start](/gitlab-mcp-server/getting-started/#manual-configuration).
 
 ## Upgrade and uninstall
 

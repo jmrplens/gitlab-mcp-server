@@ -171,7 +171,14 @@ La entrada stdio mínima es la ruta al binario y el token. Añade `GITLAB_URL` a
 }
 ```
 
-Con Claude Code el paso entero es un comando, `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server` (añade `--env GITLAB_URL=https://gitlab.example.com` para GitLab autoalojado). Las pestañas por cliente, incluido el mapa `servers` de VS Code con la petición enmascarada del token, están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
+Con Claude Code el registro en sí es un comando que no nombra ningún token, `claude mcp add gitlab -- gitlab-mcp-server`, porque el servidor lee `~/.gitlab-mcp-server.env` para lo que no tenga ya en su entorno:
+
+```bash
+echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+claude mcp add gitlab -- gitlab-mcp-server
+```
+
+Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo para GitLab autoalojado. Las pestañas por cliente, incluido el mapa `servers` de VS Code con la petición enmascarada del token, están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
 
 ## Actualizar y desinstalar
 

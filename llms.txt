@@ -34,7 +34,7 @@ Without Docker: use `npx` as `command` with `args` `["-y", "@jmrp.io/gitlab-mcp-
 
 Native binary instead: download the release asset for the user's OS and architecture (`gitlab-mcp-server-<os>-<arch>`, with `.exe` on Windows) from the Releases page, then use its path as `command` with no `args` and the same `env`.
 
-Claude Code (CLI): `claude mcp add gitlab --env GITLAB_TOKEN=<token> --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest` (Docker), or `claude mcp add gitlab --env GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).
+Claude Code (CLI): the registration command never carries the token. Docker: export `GITLAB_TOKEN` in the shell that launches the client, then `claude mcp add gitlab --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest`, where `-e GITLAB_TOKEN` with no value forwards the variable from the environment Claude Code hands `docker`. Native binary: write `GITLAB_TOKEN=<token>` to `~/.gitlab-mcp-server.env`, which the server reads for values its environment does not already carry, then `claude mcp add gitlab -- gitlab-mcp-server`. Do not suggest `--env GITLAB_TOKEN=<token>`: a shell expands before exec, so the value lands in the process arguments either way, and `claude mcp add` persists whatever it is given into its own configuration file.
 
 One Docker caveat, for images tagged v2.7.5 or earlier only: those default to HTTP and hang at `initialize` when a client speaks stdio to them. Append `--http=false` after the image name for such a tag. Later images infer the transport from stdin, so `docker run -i` is enough and no extra argument is needed.
 

@@ -56,7 +56,14 @@ El alias está en el PATH, así que el comando a secas funciona una vez has rein
 }
 ```
 
-Si un cliente sigue sin encontrarlo, usa la ruta completa que imprime `(Get-Command gitlab-mcp-server).Source`, con las barras invertidas duplicadas en el JSON. Añade `"GITLAB_URL": "https://gitlab.example.com"` a `env` para una instancia autogestionada. Con Claude Code el paso es `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`, idéntico al del resto de canales. Las pestañas por cliente están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
+Si un cliente sigue sin encontrarlo, usa la ruta completa que imprime `(Get-Command gitlab-mcp-server).Source`, con las barras invertidas duplicadas en el JSON. Añade `"GITLAB_URL": "https://gitlab.example.com"` a `env` para una instancia autogestionada. Con Claude Code el paso es `claude mcp add gitlab -- gitlab-mcp-server`, idéntico al del resto de canales, y el token va en `%USERPROFILE%\.gitlab-mcp-server.env` (el `~/.gitlab-mcp-server.env` de las demás páginas) en lugar de en esa línea de comandos:
+
+```powershell
+Set-Content -Path "$env:USERPROFILE\.gitlab-mcp-server.env" -Value 'GITLAB_TOKEN=glpat-xxxx'
+claude mcp add gitlab -- gitlab-mcp-server
+```
+
+Las pestañas por cliente están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
 
 ## Actualizar y desinstalar
 

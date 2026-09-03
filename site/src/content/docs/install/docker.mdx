@@ -18,12 +18,15 @@ Its entrypoint is `gitlab-mcp-server` and its default command is `--transport au
 docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-`-e GITLAB_TOKEN` with no value forwards the variable from the environment the client gives `docker`, so the token lives in the client's `env` block rather than on the command line. Docker pulls the image on the first run. The client entry that launches this command is under [Configure your client](#configure-your-client) below; with Claude Code it is one line:
+`-e GITLAB_TOKEN` with no value forwards the variable from the environment the client gives `docker`, so the token lives in the client's `env` block rather than on the command line. Docker pulls the image on the first run. The client entry that launches this command is under [Configure your client](#configure-your-client) below; with Claude Code the registration is the same command line, and it carries no token either:
 
 ```bash
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+export GITLAB_TOKEN=glpat-xxxx
+claude mcp add gitlab --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
+
+Claude Code hands its own environment to `docker`, which is where `-e GITLAB_TOKEN` picks the value up, so export it in the shell you launch the client from (your shell profile makes that durable) or add it to the entry's `env` block afterwards. A container has its own filesystem and never reads `~/.gitlab-mcp-server.env`, which is how every other channel supplies the token; forwarding is the container's equivalent.
 
 The one-click buttons for VS Code, Cursor, LM Studio and Kiro on the [Quick Start](/gitlab-mcp-server/getting-started/#one-click-buttons) register exactly this entry, and the [Agent Plugins](/gitlab-mcp-server/install/agent-plugin/) manifest runs it too.
 

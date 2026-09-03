@@ -51,7 +51,7 @@ head:
             "@type": "HowToStep",
             "position": 3,
             "name": "Register the server with your MCP client",
-            "text": "Add the server to your client's MCP configuration with GITLAB_TOKEN in its environment. For Claude Code the whole step is one command: claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server. For a self-managed instance also pass GITLAB_URL, plus GITLAB_SKIP_TLS_VERIFY=true for self-signed certificates. To keep the token out of client JSON files, put GITLAB_URL and GITLAB_TOKEN in ~/.gitlab-mcp-server.env instead, which the server reads when they are not already in its environment.",
+            "text": "Put GITLAB_TOKEN in ~/.gitlab-mcp-server.env, which the server reads for values it does not already have in its environment, then register the server without naming the token. For Claude Code the whole step is claude mcp add gitlab -- gitlab-mcp-server. For a self-managed instance add GITLAB_URL to the same file, plus GITLAB_SKIP_TLS_VERIFY=true for self-signed certificates. Docker is the one exception: a container has its own filesystem and never reads that file, so export GITLAB_TOKEN where you launch the client and let the -e GITLAB_TOKEN in the docker run command forward it.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#manual-configuration"
           },
           {
@@ -136,11 +136,19 @@ Every button runs the container image; the [Docker](/gitlab-mcp-server/install/d
 Docker (no install — pulls the image on first run):
 
 ```bash
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+export GITLAB_TOKEN=glpat-xxxx
+claude mcp add gitlab --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-Any other channel registers the same way once `gitlab-mcp-server` is on your PATH: `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`.
+The registration command never carries the token. `-e GITLAB_TOKEN` with no value forwards the variable from the environment Claude Code hands `docker`, so export it where you launch the client (your shell profile makes that durable) or add it to the entry's `env` block afterwards.
+
+Any other channel registers the same way once `gitlab-mcp-server` is on your PATH, and there the token goes in a file the server reads instead:
+
+```bash
+echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+claude mcp add gitlab -- gitlab-mcp-server
+```
 
 <LinkCard
   title="Docker"
@@ -210,7 +218,8 @@ Installs the binary onto your PATH, then registers it. Updates come from whateve
 # Linux/macOS (script; verifies the SHA-256 against checksums.txt before installing)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 
-claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+claude mcp add gitlab -- gitlab-mcp-server
 ```
 
 Homebrew, winget and the PowerShell installer put the same binary on your PATH; each has its own page with the command, where the binary lands, and how to upgrade and uninstall:
@@ -233,7 +242,7 @@ Homebrew, winget and the PowerShell installer put the same binary on your PATH; 
   />
 </CardGrid>
 
-Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs).
+Self-managed GitLab? Add `GITLAB_URL=https://gitlab.example.com` to the same file (and `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs), one `KEY=value` per line.
 
 ### Try it without installing anything (hosted endpoint)
 
@@ -303,7 +312,7 @@ There is no setup wizard. MCP configuration belongs in your client's own JSON fi
 Running the binary in a terminal with neither `GITLAB_TOKEN` nor `GITLAB_URL` set, or double-clicking it, prints what the server is, the two values it needs, and where the per-client JSON is documented, then waits for Enter so a double-clicked window on Windows does not close before you can read it. An MCP client never sees that screen: a client connects pipes rather than a terminal, so the server starts normally.
 
 :::tip[Keeping the token out of client JSON]
-The server still reads `~/.gitlab-mcp-server.env` for values it does not already have in its environment, one `KEY=value` per line. Write it yourself and leave `env` out of the client configuration:
+This is the file every registration command on this page writes to. The server reads `~/.gitlab-mcp-server.env` for values it does not already have in its environment, one `KEY=value` per line, so nothing needs an `env` block in the client configuration:
 
 ```bash
 GITLAB_URL=https://gitlab.com
@@ -435,21 +444,18 @@ Create or edit `.cursor/mcp.json` in your project root:
 </TabItem>
 <TabItem label="Claude Code">
 
-Add the server using the CLI:
+Write the token where the server reads it, then add the server using the CLI:
 
 ```bash
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
+chmod 600 ~/.gitlab-mcp-server.env
+
 claude mcp add gitlab \
   --transport stdio \
   -- /path/to/gitlab-mcp-server
 ```
 
-Then set the required token:
-
-```bash
-export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
-```
-
-Set `GITLAB_URL` here only for self-managed instances, or put the variables above in `~/.gitlab-mcp-server.env`.
+Add `GITLAB_URL=https://gitlab.example.com` to the same file for a self-managed instance. Nothing names the token on the command line, so it stays out of `argv` and out of Claude Code's own configuration file.
 
 </TabItem>
 <TabItem label="Windsurf">
