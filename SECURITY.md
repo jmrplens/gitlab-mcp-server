@@ -207,10 +207,17 @@ which writes rather than reads.
   `GITLAB_MCP_ALLOWED_UPLOAD_DIRS` for reads, `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`
   for writes, and `GITLAB_MCP_ALLOWED_IMPORT_DIRS` for import archives.
 - **The working directory is dropped from the roots when it is the filesystem
-  root.** A stdio server usually starts in the workspace somebody just opened,
-  which is why it is a root at all. Some clients start their servers in `/`,
-  where keeping it would allow-list the whole disk and undo the confinement
-  without saying so.
+  root or the user's home directory.** A stdio server usually starts in the
+  workspace somebody just opened, which is why it is a root at all. Some clients
+  start their servers in `/`, where keeping it would allow-list the whole disk
+  and undo the confinement without saying so. The home directory is the same
+  argument one level down: it holds `~/.ssh`, `~/.aws`, the browser profiles and
+  this server's own `~/.gitlab-mcp-server.env`, so allow-listing it implicitly
+  would put the `GITLAB_TOKEN` the confinement exists to protect within reach of
+  a `file_path`. Both are dropped as *implicit* roots only. An operator whose
+  workspace really is their home directory names it in one of the variables
+  above and gets it back, and the server logs a warning naming that remedy the
+  first time it resolves a caller-supplied path there.
 - **A local path may not be named at all over HTTP.** This is a property of the
   transport rather than a setting. A stdio server shares a machine with the
   person driving it and `file_path` is the point of it; a caller reached over
@@ -262,6 +269,7 @@ from a model that may have read attacker-influenced content.
 
 - Release binaries are built from tagged commits and published via GoReleaser.
 - Checksums (`checksums.txt`) and a Cosign/Sigstore signature bundle (`checksums.txt.sigstore.json`) are attached to every GitHub Release. Verify with [`cosign`](https://docs.sigstore.dev/cosign/installation/) using the keyless GitHub OIDC identity of this repository.
+- Some release-integrity controls are GitHub repository settings rather than files, so no commit or CI gate can apply them. They are tracked as a maintainer checklist in [Repository Settings](docs/development/repository-settings.md).
 
 ## Security Best Practices for Deployment
 

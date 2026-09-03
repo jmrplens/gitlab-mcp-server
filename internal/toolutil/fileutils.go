@@ -272,6 +272,21 @@ func CanonicalLocalDirPath(path string) (string, error) {
 // Call it again after creating the parent directories. The second call
 // resolves a parent that now exists, which is what turns the check from a
 // promise about the path into a check on the directory being written to.
+//
+// An existing regular file is overwritten, deliberately, and there is no
+// caller opt-in to refuse it. The audit that produced the symlink check asked
+// for one, and the trade is not worth taking: an opt-in is a new field on
+// DownloadInput, which is a served input schema, so it lands in the tool
+// snapshots, all three llms artifacts, the token-footprint tables and the
+// per-domain docs. What it buys is bounded by two things that are already
+// true. The destination can only be inside the working directory, the OS
+// temporary directory or a directory the operator allow-listed, so the file at
+// risk is one in the workspace rather than one belonging to the system; and
+// under stdio, which is the only transport where a caller-supplied path is
+// honored at all, whatever is driving this server holds its own filesystem
+// write and can overwrite that same file directly. The opt-in would be one
+// bool plus a regeneration pass if the calculus ever changes, but the residual
+// risk it removes is smaller than the surface it adds.
 func CanonicalDownloadOutputPath(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("output path is required")
@@ -396,18 +411,29 @@ func allowedImportArchiveDirs() []string {
 // path may resolve into: the working directory, the OS temporary directory,
 // and whatever envName lists.
 //
-// The working directory is skipped when it is a filesystem root. A stdio
-// server usually starts in the workspace the user just opened, which is what
-// makes it a sensible root; Claude Desktop starts its servers in "/", where
-// keeping it would allow-list the entire disk and quietly undo the whole
-// containment.
+// The working directory is skipped when it is a filesystem root or the user's
+// home directory. A stdio server usually starts in the workspace the user just
+// opened, which is what makes it a sensible root; Claude Desktop starts its
+// servers in "/", where keeping it would allow-list the entire disk and quietly
+// undo the whole containment. The home directory is the same argument one level
+// down, and it is not hypothetical: it holds ~/.ssh, ~/.aws, the browser
+// profiles, and this server's own ~/.gitlab-mcp-server.env, so implicitly
+// allow-listing it means a file_path naming that file exfiltrates the very
+// GITLAB_TOKEN the containment exists to protect.
+//
+// Skipped as an implicit root, not forbidden: an operator whose workspace
+// really is their home directory names it in envName and gets it back. That is
+// the difference between a default that is safe and a policy that decides for
+// them, and the warning logged the first time a caller-supplied path is
+// resolved there says so rather than leaving a working setup to fail as a
+// puzzling "outside the allowed directories".
 func allowedLocalDirs(envName string) []string {
 	type dirEntry struct {
 		path       string
 		configured bool
 	}
 	dirs := []dirEntry{}
-	if cwd, err := os.Getwd(); err == nil && filepath.Dir(cwd) != cwd {
+	if cwd, err := os.Getwd(); err == nil && filepath.Dir(cwd) != cwd && !skipHomeAsImplicitRoot(cwd) {
 		dirs = append(dirs, dirEntry{path: cwd})
 	}
 	dirs = append(dirs, dirEntry{path: os.TempDir()})
@@ -434,6 +460,47 @@ func allowedLocalDirs(envName string) []string {
 		allowed = append(allowed, canonicalDir)
 	}
 	return allowed
+}
+
+// homeDirWarned keeps the dropped-home-root warning to one line per process.
+// It is emitted from a path a tool call reaches rather than from startup, so
+// without this a session doing many uploads would repeat it on every one.
+var homeDirWarned atomic.Bool
+
+// userHomeDir is [os.UserHomeDir], replaceable in tests.
+var userHomeDir = os.UserHomeDir
+
+// skipHomeAsImplicitRoot reports whether cwd is the user's home directory, and
+// says so once when it is.
+//
+// A false answer whenever the home directory cannot be determined is the safe
+// direction here: it keeps the working directory as a root, which is the
+// behavior every deployment already has, rather than silently narrowing the
+// allow-list on a platform where os.UserHomeDir happens to fail.
+func skipHomeAsImplicitRoot(cwd string) bool {
+	home, err := userHomeDir()
+	if err != nil || home == "" {
+		return false
+	}
+	canonicalHome, err := canonicalDirPath(home)
+	if err != nil {
+		return false
+	}
+	canonicalCWD, err := canonicalDirPath(cwd)
+	if err != nil {
+		canonicalCWD = filepath.Clean(cwd)
+	}
+	if canonicalCWD != canonicalHome {
+		return false
+	}
+	if homeDirWarned.CompareAndSwap(false, true) {
+		slog.Warn("working directory is the home directory, so it is not an implicit allowlist root for caller-supplied paths",
+			"home", canonicalHome,
+			"remedy", "start the server from a project directory, or name the directories you want reachable in "+
+				UploadDirAllowlistEnv+", "+DownloadDirAllowlistEnv+" or "+ImportArchiveAllowlistEnv,
+		)
+	}
+	return true
 }
 
 func canonicalDirPath(dir string) (string, error) {
