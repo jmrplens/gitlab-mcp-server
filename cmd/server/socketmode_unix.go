@@ -47,7 +47,7 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
+	cryptorand "crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -152,6 +152,22 @@ func bindUnixSocket(ctx context.Context, path string, mode os.FileMode) (net.Lis
 // runs on is known to produce.
 var probeUnixSocket = confirmReachable //nolint:gochecknoglobals // test seam
 
+// The system calls this file makes on the staging path, as variables.
+//
+// Every one of them guards a property rather than merely reporting an error: a
+// chmod that did not apply, a stat that cannot confirm what it applied to, a
+// name reservation that did not reserve. None can be made to fail from a test
+// by ordinary means, and leaving them uncovered would mean the checks that
+// exist to catch a hostile or broken filesystem are themselves never exercised.
+// The package already covers this class of branch the same way, through
+// loadTLSKeyPair and buildServerCardFn.
+var (
+	chmodStagedSocket = os.Chmod        //nolint:gochecknoglobals // test seam
+	lstatStagedSocket = os.Lstat        //nolint:gochecknoglobals // test seam
+	mkdirStagingDir   = os.Mkdir        //nolint:gochecknoglobals // test seam
+	readRandomName    = cryptorand.Read //nolint:gochecknoglobals // test seam
+)
+
 // confirmReachable connects to path and hangs up.
 //
 // Publishing with link(2) means the address a client dials is no longer the
@@ -195,14 +211,14 @@ func publishStagedSocket(listener net.Listener, staged, path string, mode os.Fil
 	// this function is about to remove anyway, and never the published one.
 	unixListener.SetUnlinkOnClose(false)
 
-	if err := os.Chmod(staged, mode.Perm()); err != nil {
+	if err := chmodStagedSocket(staged, mode.Perm()); err != nil {
 		return nil, fmt.Errorf("setting the mode of unix socket %q: %w", path, err)
 	}
 	// Verified rather than assumed: a filesystem that ignores the chmod, or
 	// honors only part of it, would leave the socket more open than the
 	// operator asked for. Serving on a socket whose permissions nobody checked
 	// is the failure this whole path exists to avoid.
-	info, err := os.Lstat(staged)
+	info, err := lstatStagedSocket(staged)
 	if err != nil {
 		return nil, fmt.Errorf("checking the mode of unix socket %q: %w", path, err)
 	}
@@ -243,14 +259,14 @@ func newStagingDir(parent string) (string, error) {
 	var lastErr error
 	for range stagingDirAttempts {
 		raw := make([]byte, stagingDirRandomBytes)
-		if _, err := rand.Read(raw); err != nil {
+		if _, err := readRandomName(raw); err != nil {
 			return "", fmt.Errorf("naming a staging directory: %w", err)
 		}
 		dir := filepath.Join(parent, stagingDirPrefix+hex.EncodeToString(raw))
 
 		// mkdir is the reservation: it fails rather than reusing a name
 		// somebody else already holds, so no two binds can share a directory.
-		err := os.Mkdir(dir, stagingDirMode)
+		err := mkdirStagingDir(dir, stagingDirMode)
 		if errors.Is(err, fs.ErrExist) {
 			lastErr = err
 			continue

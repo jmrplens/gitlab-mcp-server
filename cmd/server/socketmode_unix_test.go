@@ -628,3 +628,134 @@ func TestPublishStagedSocket_AListenerThatIsNotUnix_IsRefused(t *testing.T) {
 		t.Errorf("error = %q, want it to say the listener cannot own a path", err)
 	}
 }
+
+// TestPublishStagedSocket_AChmodThatFails_LeavesNothingPublished verifies that
+// a socket whose mode could not be applied never reaches the operator's path.
+//
+// The order matters more than the error: the mode is applied and confirmed
+// BEFORE the link, so a failure here means the path was never created at all,
+// rather than created and then repaired.
+func TestPublishStagedSocket_AChmodThatFails_LeavesNothingPublished(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "published.sock")
+
+	original := chmodStagedSocket
+	t.Cleanup(func() { chmodStagedSocket = original })
+	chmodStagedSocket = func(string, os.FileMode) error {
+		return errors.New("the filesystem refused the mode")
+	}
+
+	_, err := bindUnixSocket(t.Context(), path, 0o660)
+	if err == nil {
+		t.Fatal("bindUnixSocket() published a socket whose mode was never applied")
+	}
+	if _, statErr := os.Lstat(path); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("the path exists after a failed chmod, so a socket with an unknown mode was published")
+	}
+}
+
+// TestPublishStagedSocket_AModeThatDidNotApply_IsRefused verifies the check
+// that exists for a filesystem which accepts a chmod and does not honor it.
+//
+// Reporting success while leaving the socket more open than the operator asked
+// for is the failure this whole file is built to avoid, so the result is
+// confirmed rather than assumed.
+func TestPublishStagedSocket_AModeThatDidNotApply_IsRefused(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wrong-mode.sock")
+
+	originalChmod := chmodStagedSocket
+	originalLstat := lstatStagedSocket
+	t.Cleanup(func() {
+		chmodStagedSocket = originalChmod
+		lstatStagedSocket = originalLstat
+	})
+	// A filesystem that takes the call and does nothing.
+	chmodStagedSocket = func(string, os.FileMode) error { return nil }
+	lstatStagedSocket = func(name string) (os.FileInfo, error) {
+		info, err := os.Lstat(name)
+		if err != nil {
+			return nil, err
+		}
+		return wrongModeInfo{FileInfo: info}, nil
+	}
+
+	_, err := bindUnixSocket(t.Context(), path, 0o660)
+	if err == nil {
+		t.Fatal("bindUnixSocket() served on a socket whose mode it could not confirm")
+	}
+	if !strings.Contains(err.Error(), "refusing to serve on it") {
+		t.Errorf("error = %q, want it to say it is refusing to serve", err)
+	}
+}
+
+// wrongModeInfo reports a mode other than the one on disk, standing in for a
+// filesystem that ignores a chmod.
+type wrongModeInfo struct {
+	os.FileInfo
+}
+
+func (w wrongModeInfo) Mode() os.FileMode {
+	return (w.FileInfo.Mode() &^ os.ModePerm) | 0o777
+}
+
+// TestPublishStagedSocket_AStatThatFails_IsRefused verifies that a mode which
+// cannot be read back is treated as a mode that was not applied.
+func TestPublishStagedSocket_AStatThatFails_IsRefused(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "unstattable.sock")
+
+	original := lstatStagedSocket
+	t.Cleanup(func() { lstatStagedSocket = original })
+	lstatStagedSocket = func(string) (os.FileInfo, error) {
+		return nil, errors.New("the filesystem would not answer")
+	}
+
+	if _, err := bindUnixSocket(t.Context(), path, 0o660); err == nil {
+		t.Fatal("bindUnixSocket() published a socket whose mode it never read back")
+	}
+}
+
+// TestNewStagingDir_NamesAlreadyTaken_AreRetriedAndThenReported verifies the
+// reservation loop.
+//
+// mkdir is the reservation: it fails rather than reusing a name somebody else
+// holds, which is what stops two concurrent binds sharing a directory. A
+// collision must therefore be retried rather than treated as fatal, and a
+// parent that collides every time must be reported rather than looped on.
+func TestNewStagingDir_NamesAlreadyTaken_AreRetriedAndThenReported(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	original := mkdirStagingDir
+	t.Cleanup(func() { mkdirStagingDir = original })
+	attempts := 0
+	mkdirStagingDir = func(string, os.FileMode) error {
+		attempts++
+		return fs.ErrExist
+	}
+
+	_, err := newStagingDir(t.TempDir())
+	if err == nil {
+		t.Fatal("newStagingDir() reported success without ever creating a directory")
+	}
+	if attempts < 2 {
+		t.Errorf("mkdir was called %d time(s); a name collision must be retried, not fatal", attempts)
+	}
+}
+
+// TestNewStagingDir_AnUnnameableDirectory_IsReported covers the one failure
+// that happens before the filesystem is touched at all.
+func TestNewStagingDir_AnUnnameableDirectory_IsReported(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	original := readRandomName
+	t.Cleanup(func() { readRandomName = original })
+	readRandomName = func([]byte) (int, error) {
+		return 0, errors.New("no entropy")
+	}
+
+	if _, err := newStagingDir(t.TempDir()); err == nil {
+		t.Fatal("newStagingDir() named a directory without any randomness")
+	}
+}
