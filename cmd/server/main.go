@@ -1158,7 +1158,18 @@ type serverSurfaceRegistration struct {
 }
 
 // runStdio loads configuration from environment variables (GITLAB_TOKEN
-// required), validates GitLab connectivity, and starts the stdio server.
+// required) and serves the stdio transport, with everything that needs GitLab
+// running alongside a server that is already answering.
+//
+// The order is the whole point. A stdio client has no way to observe that the
+// process is not reading its pipe yet, so it writes initialize the instant it
+// has spawned the binary and writes it again when nothing comes back; the
+// second one is refused as a duplicate and the connection dies. Loading
+// configuration and building the GitLab client are local and cost microseconds,
+// and the server shell needs nothing else, so the transport is connected next.
+// The connectivity probe, the tier detection, the scope detection and the
+// catalog registration then run on their own goroutine behind the readiness
+// gate. See readiness.go.
 func runStdio(ctx context.Context) error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -1170,13 +1181,89 @@ func runStdio(ctx context.Context) error {
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
-	// Clean up leftover .old binary from previous updates.
-
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
 		return fmt.Errorf("creating gitlab client: %w", err)
 	}
 
+	// Serving gets its own cancellable context so a catalog that cannot be
+	// built stops the server, rather than leaving it answering the handshake
+	// and holding every other method forever.
+	serveCtx, stopServing := context.WithCancel(ctx)
+	defer stopServing()
+
+	serverCfg := cfg.ServerConfig()
+	identity := &deferredIdentity{}
+	shell, err := newServerShell(serveCtx, client, serverCfg,
+		withTransport(mcpotel.TransportPipe), withDeferredIdentity(identity))
+	if err != nil {
+		return fmt.Errorf("creating MCP server: %w", err)
+	}
+	logDeprecatedEnvNames()
+
+	var startupErr error
+	startupDone := make(chan struct{})
+	go func() {
+		startupErr = prepareStdioCatalog(serveCtx, client, cfg, serverCfg, shell, identity)
+		// Closed BEFORE serving is cancelled, so the main goroutine always
+		// finds the outcome recorded when serveStdio returns because of it.
+		close(startupDone)
+		if startupErr != nil {
+			slog.ErrorContext(serveCtx, "the tool catalog could not be built", "error", startupErr)
+			stopServing()
+		}
+	}()
+
+	serveErr := serveStdio(serveCtx, shell.server)
+
+	// Serving has ended, so the startup work has nobody left to serve. Cancel
+	// it and wait for it to notice, rather than returning while it runs: a
+	// goroutine that outlives this call keeps making requests to GitLab and
+	// writing to the default logger while the caller is already shutting
+	// telemetry down, and in a test binary it writes into whichever logger the
+	// next test installed. The wait is bounded so a request that never returns
+	// cannot hold the process open, and canceling first is what makes the
+	// common case instant: the remaining work is a catalog build that has
+	// either finished long ago or is a few hundred milliseconds from finishing.
+	stopServing()
+	select {
+	case <-startupDone:
+		// A signal cancels the startup work too, and the error that produces
+		// describes the shutdown rather than anything wrong with this build.
+		if startupErr != nil && ctx.Err() == nil {
+			return startupErr
+		}
+	case <-time.After(stdioStartupDrainTimeout):
+		// startupErr is deliberately not read here: the goroutine may still be
+		// writing it, and nothing downstream acts on a startup outcome that
+		// arrives after the server has already stopped serving.
+		slog.DebugContext(ctx, "startup work had not finished when serving ended",
+			"waited", stdioStartupDrainTimeout)
+	}
+	return serveErr
+}
+
+// stdioStartupDrainTimeout bounds how long a stdio shutdown waits for startup
+// work that is still in flight. It is a backstop against a request that never
+// returns, not a budget: the wait begins by canceling that work, so anything
+// honoring its context is already on its way out.
+const stdioStartupDrainTimeout = 5 * time.Second
+
+// prepareStdioCatalog runs everything stdio startup needs GitLab for, registers
+// the tool catalog, and opens the readiness gate.
+//
+// It runs while the server is already answering the handshake, which is why the
+// identity it resolves is published through a holder instead of being put in
+// the context handed to mcp.Server.Run: that context was taken before any of
+// this had an answer.
+func prepareStdioCatalog(
+	ctx context.Context,
+	client *gitlabclient.Client,
+	cfg *config.Config,
+	serverCfg *config.ServerConfig,
+	shell *serverShell,
+	identity *deferredIdentity,
+) error {
 	slog.InfoContext(ctx, "connecting to gitlab", "url", cfg.GitLabURL, "tls_skip", cfg.SkipTLSVerify)
 	gitlabVersion, err := client.Initialize(ctx)
 	if err != nil {
@@ -1189,10 +1276,12 @@ func runStdio(ctx context.Context) error {
 			slog.WarnContext(ctx, "could not resolve user identity at startup", "error", userErr)
 			slog.InfoContext(ctx, "gitlab connection verified", "url", cfg.GitLabURL, "version", gitlabVersion)
 		} else {
-			ctx = toolutil.IdentityToContext(ctx, toolutil.UserIdentity{
+			resolved := toolutil.UserIdentity{
 				UserID:   strconv.Itoa(userInfo.UserID),
 				Username: userInfo.Username,
-			})
+			}
+			identity.set(resolved)
+			ctx = toolutil.IdentityToContext(ctx, resolved)
 			slog.InfoContext(ctx,
 				"gitlab connection verified",
 				"url", cfg.GitLabURL,
@@ -1206,7 +1295,6 @@ func runStdio(ctx context.Context) error {
 	// Resolve the licensing tier. When the operator pinned it explicitly via
 	// GITLAB_TIER, use it verbatim (no license check). Otherwise detect it from
 	// the instance license, falling back to Free.
-	serverCfg := cfg.ServerConfig()
 	if cfg.TierExplicit || !client.IsInitialized() {
 		client.SetTier(cfg.Tier)
 		serverCfg.Tier = cfg.Tier
@@ -1222,12 +1310,15 @@ func runStdio(ctx context.Context) error {
 		}
 	}
 
-	server, err := createServer(ctx, client, serverCfg, withTransport(mcpotel.TransportPipe))
-	if err != nil {
-		return fmt.Errorf("creating MCP server: %w", err)
+	// serverCfg is only read again from here: the shell copied everything it
+	// needed into its middleware and its server options before this goroutine
+	// started, and nothing else can reach the catalog while the gate is shut.
+	if registerErr := shell.register(ctx); registerErr != nil {
+		return fmt.Errorf("registering the tool catalog: %w", registerErr)
 	}
-	logDeprecatedEnvNames()
-	return serveStdio(ctx, server)
+	shell.gate.markReady()
+	slog.InfoContext(ctx, "tool catalog ready", "transport", "stdio")
+	return nil
 }
 
 // sharedSchemaCache caches resolved tool schemas across every MCP server
@@ -1302,13 +1393,70 @@ func sessionTagOf(sessionID string) (string, bool) {
 
 // The context bounds the server's lifetime rather than any one request: it is
 // what tells the subscription runtime to end its open listen streams, which
-// otherwise keep the process alive through shutdown.
+// otherwise keep the process alive through shutdown, and what releases a
+// request parked behind the readiness gate when the server stops before its
+// catalog is ready.
 func createServer(
 	ctx context.Context,
 	client *gitlabclient.Client,
 	cfg *config.ServerConfig,
 	opts ...serverOption,
 ) (*mcp.Server, error) {
+	shell, err := newServerShell(ctx, client, cfg, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if registerErr := shell.register(ctx); registerErr != nil {
+		return nil, registerErr
+	}
+	// Everything reaching this function wants a finished server: the HTTP pool
+	// builds one per credential before any request can be routed to it, and so
+	// does every test. Only runStdio drives the two halves apart, and only
+	// there does the gate ever have anything to hold back.
+	shell.gate.markReady()
+	return shell.server, nil
+}
+
+// serverShell is a server that can answer the handshake and nothing else yet.
+//
+// Everything the handshake reports comes from configuration: the
+// implementation, the instructions and the capabilities are all decided by the
+// tool surface and the capability surface, so mcp.NewServer needs no network
+// and this half costs microseconds. Everything that needs the instance's tier
+// or the token's scopes is registration, and lives in [serverShell.register].
+//
+// The whole receiving-middleware chain belongs to this half rather than to
+// registration, and that is not a matter of taste. The SDK reads the chain once
+// per request, so a request that arrived before a middleware was added never
+// sees it, and on stdio a request arrives during registration by construction.
+// A tools/list parked in the readiness gate and released into a half-built
+// chain would answer without the input-schema lockdown and without the
+// pagination bounds, both of which shape that very response.
+type serverShell struct {
+	server *mcp.Server
+	client *gitlabclient.Client
+	cfg    *config.ServerConfig
+
+	toolSurface       string
+	capabilitySurface string
+
+	// subs is nil on the minimal capability surface, which registers no
+	// subscribable resource.
+	subs *subscriptionRuntime
+	// gate holds every catalog-dependent method back until register returns.
+	gate *readinessGate
+	// identifier is what telemetry resolves a tools/call against; register
+	// fills it in from the catalog it builds.
+	identifier *deferredCallIdentifier
+}
+
+// newServerShell builds the half of the server that needs nothing from GitLab.
+func newServerShell(
+	ctx context.Context,
+	client *gitlabclient.Client,
+	cfg *config.ServerConfig,
+	opts ...serverOption,
+) (*serverShell, error) {
 	if client == nil {
 		return nil, errors.New("createServer: client must not be nil")
 	}
@@ -1332,6 +1480,14 @@ func createServer(
 	}
 	if capabilitySurface == config.CapabilitySurfaceFull {
 		serverCapabilities.Prompts = &mcp.PromptCapabilities{ListChanged: true}
+	}
+	if subscribeHandler != nil {
+		// Stated here rather than left to the SDK, which sets the same bit but
+		// only once a resource has been registered: Server.capabilities
+		// augments from the registry, and the handshake is now answered while
+		// registration is still in flight. A client told resources cannot be
+		// subscribed to does not ask again.
+		serverCapabilities.Resources.Subscribe = true
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -1398,6 +1554,12 @@ func createServer(
 
 	subs.attach(ctx, server)
 
+	// First, therefore innermost: the SDK wraps the current handler on each
+	// call, so the last middleware added is the one that runs first. See
+	// [readinessGate.middleware] for why the gate wants to act last.
+	gate := newReadinessGate(ctx)
+	server.AddReceivingMiddleware(gate.middleware())
+
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
 	// tier-dependent, so almost every cacheable result is stamped "private".
 	// The prompt catalog is the exception and is stamped "public": it is
@@ -1416,9 +1578,10 @@ func createServer(
 
 	// Operator-defined catalog text substitutions, for MCP gateways whose
 	// validators reject characters this server's descriptions carry
-	// (GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS). In stdio mode createServer runs
-	// at startup, so a parse error here is a startup failure; in HTTP mode
-	// runHTTP already validated the value before the listener came up.
+	// (GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS). In stdio mode this runs before
+	// the transport is connected, so a parse error here is still a startup
+	// failure; in HTTP mode runHTTP already validated the value before the
+	// listener came up.
 	gatewaySubs, substErr := gatewaycompat.FromEnv()
 	if substErr != nil {
 		return nil, substErr
@@ -1440,63 +1603,20 @@ func createServer(
 	}
 	server.AddReceivingMiddleware(capguard.Undeclared(gatedMethods...))
 
-	var metaSchemaRoutes map[string]toolutil.ActionMap
-	var surfaceCatalog *actioncatalog.Catalog
-	if toolSurface != config.ToolSurfaceIndividual {
-		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
-	}
-	surfaceRegistration, err := registerConfiguredToolSurface(server, client, cfg, toolSurface)
-	if err != nil {
-		return nil, err
-	}
-	metaSchemaRoutes = surfaceRegistration.metaSchemaRoutes
-	surfaceCatalog = surfaceRegistration.surfaceCatalog
-
-	applyToolVisibilityConfig(ctx, server, cfg, toolSurface, surfaceCatalog)
-
-	toolCount, err := countRegisteredTools(server)
-	if err != nil {
-		slog.Warn("failed to count registered tools", "error", err)
-	}
-	logRegisteredToolSurface(toolSurface, toolCount, metaSchemaRoutes)
-
-	if toolSurface == config.ToolSurfaceMeta {
-		var routesErr error
-		metaSchemaRoutes, routesErr = visibleMetaSchemaRoutes(server, metaSchemaRoutes)
-		if routesErr != nil {
-			slog.Warn("failed to filter meta-schema routes to visible tools", "error", routesErr)
-		}
-	}
-
-	registerConfiguredCapabilities(server, client, capabilitySurface)
-
 	// Force `additionalProperties: false` on tool input schemas so unknown
 	// properties produce actionable validation errors LLMs can self-correct
-	// rather than silent acceptance with empty values. Registered as a
-	// receiving middleware after every tool/resource/prompt is in place so
-	// it sees the final schema set on every tools/list response.
+	// rather than silent acceptance with empty values. It rewrites the schemas
+	// carried by the first tools/list result, and those are the registered
+	// tools themselves — the SDK hands out the same *mcp.Tool pointers it
+	// holds — so installing it before registration still lands on the final
+	// schema set.
 	toolutil.LockdownInputSchemas(server)
 
 	// Inject JSON Schema numeric bounds on the standard pagination
 	// parameters so LLM clients see `page >= 1` and `1 <= per_page <= 100`
-	// directly in tools/list. Runs after the lockdown so it operates on
-	// the same finalized schema set.
+	// directly in tools/list. Installed after the lockdown so it sits inside
+	// it in the chain and operates on the same finalized schema set.
 	toolutil.EnrichPaginationConstraints(server)
-
-	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
-		slog.Warn("failed to build tool manifest resource", "error", listErr)
-	} else {
-		manifestOpts := resources.ToolSurfaceResourceOptions{
-			Surface:    toolSurface,
-			Tools:      manifestTools,
-			Catalog:    surfaceCatalog,
-			MetaRoutes: metaSchemaRoutes,
-		}
-		if subs != nil {
-			manifestOpts.SubscribableURITemplates = subscriptions.Templates()
-		}
-		resources.RegisterToolSurfaceResources(server, manifestOpts)
-	}
 
 	// Ceiling on concurrent open subscriptions/listen streams. Installed for
 	// every server rather than beside the subscription runtime, because that
@@ -1525,13 +1645,14 @@ func createServer(
 		)
 	}
 
-	// Second to last, so the span covers every middleware above it, and so a
+	// Near the end, so the span covers every middleware above it, and so a
 	// panic reaches this middleware's deferred span.End before recoverPanics
 	// swallows it. That ordering is what lets the SDK record the panic as an
 	// exception event: it recovers inside End, records it, and re-panics. A
 	// recovery running first would leave the span with no explanation.
+	identifier := &deferredCallIdentifier{}
 	telemetryOptions := mcpotel.Options{
-		Identifier: gitlabtools.NewCallIdentifier(surfaceCatalog, toolSurface),
+		Identifier: identifier,
 		Users:      telemetryUsers(),
 		Resources:  telemetryResources(),
 		Surface:    toolSurface,
@@ -1553,10 +1674,88 @@ func createServer(
 	// asking for it.
 	server.AddSendingMiddleware(mcpotel.SendingMiddleware(telemetryOptions))
 
+	// stdio only, and outside the telemetry middleware on purpose: that
+	// middleware resolves the caller from the context it is handed, so an
+	// overlay applied inside it would leave a span recording nobody for a call
+	// whose own log line names someone. See [deferredIdentity].
+	if settings.identity != nil {
+		server.AddReceivingMiddleware(settings.identity.middleware())
+	}
+
 	// Added last so it wraps every middleware above it as well as the handler.
 	server.AddReceivingMiddleware(recoverPanics)
 
-	return server, nil
+	return &serverShell{
+		server:            server,
+		client:            client,
+		cfg:               cfg,
+		toolSurface:       toolSurface,
+		capabilitySurface: capabilitySurface,
+		subs:              subs,
+		gate:              gate,
+		identifier:        identifier,
+	}, nil
+}
+
+// register builds the tool catalog and everything derived from it: the tool
+// surface, the resources and prompts, the gitlab://tools manifest, and the
+// identifier telemetry resolves a call against.
+//
+// This is the slow half, around 1.5 seconds for the dynamic surface, and the
+// reason the shell exists. It does not open the readiness gate: [createServer]
+// does that for every caller that wants a finished server, and runStdio does it
+// once the probes running alongside this have finished too.
+func (sh *serverShell) register(ctx context.Context) error {
+	server, client, cfg := sh.server, sh.client, sh.cfg
+
+	if sh.toolSurface != config.ToolSurfaceIndividual {
+		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
+	}
+	surfaceRegistration, err := registerConfiguredToolSurface(server, client, cfg, sh.toolSurface)
+	if err != nil {
+		return err
+	}
+	metaSchemaRoutes := surfaceRegistration.metaSchemaRoutes
+	surfaceCatalog := surfaceRegistration.surfaceCatalog
+
+	applyToolVisibilityConfig(ctx, server, cfg, sh.toolSurface, surfaceCatalog)
+
+	toolCount, err := countRegisteredTools(server)
+	if err != nil {
+		slog.Warn("failed to count registered tools", "error", err)
+	}
+	logRegisteredToolSurface(sh.toolSurface, toolCount, metaSchemaRoutes)
+
+	if sh.toolSurface == config.ToolSurfaceMeta {
+		var routesErr error
+		metaSchemaRoutes, routesErr = visibleMetaSchemaRoutes(server, metaSchemaRoutes)
+		if routesErr != nil {
+			slog.Warn("failed to filter meta-schema routes to visible tools", "error", routesErr)
+		}
+	}
+
+	registerConfiguredCapabilities(server, client, sh.capabilitySurface)
+
+	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
+		slog.Warn("failed to build tool manifest resource", "error", listErr)
+	} else {
+		manifestOpts := resources.ToolSurfaceResourceOptions{
+			Surface:    sh.toolSurface,
+			Tools:      manifestTools,
+			Catalog:    surfaceCatalog,
+			MetaRoutes: metaSchemaRoutes,
+		}
+		if sh.subs != nil {
+			manifestOpts.SubscribableURITemplates = subscriptions.Templates()
+		}
+		resources.RegisterToolSurfaceResources(server, manifestOpts)
+	}
+
+	// Last, because until it is set a tools/call is unidentified in a trace,
+	// and until the gate opens no tools/call can reach the middleware that
+	// reads it.
+	sh.identifier.set(gitlabtools.NewCallIdentifier(surfaceCatalog, sh.toolSurface))
+	return nil
 }
 
 func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
@@ -3694,7 +3893,11 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	// would take the process and the client's whole context with it. See
 	// [resilientStdio].
 	reader, writer := resilientStdio(os.Stdin, os.Stdout)
-	err := server.Run(ctx, &mcp.IOTransport{Reader: reader, Writer: writer})
+	// This connection, and only this connection, is subject to the readiness
+	// gate: it is the one a client speaks over, and the one that can arrive
+	// before the catalog exists. Everything else this process connects to the
+	// same server is registration inspecting itself. See readiness.go.
+	err := server.Run(withReadinessGate(ctx), &mcp.IOTransport{Reader: reader, Writer: writer})
 	if err == nil {
 		return nil
 	}
