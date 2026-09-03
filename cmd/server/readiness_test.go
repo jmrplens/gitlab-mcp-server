@@ -429,3 +429,59 @@ func TestPoolEntryCost_SplitsShellFromRegistration(t *testing.T) {
 		})
 	}
 }
+
+// TestReadinessGate_MarkFailed_ReleasesWaitersWithAnErrorRatherThanAnEmptyCatalog
+// covers the outcome that only exists on HTTP.
+//
+// Under stdio a failed registration means the process is leaving, so nobody
+// waits long enough to care. Under HTTP the server is one pooled entry among
+// many and the process stays up, which leaves two wrong answers available:
+// holding the parked requests until their own deadline reports a timeout for
+// something that already has a cause, and opening the gate as though all were
+// well answers an empty catalog, which is the single outcome this gate exists
+// to prevent.
+func TestReadinessGate_MarkFailed_ReleasesWaitersWithAnErrorRatherThanAnEmptyCatalog(t *testing.T) {
+	gate := newReadinessGate(t.Context())
+
+	released := make(chan error, 1)
+	go func() { released <- gate.await(t.Context(), "tools/list") }()
+
+	gate.markFailed(errors.New("the catalog could not be built"))
+
+	select {
+	case err := <-released:
+		if err == nil {
+			t.Fatal("await() returned no error after a failed registration, so the caller would be served an empty catalog")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("await() never returned after markFailed; a failure has to reach the requests parked on the gate")
+	}
+
+	if gate.isReady() {
+		t.Error("isReady() is true after a failed registration; the middleware would let requests through to a catalog that is not there")
+	}
+	if gate.failed() == nil {
+		t.Error("failed() reports no cause after markFailed")
+	}
+}
+
+// TestReadinessGate_MarkFailedThenMarkReady_KeepsTheFailure verifies that the
+// two outcomes cannot overwrite each other.
+//
+// Both are called from the same background goroutine on mutually exclusive
+// paths, so this is a guard rather than a live case; it is here because if that
+// ever stops being true, the failure mode is a server reporting itself ready
+// with no tools, which is the hardest possible thing to diagnose from a client.
+func TestReadinessGate_MarkFailedThenMarkReady_KeepsTheFailure(t *testing.T) {
+	gate := newReadinessGate(t.Context())
+
+	gate.markFailed(errors.New("registration failed"))
+	gate.markReady()
+
+	if gate.failed() == nil {
+		t.Error("markReady() erased a recorded failure")
+	}
+	if gate.isReady() {
+		t.Error("isReady() is true for a gate whose registration failed")
+	}
+}
