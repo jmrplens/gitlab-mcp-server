@@ -127,37 +127,29 @@ func TestRunShutdown_NoPeers_SucceedsWithoutTouchingAnything(t *testing.T) {
 func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 	tests := []struct {
 		name string
-		// source is the executable copied under the peer name, and args is how
-		// it is run.
-		source string
-		args   []string
+		// ignoresTerm makes the peer ignore SIGTERM, so the call has to fall
+		// through to the kill.
+		ignoresTerm bool
 		// graceful says the peer stops on SIGTERM, so the call must return
 		// well inside the grace period rather than fall through to the kill.
 		graceful bool
 	}{
-		{name: "a peer that stops on SIGTERM", source: "/bin/sleep", args: []string{"300"}, graceful: true},
-		// A shell running a script that ignores SIGTERM: the process an
-		// operator is really trying to clear when a server is wedged.
-		//
-		// The trailing "exit 0" is load-bearing. Without it, sleep is the last
-		// command of the -c script, and a shell is then free to exec it in
-		// place rather than fork: an ignored signal disposition survives exec,
-		// so the optimization preserves the semantics and is perfectly correct.
-		// What it does not preserve is the process name, and this test finds
-		// its peers by name. On Linux /bin/sh is dash and forks; on macOS it is
-		// bash, which took the shortcut, so both peers reported themselves as
-		// "sleep" and the test saw none of them. Keeping a command after the
-		// sleep leaves the shell resident on every platform.
-		{name: "a peer that ignores SIGTERM", source: "/bin/sh", args: []string{"-c", "trap '' TERM; sleep 300; exit 0"}},
+		{name: "a peer that stops on SIGTERM", graceful: true},
+		// The process an operator is really trying to clear when a server is
+		// wedged.
+		{name: "a peer that ignores SIGTERM", ignoresTerm: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			binary := filepath.Join(t.TempDir(), peerName(t))
-			copyExecutable(t, tt.source, binary)
+			binary := buildPeer(t, filepath.Join(t.TempDir(), peerName(t)))
 			withArgv0(t, binary)
 
-			peers := []*peerProcess{startPeer(t, binary, tt.args...), startPeer(t, binary, tt.args...)}
+			var env []string
+			if tt.ignoresTerm {
+				env = []string{peerIgnoreTermEnv + "=1"}
+			}
+			peers := []*peerProcess{startPeer(t, binary, env), startPeer(t, binary, env)}
 			waitForPeers(t, len(peers))
 
 			started := time.Now()
@@ -198,17 +190,33 @@ func withArgv0(t *testing.T, path string) {
 	t.Cleanup(func() { os.Args[0] = original })
 }
 
-// copyExecutable copies src to dst and makes it runnable, so the child process
-// reports dst's base name as its own.
-func copyExecutable(t *testing.T, src, dst string) {
+// peerIgnoreTermEnv is the variable testdata/peer reads to decide whether to
+// ignore SIGTERM. Declared here rather than imported, because a program under
+// testdata is deliberately not part of any package this one can import.
+const peerIgnoreTermEnv = "PEER_IGNORE_SIGTERM"
+
+// buildPeer compiles testdata/peer to path, so a peer process carries the name
+// findPeers hunts for, and returns path.
+//
+// It builds rather than copying a system binary, which is what this used to do
+// and what does not survive contact with a second platform: /bin/sleep and
+// /bin/sh copied under a new name worked on Linux, and on macOS the shell copy
+// started and never became visible under that name, so the test saw no peers at
+// all. Whatever a platform does with a copy of its own shell, a program built
+// from this repository does the same thing everywhere, and the two cases stop
+// depending on which shell /bin/sh happens to be.
+//
+// It also stops orphaning a process. The shell forked "sleep 300", and
+// runShutdown kills the processes it matched by name rather than their children,
+// so every run of this test left a five-minute sleep behind.
+func buildPeer(t *testing.T, path string) string {
 	t.Helper()
-	data, err := os.ReadFile(src)
-	if err != nil {
-		t.Skipf("no executable to copy for a peer process: %v", err)
+
+	build := exec.CommandContext(t.Context(), "go", "build", "-o", path, "./testdata/peer")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("building the peer binary: %v\n%s", err, out)
 	}
-	if writeErr := os.WriteFile(dst, data, 0o700); writeErr != nil { //nolint:gosec // the copy has to be executable
-		t.Fatalf("writing the peer binary: %v", writeErr)
-	}
+	return path
 }
 
 // peerProcess is one running peer, reaped as soon as it exits.
@@ -234,12 +242,14 @@ func (p *peerProcess) exited(t *testing.T) bool {
 	}
 }
 
-// startPeer runs one peer under the private binary name.
-func startPeer(t *testing.T, binary string, args ...string) *peerProcess {
+// startPeer runs one peer under the private binary name, with env added to the
+// process environment.
+func startPeer(t *testing.T, binary string, env []string) *peerProcess {
 	t.Helper()
-	// The binary is the copy this test just made, in its own temporary
+	// The binary is the one this test just built, in its own temporary
 	// directory.
-	cmd := exec.CommandContext(t.Context(), binary, args...)
+	cmd := exec.CommandContext(t.Context(), binary)
+	cmd.Env = append(os.Environ(), env...)
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting a peer: %v", err)
 	}

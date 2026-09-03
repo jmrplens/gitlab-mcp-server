@@ -49,8 +49,15 @@ func (c *TokenCache) Get(gitlabURL, token string) (*auth.TokenInfo, bool) {
 	}
 
 	if expired(entry.expiresAt) {
+		// Re-read under the write lock before deleting. The read lock was
+		// released above, so a Put that reverified this very token in the
+		// meantime has already stored a live entry, and deleting by key alone
+		// would throw that away and send the next request back to GitLab. This
+		// call still reports a miss, which is what it observed.
 		c.mu.Lock()
-		delete(c.entries, key)
+		if current, stillThere := c.entries[key]; stillThere && expired(current.expiresAt) {
+			delete(c.entries, key)
+		}
 		c.mu.Unlock()
 		return nil, false
 	}
@@ -93,17 +100,22 @@ func (c *TokenCache) Len() int {
 
 // Cleanup removes all expired entries. Intended for periodic maintenance.
 func (c *TokenCache) Cleanup() {
+	// One cutoff for the whole pass, read before the lock. Calling time.Now
+	// per entry would make the sweep's result depend on map iteration order,
+	// and [RejectedTokens.Cleanup] already snapshots for the same reason.
+	now := time.Now()
+
 	c.mu.Lock()
 	for key, entry := range c.entries {
-		if expired(entry.expiresAt) {
+		if expiredAt(now, entry.expiresAt) {
 			delete(c.entries, key)
 		}
 	}
 	c.mu.Unlock()
 }
 
-// expired reports whether a deadline has been reached, counting the instant of
-// the deadline itself as reached.
+// expired reports whether a deadline has been reached as of now, counting the
+// instant of the deadline itself as reached.
 //
 // The obvious spelling, time.Now().After(deadline), keeps an entry alive for
 // one clock tick past its deadline, and a tick is not the same length
@@ -113,7 +125,13 @@ func (c *TokenCache) Cleanup() {
 // (1m to 2h) makes that harmless in a running server and wrong in what the
 // code says, which is enough reason to say the other thing.
 func expired(deadline time.Time) bool {
-	return !time.Now().Before(deadline)
+	return expiredAt(time.Now(), deadline)
+}
+
+// expiredAt is [expired] against a caller-supplied instant, for a sweep that
+// must judge every entry by the same clock reading.
+func expiredAt(now, deadline time.Time) bool {
+	return !now.Before(deadline)
 }
 
 // RunCleanup sweeps expired entries every interval until ctx is done. It blocks,

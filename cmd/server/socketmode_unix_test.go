@@ -232,7 +232,7 @@ func TestBindUnixSocket_RefusesToClobberAnExistingPath(t *testing.T) {
 func TestBindUnixSocket_LeavesConcurrentFileCreationAlone(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := socketDir(t)
 
 	baseline := filepath.Join(dir, "baseline")
 	if err := os.Mkdir(baseline, 0o700); err != nil {
