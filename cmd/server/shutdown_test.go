@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -123,7 +124,22 @@ func TestRunShutdown_NoPeers_SucceedsWithoutTouchingAnything(t *testing.T) {
 // caller replaces the binary next and a surviving process would be writing to a
 // file that no longer exists. A peer that honors SIGTERM must be waited for
 // rather than assumed gone, and one that ignores it must be killed rather than
-// left behind — which is why the second case pays the grace period in full.
+// left behind, which is why the second case pays the grace period in full.
+//
+// Only one of those two phases exists on Windows, so only part of this is
+// assertable there. gopsutil's Terminate is TerminateProcess, which is a kill:
+// a process cannot decline it, cannot run cleanup before it, and cannot be told
+// apart by how long it took to go. The wedged case therefore has an impossible
+// premise there and skips, and the graceful case keeps everything except the
+// timing claim, which on Windows would be measuring how fast a kill is rather
+// than whether a signal was honored. What survives on every platform is the
+// contract the updater actually depends on: every peer is gone, and the exit
+// status says so.
+//
+// This used to be hidden. The peers were copies of /bin/sleep and /bin/sh, and
+// Windows has neither, so the whole test skipped there by accident. Building
+// the peer from testdata removed that accident and left the distinction above
+// to be made deliberately.
 func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 	tests := []struct {
 		name string
@@ -140,8 +156,16 @@ func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 		{name: "a peer that ignores SIGTERM", ignoresTerm: true},
 	}
 
+	// terminateIsASignal says whether Terminate asks the process to stop, which
+	// it can decline, rather than ending it outright.
+	terminateIsASignal := runtime.GOOS != "windows"
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.ignoresTerm && !terminateIsASignal {
+				t.Skip("Terminate is TerminateProcess here, which no process can ignore, so there is no fall-through to a kill to observe")
+			}
+
 			binary := buildPeer(t, filepath.Join(t.TempDir(), peerName(t)))
 			withArgv0(t, binary)
 
@@ -159,7 +183,7 @@ func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 			if code != 0 {
 				t.Errorf("runShutdown() = %d, want 0 once every instance is gone", code)
 			}
-			if tt.graceful && elapsed >= shutdownGracePeriod {
+			if tt.graceful && terminateIsASignal && elapsed >= shutdownGracePeriod {
 				t.Errorf("runShutdown took %s: a peer that stops on SIGTERM must not cost the whole grace period", elapsed)
 			}
 			for i, peer := range peers {
@@ -175,10 +199,21 @@ func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 //
 // Kept under fifteen characters because that is where the kernel truncates the
 // name a process reports, and a truncated name would not match what findPeers
-// derives from os.Args[0].
+// derives from os.Args[0]. The Windows suffix does not threaten that: it is
+// added only where nothing truncates, and [canonicalBinaryName] strips it from
+// both sides of the comparison anyway.
+//
+// The suffix is not cosmetic there. Windows will not execute a file without it,
+// so a peer built under the bare name failed to start at all: `exec: "...
+// \mcppeer-2504": executable file not found in %PATH%`.
 func peerName(t *testing.T) string {
 	t.Helper()
-	return "mcppeer-" + strconv.Itoa(os.Getpid()%100000)
+
+	name := "mcppeer-" + strconv.Itoa(os.Getpid()%100000)
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return name
 }
 
 // withArgv0 points os.Args[0] at path for the duration of the test, which is
