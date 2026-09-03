@@ -109707,7 +109707,7 @@
   },
   {
     "name": "gitlab_list_work_items",
-    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, labels, child work items, and timestamps. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
+    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the next-page cursor. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109809,6 +109809,28 @@
             "null",
             "array"
           ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            },
+            "has_previous_page": {
+              "type": "boolean"
+            },
+            "start_cursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "type": "object"
         },
         "work_items": {
           "items": {
@@ -109937,7 +109959,8 @@
         }
       },
       "required": [
-        "work_items"
+        "work_items",
+        "pagination"
       ],
       "type": "object"
     },

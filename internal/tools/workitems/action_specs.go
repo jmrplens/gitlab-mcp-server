@@ -56,7 +56,7 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 		opts.Usage = "List work items in one project or group namespace. Use filters such as state, search, types, author_username, label_name, confidential, sort, include_ancestors/descendants, and cursor pagination when the prompt asks for matching work items in a known namespace."
 		opts.Aliases = []string{"list work items", "find work items in namespace", "show open work items", individualTool}
 		opts.RelatedActions = []string{actionWorkItemGet, "work_item.create", "work_item.type_list"}
-		opts.IndividualTool.Description = "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, labels, child work items, and timestamps. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types."
+		opts.IndividualTool.Description = "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the next-page cursor. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types."
 		opts.InputSchemaOverrides = workItemListEnumOverrides()
 	case "gitlab_list_work_item_types":
 		opts.Usage = "List available work item types (system-defined and custom) for a project or group namespace. Supports filtering by name and availability, with cursor-based pagination. Returns: type definitions with id, name, and enabled status. Experimental: the Work Items API may introduce breaking changes between minor versions."

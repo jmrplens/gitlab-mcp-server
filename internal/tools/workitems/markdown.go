@@ -55,17 +55,27 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 }
 
 // FormatListMarkdown formats a list of work items as markdown.
+//
+// The empty result carries its own hint because GitLab answers a namespace that
+// does not exist, or that the token cannot see, with a null namespace rather
+// than an error: the list handler cannot tell that apart from a namespace with
+// no matching work items, so the reader is told to check the path.
 func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
-	if len(out.WorkItems) == 0 {
-		return toolutil.ToolResultWithMarkdown("No work items found.\n")
-	}
 	var sb strings.Builder
+	if len(out.WorkItems) == 0 {
+		sb.WriteString("No work items found.\n")
+		toolutil.WriteHints(&sb, "If work items were expected, verify full_path with `gitlab_project_list` or `gitlab_group_list`: a namespace that does not exist, or that the token cannot read, also lists no work items")
+		return toolutil.ToolResultWithMarkdown(sb.String())
+	}
 	fmt.Fprintf(&sb, "## Work Items (%d)\n\n", len(out.WorkItems))
 	sb.WriteString("| IID | Type | State | Status | Title | Author |\n")
 	sb.WriteString("|-----|------|-------|--------|-------|--------|\n")
 	for _, wi := range out.WorkItems {
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %s | %s |\n",
 			wi.IID, wi.Type, wi.State, wi.Status, toolutil.EscapeMdTableCell(wi.Title), wi.Author)
+	}
+	if out.Pagination.HasNextPage {
+		fmt.Fprintf(&sb, "\n> Next page cursor: `%s`\n", out.Pagination.EndCursor)
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_get_work_item` to view full details of a specific item")
 	return toolutil.ToolResultWithMarkdown(sb.String())

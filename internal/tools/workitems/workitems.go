@@ -3,10 +3,7 @@ package workitems
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -104,15 +101,12 @@ func workItemToItem(wi *gl.WorkItem) WorkItemItem {
 			Path: c.NamespacePath,
 		})
 	}
-	if wi.CreatedAt != nil {
-		item.CreatedAt = wi.CreatedAt.String()
-	}
-	if wi.UpdatedAt != nil {
-		item.UpdatedAt = wi.UpdatedAt.String()
-	}
-	if wi.ClosedAt != nil {
-		item.ClosedAt = wi.ClosedAt.String()
-	}
+	// RFC 3339 rather than time.Time's own String(), which is what every other
+	// timestamp in this server emits (toolutil.FormatTimePtr) and what the raw
+	// GraphQL list handler passed through verbatim before it moved onto the SDK.
+	item.CreatedAt = toolutil.FormatTimePtr(wi.CreatedAt)
+	item.UpdatedAt = toolutil.FormatTimePtr(wi.UpdatedAt)
+	item.ClosedAt = toolutil.FormatTimePtr(wi.ClosedAt)
 	return item
 }
 
@@ -164,270 +158,98 @@ type ListInput struct {
 // ListOutput is the output for listing work items.
 type ListOutput struct {
 	toolutil.HintableOutput
-	WorkItems []WorkItemItem `json:"work_items"`
+	WorkItems  []WorkItemItem                   `json:"work_items"`
+	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
 }
 
 const errHintWorkItemsFullPath = "verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)"
 
-const queryListWorkItems = `
-query ListWorkItems(
-  $fullPath: ID!
-  $state: IssuableState
-  $search: String
-  $types: [IssueType!]
-  $authorUsername: String
-  $labelName: [String!]
-  $confidential: Boolean
-  $sort: WorkItemSort
-  $first: Int
-  $after: String
-  $includeAncestors: Boolean
-  $includeDescendants: Boolean
-) {
-  namespace(fullPath: $fullPath) {
-    workItems(
-      state: $state
-      search: $search
-      types: $types
-      authorUsername: $authorUsername
-      labelName: $labelName
-      confidential: $confidential
-      sort: $sort
-      first: $first
-      after: $after
-      includeAncestors: $includeAncestors
-      includeDescendants: $includeDescendants
-    ) {
-      nodes {
-        id
-        iid
-        workItemType {
-          name
-        }
-        state
-        title
-        description
-        confidential
-        author {
-          username
-        }
-        createdAt
-        updatedAt
-        closedAt
-        webUrl
-        features {
-          hierarchy {
-            hasChildren
-            children {
-              nodes {
-                iid
-                namespace {
-                  fullPath
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-`
+// listWorkItemsDefaultFirst is the page size used when the caller names none,
+// preserved from the hand-written query this handler replaced.
+const listWorkItemsDefaultFirst = int64(20)
 
-type listWorkItemsNamespace struct {
-	WorkItems struct {
-		Nodes []gqlListWorkItem `json:"nodes"`
-	} `json:"workItems"`
-}
-
-type listWorkItemsData struct {
-	Namespace *listWorkItemsNamespace `json:"namespace"`
-}
-
-type listWorkItemsResponse struct {
-	Data listWorkItemsData `json:"data"`
-	gl.GenericGraphQLErrors
-}
-
-type gqlListWorkItem struct {
-	ID           string `json:"id"`
-	IID          string `json:"iid"`
-	WorkItemType struct {
-		Name string `json:"name"`
-	} `json:"workItemType"`
-	State        string `json:"state"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	Confidential bool   `json:"confidential"`
-	Author       *struct {
-		Username string `json:"username"`
-	} `json:"author"`
-	CreatedAt string              `json:"createdAt"`
-	UpdatedAt string              `json:"updatedAt"`
-	ClosedAt  string              `json:"closedAt"`
-	WebURL    string              `json:"webUrl"`
-	Features  gqlWorkItemFeatures `json:"features"`
-}
-
-// gqlWorkItemFeatures groups the widget sub-objects parsed from the list query.
-type gqlWorkItemFeatures struct {
-	Hierarchy *gqlWorkItemHierarchy `json:"hierarchy"`
-}
-
-// gqlWorkItemHierarchy is the hierarchy widget of the list query, carrying the
-// child work items when the item has any.
-type gqlWorkItemHierarchy struct {
-	HasChildren bool                `json:"hasChildren"`
-	Children    gqlWorkItemChildren `json:"children"`
-}
-
-// gqlWorkItemChildren is the children connection within the hierarchy widget.
-type gqlWorkItemChildren struct {
-	Nodes []gqlWorkItemChild `json:"nodes"`
-}
-
-// gqlWorkItemChild is a child node in the hierarchy widget of the list query.
-type gqlWorkItemChild struct {
-	IID       string `json:"iid"`
-	Namespace struct {
-		FullPath string `json:"fullPath"`
-	} `json:"namespace"`
+// buildListOptions translates the tool input into SDK list options.
+//
+// Every filter the tool exposes has a direct counterpart on
+// [gl.ListWorkItemsOptions], which accepts a superset: assignee, milestone,
+// iteration, release, weight, CRM, reaction and date-range filters the tool
+// does not surface today.
+func buildListOptions(input ListInput) *gl.ListWorkItemsOptions {
+	first := listWorkItemsDefaultFirst
+	opts := &gl.ListWorkItemsOptions{First: &first}
+	if input.First != nil {
+		opts.First = input.First
+	}
+	if input.State != "" {
+		opts.State = &input.State
+	}
+	if input.Search != "" {
+		opts.Search = &input.Search
+	}
+	if len(input.Types) > 0 {
+		opts.Types = input.Types
+	}
+	if input.AuthorUsername != "" {
+		opts.AuthorUsername = &input.AuthorUsername
+	}
+	if len(input.LabelName) > 0 {
+		opts.LabelName = input.LabelName
+	}
+	if input.Confidential != nil {
+		opts.Confidential = input.Confidential
+	}
+	if input.Sort != "" {
+		opts.Sort = &input.Sort
+	}
+	if input.After != "" {
+		opts.After = &input.After
+	}
+	if input.IncludeAncestors != nil {
+		opts.IncludeAncestors = input.IncludeAncestors
+	}
+	if input.IncludeDescendants != nil {
+		opts.IncludeDescendants = input.IncludeDescendants
+	}
+	return opts
 }
 
 // List retrieves work items for a project or group.
+//
+// The SDK requests its CE-safe default field set, which is a superset of the
+// query this handler used to send: assignees, labels and linked items now come
+// back on every listed item instead of only on [Get]. Enterprise-only widgets
+// (status, weight, health status, color, iteration) stay unrequested, because
+// asking for them errors against a Community Edition instance.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if input.FullPath == "" {
 		return ListOutput{}, toolutil.ErrRequiredString("list_work_items", "full_path")
 	}
 
-	defaultFirst := int64(20)
-	first := &defaultFirst
-	if input.First != nil {
-		first = input.First
-	}
-
-	variables := map[string]any{
-		"fullPath": input.FullPath,
-		"first":    first,
-	}
-	if input.State != "" {
-		variables["state"] = input.State
-	}
-	if input.Search != "" {
-		variables["search"] = input.Search
-	}
-	if len(input.Types) > 0 {
-		variables["types"] = input.Types
-	}
-	if input.AuthorUsername != "" {
-		variables["authorUsername"] = input.AuthorUsername
-	}
-	if len(input.LabelName) > 0 {
-		variables["labelName"] = input.LabelName
-	}
-	if input.Confidential != nil {
-		variables["confidential"] = input.Confidential
-	}
-	if input.Sort != "" {
-		variables["sort"] = input.Sort
-	}
-	if input.After != "" {
-		variables["after"] = input.After
-	}
-	if input.IncludeAncestors != nil {
-		variables["includeAncestors"] = input.IncludeAncestors
-	}
-	if input.IncludeDescendants != nil {
-		variables["includeDescendants"] = input.IncludeDescendants
-	}
-
-	var resp listWorkItemsResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     queryListWorkItems,
-		Variables: variables,
-	}, &resp, gl.WithContext(ctx))
+	items, resp, err := client.GL().WorkItems.ListWorkItems(input.FullPath, buildListOptions(input), gl.WithContext(ctx))
 	if err != nil {
+		// A query-level failure arrives as GraphQLResponseError with HTTP 200,
+		// so the status-keyed hint would never fire for it.
+		if _, isGraphQLErr := errors.AsType[*gl.GraphQLResponseError](err); isGraphQLErr {
+			return ListOutput{}, toolutil.WrapErrWithHint("list_work_items", err, errHintWorkItemsFullPath)
+		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_work_items", err, http.StatusNotFound,
 			errHintWorkItemsFullPath)
 	}
-	if len(resp.Errors) > 0 {
-		return ListOutput{}, toolutil.WrapErrWithHint("list_work_items", &gl.GraphQLResponseError{
-			Err:    errors.New("GraphQL query failed"),
-			Errors: resp.GenericGraphQLErrors,
-		}, errHintWorkItemsFullPath)
-	}
-	if resp.Data.Namespace == nil {
-		return ListOutput{}, toolutil.WrapErrWithHint("list_work_items", gl.ErrNotFound,
-			errHintWorkItemsFullPath)
-	}
 
-	items := resp.Data.Namespace.WorkItems.Nodes
 	result := make([]WorkItemItem, 0, len(items))
 	for _, item := range items {
-		mapped, mapErr := gqlListWorkItemToItem(item)
-		if mapErr != nil {
-			return ListOutput{}, fmt.Errorf("list_work_items: parsing work item: %w", mapErr)
-		}
-		result = append(result, mapped)
+		result = append(result, workItemToItem(item))
 	}
-	return ListOutput{WorkItems: result}, nil
-}
-
-func gqlListWorkItemToItem(item gqlListWorkItem) (WorkItemItem, error) {
-	id, err := parseWorkItemGID(item.ID)
-	if err != nil {
-		return WorkItemItem{}, err
-	}
-	iid, err := parseWorkItemInt64("iid", item.IID)
-	if err != nil {
-		return WorkItemItem{}, err
-	}
-
-	mapped := WorkItemItem{
-		ID:           id,
-		IID:          iid,
-		Type:         item.WorkItemType.Name,
-		State:        item.State,
-		Title:        item.Title,
-		Description:  item.Description,
-		WebURL:       item.WebURL,
-		Confidential: item.Confidential,
-		CreatedAt:    item.CreatedAt,
-		UpdatedAt:    item.UpdatedAt,
-		ClosedAt:     item.ClosedAt,
-	}
-	if item.Author != nil {
-		mapped.Author = item.Author.Username
-	}
-	if h := item.Features.Hierarchy; h != nil && h.HasChildren {
-		for _, node := range h.Children.Nodes {
-			childIID, parseErr := parseWorkItemInt64("iid", node.IID)
-			if parseErr != nil {
-				return WorkItemItem{}, parseErr
-			}
-			mapped.Children = append(mapped.Children, ChildItem{
-				IID:  childIID,
-				Path: node.Namespace.FullPath,
-			})
+	out := ListOutput{WorkItems: result}
+	if resp != nil && resp.PageInfo != nil {
+		out.Pagination = toolutil.GraphQLPaginationOutput{
+			HasNextPage:     resp.PageInfo.HasNextPage,
+			HasPreviousPage: resp.PageInfo.HasPreviousPage,
+			EndCursor:       resp.PageInfo.EndCursor,
+			StartCursor:     resp.PageInfo.StartCursor,
 		}
 	}
-	return mapped, nil
-}
-
-func parseWorkItemGID(value string) (int64, error) {
-	lastSlash := strings.LastIndex(value, "/")
-	if lastSlash < 0 || lastSlash == len(value)-1 {
-		return 0, fmt.Errorf("invalid work item id %q", value)
-	}
-	return parseWorkItemInt64("id", value[lastSlash+1:])
-}
-
-func parseWorkItemInt64(field, value string) (int64, error) {
-	parsed, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid work item %s %q: %w", field, value, err)
-	}
-	return parsed, nil
+	return out, nil
 }
 
 // Create.
