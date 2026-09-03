@@ -255,3 +255,36 @@ func extractText(t *testing.T, result *mcp.CallToolResult) string {
 	}
 	return tc.Text
 }
+
+// TestSafeModeAndReadOnlyFilters_WithoutAServer_ChangeNothing covers what both
+// registration-time filters do when the surface cannot be listed.
+//
+// They work by listing the registered tools through an ephemeral in-memory
+// session, and that inspection is the one thing that can fail. Reporting zero
+// is the honest answer — nothing was wrapped, nothing was removed — and it is
+// logged rather than swallowed, because a deployment that asked for safe mode
+// and silently got none is worse than one that fails.
+func TestSafeModeAndReadOnlyFilters_WithoutAServer_ChangeNothing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		apply func() int
+	}{
+		{name: "safe mode wraps nothing", apply: func() int { return WrapMutatingToolsForSafeMode(context.Background(), nil) }},
+		{name: "safe mode with exemptions wraps nothing", apply: func() int {
+			return WrapMutatingToolsForSafeModeExcept(context.Background(), nil, map[string]struct{}{"gitlab_issue": {}})
+		}},
+		{name: "read-only removes nothing", apply: func() int { return RemoveNonReadOnlyTools(context.Background(), nil) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tt.apply(); got != 0 {
+				t.Errorf("filter reported %d tools changed on a server it could not inspect", got)
+			}
+		})
+	}
+}

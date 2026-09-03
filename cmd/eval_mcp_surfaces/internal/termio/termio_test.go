@@ -6,6 +6,9 @@ package termio
 
 import (
 	"errors"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -79,5 +82,219 @@ func TestShouldConfigure_RespectsQuietCheckModes(t *testing.T) {
 	}
 	if !ShouldConfigure("", true, true, 0, 0) {
 		t.Fatal("ShouldConfigure(explicit print) = false, want true")
+	}
+}
+
+// captureStream swaps the process stream at target (os.Stdout or os.Stderr)
+// for a temporary file until the test ends and returns a reader for what was
+// written to it. The helpers under test write to the package-level os.Stdout
+// and os.Stderr variables, so replacing them is what lets a test observe the
+// echo and the diagnostic paths.
+func captureStream(t *testing.T, target **os.File) func() string {
+	t.Helper()
+	file, err := os.Create(filepath.Join(t.TempDir(), "stream"))
+	if err != nil {
+		t.Fatalf("create capture file: %v", err)
+	}
+	previous := *target
+	*target = file
+	t.Cleanup(func() {
+		*target = previous
+		_ = file.Close()
+	})
+	return func() string {
+		data, readErr := os.ReadFile(file.Name())
+		if readErr != nil {
+			t.Fatalf("read capture file: %v", readErr)
+		}
+		return string(data)
+	}
+}
+
+// TestOutputWrite_EchoEnabled_MirrorsToStdout verifies that an echoing sink
+// writes the payload to both the file sink and os.Stdout and still reports
+// the full length.
+func TestOutputWrite_EchoEnabled_MirrorsToStdout(t *testing.T) {
+	stdout := captureStream(t, &os.Stdout)
+	var builder strings.Builder
+
+	n, err := NewOutput(&builder, true).Write([]byte("echoed"))
+	if err != nil || n != len("echoed") {
+		t.Fatalf("Write() = %d, %v; want %d nil", n, err, len("echoed"))
+	}
+	if builder.String() != "echoed" || stdout() != "echoed" {
+		t.Fatalf("file sink = %q, stdout = %q; want both echoed", builder.String(), stdout())
+	}
+}
+
+// TestOutputWrite_StdoutClosed_ReturnsStdoutError verifies that a failure of
+// the stdout echo is returned to the caller even though the file sink
+// accepted the payload: the sink is a tee, and a tee that drops one leg
+// silently would hide a broken terminal.
+func TestOutputWrite_StdoutClosed_ReturnsStdoutError(t *testing.T) {
+	captureStream(t, &os.Stdout)
+	if err := os.Stdout.Close(); err != nil {
+		t.Fatalf("close capture stdout: %v", err)
+	}
+	var builder strings.Builder
+
+	_, err := NewOutput(&builder, true).Write([]byte("lost"))
+	if err == nil {
+		t.Fatal("Write() error = nil, want the closed-stdout error")
+	}
+	if builder.String() != "lost" {
+		t.Fatalf("file sink = %q, want the payload written before the echo failed", builder.String())
+	}
+}
+
+// TestPrintHelpers_EchoEnabled_WriteStdout verifies Printf and Print echo to
+// os.Stdout when the sink is configured to, while LogPrintf never does.
+func TestPrintHelpers_EchoEnabled_WriteStdout(t *testing.T) {
+	tests := []struct {
+		name       string
+		call       func()
+		wantStdout string
+		wantFile   string
+	}{
+		{name: "Printf", call: func() { Printf("value=%d", 7) }, wantStdout: "value=7", wantFile: "value=7"},
+		{name: "Print", call: func() { Print("plain") }, wantStdout: "plain", wantFile: "plain"},
+		{name: "LogPrintf", call: func() { LogPrintf("log=%s", "only") }, wantStdout: "", wantFile: "log=only"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout := captureStream(t, &os.Stdout)
+			var builder strings.Builder
+			t.Cleanup(SetOutputForTest(NewOutput(&builder, true)))
+
+			tt.call()
+			if got := stdout(); got != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", got, tt.wantStdout)
+			}
+			if got := builder.String(); got != tt.wantFile {
+				t.Errorf("file sink = %q, want %q", got, tt.wantFile)
+			}
+		})
+	}
+}
+
+// TestPrintHelpers_FileSinkFails_ReportsOnStderr verifies each helper names
+// itself on os.Stderr when the log-file sink rejects the write, so a full disk
+// under the evaluator is visible instead of silently truncating the log.
+func TestPrintHelpers_FileSinkFails_ReportsOnStderr(t *testing.T) {
+	tests := []struct {
+		name string
+		call func()
+	}{
+		{name: "Printf", call: func() { Printf("value=%d", 7) }},
+		{name: "Print", call: func() { Print("plain") }},
+		{name: "LogPrintf", call: func() { LogPrintf("log=%s", "only") }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stderr := captureStream(t, &os.Stderr)
+			t.Cleanup(SetOutputForTest(NewOutput(failingWriter{}, false)))
+
+			tt.call()
+			want := "termio." + tt.name + ": write terminal log: write failed\n"
+			if got := stderr(); got != want {
+				t.Errorf("stderr = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// TestConfigure_ValidPath_RoutesOutputAndRestoresOnClose verifies Configure
+// creates the log directory and file, writes its header lines, routes both
+// the helpers and the default slog logger into the file, and that the
+// returned closer restores the previous logger and sink and closes the file.
+func TestConfigure_ValidPath_RoutesOutputAndRestoresOnClose(t *testing.T) {
+	stdout := captureStream(t, &os.Stdout)
+	logPath := filepath.Join(t.TempDir(), "nested", "terminal.log")
+	previousLogger := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	closer, err := Configure(logPath, true)
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	Printf("progress %d\n", 1)
+	slog.Info("from slog")
+	if closeErr := closer(); closeErr != nil {
+		t.Fatalf("closer() error = %v", closeErr)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read terminal log: %v", err)
+	}
+	for _, want := range []string{
+		"eval_mcp_surfaces terminal output\n",
+		"terminal_log=" + logPath + "\n",
+		"print_output=true\n",
+		"progress 1\n",
+		"msg=\"from slog\"",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(string(content), want) {
+				t.Errorf("terminal log %q does not contain %q", content, want)
+			}
+		})
+	}
+	if got := stdout(); !strings.Contains(got, "progress 1\n") || strings.Contains(got, "terminal_log=") {
+		t.Errorf("stdout = %q, want the echoed progress line and no log-only header", got)
+	}
+	if slog.Default() != previousLogger {
+		t.Error("closer() did not restore the previous default logger")
+	}
+	if commandOutput.file != nil || commandOutput.echo {
+		t.Errorf("commandOutput after close = %+v, want the zero sink", commandOutput)
+	}
+	if closer() == nil {
+		t.Error("second closer() error = nil, want the already-closed file error")
+	}
+}
+
+// TestConfigure_UnusableLogPath_ReturnsError verifies Configure reports the
+// directory-creation and file-open failures instead of routing output into
+// nothing: a log directory that collides with a file, and a log path that is
+// a directory.
+func TestConfigure_UnusableLogPath_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		logPath func(t *testing.T) string
+		wantErr string
+	}{
+		{
+			name: "log directory is a file",
+			logPath: func(t *testing.T) string {
+				t.Helper()
+				blocker := filepath.Join(t.TempDir(), "blocker")
+				if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+					t.Fatalf("write blocker: %v", err)
+				}
+				return filepath.Join(blocker, "terminal.log")
+			},
+			wantErr: "create terminal log directory",
+		},
+		{
+			name: "log path is a directory",
+			logPath: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			wantErr: "open terminal log",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			closer, err := Configure(tt.logPath(t), false)
+			if err == nil {
+				_ = closer()
+				t.Fatalf("Configure() error = nil, want %q", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Configure() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
 	}
 }

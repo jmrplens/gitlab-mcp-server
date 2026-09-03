@@ -613,3 +613,39 @@ func TestSlogHandler_TheExportFloorSurvivesAQuietTerminal(t *testing.T) {
 		t.Errorf("the terminal printed an INFO record while set to warn: %s", terminal.String())
 	}
 }
+
+// TestNewSlogHandler_WithoutABaseHandler_IsNil covers the answer given when
+// there is no terminal leg to fan out from.
+//
+// Nil is what the caller checks for: cmd/server installs the bridge only when
+// it gets a handler back, so returning a handler that writes to nowhere would
+// silently replace the process logger with one whose stderr leg does not exist.
+func TestNewSlogHandler_WithoutABaseHandler_IsNil(t *testing.T) {
+	t.Parallel()
+
+	if got := NewSlogHandler(nil, slog.LevelInfo, nil); got != nil {
+		t.Errorf("NewSlogHandler(nil, ...) = %#v, want nil so the caller keeps its own logger", got)
+	}
+}
+
+// TestSlogHandler_AResourceURIInsideAGroup_IsStillRedacted covers the walk into
+// grouped attributes on the exported leg.
+//
+// slog.Group is an ordinary value any caller can pass, and the subscription code
+// logs its watch details that way. A flat scan of a record's attributes reads a
+// group as one opaque value and rewrites nothing inside it, so the project and
+// group identifiers embedded in the URI would reach the collector verbatim —
+// which is the disclosure the redaction exists to prevent.
+func TestSlogHandler_AResourceURIInsideAGroup_IsStillRedacted(t *testing.T) {
+	exported := exportedRecord(t, nil, func(logger *slog.Logger) {
+		logger.Info("watch started",
+			slog.Group("watch", slog.String("uri", "gitlab://project/82077663"), slog.Int("interval", 30)))
+	})
+
+	if strings.Contains(exported, "82077663") {
+		t.Errorf("a URI inside a group reached the collector verbatim: %s", exported)
+	}
+	if !strings.Contains(exported, "30") {
+		t.Errorf("the group lost the attributes that were not URIs: %s", exported)
+	}
+}

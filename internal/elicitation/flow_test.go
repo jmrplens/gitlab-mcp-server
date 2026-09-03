@@ -1034,3 +1034,133 @@ func TestGatherData_AnAcceptWithNoContentStillValidates(t *testing.T) {
 		t.Error("an accept with no content passed a schema that requires a field")
 	}
 }
+
+// TestValidateAgainstSchema_SchemasItCannotUse covers the answers given when
+// the schema itself is the problem rather than the content.
+//
+// GatherData takes an arbitrary schema from its caller, so a schema that cannot
+// be encoded, read or resolved is a bug in the caller — and each has to come
+// back as its own error rather than as a validation failure, which would tell
+// the model the user answered wrongly when nobody was ever asked. A nil schema
+// is the opposite case and the ordinary one: nothing was specified, so there is
+// nothing to check.
+func TestValidateAgainstSchema_SchemasItCannotUse(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		schema  map[string]any
+		wantErr string
+	}{
+		{name: "no schema validates anything", schema: nil},
+		{
+			name:    "a schema that cannot be encoded",
+			schema:  map[string]any{"type": "object", "properties": make(chan int)},
+			wantErr: "cannot encode the requested schema",
+		},
+		{
+			name:    "a schema whose keywords have the wrong shape",
+			schema:  map[string]any{"type": 42},
+			wantErr: "cannot read the requested schema",
+		},
+		{
+			name:    "a schema whose reference goes nowhere",
+			schema:  map[string]any{"$ref": "#/$defs/absent"},
+			wantErr: "cannot resolve the requested schema",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateAgainstSchema(tt.schema, map[string]any{"name": "value"})
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("validateAgainstSchema = %v, want nil when no schema was specified", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("validateAgainstSchema accepted a schema it cannot use (%v)", tt.schema)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("err = %q, want it to say %q", err, tt.wantErr)
+			}
+			if errors.Is(err, ErrMalformedAnswer) {
+				t.Error("a broken schema was reported as a malformed answer, blaming the user for the caller's bug")
+			}
+		})
+	}
+}
+
+// TestFlow_MRTR_ClientWithoutFormMode_IsNotAsked covers the capability check the
+// multi round-trip path has to make for itself.
+//
+// "Servers MUST NOT send elicitation requests with modes that are not supported
+// by the client." On the legacy path the SDK refuses the send, so nothing here
+// can go wrong; on this path the request is queued into the result and the SDK
+// never inspects it, so a client that advertises url mode alone would be handed
+// a form request it declared it cannot render.
+func TestFlow_MRTR_ClientWithoutFormMode_IsNotAsked(t *testing.T) {
+	ctx := context.Background()
+	server := mcp.NewServer(testImpl, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "form_tool", Description: "form test tool"},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
+			fl, err := FlowFromRequest(req)
+			if err != nil {
+				//nolint:nilerr // the flow error is surfaced in-band as an error tool result
+				return textResult("flow error: " + err.Error()), nil, nil
+			}
+			if !fl.UsesMultiRoundTrip() {
+				return textResult("not the multi round-trip path"), nil, nil
+			}
+			_, confirmErr := fl.Confirm(ctx, "confirm", "Proceed?")
+			if !errors.Is(confirmErr, ErrFormElicitationNotSupported) {
+				answered := "no error at all"
+				if confirmErr != nil {
+					answered = confirmErr.Error()
+				}
+				return textResult("unexpected: " + answered), nil, nil
+			}
+			if len(fl.pending) != 0 {
+				return textResult("a form request was queued anyway"), nil, nil
+			}
+			return textResult("form mode refused"), nil, nil
+		})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	// URL mode alone: the capability the SDK would otherwise infer from the
+	// handler declares both modes, and this test is about a client that
+	// declares it cannot render a form.
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+		Capabilities: &mcp.ClientCapabilities{
+			Elicitation: &mcp.ElicitationCapabilities{URL: &mcp.URLElicitationCapabilities{}},
+		},
+	})
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		_ = ss.Close()
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = cs.Close()
+		_ = ss.Close()
+	})
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "form_tool", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if got := resultText(result); got != "form mode refused" {
+		t.Errorf("result = %q, want the form request refused before it was queued", got)
+	}
+}

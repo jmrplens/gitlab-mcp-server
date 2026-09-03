@@ -1097,3 +1097,234 @@ func managedBlockForTest(t *testing.T, content, startMarker, endMarker string) s
 	}
 	return content[start : start+end]
 }
+
+// TestPublishSectionForRow_UsesPresetEditionThenReportEdition verifies a row
+// lands in the section its preset implies, falls back to the report edition
+// when the preset is neutral, and keeps unknown surfaces unknown.
+func TestPublishSectionForRow_UsesPresetEditionThenReportEdition(t *testing.T) {
+	cases := []struct {
+		name   string
+		report publishReport
+		row    publishRow
+		want   string
+	}{
+		{name: "enterprise preset", report: publishReport{ToolSurface: config.ToolSurfaceMeta}, row: publishRow{Preset: presetDockerEnterpriseRead}, want: publishSectionEnterpriseMeta},
+		{name: "ce preset", report: publishReport{ToolSurface: config.ToolSurfaceDynamic, Edition: editionEnterprise}, row: publishRow{Preset: presetDockerRead}, want: publishSectionDynamic},
+		{name: "neutral preset enterprise report", report: publishReport{ToolSurface: config.ToolSurfaceDynamic, Edition: editionEnterprise}, row: publishRow{Preset: "other"}, want: publishSectionEnterpriseDynamic},
+		{name: "neutral preset ce report", report: publishReport{ToolSurface: config.ToolSurfaceMeta}, row: publishRow{Preset: "other"}, want: publishSectionMeta},
+		{name: "unknown surface", report: publishReport{ToolSurface: "individual"}, row: publishRow{Preset: presetDockerRead}, want: publishSectionUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := publishSectionForRow(tc.report, tc.row); got != tc.want {
+				t.Fatalf("publishSectionForRow() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPublishSectionForReport_EnterpriseRowsPromoteSection verifies a CE
+// report carrying an enterprise preset row publishes into the enterprise
+// section, and an unknown surface stays unknown.
+func TestPublishSectionForReport_EnterpriseRowsPromoteSection(t *testing.T) {
+	cases := []struct {
+		name   string
+		report publishReport
+		want   string
+	}{
+		{name: "enterprise row", report: publishReport{ToolSurface: config.ToolSurfaceMeta, Rows: []publishRow{{Preset: presetDockerEnterpriseMutatingSafe}}}, want: publishSectionEnterpriseMeta},
+		{name: "plain ce", report: publishReport{ToolSurface: config.ToolSurfaceMeta, Rows: []publishRow{{Preset: presetDockerRead}}}, want: publishSectionMeta},
+		{name: "unknown surface", report: publishReport{ToolSurface: "individual"}, want: publishSectionUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := publishSectionForReport(tc.report); got != tc.want {
+				t.Fatalf("publishSectionForReport() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnterprisePublishSection_PassesUnknownThrough verifies only the two base
+// sections have an enterprise variant.
+func TestEnterprisePublishSection_PassesUnknownThrough(t *testing.T) {
+	cases := []struct {
+		section string
+		want    string
+	}{
+		{section: publishSectionMeta, want: publishSectionEnterpriseMeta},
+		{section: publishSectionDynamic, want: publishSectionEnterpriseDynamic},
+		{section: publishSectionUnknown, want: publishSectionUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.section, func(t *testing.T) {
+			if got := enterprisePublishSection(tc.section); got != tc.want {
+				t.Fatalf("enterprisePublishSection(%s) = %q, want %q", tc.section, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPublishReportEdition_NormalizesEditionMetadata verifies explicit
+// editions are lower-cased, an enterprise preset implies enterprise, and
+// everything else is "all".
+func TestPublishReportEdition_NormalizesEditionMetadata(t *testing.T) {
+	cases := []struct {
+		name   string
+		report publishReport
+		want   string
+	}{
+		{name: "explicit ce", report: publishReport{Edition: " CE "}, want: editionCE},
+		{name: "explicit enterprise", report: publishReport{Edition: "Enterprise"}, want: editionEnterprise},
+		{name: "enterprise preset", report: publishReport{Preset: presetSchemaEnterprise}, want: editionEnterprise},
+		{name: "unset", report: publishReport{}, want: editionAll},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := publishReportEdition(tc.report); got != tc.want {
+				t.Fatalf("publishReportEdition() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestQualifyPublishSectionLabel_RewritesCombinedLabels verifies split
+// CE/Enterprise snapshots get distinguishable headings for every label shape.
+func TestQualifyPublishSectionLabel_RewritesCombinedLabels(t *testing.T) {
+	cases := []struct {
+		name    string
+		label   string
+		section string
+		want    string
+	}{
+		{name: "combined on enterprise for ce", label: "CE+Enterprise-on-Enterprise combined run", section: publishSectionDynamic, want: "CE-on-Enterprise run"},
+		{name: "combined on enterprise for enterprise", label: "CE+Enterprise-on-Enterprise combined run", section: publishSectionEnterpriseDynamic, want: "Enterprise run"},
+		{name: "combined for ce", label: "CE+Enterprise combined run", section: publishSectionMeta, want: "CE run"},
+		{name: "combined for enterprise", label: "CE+Enterprise combined run", section: publishSectionEnterpriseMeta, want: "Enterprise run"},
+		{name: "plain label", label: "Nightly", section: publishSectionEnterpriseMeta, want: "Nightly (Enterprise)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := qualifyPublishSectionLabel(tc.label, tc.section); got != tc.want {
+				t.Fatalf("qualifyPublishSectionLabel() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPublishSectionLabel_QualifiesOnlyWithSiblingSection verifies the
+// heading is qualified when both editions of a surface publish together and
+// left alone otherwise.
+func TestPublishSectionLabel_QualifiesOnlyWithSiblingSection(t *testing.T) {
+	siblings := []publishReport{
+		{ToolSurface: config.ToolSurfaceMeta, Rows: []publishRow{{Preset: presetDockerRead}}},
+		{ToolSurface: config.ToolSurfaceMeta, Rows: []publishRow{{Preset: presetDockerEnterpriseRead}}},
+	}
+	if got := publishSectionLabel("Nightly", publishSectionMeta, siblings); got != "Nightly (CE)" {
+		t.Fatalf("publishSectionLabel(with sibling) = %q, want Nightly (CE)", got)
+	}
+	if got := publishSectionLabel("Nightly", publishSectionMeta, siblings[:1]); got != "Nightly" {
+		t.Fatalf("publishSectionLabel(without sibling) = %q, want Nightly", got)
+	}
+	if publishSectionLabel("", publishSectionUnknown, nil) == "" {
+		t.Fatal("publishSectionLabel(empty) = empty, want fallback snapshot label")
+	}
+}
+
+// TestPublishDocSectionForKey_UnknownKey_ReturnsUnknownSection verifies an
+// unrecognized section key yields a marker-less unknown section.
+func TestPublishDocSectionForKey_UnknownKey_ReturnsUnknownSection(t *testing.T) {
+	section := publishDocSectionForKey("nope")
+	if section.Key != publishSectionUnknown || section.ResultsStartMarker != "" {
+		t.Fatalf("publishDocSectionForKey(nope) = %+v, want unknown section", section)
+	}
+}
+
+// TestPublishPresetForTask_ClassifiesTasks verifies a task is attributed to
+// its first matching preset, then to its partition, then to "other".
+func TestPublishPresetForTask_ClassifiesTasks(t *testing.T) {
+	cases := []struct {
+		name string
+		task evalTask
+		want string
+	}{
+		{name: "typed preset", task: evalTask{Case: &EvalCase{Presets: []EvalPreset{presetDockerMutatingSafe}}}, want: presetDockerMutatingSafe},
+		{name: "typed partition", task: evalTask{Case: &EvalCase{Presets: []EvalPreset{EvalPreset(presetDockerErrorRecovery)}, Partition: EvalPartition(partitionErrorRecovery)}}, want: partitionErrorRecovery},
+		{name: "other", task: evalTask{Case: &EvalCase{Presets: []EvalPreset{EvalPreset(presetDockerErrorRecovery)}, Partition: "custom"}}, want: "other"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := publishPresetForTask(tc.task); got != tc.want {
+				t.Fatalf("publishPresetForTask() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPublishTraceJSONLPath_ResolvesTraceDirectory verifies the trace JSONL
+// path is empty without trace metadata, absolute when the report says so, and
+// resolved relative to the report otherwise, preferring whichever exists.
+func TestPublishTraceJSONLPath_ResolvesTraceDirectory(t *testing.T) {
+	root := t.TempDir()
+	reportPath := filepath.Join(root, "reports", "report.md")
+	if err := os.MkdirAll(filepath.Join(root, "reports", "rel.traces"), 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "reports", "rel.traces", "traces.jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("write traces: %v", err)
+	}
+	cwdTraces := filepath.Join(t.TempDir(), "cwd.traces")
+	if err := os.MkdirAll(cwdTraces, 0o750); err != nil {
+		t.Fatalf("mkdir cwd traces: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cwdTraces, "traces.jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("write cwd traces: %v", err)
+	}
+	t.Chdir(filepath.Dir(cwdTraces))
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "no metadata", content: "Mode: model tool-calling\n", want: ""},
+		{name: "absolute", content: "Trace artifacts: `" + filepath.Join(root, "abs.traces") + "`\n", want: filepath.Join(root, "abs.traces", "traces.jsonl")},
+		{name: "relative to report", content: "Trace artifacts: `rel.traces`\n", want: filepath.Join(root, "reports", "rel.traces", "traces.jsonl")},
+		{name: "relative to cwd", content: "Trace artifacts: `cwd.traces`\n", want: filepath.Join("cwd.traces", "traces.jsonl")},
+		{name: "missing everywhere", content: "Trace artifacts: `gone.traces`\n", want: filepath.Join(root, "reports", "gone.traces", "traces.jsonl")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := publishTraceJSONLPath(reportPath, tc.content); got != tc.want {
+				t.Fatalf("publishTraceJSONLPath() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPublishEffectiveTraceOutcome_HandlesEmptyAndMismatchedSteps verifies a
+// trace without expected steps scores nothing and a first call that matches
+// no candidate step falls back to comparing against the first expected step.
+func TestPublishEffectiveTraceOutcome_HandlesEmptyAndMismatchedSteps(t *testing.T) {
+	if toolOK, actionOK, firstPassOK := publishEffectiveTraceOutcome(taskTrace{}, ""); toolOK || actionOK || firstPassOK {
+		t.Fatal("publishEffectiveTraceOutcome(empty) = true values, want all false")
+	}
+	trace := taskTrace{
+		Expected: []traceExpectedStep{{Tool: "gitlab_project", Action: "get"}},
+		Summary:  traceSummary{FirstTool: "gitlab_issue", FirstAction: "get", FirstPass: true},
+	}
+	toolOK, actionOK, firstPassOK := publishEffectiveTraceOutcome(trace, "")
+	if toolOK || !actionOK || !firstPassOK {
+		t.Fatalf("publishEffectiveTraceOutcome(mismatch) = %t/%t/%t, want false/true/true", toolOK, actionOK, firstPassOK)
+	}
+}
+
+// TestFirstPositive_ReturnsFirstPositiveOrZero verifies the first positive
+// candidate wins and an all-non-positive list yields zero.
+func TestFirstPositive_ReturnsFirstPositiveOrZero(t *testing.T) {
+	if got := firstPositive(0, -1, 4, 9); got != 4 {
+		t.Fatalf("firstPositive() = %d, want 4", got)
+	}
+	if got := firstPositive(0, -2); got != 0 {
+		t.Fatalf("firstPositive(non-positive) = %d, want 0", got)
+	}
+}

@@ -6,6 +6,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -469,17 +471,13 @@ func TestEmptyParamDescription_FlagsBoilerplate(t *testing.T) {
 var (
 	fullReportOnce sync.Once
 	fullReport     report
-	errFullReport  error
 )
 
 func cachedFullReport(t *testing.T) report {
 	t.Helper()
 	fullReportOnce.Do(func() {
-		fullReport, errFullReport = buildReport(false, 3)
+		fullReport = buildReport(false, 3)
 	})
-	if errFullReport != nil {
-		t.Fatalf("buildReport: %v", errFullReport)
-	}
 	return fullReport
 }
 
@@ -494,10 +492,7 @@ func cachedFullReport(t *testing.T) report {
 // in either direction (a check that no longer detects the gap, or a
 // regression in the source that re-introduces it) are caught.
 func TestBuildReport_LinkCreateBatchGoldStandard(t *testing.T) {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		t.Fatalf("auditclient.NewMock: %v", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 	_ = client // silence unused warning; client reserved for future live-catalog assertions.
 
@@ -568,10 +563,7 @@ func TestBuildReport_LinkCreateBatchGoldStandard(t *testing.T) {
 	// registry corroboration) so future changes to the source packages are
 	// visible in CI. The result is informational only (t.Logf) — the gold
 	// standard is pinned above against the synthetic spec.
-	client2, cleanup2, err := auditclient.NewMock()
-	if err != nil {
-		t.Fatalf("auditclient.NewMock: %v", err)
-	}
+	client2, cleanup2 := auditclient.NewMock()
 	defer cleanup2()
 	rep := cachedFullReport(t)
 	var liveFlags []string
@@ -595,14 +587,8 @@ func TestBuildReport_LinkCreateBatchGoldStandard(t *testing.T) {
 
 // TestBuildReport_Deterministic verifies repeated runs are identical.
 func TestBuildReport_Deterministic(t *testing.T) {
-	first, err := buildReport(true, 3)
-	if err != nil {
-		t.Fatalf("first buildReport: %v", err)
-	}
-	second, err := buildReport(true, 3)
-	if err != nil {
-		t.Fatalf("second buildReport: %v", err)
-	}
+	first := buildReport(true, 3)
+	second := buildReport(true, 3)
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("buildReport is not deterministic across runs")
 	}
@@ -917,5 +903,620 @@ func TestIsEnumCandidate(t *testing.T) {
 	}
 	if cand("title", map[string]any{"type": "string", "description": "Free text, e.g. asc or desc placeholder"}) {
 		t.Error("free-form title name must NOT be a candidate")
+	}
+}
+
+// TestParseSeverity_Scenarios_ParsesThresholdNames verifies the -severity
+// flag accepts the three level names in any case and with surrounding
+// whitespace, and rejects anything else with a message naming the input.
+func TestParseSeverity_Scenarios_ParsesThresholdNames(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    int
+		wantErr bool
+	}{
+		{name: "error", in: "error", want: severityError},
+		{name: "warning uppercase", in: "WARNING", want: severityWarning},
+		{name: "info padded", in: "  info  ", want: severityInfo},
+		{name: "unknown", in: "critical", wantErr: true},
+		{name: "empty", in: "", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSeverity(tt.in)
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "must be error, warning, or info") {
+					t.Fatalf("parseSeverity(%q) error = %v, want the usage message", tt.in, err)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Fatalf("parseSeverity(%q) = %d, %v; want %d, nil", tt.in, got, err, tt.want)
+			}
+		})
+	}
+}
+
+// TestSeverityRank_Scenarios_RanksKnownLevels verifies the rank of each level
+// name and that an unknown label ranks as info, so an unrecognized severity
+// can never make a finding look more urgent than it is.
+func TestSeverityRank_Scenarios_RanksKnownLevels(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{name: "error", in: "error", want: severityError},
+		{name: "warning", in: "warning", want: severityWarning},
+		{name: "info", in: "info", want: severityInfo},
+		{name: "unknown label", in: "fatal", want: severityInfo},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := severityRank(tt.in); got != tt.want {
+				t.Errorf("severityRank(%q) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSeverityFor_NonEscalatingFlags_KeepFixedSeverity verifies the flags
+// whose severity does not depend on the cluster: the warning-level metadata
+// gaps, the two info-level backlog signals, and an unknown flag, which falls
+// back to info.
+func TestSeverityFor_NonEscalatingFlags_KeepFixedSeverity(t *testing.T) {
+	tests := []struct {
+		name string
+		flag string
+		want string
+	}{
+		{name: "missing next steps", flag: "missing_next_steps", want: "warning"},
+		{name: "empty param description", flag: "empty_param_description", want: "warning"},
+		{name: "missing parameter guidance", flag: "missing_parameter_guidance", want: "warning"},
+		{name: "aliases only toolname", flag: "aliases_only_toolname", want: "warning"},
+		{name: "empty output description", flag: "empty_output_description", want: "info"},
+		{name: "param enum candidate", flag: "param_enum_candidate", want: "info"},
+		{name: "unknown flag", flag: "not_a_flag", want: "info"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clusterMembers := []string{"link_create", "link_create_batch"}
+			if got := severityFor(tt.flag, true, clusterMembers); got != tt.want {
+				t.Errorf("severityFor(%q, inCluster) = %q, want %q", tt.flag, got, tt.want)
+			}
+			if got := severityFor(tt.flag, false, nil); got != tt.want {
+				t.Errorf("severityFor(%q, out of cluster) = %q, want %q", tt.flag, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReportCheck_Scenarios_GatesOnThreshold verifies the -check gate: each
+// threshold fails on findings at or above its level, passes below it, and a
+// summary with no finding at all passes every threshold.
+func TestReportCheck_Scenarios_GatesOnThreshold(t *testing.T) {
+	tests := []struct {
+		name      string
+		summary   reportSummary
+		threshold int
+		wantErr   string
+	}{
+		{name: "error threshold with an error", summary: reportSummary{Errors: 2}, threshold: severityError, wantErr: "2 error-severity finding(s)"},
+		{name: "error threshold ignores warnings", summary: reportSummary{Warnings: 3, Infos: 4}, threshold: severityError},
+		{name: "warning threshold counts errors and warnings", summary: reportSummary{Errors: 1, Warnings: 2, Infos: 9}, threshold: severityWarning, wantErr: "3 warning-or-worse finding(s)"},
+		{name: "warning threshold ignores infos", summary: reportSummary{Infos: 5}, threshold: severityWarning},
+		{name: "info threshold counts everything", summary: reportSummary{Errors: 1, Warnings: 1, Infos: 1}, threshold: severityInfo, wantErr: "3 info-or-worse finding(s)"},
+		{name: "clean report passes", summary: reportSummary{}, threshold: severityInfo},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := report{Summary: tt.summary}.check(tt.threshold)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("check() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("check() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// captureDiscoveryStdout swaps os.Stdout for a temporary file until the test
+// ends and returns a reader for what was written, so the "-" report path can
+// be observed.
+func captureDiscoveryStdout(t *testing.T) func() string {
+	t.Helper()
+	file, err := os.Create(filepath.Join(t.TempDir(), "stdout"))
+	if err != nil {
+		t.Fatalf("create stdout capture: %v", err)
+	}
+	previous := os.Stdout
+	os.Stdout = file
+	t.Cleanup(func() {
+		os.Stdout = previous
+		_ = file.Close()
+	})
+	return func() string {
+		data, readErr := os.ReadFile(file.Name())
+		if readErr != nil {
+			t.Fatalf("read stdout capture: %v", readErr)
+		}
+		return string(data)
+	}
+}
+
+// TestWriteReport_Scenarios_WritesStdoutOrFile verifies the "-" sentinel
+// writes the JSON report to stdout, a nested output path gets its parent
+// directories created, and a parent that is a regular file is reported as an
+// error instead of silently dropping the report.
+func TestWriteReport_Scenarios_WritesStdoutOrFile(t *testing.T) {
+	t.Run("stdout sentinel", func(t *testing.T) {
+		stdout := captureDiscoveryStdout(t)
+		if err := writeReport("-", []byte("{}\n")); err != nil {
+			t.Fatalf("writeReport(-) error = %v", err)
+		}
+		if got := stdout(); got != "{}\n" {
+			t.Errorf("stdout = %q, want the report", got)
+		}
+	})
+	t.Run("nested file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "plan", "discovery-backlog.json")
+		if err := writeReport(path, []byte("{}\n")); err != nil {
+			t.Fatalf("writeReport() error = %v", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != "{}\n" {
+			t.Errorf("written report = %q, %v; want the content", data, err)
+		}
+	})
+	t.Run("parent is a file", func(t *testing.T) {
+		blocker := filepath.Join(t.TempDir(), "blocker")
+		if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+			t.Fatalf("write blocker: %v", err)
+		}
+		if err := writeReport(filepath.Join(blocker, "backlog.json"), []byte("{}\n")); err == nil {
+			t.Fatal("writeReport() error = nil, want the directory creation failure")
+		}
+	})
+}
+
+// TestInferOwnerFromName_Scenarios_TakesDottedPrefix verifies the defensive
+// owner guess reads the segment before the first dot and returns the whole
+// name when there is none.
+func TestInferOwnerFromName_Scenarios_TakesDottedPrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "dotted name", in: "release.link_create", want: "release"},
+		{name: "bare name", in: "link_create", want: "link_create"},
+		{name: "empty", in: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := inferOwnerFromName(tt.in); got != tt.want {
+				t.Errorf("inferOwnerFromName(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSiblingClusters_SpecsWithoutOwner_ClusterByInferredOwner verifies specs
+// that carry no OwnerPackage are clustered under the owner inferred from
+// their dotted name, and that a single-member bucket is dropped.
+func TestSiblingClusters_SpecsWithoutOwner_ClusterByInferredOwner(t *testing.T) {
+	clusters := siblingClusters([]toolutil.ActionSpec{
+		{Name: "release.link_create"},
+		{Name: "release.link_create_batch"},
+		{Name: "release.solo_get"},
+	})
+	if len(clusters) != 1 {
+		t.Fatalf("clusters = %+v, want one multi-member cluster", clusters)
+	}
+	got := clusters[0]
+	if got.Package != "release" {
+		t.Errorf("cluster package = %q, want the inferred owner release", got.Package)
+	}
+	if !reflect.DeepEqual(got.Members, []string{"release.link_create", "release.link_create_batch"}) {
+		t.Errorf("cluster members = %v, want the two link actions sorted", got.Members)
+	}
+}
+
+// TestSiblingMatches_EmbeddedSiblingName_MatchesByContains verifies the
+// defensive fallback: a related action that is neither an exact nor a
+// dot-tail match still counts when it embeds a sibling name, so a
+// non-conformant RelatedActions value does not produce a false gap.
+func TestSiblingMatches_EmbeddedSiblingName_MatchesByContains(t *testing.T) {
+	siblings := map[string]struct{}{"link_create": {}}
+	tests := []struct {
+		name    string
+		related string
+		want    bool
+	}{
+		{name: "embedded sibling", related: "legacy_link_create_v2", want: true},
+		{name: "unrelated", related: "tag_delete", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := siblingMatches(tt.related, siblings); got != tt.want {
+				t.Errorf("siblingMatches(%q) = %v, want %v", tt.related, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestHasDisambiguation_Scenarios_RequiresSignalAndSiblingReference verifies
+// the two ways an action can point at its sibling once its Usage carries a
+// distinguishing signal (a RelatedActions entry or a CommonConfusions entry),
+// that a Usage naming the sibling verbatim counts as the signal, and that a
+// signal alone is not enough.
+func TestHasDisambiguation_Scenarios_RequiresSignalAndSiblingReference(t *testing.T) {
+	tests := []struct {
+		name    string
+		spec    toolutil.ActionSpec
+		members []string
+		want    bool
+	}{
+		{
+			name: "no siblings is a vacuous pass",
+			spec: toolutil.ActionSpec{Name: "link_create"},
+			want: true,
+		},
+		{
+			name:    "usage keyword plus a related sibling",
+			spec:    toolutil.ActionSpec{Name: "link_create_batch", Usage: "Use instead of link creation one at a time.", RelatedActions: []string{"release.link_create"}},
+			members: []string{"link_create", "link_create_batch"},
+			want:    true,
+		},
+		{
+			name:    "usage names the sibling verbatim without a keyword",
+			spec:    toolutil.ActionSpec{Name: "link_create_batch", Usage: "Prefer link_create when you have one link.", RelatedActions: []string{"link_create"}},
+			members: []string{"link_create", "link_create_batch"},
+			want:    true,
+		},
+		{
+			name: "sibling named in a parameter confusion",
+			spec: toolutil.ActionSpec{
+				Name:              "link_create_batch",
+				Usage:             "Creates multiple links in one call.",
+				ParameterGuidance: map[string]toolutil.ParameterGuidance{"links": {CommonConfusions: []string{"not to be confused with link_create"}}},
+			},
+			members: []string{"link_create", "link_create_batch"},
+			want:    true,
+		},
+		{
+			name:    "signal without any sibling reference",
+			spec:    toolutil.ActionSpec{Name: "link_create_batch", Usage: "Creates multiple links in one call.", RelatedActions: []string{"tag.delete"}},
+			members: []string{"link_create", "link_create_batch"},
+		},
+		{
+			name:    "no signal at all",
+			spec:    toolutil.ActionSpec{Name: "link_create_batch", Usage: "Creates links.", RelatedActions: []string{"link_create"}},
+			members: []string{"link_create", "link_create_batch"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasDisambiguation(tt.spec, tt.members); got != tt.want {
+				t.Errorf("hasDisambiguation() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSchemaPointer_NilSchema_IsZero verifies a nil schema fingerprints to
+// zero so the cycle guard never keys on a missing schema.
+func TestSchemaPointer_NilSchema_IsZero(t *testing.T) {
+	if got := schemaPointer(nil); got != 0 {
+		t.Fatalf("schemaPointer(nil) = %d, want 0", got)
+	}
+}
+
+// TestResolveSchemaRef_Scenarios_FollowsLocalDefs verifies a "#/$defs/Name"
+// reference resolves against local $defs, and that a schema without a $ref,
+// with a foreign $ref, or with an unresolvable name is returned unchanged.
+func TestResolveSchemaRef_Scenarios_FollowsLocalDefs(t *testing.T) {
+	target := map[string]any{"type": "object", "description": "resolved"}
+	tests := []struct {
+		name     string
+		schema   map[string]any
+		resolved bool
+	}{
+		{
+			name:     "local defs reference",
+			schema:   map[string]any{"$ref": "#/$defs/Target", "$defs": map[string]any{"Target": target}},
+			resolved: true,
+		},
+		{name: "no ref", schema: map[string]any{"type": "string"}},
+		{name: "foreign ref", schema: map[string]any{"$ref": "https://example.com/schema.json"}},
+		{name: "ref without defs", schema: map[string]any{"$ref": "#/$defs/Missing"}},
+		{name: "ref naming an absent def", schema: map[string]any{"$ref": "#/$defs/Absent", "$defs": map[string]any{"Other": target}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveSchemaRef(tt.schema)
+			if tt.resolved {
+				if !reflect.DeepEqual(got, target) {
+					t.Fatalf("resolveSchemaRef() = %v, want the resolved definition", got)
+				}
+				return
+			}
+			if !reflect.DeepEqual(got, tt.schema) {
+				t.Fatalf("resolveSchemaRef() = %v, want the schema unchanged", got)
+			}
+		})
+	}
+}
+
+// TestWalkSchemaProperties_Scenarios_VisitsResolvedPropertiesOnce verifies
+// the traversal: a nil schema visits nothing, a schema behind a $ref is
+// resolved before its properties are read, and a schema already recorded in
+// the visited set is not walked twice.
+func TestWalkSchemaProperties_Scenarios_VisitsResolvedPropertiesOnce(t *testing.T) {
+	behindRef := map[string]any{
+		"$ref": "#/$defs/Body",
+		"$defs": map[string]any{"Body": map[string]any{
+			"properties": map[string]any{"title": map[string]any{"type": "string", "description": "The issue title."}},
+		}},
+	}
+	// shared is a schema whose two properties resolve to the same target map:
+	// the direct one is walked first, so the $ref wrapper's target is already
+	// in the visited set when the wrapper is resolved.
+	target := map[string]any{"properties": map[string]any{"inner": map[string]any{"type": "string", "description": "An inner field."}}}
+	shared := map[string]any{"properties": map[string]any{
+		"a_direct": target,
+		"b_ref":    map[string]any{"$ref": "#/$defs/Target", "$defs": map[string]any{"Target": target}},
+	}}
+	tests := []struct {
+		name       string
+		schema     map[string]any
+		preVisited bool
+		want       []string
+	}{
+		{name: "nil schema", schema: nil},
+		{name: "resolved through a ref", schema: behindRef, want: []string{"title"}},
+		{name: "already visited", schema: behindRef, preVisited: true},
+		{name: "ref target already visited", schema: shared, want: []string{"a_direct", "inner", "b_ref"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			visited := map[uintptr]bool{}
+			if tt.preVisited {
+				visited[schemaPointer(tt.schema)] = true
+			}
+			var seen []string
+			walkSchemaProperties(tt.schema, "", visited, func(name, _ string, _ map[string]any) {
+				seen = append(seen, name)
+			})
+			if !reflect.DeepEqual(seen, tt.want) {
+				t.Errorf("visited properties = %v, want %v", seen, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsEmptyOrBoilerplateDescription_Scenarios_FlagsUninformativeText
+// verifies the field-description gate: a missing or blank description, a
+// description too short to say anything, a bare "The x" article phrase and a
+// literal "id" are all boilerplate, while a real sentence is not.
+func TestIsEmptyOrBoilerplateDescription_Scenarios_FlagsUninformativeText(t *testing.T) {
+	tests := []struct {
+		name string
+		prop map[string]any
+		want bool
+	}{
+		{name: "no description key", prop: map[string]any{"type": "string"}, want: true},
+		{name: "non-string description", prop: map[string]any{"description": 42}, want: true},
+		{name: "blank description", prop: map[string]any{"description": "   "}, want: true},
+		{name: "too short", prop: map[string]any{"description": "ID."}, want: true},
+		{name: "bare article phrase", prop: map[string]any{"description": "The id"}, want: true},
+		{name: "literal id", prop: map[string]any{"description": "id"}, want: true},
+		{name: "real sentence", prop: map[string]any{"description": "The numeric project identifier."}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isEmptyOrBoilerplateDescription(tt.prop); got != tt.want {
+				t.Errorf("isEmptyOrBoilerplateDescription(%v) = %v, want %v", tt.prop, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNeedsMarkdownFormatter_Scenarios_SkipsDestructiveAndNamelessSpecs
+// verifies the missing_next_steps precondition: destructive actions never
+// need a formatter, list/detail content always does, a named action does by
+// default, and an unnamed non-list action does not.
+func TestNeedsMarkdownFormatter_Scenarios_SkipsDestructiveAndNamelessSpecs(t *testing.T) {
+	tests := []struct {
+		name string
+		spec toolutil.ActionSpec
+		want bool
+	}{
+		{name: "destructive", spec: toolutil.ActionSpec{Name: "branch_delete", Destructive: true}},
+		{name: "list content", spec: toolutil.ActionSpec{Name: "branch_list", ContentKind: toolutil.ActionSpecContentList}, want: true},
+		{name: "named action", spec: toolutil.ActionSpec{Name: "branch_get"}, want: true},
+		{name: "unnamed action", spec: toolutil.ActionSpec{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := needsMarkdownFormatter(tt.spec); got != tt.want {
+				t.Errorf("needsMarkdownFormatter(%+v) = %v, want %v", tt.spec, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAliasesOnlyToolname_BlankAliases_AreSkipped verifies blank alias
+// entries carry no signal: a spec whose only aliases are blank or repeat the
+// canonical and tool names is flagged, while one real alias clears it.
+func TestAliasesOnlyToolname_BlankAliases_AreSkipped(t *testing.T) {
+	tests := []struct {
+		name    string
+		aliases []string
+		want    bool
+	}{
+		{name: "blank and echoed names", aliases: []string{"  ", "branch_get", "gitlab_branch_get"}, want: true},
+		{name: "one real alias", aliases: []string{"  ", "show branch"}, want: false},
+		{name: "no aliases at all", aliases: nil, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := toolutil.ActionSpec{
+				Name:           "branch_get",
+				Aliases:        tt.aliases,
+				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_branch_get"},
+			}
+			if got := aliasesOnlyToolname(spec); got != tt.want {
+				t.Errorf("aliasesOnlyToolname(%v) = %v, want %v", tt.aliases, got, tt.want)
+			}
+		})
+	}
+}
+
+// unformattedOutput is an output type no Markdown formatter is registered
+// for, so a spec routing to it raises missing_next_steps.
+type unformattedOutput struct {
+	Name string `json:"name"`
+}
+
+// TestAnalyzeSpec_SyntheticSpec_RaisesEachActionFlag verifies analyzeSpec
+// raises each action-level flag from the corresponding gap in one synthetic
+// spec: a projected individual description missing its Returns/See also
+// sections, an output type with no registered Markdown formatter, a
+// scope-suggestive parameter with no ParameterGuidance, and an input
+// property with no description.
+func TestAnalyzeSpec_SyntheticSpec_RaisesEachActionFlag(t *testing.T) {
+	spec := toolutil.ActionSpec{
+		Name:           "widget_get",
+		Usage:          "Reads one widget by id.",
+		Aliases:        []string{"fetch widget", "show widget", "read widget"},
+		RelatedActions: []string{"widget.list"},
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_widget_get"},
+		ContentKind:    toolutil.ActionSpecContentDetail,
+		Route: toolutil.ActionRoute{
+			OutputType: reflect.TypeFor[unformattedOutput](),
+			InputSchema: map[string]any{"properties": map[string]any{
+				"project_id": map[string]any{"type": "string", "description": "The numeric project identifier or full path."},
+				"widget_id":  map[string]any{"type": "string"},
+			}},
+		},
+	}
+	projected := map[string]string{"gitlab_widget_get": "Reads one widget."}
+
+	finding := analyzeSpec(spec, projected, nil, 3)
+	for _, want := range []string{
+		"weak_individual_description",
+		"missing_next_steps",
+		"missing_parameter_guidance",
+		"empty_param_description",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !slices.Contains(finding.Flags, want) {
+				t.Errorf("flags = %v, want %q", finding.Flags, want)
+			}
+		})
+	}
+	t.Run("field breakdown names the undescribed parameter", func(t *testing.T) {
+		want := []fieldFinding{{Param: "widget_id", Flag: "empty_param_description"}}
+		if !reflect.DeepEqual(finding.Fields, want) {
+			t.Errorf("fields = %+v, want %+v", finding.Fields, want)
+		}
+	})
+	t.Run("severity is the highest of the flags", func(t *testing.T) {
+		if finding.Severity != "warning" {
+			t.Errorf("severity = %q, want warning", finding.Severity)
+		}
+	})
+	t.Run("schema presence is recorded", func(t *testing.T) {
+		if !finding.HasSchema {
+			t.Error("HasSchema = false, want true for a spec carrying an input schema")
+		}
+	})
+}
+
+// TestCollectFieldFindings_OutputSchemaGap_RaisesOutputFlag verifies the
+// output-schema walk contributes its own field findings and flag,
+// independently of the input schema.
+func TestCollectFieldFindings_OutputSchemaGap_RaisesOutputFlag(t *testing.T) {
+	spec := toolutil.ActionSpec{Route: toolutil.ActionRoute{
+		OutputSchema: map[string]any{"properties": map[string]any{"web_url": map[string]any{"type": "string"}}},
+	}}
+
+	fields, flags := collectFieldFindings(spec)
+	if !reflect.DeepEqual(fields, []fieldFinding{{Param: "web_url", Flag: "empty_output_description"}}) {
+		t.Errorf("fields = %+v, want the undescribed output property", fields)
+	}
+	if !reflect.DeepEqual(flags, []string{"empty_output_description"}) {
+		t.Errorf("flags = %v, want [empty_output_description]", flags)
+	}
+}
+
+// TestSummarize_EveryFlag_CountsPerFlagAndSeverity verifies the summary
+// tallies one action carrying every flag: each per-flag counter reaches one,
+// and the severity totals partition the flags into the error, warning and
+// info buckets they map to outside a cluster.
+func TestSummarize_EveryFlag_CountsPerFlagAndSeverity(t *testing.T) {
+	flags := []string{
+		"weak_aliases", "generic_usage", "empty_related", "missing_next_steps",
+		"empty_param_description", "empty_output_description", "param_enum_candidate",
+		"missing_disambiguation", "weak_individual_description",
+		"missing_parameter_guidance", "aliases_only_toolname",
+	}
+	summary := summarize([]packageReport{{
+		Package:  "widgets",
+		Actions:  2,
+		Findings: []actionFinding{{Action: "widget_get", Severity: "error", Flags: flags}},
+	}})
+
+	if summary.Packages != 1 || summary.Actions != 2 {
+		t.Errorf("summary = %+v, want one package with two actions", summary)
+	}
+	counts := map[string]int{
+		"weak_aliases":                summary.WeakAliases,
+		"generic_usage":               summary.GenericUsage,
+		"empty_related":               summary.EmptyRelated,
+		"missing_next_steps":          summary.MissingNextSteps,
+		"empty_param_description":     summary.EmptyParamDescription,
+		"empty_output_description":    summary.EmptyOutputDescription,
+		"param_enum_candidate":        summary.ParamEnumCandidate,
+		"missing_disambiguation":      summary.MissingDisambiguation,
+		"weak_individual_description": summary.WeakIndividualDescription,
+		"missing_parameter_guidance":  summary.MissingParameterGuidance,
+		"aliases_only_toolname":       summary.AliasesOnlyToolname,
+	}
+	for _, flag := range flags {
+		t.Run(flag, func(t *testing.T) {
+			if counts[flag] != 1 {
+				t.Errorf("%s count = %d, want 1", flag, counts[flag])
+			}
+		})
+	}
+	if summary.Errors != 2 || summary.Warnings != 7 || summary.Infos != 2 {
+		t.Errorf("severity totals = %d errors, %d warnings, %d infos; want 2/7/2", summary.Errors, summary.Warnings, summary.Infos)
+	}
+}
+
+// TestBuildReport_GapsOnly_DropsCleanPackages verifies the -gaps-only report
+// keeps only packages that raise at least one finding, while reporting the
+// same clusters as the full report.
+func TestBuildReport_GapsOnly_DropsCleanPackages(t *testing.T) {
+	full := cachedFullReport(t)
+
+	gapsOnly := buildReport(true, 3)
+	if len(gapsOnly.Packages) > len(full.Packages) {
+		t.Fatalf("gaps-only reports %d packages, full reports %d", len(gapsOnly.Packages), len(full.Packages))
+	}
+	for _, pr := range gapsOnly.Packages {
+		if len(pr.Findings) == 0 {
+			t.Errorf("package %q has no finding in the gaps-only report", pr.Package)
+		}
+	}
+	if len(gapsOnly.Clusters) != len(full.Clusters) {
+		t.Errorf("gaps-only clusters = %d, want the full report's %d", len(gapsOnly.Clusters), len(full.Clusters))
 	}
 }

@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"slices"
@@ -121,12 +122,21 @@ func main() {
 	userOpts := opts
 	userOpts.BaseURL = apidocs.DefaultUserDocBaseURL
 	res := newDocResolver(apidocs.New(root, opts), apidocs.New(root, userOpts))
+	if runErr := run(ctx, res, *gapsOnly, *outputPath, os.Stdout); runErr != nil {
+		cmdutil.Fatalf("%v", runErr)
+	}
+}
+
+// run builds the report, keeps only the domains that need tier work when
+// gapsOnly is set, and writes it as indented JSON to outputPath, or to stdout
+// when outputPath is "-".
+func run(ctx context.Context, res *docResolver, gapsOnly bool, outputPath string, stdout io.Writer) error {
 	rep, err := buildReport(ctx, res)
 	if err != nil {
-		cmdutil.Fatalf("build edition tier report: %v", err)
+		return fmt.Errorf("build edition tier report: %w", err)
 	}
 
-	if *gapsOnly {
+	if gapsOnly {
 		filtered := rep.Domains[:0]
 		for _, d := range rep.Domains {
 			if d.NeedsWork {
@@ -138,15 +148,16 @@ func main() {
 
 	data, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
-		cmdutil.Fatalf("marshal report: %v", err)
+		return fmt.Errorf("marshal report: %w", err)
 	}
-	if *outputPath == "-" {
-		fmt.Println(string(data))
-		return
+	if outputPath == "-" {
+		fmt.Fprintln(stdout, string(data))
+		return nil
 	}
-	if writeErr := os.WriteFile(*outputPath, append(data, '\n'), 0o600); writeErr != nil {
-		cmdutil.Fatalf("write report: %v", writeErr)
+	if writeErr := os.WriteFile(outputPath, append(data, '\n'), 0o600); writeErr != nil {
+		return fmt.Errorf("write report: %w", writeErr)
 	}
+	return nil
 }
 
 // report is the top-level JSON output.

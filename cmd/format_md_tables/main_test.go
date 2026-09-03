@@ -9,6 +9,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -515,5 +516,93 @@ func TestDiscoverMarkdownFiles_FindsMDX(t *testing.T) {
 				t.Errorf("files = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestRun_RemovedWorkingDirectory_ReturnsResolveRootError verifies that a
+// relative --root that cannot be made absolute (the process's working
+// directory no longer exists, so getcwd fails) is reported as a root
+// resolution error rather than an open error on an empty path.
+func TestRun_RemovedWorkingDirectory_ReturnsResolveRootError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows getcwd does not fail when the current directory is removed")
+	}
+	gone := filepath.Join(t.TempDir(), "gone")
+	if err := os.Mkdir(gone, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Chdir(gone)
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatalf("remove working directory: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	err := run([]string{"--root", "relative"}, &stdout)
+	if err == nil || !strings.Contains(err.Error(), "resolve root relative") {
+		t.Fatalf("run() error = %v, want resolve root failure", err)
+	}
+}
+
+// TestRun_UnreadableMarkdownFile_ReturnsReadError verifies that a discovered
+// Markdown file whose open fails after discovery's stat succeeded aborts the
+// run with the read error. A unix socket is such a file: stat sees a
+// non-directory entry, while open(2) refuses it with ENXIO whatever the
+// caller's privileges, which is what makes the case reproducible as root.
+func TestRun_UnreadableMarkdownFile_ReturnsReadError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix sockets are not regular filesystem entries on Windows")
+	}
+	root := t.TempDir()
+	var config net.ListenConfig
+	listener, err := config.Listen(t.Context(), "unix", filepath.Join(root, "sock.md"))
+	if err != nil {
+		t.Skipf("cannot create a unix socket in the temp root: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	var stdout bytes.Buffer
+	err = run([]string{"--root", root, "sock.md"}, &stdout)
+	if err == nil || !strings.Contains(err.Error(), "read sock.md") {
+		t.Fatalf("run() error = %v, want read sock.md failure", err)
+	}
+}
+
+// failAfterWriter accepts the first allowed writes and fails every later one,
+// so the per-file change list can fail after the header line succeeded.
+type failAfterWriter struct {
+	allowed int
+	writes  int
+}
+
+// Write succeeds allowed times and then fails.
+func (w *failAfterWriter) Write(p []byte) (int, error) {
+	w.writes++
+	if w.writes > w.allowed {
+		return 0, errors.New("write failed")
+	}
+	return len(p), nil
+}
+
+// TestRun_ChangeListWriteFails_ReturnsWriteError verifies that a stdout
+// failure while listing the formatted files, after the header line was
+// written, is still reported as a write error.
+func TestRun_ChangeListWriteFails_ReturnsWriteError(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "README.md"), "| A | B |\n| --- | ---: |\n| one | 2 |\n")
+
+	err := run([]string{"--root", root, "README.md"}, &failAfterWriter{allowed: 1})
+	if err == nil || !strings.Contains(err.Error(), "write stdout") {
+		t.Fatalf("run() error = %v, want write stdout failure on the change list", err)
+	}
+}
+
+// TestResolveInputPath_RelativeRootAbsoluteItem_ReturnsError verifies the
+// relative-path computation error is surfaced: an absolute item cannot be
+// expressed relative to a root that is itself relative.
+func TestResolveInputPath_RelativeRootAbsoluteItem_ReturnsError(t *testing.T) {
+	item := filepath.Join(t.TempDir(), "doc.md")
+	_, err := resolveInputPath("relative-root", item)
+	if err == nil || !strings.Contains(err.Error(), "resolve "+item) {
+		t.Fatalf("resolveInputPath() error = %v, want resolve failure", err)
 	}
 }

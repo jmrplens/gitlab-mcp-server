@@ -93,3 +93,27 @@ func TestResourceRedactor_PolicyIsTheOnlyDifference(t *testing.T) {
 		t.Errorf("both policies used the key %s; a consumer reading mcp.resource.uri is entitled to find a URI there", full[0].Key)
 	}
 }
+
+// TestResourceRedactor_WithoutAKeyring_RecordsNothing covers the case where the
+// policy asks for a pseudonym and there is no key to make one with.
+//
+// This is the shape a process takes when the keyring could not be built: the
+// redactor still exists, because failing to build one must not stop the server,
+// and its answer has to be no attribute at all. An empty digest recorded under
+// the ref attribute would be one time series standing for every resource, and
+// would read on a dashboard as a single resource everybody watches.
+func TestResourceRedactor_WithoutAKeyring_RecordsNothing(t *testing.T) {
+	t.Parallel()
+
+	for _, policy := range []IdentityPolicy{IdentityPseudonymous, IdentityNone} {
+		t.Run(string(policy), func(t *testing.T) {
+			t.Parallel()
+
+			redactor := NewResourceRedactor(policy, nil)
+
+			if got := redactor.ResourceAttributes("gitlab://project/82077663"); got != nil {
+				t.Errorf("ResourceAttributes = %v, want nothing recorded without a key to pseudonymize with", got)
+			}
+		})
+	}
+}

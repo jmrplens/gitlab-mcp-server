@@ -943,3 +943,115 @@ func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
 		t.Fatalf("route validation problems = %+v", problems)
 	}
 }
+
+// TestTaskDeletesProjectServiceAccount_DetectsDeleteWithoutCreate verifies the
+// shared service-account guard fires for every delete shape and stays quiet
+// when the same task creates its own account first.
+func TestTaskDeletesProjectServiceAccount_DetectsDeleteWithoutCreate(t *testing.T) {
+	cases := []struct {
+		name  string
+		steps []evalStep
+		want  bool
+	}{
+		{name: "meta delete", steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "service_account_delete"}}, want: true},
+		{name: "dynamic delete", steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.service_account_delete"}}, want: true},
+		{name: "dispatcher delete", steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.service_account_delete"}}, want: true},
+		{name: "create then delete", steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.service_account_create"}, {ExpectedTool: "gitlab", ExpectedAction: "project.service_account_delete"}}, want: false},
+		{name: "unrelated", steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := taskDeletesProjectServiceAccount(evalTask{Steps: tc.steps}); got != tc.want {
+				t.Fatalf("taskDeletesProjectServiceAccount() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTaskCreatesProjectServiceAccount_DetectsCreateShapes verifies every
+// create shape is recognized across the meta, dynamic and dispatcher tools.
+func TestTaskCreatesProjectServiceAccount_DetectsCreateShapes(t *testing.T) {
+	cases := []struct {
+		name  string
+		steps []evalStep
+		want  bool
+	}{
+		{name: "meta create", steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "service_account_create"}}, want: true},
+		{name: "dynamic create", steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.service_account_create"}}, want: true},
+		{name: "dispatcher create", steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.service_account_create"}}, want: true},
+		{name: "none", steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := taskCreatesProjectServiceAccount(evalTask{Steps: tc.steps}); got != tc.want {
+				t.Fatalf("taskCreatesProjectServiceAccount() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTaskDeletesSharedJobArtifacts_RespectsAttemptScopedFixture verifies the
+// artifact-delete guard fires for both tool shapes unless the task owns an
+// attempt-scoped failed-job fixture.
+func TestTaskDeletesSharedJobArtifacts_RespectsAttemptScopedFixture(t *testing.T) {
+	cases := []struct {
+		name string
+		task evalTask
+		want bool
+	}{
+		{name: "meta delete", task: evalTask{Steps: []evalStep{{ExpectedTool: "gitlab_job", ExpectedAction: "delete_artifacts"}}}, want: true},
+		{name: "dynamic delete", task: evalTask{Steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.delete_artifacts"}}}, want: true},
+		{name: "attempt fixture", task: evalTask{Steps: []evalStep{{ExpectedTool: "gitlab_job", ExpectedAction: "delete_artifacts"}}, Case: &EvalCase{Fixtures: []CaseFixtureSpec{{Name: "failed_job_artifact", Scope: FixtureScopeAttempt}}}}, want: false},
+		{name: "unrelated", task: evalTask{Steps: []evalStep{{ExpectedTool: "gitlab_job", ExpectedAction: "list"}}}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := taskDeletesSharedJobArtifacts(tc.task); got != tc.want {
+				t.Fatalf("taskDeletesSharedJobArtifacts() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTaskHasSimulation_DetectsSimulatedSteps verifies a task counts as
+// simulated when any step declares a simulation mode.
+func TestTaskHasSimulation_DetectsSimulatedSteps(t *testing.T) {
+	cases := []struct {
+		name string
+		task evalTask
+		want bool
+	}{
+		{name: "simulated step", task: evalTask{Steps: []evalStep{{ExpectedTool: "gitlab_project"}, {ExpectedTool: "gitlab_issue", Simulation: "transient_error_once"}}}, want: true},
+		{name: "plain", task: evalTask{ExpectedTool: "gitlab_project"}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := taskHasSimulation(tc.task); got != tc.want {
+				t.Fatalf("taskHasSimulation() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSplitMarkdownRow_HandlesEscapesAndEdges verifies escaped pipes stay in
+// the cell, other escapes keep their backslash, a trailing backslash is
+// preserved, and leading or trailing empty cells are trimmed.
+func TestSplitMarkdownRow_HandlesEscapesAndEdges(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want []string
+	}{
+		{name: "escaped pipe", line: `| a \| b | c |`, want: []string{"a | b", "c"}},
+		{name: "other escape", line: `| a\x | c |`, want: []string{`a\x`, "c"}},
+		{name: "trailing backslash", line: `| a\`, want: []string{`a\`}},
+		{name: "empty line", line: "", want: []string{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := splitMarkdownRow(tc.line); strings.Join(got, "\x00") != strings.Join(tc.want, "\x00") {
+				t.Fatalf("splitMarkdownRow(%q) = %q, want %q", tc.line, got, tc.want)
+			}
+		})
+	}
+}

@@ -749,3 +749,50 @@ func TestIsYOLOMode_TheFlagOverridesTheInheritedAlias(t *testing.T) {
 		t.Error("with YOLO_MODE unset, the AUTOPILOT alias must still work")
 	}
 }
+
+// TestConfirmAction_ADismissedDialogIsNotARefusal covers the third outcome of a
+// confirmation, distinct from both an accept and a decline.
+//
+// The model is meant to act differently on each: a decision to say no means
+// stop and offer something else, while a dialog that was dismissed without an
+// answer can reasonably be asked again later. Collapsing the two would either
+// nag a user who already said no, or silently drop a request the user never
+// actually answered — so the two results are asserted to differ in what they
+// tell the model to do next.
+func TestConfirmAction_ADismissedDialogIsNotARefusal(t *testing.T) {
+	tests := []struct {
+		name   string
+		action string
+		want   string
+	}{
+		{name: "dismissed without answering", action: "cancel", want: "you may ask again"},
+		{name: "declined deliberately", action: "decline", want: "Do not retry"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ss := newConfirmSession(t, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				return &mcp.ElicitResult{Action: tt.action}, nil
+			})
+			req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
+
+			got, guardErr := ConfirmAction(context.Background(), req, "Delete?")
+
+			if guardErr != nil {
+				t.Fatalf("unexpected protocol error: %v", guardErr)
+			}
+			if got == nil {
+				t.Fatal("ConfirmAction returned no result for an unanswered confirmation")
+			}
+			var text strings.Builder
+			for _, content := range got.Content {
+				if tc, ok := content.(*mcp.TextContent); ok {
+					text.WriteString(tc.Text)
+				}
+			}
+			if !strings.Contains(text.String(), tt.want) {
+				t.Errorf("result = %q, want it to say %q", text.String(), tt.want)
+			}
+		})
+	}
+}

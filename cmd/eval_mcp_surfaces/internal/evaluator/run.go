@@ -450,6 +450,12 @@ type evaluationRuntime struct {
 	executionClient *gitlabclient.Client
 	bridgeSupport   mcpBridgeSupport
 	close           func()
+	// providerClient, when set, is the HTTP client every model runner built
+	// from this runtime uses for provider calls. It stays nil in production
+	// (newEvaluationRuntime never sets it) so the runner keeps its own timed
+	// client; tests inject a transport that answers with canned tool calls so
+	// the evaluation loop runs without a provider API.
+	providerClient *http.Client
 }
 
 func newEvaluationRuntime(opts options, catalog []modelTool) (evaluationRuntime, error) {
@@ -543,6 +549,10 @@ func newModelRunner(opts options, spec modelSpec, runtime evaluationRuntime) (*m
 	if err != nil {
 		return nil, err
 	}
+	client := runtime.providerClient
+	if client == nil {
+		client = &http.Client{Timeout: 60 * time.Second}
+	}
 	return &modelRunner{
 		apiKey:      apiKey,
 		provider:    spec.Provider,
@@ -552,7 +562,7 @@ func newModelRunner(opts options, spec modelSpec, runtime evaluationRuntime) (*m
 		maxTokens:   opts.MaxTokens,
 		retries:     opts.Retries,
 		retryWait:   opts.RetryWait,
-		client:      &http.Client{Timeout: 60 * time.Second},
+		client:      client,
 		mcpSession:  runtime.mcpSession,
 		mcpBridge:   runtime.bridgeSupport,
 		traceBodies: opts.TraceProviderBodies,

@@ -7,6 +7,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -295,5 +298,103 @@ func TestManifestResources_SortedByName(t *testing.T) {
 func TestRun_CheckModeAcceptsCommittedManifest(t *testing.T) {
 	if err := run(true); err != nil {
 		t.Fatalf("run(true) error: %v", err)
+	}
+}
+
+// chdirFixtureProject makes a temporary project root (a directory holding a
+// go.mod) the working directory for the rest of the test and returns it, so
+// run's project-root walk lands there instead of in this repository.
+func chdirFixtureProject(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module fixture\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	t.Chdir(root)
+	return root
+}
+
+// TestRun_FixtureProject_Scenarios verifies run against a throwaway project
+// root: a missing manifest and an unparsable one are reported by stage, check
+// mode rejects a manifest whose capability arrays are stale, and a write run
+// rewrites the manifest to exactly what generate produces and then passes
+// check mode.
+func TestRun_FixtureProject_Scenarios(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest string
+		absent   bool
+		check    bool
+		wantErr  string
+	}{
+		{name: "missing manifest", absent: true, check: true, wantErr: "read " + manifestFileName},
+		{name: "unparsable manifest", manifest: "{", check: true, wantErr: "parse " + manifestFileName},
+		{name: "check rejects stale arrays", manifest: minimalManifest, check: true, wantErr: manifestFileName + " is stale"},
+		{name: "write rewrites the manifest", manifest: minimalManifest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := chdirFixtureProject(t)
+			if !tt.absent {
+				if err := os.WriteFile(filepath.Join(root, manifestFileName), []byte(tt.manifest), 0o600); err != nil {
+					t.Fatalf("write manifest: %v", err)
+				}
+			}
+
+			err := run(tt.check)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("run(%v) error = %v, want containing %q", tt.check, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("run(%v) error = %v", tt.check, err)
+			}
+			assertManifestRewritten(t, root, tt.manifest)
+		})
+	}
+}
+
+// assertManifestRewritten checks that the manifest under root is byte-equal
+// to what generate produces from the original content, and that check mode
+// then accepts it.
+func assertManifestRewritten(t *testing.T, root, original string) {
+	t.Helper()
+	want, _, genErr := generate([]byte(original))
+	if genErr != nil {
+		t.Fatalf("generate() error = %v", genErr)
+	}
+	got, readErr := os.ReadFile(filepath.Join(root, manifestFileName))
+	if readErr != nil {
+		t.Fatalf("read rewritten manifest: %v", readErr)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("rewritten manifest differs from generate() output:\n%s", got)
+	}
+	if checkErr := run(true); checkErr != nil {
+		t.Fatalf("run(true) after the rewrite error = %v, want the manifest accepted", checkErr)
+	}
+}
+
+// TestRun_RemovedWorkingDirectory_ReturnsProjectRootError verifies run
+// surfaces the project-root lookup failure when the working directory was
+// removed from under the process, instead of reading a manifest from nowhere.
+func TestRun_RemovedWorkingDirectory_ReturnsProjectRootError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows getcwd does not fail when the current directory is removed")
+	}
+	gone := filepath.Join(t.TempDir(), "gone")
+	if err := os.Mkdir(gone, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Chdir(gone)
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatalf("remove working directory: %v", err)
+	}
+
+	err := run(true)
+	if err == nil || !strings.Contains(err.Error(), "get working directory") {
+		t.Fatalf("run(true) error = %v, want the working-directory error", err)
 	}
 }

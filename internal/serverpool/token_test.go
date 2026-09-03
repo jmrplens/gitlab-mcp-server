@@ -489,3 +489,82 @@ func TestNormalizeGitLabURLs_DropsBlanksAndDuplicates(t *testing.T) {
 		t.Errorf("NormalizeGitLabURLs() = %v, want %v", got, want)
 	}
 }
+
+// TestResolveRequestOptionsFor_MalformedHeaderAgainstAnAllowList_IsRejected
+// covers the header failing to parse when several instances are published.
+//
+// The allow-list branch has to parse the header before it can ask whether the
+// list contains it, and an unparseable value is refused with the parse error
+// rather than silently falling back to the default instance: falling back would
+// answer a question the client did not ask, with another instance's data.
+func TestResolveRequestOptionsFor_MalformedHeaderAgainstAnAllowList_IsRejected(t *testing.T) {
+	t.Parallel()
+
+	allowed := []string{"https://gitlab.com", "https://gitlab.example.com"}
+	tests := []struct {
+		name   string
+		header string
+	}{
+		{name: "not a URL at all", header: "://nonsense"},
+		{name: "no scheme", header: "gitlab.example.com"},
+		{name: "credentials embedded", header: "https://user:pass@gitlab.example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			r.Header.Set(RequestOptionGitLabURL, tt.header)
+
+			options, err := ResolveRequestOptionsFor(r, allowed)
+
+			if err == nil {
+				t.Fatalf("resolved %q to %q instead of refusing it", tt.header, options.GitLabURL)
+			}
+			if _, ok := errors.AsType[*InvalidGitLabURLError](err); !ok {
+				t.Errorf("error = %v (%T), want an InvalidGitLabURLError naming the header", err, err)
+			}
+			if options.GitLabURL != "" {
+				t.Errorf("GitLabURL = %q, want nothing selected when the header cannot be read", options.GitLabURL)
+			}
+		})
+	}
+}
+
+// TestCanonicalHost_DropsOnlyTheSchemeDefaultPort pins the comparison key both
+// the allow-list and the pool are built on.
+//
+// RFC 3986 section 6.2.2 makes the host case-insensitive and an explicit
+// default port equivalent to none, so two spellings of one instance have to
+// canonicalize alike or the allow-list refuses the very instance it publishes
+// and the pool builds two entries for one credential. A non-default port is
+// part of the address and must survive, an IPv6 literal keeps its brackets, and
+// a scheme with no default port of its own has nothing to drop.
+func TestCanonicalHost_DropsOnlyTheSchemeDefaultPort(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		scheme string
+		host   string
+		want   string
+	}{
+		{name: "https default port", scheme: "https", host: "GitLab.com:443", want: "gitlab.com"},
+		{name: "http default port", scheme: "http", host: "GitLab.local:80", want: "gitlab.local"},
+		{name: "https non-default port", scheme: "https", host: "gitlab.local:8443", want: "gitlab.local:8443"},
+		{name: "http port that is https default", scheme: "http", host: "gitlab.local:443", want: "gitlab.local:443"},
+		{name: "ipv6 literal keeps its brackets", scheme: "https", host: "[::1]:443", want: "[::1]"},
+		{name: "a scheme with no default port keeps everything", scheme: "ssh", host: "GitLab.local:22", want: "gitlab.local:22"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := canonicalHost(tt.scheme, tt.host); got != tt.want {
+				t.Errorf("canonicalHost(%q, %q) = %q, want %q", tt.scheme, tt.host, got, tt.want)
+			}
+		})
+	}
+}

@@ -41,24 +41,34 @@ func main() {
 	if err != nil {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
-	builders, err := auditshared.DiscoverActionSpecGroupBuilders(filepath.Join(root, *sourceDir))
+	if runErr := run(root, *sourceDir, *outputPath, *check); runErr != nil {
+		cmdutil.Fatalf("%v", runErr)
+	}
+}
+
+// run discovers the builders under root/sourceDir, renders the manifest, and
+// either verifies root/outputPath against it (check) or rewrites it. Every
+// error names the stage that failed, which is the text main reports.
+func run(root, sourceDir, outputPath string, check bool) error {
+	builders, err := auditshared.DiscoverActionSpecGroupBuilders(filepath.Join(root, sourceDir))
 	if err != nil {
-		cmdutil.Fatalf("discover action spec group builders: %v", err)
+		return fmt.Errorf("discover action spec group builders: %w", err)
 	}
 	content, err := generateManifest(builders)
 	if err != nil {
-		cmdutil.Fatalf("generate manifest: %v", err)
+		return fmt.Errorf("generate manifest: %w", err)
 	}
-	targetPath := filepath.Join(root, *outputPath)
-	if *check {
+	targetPath := filepath.Join(root, outputPath)
+	if check {
 		if checkErr := checkManifest(targetPath, content); checkErr != nil {
-			cmdutil.Fatalf("check manifest: %v", checkErr)
+			return fmt.Errorf("check manifest: %w", checkErr)
 		}
-		return
+		return nil
 	}
 	if writeErr := os.WriteFile(targetPath, content, 0o600); writeErr != nil {
-		cmdutil.Fatalf("write %s: %v", targetPath, writeErr)
+		return fmt.Errorf("write %s: %w", targetPath, writeErr)
 	}
+	return nil
 }
 
 func generateManifest(builders []string) ([]byte, error) {

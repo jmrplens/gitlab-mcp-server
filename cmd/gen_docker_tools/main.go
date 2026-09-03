@@ -34,6 +34,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
@@ -70,6 +71,11 @@ func main() {
 
 // run introspects the selected MCP catalog mode and writes a tools.json payload
 // compatible with Docker MCP Registry ingestion.
+//
+// Two failures travel back to main: a bad flag, and a failed write of the
+// payload, which is a real stream the caller owns (a closed pipe is the usual
+// one). Registering the compiled-in catalog on an in-memory server and listing
+// it back are neither, so they abort instead.
 func run(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("gen_docker_tools", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -79,10 +85,7 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("parse flags: %w", err)
 	}
 
-	client, closeStub, err := auditshared.NewStubGitLabClient("gen-docker-tools-token") //#nosec G101 -- dummy token, no real credential
-	if err != nil {
-		return fmt.Errorf("client: %w", err)
-	}
+	client, closeStub := auditshared.NewStubGitLabClient("gen-docker-tools-token") //#nosec G101 -- dummy token, no real credential
 	defer closeStub()
 
 	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
@@ -92,31 +95,19 @@ func run(args []string, stdout io.Writer) error {
 	case *individual:
 		tools.RegisterAll(server, client, edition.Ultimate)
 	case *enterprise:
-		if registerErr := tools.RegisterAllMeta(server, client, edition.Ultimate); registerErr != nil {
-			return fmt.Errorf("register meta tools: %w", registerErr)
-		}
+		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.Ultimate))
 	default:
-		if registerErr := tools.RegisterAllMeta(server, client, edition.Free); registerErr != nil {
-			return fmt.Errorf("register meta tools: %w", registerErr)
-		}
+		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.Free))
 	}
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, connErr := server.Connect(ctx, st, nil); connErr != nil {
-		return fmt.Errorf("server connect: %w", connErr)
-	}
+	cmdutil.Must(server.Connect(ctx, st, nil))
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "gen-docker-tools-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		return fmt.Errorf("client connect: %w", err)
-	}
+	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
 	defer func() { _ = session.Close() }()
 
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("list tools: %w", err)
-	}
+	result := cmdutil.Must(session.ListTools(ctx, nil))
 
 	out := make([]dockerTool, 0, len(result.Tools))
 	for _, t := range result.Tools {

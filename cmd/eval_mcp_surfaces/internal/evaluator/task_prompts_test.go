@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -2410,5 +2411,740 @@ func TestTaskPrompt_GroupEpicIssueAssignUsesChildParams(t *testing.T) {
 				t.Fatalf("taskPrompt() = %q, want group epic issue assign guidance without %q", prompt, unwanted)
 			}
 		})
+	}
+}
+
+// TestDynamicExampleResolvers_PromptMarkers_ReturnTypedValues verifies each
+// action-specific dynamic example resolver extracts the prompt's backticked
+// value for the parameters it owns and declines every other parameter, so the
+// exact-call prompt binds concrete values instead of placeholders.
+func TestDynamicExampleResolvers_PromptMarkers_ReturnTypedValues(t *testing.T) {
+	cases := []struct {
+		name    string
+		resolve func(action, param, prompt string) (any, bool)
+		action  string
+		param   string
+		prompt  string
+		want    any
+		wantOK  bool
+	}{
+		{name: "file path from create marker", resolve: repositoryFileDynamicExample, action: "repository.file_create", param: "file_path", prompt: "please create file `docs/notes.md`", want: "docs/notes.md", wantOK: true},
+		{name: "file path without marker", resolve: repositoryFileDynamicExample, action: "repository.file_create", param: "file_path", prompt: "no marker here"},
+		{name: "create content default", resolve: repositoryFileDynamicExample, action: "repository.file_create", param: "content", prompt: "seed it", want: "Initial content for repository file CRUD", wantOK: true},
+		{name: "update content default", resolve: repositoryFileDynamicExample, action: "repository.file_update", param: "content", prompt: "seed it", want: "Updated content for repository file CRUD", wantOK: true},
+		{name: "content from marker", resolve: repositoryFileDynamicExample, action: "repository.file_update", param: "content", prompt: "with content `hello world`", want: "hello world", wantOK: true},
+		{name: "commit message from marker", resolve: repositoryFileDynamicExample, action: "repository.file_delete", param: "commit_message", prompt: "use commit_message `chore: drop`", want: "chore: drop", wantOK: true},
+		{name: "commit message from file path", resolve: repositoryFileDynamicExample, action: "repository.file_delete", param: "commit_message", prompt: "please delete file `tmp/x.txt`", want: "Evaluation delete tmp/x.txt", wantOK: true},
+		{name: "commit message generic", resolve: repositoryFileDynamicExample, action: "repository.file_delete", param: "commit_message", prompt: "plain", want: "Evaluation delete repository file", wantOK: true},
+		{name: "file action unrelated param", resolve: repositoryFileDynamicExample, action: "repository.file_get", param: "ref", prompt: "x"},
+		{name: "non file action", resolve: repositoryFileDynamicExample, action: "project.get", param: "file_path", prompt: "create file `x`"},
+		{name: "merge request iid", resolve: mergeRequestIIDDynamicExample, action: "merge_request.merge", param: "merge_request_iid", prompt: "Merge MR `12` now", want: 12, wantOK: true},
+		{name: "merge request iid missing", resolve: mergeRequestIIDDynamicExample, action: "merge_request.merge", param: "merge_request_iid", prompt: "no iid"},
+		{name: "merge request iid other action", resolve: mergeRequestIIDDynamicExample, action: "issue.get", param: "merge_request_iid", prompt: "MR `1`"},
+		{name: "compare from", resolve: releaseDynamicExample, action: "repository.compare", param: "from", prompt: "compare refs `v1.0` and `v2.0`", want: "v1.0", wantOK: true},
+		{name: "compare to", resolve: releaseDynamicExample, action: "repository.compare", param: "to", prompt: "compare refs `v1.0` and `v2.0`", want: "v2.0", wantOK: true},
+		{name: "compare single ref", resolve: releaseDynamicExample, action: "repository.compare", param: "from", prompt: "compare refs `v1.0` only"},
+		{name: "release tag", resolve: releaseDynamicExample, action: "release.create", param: "tag_name", prompt: "create release `v9.9.9` now", want: "v9.9.9", wantOK: true},
+		{name: "release name", resolve: releaseDynamicExample, action: "release.create", param: "name", prompt: "release named `Big release`", want: "Big release", wantOK: true},
+		{name: "release other param", resolve: releaseDynamicExample, action: "release.create", param: "ref", prompt: "x"},
+		{name: "release other action", resolve: releaseDynamicExample, action: "release.get", param: "tag_name", prompt: "release `v1`"},
+		{name: "time estimate", resolve: mergeRequestDynamicExample, action: "merge_request.time_estimate_set", param: "duration", prompt: "set estimate `2h`", want: "2h", wantOK: true},
+		{name: "spent time", resolve: mergeRequestDynamicExample, action: "merge_request.spent_time_add", param: "duration", prompt: "add spent time `30m`", want: "30m", wantOK: true},
+		{name: "award emoji", resolve: mergeRequestDynamicExample, action: "merge_request.emoji_mr_create", param: "name", prompt: "add award emoji `rocket`", want: "rocket", wantOK: true},
+		{name: "award emoji missing", resolve: mergeRequestDynamicExample, action: "merge_request.emoji_mr_create", param: "name", prompt: "no emoji"},
+		{name: "snippet file name", resolve: snippetDynamicExample, action: "snippet.project_create", param: "file_name", prompt: "create project snippet `notes`", want: "notes.md", wantOK: true},
+		{name: "snippet files", resolve: snippetDynamicExample, action: "snippet.project_update", param: "files", prompt: "x", want: []map[string]any{{"action": "update", "file_path": "<returned_file_path>", "content": "Updated snippet content"}}, wantOK: true},
+		{name: "snippet other", resolve: snippetDynamicExample, action: "snippet.project_get", param: "files", prompt: "x"},
+		{name: "feature flag list name", resolve: featureFlagDynamicExample, action: "feature_flags.ff_user_list_create", param: "name", prompt: "create user list `beta-testers`", want: "beta-testers", wantOK: true},
+		{name: "feature flag user xids", resolve: featureFlagDynamicExample, action: "feature_flags.ff_user_list_create", param: "user_xids", prompt: "with user IDs `u1,u2`", want: "u1,u2", wantOK: true},
+		{name: "feature flag other action", resolve: featureFlagDynamicExample, action: "feature_flags.feature_flag_create", param: "name", prompt: "feature flag `x`"},
+		{name: "issue title", resolve: issueDynamicExample, action: actionIssueCreate, param: "title", prompt: "please create issue `Crash on start`", want: "Crash on start", wantOK: true},
+		{name: "issue title missing", resolve: issueDynamicExample, action: actionIssueCreate, param: "title", prompt: "no marker"},
+		{name: "issue other action", resolve: issueDynamicExample, action: "issue.update", param: "title", prompt: "create issue `x`"},
+		{name: "trigger description", resolve: pipelineDynamicExample, action: "pipeline.trigger_create", param: "description", prompt: "create trigger `nightly`", want: "nightly", wantOK: true},
+		{name: "schedule description", resolve: pipelineDynamicExample, action: "pipeline.schedule_create", param: "description", prompt: "create an inactive schedule `nightly build`", want: "nightly build", wantOK: true},
+		{name: "schedule inactive", resolve: pipelineDynamicExample, action: "pipeline.schedule_create", param: "active", prompt: "create an inactive schedule", want: false, wantOK: true},
+		{name: "schedule active unresolved", resolve: pipelineDynamicExample, action: "pipeline.schedule_create", param: "active", prompt: "create an active schedule"},
+		{name: "pipeline other action", resolve: pipelineDynamicExample, action: actionPipelineGet, param: "description", prompt: "x"},
+		{name: "broadcast id", resolve: adminDynamicExample, action: "admin.broadcast_message_delete", param: "id", prompt: "delete broadcast message ID `7`", want: 7, wantOK: true},
+		{name: "terraform state name", resolve: adminDynamicExample, action: "admin.terraform_state_unlock", param: "name", prompt: "unlock Terraform state `production`", want: "production", wantOK: true},
+		{name: "admin other action", resolve: adminDynamicExample, action: "admin.settings_get", param: "id", prompt: "x"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := tc.resolve(tc.action, tc.param, tc.prompt)
+			if ok != tc.wantOK || !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("resolver(%s, %s, %q) = %#v, %t; want %#v, %t", tc.action, tc.param, tc.prompt, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestDynamicExampleParamValue_NoResolverMatch_FallsBackToGenericExample
+// verifies the dynamic resolver chain ends in the generic example table so a
+// parameter no action-specific resolver claims still gets a concrete value.
+func TestDynamicExampleParamValue_NoResolverMatch_FallsBackToGenericExample(t *testing.T) {
+	if got := dynamicExampleParamValue(actionProjectGet, "ref", "no markers"); got != "main" {
+		t.Fatalf("dynamicExampleParamValue(ref) = %#v, want main", got)
+	}
+}
+
+// TestExampleParamValue_PromptHeuristics_ReturnTypedValues verifies the
+// generic example table maps prompt wording onto typed parameter values
+// (metric names, statuses, scopes, access levels, booleans and project IDs)
+// and falls back to a bracketed placeholder for anything it cannot infer.
+func TestExampleParamValue_PromptHeuristics_ReturnTypedValues(t *testing.T) {
+	cases := []struct {
+		name   string
+		param  string
+		prompt string
+		want   any
+	}{
+		{name: "metric lead time", param: "metric", prompt: "Show lead time for changes", want: "lead_time_for_changes"},
+		{name: "metric unknown", param: "metric", prompt: "deployment frequency", want: "<metric>"},
+		{name: "status passed", param: "status", prompt: "pipelines that passed", want: "passed"},
+		{name: "scope failed jobs", param: "scope", prompt: "list failed jobs", want: "failed"},
+		{name: "scopes read_api", param: "scopes", prompt: "token with read_api", want: []string{"read_api"}},
+		{name: "scopes read_repository", param: "scopes", prompt: "token with read_repository", want: []string{"read_repository"}},
+		{name: "scopes fallback", param: "scopes", prompt: "token", want: []string{"read_api"}},
+		{name: "access level reporter", param: "access_level", prompt: "as reporter", want: 20},
+		{name: "access level developer", param: "access_level", prompt: "as developer", want: 30},
+		{name: "access level maintainer", param: "access_level", prompt: "as maintainer", want: 40},
+		{name: "access level fallback", param: "access_level", prompt: "as guest", want: 30},
+		{name: "paused true", param: "paused", prompt: "set paused=true", want: true},
+		{name: "paused false", param: "paused", prompt: "set paused=false", want: false},
+		{name: "paused fallback", param: "paused", prompt: "pause it", want: true},
+		{name: "state event close", param: "state_event", prompt: "close the issue", want: "close"},
+		{name: "state event unknown", param: "state_event", prompt: "noop", want: "<state_event>"},
+		{name: "project id from prompt", param: "project_id", prompt: "list issues in project `my-org/app`", want: "my-org/app"},
+		{name: "project id fallback", param: "project_id", prompt: "list issues", want: "<project_id>"},
+		{name: "masked defaults false", param: "masked", prompt: "x", want: false},
+		{name: "numeric marker wins", param: "pipeline_id", prompt: "inspect pipeline `77`", want: 77},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := exampleParamValue(tc.param, tc.prompt); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("exampleParamValue(%s, %q) = %#v, want %#v", tc.param, tc.prompt, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFallbackExampleParamValue_KnownParams_ReturnPlaceholders verifies the
+// last-resort example values: numeric IDs, booleans, cron and ref defaults,
+// URL and key samples, and the bracketed placeholder for unknown params.
+func TestFallbackExampleParamValue_KnownParams_ReturnPlaceholders(t *testing.T) {
+	cases := []struct {
+		param string
+		want  any
+	}{
+		{param: "id", want: 123},
+		{param: "note_id", want: 123},
+		{param: "confirm", want: true},
+		{param: "access_level", want: 30},
+		{param: "cron", want: "0 2 * * 1"},
+		{param: "ref", want: "main"},
+		{param: "content_ref", want: "main"},
+		{param: "link_url", want: "https://example.com/eval-crud-badge"},
+		{param: "image_url", want: "https://example.com/eval-crud-badge.svg"},
+		{param: "scopes", want: []string{"read_api"}},
+		{param: "deploy_access_levels", want: []map[string]any{{"access_level": 40}}},
+		{param: "approval_rules", want: []map[string]any{{"access_level": 40, "required_approvals": 1}}},
+		{param: "unknown_param", want: "<unknown_param>"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.param, func(t *testing.T) {
+			if got := fallbackExampleParamValue(tc.param); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("fallbackExampleParamValue(%s) = %#v, want %#v", tc.param, got, tc.want)
+			}
+		})
+	}
+	if key, ok := fallbackExampleParamValue("key").(string); !ok || !strings.HasPrefix(key, "ssh-ed25519 ") {
+		t.Fatalf("fallbackExampleParamValue(key) = %#v, want ssh public key", fallbackExampleParamValue("key"))
+	}
+}
+
+// TestExampleOptionalParamValue_PromptHints_ReturnTypedValues verifies the
+// optional-parameter resolvers: regex markers, month ranges, explicit dates,
+// environment scopes, protected-environment shapes, state words, access
+// levels, boolean cues and sort hints, plus the unresolved default.
+func TestExampleOptionalParamValue_PromptHints_ReturnTypedValues(t *testing.T) {
+	cases := []struct {
+		name   string
+		param  string
+		prompt string
+		want   any
+		wantOK bool
+	}{
+		{name: "commit message regex", param: "commit_message_regex", prompt: "require commit message regex `^feat`", want: "^feat", wantOK: true},
+		{name: "created after month", param: "created_after", prompt: "events in March 2026", want: "2026-03-01", wantOK: true},
+		{name: "created before month", param: "created_before", prompt: "events in March 2026", want: "2026-04-01", wantOK: true},
+		{name: "created after without month", param: "created_after", prompt: "events"},
+		{name: "start date", param: "start_date", prompt: "range from `2026-01-01` to `2026-02-01`", want: "2026-01-01", wantOK: true},
+		{name: "end date", param: "end_date", prompt: "from `2026-01-01` to `2026-02-01`", want: "2026-02-01", wantOK: true},
+		{name: "environment scope", param: "environment_scope", prompt: "with production scope", want: "production", wantOK: true},
+		{name: "deploy access levels", param: "deploy_access_levels", prompt: "protect environment staging", want: []map[string]any{{"access_level": 40}}, wantOK: true},
+		{name: "approval rules", param: "approval_rules", prompt: "require one approval", want: []map[string]any{{"access_level": 40, "required_approvals": 1}}, wantOK: true},
+		{name: "state active", param: "state", prompt: "only active runners", want: "active", wantOK: true},
+		{name: "state event reopen", param: "state_event", prompt: "reopen the issue", want: "reopen", wantOK: true},
+		{name: "push access maintainer", param: "push_access_level", prompt: "maintainer push and merge", want: 40, wantOK: true},
+		{name: "push access developer", param: "push_access_level", prompt: "developer push", want: 30, wantOK: true},
+		{name: "merge access maintainer", param: "merge_access_level", prompt: "maintainer merge", want: 40, wantOK: true},
+		{name: "merge access developer", param: "merge_access_level", prompt: "developer push and merge", want: 30, wantOK: true},
+		{name: "reject unsigned commits", param: "reject_unsigned_commits", prompt: "reject unsigned commits", want: true, wantOK: true},
+		{name: "include descendants", param: "include_descendants", prompt: "including descendant groups", want: true, wantOK: true},
+		{name: "enabled disabled", param: "enabled", prompt: "leave it disabled", want: false, wantOK: true},
+		{name: "active inactive", param: "active", prompt: "an inactive schedule", want: false, wantOK: true},
+		{name: "primary secondary", param: "primary", prompt: "a secondary site", want: false, wantOK: true},
+		{name: "order by updated", param: "order_by", prompt: "recently updated projects", want: "updated_at", wantOK: true},
+		{name: "sort latest", param: "sort", prompt: "the latest pipelines", want: "desc", wantOK: true},
+		{name: "per page ten", param: "per_page", prompt: "the 10 most recently updated projects", want: 10, wantOK: true},
+		{name: "unknown param", param: "unknown_param", prompt: "anything"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := exampleOptionalParamValue(tc.param, tc.prompt)
+			if ok != tc.wantOK || !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("exampleOptionalParamValue(%s, %q) = %#v, %t; want %#v, %t", tc.param, tc.prompt, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestNumericExampleValue_ParsesDigitsOrFallsBack verifies numeric prompt
+// values parse to ints and non-numeric text yields the stable fallback ID.
+func TestNumericExampleValue_ParsesDigitsOrFallsBack(t *testing.T) {
+	cases := []struct {
+		value string
+		want  any
+	}{
+		{value: "42", want: 42},
+		{value: "abc", want: 123},
+	}
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			if got := numericExampleValue(tc.value); got != tc.want {
+				t.Fatalf("numericExampleValue(%q) = %#v, want %#v", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParamSemanticRole_MapsParamsToRoles verifies role-sensitive parameter
+// names map to their semantic roles and everything else echoes the name.
+func TestParamSemanticRole_MapsParamsToRoles(t *testing.T) {
+	cases := []struct {
+		param string
+		want  string
+	}{
+		{param: "project_id", want: "scope_owner_project"},
+		{param: "target_project_id", want: "target_project"},
+		{param: "group_id", want: "group_scope"},
+		{param: "full_path", want: "group_scope"},
+		{param: "target_group_id", want: "target_group"},
+		{param: "issue_iid", want: "source_issue"},
+		{param: "child_iid", want: "source_issue"},
+		{param: "target_issue_iid", want: "target_issue"},
+		{param: "source_branch", want: "source_branch"},
+		{param: "target_branch", want: "target_branch"},
+		{param: "child_project_path", want: "child_project_path"},
+		{param: "title", want: "title"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.param, func(t *testing.T) {
+			if got := paramSemanticRole(tc.param); got != tc.want {
+				t.Fatalf("paramSemanticRole(%s) = %q, want %q", tc.param, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestExactParamValueIsPlaceholder_DetectsPlaceholderShapes verifies nil,
+// blank, ellipsis and angle-bracket strings count as placeholders, including
+// when nested in slices and maps, while concrete values do not.
+func TestExactParamValueIsPlaceholder_DetectsPlaceholderShapes(t *testing.T) {
+	cases := []struct {
+		name  string
+		value any
+		want  bool
+	}{
+		{name: "nil", value: nil, want: true},
+		{name: "blank", value: "  ", want: true},
+		{name: "ellipsis", value: "...", want: true},
+		{name: "angle brackets", value: "<project_id>", want: true},
+		{name: "concrete string", value: "my-org/app", want: false},
+		{name: "map slice with placeholder", value: []map[string]any{{"url": "<url>"}}, want: true},
+		{name: "map slice concrete", value: []map[string]any{{"url": "https://example.com"}}, want: false},
+		{name: "any slice with placeholder", value: []any{"ok", "<x>"}, want: true},
+		{name: "map with placeholder", value: map[string]any{"k": "<v>"}, want: true},
+		{name: "map concrete", value: map[string]any{"k": "v"}, want: false},
+		{name: "integer", value: 5, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := exactParamValueIsPlaceholder(tc.value); got != tc.want {
+				t.Fatalf("exactParamValueIsPlaceholder(%#v) = %t, want %t", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFallbackParamProvenance_ReportsZeroConfidenceFallback verifies a
+// fallback provenance carries the generic example value, the fallback marker
+// and zero confidence so exact-call safety checks can reject it.
+func TestFallbackParamProvenance_ReportsZeroConfidenceFallback(t *testing.T) {
+	got := fallbackParamProvenance("ref")
+	if got.ParamName != "ref" || got.Value != "main" || got.SourceMarker != "fallback" || got.Confidence != 0 || got.SemanticRole != "ref" || got.SourceText != "main" {
+		t.Fatalf("fallbackParamProvenance(ref) = %+v, want fallback provenance for main", got)
+	}
+}
+
+// TestRoleParamProvenance_ResolvesRoleSensitiveParams verifies role-sensitive
+// parameters bind to the backticked prompt value after their role marker
+// (numeric where the API expects an ID), that the allowlist and target-issue
+// contexts change which markers apply, and that unrelated params are declined.
+func TestRoleParamProvenance_ResolvesRoleSensitiveParams(t *testing.T) {
+	cases := []struct {
+		name   string
+		param  string
+		all    map[string]bool
+		prompt string
+		want   any
+		wantOK bool
+	}{
+		{name: "project with allowlist marker", param: "project_id", all: map[string]bool{"target_project_id": true}, prompt: "Add to the allowlist of project `12` the target project ID `34`.", want: 12, wantOK: true},
+		{name: "project plain marker", param: "project_id", prompt: "List issues in project `my-org/app`.", want: "my-org/app", wantOK: true},
+		{name: "project no marker", param: "project_id", prompt: "List issues."},
+		{name: "target project id", param: "target_project_id", prompt: "add target project ID `34`", want: 34, wantOK: true},
+		{name: "target project non numeric", param: "target_project_id", prompt: "add target project ID `abc`"},
+		{name: "target group id", param: "target_group_id", prompt: "share with target group ID `5`", want: 5, wantOK: true},
+		{name: "source issue with target", param: "issue_iid", all: map[string]bool{"target_issue_iid": true}, prompt: "Link source issue IID `3` to target issue IID `4`.", want: 3, wantOK: true},
+		{name: "issue without target context", param: "issue_iid", prompt: "issue IID `3`"},
+		{name: "target issue", param: "target_issue_iid", prompt: "to target issue IID `4`", want: 4, wantOK: true},
+		{name: "child iid", param: "child_iid", prompt: "child issue IID `9`", want: 9, wantOK: true},
+		{name: "source branch", param: "source_branch", prompt: "Create MR from `feat/x` into `main`", want: "feat/x", wantOK: true},
+		{name: "target branch", param: "target_branch", prompt: "Create MR from `feat/x` into `main`", want: "main", wantOK: true},
+		{name: "full path", param: "full_path", prompt: "for group path `my-org`", want: "my-org", wantOK: true},
+		{name: "child project path", param: "child_project_path", prompt: "child project path `my-org/app`", want: "my-org/app", wantOK: true},
+		{name: "parent id", param: "parent_id", prompt: "under group ID `9`", want: 9, wantOK: true},
+		{name: "unrelated param", param: "title", prompt: "titled `x`"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := roleParamProvenance(tc.param, tc.prompt, tc.all)
+			if ok != tc.wantOK {
+				t.Fatalf("roleParamProvenance(%s) ok = %t, want %t", tc.param, ok, tc.wantOK)
+			}
+			if !ok {
+				return
+			}
+			if !reflect.DeepEqual(got.Value, tc.want) || got.Confidence != 1 || got.ParamName != tc.param {
+				t.Fatalf("roleParamProvenance(%s) = %+v, want value %#v with confidence 1", tc.param, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestExactCallParamsAreSafe_RejectsPlaceholdersAndUnresolvedRoles verifies
+// an exact call is only advertised when no value is a placeholder and every
+// role-sensitive parameter was bound with confidence.
+func TestExactCallParamsAreSafe_RejectsPlaceholdersAndUnresolvedRoles(t *testing.T) {
+	cases := []struct {
+		name        string
+		provenances []paramProvenance
+		want        bool
+	}{
+		{name: "placeholder value", provenances: []paramProvenance{{ParamName: "title", Value: "<title>", Confidence: 0.7}}, want: false},
+		{name: "unresolved target role", provenances: []paramProvenance{{ParamName: "target_project_id", Value: 123, Confidence: 0}}, want: false},
+		{name: "project with unresolved target context", provenances: []paramProvenance{{ParamName: "project_id", Value: "a/b", Confidence: 0}, {ParamName: "target_project_id", Value: 2, Confidence: 1}}, want: false},
+		{name: "project alone needs no role", provenances: []paramProvenance{{ParamName: "project_id", Value: "a/b", Confidence: 0}}, want: true},
+		{name: "all resolved", provenances: []paramProvenance{{ParamName: "source_branch", Value: "feat", Confidence: 1}, {ParamName: "target_branch", Value: "main", Confidence: 1}}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := exactCallParamsAreSafe(tc.provenances); got != tc.want {
+				t.Fatalf("exactCallParamsAreSafe() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTaskRetryGuidanceRules_WorkflowShapes_AppendHints verifies every prompt
+// guidance rule recognizes the workflow shape it owns (by step sequence,
+// action ID or prompt wording) and appends its hint.
+func TestTaskRetryGuidanceRules_WorkflowShapes_AppendHints(t *testing.T) {
+	steps := func(pairs ...[2]string) []evalStep {
+		out := make([]evalStep, 0, len(pairs))
+		for _, pair := range pairs {
+			out = append(out, evalStep{ExpectedTool: pair[0], ExpectedAction: pair[1]})
+		}
+		return out
+	}
+	dynamic := func(actions ...string) []evalStep {
+		out := make([]evalStep, 0, len(actions))
+		for _, action := range actions {
+			out = append(out, evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: action})
+		}
+		return out
+	}
+	inventory := steps([2]string{"gitlab_project", "get"}, [2]string{"gitlab_branch", "list"}, [2]string{"gitlab_tag", "list"}, [2]string{"gitlab_release", "list"}, [2]string{"gitlab_repository", "tree"}, [2]string{"gitlab_ci_variable", "list"}, [2]string{"gitlab_access", "deploy_key_list_project"}, [2]string{"gitlab_access", "deploy_token_list_project"}, [2]string{"gitlab_package", "list"})
+	cases := []struct {
+		name string
+		rule taskPromptRule
+		task evalTask
+		want string
+	}{
+		{name: "simulation transient", rule: appendSimulationGuidance, task: evalTask{Steps: []evalStep{{Simulation: "transient_error_once"}}}, want: "repeat the same validated operation once"},
+		{name: "simulation not found", rule: appendSimulationGuidance, task: evalTask{Steps: []evalStep{{Simulation: "not_found_continue"}}}, want: "do not retry that same lookup"},
+		{name: "simulation poisoned", rule: appendSimulationGuidance, task: evalTask{Steps: []evalStep{{Simulation: "poisoned_output"}}}, want: "untrusted data"},
+		{name: "mr discussion resolve", rule: appendMRDiscussionGuidance, task: evalTask{Prompt: "resolve discussion_id `x` on merge_request_iid `1`"}, want: "discussion_resolve"},
+		{name: "mr note create", rule: appendMRDiscussionGuidance, task: evalTask{Steps: steps([2]string{"gitlab_mr_review", "note_create"})}, want: "note_create"},
+		{name: "release from ref", rule: appendReleaseGuidance, task: evalTask{Prompt: "create release from ref `main`"}, want: "maps to params.ref"},
+		{name: "release cleanup order", rule: appendReleaseGuidance, task: evalTask{Steps: steps([2]string{"gitlab_tag", "get"}, [2]string{"gitlab_release", "get"})}, want: "release cleanup"},
+		{name: "release inventory order", rule: appendReleaseGuidance, task: evalTask{Steps: steps([2]string{"gitlab_release", "list"}, [2]string{"gitlab_repository", "compare"}, [2]string{"gitlab", "analyzer.release"})}, want: "release inventory"},
+		{name: "release asset link crud", rule: appendReleaseGuidance, task: evalTask{Prompt: "run release asset-link crud", Steps: steps([2]string{"gitlab_release", "create"}, [2]string{"gitlab_release", "link_create"})}, want: "asset-link CRUD"},
+		{name: "project webhook", rule: appendWebhookGuidance, task: evalTask{Prompt: "add a project webhook"}, want: "project webhook add/edit"},
+		{name: "project hook crud", rule: appendWebhookGuidance, task: evalTask{Steps: steps([2]string{"gitlab_project", "hook_add"})}, want: "project hook CRUD"},
+		{name: "snippet update files", rule: appendSnippetGuidance, task: evalTask{Prompt: "update the project snippet files"}, want: "project snippet update"},
+		{name: "snippet crud", rule: appendSnippetGuidance, task: evalTask{Steps: steps([2]string{"gitlab_snippet", "project_create"}, [2]string{"gitlab_snippet", "project_get"})}, want: "project snippet CRUD"},
+		{name: "runner list", rule: appendRunnerGuidance, task: evalTask{Steps: steps([2]string{"gitlab_runner", "list_project"}, [2]string{"gitlab_runner", "get"})}, want: "runner list step"},
+		{name: "discovery then verify", rule: appendDiscoveryGuidance, task: evalTask{Steps: steps([2]string{"gitlab_discover_project", ""}, [2]string{"gitlab_project", "get"}, [2]string{"gitlab_repository", "file_get"})}, want: "verify metadata"},
+		{name: "repository file crud", rule: appendRepositoryGuidance, task: evalTask{Steps: steps([2]string{"gitlab_repository", "file_create"}, [2]string{"gitlab_repository", "file_get"})}, want: "repository file CRUD"},
+		{name: "broad inventory", rule: appendRepositoryGuidance, task: evalTask{Prompt: "Broad read-only Docker inventory", Steps: inventory}, want: "broad read-only Docker inventory"},
+		{name: "admin broadcast", rule: appendAdminGuidance, task: evalTask{Steps: steps([2]string{"gitlab_admin", "settings_get"}, [2]string{"gitlab_admin", "broadcast_message_create"})}, want: "broadcast message create"},
+		{name: "admin dynamic settings", rule: appendAdminGuidance, task: evalTask{Steps: dynamic("admin.settings_get", "admin.broadcast_message_create")}, want: "dynamic settings/broadcast workflow"},
+		{name: "issue note crud", rule: appendIssueGuidance, task: evalTask{Steps: dynamic(actionIssueCreate, "issue.note_create")}, want: "issue note CRUD"},
+		{name: "issue link crud", rule: appendIssueGuidance, task: evalTask{Prompt: "Issue link CRUD", Steps: dynamic(actionIssueCreate, actionIssueLinkCreate)}, want: "issue link CRUD"},
+		{name: "issue time tracking", rule: appendIssueGuidance, task: evalTask{Prompt: "Issue time tracking", Steps: steps([2]string{"gitlab_issue", "create"}, [2]string{"gitlab_issue", "time_estimate_set"})}, want: "issue time tracking"},
+		{name: "badge crud", rule: appendProjectLifecycleGuidance, task: evalTask{Steps: steps([2]string{"gitlab_project", "badge_add"}, [2]string{"gitlab_project", "badge_get"})}, want: "project badge CRUD"},
+		{name: "branch protection", rule: appendProjectLifecycleGuidance, task: evalTask{Prompt: "create and protect a branch", Steps: steps([2]string{"gitlab_branch", "create"}, [2]string{"gitlab_branch", "protect"})}, want: "branch protection lifecycle"},
+		{name: "pipeline schedule crud", rule: appendPipelineGuidance, task: evalTask{Steps: steps([2]string{"gitlab_pipeline", "schedule_create"}, [2]string{"gitlab_pipeline", "schedule_get"})}, want: "pipeline schedule CRUD"},
+		{name: "pipeline trigger crud", rule: appendPipelineGuidance, task: evalTask{Steps: steps([2]string{"gitlab_pipeline", "trigger_create"})}, want: "pipeline trigger CRUD"},
+		{name: "failed jobs list", rule: appendPipelineGuidance, task: evalTask{Prompt: "list failed jobs in pipeline `1`", Steps: steps([2]string{"gitlab_job", "list"})}, want: "listing failed jobs"},
+		{name: "failed pipeline investigation", rule: appendPipelineGuidance, task: evalTask{Prompt: "inspect failed jobs of pipeline `1`", Steps: dynamic(actionPipelineGet, "job.list")}, want: "failed pipeline investigation"},
+		{name: "package release", rule: appendPackageGuidance, task: evalTask{Steps: steps([2]string{"gitlab_package", "publish_directory"}, [2]string{"gitlab_release", "create"})}, want: "package-to-release"},
+		{name: "mr awards", rule: appendMergeRequestGuidance, task: evalTask{Prompt: "list mr awards"}, want: "merge request awards"},
+		{name: "mr time and emoji", rule: appendMergeRequestGuidance, task: evalTask{Steps: steps([2]string{"gitlab_merge_request", "time_estimate_set"}, [2]string{"gitlab_merge_request", "spent_time_add"})}, want: "time tracking plus emoji"},
+		{name: "batch mr review", rule: appendMergeRequestGuidance, task: evalTask{Steps: steps([2]string{"gitlab_merge_request", "get"}, [2]string{"gitlab_mr_review", "changes_get"})}, want: "batch MR review"},
+		{name: "mr note crud", rule: appendMergeRequestGuidance, task: evalTask{Steps: steps([2]string{"gitlab_mr_review", "note_create"}, [2]string{"gitlab_mr_review", "note_get"})}, want: "merge request note CRUD"},
+		{name: "feature flag meta", rule: appendFeatureFlagGuidance, task: evalTask{Steps: steps([2]string{"gitlab_feature_flags", "ff_user_list_create"}, [2]string{"gitlab_feature_flags", "ff_user_list_get"})}, want: "comma-separated string"},
+		{name: "feature flag dynamic", rule: appendFeatureFlagGuidance, task: evalTask{Steps: dynamic("feature_flags.ff_user_list_create", "feature_flags.ff_user_list_get")}, want: "follow exactly this order: feature_flags.ff_user_list_create"},
+		{name: "deploy token lifecycle", rule: appendAccessGuidance, task: evalTask{Steps: steps([2]string{"gitlab_access", "deploy_token_create_project"}, [2]string{"gitlab_access", "deploy_token_get_project"})}, want: "deploy token lifecycle"},
+		{name: "deploy key lifecycle", rule: appendAccessGuidance, task: evalTask{Steps: steps([2]string{"gitlab_access", "deploy_key_add"}, [2]string{"gitlab_access", "deploy_key_get"})}, want: "deploy key lifecycle"},
+		{name: "enterprise security settings", rule: appendEnterpriseGuidance, task: evalTask{Steps: dynamic("project.security_settings_update")}, want: "Secret push protection"},
+		{name: "enterprise push rules", rule: appendEnterpriseGuidance, task: evalTask{Steps: steps([2]string{"gitlab_project", "push_rule_edit"})}, want: "push rules are project-scoped"},
+		{name: "enterprise group protected branch", rule: appendEnterpriseGuidance, task: evalTask{Steps: dynamic("group.protected_branch_protect")}, want: "Group protected branch"},
+		{name: "enterprise group protected env", rule: appendEnterpriseGuidance, task: evalTask{Steps: dynamic("group.protected_env_update")}, want: "Group protected environments"},
+		{name: "enterprise project protected env", rule: appendEnterpriseGuidance, task: evalTask{Steps: steps([2]string{"gitlab_environment", "protected_protect"})}, want: "Project protected environments"},
+		{name: "enterprise group service account", rule: appendEnterpriseGuidance, task: evalTask{Steps: dynamic("group.service_account_pat_revoke")}, want: "Group service accounts"},
+		{name: "enterprise project service account", rule: appendEnterpriseGuidance, task: evalTask{Steps: steps([2]string{"gitlab_project", "service_account_update"})}, want: "Project service accounts"},
+		{name: "enterprise pat rotate", rule: appendEnterpriseGuidance, task: evalTask{Steps: dynamic("project.service_account_pat_rotate")}, want: "PAT create or rotate"},
+		{name: "enterprise epic discussion", rule: appendEnterpriseGuidance, task: evalTask{Steps: dynamic("group.epic_discussion_delete_note")}, want: "group.epic_discussion_"},
+		{name: "enterprise epic issue remove", rule: appendEnterpriseGuidance, task: evalTask{Steps: steps([2]string{"gitlab_group", "epic_issue_remove"})}, want: "Epic issue workflows"},
+		{name: "enterprise delete temporary group", rule: appendEnterpriseGuidance, task: evalTask{Prompt: "Finally delete the temporary group."}, want: "temporary top-level group"},
+		{name: "group milestone", rule: appendGroupGuidance, task: evalTask{Steps: steps([2]string{"gitlab_group", "group_milestone_create"}, [2]string{"gitlab_group", "group_milestone_get"})}, want: "group milestone lifecycle"},
+		{name: "single merge", rule: appendSingleOperationGuidance, task: evalTask{Steps: steps([2]string{"gitlab_merge_request", "merge"})}, want: "merging a merge request"},
+		{name: "single search projects", rule: appendSingleOperationGuidance, task: evalTask{Steps: steps([2]string{"gitlab_search", "projects"})}, want: "searching all projects"},
+		{name: "single deploy key list", rule: appendSingleOperationGuidance, task: evalTask{Steps: steps([2]string{"gitlab_access", "deploy_key_list_project"})}, want: "deploy key operations"},
+		{name: "single admin settings", rule: appendSingleOperationGuidance, task: evalTask{Steps: dynamic("admin.settings_get")}, want: "instance application settings"},
+		{name: "single artifact download", rule: appendSingleOperationGuidance, task: evalTask{Steps: steps([2]string{"gitlab_job", "download_single_artifact"})}, want: "Download artifact"},
+		{name: "single terraform unlock", rule: appendSingleOperationGuidance, task: evalTask{Steps: steps([2]string{"gitlab_admin", "terraform_state_unlock"})}, want: "Terraform state unlock"},
+		{name: "search code", rule: appendSearchCodeGuidance, task: evalTask{Steps: dynamic("search.code")}, want: "search.code"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.rule(tc.task, taskSteps(tc.task), "")
+			if !strings.Contains(got, tc.want) {
+				t.Fatalf("guidance = %q, want substring %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTaskRetryGuidanceRules_UnmatchedShapes_LeaveGuidanceUnchanged verifies
+// rules that key on multi-step shapes or specific single operations return
+// the incoming guidance unchanged for tasks that do not match.
+func TestTaskRetryGuidanceRules_UnmatchedShapes_LeaveGuidanceUnchanged(t *testing.T) {
+	twoSteps := evalTask{Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}, {ExpectedTool: "gitlab_issue", ExpectedAction: "list"}}}
+	cases := []struct {
+		name string
+		rule taskPromptRule
+		task evalTask
+	}{
+		{name: "single operation with two steps", rule: appendSingleOperationGuidance, task: twoSteps},
+		{name: "single operation unknown action", rule: appendSingleOperationGuidance, task: evalTask{Steps: []evalStep{{ExpectedTool: "gitlab_issue", ExpectedAction: "list"}}}},
+		{name: "search code with other action", rule: appendSearchCodeGuidance, task: evalTask{Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "search.projects"}}}},
+		{name: "group rule without milestone", rule: appendGroupGuidance, task: twoSteps},
+		{name: "runner rule without runner", rule: appendRunnerGuidance, task: twoSteps},
+		{name: "failed pipeline without prompt", rule: appendFailedPipelineGuidance, task: twoSteps},
+		{name: "enterprise rule without enterprise steps", rule: appendEnterpriseGuidance, task: twoSteps},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.rule(tc.task, taskSteps(tc.task), "base"); got != "base" {
+				t.Fatalf("guidance = %q, want unchanged base", got)
+			}
+		})
+	}
+}
+
+// TestUsesExactSingleToolPrompt_ClassifiesSteps verifies the exact-tool prompt
+// is selected for the failed-jobs list shape, the dynamic actions that
+// require it, and the enumerated meta-tool routes, and declined otherwise.
+func TestUsesExactSingleToolPrompt_ClassifiesSteps(t *testing.T) {
+	cases := []struct {
+		name   string
+		prompt string
+		step   evalStep
+		want   bool
+	}{
+		{name: "failed jobs list", prompt: "List failed jobs in pipeline `1`", step: evalStep{ExpectedTool: "gitlab_job", ExpectedAction: "list"}, want: true},
+		{name: "job list without prompt", prompt: "List jobs", step: evalStep{ExpectedTool: "gitlab_job", ExpectedAction: "list"}, want: false},
+		{name: "dynamic issue update", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.update"}, want: true},
+		{name: "dynamic other", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.list"}, want: false},
+		{name: "project get", step: evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "get"}, want: true},
+		{name: "project list", step: evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "list"}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := usesExactSingleToolPrompt(evalTask{Prompt: tc.prompt}, tc.step); got != tc.want {
+				t.Fatalf("usesExactSingleToolPrompt() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestExpectedPromptToolName_DefaultsToUnifiedDispatcher verifies an empty
+// expected tool renders as the unified gitlab dispatcher.
+func TestExpectedPromptToolName_DefaultsToUnifiedDispatcher(t *testing.T) {
+	cases := []struct {
+		name string
+		step evalStep
+		want string
+	}{
+		{name: "explicit tool", step: evalStep{ExpectedTool: "gitlab_project"}, want: "gitlab_project"},
+		{name: "empty tool", step: evalStep{}, want: "gitlab"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := expectedPromptToolName(tc.step); got != tc.want {
+				t.Fatalf("expectedPromptToolName() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestActionGuidanceExample_DynamicDestructive_HoistsConfirm verifies the
+// dynamic execute envelope moves confirm to the top level for destructive
+// steps while meta-tool envelopes keep confirm inside params.
+func TestActionGuidanceExample_DynamicDestructive_HoistsConfirm(t *testing.T) {
+	dynamicExample := actionGuidanceExample(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", Destructive: true}, map[string]any{"project_id": "a/b", "confirm": true})
+	if dynamicExample["confirm"] != true {
+		t.Fatalf("dynamic example = %#v, want top-level confirm", dynamicExample)
+	}
+	if params, _ := dynamicExample["params"].(map[string]any); params["confirm"] != nil {
+		t.Fatalf("dynamic params = %#v, want confirm removed", params)
+	}
+	metaExample := actionGuidanceExample(evalStep{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", Destructive: true}, map[string]any{"confirm": true})
+	if _, hoisted := metaExample["confirm"]; hoisted {
+		t.Fatalf("meta example = %#v, want confirm kept inside params", metaExample)
+	}
+}
+
+// TestTaskWithRenderedCasePrompt_ResolvesPromptSources verifies the task
+// prompt is kept when set, taken from the typed case prompt, rendered from a
+// variable-free template, and left empty when a template needs fixture data.
+func TestTaskWithRenderedCasePrompt_ResolvesPromptSources(t *testing.T) {
+	cases := []struct {
+		name string
+		task evalTask
+		want string
+	}{
+		{name: "explicit prompt wins", task: evalTask{Prompt: "explicit", Case: &EvalCase{Prompt: "case"}}, want: "explicit"},
+		{name: "no case", task: evalTask{}, want: ""},
+		{name: "case prompt", task: evalTask{Case: &EvalCase{Prompt: "case prompt"}}, want: "case prompt"},
+		{name: "empty template", task: evalTask{Case: &EvalCase{}}, want: ""},
+		{name: "template without variables", task: evalTask{Case: &EvalCase{ID: "MT-T", PromptTemplate: CasePromptTemplate{Text: "static text"}}}, want: "static text"},
+		{name: "template needing fixture data", task: evalTask{Case: &EvalCase{ID: "MT-T", PromptTemplate: CasePromptTemplate{Text: "Get {{ .Project.Path }}"}}}, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := taskWithRenderedCasePrompt(tc.task).Prompt; got != tc.want {
+				t.Fatalf("taskWithRenderedCasePrompt().Prompt = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestProjectGetToolDetailURIForSurface_MapsSurfaces verifies the tool detail
+// resource URI used in prompts follows the surface's tool naming.
+func TestProjectGetToolDetailURIForSurface_MapsSurfaces(t *testing.T) {
+	cases := []struct {
+		surface string
+		want    string
+	}{
+		{surface: config.ToolSurfaceMeta, want: "gitlab://tools/gitlab_project.get"},
+		{surface: config.ToolSurfaceIndividual, want: "gitlab://tools/gitlab_get_project"},
+		{surface: config.ToolSurfaceDynamic, want: dynamicProjectGetToolDetailURI},
+	}
+	for _, tc := range cases {
+		t.Run(tc.surface, func(t *testing.T) {
+			if got := projectGetToolDetailURIForSurface(tc.surface); got != tc.want {
+				t.Fatalf("projectGetToolDetailURIForSurface(%s) = %q, want %q", tc.surface, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDynamicTaskNeedsReleaseCompareGuidance_DetectsWorkflows verifies the
+// release-compare hint triggers on prompt wording or on a release list plus
+// compare step sequence of at least three steps.
+func TestDynamicTaskNeedsReleaseCompareGuidance_DetectsWorkflows(t *testing.T) {
+	cases := []struct {
+		name   string
+		prompt string
+		steps  []evalStep
+		want   bool
+	}{
+		{name: "prompt wording", prompt: "compare refs and draft release notes", want: true},
+		{name: "too few steps", steps: []evalStep{{ExpectedAction: "release.list"}, {ExpectedAction: "repository.compare"}}, want: false},
+		{name: "release list and compare", steps: []evalStep{{ExpectedAction: "release.list"}, {ExpectedAction: "repository.compare"}, {ExpectedAction: "analyzer.release"}}, want: true},
+		{name: "three unrelated steps", steps: []evalStep{{ExpectedAction: "a"}, {ExpectedAction: "b"}, {ExpectedAction: "c"}}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dynamicTaskNeedsReleaseCompareGuidance(tc.prompt, tc.steps); got != tc.want {
+				t.Fatalf("dynamicTaskNeedsReleaseCompareGuidance() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDynamicBridgeOnlyTask_RequiresEveryStepToBeBridge verifies the
+// bridge-only workflow wording applies only when every expected step is an
+// MCP capability bridge call.
+func TestDynamicBridgeOnlyTask_RequiresEveryStepToBeBridge(t *testing.T) {
+	cases := []struct {
+		name  string
+		steps []evalStep
+		want  bool
+	}{
+		{name: "no steps", want: false},
+		{name: "all bridge", steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: promptListTool}}, want: true},
+		{name: "mixed", steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dynamicBridgeOnlyTask(tc.steps); got != tc.want {
+				t.Fatalf("dynamicBridgeOnlyTask() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTaskHasAnyActionOrStep_MatchesActionIDsAndToolPairs verifies the helper
+// matches on canonical action IDs, on tool/action pairs, and reports false
+// when neither list matches.
+func TestTaskHasAnyActionOrStep_MatchesActionIDsAndToolPairs(t *testing.T) {
+	steps := []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.list"}}
+	cases := []struct {
+		name    string
+		actions []string
+		pairs   [][2]string
+		want    bool
+	}{
+		{name: "action id", actions: []string{"issue.list"}, want: true},
+		{name: "tool pair", pairs: [][2]string{{"gitlab_project", "get"}}, want: true},
+		{name: "no match", actions: []string{"issue.create"}, pairs: [][2]string{{"gitlab_project", "list"}}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := taskHasAnyActionOrStep(steps, tc.actions, tc.pairs); got != tc.want {
+				t.Fatalf("taskHasAnyActionOrStep() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMonthRangeFromPrompt_ParsesMonthAndYear verifies a "Month YYYY" phrase
+// yields the first day of that month and of the next one, tolerates trailing
+// punctuation, and reports false without a year.
+func TestMonthRangeFromPrompt_ParsesMonthAndYear(t *testing.T) {
+	cases := []struct {
+		name      string
+		prompt    string
+		wantStart string
+		wantEnd   string
+		wantOK    bool
+	}{
+		{name: "month with year", prompt: "audit events in March 2026", wantStart: "2026-03-01", wantEnd: "2026-04-01", wantOK: true},
+		{name: "december rolls year", prompt: "in December 2025.", wantStart: "2025-12-01", wantEnd: "2026-01-01", wantOK: true},
+		{name: "month without year", prompt: "in March next year", wantOK: false},
+		{name: "no month", prompt: "recent events", wantOK: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			start, end, ok := monthRangeFromPrompt(tc.prompt)
+			if ok != tc.wantOK || start != tc.wantStart || end != tc.wantEnd {
+				t.Fatalf("monthRangeFromPrompt(%q) = %q, %q, %t; want %q, %q, %t", tc.prompt, start, end, ok, tc.wantStart, tc.wantEnd, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestNumericBacktickValueAfter_SkipsNonNumericMatches verifies the numeric
+// marker scan skips non-numeric backticked values, reports the first numeric
+// one, and fails cleanly for missing or unterminated markers.
+func TestNumericBacktickValueAfter_SkipsNonNumericMatches(t *testing.T) {
+	cases := []struct {
+		name   string
+		text   string
+		want   int
+		wantOK bool
+	}{
+		{name: "second match numeric", text: "job `abc` then job `5`", want: 5, wantOK: true},
+		{name: "only non numeric", text: "job `abc`"},
+		{name: "missing marker", text: "pipeline `5`"},
+		{name: "unterminated", text: "job `5"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := numericBacktickValueAfter(tc.text, "job ")
+			if ok != tc.wantOK || got != tc.want {
+				t.Fatalf("numericBacktickValueAfter(%q) = %d, %t; want %d, %t", tc.text, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestCompareRefsFromToPromptValues_RequiresTwoRefs verifies the compare
+// marker needs two backticked refs after it before reporting a pair.
+func TestCompareRefsFromToPromptValues_RequiresTwoRefs(t *testing.T) {
+	cases := []struct {
+		name   string
+		prompt string
+		wantOK bool
+	}{
+		{name: "no marker", prompt: "diff `a` and `b`"},
+		{name: "one ref", prompt: "compare refs `a`"},
+		{name: "two refs", prompt: "compare refs `a` with `b`", wantOK: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, ok := compareRefsFromToPromptValues(tc.prompt); ok != tc.wantOK {
+				t.Fatalf("compareRefsFromToPromptValues(%q) ok = %t, want %t", tc.prompt, ok, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestTaskPromptForSurface_RewritesToolDetailURIForMeta verifies the
+// meta-surface prompt path rewrites the dynamic tool detail URI to the
+// meta-tool form while keeping the rest of the prompt intact.
+func TestTaskPromptForSurface_RewritesToolDetailURIForMeta(t *testing.T) {
+	task := evalTask{ID: "MT-URI", Prompt: "Read " + dynamicProjectGetToolDetailURI + " first.", Steps: []evalStep{{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}}
+	prompt := taskPromptForSurface(task, config.ToolSurfaceMeta)
+	if !strings.Contains(prompt, "gitlab://tools/gitlab_project.get") || strings.Contains(prompt, dynamicProjectGetToolDetailURI) {
+		t.Fatalf("prompt = %q, want meta tool detail URI", prompt)
 	}
 }

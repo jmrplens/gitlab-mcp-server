@@ -1931,3 +1931,55 @@ func TestPool_OnEvictFiresOnEveryRemovalPath(t *testing.T) {
 		}
 	})
 }
+
+// TestStartRevalidation_PanickingEvictionCallback_DoesNotKillTheProcess covers
+// the recover the revalidation goroutine runs behind.
+//
+// Eviction calls back into code the pool does not own — the HTTP server's
+// callback that forgets a session's tags — and a panic there arrives on the
+// pool's own goroutine, where nothing above it can recover: an unrecovered
+// panic on a background goroutine takes the whole process down, so a bug in a
+// callback would stop a server that is otherwise serving every other
+// credential. The test's assertion is that it returns at all; without the
+// recover the test binary dies rather than failing.
+func TestStartRevalidation_PanickingEvictionCallback_DoesNotKillTheProcess(t *testing.T) {
+	var reachable atomic.Bool
+	reachable.Store(true)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if !reachable.Load() {
+			http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	}))
+	defer srv.Close()
+
+	pool := New(testConfig(srv.URL), testFactory(),
+		WithRevalidateInterval(10*time.Millisecond),
+		WithOnEvict(func(*mcp.Server) { panic("a callback outside the pool") }),
+	)
+	if _, err := pool.GetOrCreate("glpat-revalidate", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	reachable.Store(false)
+	pool.StartRevalidation(ctx)
+
+	deadline := time.Now().Add(10 * time.Second)
+	for pool.Size() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the entry whose token stopped verifying was never evicted")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// The panic unwinds after the entry leaves the map, so a moment here is
+	// what separates "recovered" from "about to crash the binary".
+	time.Sleep(50 * time.Millisecond)
+
+	if pool.Stats().RevalidationsFailed == 0 {
+		t.Error("the failed revalidation was not counted")
+	}
+}

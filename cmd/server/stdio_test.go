@@ -263,3 +263,34 @@ func TestScalarID_ObjectsAndArraysAreNotEchoed(t *testing.T) {
 		})
 	}
 }
+
+// TestResilientStdio_AFinalLineWithoutANewline_IsStillDelivered covers the read
+// that ends with data and an error at once.
+//
+// A client that writes its last message and closes the pipe without a trailing
+// newline is ordinary — several MCP clients do exactly that on shutdown — and
+// the reader is handed both the line and io.EOF in the same call. Returning the
+// error there would drop a complete, valid request on the floor and end the
+// session; the data has to be delivered first, with the EOF surfacing on the
+// next read.
+func TestResilientStdio_AFinalLineWithoutANewline_IsStillDelivered(t *testing.T) {
+	t.Parallel()
+
+	const message = `{"jsonrpc":"2.0","id":9,"method":"ping"}`
+	var out bytes.Buffer
+	reader, _ := resilientStdio(strings.NewReader(message), &out)
+
+	got, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("reading the filtered stream: %v", err)
+	}
+	if string(got) != message {
+		t.Errorf("filtered stream = %q, want the unterminated final message delivered verbatim", got)
+	}
+	if !reader.clientClosed() {
+		t.Error("the reader did not observe the closed input, so the exit status would report a failure")
+	}
+	if out.Len() != 0 {
+		t.Errorf("a valid message produced output on the response stream: %q", out.String())
+	}
+}

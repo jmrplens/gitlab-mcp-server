@@ -10,9 +10,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +23,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // cachedCoverageReport builds the repository coverage report once and shares
@@ -200,6 +203,50 @@ func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
 	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
 	if len(missing) != 1 || missing[0] != "example.get" {
 		t.Fatalf("catalogActionsMissingIndividualProjectionPolicy() = %+v, want example.get", missing)
+	}
+}
+
+// TestCatalogActionsMissingIndividualProjectionPolicy_Exemptions_AreAccepted
+// verifies the projection check on the cases around a plain gap: a nil
+// catalog reports nothing, an action whose ID is a documented meta-only alias
+// is exempt, and an action carrying an individual tool name passes.
+func TestCatalogActionsMissingIndividualProjectionPolicy_Exemptions_AreAccepted(t *testing.T) {
+	tests := []struct {
+		name    string
+		group   string
+		action  actioncatalog.Action
+		nilCase bool
+		want    []string
+	}{
+		{name: "nil catalog", nilCase: true},
+		{name: "meta-only alias is exempt", group: "gitlab_server", action: actioncatalog.Action{ID: "server.health_check", Name: "health_check"}},
+		{
+			name:   "projected action passes",
+			group:  "gitlab_example",
+			action: actioncatalog.Action{ID: "example.get", Name: "get", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_example_get"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var catalog *actioncatalog.Catalog
+			if !tt.nilCase {
+				catalog = actioncatalog.NewCatalog()
+				group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: tt.group})
+				group.SetAction(tt.action)
+				if err := catalog.AddGroup(group); err != nil {
+					t.Fatalf("AddGroup() error = %v", err)
+				}
+			}
+			got := catalogActionsMissingIndividualProjectionPolicy(catalog)
+			if len(got) != len(tt.want) {
+				t.Fatalf("catalogActionsMissingIndividualProjectionPolicy() = %v, want %v", got, tt.want)
+			}
+			for i, want := range tt.want {
+				if got[i] != want {
+					t.Errorf("missing[%d] = %q, want %q", i, got[i], want)
+				}
+			}
+		})
 	}
 }
 
@@ -655,6 +702,584 @@ func TestRegisterToolsClientType_ReturnsNonServerParam(t *testing.T) {
 			}
 		})
 	}
+}
+
+// catalogFirstFixtureFiles is the smallest repository layout every source
+// assertion of buildCoverageReport accepts: the production files the
+// legacy-bridge scan reads, the dynamic register.go, one builder source plus
+// a manifest naming it, the AI-context files and directories, and one domain
+// package carrying a markdown formatter and a test. Paths are slash-separated
+// and relative to the fixture root.
+func catalogFirstFixtureFiles() map[string]string {
+	return map[string]string{
+		"internal/tools/action_catalog.go":            "package tools\n",
+		"internal/tools/register_meta.go":             "package tools\n",
+		"internal/tools/register.go":                  "package tools\n",
+		"internal/toolutil/metatool.go":               "package toolutil\n",
+		"internal/tools/dynamic/register.go":          "package dynamic\n",
+		"internal/tools/action_specs.go":              "package tools\n\nfunc buildAlphaActionSpecs() {}\n",
+		"internal/tools/action_specs_manifest_gen.go": "package tools\n\nfunc actionSpecGroupBuilders() []actionSpecGroupBuilder {\n\treturn []actionSpecGroupBuilder{\n\t\tbuildAlphaActionSpecs,\n\t}\n}\n",
+		"internal/tools/alpha/alpha.go":               "package alpha\n",
+		"internal/tools/alpha/markdown.go":            "package alpha\n",
+		"internal/tools/alpha/alpha_test.go":          "package alpha\n",
+		".github/copilot-instructions.md":             "# Copilot\n",
+		"AGENTS.md":                                   "# Agents\n",
+		"CLAUDE.md":                                   "# Claude\n",
+		".github/agents/agent.md":                     "# Agent\n",
+		".github/agents/notes.txt":                    "not markdown\n",
+		".github/skills/skill.md":                     "# Skill\n",
+		".github/instructions/go.md":                  "# Go\n",
+	}
+}
+
+// writeCatalogFirstFixture materializes files under a fresh temporary root
+// and returns that root.
+func writeCatalogFirstFixture(t *testing.T, files map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	for name, content := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		writeAuditTestFile(t, path, content)
+	}
+	return root
+}
+
+// TestBuildCoverageReport_FixtureRoot_ReportsSourceOnlyDomains verifies the
+// full report over a synthetic repository: a domain that contributes no
+// catalog action is classified as having no GitLab surface while its
+// markdown formatter and test file are still recorded, and the architecture
+// section reports no legacy bridge.
+func TestBuildCoverageReport_FixtureRoot_ReportsSourceOnlyDomains(t *testing.T) {
+	root := writeCatalogFirstFixture(t, catalogFirstFixtureFiles())
+
+	report, err := buildCoverageReport(root)
+	if err != nil {
+		t.Fatalf("buildCoverageReport() error = %v", err)
+	}
+	alpha := requireDomain(t, report, "alpha")
+	if alpha.SurfaceClassification != noGitLabSurface || !alpha.HasMarkdown || !alpha.HasTests || alpha.HasRegisterTools {
+		t.Errorf("alpha coverage = %+v, want no-surface domain with markdown and tests", alpha)
+	}
+	if report.Summary.DomainCount != 2 || report.Summary.NoGitLabActionSurfaceCount < 1 {
+		t.Errorf("summary = %+v, want 2 domains with at least one no-surface domain", report.Summary)
+	}
+	if report.Architecture.LegacyBridgeCount != 0 || len(report.Architecture.LegacyBridges) != 0 {
+		t.Errorf("architecture reports legacy bridges: %+v", report.Architecture)
+	}
+}
+
+// TestBuildCoverageReport_BrokenFixtures_ReportsFirstFailingAssertion
+// verifies each source assertion and invariant of buildCoverageReport on a
+// synthetic repository broken in exactly one way, checking that the error
+// names the failing assertion.
+func TestBuildCoverageReport_BrokenFixtures_ReportsFirstFailingAssertion(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(files map[string]string)
+		wantErr string
+	}{
+		{
+			name: "production source calls the forbidden selector",
+			mutate: func(f map[string]string) {
+				f["internal/tools/beta/beta.go"] = "package beta\n\nfunc f() { toolutil.CaptureMetaToolDefinitions() }\n"
+			},
+			wantErr: "calls toolutil.CaptureMetaToolDefinitions",
+		},
+		{
+			name:    "production source does not parse",
+			mutate:  func(f map[string]string) { f["internal/tools/beta/beta.go"] = "package beta\n\nfunc {\n" },
+			wantErr: "parse ",
+		},
+		{
+			name:    "action_catalog.go missing",
+			mutate:  func(f map[string]string) { delete(f, "internal/tools/action_catalog.go") },
+			wantErr: "read ",
+		},
+		{
+			name: "action_catalog.go references legacy meta registration",
+			mutate: func(f map[string]string) {
+				f["internal/tools/action_catalog.go"] = "package tools\n\n// registerAllMetaGroups(\n"
+			},
+			wantErr: "must not depend on legacy meta registration",
+		},
+		{
+			name:    "register.go keeps a legacy bridge",
+			mutate:  func(f map[string]string) { f["internal/tools/register.go"] = "package tools\n\n// registerAllLegacy\n" },
+			wantErr: "production legacy bridge count = 1",
+		},
+		{
+			name:    "metatool.go missing",
+			mutate:  func(f map[string]string) { delete(f, "internal/toolutil/metatool.go") },
+			wantErr: "read ",
+		},
+		{
+			name:    "dynamic register.go missing",
+			mutate:  func(f map[string]string) { delete(f, "internal/tools/dynamic/register.go") },
+			wantErr: "read ",
+		},
+		{
+			name: "dynamic register.go owns compatibility policy",
+			mutate: func(f map[string]string) {
+				f["internal/tools/dynamic/register.go"] = "package dynamic\n\nfunc boolStringValue(v bool) string { return \"\" }\n"
+			},
+			wantErr: "owns compatibility policy",
+		},
+		{
+			name:    "AI context file missing",
+			mutate:  func(f map[string]string) { delete(f, "CLAUDE.md") },
+			wantErr: "read ",
+		},
+		{
+			name:    "AI context carries stale guidance",
+			mutate:  func(f map[string]string) { f["CLAUDE.md"] = "# Claude\n\nCreate `register.go` with `RegisterTools`.\n" },
+			wantErr: "AI context audit failed",
+		},
+		{
+			name: "AI context directory missing",
+			mutate: func(f map[string]string) {
+				delete(f, ".github/agents/agent.md")
+				delete(f, ".github/agents/notes.txt")
+			},
+			wantErr: "walk AI context",
+		},
+		{
+			name:    "no builder in the tools source",
+			mutate:  func(f map[string]string) { f["internal/tools/action_specs.go"] = "package tools\n" },
+			wantErr: "no action spec group builders found",
+		},
+		{
+			name:    "manifest missing",
+			mutate:  func(f map[string]string) { delete(f, "internal/tools/action_specs_manifest_gen.go") },
+			wantErr: "parse ",
+		},
+		{
+			name:    "manifest without the builders function",
+			mutate:  func(f map[string]string) { f["internal/tools/action_specs_manifest_gen.go"] = "package tools\n" },
+			wantErr: "does not define actionSpecGroupBuilders",
+		},
+		{
+			name: "domain keeps package-level RegisterMeta",
+			mutate: func(f map[string]string) {
+				f["internal/tools/alpha/alpha.go"] = "package alpha\n\nfunc RegisterMeta() {}\n"
+			},
+			wantErr: "still defines package-level RegisterMeta",
+		},
+		{
+			name: "domain keeps GitLab-client RegisterTools",
+			mutate: func(f map[string]string) {
+				f["internal/tools/alpha/alpha.go"] = "package alpha\n\nfunc RegisterTools(server *mcp.Server, client *gitlabclient.Client) {}\n"
+			},
+			wantErr: "still defines package-local RegisterTools",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := catalogFirstFixtureFiles()
+			tt.mutate(files)
+			root := writeCatalogFirstFixture(t, files)
+
+			_, err := buildCoverageReport(root)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("buildCoverageReport() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestAssertNoLegacyRuntimeBridges_Scenarios_ReadsFixedFiles verifies the
+// bridge scan reports a missing production file, a reference to a retired
+// bridge, and a clean tree, and that buildArchitectureReport shares the
+// missing-file failure.
+func TestAssertNoLegacyRuntimeBridges_Scenarios_ReadsFixedFiles(t *testing.T) {
+	clean := map[string]string{
+		"internal/tools/action_catalog.go": "package tools\n",
+		"internal/tools/register_meta.go":  "package tools\n",
+		"internal/tools/register.go":       "package tools\n",
+		"internal/toolutil/metatool.go":    "package toolutil\n",
+	}
+	bridged := maps.Clone(clean)
+	bridged["internal/tools/register_meta.go"] = "package tools\n\n// domain.RegisterMeta(server)\n"
+
+	tests := []struct {
+		name    string
+		files   map[string]string
+		wantErr string
+	}{
+		{name: "missing production file", files: map[string]string{}, wantErr: "read "},
+		{name: "retired bridge referenced", files: bridged, wantErr: "production legacy bridge count = 1"},
+		{name: "clean tree", files: clean},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeCatalogFirstFixture(t, tt.files)
+			err := assertNoLegacyRuntimeBridges(root)
+			_, architectureErr := buildArchitectureReport(root, coverageSummary{SurfaceSpecCount: 3})
+			if tt.wantErr == "" {
+				if err != nil || architectureErr != nil {
+					t.Fatalf("clean tree errors = %v / %v, want nil", err, architectureErr)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("assertNoLegacyRuntimeBridges() error = %v, want containing %q", err, tt.wantErr)
+			}
+			if tt.files["internal/tools/register.go"] == "" && architectureErr == nil {
+				t.Error("buildArchitectureReport() error = nil on a tree without production files")
+			}
+		})
+	}
+}
+
+// TestBuildArchitectureReport_CleanFixture_MirrorsSummaryAndAliases verifies
+// the architecture section carries the summary's surface spec count, no
+// legacy bridge, and the compatibility alias counts of the real actioncompat
+// policy.
+func TestBuildArchitectureReport_CleanFixture_MirrorsSummaryAndAliases(t *testing.T) {
+	root := writeCatalogFirstFixture(t, catalogFirstFixtureFiles())
+
+	architecture, err := buildArchitectureReport(root, coverageSummary{SurfaceSpecCount: 7})
+	if err != nil {
+		t.Fatalf("buildArchitectureReport() error = %v", err)
+	}
+	if architecture.SurfaceSpecCount != 7 || architecture.LegacyBridgeCount != 0 || len(architecture.LegacyBridges) != 0 {
+		t.Errorf("architecture = %+v, want 7 surface specs and no bridge", architecture)
+	}
+	if architecture.DynamicActionAliasCount == 0 || architecture.DynamicParameterAliasCount < architecture.DynamicSpecMetadataParameterAliasCount {
+		t.Errorf("alias counts = %+v, want the real policy sizes", architecture)
+	}
+}
+
+// TestAIContextFiles_Fixture_ListsMarkdownSorted verifies the AI-context
+// inventory holds the three fixed files plus every .md under the three
+// .github directories, sorted, and skips non-Markdown entries.
+func TestAIContextFiles_Fixture_ListsMarkdownSorted(t *testing.T) {
+	root := writeCatalogFirstFixture(t, catalogFirstFixtureFiles())
+
+	files, err := aiContextFiles(root)
+	if err != nil {
+		t.Fatalf("aiContextFiles() error = %v", err)
+	}
+	want := []string{
+		filepath.Join(root, ".github", "agents", "agent.md"),
+		filepath.Join(root, ".github", "copilot-instructions.md"),
+		filepath.Join(root, ".github", "instructions", "go.md"),
+		filepath.Join(root, ".github", "skills", "skill.md"),
+		filepath.Join(root, "AGENTS.md"),
+		filepath.Join(root, "CLAUDE.md"),
+	}
+	if strings.Join(files, "\n") != strings.Join(want, "\n") {
+		t.Errorf("aiContextFiles() = %v, want %v", files, want)
+	}
+}
+
+// TestSkipSelectorAuditEntry_WalkError_IsReturned verifies a walk error is
+// handed back unchanged instead of being skipped.
+func TestSkipSelectorAuditEntry_WalkError_IsReturned(t *testing.T) {
+	walkErr := errors.New("walk failed")
+	skip, err := skipSelectorAuditEntry(nil, walkErr)
+	if skip || !errors.Is(err, walkErr) {
+		t.Fatalf("skipSelectorAuditEntry() = %v, %v; want false and the walk error", skip, err)
+	}
+}
+
+// TestReadManifestActionSpecGroupBuilders_Scenarios_ParsesReturnLiteral
+// verifies the manifest reader lists the identifiers of the returned
+// composite literal, returns nothing for a function that returns nil, and
+// fails when the file does not parse or lacks the function.
+func TestReadManifestActionSpecGroupBuilders_Scenarios_ParsesReturnLiteral(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		want    []string
+		wantErr string
+	}{
+		{
+			name:   "identifiers in declaration order",
+			source: "package tools\n\nfunc helper() {}\n\nfunc actionSpecGroupBuilders() []b {\n\treturn []b{\n\t\tbuildZetaActionSpecs,\n\t\tbuildAlphaActionSpecs,\n\t}\n}\n",
+			want:   []string{"buildZetaActionSpecs", "buildAlphaActionSpecs"},
+		},
+		{name: "nil return carries no names", source: "package tools\n\nfunc actionSpecGroupBuilders() []b { return nil }\n"},
+		{name: "unparsable manifest", source: "package tools\n\nfunc {\n", wantErr: "parse "},
+		{name: "function missing", source: "package tools\n\nfunc other() {}\n", wantErr: "does not define actionSpecGroupBuilders"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "action_specs_manifest_gen.go")
+			writeAuditTestFile(t, path, tt.source)
+			got, err := readManifestActionSpecGroupBuilders(path)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("readManifestActionSpecGroupBuilders() error = %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("readManifestActionSpecGroupBuilders() error = %v", err)
+			}
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("builders = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDiscoverDomainSources_UnusableTree_ReturnsError verifies the domain
+// walk reports a missing internal/tools directory, a domain directory that
+// vanished before inspection, and a domain file that does not parse.
+func TestDiscoverDomainSources_UnusableTree_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		files   map[string]string
+		inspect string
+		wantErr string
+	}{
+		{name: "tools directory missing", files: map[string]string{}, wantErr: "read tools directory"},
+		{name: "domain file does not parse", files: map[string]string{"internal/tools/alpha/alpha.go": "package alpha\n\nfunc {\n"}, wantErr: "parse "},
+		{name: "domain directory missing", files: map[string]string{}, inspect: "absent", wantErr: "no such file or directory"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeCatalogFirstFixture(t, tt.files)
+			var err error
+			if tt.inspect != "" {
+				_, err = inspectDomainSource(filepath.Join(root, tt.inspect), tt.inspect)
+			} else {
+				_, err = discoverDomainSources(root)
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestRegisterToolsClientType_NoParameterList_ReturnsEmpty verifies a
+// declaration without a parameter list yields no client type.
+func TestRegisterToolsClientType_NoParameterList_ReturnsEmpty(t *testing.T) {
+	if got := registerToolsClientType(token.NewFileSet(), &ast.FuncDecl{Type: &ast.FuncType{}}); got != "" {
+		t.Fatalf("registerToolsClientType() = %q, want empty", got)
+	}
+}
+
+// TestExprString_UnprintableNode_ReturnsEmpty verifies a node the printer
+// rejects renders as the empty string instead of aborting the scan.
+func TestExprString_UnprintableNode_ReturnsEmpty(t *testing.T) {
+	if got := exprString(token.NewFileSet(), nil); got != "" {
+		t.Fatalf("exprString(nil) = %q, want empty", got)
+	}
+}
+
+// TestReferencedPackages_Scenarios_CollectsQualifiers verifies the selector
+// scan records the package qualifier of every <pkg>.RegisterTools reference,
+// ignores nested selectors, bare calls and other selectors, and reports a
+// file that does not parse.
+func TestReferencedPackages_Scenarios_CollectsQualifiers(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		want    []string
+		wantErr string
+	}{
+		{
+			name:   "qualifier references",
+			source: "package tools\n\nfunc f() {\n\talpha.RegisterTools(nil, nil)\n\tnested.pkg.RegisterTools(nil, nil)\n\tbeta.Other()\n\tRegisterTools()\n\tgamma.RegisterTools(nil, nil)\n}\n",
+			want:   []string{"alpha", "gamma"},
+		},
+		{name: "unparsable file", source: "package tools\n\nfunc {\n", wantErr: "parse "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), registerGoFile)
+			writeAuditTestFile(t, path, tt.source)
+			got, err := referencedPackages(path, "RegisterTools")
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("referencedPackages() error = %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("referencedPackages() error = %v", err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("referencedPackages() = %v, want %v", got, tt.want)
+			}
+			for _, name := range tt.want {
+				if !got[name] {
+					t.Errorf("referencedPackages() lacks %q: %v", name, got)
+				}
+			}
+		})
+	}
+}
+
+// TestRecordSurfaceSpecs_OwnerlessSpec_IsSkipped verifies specs without an
+// owner package contribute nothing while owned specs are counted under
+// their owner with their surface kind and group.
+func TestRecordSurfaceSpecs_OwnerlessSpec_IsSkipped(t *testing.T) {
+	coverage := map[string]packageActionCoverage{}
+	recordSurfaceSpecs(coverage, []actioncatalog.SurfaceToolSpec{
+		{OwnerPackage: "  ", GroupToolName: "gitlab_ignored"},
+		{OwnerPackage: "owner", GroupToolName: "gitlab_owned", SurfaceKind: actioncatalog.SurfaceKindDynamicController},
+	})
+	if len(coverage) != 1 {
+		t.Fatalf("coverage = %v, want the owned spec only", coverage)
+	}
+	owned := coverage["owner"]
+	if owned.SurfaceSpecCount != 1 || owned.UtilitySurfaceActionCount != 1 || owned.OrdinaryGitLabActionCount != 0 {
+		t.Errorf("owned coverage = %+v, want one utility surface spec", owned)
+	}
+	if _, ok := owned.MetaGroups["gitlab_owned"]; !ok {
+		t.Errorf("meta groups = %v, want gitlab_owned", owned.MetaGroups)
+	}
+}
+
+// TestRecordSurfaceKind_ZeroValue_AllocatesCounts verifies the kind counter
+// allocates its map on first use.
+func TestRecordSurfaceKind_ZeroValue_AllocatesCounts(t *testing.T) {
+	var coverage packageActionCoverage
+	coverage.recordSurfaceKind(actioncatalog.SurfaceKindGitLabAction)
+	if coverage.SurfaceKindCounts[string(actioncatalog.SurfaceKindGitLabAction)] != 1 {
+		t.Fatalf("SurfaceKindCounts = %v, want one gitlab-action", coverage.SurfaceKindCounts)
+	}
+}
+
+// TestClassifySurface_Scenarios_OrdersRules verifies each classification
+// rule in precedence order against synthetic source and coverage facts.
+func TestClassifySurface_Scenarios_OrdersRules(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   domainSource
+		coverage domainCoverage
+		want     string
+	}{
+		{name: "dynamic controller surface", source: domainSource{HasDynamicCatalogRegistration: true}, coverage: domainCoverage{HasSurfaceSpecs: true}, want: "dynamic-controller-surface"},
+		{name: "surface backed by utility actions", coverage: domainCoverage{UtilitySurfaceActionCount: 1}, want: "surface-backed"},
+		{name: "dynamic catalog surface", source: domainSource{HasDynamicCatalogRegistration: true}, want: "dynamic-catalog-surface"},
+		{name: "spec backed", coverage: domainCoverage{HasIndividualTools: true, HasMetaSpecs: true}, want: "spec-backed"},
+		{name: "individual only", coverage: domainCoverage{HasIndividualTools: true}, want: "individual-only"},
+		{name: "standalone meta", source: domainSource{HasRegisterMeta: true}, coverage: domainCoverage{HasDynamicCatalogEntries: true}, want: "standalone-meta"},
+		{name: "catalog only", coverage: domainCoverage{HasMetaSpecs: true}, want: "catalog-only"},
+		{name: "standalone only", coverage: domainCoverage{HasStandaloneOnlyTools: true}, want: "standalone-only"},
+		{name: "register meta without catalog entries", source: domainSource{HasRegisterMeta: true}, want: "standalone-only"},
+		{name: "nothing discovered", want: noGitLabSurface},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := classifySurface(tt.source, tt.coverage); got != tt.want {
+				t.Errorf("classifySurface() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCoverageNotes_Scenarios_ExplainsRegistrationState verifies the notes
+// name an unreferenced RegisterTools, a delegated RegisterMeta, and a domain
+// without any surface.
+func TestCoverageNotes_Scenarios_ExplainsRegistrationState(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   domainSource
+		coverage domainCoverage
+		want     string
+	}{
+		{name: "unreferenced RegisterTools", source: domainSource{HasRegisterTools: true}, want: "RegisterTools is not referenced from internal/tools/register.go"},
+		{name: "delegated RegisterMeta", source: domainSource{HasRegisterMeta: true}, coverage: domainCoverage{DelegatedMeta: true}, want: "delegated RegisterMeta is referenced from internal/tools/register_meta.go"},
+		{name: "no surface", coverage: domainCoverage{SurfaceClassification: noGitLabSurface}, want: "no GitLab action surface discovered from source or catalog metadata"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			notes := coverageNotes(tt.source, tt.coverage)
+			if len(notes) != 1 || notes[0] != tt.want {
+				t.Errorf("coverageNotes() = %v, want [%q]", notes, tt.want)
+			}
+		})
+	}
+}
+
+// TestSummarizeCoverage_LegacyDomains_CountsRegistrationForms verifies the
+// summary tallies package-local RegisterTools and RegisterMeta domains and
+// merges the per-domain surface kind counts.
+func TestSummarizeCoverage_LegacyDomains_CountsRegistrationForms(t *testing.T) {
+	summary := summarizeCoverage([]domainCoverage{
+		{Package: "a", HasRegisterTools: true, SurfaceKindCounts: map[string]int{"gitlab-action": 2}},
+		{Package: "b", HasRegisterMeta: true, SurfaceKindCounts: map[string]int{"gitlab-action": 1, "meta-group": 1}},
+	})
+	if summary.DomainCount != 2 || summary.RegisterToolsCount != 1 || summary.RegisterMetaCount != 1 {
+		t.Errorf("summary = %+v, want 2 domains with one RegisterTools and one RegisterMeta", summary)
+	}
+	if summary.SurfaceKindCounts["gitlab-action"] != 3 || summary.SurfaceKindCounts["meta-group"] != 1 {
+		t.Errorf("SurfaceKindCounts = %v, want merged counts", summary.SurfaceKindCounts)
+	}
+}
+
+// TestJoinSortedSet_Scenarios_JoinsSortedOrEmpty verifies an empty set joins
+// to the empty string and a populated set joins its sorted members.
+func TestJoinSortedSet_Scenarios_JoinsSortedOrEmpty(t *testing.T) {
+	tests := []struct {
+		name   string
+		values map[string]struct{}
+		want   string
+	}{
+		{name: "empty", values: nil, want: ""},
+		{name: "sorted members", values: map[string]struct{}{"gitlab_b": {}, "gitlab_a": {}}, want: "gitlab_a,gitlab_b"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := joinSortedSet(tt.values); got != tt.want {
+				t.Errorf("joinSortedSet() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// captureStdout swaps os.Stdout for a temporary file until the test ends and
+// returns a reader for what was written, so the "-" output path can be
+// observed.
+func captureStdout(t *testing.T) func() string {
+	t.Helper()
+	file, err := os.Create(filepath.Join(t.TempDir(), "stdout"))
+	if err != nil {
+		t.Fatalf("create stdout capture: %v", err)
+	}
+	previous := os.Stdout
+	os.Stdout = file
+	t.Cleanup(func() {
+		os.Stdout = previous
+		_ = file.Close()
+	})
+	return func() string {
+		data, readErr := os.ReadFile(file.Name())
+		if readErr != nil {
+			t.Fatalf("read stdout capture: %v", readErr)
+		}
+		return string(data)
+	}
+}
+
+// TestWriteReport_Scenarios_WritesStdoutOrFailsOnBlockedDirectory verifies
+// the "-" sentinel writes the report to stdout and a report path whose parent
+// directory cannot be created is reported as an error.
+func TestWriteReport_Scenarios_WritesStdoutOrFailsOnBlockedDirectory(t *testing.T) {
+	t.Run("stdout sentinel", func(t *testing.T) {
+		stdout := captureStdout(t)
+		if err := writeReport("-", []byte("{}\n")); err != nil {
+			t.Fatalf("writeReport(-) error = %v", err)
+		}
+		if got := stdout(); got != "{}\n" {
+			t.Errorf("stdout = %q, want the report", got)
+		}
+	})
+	t.Run("blocked parent directory", func(t *testing.T) {
+		blocker := filepath.Join(t.TempDir(), "blocker")
+		writeAuditTestFile(t, blocker, "x")
+		if err := writeReport(filepath.Join(blocker, "coverage.json"), []byte("{}\n")); err == nil {
+			t.Fatal("writeReport() error = nil, want the directory creation failure")
+		}
+	})
 }
 
 // TestProductionFileCallsSelector_FindsCallsAndParsesErrors verifies the

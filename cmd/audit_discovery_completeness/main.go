@@ -215,10 +215,7 @@ func main() {
 		cmdutil.Fatalf("invalid -severity: %v", err)
 	}
 
-	rep, err := buildReport(*gapsOnly, *minAliases)
-	if err != nil {
-		cmdutil.Fatalf("build discovery completeness report: %v", err)
-	}
+	rep := buildReport(*gapsOnly, *minAliases)
 
 	if *checkMode {
 		if checkErr := rep.check(threshold); checkErr != nil {
@@ -288,19 +285,15 @@ func (r report) check(threshold int) error {
 	return nil
 }
 
-func buildReport(gapsOnly bool, minAliases int) (report, error) {
+// buildReport analyzes the catalog compiled into this binary, projected in
+// memory. Every input is already inside the process, so the report is always
+// producible; what a caller acts on is its contents, which is what -check reads.
+func buildReport(gapsOnly bool, minAliases int) report {
 	cmdutil.Progressf("audit_discovery_completeness: building catalog and analyzing discovery metadata...")
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		return report{}, fmt.Errorf("create audit client: %w", err)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
-	projected, err := auditshared.CachedIndividualDescriptions(client)
-	if err != nil {
-		return report{}, err
-	}
-
+	projected := auditshared.CachedIndividualDescriptions(client)
 	allClusters := collectAllClusters(client)
 
 	packagesOut := buildPackageReports(client, allClusters, projected, minAliases, gapsOnly)
@@ -311,7 +304,7 @@ func buildReport(gapsOnly bool, minAliases int) (report, error) {
 		Summary:       summarize(packagesOut),
 		Clusters:      clustersOut,
 		Packages:      packagesOut,
-	}, nil
+	}
 }
 
 // collectAllClusters gathers the catalog and builds sibling clusters across

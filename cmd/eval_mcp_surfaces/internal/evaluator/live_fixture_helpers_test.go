@@ -6,6 +6,7 @@ package evaluator
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -295,5 +296,339 @@ func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
 	}
 	if gotParams["project_id"] != "my-org/tools/gitlab-mcp-server" {
 		t.Errorf("params = %+v, want project_id my-org/tools/gitlab-mcp-server", gotParams)
+	}
+}
+
+// TestLiveMergeRequestApprovalsSatisfied_ReadsConfigurationThenRules verifies
+// the approval check accepts a merge request whose configuration reports no
+// outstanding approvals, falls back to the approval rules when the
+// configuration call fails, and reports false for an outstanding rule.
+func TestLiveMergeRequestApprovalsSatisfied_ReadsConfigurationThenRules(t *testing.T) {
+	cases := []struct {
+		name              string
+		configurationBody string
+		configurationCode int
+		rulesBody         string
+		want              bool
+	}{
+		{name: "configuration satisfied", configurationBody: `{"approvals_required":0,"approvals_left":0}`, configurationCode: http.StatusOK, want: true},
+		{name: "configuration outstanding", configurationBody: `{"approvals_required":1,"approvals_left":1}`, configurationCode: http.StatusOK},
+		{name: "rules satisfied", configurationCode: http.StatusNotFound, rulesBody: `{"rules":[{"id":1,"approvals_required":1,"approved":true}]}`, want: true},
+		{name: "rules outstanding", configurationCode: http.StatusNotFound, rulesBody: `{"rules":[{"id":1,"approvals_required":1,"approved":false}]}`},
+		{name: "rules unavailable", configurationCode: http.StatusNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if strings.HasSuffix(r.URL.EscapedPath(), "/approval_state") {
+					if tc.rulesBody == "" {
+						w.WriteHeader(http.StatusNotFound)
+						fmt.Fprint(w, `{"message":"404 Not Found"}`)
+						return
+					}
+					fmt.Fprint(w, tc.rulesBody)
+					return
+				}
+				w.WriteHeader(tc.configurationCode)
+				if tc.configurationBody == "" {
+					fmt.Fprint(w, `{"message":"404 Not Found"}`)
+					return
+				}
+				fmt.Fprint(w, tc.configurationBody)
+			}))
+			defer server.Close()
+			if got := liveMergeRequestApprovalsSatisfied(t.Context(), newFixtureTestClient(t, server.URL), "my-org/app", 7); got != tc.want {
+				t.Fatalf("liveMergeRequestApprovalsSatisfied() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnsureLiveBranchExists_CreatesOnlyWhenAbsent verifies the branch helper
+// skips creation when the branch is present, creates it after a 404, tolerates
+// a concurrent creation, and reports an unexpected lookup failure.
+func TestEnsureLiveBranchExists_CreatesOnlyWhenAbsent(t *testing.T) {
+	cases := []struct {
+		name       string
+		getCode    int
+		createCode int
+		wantCreate bool
+		wantErr    bool
+	}{
+		{name: "branch exists", getCode: http.StatusOK},
+		{name: "creates after 404", getCode: http.StatusNotFound, createCode: http.StatusOK, wantCreate: true},
+		{name: "tolerates concurrent creation", getCode: http.StatusNotFound, createCode: http.StatusConflict, wantCreate: true},
+		{name: "reports create failure", getCode: http.StatusNotFound, createCode: http.StatusInternalServerError, wantCreate: true, wantErr: true},
+		{name: "reports lookup failure", getCode: http.StatusInternalServerError, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			created := false
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method == http.MethodPost {
+					created = true
+					w.WriteHeader(tc.createCode)
+					fmt.Fprint(w, `{"name":"feature/x"}`)
+					return
+				}
+				w.WriteHeader(tc.getCode)
+				fmt.Fprint(w, `{"name":"feature/x"}`)
+			}))
+			defer server.Close()
+			err := ensureLiveBranchExists(t.Context(), newFixtureTestClient(t, server.URL), "my-org/app", "feature/x", "main")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ensureLiveBranchExists() error = %v, want error = %t", err, tc.wantErr)
+			}
+			if created != tc.wantCreate {
+				t.Fatalf("created = %t, want %t", created, tc.wantCreate)
+			}
+		})
+	}
+}
+
+// TestCreateLiveAwardEmoji_FallsThroughCandidateNames verifies award creation
+// walks its candidate emoji when GitLab rejects one as already awarded, and
+// reports a non-conflict failure immediately.
+func TestCreateLiveAwardEmoji_FallsThroughCandidateNames(t *testing.T) {
+	t.Run("second candidate succeeds", func(t *testing.T) {
+		var attempts int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			attempts++
+			w.Header().Set("Content-Type", "application/json")
+			if attempts == 1 {
+				w.WriteHeader(http.StatusConflict)
+				fmt.Fprint(w, `{"message":"already awarded"}`)
+				return
+			}
+			fmt.Fprint(w, `{"id":42,"name":"thumbsdown"}`)
+		}))
+		defer server.Close()
+		client := newFixtureTestClient(t, server.URL)
+		id, err := createLiveMRAwardEmoji(t.Context(), client, "my-org/app", 7)
+		if err != nil || id != 42 {
+			t.Fatalf("createLiveMRAwardEmoji() = %d, %v; want the second candidate", id, err)
+		}
+		attempts = 0
+		id, err = createLiveIssueAwardEmoji(t.Context(), client, "my-org/app", 3)
+		if err != nil || id != 42 {
+			t.Fatalf("createLiveIssueAwardEmoji() = %d, %v; want the second candidate", id, err)
+		}
+	})
+	t.Run("non conflict failure aborts", func(t *testing.T) {
+		var attempts int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			attempts++
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"403 Forbidden"}`)
+		}))
+		defer server.Close()
+		if _, err := createLiveMRAwardEmoji(t.Context(), newFixtureTestClient(t, server.URL), "my-org/app", 7); err == nil {
+			t.Fatal("createLiveMRAwardEmoji() error = nil, want the forbidden failure")
+		}
+		if attempts != 1 {
+			t.Fatalf("attempts = %d, want a single attempt", attempts)
+		}
+	})
+}
+
+// TestWaitForLiveMergeRequestReady_TerminalStatuses verifies the merge-request
+// wait returns once GitLab reports the merge request mergeable, accepts an
+// approvals-syncing status whose approvals are already satisfied, and reports
+// a status that will never become mergeable.
+func TestWaitForLiveMergeRequestReady_TerminalStatuses(t *testing.T) {
+	cases := []struct {
+		name       string
+		status     string
+		approvals  string
+		wantErr    string
+		wantNoWait bool
+	}{
+		{name: "mergeable", status: "mergeable", wantNoWait: true},
+		{name: "approvals syncing but satisfied", status: "approvals_syncing", approvals: `{"approvals_required":0,"approvals_left":0}`, wantNoWait: true},
+		{name: "terminal status", status: "conflict", wantErr: "is not mergeable: conflict"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				path := r.URL.EscapedPath()
+				w.Header().Set("Content-Type", "application/json")
+				if strings.HasSuffix(path, "/approvals") {
+					fmt.Fprint(w, tc.approvals)
+					return
+				}
+				fmt.Fprintf(w, `[{"id":1,"iid":7,"detailed_merge_status":%q}]`, tc.status)
+			}))
+			defer server.Close()
+			err := waitForLiveMergeRequestReady(t.Context(), newFixtureTestClient(t, server.URL), "my-org/app", 7)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("waitForLiveMergeRequestReady() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("waitForLiveMergeRequestReady() error = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestGetLiveMergeRequestWithStatusRecheck_EmptyListing_ReportsMissingMR
+// verifies the status recheck reports a merge request GitLab does not list
+// rather than dereferencing an empty result.
+func TestGetLiveMergeRequestWithStatusRecheck_EmptyListing_ReportsMissingMR(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[]`)
+	}))
+	defer server.Close()
+	_, err := getLiveMergeRequestWithStatusRecheck(t.Context(), newFixtureTestClient(t, server.URL), "my-org/app", 7)
+	if err == nil || !strings.Contains(err.Error(), "merge request !7 not found") {
+		t.Fatalf("getLiveMergeRequestWithStatusRecheck() error = %v, want missing merge request", err)
+	}
+}
+
+// TestWaitForPipelineJobStatus_ListingError_ReportsContext verifies the shared
+// job wait reports the listing failure under the caller's context label.
+func TestWaitForPipelineJobStatus_ListingError_ReportsContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, `{"message":"500"}`)
+	}))
+	defer server.Close()
+	_, err := waitForFailedJob(t.Context(), newFixtureTestClient(t, server.URL), "my-org/app", 7)
+	if err == nil || !strings.Contains(err.Error(), "prepare failed-job fixture jobs") {
+		t.Fatalf("waitForFailedJob() error = %v, want the listing context", err)
+	}
+}
+
+// TestEnsureLiveProjectActive_NilClientAndLookupFailure verifies the guard is
+// a no-op without a client and reports a lookup failure with the project path.
+func TestEnsureLiveProjectActive_NilClientAndLookupFailure(t *testing.T) {
+	if err := ensureLiveProjectActive(t.Context(), nil); err != nil {
+		t.Fatalf("ensureLiveProjectActive(nil) error = %v, want nil", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, `{"message":"500"}`)
+	}))
+	defer server.Close()
+	err := ensureLiveProjectActive(t.Context(), newFixtureTestClient(t, server.URL))
+	if err == nil || !strings.Contains(err.Error(), "get project "+liveFixtureProjectPath) {
+		t.Fatalf("ensureLiveProjectActive() error = %v, want lookup failure", err)
+	}
+}
+
+// TestSplitFixtureSetupAction_RejectsMalformedActionIDs verifies the meta-tool
+// fallback only splits a canonical domain.action identifier.
+func TestSplitFixtureSetupAction_RejectsMalformedActionIDs(t *testing.T) {
+	cases := []struct {
+		action     string
+		wantTool   string
+		wantAction string
+		wantOK     bool
+	}{
+		{action: "branch.create", wantTool: "gitlab_branch", wantAction: "create", wantOK: true},
+		{action: "mr_review.discussion.resolve", wantTool: "gitlab_mr_review", wantAction: "discussion_resolve", wantOK: true},
+		{action: "nodot"},
+		{action: ".create"},
+		{action: "branch."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			tool, action, ok := splitFixtureSetupAction(tc.action)
+			if ok != tc.wantOK || tool != tc.wantTool || action != tc.wantAction {
+				t.Fatalf("splitFixtureSetupAction(%q) = %q, %q, %t; want %q, %q, %t", tc.action, tool, action, ok, tc.wantTool, tc.wantAction, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestCallFixtureSetupTool_IgnoredErrors_AreTreatedAsSuccess verifies a
+// fixture setup call whose error text matches an ignored substring is accepted
+// and any other error is reported with the action name.
+func TestCallFixtureSetupTool_IgnoredErrors_AreTreatedAsSuccess(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "fixture-ignored", Version: "0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: dynamicExecuteActionTool, Description: "dynamic execute"}, func(_ context.Context, _ *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "Branch already exists"}}}, nil, nil
+	})
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "fixture-ignored-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	if ignoredErr := callFixtureSetupTool(t.Context(), session, config.ToolSurfaceDynamic, "branch.create", nil, "already exists"); ignoredErr != nil {
+		t.Fatalf("callFixtureSetupTool(ignored) error = %v, want nil", ignoredErr)
+	}
+	reportedErr := callFixtureSetupTool(t.Context(), session, config.ToolSurfaceDynamic, "branch.create", nil)
+	if reportedErr == nil || !strings.Contains(reportedErr.Error(), "prepare fixture branch.create: Branch already exists") {
+		t.Fatalf("callFixtureSetupTool() error = %v, want the reported failure", reportedErr)
+	}
+}
+
+// TestTerraformStateUnlockProjectID_PrefersInProjectMarker verifies the
+// Terraform unlock project identifier is read from the "in project" marker and
+// falls back to the generic project marker.
+func TestTerraformStateUnlockProjectID_PrefersInProjectMarker(t *testing.T) {
+	cases := []struct {
+		name   string
+		prompt string
+		want   string
+		wantOK bool
+	}{
+		{name: "in project marker", prompt: "Unlock Terraform state `prod` in project `my-org/app`.", want: "my-org/app", wantOK: true},
+		{name: "generic project marker", prompt: "Unlock state for project `my-org/other`.", want: "my-org/other", wantOK: true},
+		{name: "no marker", prompt: "Unlock the state."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := terraformStateUnlockProjectID(tc.prompt)
+			if ok != tc.wantOK || got != tc.want {
+				t.Fatalf("terraformStateUnlockProjectID(%q) = %q, %t; want %q, %t", tc.prompt, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestLiveGitLabHTTPClient_HonorsSkipTLSVerify verifies the helper returns the
+// default client when TLS verification stays on, a custom transport when it is
+// skipped, and an error for an unparseable setting.
+func TestLiveGitLabHTTPClient_HonorsSkipTLSVerify(t *testing.T) {
+	cases := []struct {
+		name        string
+		value       string
+		wantDefault bool
+		wantErr     bool
+	}{
+		{name: "unset", value: "", wantDefault: true},
+		{name: "false", value: "false", wantDefault: true},
+		{name: "true", value: "true"},
+		{name: "invalid", value: "maybe", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_SKIP_TLS_VERIFY", tc.value)
+			client, err := liveGitLabHTTPClient()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("liveGitLabHTTPClient() error = %v, want error = %t", err, tc.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if (client == http.DefaultClient) != tc.wantDefault {
+				t.Fatalf("liveGitLabHTTPClient() default client = %t, want %t", client == http.DefaultClient, tc.wantDefault)
+			}
+		})
 	}
 }

@@ -72,6 +72,125 @@ func TestCheckManifest_DetectsStaleOutput(t *testing.T) {
 	}
 }
 
+// TestCheckManifest_Scenarios_ComparesCommittedFile verifies the check
+// accepts a byte-identical manifest and reports a missing one by path.
+func TestCheckManifest_Scenarios_ComparesCommittedFile(t *testing.T) {
+	tests := []struct {
+		name    string
+		write   bool
+		wantErr string
+	}{
+		{name: "identical manifest passes", write: true},
+		{name: "missing manifest is a read error", write: false, wantErr: "read "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "action_specs_manifest_gen.go")
+			if tt.write {
+				writeTestFile(t, path, "same")
+			}
+			err := checkManifest(path, []byte("same"))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("checkManifest() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("checkManifest() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestGenerateManifest_InvalidBuilderName_ReturnsFormatError verifies a
+// builder name that is not a Go identifier makes gofmt reject the rendered
+// source, so a corrupt discovery result never lands in the manifest.
+func TestGenerateManifest_InvalidBuilderName_ReturnsFormatError(t *testing.T) {
+	_, err := generateManifest([]string{"build Broken ActionSpecs"})
+	if err == nil || !strings.Contains(err.Error(), "format generated manifest") {
+		t.Fatalf("generateManifest() error = %v, want the format error", err)
+	}
+}
+
+// manifestRunCase is one fixture tree for the command-core test: source is
+// the builder file written under internal/tools, manifest the committed
+// manifest (empty for none), blockOut replaces the target path with a
+// directory, and wantErr the error stage expected.
+type manifestRunCase struct {
+	name     string
+	source   string
+	manifest string
+	blockOut bool
+	check    bool
+	wantErr  string
+}
+
+// TestRun_Scenarios_WritesOrVerifiesManifest verifies the command core on a
+// fixture tree: a write run creates the manifest from the discovered
+// builders, a check run accepts that manifest and rejects a stale one, and
+// each failing stage is reported with its own prefix (no builders, a target
+// path that cannot be written).
+func TestRun_Scenarios_WritesOrVerifiesManifest(t *testing.T) {
+	const source = "package tools\n\nfunc buildWikiActionSpecs() {}\nfunc buildAccessActionSpecs() {}\n"
+	want, err := generateManifest([]string{"buildAccessActionSpecs", "buildWikiActionSpecs"})
+	if err != nil {
+		t.Fatalf("generateManifest() error = %v", err)
+	}
+
+	tests := []manifestRunCase{
+		{name: "write run creates the manifest", source: source},
+		{name: "check run accepts a current manifest", source: source, manifest: string(want), check: true},
+		{name: "check run rejects a stale manifest", source: source, manifest: "package tools\n", check: true, wantErr: "check manifest: "},
+		{name: "no builders in the source tree", source: "package tools\n", wantErr: "discover action spec group builders: no action spec group builders found"},
+		{name: "unwritable target path", source: source, blockOut: true, wantErr: "write "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runManifestCase(t, tt, want)
+		})
+	}
+}
+
+// runManifestCase stages one manifest fixture tree, runs the command core
+// over it, and asserts either the expected failure or the rewritten manifest.
+func runManifestCase(t *testing.T, tt manifestRunCase, want []byte) {
+	t.Helper()
+	root := t.TempDir()
+	sourceDir := filepath.Join(root, "internal", "tools")
+	if mkErr := os.MkdirAll(sourceDir, 0o750); mkErr != nil {
+		t.Fatalf("mkdir source dir: %v", mkErr)
+	}
+	writeTestFile(t, filepath.Join(sourceDir, "action_specs.go"), tt.source)
+	target := filepath.Join(sourceDir, "manifest_gen.go")
+	if tt.manifest != "" {
+		writeTestFile(t, target, tt.manifest)
+	}
+	if tt.blockOut {
+		if mkErr := os.Mkdir(target, 0o750); mkErr != nil {
+			t.Fatalf("mkdir blocking target: %v", mkErr)
+		}
+	}
+
+	runErr := run(root, filepath.Join("internal", "tools"), filepath.Join("internal", "tools", "manifest_gen.go"), tt.check)
+	if tt.wantErr != "" {
+		if runErr == nil || !strings.Contains(runErr.Error(), tt.wantErr) {
+			t.Fatalf("run() error = %v, want containing %q", runErr, tt.wantErr)
+		}
+		return
+	}
+	if runErr != nil {
+		t.Fatalf("run() error = %v", runErr)
+	}
+	got, readErr := os.ReadFile(target)
+	if readErr != nil {
+		t.Fatalf("read manifest: %v", readErr)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("manifest = %q, want %q", got, want)
+	}
+}
+
 // writeTestFile writes test file fixture data for tests.
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()

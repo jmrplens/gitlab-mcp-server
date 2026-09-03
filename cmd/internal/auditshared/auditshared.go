@@ -15,6 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -60,7 +61,6 @@ func WeakIndividualDescription(spec toolutil.ActionSpec, projected map[string]st
 var projectionCache struct {
 	once         sync.Once
 	descriptions map[string]string
-	err          error
 }
 
 // specsCache memoizes CachedActionSpecs per enterprise flag, same contract:
@@ -74,11 +74,11 @@ type specsResult struct {
 
 // CachedIndividualDescriptions returns the projected individual-tool
 // descriptions, computed once per process. The map is shared: read-only.
-func CachedIndividualDescriptions(client *gitlabclient.Client) (map[string]string, error) {
+func CachedIndividualDescriptions(client *gitlabclient.Client) map[string]string {
 	projectionCache.once.Do(func() {
-		projectionCache.descriptions, projectionCache.err = ProjectIndividualDescriptions(client)
+		projectionCache.descriptions = ProjectIndividualDescriptions(client)
 	})
-	return projectionCache.descriptions, projectionCache.err
+	return projectionCache.descriptions
 }
 
 // CachedActionSpecs returns the collected action specs for the given tier
@@ -97,32 +97,29 @@ func CachedActionSpecs(client *gitlabclient.Client, enterprise bool) []tools.Act
 // in-memory MCP server and returns the projected description per tool name —
 // the exact text the model consumes. Prefer CachedIndividualDescriptions
 // unless a fresh projection is the point.
-func ProjectIndividualDescriptions(client *gitlabclient.Client) (map[string]string, error) {
+//
+// Registration projects the catalog compiled into this binary and both ends of
+// the transport are this process, so none of the three steps can fail and no
+// auditor could do anything with the failure but print it.
+func ProjectIndividualDescriptions(client *gitlabclient.Client) map[string]string {
 	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	tools.RegisterAll(server, client, edition.Ultimate)
 	toolutil.LockdownInputSchemas(server)
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
-		return nil, fmt.Errorf("connect server: %w", err)
-	}
+	cmdutil.Must(server.Connect(ctx, serverTransport, nil))
+
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "audit-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		return nil, fmt.Errorf("connect client: %w", err)
-	}
+	session := cmdutil.Must(mcpClient.Connect(ctx, clientTransport, nil))
 	defer func() { _ = session.Close() }()
 
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list tools: %w", err)
-	}
+	result := cmdutil.Must(session.ListTools(ctx, nil))
 	descriptions := make(map[string]string, len(result.Tools))
 	for _, tool := range result.Tools {
 		descriptions[tool.Name] = tool.Description
 	}
-	return descriptions, nil
+	return descriptions
 }
 
 // OwnerPackage resolves the owning package for an action: the spec override
@@ -141,21 +138,18 @@ func OwnerPackage(group tools.ActionSpecGroup, spec toolutil.ActionSpec) string 
 // stub that answers every request with a fixed version payload. Generators
 // and auditors use it to register the tool catalog offline. The returned
 // cleanup func shuts the stub server down.
-func NewStubGitLabClient(token string) (*gitlabclient.Client, func(), error) {
+//
+// The only thing client construction validates is the base URL, and that one
+// comes from the httptest server started two lines earlier.
+func NewStubGitLabClient(token string) (client *gitlabclient.Client, cleanup func()) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, `{"version":"17.0.0"}`)
 	}))
 
-	cfg := &config.Config{
+	return cmdutil.Must(gitlabclient.NewClient(&config.Config{
 		GitLabURL:   srv.URL,
 		GitLabToken: token,
-	}
-	client, err := gitlabclient.NewClient(cfg)
-	if err != nil {
-		srv.Close()
-		return nil, nil, fmt.Errorf("create stub gitlab client: %w", err)
-	}
-	return client, srv.Close, nil
+	})), srv.Close
 }

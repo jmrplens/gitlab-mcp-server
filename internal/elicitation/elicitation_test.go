@@ -1709,3 +1709,45 @@ func TestFromRequest_ReadsTheRequestsOwnCapabilities(t *testing.T) {
 		})
 	}
 }
+
+// TestConfirm_AcceptWithoutTheAnswer_IsNotADecision covers an accept whose
+// content does not carry the boolean the confirmation asked for.
+//
+// It is deliberately not read as "no". A declined dialog is a decision the user
+// made, and a model is told to stop and offer something else; a malformed
+// answer is a client that did not answer the question at all, and reporting it
+// as a refusal would attribute to the user a choice nobody made. Failing closed
+// here is what keeps the destructive action from running either way.
+func TestConfirm_AcceptWithoutTheAnswer_IsNotADecision(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		content map[string]any
+	}{
+		// A wrong type is not among them: the SDK validates the answer against
+		// the schema that was sent and refuses it before this code sees it.
+		// What reaches here is an answer that satisfies the schema and still
+		// does not carry the field, which the schema does not make required.
+		{name: "the field is missing", content: map[string]any{}},
+		{name: "no content at all", content: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				return &mcp.ElicitResult{Action: "accept", Content: tt.content}, nil
+			})
+			defer cleanup()
+
+			confirmed, err := clientFromSession(ss).Confirm(ctx, testConfirmMsg)
+
+			if !errors.Is(err, ErrMalformedAnswer) {
+				t.Errorf("Confirm() error = %v, want ErrMalformedAnswer", err)
+			}
+			if confirmed {
+				t.Error("Confirm() = true for an answer that never said so")
+			}
+		})
+	}
+}

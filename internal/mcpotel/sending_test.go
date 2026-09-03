@@ -161,3 +161,41 @@ func TestIsNotification(t *testing.T) {
 		})
 	}
 }
+
+// TestSendingMiddleware_APanickingHandler_IsStillMeasured covers the deferred
+// record, which exists for the one outcome the ordinary path cannot report.
+//
+// A panic unwinding through the middleware skips the record call below it, so
+// without this the client instrument would undercount exactly the calls most
+// worth counting: the span would end with no outcome and no measurement would
+// be taken. The panic itself is deliberately not recovered here — it is
+// re-raised past the middleware, and this test catches it the way the caller
+// above would have to.
+func TestSendingMiddleware_APanickingHandler_IsStillMeasured(t *testing.T) {
+	recorder := newRecorder(t)
+	handler := SendingMiddleware(Options{})(
+		func(context.Context, string, mcp.Request) (mcp.Result, error) {
+			panic("the handler below the middleware panicked")
+		},
+	)
+
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("the middleware swallowed the panic; whoever is below it must decide what a panic means")
+			}
+		}()
+		_, _ = handler(context.Background(), "elicitation/create", &mcp.ListToolsRequest{})
+	}()
+
+	spans := recorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("recorded %d spans, want the one the panic unwound through", len(spans))
+	}
+	if got := spans[0].Status().Code; got != codes.Error {
+		t.Errorf("span status = %v, want an error: a panicking call is not a success", got)
+	}
+	if _, ok := attrOf(spans[0], AttrErrorType); !ok {
+		t.Errorf("%s is absent; the outcome of a panicking call was never classified", AttrErrorType)
+	}
+}

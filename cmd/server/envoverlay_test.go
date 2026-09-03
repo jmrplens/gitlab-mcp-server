@@ -3,6 +3,7 @@
 package main
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -206,6 +207,83 @@ func TestApplyHTTPEnvOverlay_OAuthOriginSettingsFollowPrecedence(t *testing.T) {
 		}
 		if hcfg.trustedOrigins != "https://flag-origin.example" {
 			t.Errorf("trustedOrigins = %q, want the flag value", hcfg.trustedOrigins)
+		}
+	})
+}
+
+// TestApplyHTTPEnvOverlay_SettingsWithoutTheirOwnTest covers the overlay
+// entries that no other case exercises: the instance list, the deprecated
+// boolean surface selector, and the two rate-limit numbers.
+//
+// GITLAB_URL is the one that is not a plain assignment. The environment carries
+// one string where the flag can be repeated, so a comma-separated value has to
+// spell the same list — and it replaces whatever the flag layer left rather
+// than appending to it, or a value from a previous parse would survive
+// underneath the operator's own.
+func TestApplyHTTPEnvOverlay_SettingsWithoutTheirOwnTest(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the instance list comes from one comma-separated value", func(t *testing.T) {
+		t.Parallel()
+
+		hcfg := newOverlayConfig()
+		hcfg.gitlabURLs = repeatedFlag{"https://left-over.example.com"}
+		value := "https://gitlab.com, https://gitlab.example.com"
+
+		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{GitLabURL: &value})
+
+		want := repeatedFlag{"https://gitlab.com", "https://gitlab.example.com"}
+		if !slices.Equal(hcfg.gitlabURLs, want) {
+			t.Errorf("gitlabURLs = %v, want %v", hcfg.gitlabURLs, want)
+		}
+	})
+
+	t.Run("a passed flag keeps the instance list", func(t *testing.T) {
+		t.Parallel()
+
+		hcfg := newOverlayConfig("gitlab-url")
+		hcfg.gitlabURLs = repeatedFlag{"https://from-the-flag.example.com"}
+		value := "https://from-the-environment.example.com"
+
+		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{GitLabURL: &value})
+
+		if !slices.Equal(hcfg.gitlabURLs, repeatedFlag{"https://from-the-flag.example.com"}) {
+			t.Errorf("gitlabURLs = %v, want the flag value kept", hcfg.gitlabURLs)
+		}
+	})
+
+	t.Run("the deprecated boolean selector is honored and marked", func(t *testing.T) {
+		t.Parallel()
+
+		hcfg := newOverlayConfig()
+		metaTools := true
+
+		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{MetaTools: &metaTools})
+
+		if !hcfg.metaTools {
+			t.Error("metaTools = false, want the deprecated environment selector honored")
+		}
+		// Marked as set, because the flag layer reads it only when it was
+		// stated: an unmarked value cannot be told from the flag's default and
+		// would silently select the meta surface for everyone.
+		if !hcfg.metaToolsSet {
+			t.Error("metaToolsSet = false, want the value recorded as stated")
+		}
+	})
+
+	t.Run("the rate limit comes from the environment", func(t *testing.T) {
+		t.Parallel()
+
+		hcfg := newOverlayConfig()
+		rps, burst := 42.5, 99
+
+		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{RateLimitRPS: &rps, RateLimitBurst: &burst})
+
+		if hcfg.rateLimitRPS != rps {
+			t.Errorf("rateLimitRPS = %v, want %v", hcfg.rateLimitRPS, rps)
+		}
+		if hcfg.rateLimitBurst != burst {
+			t.Errorf("rateLimitBurst = %d, want %d", hcfg.rateLimitBurst, burst)
 		}
 	})
 }

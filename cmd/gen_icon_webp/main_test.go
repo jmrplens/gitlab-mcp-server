@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -438,5 +439,77 @@ func TestRun_CheckModeAcceptsCommittedAssets(t *testing.T) {
 
 	if err := run(true, rasterize); err != nil {
 		t.Fatalf("run(true) error: %v", err)
+	}
+}
+
+// writeFakeTool writes an executable shell script named name into dir whose
+// body is script, so a test can stand in for rsvg-convert or cwebp on PATH
+// without the real tool.
+func writeFakeTool(t *testing.T, dir, name, script string) {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script), 0o755); err != nil { //nolint:gosec // the fake tool must be executable
+		t.Fatalf("write fake %s: %v", name, err)
+	}
+}
+
+// TestRasterize_CwebpUnusable_ReturnsCwebpError exercises the two cwebp
+// branches of rasterize by putting a fake rsvg-convert that succeeds on a
+// private PATH: with no cwebp beside it the lookup fails, and with a cwebp
+// that exits non-zero the run fails and carries the tool's stderr. Neither
+// case needs the real tools installed.
+func TestRasterize_CwebpUnusable_ReturnsCwebpError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake tools are POSIX shell scripts")
+	}
+	tests := []struct {
+		name    string
+		cwebp   string
+		wantErr []string
+	}{
+		{name: "cwebp not on PATH", cwebp: "", wantErr: []string{"cwebp", "not found"}},
+		{name: "cwebp exits non-zero", cwebp: "echo 'bad png' >&2\nexit 3\n", wantErr: []string{"cwebp: exit status 3", "bad png"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bin := t.TempDir()
+			writeFakeTool(t, bin, "rsvg-convert", "cat >/dev/null\nexit 0\n")
+			if tt.cwebp != "" {
+				writeFakeTool(t, bin, "cwebp", tt.cwebp)
+			}
+			t.Setenv("PATH", bin)
+
+			_, err := rasterize("<svg fill=\"currentColor\"></svg>", colorLight)
+			if err == nil {
+				t.Fatal("rasterize() error = nil, want a cwebp failure")
+			}
+			for _, want := range tt.wantErr {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("rasterize() error = %v, want containing %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+// TestRepoRoot_RemovedWorkingDirectory_ReturnsError verifies repoRoot reports
+// the os.Getwd failure when the process's working directory was removed:
+// getcwd(3) then fails with ENOENT regardless of privilege, which makes the
+// branch reproducible without depending on permission enforcement.
+func TestRepoRoot_RemovedWorkingDirectory_ReturnsError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows getcwd does not fail when the current directory is removed")
+	}
+	gone := filepath.Join(t.TempDir(), "gone")
+	if err := os.Mkdir(gone, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Chdir(gone)
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatalf("remove working directory: %v", err)
+	}
+
+	if _, err := repoRoot(); err == nil || strings.Contains(err.Error(), "go.mod not found") {
+		t.Fatalf("repoRoot() error = %v, want the working-directory error, not a go.mod walk result", err)
 	}
 }

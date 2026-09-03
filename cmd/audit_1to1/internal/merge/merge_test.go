@@ -3,8 +3,10 @@ package merge
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -192,4 +194,116 @@ func indexPackages(bl backlog) map[string]backlogPackage {
 		out[pkg.Package] = pkg
 	}
 	return out
+}
+
+// TestBuildBacklogFromPaths_BadInputs_NameTheFailingFile verifies each of
+// the three report files is read and parsed in turn, and that a missing or
+// malformed one fails the merge with its own path in the error.
+func TestBuildBacklogFromPaths_BadInputs_NameTheFailingFile(t *testing.T) {
+	dir := t.TempDir()
+	good := map[string]string{
+		"struct":   writeTemp(t, dir, "struct.json", `{"packages":[]}`),
+		"action":   writeTemp(t, dir, "action.json", `{"services":[]}`),
+		"metadata": writeTemp(t, dir, "metadata.json", `{"packages":[]}`),
+	}
+	malformed := writeTemp(t, dir, "malformed.json", `{"packages": [`)
+	missing := filepath.Join(dir, "missing.json")
+
+	cases := []struct {
+		name     string
+		paths    map[string]string
+		wantPath string
+		wantErr  string
+	}{
+		{name: "missing_struct_report", paths: map[string]string{"struct": missing}, wantPath: missing, wantErr: "read "},
+		{name: "missing_action_report", paths: map[string]string{"action": missing}, wantPath: missing, wantErr: "read "},
+		{name: "missing_metadata_report", paths: map[string]string{"metadata": missing}, wantPath: missing, wantErr: "read "},
+		{name: "malformed_struct_report", paths: map[string]string{"struct": malformed}, wantPath: malformed, wantErr: "parse "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			paths := maps.Clone(good)
+			maps.Copy(paths, tc.paths)
+			_, err := BuildBacklogFromPaths(paths["struct"], paths["action"], paths["metadata"])
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr+tc.wantPath) {
+				t.Fatalf("BuildBacklogFromPaths error = %v, want it to contain %q", err, tc.wantErr+tc.wantPath)
+			}
+		})
+	}
+}
+
+// TestBuildBacklogFromBytes_BadInputs_NameTheFailingStream verifies each
+// in-memory report is parsed in turn and a malformed one fails the merge
+// naming its stream.
+func TestBuildBacklogFromBytes_BadInputs_NameTheFailingStream(t *testing.T) {
+	structJSON, actionJSON, metadataJSON := `{"packages":[]}`, `{"services":[]}`, `{"packages":[]}`
+	cases := []struct {
+		name    string
+		inputs  [3]string
+		wantErr string
+	}{
+		{name: "struct", inputs: [3]string{"{", actionJSON, metadataJSON}, wantErr: "parse struct report"},
+		{name: "action", inputs: [3]string{structJSON, "[]", metadataJSON}, wantErr: "parse action report"},
+		{name: "metadata", inputs: [3]string{structJSON, actionJSON, "nope"}, wantErr: "parse metadata report"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := BuildBacklogFromBytes([]byte(tc.inputs[0]), []byte(tc.inputs[1]), []byte(tc.inputs[2]))
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("BuildBacklogFromBytes error = %v, want it to contain %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestMergeBacklog_Streams_CountEveryFlagAndSortServices verifies the pure
+// merge: every metadata flag is tallied under its counter, a metadata
+// package without findings is left out, a package referenced by two gapped
+// services lists them sorted by service, and the summary sums it all.
+func TestMergeBacklog_Streams_CountEveryFlagAndSortServices(t *testing.T) {
+	var actionRep actionReport
+	if err := json.Unmarshal([]byte(`{"services":[
+	  {"service":"ZetaServiceInterface","packages":["issues"],"api_methods":3,"covered_methods":2,"missing_methods":["Z"]},
+	  {"service":"AlphaServiceInterface","packages":["issues"],"api_methods":5,"covered_methods":3,"missing_methods":["A","B"]}
+	]}`), &actionRep); err != nil {
+		t.Fatal(err)
+	}
+	var metaRep metadataReport
+	if err := json.Unmarshal([]byte(`{"packages":[
+	  {"package":"issues","findings":[
+	    {"action":"issue.list","flags":["generic_usage","aliases_only_toolname"]},
+	    {"action":"issue.get","flags":["empty_related","weak_individual_description","unknown"]}
+	  ]},
+	  {"package":"clean","findings":[]}
+	]}`), &metaRep); err != nil {
+		t.Fatal(err)
+	}
+
+	bl := mergeBacklog(structReport{}, actionRep, metaRep)
+	if len(bl.Packages) != 1 || bl.Packages[0].Package != "issues" {
+		t.Fatalf("packages = %+v, want only issues (clean has no findings)", bl.Packages)
+	}
+	issues := bl.Packages[0]
+	if len(issues.Actions) != 2 || issues.Actions[0].Service != "AlphaServiceInterface" || issues.Actions[1].Service != "ZetaServiceInterface" {
+		t.Errorf("issues actions = %+v, want the two services sorted by name", issues.Actions)
+	}
+	wantMeta := &metadataGaps{GenericUsage: 1, AliasesOnlyToolname: 1, EmptyRelated: 1, WeakIndividualDescription: 1, Findings: metaRep.Packages[0].Findings}
+	if issues.Metadata == nil || !reflectEqualMeta(issues.Metadata, wantMeta) {
+		t.Errorf("issues metadata = %+v, want %+v", issues.Metadata, wantMeta)
+	}
+	wantSummary := backlogSummary{Packages: 1, ActionMissingMethods: 3, MetaGenericUsage: 1, MetaAliasesOnlyToolname: 1, MetaEmptyRelated: 1, MetaWeakIndividualDescription: 1}
+	if bl.Summary != wantSummary {
+		t.Errorf("summary = %+v, want %+v", bl.Summary, wantSummary)
+	}
+	if bl.SchemaVersion != 1 || !strings.HasPrefix(bl.Note, "Merged 1:1 audit backlog.") {
+		t.Errorf("backlog header = version %d, note %q", bl.SchemaVersion, bl.Note)
+	}
+}
+
+// reflectEqualMeta compares two metadata sections by their JSON form, since
+// the findings carry omitempty fields that make a direct comparison brittle.
+func reflectEqualMeta(a, b *metadataGaps) bool {
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	return errA == nil && errB == nil && bytes.Equal(ja, jb)
 }

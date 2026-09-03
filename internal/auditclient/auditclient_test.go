@@ -3,6 +3,7 @@ package auditclient
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -12,10 +13,7 @@ import (
 // TestNewMock_ReturnsPingableClient verifies the audit client helper exposes a
 // local GitLab version endpoint and a cleanup function.
 func TestNewMock_ReturnsPingableClient(t *testing.T) {
-	client, cleanup, err := NewMock()
-	if err != nil {
-		t.Fatalf("NewMock() unexpected error: %v", err)
-	}
+	client, cleanup := NewMock()
 	t.Cleanup(cleanup)
 
 	version, err := client.Ping(context.Background())
@@ -38,17 +36,22 @@ func TestNewMock_ClientCreationError(t *testing.T) {
 		return nil, wantErr
 	}
 
-	client, cleanup, err := NewMock()
-	if err == nil {
-		t.Fatal("NewMock() expected error, got nil")
-	}
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("NewMock() error = %v, want wrapping %v", err, wantErr)
-	}
-	if client != nil {
-		t.Fatalf("client = %#v, want nil", client)
-	}
-	if cleanup != nil {
-		t.Fatal("cleanup is non-nil, want nil")
-	}
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("NewMock() returned normally, want a panic when the client cannot be built")
+		}
+		message, ok := recovered.(string)
+		if !ok {
+			t.Fatalf("panic value = %#v, want a string", recovered)
+		}
+		if !strings.Contains(message, wantErr.Error()) {
+			t.Errorf("panic = %q, want it to carry %q", message, wantErr.Error())
+		}
+		if !strings.Contains(message, "auditclient") {
+			t.Errorf("panic = %q, want it to name the package that failed", message)
+		}
+	}()
+
+	NewMock()
 }

@@ -3,7 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"flag"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -257,5 +261,133 @@ func TestIdentityKeyring_AConfiguredKeySurvivesABrokenRotation(t *testing.T) {
 	}
 	if !ring.Configured() {
 		t.Error("the keyring does not report the configured key")
+	}
+}
+
+// TestAnnounceIdentityChoice_SaysOnlyWhatIsWorthReading covers the startup
+// line describing what this deployment records about callers.
+//
+// The default records nobody, and a line saying so on every startup is noise;
+// anything else is the line somebody skimming a log for surprises needs to see.
+// The keyring is built before the announcement rather than after, because
+// announcing that identity is recorded and then failing to build the thing that
+// records it would be the announcement lying. And the announcement has to reach
+// the collector as well as stderr, which is why it is separate from building
+// the redactor: doing it there wrote both lines through the handler that was
+// about to be replaced.
+func TestAnnounceIdentityChoice_SaysOnlyWhatIsWorthReading(t *testing.T) {
+	tests := []struct {
+		name     string
+		policy   string
+		key      string
+		rotation string
+		want     []string
+		unwanted []string
+	}{
+		{
+			name:     "the default announces nothing",
+			policy:   "",
+			unwanted: []string{"telemetry records caller identity"},
+		},
+		{
+			name:     "an unusable policy announces nothing",
+			policy:   "hashed-with-pepper",
+			unwanted: []string{"telemetry records caller identity"},
+		},
+		{
+			name:   "full names what leaves the process",
+			policy: "full",
+			want:   []string{"telemetry records caller identity", "the GitLab user id and username"},
+		},
+		{
+			name:   "a configured key is stable across replicas",
+			policy: "pseudonymous",
+			key:    "a deployment-wide secret",
+			want:   []string{"stable across replicas and restarts"},
+		},
+		{
+			name:     "a configured key cancels a requested rotation, out loud",
+			policy:   "pseudonymous",
+			key:      "a deployment-wide secret",
+			rotation: "24h",
+			want:     []string{"the rotation interval is ignored"},
+		},
+		{
+			name:     "a generated key that rotates says so",
+			policy:   "pseudonymous",
+			rotation: "24h",
+			want:     []string{"generated key that rotates"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(telemetry.EnvIdentityName, tt.policy)
+			t.Setenv(telemetry.EnvIdentityKeyName, tt.key)
+			t.Setenv(telemetry.EnvIdentityRotationName, tt.rotation)
+			resetIdentityKeyring(t)
+
+			var buf bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			announceIdentityChoice()
+
+			logged := buf.String()
+			for _, want := range tt.want {
+				if !strings.Contains(logged, want) {
+					t.Errorf("startup log %q is missing %q", logged, want)
+				}
+			}
+			for _, unwanted := range tt.unwanted {
+				if strings.Contains(logged, unwanted) {
+					t.Errorf("startup log %q announces %q for a policy that records nobody", logged, unwanted)
+				}
+			}
+		})
+	}
+}
+
+// TestTelemetryIdentityRotation_TheFlagBeatsTheEnvironment covers the precedence
+// for the one identity setting that has a flag.
+//
+// The key deliberately has none — process arguments are readable through /proc
+// by any local principal — but how long a generated key lives is not a secret,
+// so it follows the same rule as every other flag: what the operator typed wins
+// over what the environment happened to carry.
+func TestTelemetryIdentityRotation_TheFlagBeatsTheEnvironment(t *testing.T) {
+	withFreshFlagSet(t)
+	t.Setenv(telemetry.EnvIdentityRotationName, "1h")
+
+	previous := telemetryIdentityRotationFlag
+	t.Cleanup(func() { telemetryIdentityRotationFlag = previous })
+	telemetryIdentityRotationFlag = flag.String("telemetry-identity-rotation", "", "")
+	if err := flag.CommandLine.Parse([]string{"-telemetry-identity-rotation=6h"}); err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+
+	rotation, err := telemetryIdentityRotation()
+	if err != nil {
+		t.Fatalf("telemetryIdentityRotation: %v", err)
+	}
+	if rotation != 6*time.Hour {
+		t.Errorf("rotation = %s, want the flag's 6h rather than the environment's 1h", rotation)
+	}
+}
+
+// TestTelemetryResources_AnUnusablePolicy_RecordsNothing covers the redactor
+// the middleware consults for resource URIs.
+//
+// A server that is already running must not stop mid-startup over a privacy
+// setting it cannot parse, and it must not guess either: the safe answer is to
+// record nothing, which nil is. The loud complaint about the same value belongs
+// to the startup validation, which runs before any of this.
+func TestTelemetryResources_AnUnusablePolicy_RecordsNothing(t *testing.T) {
+	t.Setenv(telemetry.EnvIdentityName, "hashed-with-pepper")
+	resetIdentityKeyring(t)
+
+	if got := telemetryResources(); got != nil {
+		t.Errorf("telemetryResources() = %#v, want nil so nothing about a resource is recorded", got)
 	}
 }

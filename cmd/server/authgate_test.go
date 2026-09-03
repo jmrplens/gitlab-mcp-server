@@ -636,3 +636,220 @@ func TestGate_AllowListIsOnlyNamedWhereItIsAlreadyPublic(t *testing.T) {
 		}
 	})
 }
+
+// TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredential
+// covers the check that makes a session ID insufficient on its own.
+//
+// Each pooled entry mints session IDs under its own tag, so a session presented
+// with a different credential belongs to somebody else: waving it through would
+// make the ID alone enough to read another user's server-initiated stream or to
+// end their session. An untagged ID is refused for the same reason — stateless
+// mode issues none at all, so anything untagged is stale or forged — and the
+// refusal is a 404 rather than a 403, which is what the SDK answers for a
+// session it does not know and therefore says nothing about which IDs exist.
+func TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredential(t *testing.T) {
+	t.Parallel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	other := mcp.NewServer(&mcp.Implementation{Name: "other", Version: "0"}, nil)
+	tags := &sync.Map{}
+	tags.Store(server, "owner")
+	tags.Store(other, "somebody-else")
+
+	tests := []struct {
+		name      string
+		sessionID string
+		server    *mcp.Server
+		wantRefus bool
+	}{
+		{name: "no session id is nothing to own", sessionID: ""},
+		{name: "the credential's own session", sessionID: "owner" + sessionTagSeparator + "abc", server: server},
+		{name: "a session minted for another credential", sessionID: "somebody-else" + sessionTagSeparator + "abc", server: server, wantRefus: true},
+		{name: "an id this deployment never minted", sessionID: "not-tagged-at-all", server: server, wantRefus: true},
+		{name: "a server the pool no longer knows", sessionID: "owner" + sessionTagSeparator + "abc", server: mcp.NewServer(&mcp.Implementation{Name: "gone", Version: "0"}, nil), wantRefus: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			gate := &mcpServerGate{sessionTags: tags, challenge: legacyAuthChallenge}
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			if tt.sessionID != "" {
+				r.Header.Set(mcpSessionIDHeader, tt.sessionID)
+			}
+
+			failure := gate.checkSessionOwnership(r, tt.server)
+
+			if (failure != nil) != tt.wantRefus {
+				t.Fatalf("failure = %+v, want refused=%v", failure, tt.wantRefus)
+			}
+			if failure != nil && failure.status != http.StatusNotFound {
+				t.Errorf("status = %d, want %d so the refusal says nothing about which sessions exist", failure.status, http.StatusNotFound)
+			}
+		})
+	}
+}
+
+// TestMcpServerGate_WithIdentity_WithoutAPoolOrAUsableURL_LeavesTheContext
+// covers the two ways identity resolution declines to say anything.
+//
+// Both leave the context untouched rather than storing an empty identity,
+// because a handler has to be able to tell "the lookup did not succeed" from
+// "a user with no name" — the second would be logged as an authenticated call
+// by nobody.
+func TestMcpServerGate_WithIdentity_WithoutAPoolOrAUsableURL_LeavesTheContext(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		gate   *mcpServerGate
+		header string
+	}{
+		{name: "no pool at all", gate: &mcpServerGate{}},
+		{
+			name:   "an instance this deployment does not publish",
+			gate:   &mcpServerGate{pool: serverpool.New(&config.Config{GitLabURL: "https://gitlab.example.com", IgnoreScopes: true, TierExplicit: true}, okFactory), gitlabURLs: []string{"https://a.example.com", "https://b.example.com"}},
+			header: "https://elsewhere.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			r.Header.Set("PRIVATE-TOKEN", "glpat-something")
+			if tt.header != "" {
+				r.Header.Set(serverpool.RequestOptionGitLabURL, tt.header)
+			}
+
+			ctx := tt.gate.withIdentity(t.Context(), r)
+
+			if toolutil.IdentityFromContext(ctx).IsAuthenticated() {
+				t.Error("an identity was attached from a lookup that never succeeded")
+			}
+		})
+	}
+}
+
+// TestMcpServerGate_InvalidURLMessage_SaysOnlyWhatTheCallerAlreadyKnows covers
+// what a rejected GITLAB-URL is told.
+//
+// A client that sent no header is looking at the operator's own misconfigured
+// --gitlab-url, and echoing the parse detail there would reflect server-side
+// configuration back to anyone who asks. Naming the published instances is safe
+// exactly in oauth mode, where the same list is already served unauthenticated
+// as RFC 9728 authorization_servers; legacy mode publishes no such document and
+// this rejection is reached before the credential is checked, so echoing the
+// list would let any non-empty token enumerate the operator's hostnames.
+func TestMcpServerGate_InvalidURLMessage_SaysOnlyWhatTheCallerAlreadyKnows(t *testing.T) {
+	t.Parallel()
+
+	disallowed := &serverpool.DisallowedGitLabURLError{Allowed: []string{"https://gitlab.com", "https://gitlab.example.com"}}
+
+	tests := []struct {
+		name      string
+		gate      *mcpServerGate
+		header    string
+		err       error
+		wantSays  string
+		wantHides string
+	}{
+		{
+			name:     "no header names the operator, not the caller",
+			gate:     &mcpServerGate{},
+			err:      disallowed,
+			wantSays: "contact the operator",
+		},
+		{
+			name:      "legacy mode does not list the instances",
+			gate:      &mcpServerGate{},
+			header:    "https://elsewhere.example.com",
+			err:       disallowed,
+			wantSays:  "does not serve",
+			wantHides: "gitlab.example.com",
+		},
+		{
+			name:     "oauth mode may name what it already publishes",
+			gate:     &mcpServerGate{oauthMode: true},
+			header:   "https://elsewhere.example.com",
+			err:      disallowed,
+			wantSays: "gitlab.example.com",
+		},
+		{
+			name:     "another parse failure is returned as a sentence",
+			gate:     &mcpServerGate{},
+			header:   "://nonsense",
+			err:      &serverpool.InvalidGitLabURLError{Reason: "malformed URL"},
+			wantSays: "GITLAB-URL",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			if tt.header != "" {
+				r.Header.Set(serverpool.RequestOptionGitLabURL, tt.header)
+			}
+
+			message := tt.gate.invalidURLMessage(r, tt.err)
+
+			if !strings.Contains(message, tt.wantSays) {
+				t.Errorf("message = %q, want it to say %q", message, tt.wantSays)
+			}
+			if tt.wantHides != "" && strings.Contains(message, tt.wantHides) {
+				t.Errorf("message = %q, want it to keep %q to itself", message, tt.wantHides)
+			}
+			if message != "" && message[0] >= 'a' && message[0] <= 'z' {
+				t.Errorf("message = %q, want it to read as a sentence", message)
+			}
+		})
+	}
+}
+
+// TestCapitalizeFirst_AnEmptyStringStaysEmpty covers the guard in front of the
+// slice that would otherwise panic.
+//
+// The input is an error string, and an error whose message is empty is exactly
+// the kind of thing that only turns up in production.
+func TestCapitalizeFirst_AnEmptyStringStaysEmpty(t *testing.T) {
+	t.Parallel()
+
+	if got := capitalizeFirst(""); got != "" {
+		t.Errorf("capitalizeFirst(\"\") = %q, want the empty string", got)
+	}
+	if got := capitalizeFirst("gitlab refused the token"); got != "Gitlab refused the token" {
+		t.Errorf("capitalizeFirst = %q, want the first letter upper-cased", got)
+	}
+}
+
+// TestMcpServerGate_InvalidTokenChallenge_NamesTheVerdictInOAuthMode covers the
+// difference between the two modes' challenges for a credential GitLab refused.
+//
+// The bearer guard emits error="invalid_token" for the identical judgement, and
+// the gate reaches this only for a pool rejection the guard could not see:
+// answering the same verdict two different ways leaves a client unable to tell
+// "reauthorize" from "you sent nothing". Legacy mode carries no such parameters
+// because it publishes no metadata document for a client to act on.
+func TestMcpServerGate_InvalidTokenChallenge_NamesTheVerdictInOAuthMode(t *testing.T) {
+	t.Parallel()
+
+	legacy := (&mcpServerGate{challenge: legacyAuthChallenge}).invalidTokenChallenge()
+	if legacy != legacyAuthChallenge {
+		t.Errorf("legacy challenge = %q, want it unchanged", legacy)
+	}
+
+	oauthed := (&mcpServerGate{challenge: `Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"`, oauthMode: true}).invalidTokenChallenge()
+	for _, want := range []string{`error="invalid_token"`, "error_description="} {
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+
+			if !strings.Contains(oauthed, want) {
+				t.Errorf("oauth challenge %q is missing %s", oauthed, want)
+			}
+		})
+	}
+}

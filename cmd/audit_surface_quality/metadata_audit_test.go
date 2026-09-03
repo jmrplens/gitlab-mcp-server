@@ -140,9 +140,11 @@ func TestAuditAdditionalProperties_RequiresFalseConstraint(t *testing.T) {
 func TestAuditAdditionalProperties_NonObjectSchemasAreSkipped(t *testing.T) {
 	tools := []*mcp.Tool{
 		{Name: "string", InputSchema: map[string]any{"type": "string"}},
+		{Name: "not_a_map", InputSchema: "not a map"},
+		{Name: "no_type_no_properties", InputSchema: map[string]any{}},
 	}
 	if got := auditAdditionalProperties(tools, "individual"); len(got) != 0 {
-		t.Fatalf("auditAdditionalProperties() = %d, want 0", len(got))
+		t.Fatalf("auditAdditionalProperties() = %d, want 0: %+v", len(got), got)
 	}
 }
 

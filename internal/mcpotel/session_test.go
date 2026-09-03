@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
@@ -139,5 +140,100 @@ func TestSessionDuration_IsSkippedForAStatelessPost(t *testing.T) {
 	// before the wrong measurement and report success.
 	if _, found := awaitMetric(t, reader, "mcp.server.session.duration"); found {
 		t.Error("a stateless POST was recorded as a session; this duplicates mcp.server.operation.duration under a misleading name")
+	}
+}
+
+// TestSessionTracker_NothingToObserve_IsANoOp covers the guards that run before
+// a session is measured at all.
+//
+// The middleware calls observe on every request, so both cases are ordinary
+// rather than defensive: the tracker is nil whenever its instrument could not
+// be built, and sessionIDOf is asked about requests that belong to no session.
+// A nil-pointer panic here would be one per request, on the receiving path of
+// every method.
+func TestSessionTracker_NothingToObserve_IsANoOp(t *testing.T) {
+	t.Parallel()
+
+	var absent *sessionTracker
+	absent.observe(&mcp.ListToolsRequest{}, "2026-07-28")
+
+	live := newSessionTracker(noopmetric.NewMeterProvider().Meter("test"), nil, TransportPipe)
+	if live == nil {
+		t.Fatal("newSessionTracker returned nil for a provider that accepts the instrument")
+	}
+	live.observe(nil, "2026-07-28")
+
+	if got := sessionIDOf(nil); got != "" {
+		t.Errorf("sessionIDOf(nil) = %q, want the empty string the convention uses for no session", got)
+	}
+	if got := len(live.observing); got != 0 {
+		t.Errorf("the tracker started watching %d sessions without being given one", got)
+	}
+}
+
+// TestSessionDuration_ASessionWithManyRequests_IsMeasuredOnce covers the
+// bookkeeping that makes the instrument a session measurement rather than a
+// request one.
+//
+// observe runs per request, so without the seen-set every request would park
+// another goroutine on the same session's Wait and each would record its own
+// data point when it ended. The instrument would then read as a count of
+// requests with the session's lifetime as its value, which is wrong twice over.
+func TestSessionDuration_ASessionWithManyRequests_IsMeasuredOnce(t *testing.T) {
+	reader, restore := newMetricRecorder(t)
+	defer restore()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server.AddReceivingMiddleware(Middleware(Options{Transport: TransportPipe, ProtocolVersions: admitted}))
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+
+	// Three different methods rather than one repeated: from protocol
+	// 2026-07-28 a client may answer a repeated tools/list from its own cache,
+	// so the later calls would never reach the middleware and the case under
+	// test would not run. The tool calls fail — nothing is registered — which
+	// is immaterial: what matters is that each request reaches the server.
+	if _, listErr := clientSession.ListTools(ctx, nil); listErr != nil {
+		t.Fatalf("tools/list: %v", listErr)
+	}
+	for _, tool := range []string{"absent_one", "absent_two"} {
+		_, _ = clientSession.CallTool(ctx, &mcp.CallToolParams{Name: tool})
+	}
+
+	if closeErr := clientSession.Close(); closeErr != nil {
+		t.Fatalf("client close: %v", closeErr)
+	}
+	_ = serverSession.Wait()
+
+	recorded, ok := awaitMetric(t, reader, "mcp.server.session.duration")
+	if !ok {
+		t.Fatal("mcp.server.session.duration was never recorded")
+	}
+	histogram, ok := recorded.Data.(metricdata.Histogram[float64])
+	if !ok {
+		t.Fatalf("data is %T, want a float64 histogram", recorded.Data)
+	}
+	if len(histogram.DataPoints) != 1 {
+		t.Fatalf("recorded %d data points, want one per session however many requests it carried", len(histogram.DataPoints))
+	}
+	if got := histogram.DataPoints[0].Count; got != 1 {
+		t.Errorf("count = %d, want 1: three requests on one session are one measurement", got)
+	}
+	// The version the session negotiated travels onto the measurement, which is
+	// the one attribute a session-scoped instrument can carry that a
+	// request-scoped one cannot infer.
+	if _, recorded := histogram.DataPoints[0].Attributes.Value(AttrMCPProtocolVersion); !recorded {
+		t.Errorf("%s is absent from the session measurement; attributes = %v",
+			AttrMCPProtocolVersion, histogram.DataPoints[0].Attributes.ToSlice())
 	}
 }

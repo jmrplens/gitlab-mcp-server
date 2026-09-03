@@ -205,3 +205,45 @@ func surfaceToolResultText(result *mcp.CallToolResult) string {
 	}
 	return b.String()
 }
+
+// TestRegisterSurfaceToolFromSpec_AProtocolFaultStopsTheRouteAsAnError covers
+// the guard failing rather than the user declining.
+//
+// A requestState this server did not issue is a protocol fault, not a tool
+// outcome: it travels out as a JSON-RPC error so the client fixes what it sent,
+// where an error result would invite the model to try the destructive call
+// again. Either way the route must not run — a confirmation exchange that
+// cannot be completed fails closed.
+func TestRegisterSurfaceToolFromSpec_AProtocolFaultStopsTheRouteAsAnError(t *testing.T) {
+	var called atomic.Bool
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	route := RouteFunc(func(_ context.Context, _ surfaceToolTestInput) (DeleteOutput, error) {
+		called.Store(true)
+		return DeleteOutput{Status: "success", Message: "deleted"}, nil
+	})
+	route.Destructive = true
+	spec := NewActionSpec("delete", route, ActionSpecOptions{
+		IndividualTool: IndividualToolSpec{Name: "gitlab_test_delete", Title: "Test Delete"},
+	})
+	RegisterSurfaceToolFromSpec(server, spec, SurfaceToolRegisterOptions{Description: "Test destructive tool."})
+
+	session := newSurfaceToolSession(t, server, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+	})
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:         "gitlab_test_delete",
+		Arguments:    map[string]any{"id": 1},
+		RequestState: "not-a-state-this-server-issued",
+	})
+
+	// The SDK surfaces a handler's coded error as a transport error or as an
+	// error result depending on the negotiated revision; what must not happen
+	// is a successful call.
+	if err == nil && (result == nil || !result.IsError) {
+		t.Fatalf("a forged requestState was accepted (result = %+v); the gate can be bypassed by sending one", result)
+	}
+	if called.Load() {
+		t.Error("the destructive route ran despite a confirmation that could not be completed")
+	}
+}

@@ -14,13 +14,14 @@ package metadata
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -57,32 +58,34 @@ type reportSummary struct {
 // Run builds the report and returns it as indented JSON (with a trailing
 // newline). gapsOnly filters to actions that raise at least one flag, matching
 // the original -gaps-only flag.
-func Run(gapsOnly bool) ([]byte, error) {
-	rep, err := buildReport(gapsOnly)
-	if err != nil {
-		return nil, err
-	}
-	content, err := json.MarshalIndent(rep, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("marshal report: %w", err)
-	}
-	return append(content, '\n'), nil
+//
+// Nothing here can fail: the report is analyzed out of the catalog compiled
+// into this binary, and the JSON encodes a struct built a line earlier from
+// strings and ints.
+func Run(gapsOnly bool) []byte {
+	content := cmdutil.Must(json.MarshalIndent(buildReport(gapsOnly), "", "  "))
+	return append(content, '\n')
 }
 
-func buildReport(gapsOnly bool) (report, error) {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		return report{}, fmt.Errorf("create audit client: %w", err)
-	}
+func buildReport(gapsOnly bool) report {
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
 
-	projected, err := auditshared.CachedIndividualDescriptions(client)
-	if err != nil {
-		return report{}, err
+	projected := auditshared.CachedIndividualDescriptions(client)
+	packagesOut := collectPackages(auditshared.CachedActionSpecs(client, true), projected, gapsOnly)
+	return report{
+		SchemaVersion: shared.SchemaVersion,
+		Summary:       summarize(packagesOut),
+		Packages:      packagesOut,
 	}
+}
 
+// collectPackages analyzes every spec of every group and returns the per-owner
+// package reports, sorted by package and, within one, by action. gapsOnly
+// drops the packages that raise no finding.
+func collectPackages(groups []tools.ActionSpecGroup, projected map[string]string, gapsOnly bool) []packageReport {
 	byPackage := map[string]*packageReport{}
-	for _, group := range auditshared.CachedActionSpecs(client, true) {
+	for _, group := range groups {
 		for _, spec := range group.Actions {
 			owner := auditshared.OwnerPackage(group, spec)
 			pr := packageFor(byPackage, owner)
@@ -102,11 +105,7 @@ func buildReport(gapsOnly bool) (report, error) {
 		packagesOut = append(packagesOut, *pr)
 	}
 	sort.Slice(packagesOut, func(i, j int) bool { return packagesOut[i].Package < packagesOut[j].Package })
-	return report{
-		SchemaVersion: shared.SchemaVersion,
-		Summary:       summarize(packagesOut),
-		Packages:      packagesOut,
-	}, nil
+	return packagesOut
 }
 
 // analyzeSpec returns the R-META finding for one spec. The boolean is false when

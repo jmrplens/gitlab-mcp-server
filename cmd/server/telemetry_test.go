@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 )
 
 // TestTelemetryEnabled_DefaultsToOff pins the default, which is a privacy
@@ -292,4 +294,89 @@ func boundedShutdown(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+// TestDropToolNameFromMetrics_ReadsTheFlagThenTheEnvironmentThenAuto covers the
+// switch that decides whether gen_ai.tool.name is a metric dimension.
+//
+// Auto is the default because the answer differs per surface: the individual
+// surface registers about a thousand tools, and one time series per tool
+// exhausts the SDK's cardinality limit — which it answers by collapsing the
+// long tail into a single otel.metric.overflow bucket, first-come-wins under
+// cumulative temporality, so the loss is silent. A value this build cannot
+// parse falls back to auto with a line rather than stopping a server that is
+// already coming up.
+func TestDropToolNameFromMetrics_ReadsTheFlagThenTheEnvironmentThenAuto(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     string
+		flag    string
+		surface string
+		want    bool
+	}{
+		{name: "auto keeps the name on the dynamic surface", surface: config.ToolSurfaceDynamic, want: false},
+		{name: "auto drops it on the individual surface", surface: config.ToolSurfaceIndividual, want: true},
+		{name: "the environment can force it off", env: "off", surface: config.ToolSurfaceDynamic, want: true},
+		{name: "the environment can force it on", env: "on", surface: config.ToolSurfaceIndividual, want: false},
+		{name: "the flag beats the environment", env: "off", flag: "on", surface: config.ToolSurfaceIndividual, want: false},
+		{name: "an unusable value falls back to auto", env: "sometimes", surface: config.ToolSurfaceIndividual, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withFreshFlagSet(t)
+			t.Setenv(telemetry.EnvToolNameName, tt.env)
+
+			previous := telemetryToolNameFlag
+			t.Cleanup(func() { telemetryToolNameFlag = previous })
+			telemetryToolNameFlag = flag.String("telemetry-tool-name", "", "")
+			if tt.flag != "" {
+				if err := flag.CommandLine.Parse([]string{"-telemetry-tool-name=" + tt.flag}); err != nil {
+					t.Fatalf("parsing: %v", err)
+				}
+			}
+
+			if got := dropToolNameFromMetrics(tt.surface); got != tt.want {
+				t.Errorf("dropToolNameFromMetrics(%q) = %v, want %v", tt.surface, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTelemetryEnabled_ThePassedFlagIsTheAnswer covers the switch's top
+// precedence level.
+//
+// The environment variable is what a fleet sets and the flag is what one
+// deployment types, so a flag that was actually passed has to win in both
+// directions — including the one that turns telemetry off on a host whose
+// environment turns it on, which is the case an operator uses to isolate a
+// misbehaving collector.
+func TestTelemetryEnabled_ThePassedFlagIsTheAnswer(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		flag string
+		want bool
+	}{
+		{name: "the flag turns it on over an environment that says off", env: "false", flag: "true", want: true},
+		{name: "the flag turns it off over an environment that says on", env: "true", flag: "false", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withFreshFlagSet(t)
+			t.Setenv(telemetry.EnvSwitchName, tt.env)
+
+			previous := telemetryFlag
+			t.Cleanup(func() { telemetryFlag = previous })
+			telemetryFlag = flag.Bool("telemetry", false, "")
+			if err := flag.CommandLine.Parse([]string{"-telemetry=" + tt.flag}); err != nil {
+				t.Fatalf("parsing: %v", err)
+			}
+
+			if got := telemetryEnabled(); got != tt.want {
+				t.Errorf("telemetryEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

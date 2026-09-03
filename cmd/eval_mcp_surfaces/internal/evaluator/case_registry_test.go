@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestValidateEvalCaseRegistry_DetectsInvalidDefinitions verifies that
@@ -357,4 +359,82 @@ func TestDestructiveEvalCases_DestructiveStepsRequireConfirm(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateEvalCaseRegistry_BuiltInCatalog_ReportsOnlyDuplicateIDs
+// verifies the exported validator runs over the shipped catalog and that the
+// only structural complaint it has is a set of case IDs reused across
+// partitions (for example MT-110, which names both a read case and a
+// destructive one). Every other class of defect — empty prompts, missing
+// steps, unknown presets or partitions, destructive steps without confirm,
+// misplaced optional steps — must stay absent, so a new one fails here.
+func TestValidateEvalCaseRegistry_BuiltInCatalog_ReportsOnlyDuplicateIDs(t *testing.T) {
+	problems := ValidateEvalCaseRegistry(nil)
+	for _, problem := range problems {
+		t.Run(problem, func(t *testing.T) {
+			if !strings.HasSuffix(problem, " has duplicate ID") {
+				t.Fatalf("ValidateEvalCaseRegistry(nil) reported %q, want only duplicate-ID problems", problem)
+			}
+		})
+	}
+}
+
+// TestCaseByID_UnknownID_ReturnsFalse verifies an unknown case ID reports a
+// miss instead of an empty case.
+func TestCaseByID_UnknownID_ReturnsFalse(t *testing.T) {
+	if _, ok := CaseByID("MT-DOES-NOT-EXIST"); ok {
+		t.Fatal("CaseByID(unknown) ok = true, want false")
+	}
+}
+
+// TestValidateEvalCaseRegistry_MalformedCases_ReportsEachProblem verifies the
+// validator names every structural defect: empty and duplicate IDs, empty
+// prompts, missing steps, unknown presets and partitions, destructive steps
+// without confirm, misplaced optional steps, and unregistered routes.
+func TestValidateEvalCaseRegistry_MalformedCases_ReportsEachProblem(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": {}}}
+	cases := []EvalCase{
+		{ID: "", Prompt: "x", Steps: []ExpectedStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}},
+		{ID: "MT-DUP", Prompt: "x", Steps: []ExpectedStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}},
+		{ID: "MT-DUP", Prompt: "x", Steps: []ExpectedStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}},
+		{ID: "MT-EMPTY", Steps: nil, Presets: []EvalPreset{"nope"}, Partition: "nowhere"},
+		{ID: "MT-STEPS", Prompt: "x", Steps: []ExpectedStep{
+			{ExpectedTool: "", ExpectedAction: "get"},
+			{ExpectedTool: "gitlab_project", ExpectedAction: "delete", Destructive: true},
+			{ExpectedTool: "gitlab_project", ExpectedAction: "list", OptionalStep: true},
+			{ExpectedTool: capabilityListTool, OptionalStep: true},
+		}},
+	}
+	problems := validateEvalCaseRegistry(cases, routes)
+	for _, want := range []string{
+		"case has empty ID",
+		"MT-DUP has duplicate ID",
+		"MT-EMPTY has empty prompt",
+		"MT-EMPTY has no expected steps",
+		`MT-EMPTY uses unknown preset "nope"`,
+		`MT-EMPTY uses unknown partition "nowhere"`,
+		"MT-STEPS step 1 has empty expected tool",
+		"MT-STEPS step 2 is destructive but does not list confirm as a parameter",
+		"MT-STEPS step 2 expected route gitlab_project/delete is not registered",
+		"MT-STEPS step 3 marks a non-capability bridge step as optional",
+		"MT-STEPS step 4 optional capability bridge step must be followed by another capability bridge step",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !slices.Contains(problems, want) {
+				t.Fatalf("problems = %v, want %q", problems, want)
+			}
+		})
+	}
+}
+
+// TestCaseFixturesFromNames_UnknownName_Panics verifies an unregistered
+// fixture name is a programming error surfaced at registry build time.
+func TestCaseFixturesFromNames_UnknownName_Panics(t *testing.T) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil || !strings.Contains(recovered.(string), `unknown evaluator case fixture "nope"`) {
+			t.Fatalf("recover() = %v, want unknown fixture panic", recovered)
+		}
+	}()
+	caseFixturesFromNames([]string{"nope"})
 }

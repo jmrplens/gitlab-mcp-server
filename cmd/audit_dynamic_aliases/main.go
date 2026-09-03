@@ -40,7 +40,14 @@ func run(stdout, stderr io.Writer, format string) int {
 		return 1
 	}
 
-	findings := dynamic.AuditDefaultActionAliases(catalog)
+	return writeFindings(stdout, stderr, dynamic.AuditDefaultActionAliases(catalog), format)
+}
+
+// writeFindings writes the audit findings to stdout in the requested format
+// and returns the process exit code: 0 when no error-severity finding is
+// present, 1 when one is (or the JSON encoding fails), and 2 for an unknown
+// format.
+func writeFindings(stdout, stderr io.Writer, findings []dynamic.AliasAuditFinding, format string) int {
 	errorCount := 0
 	for _, finding := range findings {
 		if finding.Severity == "error" {

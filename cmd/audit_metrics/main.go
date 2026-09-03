@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -48,96 +49,195 @@ const (
 
 var topDomains = 20
 
-// main builds the audit client, gathers runtime counts from the registered MCP
-// surface, and prints the metrics report to stdout.
+// auditOptions is what the command line selects: which mode to run and where
+// to write. Parsing it is separate from acting on it so the modes are testable.
+type auditOptions struct {
+	topDomains    int
+	jsonOut       bool
+	siteStatsPath string
+	checkOnly     bool
+}
+
+// main parses flags and hands the work to run, whose exit code it returns.
 func main() {
-	flag.IntVar(&topDomains, "top-domains", 20, "number of domains to list by tool count")
-	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
-	siteStatsPath := flag.String("site-stats", "", "write the single-sourced site stats JSON to the given path (use with -check to verify instead of write)")
-	checkOnly := flag.Bool("check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
+	opts := auditOptions{}
+	flag.IntVar(&opts.topDomains, "top-domains", 20, "number of domains to list by tool count")
+	flag.BoolVar(&opts.jsonOut, "json", false, "emit JSON summary instead of markdown report")
+	flag.StringVar(&opts.siteStatsPath, "site-stats", "", "write the single-sourced site stats JSON to the given path (use with -check to verify instead of write)")
+	flag.BoolVar(&opts.checkOnly, "check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
 	flag.Parse()
-	if topDomains < 0 {
-		cmdutil.Fatalf("-top-domains must be >= 0")
+
+	os.Exit(run(opts, os.Stdout, os.Stderr))
+}
+
+// run builds the audit clients, dispatches to the selected mode, and returns
+// the process exit code. Every write goes to the given writers so a test can
+// read what a mode produced, and every failure a caller can act on — a bad
+// flag, an unreadable VERSION file, a stale generated artifact, a write that
+// does not land — travels here rather than being reported where it happens:
+// run is the only place that prints a failure and decides the exit code.
+// Counting the surfaces this process just built in memory produces no such
+// failure, so those helpers return their measurement and nothing else.
+func run(opts auditOptions, stdout, stderr io.Writer) int {
+	topDomains = opts.topDomains
+	if opts.topDomains < 0 {
+		fmt.Fprintln(stderr, "-top-domains must be >= 0")
+		return 1
 	}
 
 	cmdutil.Progressf("audit_metrics: building catalog and counting tools/resources/prompts across surfaces...")
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1)
-	}
+	client, cleanup := auditclient.NewMock()
 	defer cleanup()
+
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token
 		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: "audit-token",
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create gitlab.com client: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit.
+		fmt.Fprintf(stderr, "failed to create gitlab.com client: %v\n", err)
+		return 1
 	}
 
-	if *siteStatsPath != "" {
-		if statsErr := writeOrCheckSiteStats(*siteStatsPath, generateSiteStats(client, gitLabComClient), *checkOnly); statsErr != nil {
-			cmdutil.Fatalf("%v", statsErr)
+	if opts.siteStatsPath != "" {
+		stats, statsErr := generateSiteStats(client, gitLabComClient)
+		if statsErr != nil {
+			fmt.Fprintf(stderr, "%v\n", statsErr)
+			return 1
 		}
-		return
+		if writeErr := writeOrCheckSiteStats(opts.siteStatsPath, stats, opts.checkOnly); writeErr != nil {
+			fmt.Fprintf(stderr, "%v\n", writeErr)
+			return 1
+		}
+		return 0
 	}
 
-	individualTools := listServerTools(client, false, false)
-	gitLabComIndividualTools := listServerTools(gitLabComClient, false, false)
-	metaBase := listServerTools(client, true, false)
-	metaEnterprise := listServerTools(client, true, true)
-	metaGitLabComEnterprise := listServerTools(gitLabComClient, true, true)
+	metrics := collectMetrics(client, gitLabComClient)
+	if opts.jsonOut {
+		if encErr := writeJSONSummary(stdout, metrics); encErr != nil {
+			fmt.Fprintf(stderr, "encode json: %v\n", encErr)
+			return 1
+		}
+		return 0
+	}
+	printReport(metrics, client)
+	return 0
+}
+
+// auditMetrics holds every number the text report and the JSON summary
+// print, gathered once by [collectMetrics] so both renderers read the same
+// measurement.
+//
+// The tool lists are the advertised MCP tool definitions per surface and
+// deployment (self-managed vs GitLab.com, base vs enterprise). The dynamic
+// action counts are catalog route totals, the registry metrics describe the
+// dynamic search index, and gitLabComEnterpriseDomains is the per-domain
+// action count of the widest catalog. The remaining fields are the resource,
+// prompt and codebase counts.
+type auditMetrics struct {
+	individualTools            []*mcp.Tool
+	gitLabComIndividualTools   []*mcp.Tool
+	metaBase                   []*mcp.Tool
+	metaEnterprise             []*mcp.Tool
+	metaGitLabComEnterprise    []*mcp.Tool
+	dynamicBase                []*mcp.Tool
+	dynamicEnterprise          []*mcp.Tool
+	dynamicGitLabComEnterprise []*mcp.Tool
+
+	dynamicBaseActions                int
+	dynamicEnterpriseActions          int
+	dynamicGitLabComEnterpriseActions int
+
+	dynamicBaseMetrics                dynamictools.RegistryMetrics
+	dynamicEnterpriseMetrics          dynamictools.RegistryMetrics
+	dynamicGitLabComEnterpriseMetrics dynamictools.RegistryMetrics
+
+	enterpriseActionAudit      enterpriseActionSpecAudit
+	gitLabComEnterpriseDomains map[string]int
+
+	staticResources   int
+	templateResources int
+	promptCount       int
+	toolPackages      int
+	srcFiles          int
+	testFiles         int
+	elicitationCount  int
+}
+
+// collectMetrics gathers every count the report prints from the registered
+// MCP surfaces, the canonical catalog and the repository tree. client is a
+// self-managed instance client; gitLabComClient targets GitLab.com so the
+// GitLab.com-only tools are counted where relevant.
+//
+// Nothing here can fail: the catalog is compiled into this binary, the
+// surfaces are registered on servers this function creates, and the listings
+// travel over in-memory transports. A failure in any of that is a bug in this
+// program, not a condition the caller could report and continue from, so it
+// panics through [cmdutil.Must] at the leaf instead of unwinding as an error
+// through frames that would then be uncoverable.
+func collectMetrics(client, gitLabComClient *gitlabclient.Client) auditMetrics {
 	dynamicBaseCatalog := dynamicActionCatalog(client, false)
 	dynamicEnterpriseCatalog := dynamicActionCatalog(client, true)
 	dynamicGitLabComEnterpriseCatalog := dynamicActionCatalog(gitLabComClient, true)
-	dynamicBaseRoutes := dynamicBaseCatalog.ActionMaps()
-	dynamicEnterpriseRoutes := dynamicEnterpriseCatalog.ActionMaps()
-	dynamicGitLabComEnterpriseRoutes := dynamicGitLabComEnterpriseCatalog.ActionMaps()
-	dynamicBase := listDynamicTools(dynamicBaseCatalog)
-	dynamicEnterprise := listDynamicTools(dynamicEnterpriseCatalog)
-	dynamicGitLabComEnterprise := listDynamicTools(dynamicGitLabComEnterpriseCatalog)
-	dynamicBaseMetrics := dynamicSearchMetrics(dynamicBaseCatalog)
-	dynamicEnterpriseMetrics := dynamicSearchMetrics(dynamicEnterpriseCatalog)
-	dynamicGitLabComEnterpriseMetrics := dynamicSearchMetrics(dynamicGitLabComEnterpriseCatalog)
-	enterpriseActionAudit := auditEnterpriseActionSpecs(dynamicBaseCatalog, dynamicEnterpriseCatalog, dynamicGitLabComEnterpriseCatalog)
-	staticResources, templateResources := countResources(client)
-	resourceCount := staticResources + templateResources
-	promptCount := countPrompts(client)
-	toolPackages := countToolPackages()
-	srcFiles, testFiles := countSourceFiles()
 
-	elicitationCount := 0
-	for _, tool := range individualTools {
+	metrics := auditMetrics{
+		dynamicBaseActions:                countActionRoutes(dynamicBaseCatalog.ActionMaps()),
+		dynamicEnterpriseActions:          countActionRoutes(dynamicEnterpriseCatalog.ActionMaps()),
+		dynamicGitLabComEnterpriseActions: countActionRoutes(dynamicGitLabComEnterpriseCatalog.ActionMaps()),
+		dynamicBaseMetrics:                dynamicSearchMetrics(dynamicBaseCatalog),
+		dynamicEnterpriseMetrics:          dynamicSearchMetrics(dynamicEnterpriseCatalog),
+		dynamicGitLabComEnterpriseMetrics: dynamicSearchMetrics(dynamicGitLabComEnterpriseCatalog),
+		enterpriseActionAudit:             auditEnterpriseActionSpecs(dynamicBaseCatalog, dynamicEnterpriseCatalog, dynamicGitLabComEnterpriseCatalog),
+		gitLabComEnterpriseDomains:        countCatalogDomains(dynamicGitLabComEnterpriseCatalog),
+		toolPackages:                      countToolPackages(),
+	}
+	metrics.individualTools = listServerTools(client, false, false)
+	metrics.gitLabComIndividualTools = listServerTools(gitLabComClient, false, false)
+	metrics.metaBase = listServerTools(client, true, false)
+	metrics.metaEnterprise = listServerTools(client, true, true)
+	metrics.metaGitLabComEnterprise = listServerTools(gitLabComClient, true, true)
+	metrics.dynamicBase = listDynamicTools(dynamicBaseCatalog)
+	metrics.dynamicEnterprise = listDynamicTools(dynamicEnterpriseCatalog)
+	metrics.dynamicGitLabComEnterprise = listDynamicTools(dynamicGitLabComEnterpriseCatalog)
+	metrics.promptCount = countPrompts(client)
+	metrics.staticResources, metrics.templateResources = countResources(client)
+	metrics.srcFiles, metrics.testFiles = countSourceFiles()
+	for _, tool := range metrics.individualTools {
 		if strings.HasPrefix(tool.Name, "gitlab_interactive_") {
-			elicitationCount++
+			metrics.elicitationCount++
 		}
 	}
+	return metrics
+}
 
-	if *jsonOut {
-		summary := struct {
-			IndividualTools   int `json:"individual_tools"`
-			MetaBase          int `json:"meta_base"`
-			MetaEnterprise    int `json:"meta_enterprise"`
-			DynamicBase       int `json:"dynamic_base"`
-			DynamicEnterprise int `json:"dynamic_enterprise"`
-			Resources         int `json:"resources"`
-			Prompts           int `json:"prompts"`
-			ToolPackages      int `json:"tool_packages"`
-			SourceFiles       int `json:"source_files"`
-			TestFiles         int `json:"test_files"`
-		}{
-			len(individualTools), len(metaBase), len(metaEnterprise),
-			len(dynamicBase), len(dynamicEnterprise),
-			resourceCount, promptCount, toolPackages, srcFiles, testFiles,
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if encErr := enc.Encode(summary); encErr != nil {
-			cmdutil.Fatalf("encode json: %v", encErr)
-		}
-		return
+// writeJSONSummary encodes the headline counts as an indented JSON object,
+// the -json form of the report.
+func writeJSONSummary(w io.Writer, metrics auditMetrics) error {
+	summary := struct {
+		IndividualTools   int `json:"individual_tools"`
+		MetaBase          int `json:"meta_base"`
+		MetaEnterprise    int `json:"meta_enterprise"`
+		DynamicBase       int `json:"dynamic_base"`
+		DynamicEnterprise int `json:"dynamic_enterprise"`
+		Resources         int `json:"resources"`
+		Prompts           int `json:"prompts"`
+		ToolPackages      int `json:"tool_packages"`
+		SourceFiles       int `json:"source_files"`
+		TestFiles         int `json:"test_files"`
+	}{
+		len(metrics.individualTools), len(metrics.metaBase), len(metrics.metaEnterprise),
+		len(metrics.dynamicBase), len(metrics.dynamicEnterprise),
+		metrics.staticResources + metrics.templateResources, metrics.promptCount, metrics.toolPackages, metrics.srcFiles, metrics.testFiles,
 	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(summary)
+}
+
+// printReport writes the Markdown metrics report to stdout. client is needed
+// only by the schema-mode section, which re-registers the meta surface under
+// each META_PARAM_SCHEMA mode to size its input schemas.
+func printReport(metrics auditMetrics, client *gitlabclient.Client) {
+	resourceCount := metrics.staticResources + metrics.templateResources
 
 	fmt.Println("=" + strings.Repeat("=", 59))
 	fmt.Println("  gitlab-mcp-server. MCP Server Metrics Audit")
@@ -146,34 +246,34 @@ func main() {
 
 	fmt.Println("## Core Metrics")
 	fmt.Println()
-	printRow("Individual MCP tools (self-managed enterprise)", len(individualTools))
-	printRow("Individual MCP tools (GitLab.com enterprise)", len(gitLabComIndividualTools))
-	printRow("Meta-tools (base)", len(metaBase))
-	printRow("Meta-tools (self-managed enterprise)", len(metaEnterprise))
-	printRow("Meta-tools (GitLab.com enterprise)", len(metaGitLabComEnterprise))
-	printRow("Dynamic tools (base)", len(dynamicBase))
-	printRow("Dynamic tools (self-managed enterprise)", len(dynamicEnterprise))
-	printRow("Dynamic tools (GitLab.com enterprise)", len(dynamicGitLabComEnterprise))
-	printRow("Dynamic catalog actions (base)", countActionRoutes(dynamicBaseRoutes))
-	printRow("Dynamic catalog actions (self-managed enterprise)", countActionRoutes(dynamicEnterpriseRoutes))
-	printRow("Dynamic catalog actions (GitLab.com enterprise)", countActionRoutes(dynamicGitLabComEnterpriseRoutes))
-	printDynamicSearchMetrics(dynamicBaseMetrics, dynamicEnterpriseMetrics, dynamicGitLabComEnterpriseMetrics)
-	printRow("Spec-backed enterprise catalog actions", len(enterpriseActionAudit.SpecBacked))
-	printRow("Enterprise catalog actions missing ActionSpec", len(enterpriseActionAudit.MissingSpec))
-	printRow("Enterprise-only meta-tools", diffByName(metaEnterprise, metaBase))
-	printRow("GitLab.com-only meta-tools", diffByName(metaGitLabComEnterprise, metaEnterprise))
-	printRow("GitLab.com-only individual tools", diffByName(gitLabComIndividualTools, individualTools))
+	printRow("Individual MCP tools (self-managed enterprise)", len(metrics.individualTools))
+	printRow("Individual MCP tools (GitLab.com enterprise)", len(metrics.gitLabComIndividualTools))
+	printRow("Meta-tools (base)", len(metrics.metaBase))
+	printRow("Meta-tools (self-managed enterprise)", len(metrics.metaEnterprise))
+	printRow("Meta-tools (GitLab.com enterprise)", len(metrics.metaGitLabComEnterprise))
+	printRow("Dynamic tools (base)", len(metrics.dynamicBase))
+	printRow("Dynamic tools (self-managed enterprise)", len(metrics.dynamicEnterprise))
+	printRow("Dynamic tools (GitLab.com enterprise)", len(metrics.dynamicGitLabComEnterprise))
+	printRow("Dynamic catalog actions (base)", metrics.dynamicBaseActions)
+	printRow("Dynamic catalog actions (self-managed enterprise)", metrics.dynamicEnterpriseActions)
+	printRow("Dynamic catalog actions (GitLab.com enterprise)", metrics.dynamicGitLabComEnterpriseActions)
+	printDynamicSearchMetrics(metrics.dynamicBaseMetrics, metrics.dynamicEnterpriseMetrics, metrics.dynamicGitLabComEnterpriseMetrics)
+	printRow("Spec-backed enterprise catalog actions", len(metrics.enterpriseActionAudit.SpecBacked))
+	printRow("Enterprise catalog actions missing ActionSpec", len(metrics.enterpriseActionAudit.MissingSpec))
+	printRow("Enterprise-only meta-tools", diffByName(metrics.metaEnterprise, metrics.metaBase))
+	printRow("GitLab.com-only meta-tools", diffByName(metrics.metaGitLabComEnterprise, metrics.metaEnterprise))
+	printRow("GitLab.com-only individual tools", diffByName(metrics.gitLabComIndividualTools, metrics.individualTools))
 	printRow("MCP Resources (total)", resourceCount)
-	printRow("  Static resources", staticResources)
-	printRow("  Resource templates", templateResources)
+	printRow("  Static resources", metrics.staticResources)
+	printRow("  Resource templates", metrics.templateResources)
 	printRow("  Workspace roots", 1)
-	printRow("MCP Prompts", promptCount)
+	printRow("MCP Prompts", metrics.promptCount)
 	fmt.Println()
 
 	fmt.Println("## Tool Categories")
 	fmt.Println()
-	printRow("Elicitation tools", elicitationCount)
-	printRow("Standard tools", len(individualTools)-elicitationCount)
+	printRow("Elicitation tools", metrics.elicitationCount)
+	printRow("Standard tools", len(metrics.individualTools)-metrics.elicitationCount)
 	fmt.Println()
 
 	fmt.Println("## Meta-Tool Schema Modes")
@@ -183,43 +283,43 @@ func main() {
 
 	fmt.Println("## Codebase Metrics")
 	fmt.Println()
-	printRow("internal/tools Go packages", toolPackages)
-	printRow("Source files (.go)", srcFiles)
-	printRow("Test files (_test.go)", testFiles)
+	printRow("internal/tools Go packages", metrics.toolPackages)
+	printRow("Source files (.go)", metrics.srcFiles)
+	printRow("Test files (_test.go)", metrics.testFiles)
 	fmt.Println()
 
 	fmt.Printf("## Catalog Domain Breakdown (GitLab.com enterprise, top %d)\n", topDomains)
 	fmt.Println()
-	printDomainTable(countCatalogDomains(dynamicGitLabComEnterpriseCatalog))
+	printDomainTable(metrics.gitLabComEnterpriseDomains)
 	fmt.Println()
 
-	printEnterpriseActionSpecAudit(enterpriseActionAudit)
+	printEnterpriseActionSpecAudit(metrics.enterpriseActionAudit)
 	fmt.Println()
 
 	fmt.Println("## Meta-tools List")
 	fmt.Println()
-	fmt.Println("### Base (" + strconv.Itoa(len(metaBase)) + ")")
-	for _, tool := range metaBase {
+	fmt.Println("### Base (" + strconv.Itoa(len(metrics.metaBase)) + ")")
+	for _, tool := range metrics.metaBase {
 		fmt.Printf(toolListFormat, tool.Name)
 	}
 	fmt.Println()
-	fmt.Println("### Enterprise-only (" + strconv.Itoa(diffByName(metaEnterprise, metaBase)) + ")")
+	fmt.Println("### Enterprise-only (" + strconv.Itoa(diffByName(metrics.metaEnterprise, metrics.metaBase)) + ")")
 	baseNames := map[string]bool{}
-	for _, tool := range metaBase {
+	for _, tool := range metrics.metaBase {
 		baseNames[tool.Name] = true
 	}
-	for _, tool := range metaEnterprise {
+	for _, tool := range metrics.metaEnterprise {
 		if !baseNames[tool.Name] {
 			fmt.Printf(toolListFormat, tool.Name)
 		}
 	}
 	fmt.Println()
-	fmt.Println("### GitLab.com-only enterprise (" + strconv.Itoa(diffByName(metaGitLabComEnterprise, metaEnterprise)) + ")")
+	fmt.Println("### GitLab.com-only enterprise (" + strconv.Itoa(diffByName(metrics.metaGitLabComEnterprise, metrics.metaEnterprise)) + ")")
 	enterpriseNames := map[string]bool{}
-	for _, tool := range metaEnterprise {
+	for _, tool := range metrics.metaEnterprise {
 		enterpriseNames[tool.Name] = true
 	}
-	for _, tool := range metaGitLabComEnterprise {
+	for _, tool := range metrics.metaGitLabComEnterprise {
 		if !enterpriseNames[tool.Name] {
 			fmt.Printf(toolListFormat, tool.Name)
 		}
@@ -383,18 +483,15 @@ func printDynamicSearchMetrics(base, enterprise, gitLabCom dynamictools.Registry
 	printRow("Dynamic aliases ambiguous (GitLab.com enterprise)", gitLabCom.AmbiguousAliasCount)
 }
 
+// dynamicActionCatalog builds the canonical catalog for the requested tier
+// and adds the standalone dynamic routes to it. Both steps read the
+// ActionSpecs compiled into this binary, so a failure is a malformed spec
+// this build already carries — the same panic every other command that
+// projects the catalog would take — and both errors already name the group
+// or the step that produced them.
 func dynamicActionCatalog(client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "build dynamic action catalog: %v\n", err)
-		os.Exit(1)
-	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "add standalone dynamic actions: %v\n", err)
-		os.Exit(1)
-	}
-	return catalog
+	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true}))
+	return cmdutil.Must(dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}))
 }
 
 // listDynamicTools registers the low-token dynamic public toolset backed by
@@ -414,30 +511,22 @@ func countActionRoutes(routes map[string]toolutil.ActionMap) int {
 	return count
 }
 
-// listToolsFromServer connects to server in-memory and returns advertised tools.
+// listToolsFromServer connects to server in-memory and returns advertised
+// tools. Nothing here leaves the process: the transport is a pair of
+// in-memory pipes, the peer is the server this program just registered, and
+// the listing asks it for what it advertises. There is no failure for a
+// caller to handle, so a broken handshake stops the program where it happens.
 func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
-	}
+	cmdutil.Must(server.Connect(ctx, st, nil))
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
-	}
+	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
 	defer session.Close()
 
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit.
-	}
-	return result.Tools
+	return cmdutil.Must(session.ListTools(ctx, nil)).Tools
 }
 
 // listServerTools registers tools on an in-memory MCP server and returns
@@ -476,10 +565,9 @@ func listServerToolsUncached(client *gitlabclient.Client, meta, enterprise bool)
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
 
 	if meta {
-		if err := tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
-			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
-			os.Exit(1)
-		}
+		// The only failure registering the meta surface has is building the
+		// catalog it projects, which is the compiled-in ActionSpecs again.
+		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)))
 	} else {
 		tools.RegisterAll(server, client, edition.Ultimate)
 	}
@@ -492,11 +580,7 @@ func listServerToolsUncached(client *gitlabclient.Client, meta, enterprise bool)
 // Workspace roots (+1) are counted separately because they need a roots.Manager.
 func countResources(client *gitlabclient.Client) (static, templates int) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
-	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{IncludeMCP: true})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "build meta action catalog: %v\n", err)
-		os.Exit(1)
-	}
+	metaCatalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{IncludeMCP: true}))
 	resources.Register(server, client)
 	resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
 		Surface: config.ToolSurfaceDynamic,
@@ -507,33 +591,15 @@ func countResources(client *gitlabclient.Client) (static, templates int) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	if _, connectErr := server.Connect(ctx, st, nil); connectErr != nil {
-		fmt.Fprintf(os.Stderr, "server connect (resources): %v\n", connectErr)
-		os.Exit(1)
-	}
+	cmdutil.Must(server.Connect(ctx, st, nil))
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect (resources): %v\n", err)
-		os.Exit(1)
-	}
+	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
 	defer session.Close()
 
-	res, err := session.ListResources(ctx, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListResources: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
-	}
-	static = len(res.Resources)
-
-	tpl, tplErr := session.ListResourceTemplates(ctx, nil)
-	if tplErr != nil {
-		fmt.Fprintf(os.Stderr, "ListResourceTemplates: %v\n", tplErr)
-		os.Exit(1)
-	}
-	templates = len(tpl.ResourceTemplates)
-	return static, templates
+	res := cmdutil.Must(session.ListResources(ctx, nil))
+	tpl := cmdutil.Must(session.ListResourceTemplates(ctx, nil))
+	return len(res.Resources), len(tpl.ResourceTemplates)
 }
 
 // countPrompts registers all MCP prompts and returns the count.
@@ -544,31 +610,25 @@ func countPrompts(client *gitlabclient.Client) int {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect (prompts): %v\n", err)
-		os.Exit(1)
-	}
+	cmdutil.Must(server.Connect(ctx, st, nil))
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect (prompts): %v\n", err)
-		os.Exit(1)
-	}
+	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
 	defer session.Close()
 
-	result, err := session.ListPrompts(ctx, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListPrompts: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
-	}
-	return len(result.Prompts)
+	return len(cmdutil.Must(session.ListPrompts(ctx, nil)).Prompts)
 }
 
 // countSourceFiles walks the internal/ directory and counts .go source files
 // and _test.go test files separately.
 func countSourceFiles() (src, test int) {
-	err := filepath.Walk(filepath.Join(repositoryRoot(), "internal"), func(path string, info os.FileInfo, walkErr error) error {
+	return countSourceFilesAt(filepath.Join(repositoryRoot(), "internal"))
+}
+
+// countSourceFilesAt walks dir and counts .go source files and _test.go test
+// files separately, reporting a walk failure on stderr.
+func countSourceFilesAt(dir string) (src, test int) {
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -628,23 +688,30 @@ func printMetaSchemaModes(client *gitlabclient.Client) {
 	fmt.Printf("  Active mode (env): %s\n\n", active)
 	fmt.Printf("  %-12s %12s\n", "mode", "total bytes")
 	fmt.Printf("  %-12s %12s\n", strings.Repeat("-", 12), strings.Repeat("-", 12))
+	// The sizing table leaves the process on the default mode.
+	defer tools.SetMetaParamSchema("opaque")
 	for _, mode := range []string{"opaque", "compact", "full"} {
 		tools.SetMetaParamSchema(mode)
-		metaTools := listServerTools(client, true, true)
-		total := 0
-		for _, t := range metaTools {
-			if t.InputSchema == nil {
-				continue
-			}
-			raw, err := json.Marshal(t.InputSchema)
-			if err != nil {
-				continue
-			}
-			total += len(raw)
-		}
-		fmt.Printf("  %-12s %12d\n", mode, total)
+		fmt.Printf("  %-12s %12d\n", mode, totalInputSchemaBytes(listServerTools(client, true, true)))
 	}
-	tools.SetMetaParamSchema("opaque")
+}
+
+// totalInputSchemaBytes sums the serialized InputSchema size of the listed
+// tools. A tool without a schema, or whose schema does not serialize, adds
+// nothing rather than aborting the sizing table.
+func totalInputSchemaBytes(listed []*mcp.Tool) int {
+	total := 0
+	for _, t := range listed {
+		if t.InputSchema == nil {
+			continue
+		}
+		raw, err := json.Marshal(t.InputSchema)
+		if err != nil {
+			continue
+		}
+		total += len(raw)
+	}
+	return total
 }
 
 // printDomainTable prints the top 20 tool domains sorted by count.

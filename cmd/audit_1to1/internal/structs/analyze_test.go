@@ -1,13 +1,16 @@
 package structs
 
 import (
+	"encoding/json"
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
@@ -740,5 +743,257 @@ func TestBuildReport_AuditedPairFloors(t *testing.T) {
 				t.Errorf("%s output_pairs = %d, want >= %d (lost audited pair; check the package-local converter wrappers for its toolutil-shared shapes)", name, pr.OutputPairs, floor)
 			}
 		})
+	}
+}
+
+// taggedField is a synthetic struct field carrying a raw struct tag, for the
+// helpers that read url tags rather than json ones.
+type taggedField struct {
+	name   string
+	tag    string
+	goType types.Type
+}
+
+// makeStructWithTags builds a *types.Struct whose fields carry raw tags.
+func makeStructWithTags(fields ...taggedField) *types.Struct {
+	vars := make([]*types.Var, 0, len(fields))
+	tags := make([]string, 0, len(fields))
+	for _, f := range fields {
+		vars = append(vars, types.NewField(token.NoPos, nil, f.name, f.goType, false))
+		tags = append(tags, f.tag)
+	}
+	return types.NewStruct(vars, tags)
+}
+
+// namedStruct declares a named struct type in pkg, for the type-shape helpers
+// that read go/types values directly instead of loading a package.
+func namedStruct(pkg *types.Package, name string, st *types.Struct) *types.Named {
+	return types.NewNamed(types.NewTypeName(token.NoPos, pkg, name, nil), st, nil)
+}
+
+// TestDerefNamedStruct_Types_UnwrapsOnePointer verifies the resolver accepts a
+// named struct directly or behind one pointer and rejects everything else: a
+// nil type, a basic type, and a named type whose underlying is not a struct.
+func TestDerefNamedStruct_Types_UnwrapsOnePointer(t *testing.T) {
+	pkg := types.NewPackage("example.com/sdk", "sdk")
+	branch := namedStruct(pkg, "Branch", makeStruct(structField{name: "Name", jsonTag: "name", goType: tString}))
+	alias := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "ISOTime", nil), tString, nil)
+
+	cases := []struct {
+		name string
+		typ  types.Type
+		want bool
+	}{
+		{name: "nil_type", typ: nil, want: false},
+		{name: "basic_type", typ: tString, want: false},
+		{name: "named_non_struct", typ: alias, want: false},
+		{name: "pointer_to_named_non_struct", typ: types.NewPointer(alias), want: false},
+		{name: "named_struct", typ: branch, want: true},
+		{name: "pointer_to_named_struct", typ: types.NewPointer(branch), want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			named, st, ok := derefNamedStruct(tc.typ)
+			if ok != tc.want {
+				t.Fatalf("derefNamedStruct = %v, want %v", ok, tc.want)
+			}
+			if ok && (named != branch || st == nil) {
+				t.Errorf("derefNamedStruct returned %v/%v, want the Branch struct", named, st)
+			}
+		})
+	}
+}
+
+// TestStructUnder_Types_ReachesTheStructThroughPointerAndName verifies the
+// embedded-field walk reaches a struct given inline, named, or behind a
+// pointer, and reports nothing for a non-struct.
+func TestStructUnder_Types_ReachesTheStructThroughPointerAndName(t *testing.T) {
+	pkg := types.NewPackage("example.com/sdk", "sdk")
+	inline := makeStruct(structField{name: "ID", jsonTag: "id", goType: tInt})
+	named := namedStruct(pkg, "ListOptions", inline)
+
+	cases := []struct {
+		name string
+		typ  types.Type
+		want bool
+	}{
+		{name: "inline_struct", typ: inline, want: true},
+		{name: "named_struct", typ: named, want: true},
+		{name: "pointer_to_named_struct", typ: types.NewPointer(named), want: true},
+		{name: "pointer_to_inline_struct", typ: types.NewPointer(inline), want: true},
+		{name: "basic_type", typ: tString, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			st, ok := structUnder(tc.typ)
+			if ok != tc.want {
+				t.Fatalf("structUnder = %v, want %v", ok, tc.want)
+			}
+			if ok && st != inline {
+				t.Error("structUnder returned a different struct than the one declared")
+			}
+		})
+	}
+}
+
+// TestSDKTypeName_Packages_QualifyWithTheLastSegment verifies the SDK type
+// name reported in a gap is qualified by the package's last path segment, and
+// that a type with no package (a synthetic or universe type) keeps its bare
+// name instead of gaining an empty qualifier.
+func TestSDKTypeName_Packages_QualifyWithTheLastSegment(t *testing.T) {
+	cases := []struct {
+		name string
+		pkg  *types.Package
+		want string
+	}{
+		{name: "versioned_sdk_path", pkg: types.NewPackage("example.com/api/client-go/v2", "sdk"), want: "v2.Branch"},
+		{name: "single_segment_path", pkg: types.NewPackage("sdk", "sdk"), want: "sdk.Branch"},
+		{name: "no_package", pkg: nil, want: "Branch"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			named := namedStruct(tc.pkg, "Branch", makeStruct())
+			if got := sdkTypeName(named); got != tc.want {
+				t.Errorf("sdkTypeName = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNonResultSDKStruct_Types_ExcludeWrappersAndTimeValues verifies the
+// name-based rule and the package-based one together: an SDK result struct is
+// audited, while the pagination wrapper, an *Options request struct and any
+// struct from the standard time package are not.
+func TestNonResultSDKStruct_Types_ExcludeWrappersAndTimeValues(t *testing.T) {
+	sdk := types.NewPackage("example.com/api/client-go/v2", "sdk")
+	timePkg := types.NewPackage("time", "time")
+
+	cases := []struct {
+		name string
+		typ  *types.Named
+		want bool
+	}{
+		{name: "result_struct", typ: namedStruct(sdk, "Branch", makeStruct()), want: false},
+		{name: "pagination_wrapper", typ: namedStruct(sdk, "Response", makeStruct()), want: true},
+		{name: "options_struct", typ: namedStruct(sdk, "ListBranchesOptions", makeStruct()), want: true},
+		{name: "time_package_struct", typ: namedStruct(timePkg, "Duration", makeStruct()), want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := nonResultSDKStruct(tc.typ); got != tc.want {
+				t.Errorf("nonResultSDKStruct(%s) = %v, want %v", tc.typ.Obj().Name(), got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFlattenInto_Nesting_StopsAtNilAndDepth verifies the field flattener's
+// two guards: a nil struct contributes nothing, and embedding deeper than the
+// recursion limit stops rather than descending forever.
+func TestFlattenInto_Nesting_StopsAtNilAndDepth(t *testing.T) {
+	out := map[string]string{}
+	flattenInto(nil, []string{tagKeyJSON}, out, 0)
+	if len(out) != 0 {
+		t.Errorf("flattenInto(nil) wrote %v, want nothing", out)
+	}
+
+	// Eight nested embedded structs: the innermost tag sits below the depth
+	// limit of 6 and must not appear.
+	deepest := makeStruct(structField{name: "Deep", jsonTag: "deep", goType: tString})
+	nested := deepest
+	for range 8 {
+		embedded := types.NewField(token.NoPos, nil, "Embedded", nested, true)
+		nested = types.NewStruct([]*types.Var{embedded}, []string{""})
+	}
+	if got := flattenFields(nested, []string{tagKeyJSON}); len(got) != 0 {
+		t.Errorf("flattenFields descended past the depth limit: %v", got)
+	}
+
+	// The same field one level in is reached.
+	shallow := types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "Embedded", deepest, true)}, []string{""})
+	if got := flattenFields(shallow, []string{tagKeyJSON}); got["deep"] != "string" {
+		t.Errorf("flattenFields of a one-level embed = %v, want the deep field", got)
+	}
+}
+
+// TestDiffPair_URLTagNotation_MatchesTheSnakeCaseMCPName verifies the input
+// diff's fallback tag match: an SDK url tag written in array or negation
+// notation (iids[], not[author_id]) is matched to the snake_case MCP json name
+// rather than reported missing, while a tag with no counterpart still is.
+func TestDiffPair_URLTagNotation_MatchesTheSnakeCaseMCPName(t *testing.T) {
+	mcp := makeStruct(
+		structField{name: "IIDs", jsonTag: "iids", goType: types.NewSlice(tInt)},
+		structField{name: "NotAuthorID", jsonTag: "not_author_id", goType: tInt},
+	)
+	sdk := makeStructWithTags(
+		taggedField{name: "IIDs", tag: `url:"iids[]"`, goType: types.NewSlice(tInt)},
+		taggedField{name: "NotAuthorID", tag: `url:"not[author_id]"`, goType: tInt},
+		taggedField{name: "Scope", tag: `url:"scope"`, goType: tString},
+	)
+
+	g := diffPair("issues", "input", structPair{
+		mcpName: "ListInput", mcpType: mcp,
+		sdkName: "v2.ListIssuesOptions", sdkType: sdk, sdkURLTags: true,
+	})
+	if len(g.MissingFields) != 1 || g.MissingFields[0].Tag != "scope" {
+		t.Errorf("missing fields = %+v, want only the unmatched scope tag", g.MissingFields)
+	}
+	if len(g.TypeMismatches) != 0 {
+		t.Errorf("type mismatches = %+v, want none (the notation match keeps the types)", g.TypeMismatches)
+	}
+}
+
+// TestSummarize_Reports_CountPackagesWithGaps verifies the report summary
+// counts a package as gapped when any of the three gap classes is non-zero,
+// sums the per-class totals, and tallies the advisory type mismatches.
+func TestSummarize_Reports_CountPackagesWithGaps(t *testing.T) {
+	s := summarize([]packageReport{
+		{Package: "clean", InputPairs: 4, OutputPairs: 2},
+		{Package: "missing_input", InputPairs: 1, MissingInputCount: 3},
+		{Package: "missing_output", OutputPairs: 1, MissingOutputCount: 2},
+		{Package: "extra_output", OutputPairs: 1, ExtraOutputCount: 1, Gaps: []gap{
+			{Kind: "output", TypeMismatches: []typeMismatch{{Tag: "id"}, {Tag: "iid"}}},
+		}},
+	})
+	want := reportSummary{
+		Packages: 4, PackagesWithGaps: 3, InputPairs: 5, OutputPairs: 4,
+		MissingInputFields: 3, MissingOutputFields: 2, ExtraOutputFields: 1, TypeMismatches: 2,
+	}
+	if s != want {
+		t.Errorf("summarize = %+v, want %+v", s, want)
+	}
+}
+
+// TestRun_Roots_EmitsJSONOrLoadError verifies the command-facing entry point:
+// a root the loader cannot enter fails the run, and the repository root yields
+// the report as indented JSON naming the SDK path, with gaps-only keeping only
+// the packages that carry a finding.
+func TestRun_Roots_EmitsJSONOrLoadError(t *testing.T) {
+	if _, err := Run(filepath.Join(t.TempDir(), "absent"), true); err == nil || !strings.Contains(err.Error(), "load packages") {
+		t.Fatalf("Run on a missing root = %v, want a load error", err)
+	}
+
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	content, err := Run(root, true)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.HasSuffix(string(content), "}\n") {
+		t.Error("report lacks the trailing newline")
+	}
+	var rep report
+	if unmarshalErr := json.Unmarshal(content, &rep); unmarshalErr != nil {
+		t.Fatalf("report is not JSON: %v", unmarshalErr)
+	}
+	if rep.SchemaVersion != shared.SchemaVersion || rep.ClientGoPath != shared.ClientGoPkgPath {
+		t.Errorf("report header = %d/%q, want %d/%q", rep.SchemaVersion, rep.ClientGoPath, shared.SchemaVersion, shared.ClientGoPkgPath)
+	}
+	for _, pr := range rep.Packages {
+		if pr.MissingInputCount == 0 && pr.MissingOutputCount == 0 && pr.ExtraOutputCount == 0 {
+			t.Errorf("gaps-only report kept %s, which has no gap", pr.Package)
+		}
 	}
 }

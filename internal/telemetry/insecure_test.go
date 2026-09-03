@@ -129,3 +129,37 @@ func TestInsecureCredentialSignals(t *testing.T) {
 		})
 	}
 }
+
+// TestIsPlaintextRemote_SaysNothingAboutWhatItCannotRead covers the two inputs
+// that are deliberately not warned about.
+//
+// An endpoint nobody configured is the default deployment, and an endpoint that
+// does not parse is already going to fail inside the exporter with a message
+// naming it. Guessing at either to raise a second warning would put noise on
+// top of an error, and the warning this function feeds is one an operator is
+// meant to act on.
+func TestIsPlaintextRemote_SaysNothingAboutWhatItCannotRead(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		endpoint string
+		want     bool
+	}{
+		{name: "nothing configured", endpoint: "", want: false},
+		{name: "unparseable", endpoint: "://not-a-url", want: false},
+		{name: "https is not plaintext", endpoint: "https://collector.example.com:4318", want: false},
+		{name: "plaintext loopback stays local", endpoint: "http://127.0.0.1:4318", want: false},
+		{name: "plaintext to another host", endpoint: "http://collector.example.com:4318", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := isPlaintextRemote(tt.endpoint); got != tt.want {
+				t.Errorf("isPlaintextRemote(%q) = %v, want %v", tt.endpoint, got, tt.want)
+			}
+		})
+	}
+}
