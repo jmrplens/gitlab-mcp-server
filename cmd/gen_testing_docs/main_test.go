@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -617,8 +618,8 @@ func TestRepositoryRoot_DeletedWorkingDirectory_FallsBackToDot(t *testing.T) {
 }
 
 // TestParseOptions_FlagShapes_ParsedOrRejected verifies the defaults, every
-// flag override, and the three rejection paths: an unknown flag, positional
-// arguments, and a non-positive table cap.
+// flag override, and the four rejection paths: an unknown flag, positional
+// arguments, a non-positive table cap, and a non-positive timeout.
 func TestParseOptions_FlagShapes_ParsedOrRejected(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -628,7 +629,7 @@ func TestParseOptions_FlagShapes_ParsedOrRejected(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			want: options{docPath: defaultDocPath, topToolRows: 25, timeout: 15 * time.Minute},
+			want: options{docPath: defaultDocPath, topToolRows: 25, timeout: defaultTestTimeout},
 		},
 		{
 			name: "all flags",
@@ -638,6 +639,8 @@ func TestParseOptions_FlagShapes_ParsedOrRejected(t *testing.T) {
 		{name: "unknown flag", args: []string{"--bogus"}, wantErr: true},
 		{name: "positional argument", args: []string{"extra"}, wantErr: true},
 		{name: "zero rows", args: []string{"--top-tool-rows", "0"}, wantErr: true},
+		{name: "zero timeout", args: []string{"--timeout", "0"}, wantErr: true},
+		{name: "negative timeout", args: []string{"--timeout", "-1m"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -867,6 +870,70 @@ func TestRunUnitCoverage_UnwritableCoverageDir_ReturnsError(t *testing.T) {
 	}
 }
 
+// TestRunUnitCoverage_SlowPackage_ReportsConfiguredTimeout verifies the
+// -timeout the generator was given reaches the `go test` it runs, by giving a
+// package that sleeps for three seconds a one second bound and reading the
+// bound back out of the failure. Without the pass-through the run would obey
+// the ten minute default `go test` applies when nobody passes -timeout, which
+// is what made the real coverage pass unrunnable: cmd/audit_metrics needs
+// longer than that under coverage instrumentation.
+func TestRunUnitCoverage_SlowPackage_ReportsConfiguredTimeout(t *testing.T) {
+	files := fakeModuleFiles()
+	files["internal/core/core_test.go"] = "package core\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\n" +
+		"func TestAdd_Slow_ExceedsTheBound(t *testing.T) {\n\ttime.Sleep(3 * time.Second)\n}\n"
+	root := writeFakeModule(t, files)
+	t.Chdir(root)
+
+	_, _, _, err := runUnitCoverage(t.Context(), options{
+		timeout:     time.Second,
+		coverageDir: filepath.Join(root, "coverage"),
+	})
+	if err == nil {
+		t.Fatal("runUnitCoverage() error = nil, want a go test timeout")
+	}
+	if !strings.Contains(err.Error(), "test timed out after 1s") {
+		t.Fatalf("runUnitCoverage() error = %v, want the configured 1s bound", err)
+	}
+}
+
+// TestRunBudget_TestRunCounts_ScaleWithTheCommandsIssued verifies the process
+// deadline covers every `go test` the run issues at its full -timeout, plus
+// the overhead allowance, and that it stays ahead of that bound so `go test`
+// reports a long package itself.
+func TestRunBudget_TestRunCounts_ScaleWithTheCommandsIssued(t *testing.T) {
+	tests := []struct {
+		name string
+		opts options
+		want time.Duration
+	}{
+		{
+			name: "coverage only",
+			opts: options{timeout: 10 * time.Minute},
+			want: 10*time.Minute + overheadBudget,
+		},
+		{
+			name: "coverage and e2e",
+			opts: options{timeout: 10 * time.Minute, includeE2ERun: true},
+			want: 20*time.Minute + overheadBudget,
+		},
+		{
+			name: "no test runs at all",
+			opts: options{timeout: 10 * time.Minute, skipCoverage: true},
+			want: overheadBudget,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := runBudget(tt.opts); got != tt.want {
+				t.Fatalf("runBudget() = %s, want %s", got, tt.want)
+			}
+			if got := runBudget(tt.opts); got <= tt.opts.timeout && !tt.opts.skipCoverage {
+				t.Fatalf("runBudget() = %s, want more than the per-package bound %s", got, tt.opts.timeout)
+			}
+		})
+	}
+}
+
 // TestCoverageDirectory_UnusableTempRoot_ReturnsError verifies the
 // unconfigured case reports a temporary root that does not exist instead of
 // handing back a directory nothing can write to.
@@ -942,7 +1009,11 @@ func TestRun_FakeModule_MigratesChecksAndReports(t *testing.T) {
 	}{
 		{name: "first run migrates", args: args, wantOut: "Updated docs/testing.md"},
 		{name: "second run is idle", args: args, wantOut: "docs/testing.md already up to date"},
-		{name: "check accepts current", args: append([]string{"--check"}, args...), wantOut: "docs/testing.md is up to date"},
+		{
+			name:    "check accepts current",
+			args:    append([]string{"--check"}, args...),
+			wantOut: "docs/testing.md is up to date" + checkedScopeSuffix(true),
+		},
 		{
 			name: "check rejects stale",
 			args: append([]string{"--check"}, args...),
@@ -1113,7 +1184,7 @@ func TestUpdateManagedSection_PathShapes_WriteOrRefuse(t *testing.T) {
 			if tt.text != "" {
 				writeFixture(t, root, tt.path, tt.text)
 			}
-			changed, err := updateManagedSection(tt.path, "same\n", tt.check)
+			changed, report, err := updateManagedSection(tt.path, "same\n", tt.check)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("updateManagedSection() error = %v, want %q", err, tt.wantErr)
@@ -1126,6 +1197,7 @@ func TestUpdateManagedSection_PathShapes_WriteOrRefuse(t *testing.T) {
 			if changed != tt.wantChanged {
 				t.Fatalf("updateManagedSection() changed = %v, want %v", changed, tt.wantChanged)
 			}
+			assertDifferenceReport(t, report, tt.check && tt.wantChanged)
 			data, readErr := os.ReadFile(filepath.Join(root, tt.path))
 			if readErr != nil {
 				t.Fatalf("read %s: %v", tt.path, readErr)
@@ -1134,6 +1206,15 @@ func TestUpdateManagedSection_PathShapes_WriteOrRefuse(t *testing.T) {
 				t.Fatalf("%s content = %q, want it to contain %q", tt.path, data, tt.wantWritten)
 			}
 		})
+	}
+}
+
+// assertDifferenceReport checks that a difference report was produced exactly
+// when one was expected: check mode over a document that would change.
+func assertDifferenceReport(t *testing.T, report string, want bool) {
+	t.Helper()
+	if want != (report != "") {
+		t.Fatalf("updateManagedSection() report = %q, want a report: %v", report, want)
 	}
 }
 
@@ -1152,9 +1233,314 @@ func TestUpdateManagedSection_ReadOnlyDocument_ReturnsWriteError(t *testing.T) {
 	}
 	t.Chdir(root)
 
-	_, err := updateManagedSection("readonly.md", "new\n", false)
+	_, _, err := updateManagedSection("readonly.md", "new\n", false)
 	if err == nil || !strings.Contains(err.Error(), "write readonly.md") {
 		t.Fatalf("updateManagedSection() error = %v, want write error", err)
+	}
+}
+
+// TestParseRecordedCoverage_GeneratedDocument_ReadsBackEveryValue verifies the
+// reader recovers exactly what the renderer writes: the three overview figures,
+// one value per coverage-table row, an unmeasured package, and nothing from a
+// count row that merely looks like a two-column table row.
+func TestParseRecordedCoverage_GeneratedDocument_ReadsBackEveryValue(t *testing.T) {
+	document := "| Metric | Value |\n| --- | ---: |\n" +
+		"| Total test functions | 13,476 |\n" +
+		"| " + overallCoverageLabel + " | 97.8% |\n" +
+		"| " + internalCoverageLabel + " | 98.3% |\n" +
+		"| " + averageCoverageLabel + " | 98.4% |\n\n" +
+		"| Package | Coverage |\n| --- | ---: |\n" +
+		"| cmd/server | 95.6% |\n" +
+		"| " + toolsOrchestrationKey + " | 99.1% |\n" +
+		"| e2eonly | " + coverageUnavailable + " |\n"
+
+	recorded := parseRecordedCoverage(document)
+
+	if !recorded.Overall.OK || recorded.Overall.Percent != 97.8 {
+		t.Fatalf("overall = %+v, want 97.8", recorded.Overall)
+	}
+	if !recorded.Internal.OK || recorded.Internal.Percent != 98.3 {
+		t.Fatalf("internal = %+v, want 98.3", recorded.Internal)
+	}
+	if !recorded.AveragePackage.OK || recorded.AveragePackage.Percent != 98.4 {
+		t.Fatalf("average = %+v, want 98.4", recorded.AveragePackage)
+	}
+	if got := recorded.ByKey["cmd/server"]; !got.OK || got.Percent != 95.6 {
+		t.Fatalf("cmd/server = %+v, want 95.6", got)
+	}
+	if got := recorded.ByKey[toolsOrchestrationKey]; !got.OK || got.Percent != 99.1 {
+		t.Fatalf("%s = %+v, want 99.1", toolsOrchestrationKey, got)
+	}
+	if got, ok := recorded.ByKey["e2eonly"]; !ok || got.OK {
+		t.Fatalf("e2eonly = %+v (present %v), want a recorded but unmeasured value", got, ok)
+	}
+	if _, ok := recorded.ByKey["Total test functions"]; ok {
+		t.Fatal("a count row was read as a coverage value")
+	}
+	if _, ok := recorded.ByKey[averageCoverageLabel]; ok {
+		t.Fatal("the average row was filed as a package")
+	}
+}
+
+// TestCoverageTableKey_Layers_MatchTheRenderedLabel verifies the reader looks a
+// package up under the label the coverage report actually gives it, which is
+// the package key everywhere except the orchestration layer.
+func TestCoverageTableKey_Layers_MatchTheRenderedLabel(t *testing.T) {
+	tests := []struct {
+		name string
+		pkg  packageMetrics
+		want string
+	}{
+		{name: "cmd package", pkg: packageMetrics{Key: "cmd/server", Layer: layerCmd}, want: "cmd/server"},
+		{name: "core package", pkg: packageMetrics{Key: "toolutil", Layer: layerCore}, want: "toolutil"},
+		{name: "tool sub-package", pkg: packageMetrics{Key: "issues", Layer: layerToolSubpackage}, want: "issues"},
+		{name: "orchestration", pkg: packageMetrics{Key: "tools", Layer: layerToolsOrchestration}, want: toolsOrchestrationKey},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := coverageTableKey(tt.pkg); got != tt.want {
+				t.Fatalf("coverageTableKey() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseCoverageCell_CellShapes_AcceptOnlyMeasurements verifies the cell
+// reader accepts what fmtCoverage writes and refuses everything else, so a
+// count, a tool total or a package name is never read as a percentage.
+func TestParseCoverageCell_CellShapes_AcceptOnlyMeasurements(t *testing.T) {
+	tests := []struct {
+		name    string
+		cell    string
+		want    coverageValue
+		wantOK  bool
+		roundOK bool
+	}{
+		{name: "measured", cell: "95.6%", want: coverageValue{Percent: 95.6, OK: true}, wantOK: true},
+		{name: "full", cell: "100.0%", want: coverageValue{Percent: 100, OK: true}, wantOK: true},
+		{name: "unmeasured", cell: coverageUnavailable, want: coverageValue{}, wantOK: true},
+		{name: "count", cell: "13,476", wantOK: false},
+		{name: "tool total", cell: "57", wantOK: false},
+		{name: "not a number", cell: "n/a%", wantOK: false},
+		{name: "empty", cell: "", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := parseCoverageCell(tt.cell)
+			if ok != tt.wantOK {
+				t.Fatalf("parseCoverageCell(%q) ok = %v, want %v", tt.cell, ok, tt.wantOK)
+			}
+			if ok && got != tt.want {
+				t.Fatalf("parseCoverageCell(%q) = %+v, want %+v", tt.cell, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSplitCoverageRow_LineShapes_ReturnCellsOrNothing verifies only real table
+// body rows are split, so a separator or a prose line never reaches the cell
+// reader.
+func TestSplitCoverageRow_LineShapes_ReturnCellsOrNothing(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want []string
+	}{
+		{name: "body row", line: "| cmd/server |    95.6% |\n", want: []string{"cmd/server", "95.6%"}},
+		{name: "separator", line: "| ---------- | -------: |\n"},
+		{name: "prose", line: "Coverage target: **>90%** per package.\n"},
+		{name: "unterminated", line: "| cmd/server | 95.6%\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitCoverageRow(tt.line)
+			if len(got) != len(tt.want) {
+				t.Fatalf("splitCoverageRow(%q) = %v, want %v", tt.line, got, tt.want)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Fatalf("splitCoverageRow(%q)[%d] = %q, want %q", tt.line, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestCollectMetrics_SkipCoverage_CarriesRecordedValuesForward verifies a
+// -skip-coverage run reports the coverage the document already records instead
+// of blanking it, which is what makes the fast freshness gate possible, and
+// that it reports the read failure when the document is not there to read.
+func TestCollectMetrics_SkipCoverage_CarriesRecordedValuesForward(t *testing.T) {
+	files := fakeModuleFiles()
+	files["docs/testing.md"] = "# T\n\n" + startMarker + "\n\n" +
+		"| Metric | Value |\n| --- | ---: |\n" +
+		"| " + overallCoverageLabel + " | 91.5% |\n" +
+		"| " + internalCoverageLabel + " | 92.5% |\n\n" +
+		"| Package | Coverage |\n| --- | ---: |\n" +
+		"| core | 88.8% |\n\n" + endMarker + "\n"
+	root := writeFakeModule(t, files)
+	t.Chdir(root)
+
+	metrics, err := collectMetrics(t.Context(), options{skipCoverage: true, docPath: "docs/testing.md", timeout: time.Minute})
+	if err != nil {
+		t.Fatalf("collectMetrics() error = %v", err)
+	}
+	if !metrics.OverallCoverage.OK || metrics.OverallCoverage.Percent != 91.5 {
+		t.Fatalf("overall coverage = %+v, want the recorded 91.5", metrics.OverallCoverage)
+	}
+	if !metrics.InternalCoverage.OK || metrics.InternalCoverage.Percent != 92.5 {
+		t.Fatalf("internal coverage = %+v, want the recorded 92.5", metrics.InternalCoverage)
+	}
+	var core packageMetrics
+	for _, pkg := range metrics.Packages {
+		if pkg.Key == "core" {
+			core = pkg
+		}
+	}
+	if !core.Coverage.OK || core.Coverage.Percent != 88.8 {
+		t.Fatalf("core coverage = %+v, want the recorded 88.8", core.Coverage)
+	}
+
+	absent, err := collectMetrics(t.Context(), options{skipCoverage: true, docPath: "docs/absent.md", timeout: time.Minute})
+	if err != nil {
+		t.Fatalf("collectMetrics() error = %v, want a document with nothing to carry forward to be silent", err)
+	}
+	if absent.OverallCoverage.OK {
+		t.Fatalf("overall coverage = %+v, want none when there is no document to read it from", absent.OverallCoverage)
+	}
+}
+
+// TestSortedCoveragePackages_RowSet_FollowsTheTreeNotTheRun verifies a package
+// with tests keeps its row even when this run has no number for it, which is
+// what makes the row set gateable: a deleted row, or a package added since the
+// last full run, has to reappear as n/a rather than quietly stay missing. A
+// package with no tests at all still earns no row.
+func TestSortedCoveragePackages_RowSet_FollowsTheTreeNotTheRun(t *testing.T) {
+	packages := []packageMetrics{
+		{Key: "measured", TestFiles: 3, Coverage: coverageValue{Percent: 91.2, OK: true}},
+		{Key: "awaiting a full run", TestFiles: 2},
+		{Key: "no tests at all"},
+	}
+
+	got := sortedCoveragePackages(packages)
+
+	keys := make([]string, 0, len(got))
+	for _, pkg := range got {
+		keys = append(keys, pkg.Key)
+	}
+	if want := []string{"awaiting a full run", "measured"}; !slices.Equal(keys, want) {
+		t.Fatalf("sortedCoveragePackages() = %v, want %v", keys, want)
+	}
+}
+
+// TestCheckScopeNote_CheckKind_SaysWhatWasCompared verifies each failing check
+// explains its own scope: that a carried-forward run still holds the package
+// rows, and that a recomputing one is comparing machine-dependent numbers.
+func TestCheckScopeNote_CheckKind_SaysWhatWasCompared(t *testing.T) {
+	tests := []struct {
+		name         string
+		skipCoverage bool
+		want         []string
+		notWant      []string
+	}{
+		{
+			name:         "carried forward",
+			skipCoverage: true,
+			want:         []string{"carried forward", "set of packages", "indicative"},
+			notWant:      []string{"load-dependent"},
+		},
+		{
+			name:    "recomputed",
+			want:    []string{"depend on the machine", "rsvg-convert", "uid 0", "load-dependent", "-skip-coverage"},
+			notWant: []string{"carried forward from the document"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := checkScopeNote(tt.skipCoverage)
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("checkScopeNote(%v) = %q, want it to mention %q", tt.skipCoverage, got, want)
+				}
+			}
+			for _, notWant := range tt.notWant {
+				if strings.Contains(got, notWant) {
+					t.Fatalf("checkScopeNote(%v) = %q, want it to omit %q", tt.skipCoverage, got, notWant)
+				}
+			}
+		})
+	}
+}
+
+// TestCheckedScopeSuffix_CheckKind_QualifiesOnlyTheCarriedForwardRun verifies
+// an up-to-date report says when it never measured coverage, and says nothing
+// extra when it did.
+func TestCheckedScopeSuffix_CheckKind_QualifiesOnlyTheCarriedForwardRun(t *testing.T) {
+	if got := checkedScopeSuffix(false); got != "" {
+		t.Fatalf("checkedScopeSuffix(false) = %q, want no qualifier", got)
+	}
+	if got := checkedScopeSuffix(true); !strings.Contains(got, "carried forward") {
+		t.Fatalf("checkedScopeSuffix(true) = %q, want it to say the values were carried forward", got)
+	}
+}
+
+// TestLineDifferenceReport_DocumentShapes_PointAtTheFirstLines verifies the
+// failing-check report names the differing line numbers, pairs a line the other
+// document does not have with a placeholder, and stops at the limit.
+func TestLineDifferenceReport_DocumentShapes_PointAtTheFirstLines(t *testing.T) {
+	tests := []struct {
+		name      string
+		committed string
+		generated string
+		limit     int
+		want      []string
+		notWant   []string
+	}{
+		{
+			name:      "one changed value",
+			committed: "header\n| cmdutil | 8 | 100.0% |\ntail\n",
+			generated: "header\n| cmdutil | 9 | 100.0% |\ntail\n",
+			limit:     10,
+			want:      []string{"line 2:", "-| cmdutil | 8 | 100.0% |", "+| cmdutil | 9 | 100.0% |"},
+			notWant:   []string{"line 1:", "further differences"},
+		},
+		{
+			name:      "generated document is longer",
+			committed: "header\n",
+			generated: "header\nextra\n",
+			limit:     10,
+			want:      []string{"line 2:", "+extra"},
+		},
+		{
+			name:      "committed document is longer",
+			committed: "header\nextra\n",
+			generated: "header\n",
+			limit:     10,
+			want:      []string{"line 2:", "-extra", "+<no such line>"},
+		},
+		{
+			name:      "limit reached",
+			committed: "a\nb\nc\n",
+			generated: "x\ny\nz\n",
+			limit:     2,
+			want:      []string{"line 1:", "line 2:", "further differences not shown"},
+			notWant:   []string{"line 3:"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := lineDifferenceReport(tt.committed, tt.generated, tt.limit)
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("lineDifferenceReport() = %q, want it to contain %q", got, want)
+				}
+			}
+			for _, notWant := range tt.notWant {
+				if strings.Contains(got, notWant) {
+					t.Fatalf("lineDifferenceReport() = %q, want it to omit %q", got, notWant)
+				}
+			}
+		})
 	}
 }
 

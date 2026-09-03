@@ -12,7 +12,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -509,7 +509,7 @@ audit-docs:
 	go run ./cmd/format_md_tables/ --check
 	go run ./cmd/gen_llms/ --check
 	go run ./cmd/gen_lhm_manifest/ --check
-	go run ./cmd/gen_testing_docs/ --check
+	$(MAKE) check-testing-docs
 	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
 	$(MAKE) check-doc-links
 	go run ./cmd/godoc_tool/ audit
@@ -924,8 +924,19 @@ check-site-stats:
 	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
 
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
+## Runs unit-test coverage over ./cmd/... and ./internal/..., so it takes minutes.
+## Add -skip-coverage to refresh only the counts, keeping the recorded values.
 gen-testing-docs:
 	go run ./cmd/gen_testing_docs/
+
+## check-testing-docs: verify everything in testing.md that a checkout determines.
+## Seconds, not minutes: it carries the recorded coverage values forward instead of
+## recomputing them, because those depend on the machine (privilege, and whether
+## rsvg-convert is installed) while counts and package rows do not. This is the CI
+## gate. To verify the coverage values too, regenerate with gen-testing-docs and
+## look at the diff.
+check-testing-docs:
+	go run ./cmd/gen_testing_docs/ --check -skip-coverage
 
 ## gen-action-catalog-manifest: regenerate the ActionSpec group builder manifest.
 gen-action-catalog-manifest:

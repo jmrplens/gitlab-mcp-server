@@ -82,6 +82,18 @@ jobs:
       # stays maintainer tooling, run with gen-icon-webp after icon edits.
       - name: Check action catalog manifest
         run: make check-action-catalog-manifest
+      # Everything in the testing reference that the source tree determines:
+      # test counts, naming breakdown, per-layer tables, and which packages
+      # appear in the coverage tables, which is what caught one missing from
+      # them. Not the coverage percentages: those depend on the machine that
+      # measured them (tests asserting permission refusals skip for uid 0,
+      # cmd/gen_icon_webp needs rsvg-convert and cwebp, cmd/server has a
+      # load-dependent branch), so a gate on them would go red over tenths of a
+      # percent nobody can fix. Carrying them forward instead also means no
+      # coverage pass here at all, so this costs seconds on a job SonarCloud
+      # already waits on. `make gen-testing-docs` refreshes the numbers.
+      - name: Check the generated testing reference
+        run: make check-testing-docs
       - name: Run tests with coverage
         run: |
           go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...

@@ -87,6 +87,48 @@ const (
 	testFilesMetricFormat = "Test files (%s)"
 )
 
+const (
+	// defaultTestTimeout is the per-package bound handed to every `go test`
+	// this generator runs. It has to clear the slowest package under coverage
+	// instrumentation, which is cmd/audit_metrics: its site-stats test builds
+	// the whole action catalog three times and takes several minutes with
+	// counters compiled in, well past the 10 minute default `go test` applies
+	// when nobody passes -timeout. That default was what made the coverage
+	// pass unrunnable, and with no way to raise it the file this generator
+	// writes could not be refreshed at all.
+	defaultTestTimeout = 30 * time.Minute
+
+	// overheadBudget is what the generation gets on top of the time its
+	// `go test` runs may consume: package listing, the coverage summary, AST
+	// parsing and the document write. It doubles as the head start the
+	// process context keeps over the bound handed to `go test`, so a package
+	// that runs long is reported by `go test` itself, which panics with the
+	// goroutine dump naming the test, rather than being killed anonymously
+	// when the context deadline cancels the command.
+	overheadBudget = 5 * time.Minute
+
+	// maxReportedDifferences caps the lines a failing check prints, so a
+	// regeneration that moves the whole block points at where to look instead
+	// of reprinting the document into a CI log.
+	maxReportedDifferences = 20
+
+	// coverageUnavailable is the cell fmtCoverage writes for a package no
+	// coverage run measured, and the cell parseCoverageCell reads back.
+	coverageUnavailable = "n/a"
+
+	// averageCoverageLabel and toolsOrchestrationKey are shared by the
+	// renderer and the reader, so the two cannot drift apart: a label edited
+	// on one side only would silently stop a -skip-coverage run from finding
+	// the value it is meant to carry forward.
+	averageCoverageLabel  = "Average package coverage"
+	toolsOrchestrationKey = "tools (orch.)"
+)
+
+var (
+	overallCoverageLabel  = fmt.Sprintf("Overall coverage (`go test %s %s`)", internalPattern, cmdPattern)
+	internalCoverageLabel = fmt.Sprintf("Overall coverage (`go test %s`)", internalPattern)
+)
+
 var (
 	coverageLineRE = regexp.MustCompile(`^ok\s+(\S+)\s+.*coverage:\s+([0-9.]+)% of statements`)
 	totalLineRE    = regexp.MustCompile(`total:\s+\(statements\)\s+([0-9.]+)%`)
@@ -99,10 +141,11 @@ var (
 // check enables non-mutating CI mode that fails when the generated block
 // would change. skipCoverage skips running `go test -cover` and only
 // updates count-only sections. topToolRows caps the high-test-count tool
-// sub-package summary table. timeout bounds the unit-test coverage run.
-// coverageDir overrides the temp profile directory; empty uses a fresh
-// temp dir. includeE2ERun additionally executes the build-tagged E2E
-// suite, which requires a real GitLab test environment.
+// sub-package summary table. timeout is handed to each `go test` run as its
+// per-package bound, and the generation as a whole gets that budget once per
+// test run plus overheadBudget. coverageDir overrides the temp profile
+// directory; empty uses a fresh temp dir. includeE2ERun additionally executes
+// the build-tagged E2E suite, which requires a real GitLab test environment.
 type options struct {
 	docPath       string
 	check         bool
@@ -163,6 +206,18 @@ type repositoryMetrics struct {
 	E2ENote                string
 }
 
+// recordedCoverageValues is the coverage a generated document already carries.
+//
+// ByKey is keyed the way the coverage tables label their rows, which is the
+// package key for every layer but the tools orchestration one. Overall,
+// Internal and AveragePackage are the three figures of the overview table.
+type recordedCoverageValues struct {
+	ByKey          map[string]coverageValue
+	Overall        coverageValue
+	Internal       coverageValue
+	AveragePackage coverageValue
+}
+
 // packageInfo identifies one Go package returned by go list.
 //
 // ImportPath is the module path. Dir is the absolute directory containing
@@ -188,7 +243,7 @@ func run(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), runBudget(opts))
 	defer cancel()
 
 	metrics, err := collectMetrics(ctx, opts)
@@ -197,16 +252,17 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	content := renderTestingStats(metrics, opts.topToolRows)
-	changed, err := updateManagedSection(opts.docPath, content, opts.check)
+	changed, report, err := updateManagedSection(opts.docPath, content, opts.check)
 	if err != nil {
 		return err
 	}
 
 	if opts.check {
 		if changed {
-			return fmt.Errorf("%s is out of date; run go run ./cmd/gen_testing_docs/", opts.docPath)
+			return fmt.Errorf("%s is out of date; run go run ./cmd/gen_testing_docs/\n%s%s",
+				opts.docPath, report, checkScopeNote(opts.skipCoverage))
 		}
-		_, _ = fmt.Fprintf(stdout, "%s is up to date\n", opts.docPath)
+		_, _ = fmt.Fprintf(stdout, "%s is up to date%s\n", opts.docPath, checkedScopeSuffix(opts.skipCoverage))
 		return nil
 	}
 
@@ -227,7 +283,7 @@ func parseOptions(args []string) (options, error) {
 	fs.BoolVar(&opts.check, "check", false, "fail if the generated section is not current")
 	fs.BoolVar(&opts.skipCoverage, "skip-coverage", false, "skip go test coverage execution and update count-only sections")
 	fs.IntVar(&opts.topToolRows, "top-tool-rows", 25, "number of high-test-count tool sub-packages to show in the summary table")
-	fs.DurationVar(&opts.timeout, "timeout", 15*time.Minute, "timeout for Go test coverage commands")
+	fs.DurationVar(&opts.timeout, "timeout", defaultTestTimeout, "per-package timeout handed to each go test run")
 	fs.StringVar(&opts.coverageDir, "coverage-dir", "", "directory for temporary coverage profiles; defaults to a temp directory")
 	fs.BoolVar(&opts.includeE2ERun, "include-e2e-run", false, "also run the build-tagged E2E suite; requires GitLab test environment")
 	if err := fs.Parse(args); err != nil {
@@ -239,7 +295,28 @@ func parseOptions(args []string) (options, error) {
 	if opts.topToolRows < 1 {
 		return options{}, errors.New("top-tool-rows must be greater than zero")
 	}
+	if opts.timeout <= 0 {
+		return options{}, errors.New("timeout must be greater than zero")
+	}
 	return opts, nil
+}
+
+// runBudget returns the wall-clock deadline for one generation.
+//
+// Each `go test` the run may issue gets the full -timeout, so the budget
+// counts them rather than sharing one bound between them: the coverage pass
+// always, the E2E suite only when -include-e2e-run asks for it. Sharing was
+// wrong for -include-e2e-run, where a coverage pass that used its whole bound
+// left the E2E run none.
+func runBudget(opts options) time.Duration {
+	runs := 0
+	if !opts.skipCoverage {
+		runs++
+	}
+	if opts.includeE2ERun {
+		runs++
+	}
+	return time.Duration(runs)*opts.timeout + overheadBudget
 }
 
 // collectMetrics discovers packages, counts tests, and runs coverage commands.
@@ -255,17 +332,12 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 		E2ENote:      "E2E tests are counted statically from test/e2e because two of the four modules need something this run does not have: test/e2e/suite needs a provisioned GitLab instance and test/e2e/orbit needs a gitlab.com token for the Knowledge Graph API, while test/e2e/http and test/e2e/stdio need neither and run on every CI push. The count here is of `_test.go` files; the README's end-to-end row counts every tracked `.go` file under test/e2e, so it is higher by the non-test helpers (`doc.go`, `name_helpers.go`).",
 	}
 
-	coverageByPackage := map[string]coverageValue{}
-	if !opts.skipCoverage {
-		cmdutil.Progressf("gen_testing_docs: running unit-test coverage for ./internal/... and ./cmd/... (this can take a few minutes)...")
-		combinedCoverage, combinedTotal, internalTotal, coverageErr := runUnitCoverage(ctx, opts)
-		if coverageErr != nil {
-			return repositoryMetrics{}, coverageErr
-		}
-		coverageByPackage = combinedCoverage
-		metrics.OverallCoverage = combinedTotal
-		metrics.InternalCoverage = internalTotal
+	coverageByPackage, recorded, err := collectCoverage(ctx, opts)
+	if err != nil {
+		return repositoryMetrics{}, err
 	}
+	metrics.OverallCoverage = recorded.Overall
+	metrics.InternalCoverage = recorded.Internal
 	toolCounts := actionSpecToolCounts()
 
 	for _, info := range infos {
@@ -290,27 +362,24 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 		}
 
 		if pkg.Layer == layerToolSubpackage {
-			legacyToolCount, toolErr := countMCPTools(info.Dir)
-			if toolErr != nil {
-				return repositoryMetrics{}, fmt.Errorf("count MCP tools in %s: %w", pkg.RelPath, toolErr)
-			}
-			localSpecCount, specErr := countLocalActionSpecTools(info.Dir)
-			if specErr != nil {
-				return repositoryMetrics{}, fmt.Errorf("count ActionSpec tools in %s: %w", pkg.RelPath, specErr)
-			}
-			pkg.ToolCount = max(legacyToolCount, localSpecCount)
-			if catalogToolCount := toolCounts[pkg.Key]; catalogToolCount > 0 {
-				pkg.ToolCount = max(catalogToolCount, legacyToolCount)
+			if pkg.ToolCount, err = packageToolCount(info.Dir, pkg.RelPath, pkg.Key, toolCounts); err != nil {
+				return repositoryMetrics{}, err
 			}
 		}
 
 		if coverage, ok := coverageByPackage[pkg.ImportPath]; ok {
 			pkg.Coverage = coverage
 		}
+		if coverage, ok := recorded.ByKey[coverageTableKey(pkg)]; ok {
+			pkg.Coverage = coverage
+		}
 		metrics.Packages = append(metrics.Packages, pkg)
 	}
 
 	metrics.AveragePackageCoverage = averageCoverage(metrics.Packages)
+	if recorded.AveragePackage.OK {
+		metrics.AveragePackageCoverage = recorded.AveragePackage
+	}
 
 	if opts.includeE2ERun {
 		if _, e2eErr := runGo(ctx, []string{"test", "-tags", "e2e", "-timeout", opts.timeout.String(), e2eSuiteRun}); e2eErr != nil {
@@ -320,6 +389,154 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 	}
 
 	return metrics, nil
+}
+
+// packageToolCount returns how many MCP tools one tool sub-package owns.
+//
+// The static AddTool scan, the local ActionSpec scan and the runtime catalog
+// can each under-count a package the other two see, so the highest wins;
+// relPath names the package in an error, which is how the failures read.
+func packageToolCount(dir, relPath, key string, catalog map[string]int) (int, error) {
+	legacyCount, err := countMCPTools(dir)
+	if err != nil {
+		return 0, fmt.Errorf("count MCP tools in %s: %w", relPath, err)
+	}
+	localSpecCount, err := countLocalActionSpecTools(dir)
+	if err != nil {
+		return 0, fmt.Errorf("count ActionSpec tools in %s: %w", relPath, err)
+	}
+	if catalogCount := catalog[key]; catalogCount > 0 {
+		return max(catalogCount, legacyCount), nil
+	}
+	return max(legacyCount, localSpecCount), nil
+}
+
+// collectCoverage resolves where this run's coverage numbers come from: a
+// fresh unit-test run, or the values the document already records.
+//
+// The two are returned side by side because they are keyed differently: a
+// measured run knows import paths, a document knows the labels its tables use.
+func collectCoverage(ctx context.Context, opts options) (map[string]coverageValue, recordedCoverageValues, error) {
+	if opts.skipCoverage {
+		return map[string]coverageValue{}, recordedCoverage(opts.docPath), nil
+	}
+
+	cmdutil.Progressf("gen_testing_docs: running unit-test coverage for ./internal/... and ./cmd/... (this can take a few minutes)...")
+	measured, overall, internal, err := runUnitCoverage(ctx, opts)
+	if err != nil {
+		return nil, recordedCoverageValues{}, err
+	}
+	return measured, recordedCoverageValues{Overall: overall, Internal: internal}, nil
+}
+
+// recordedCoverage recovers the coverage the document already records, so a
+// -skip-coverage run refreshes the counts without discarding the numbers.
+//
+// It used to blank every coverage column to n/a, which made the fast path
+// useless for anything but a first draft, and made a fast freshness check
+// impossible: a check that rewrites the columns it is comparing always fails.
+// Reading them back instead makes -skip-coverage a refresh of everything a
+// checkout determines, and leaves the numbers a coverage run determines to
+// the coverage run.
+// A document that cannot be read has nothing to carry forward, so this stays
+// silent about it: updateManagedSection reads the same path a moment later and
+// reports the failure once, with the message it has always used.
+func recordedCoverage(docPath string) recordedCoverageValues {
+	if docPath == "" {
+		return recordedCoverageValues{}
+	}
+	resolved, err := resolveRepositoryPath(docPath)
+	if err != nil {
+		return recordedCoverageValues{}
+	}
+	data, err := os.ReadFile(resolved) //#nosec G304 -- path constrained to repository root by resolveRepositoryPath.
+	if err != nil {
+		return recordedCoverageValues{}
+	}
+	return parseRecordedCoverage(string(data))
+}
+
+// parseRecordedCoverage reads the coverage cells out of a generated document.
+//
+// Every package the coverage report knows about has one two-column row in it,
+// keyed exactly as coverageTableKey keys it, and the two overall figures are
+// two-column rows of the overview table. Nothing else in the document is a
+// two-column row whose second cell is a percentage, so the shape is enough to
+// find them without tracking which section is being read.
+func parseRecordedCoverage(text string) recordedCoverageValues {
+	recorded := recordedCoverageValues{ByKey: map[string]coverageValue{}}
+	for line := range strings.Lines(text) {
+		cells := splitCoverageRow(line)
+		if len(cells) != 2 {
+			continue
+		}
+		value, ok := parseCoverageCell(cells[1])
+		if !ok {
+			continue
+		}
+		switch cells[0] {
+		case overallCoverageLabel:
+			recorded.Overall = value
+		case internalCoverageLabel:
+			recorded.Internal = value
+		case averageCoverageLabel:
+			// Read back rather than recomputed: the per-package values in the
+			// document are rounded to one decimal, so averaging them again
+			// need not land on the figure the full run wrote.
+			recorded.AveragePackage = value
+		default:
+			recorded.ByKey[cells[0]] = value
+		}
+	}
+	return recorded
+}
+
+// splitCoverageRow returns the trimmed cells of a Markdown table row, or nil
+// when the line is not one, a separator included.
+func splitCoverageRow(line string) []string {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "|") || !strings.HasSuffix(trimmed, "|") {
+		return nil
+	}
+	if strings.Contains(trimmed, "---") {
+		return nil
+	}
+	parts := strings.Split(strings.Trim(trimmed, "|"), "|")
+	cells := make([]string, 0, len(parts))
+	for _, part := range parts {
+		cells = append(cells, strings.TrimSpace(part))
+	}
+	return cells
+}
+
+// parseCoverageCell reads one rendered coverage cell back into a value.
+//
+// It accepts what fmtCoverage writes and nothing else, so a count cell such as
+// "13,476" is not mistaken for a measurement.
+func parseCoverageCell(cell string) (coverageValue, bool) {
+	if cell == coverageUnavailable {
+		return coverageValue{}, true
+	}
+	digits, ok := strings.CutSuffix(cell, "%")
+	if !ok {
+		return coverageValue{}, false
+	}
+	percent, err := strconv.ParseFloat(digits, 64)
+	if err != nil {
+		return coverageValue{}, false
+	}
+	return coverageValue{Percent: percent, OK: true}, true
+}
+
+// coverageTableKey returns the label the coverage report gives one package.
+//
+// The orchestration layer is the one that is not its own key: every package in
+// it is rendered under a single fixed label.
+func coverageTableKey(pkg packageMetrics) string {
+	if pkg.Layer == layerToolsOrchestration {
+		return toolsOrchestrationKey
+	}
+	return pkg.Key
 }
 
 // listPackages returns all packages covered by the testing reference document.
@@ -355,7 +572,7 @@ func runUnitCoverage(ctx context.Context, opts options) (packageCoverages map[st
 
 	profilePath := filepath.Join(coverageDir, "cmd-internal.out")
 	patterns := []string{internalPattern, cmdPattern}
-	args := []string{"test", "-coverprofile=" + profilePath, "-covermode=count"}
+	args := []string{"test", "-coverprofile=" + profilePath, "-covermode=count", "-timeout", opts.timeout.String()}
 	args = append(args, patterns...)
 	args = append(args, "-count=1")
 
@@ -803,9 +1020,9 @@ func renderOverview(metrics repositoryMetrics) string {
 			{fmt.Sprintf(testFilesMetricFormat, e2eDisplay), fmtInt(testFilesWithPrefix(metrics.Packages, e2ePath))},
 			{"Tool sub-packages tested", fmtInt(countTestedPackages(toolPackages))},
 			{"Core packages tested", fmtInt(countTestedPackages(corePackages))},
-			{fmt.Sprintf("Overall coverage (`go test %s %s`)", internalPattern, cmdPattern), fmtCoverage(metrics.OverallCoverage)},
-			{fmt.Sprintf("Overall coverage (`go test %s`)", internalPattern), fmtCoverage(metrics.InternalCoverage)},
-			{"Average package coverage", fmtCoverage(metrics.AveragePackageCoverage)},
+			{overallCoverageLabel, fmtCoverage(metrics.OverallCoverage)},
+			{internalCoverageLabel, fmtCoverage(metrics.InternalCoverage)},
+			{averageCoverageLabel, fmtCoverage(metrics.AveragePackageCoverage)},
 		},
 	))
 	b.WriteByte('\n')
@@ -978,7 +1195,7 @@ func renderCoverageReport(metrics repositoryMetrics) string {
 	b.WriteString("### Tool Sub-Packages\n\n")
 	coverageRows := make([][]string, 0)
 	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerToolsOrchestration)) {
-		coverageRows = append(coverageRows, []string{"tools (orch.)", fmtCoverage(pkg.Coverage)})
+		coverageRows = append(coverageRows, []string{toolsOrchestrationKey, fmtCoverage(pkg.Coverage)})
 	}
 	b.WriteString(renderPackageCoverageTableRows(appendPackageCoverageRows(coverageRows, sortedCoveragePackages(packagesByLayer(metrics.Packages, layerToolSubpackage)))))
 	b.WriteString("\n")
@@ -1054,32 +1271,109 @@ func firstSentence(s string) string {
 }
 
 // updateManagedSection replaces or creates the generated section in the target file.
-func updateManagedSection(path, content string, check bool) (bool, error) {
+//
+// In check mode nothing is written and the returned report names the first
+// lines on which the committed file and the freshly generated block disagree.
+// A gate that says only "out of date" leaves whoever reads the CI log with no
+// idea whether a test count moved, a coverage value moved, or a whole package
+// appeared, and the answer is several minutes of local coverage away.
+func updateManagedSection(path, content string, check bool) (changed bool, report string, err error) {
 	docPath, err := resolveRepositoryPath(path)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
 	data, err := os.ReadFile(docPath) //#nosec G304 -- path constrained to repository root by resolveRepositoryPath.
 	if err != nil {
-		return false, fmt.Errorf("read %s: %w", path, err)
+		return false, "", fmt.Errorf("read %s: %w", path, err)
 	}
 	text := string(data)
 
 	updated, err := replaceGeneratedBlock(text, content)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	if updated == text {
-		return false, nil
+		return false, "", nil
 	}
 	if check {
-		return true, nil
+		return true, lineDifferenceReport(text, updated, maxReportedDifferences), nil
 	}
 	if writeErr := os.WriteFile(docPath, []byte(updated), 0o644); writeErr != nil { //#nosec G306,G304,G703 -- path constrained to repository root by resolveRepositoryPath.
-		return false, fmt.Errorf("write %s: %w", path, writeErr)
+		return false, "", fmt.Errorf("write %s: %w", path, writeErr)
 	}
-	return true, nil
+	return true, "", nil
+}
+
+// checkScopeNote tells whoever reads a failing check what it compared.
+//
+// A coverage-measuring check compares numbers that are a property of the
+// machine as much as of the tree: tests asserting permission refusals skip for
+// uid 0, cmd/gen_icon_webp covers less wherever rsvg-convert and cwebp are not
+// installed, and cmd/server has a branch that depends on load. A difference
+// confined to those columns is a difference between two machines, not a stale
+// document, and saying so is what stops the obvious response, which is to
+// commit numbers the next machine will disagree with just as firmly.
+func checkScopeNote(skipCoverage bool) string {
+	if skipCoverage {
+		return "note: coverage values were carried forward from the document, not recomputed. This check holds everything\n" +
+			"the source tree determines, the set of packages in the coverage tables included; the percentages are\n" +
+			"indicative and a full run refreshes them.\n"
+	}
+	return "note: this check recomputed coverage, and those values depend on the machine as much as on the tree:\n" +
+		"tests asserting permission refusals skip for uid 0, cmd/gen_icon_webp needs rsvg-convert and cwebp installed,\n" +
+		"and cmd/server has a load-dependent branch. A difference confined to coverage columns is not a stale document,\n" +
+		"which is why the CI gate runs with -skip-coverage.\n"
+}
+
+// checkedScopeSuffix qualifies the success line of a check that carried the
+// coverage values forward, so "up to date" is never read as a statement about
+// numbers the run never measured.
+func checkedScopeSuffix(skipCoverage bool) string {
+	if !skipCoverage {
+		return ""
+	}
+	return " (counts, package rows and tables; coverage values carried forward, not recomputed)"
+}
+
+// lineDifferenceReport lists the first differing lines between two documents.
+//
+// Lines are compared by position, so an inserted or removed line reports every
+// line after it as differing. That is deliberate: this is a pointer at where to
+// look, not a minimal diff, and the limit keeps a wholesale regeneration from
+// filling a CI log with the entire file.
+func lineDifferenceReport(committed, generated string, limit int) string {
+	committedLines := strings.Split(committed, "\n")
+	generatedLines := strings.Split(generated, "\n")
+
+	var builder strings.Builder
+	builder.WriteString("first differences (- committed, + generated):\n")
+	reported := 0
+	for i := range max(len(committedLines), len(generatedLines)) {
+		if reported == limit {
+			break
+		}
+		committedLine := lineAt(committedLines, i)
+		generatedLine := lineAt(generatedLines, i)
+		if committedLine == generatedLine {
+			continue
+		}
+		_, _ = fmt.Fprintf(&builder, "  line %d:\n    -%s\n    +%s\n", i+1, committedLine, generatedLine)
+		reported++
+	}
+	if reported == limit {
+		builder.WriteString("  (further differences not shown)\n")
+	}
+	return builder.String()
+}
+
+// lineAt returns the line at index, or a placeholder when the document is
+// shorter than that, so a file that gained or lost lines still reports a pair.
+func lineAt(lines []string, index int) string {
+	if index >= len(lines) {
+		return "<no such line>"
+	}
+	return lines[index]
 }
 
 // resolveRepositoryPath returns an absolute path that stays inside the repository.
@@ -1146,7 +1440,9 @@ func replaceBetweenMarkers(text, content string) (string, error) {
 
 // runGo executes a Go command with the module toolchain version pinned.
 func runGo(ctx context.Context, args []string) ([]byte, error) {
-	// #nosec G204 -- args are built by this generator from fixed Go subcommands; no shell is involved.
+	// #nosec G204,G702 -- args are built by this generator from fixed Go subcommands plus its own
+	// flags: a duration rendered by time.Duration.String and a path it created. No shell is involved,
+	// and this is developer tooling a person runs on a checkout they already own.
 	cmd := exec.CommandContext(ctx, goExecutable(), args...)
 	cmd.Env = goEnvironment()
 	output, err := cmd.CombinedOutput()
@@ -1289,11 +1585,20 @@ func packagesByLayer(packages []packageMetrics, layer string) []packageMetrics {
 	return filtered
 }
 
-// sortedCoveragePackages returns packages with coverage, sorted by key.
+// sortedCoveragePackages returns the packages the coverage tables list, sorted
+// by key.
+//
+// A package with tests earns a row whether or not this run has a number for
+// it, so the set of rows is a fact about the tree rather than about the run.
+// Filtering on the value alone would let a package whose row was deleted, or
+// one added since the last full run, vanish from the table under
+// -skip-coverage and pass the freshness check that exists to catch exactly
+// that: cmd/audit_install_buttons went missing from these tables for months.
+// Such a row renders n/a until a full run fills it in.
 func sortedCoveragePackages(packages []packageMetrics) []packageMetrics {
 	filtered := []packageMetrics{}
 	for _, pkg := range packages {
-		if pkg.Coverage.OK {
+		if pkg.Coverage.OK || pkg.TestFiles > 0 {
 			filtered = append(filtered, pkg)
 		}
 	}
@@ -1418,7 +1723,7 @@ func fmtInt(n int) string {
 // fmtCoverage formats a coverage value for Markdown tables.
 func fmtCoverage(value coverageValue) string {
 	if !value.OK {
-		return "n/a"
+		return coverageUnavailable
 	}
 	return fmt.Sprintf("%.1f%%", value.Percent)
 }

@@ -96,15 +96,18 @@ make inspector-stop
 run that target**, but every `check-*` freshness gate is now wired into CI
 individually: the `test` job runs the eight Go ones (`check-llms`,
 `check-lhm-manifest`, `check-server-json`, `check-openplugin`, `check-stats`,
-`check-footprint`, `check-site-stats`, `check-action-catalog-manifest`) and the
-`analyze-md` job runs the two that need Node (`check-doc-links`,
-`check-mcpb`). Adding a new `check-*` target means adding it to one of those
-two jobs — `check-stats` and `check-footprint` sat stale on `main` for several
-releases precisely because nothing gated them.
+`check-footprint`, `check-site-stats`, `check-action-catalog-manifest`,
+`check-testing-docs`) and the `analyze-md` job runs the two that need Node
+(`check-doc-links`, `check-mcpb`). Adding a new `check-*` target means adding
+it to one of those two jobs — `check-stats` and `check-footprint` sat stale on
+`main` for several releases precisely because nothing gated them, and
+`docs/development/testing/testing.md` drifted for the same reason.
+`check-testing-docs` gates everything in that file a checkout determines and
+not the coverage columns, which no two machines agree on; refresh those with
+`make gen-testing-docs`.
 
-The rest of `audit-docs` — markdownlint, `gen_testing_docs --check`, the godoc
-and surface-quality audits, and the site build — is still yours to run before
-pushing.
+The rest of `audit-docs` — markdownlint, the godoc and surface-quality audits,
+and the site build — is still yours to run before pushing.
 
 ## Adding a new GitLab API tool
 
