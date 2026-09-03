@@ -15,13 +15,13 @@
       "reduction_factor_vs_dynamic": 334
     },
     "premium": {
-      "visible_tools": 1006,
-      "tool_schema_tokens": 600162,
+      "visible_tools": 1007,
+      "tool_schema_tokens": 600492,
       "reduction_factor_vs_dynamic": 400
     },
     "ultimate": {
-      "visible_tools": 1072,
-      "tool_schema_tokens": 629176,
+      "visible_tools": 1073,
+      "tool_schema_tokens": 629506,
       "reduction_factor_vs_dynamic": 419
     }
   }

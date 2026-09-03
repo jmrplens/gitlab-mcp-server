@@ -88,6 +88,12 @@
       "gitlab_ci_catalog"
     ]
   },
+  "dependency-firewall.md": {
+    "note": "Owns the single Dependency Firewall evaluate tool, which lives inside gitlab_project (per buildProjectActionSpecs). The README's 'gitlab_project (enterprise routes)' annotation is the source, the same shape mirrors.md uses.",
+    "prefixes": [
+      "gitlab_project_dependency_firewall_evaluate"
+    ]
+  },
   "epics.md": {
     "note": "Owns the epic core surface (epics, epic notes, epic issues, epic discussions, group epic boards). These tools live in the gitlab_group catalog group; the README's 'gitlab_epic' entry is a routing label rather than a real group, so the prefix allowlist is the canonical ownership signal.",
     "prefixes": [

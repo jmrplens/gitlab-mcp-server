@@ -30,6 +30,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/containerregistry"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/customemoji"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dependencies"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dependencyfirewall"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploykeys"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploymentmergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
@@ -492,8 +493,10 @@ func buildProjectActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	specs = append(specs, projectserviceaccounts.ActionSpecs(client)...)
 	// Security settings (Ultimate) and the Premium push-rule/target-branch specs
 	// inside projects.ActionSpecs are self-tagged; the central tier filter gates
-	// them, so they are always collected here.
+	// them, so they are always collected here. The Dependency Firewall evaluate
+	// action is Premium and tags itself the same way.
 	specs = append(specs, editionTaggedSpecs(securitysettings.ProjectActionSpecs(client), editionUltimate)...)
+	specs = append(specs, editionTaggedSpecs(dependencyfirewall.ActionSpecs(client), editionPremium)...)
 	specs = append(specs, projects.ActionSpecs(client, true)...)
 	return actionSpecGroup("gitlab_project", specs)
 }
