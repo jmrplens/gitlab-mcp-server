@@ -997,6 +997,37 @@ func (p *ServerPool) evictByKey(key string) {
 	}
 }
 
+// EvictServer removes the entry holding srv, and reports whether it found one.
+//
+// It exists for a build that fails after the entry is already cached. A server
+// whose catalog registration ran in the background and failed is not usable and
+// must not be handed to the next request for that credential: the pool would
+// otherwise serve the poisoned entry until an idle timeout or a revalidation
+// happened to replace it, which is an hour by default. Dropping it makes the
+// next request rebuild, which is what a synchronous failure already does.
+//
+// The scan is linear over the pool, which is bounded by --max-http-clients and
+// only walked when a registration has failed, so it is not on any hot path.
+func (p *ServerPool) EvictServer(srv *mcp.Server) bool {
+	if srv == nil {
+		return false
+	}
+	p.mu.Lock()
+	key := ""
+	for candidate, entry := range p.entries {
+		if entry != nil && entry.server == srv {
+			key = candidate
+			break
+		}
+	}
+	p.mu.Unlock()
+	if key == "" {
+		return false
+	}
+	p.evictByKey(key)
+	return true
+}
+
 // poolEntryConfigLogValues extracts safe configuration values for eviction
 // logs without requiring callers to nil-check partially initialized entries.
 func poolEntryConfigLogValues(entry *poolEntry) (string, bool) {

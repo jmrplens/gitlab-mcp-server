@@ -2183,7 +2183,12 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// records which tag belongs to which server so the gate can refuse a
 	// session presented with a different credential.
 	var sessionTags sync.Map
-	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
+	// Declared before the factory so the factory's background registration can
+	// evict the entry it belongs to. The factory only reads it from a goroutine
+	// it starts while serving a request, which is necessarily after New has
+	// returned and assigned it.
+	var pool *serverpool.ServerPool
+	pool = serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		tag := rand.Text()
 		// No server-initiated keepalive on any HTTP entry, stateful included.
 		// The SDK's keepalive is a JSON-RPC ping request, and it closes the
@@ -2193,11 +2198,36 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// mark for being idle. Liveness on this transport is the SSE
 		// keep-alive comment (see sseAwareWriter), which puts bytes on the
 		// wire without asking the client for anything.
-		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0), withTransport(mcpotel.TransportTCP))
+		// The shell rather than the whole server, and registration on a
+		// goroutine behind the readiness gate. Building the catalog is the
+		// entire cost of a pool entry, measured at 1.8s on the dynamic surface
+		// and 3.0s on individual against a shell too fast to time, and it is
+		// paid on the FIRST REQUEST OF EVERY CREDENTIAL rather than once per
+		// process the way stdio pays it. A shared deployment pays it per user,
+		// and again whenever an entry is reclaimed by the size bound or by
+		// --pool-idle-timeout. Answering the handshake from the shell moves all
+		// of it off the path a client is waiting on.
+		shell, err := newServerShell(ctx, client, serverCfg,
+			withSessionTag(tag), withKeepAlive(0), withTransport(mcpotel.TransportTCP))
 		if err != nil {
 			return nil, err
 		}
+		srv := shell.server
 		sessionTags.Store(srv, tag)
+		go func() {
+			if registerErr := shell.register(ctx); registerErr != nil {
+				// The entry is already cached, so a failure has to be published
+				// twice: to the requests parked on this gate, and to the pool,
+				// or the next request for this credential takes the fast path
+				// and is handed a server with no tools.
+				shell.gate.markFailed(registerErr)
+				slog.ErrorContext(ctx, "the tool catalog could not be built for a pooled credential",
+					"error", registerErr)
+				pool.EvictServer(srv)
+				return
+			}
+			shell.gate.markReady()
+		}()
 		return srv, nil
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
 		// The tag map must not outlive the pool entries it describes. Without
