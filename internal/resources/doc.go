@@ -30,9 +30,14 @@
 // and workflow-guide resources are static documents about this server and are
 // never narrowed.
 //
-// Two controls still do not reach this surface, both because they are applied
-// where tools are registered rather than here: the tools/call rate limiter,
-// which does not meter resources/read, and the prompt surface, which is a third
-// path to the same data and takes no options at all. Both are noted so the
-// silence does not read as coverage.
+// The prompt surface, which was the third path to the same data, now takes the
+// same options: [github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts.RegisterOptions]
+// carries the excluded actions and that package keeps its own prompt-to-action
+// table.
+//
+// One control still does not reach this surface, because it is applied where
+// tools are registered rather than here: the tools/call rate limiter does not
+// meter resources/read, resources/subscribe or prompts/get, so all three remain
+// unmetered proxies to GitLab. It is noted so the silence does not read as
+// coverage.
 package resources

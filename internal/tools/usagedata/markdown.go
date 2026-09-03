@@ -96,6 +96,13 @@ func FormatMetricDefinitionsMarkdown(out MetricDefinitionsOutput) string {
 	}
 	sb.WriteString(yaml)
 	sb.WriteString("\n```\n")
+	// Two different cuts can reach this point and the model must not read the
+	// second as the first: the block above shortens a long document for display
+	// only, while Truncated means the server stopped reading and the rest of the
+	// document is not in this response at all.
+	if out.Truncated {
+		sb.WriteString("\n- " + toolutil.EmojiWarning + " **Truncated**: the document exceeded the size this action returns, so it was cut short. Read the remainder from GitLab directly (GET /usage_data/metric_definitions)\n")
+	}
 	toolutil.WriteHints(&sb, "Use metric key names to query specific usage data")
 	return sb.String()
 }

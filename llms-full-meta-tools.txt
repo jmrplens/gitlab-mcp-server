@@ -1586,7 +1586,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>usage_data_metric_definitions</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"yaml":{"type":"string"}},"required":["yaml"],"type":"object"}
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"truncated":{"type":"boolean"},"yaml":{"type":"string"}},"required":["yaml","truncated"],"type":"object"}
 ```
 
 </details>

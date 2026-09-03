@@ -15,7 +15,7 @@ import (
 )
 
 // registerMyOpenMRsPrompt registers the my_open_mrs prompt.
-func registerMyOpenMRsPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerMyOpenMRsPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_open_mrs",
 		Title:       toolutil.TitleFromName("my_open_mrs"),
@@ -108,7 +108,7 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 }
 
 // registerMyPendingReviewsPrompt registers the my_pending_reviews prompt.
-func registerMyPendingReviewsPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerMyPendingReviewsPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_pending_reviews",
 		Title:       toolutil.TitleFromName("my_pending_reviews"),
@@ -163,7 +163,7 @@ func handleMyPendingReviews(ctx context.Context, client *gitlabclient.Client, re
 }
 
 // registerMyIssuesPrompt registers the my_issues prompt.
-func registerMyIssuesPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerMyIssuesPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_issues",
 		Title:       toolutil.TitleFromName("my_issues"),
@@ -235,7 +235,7 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 }
 
 // registerMyActivitySummaryPrompt registers the my_activity_summary prompt.
-func registerMyActivitySummaryPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerMyActivitySummaryPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_activity_summary",
 		Title:       toolutil.TitleFromName("my_activity_summary"),
@@ -345,7 +345,7 @@ func writeDailyActivityChart(b *strings.Builder, dailyData []dayActivity) {
 }
 
 // registerCrossProjectPrompts registers all cross-project prompts.
-func registerCrossProjectPrompts(server *mcp.Server, client *gitlabclient.Client) {
+func registerCrossProjectPrompts(server registrar, client *gitlabclient.Client) {
 	registerMyOpenMRsPrompt(server, client)
 	registerMyPendingReviewsPrompt(server, client)
 	registerMyIssuesPrompt(server, client)

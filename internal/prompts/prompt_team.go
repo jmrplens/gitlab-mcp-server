@@ -35,7 +35,7 @@ type reviewerWorkloadStats struct {
 }
 
 // registerTeamPrompts registers all team management prompts.
-func registerTeamPrompts(server *mcp.Server, client *gitlabclient.Client) {
+func registerTeamPrompts(server registrar, client *gitlabclient.Client) {
 	registerUserActivityReportPrompt(server, client)
 	registerTeamOverviewPrompt(server, client)
 	registerGroupMRDashboardPrompt(server, client)
@@ -43,7 +43,7 @@ func registerTeamPrompts(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerUserActivityReportPrompt registers the user_activity_report prompt.
-func registerUserActivityReportPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerUserActivityReportPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "user_activity_report",
 		Title:       toolutil.TitleFromName("user_activity_report"),
@@ -162,7 +162,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 }
 
 // registerTeamOverviewPrompt registers the team_overview prompt.
-func registerTeamOverviewPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerTeamOverviewPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "team_overview",
 		Title:       toolutil.TitleFromName("team_overview"),
@@ -286,7 +286,7 @@ func writeTeamOverviewChart(b *strings.Builder, stats map[string]*teamOverviewMe
 }
 
 // registerGroupMRDashboardPrompt registers the group_mr_dashboard prompt.
-func registerGroupMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerGroupMRDashboardPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "group_mr_dashboard",
 		Title:       toolutil.TitleFromName("group_mr_dashboard"),
@@ -367,7 +367,7 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 }
 
 // registerReviewerWorkloadPrompt registers the reviewer_workload prompt.
-func registerReviewerWorkloadPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerReviewerWorkloadPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "reviewer_workload",
 		Title:       toolutil.TitleFromName("reviewer_workload"),
