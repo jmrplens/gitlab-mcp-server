@@ -79,12 +79,12 @@ Pick one. Each path ends with you typing a prompt to your assistant. Every chann
   </tr>
   <tr>
     <td><b>Cursor</b></td>
-    <td><a href="https://cursor.com/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Install in Cursor" src="https://cursor.com/deeplink/mcp-install-dark.svg" height="28" /></a></td>
+    <td><a href="https://cursor.com/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0Il0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Install in Cursor" src="https://cursor.com/deeplink/mcp-install-dark.svg" height="28" /></a></td>
     <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
   </tr>
   <tr>
     <td><b>LM Studio</b></td>
-    <td><a href="https://lmstudio.ai/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Add to LM Studio" src="https://files.lmstudio.ai/deeplink/mcp-install-dark.svg" height="28" /></a></td>
+    <td><a href="https://lmstudio.ai/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0Il0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Add to LM Studio" src="https://files.lmstudio.ai/deeplink/mcp-install-dark.svg" height="28" /></a></td>
     <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
   </tr>
   <tr>
