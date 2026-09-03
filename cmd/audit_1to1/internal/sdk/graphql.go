@@ -133,11 +133,29 @@ func isGraphQLInterface(t types.Type, graphQL *types.Named) bool {
 // relativePosition renders a position as a repository-relative file:line.
 func relativePosition(pkg *packages.Package, pos token.Pos) string {
 	position := pkg.Fset.Position(pos)
-	file := position.Filename
+	return fmt.Sprintf("%s:%d", repoRelativeFile(position.Filename), position.Line)
+}
+
+// repoRelativeFile trims an absolute source path down to its repository-relative
+// form, and is a function of its own so the trimming can be tested without a
+// loaded package.
+//
+// Separators are normalized first. go/token stores whatever the build system
+// handed it and normalizes nothing, so on Windows the position carries
+// backslashes, the search finds no match, and the site is reported with the
+// developer's whole workspace path in front of it. The audit compares its output
+// against a declared table, so that difference is not cosmetic.
+//
+// The replacement is unconditional rather than filepath.ToSlash, which is a
+// no-op on Unix and would leave the Windows shape untestable from the only
+// platform CI runs on. The cost is a literal backslash inside a Unix directory
+// name, which would change how a path is printed and nothing else.
+func repoRelativeFile(filename string) string {
+	file := strings.ReplaceAll(filename, `\`, "/")
 	if idx := strings.LastIndex(file, "/internal/"); idx >= 0 {
 		file = file[idx+1:]
 	}
-	return fmt.Sprintf("%s:%d", file, position.Line)
+	return file
 }
 
 // buildGraphQLOperations groups the raw GraphQL sites by enclosing function and

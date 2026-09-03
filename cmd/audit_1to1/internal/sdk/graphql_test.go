@@ -66,6 +66,53 @@ func TestReceiverName_Unexpected_FallsBackRatherThanPanics(t *testing.T) {
 	}
 }
 
+// TestRepoRelativeFile_Separators_TrimTheWorkspacePrefixOnEveryPlatform
+// verifies the trimming that turns a loader's absolute path into the
+// repository-relative form the declared table is written in. The Windows case
+// is the one that matters: go/token normalizes nothing, so a backslash path
+// reaches this function verbatim, and without normalization the search finds no
+// separator and the developer's whole workspace path is reported as the site.
+func TestRepoRelativeFile_Separators_TrimTheWorkspacePrefixOnEveryPlatform(t *testing.T) {
+	cases := []struct {
+		name string
+		file string
+		want string
+	}{
+		{
+			name: "unix absolute path",
+			file: "/home/dev/gitlab-mcp-server/internal/tools/epics/epics.go",
+			want: "internal/tools/epics/epics.go",
+		},
+		{
+			name: "windows absolute path",
+			file: `C:\Users\dev\gitlab-mcp-server\internal\tools\epics\epics.go`,
+			want: "internal/tools/epics/epics.go",
+		},
+		{
+			name: "already relative",
+			file: "internal/tools/epics/epics.go",
+			want: "internal/tools/epics/epics.go",
+		},
+		{
+			name: "no internal segment is left alone",
+			file: "/home/dev/gitlab-mcp-server/main.go",
+			want: "/home/dev/gitlab-mcp-server/main.go",
+		},
+		{
+			name: "the last internal segment wins",
+			file: "/home/dev/internal/checkouts/repo/internal/tools/epics/epics.go",
+			want: "internal/tools/epics/epics.go",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := repoRelativeFile(tc.file); got != tc.want {
+				t.Errorf("repoRelativeFile(%q) = %q, want %q", tc.file, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestIsGraphQLInterface_Types_MatchOnlyThatInterface verifies the type test
 // behind every recorded site: the interface itself, through a pointer, and
 // nothing else.
