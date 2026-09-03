@@ -689,7 +689,11 @@ var ErrCredentialProbeBusy = errors.New("credential verification is saturated, r
 // never move.
 func (p *ServerPool) acquireProbeSlot() (func(), error) {
 	if p.probes == nil {
-		return func() {}, nil
+		return func() {
+			// No limiter is configured, so no slot was taken and there is
+			// nothing to give back. Returning a no-op rather than nil keeps
+			// every caller's deferred release unconditional.
+		}, nil
 	}
 	wait := p.probeQueueTimeout
 	if wait <= 0 {
