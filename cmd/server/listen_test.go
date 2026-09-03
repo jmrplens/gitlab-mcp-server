@@ -58,9 +58,7 @@ func TestIsUnixSocketAddr_DistinguishesPathsFromHostPort(t *testing.T) {
 // reach the server and one that cannot — and, in the other direction, between
 // a socket only the proxy's group can open and one every local account can.
 func TestListenHTTP_UnixSocket_ServesAndAppliesTheMode(t *testing.T) {
-	// Deliberately not parallel: binding sets the process-global umask for
-	// the duration of the bind (see bindUnixSocket), and a directory another
-	// test creates inside that window comes back missing its execute bit.
+	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "mcp.sock")
 	listener, err := listenHTTP(t.Context(), path, config.DefaultSocketMode)
@@ -120,9 +118,7 @@ func TestClearStaleSocket_AbsentPathIsFine(t *testing.T) {
 // exists to allow: a restart after a process died without unlinking its
 // socket, which would otherwise fail to bind forever.
 func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
-	// Deliberately not parallel: binding sets the process-global umask for
-	// the duration of the bind (see bindUnixSocket), and a directory another
-	// test creates inside that window comes back missing its execute bit.
+	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "dead.sock")
 	listener := listenUnixForTest(t, path)
@@ -148,9 +144,7 @@ func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
 // running server is still serving, leaving it holding a listener nobody can
 // reach. A successful connect is the proof somebody is there.
 func TestClearStaleSocket_LiveSocketIsRefused(t *testing.T) {
-	// Deliberately not parallel: binding sets the process-global umask for
-	// the duration of the bind (see bindUnixSocket), and a directory another
-	// test creates inside that window comes back missing its execute bit.
+	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "live.sock")
 	listener := listenUnixForTest(t, path)
@@ -186,9 +180,7 @@ func TestClearStaleSocket_LiveSocketIsRefused(t *testing.T) {
 // racing restart. Here the probe is cancelled before it can complete, which
 // stands in for every unanswered question.
 func TestClearStaleSocket_UnansweredProbeIsRefused(t *testing.T) {
-	// Deliberately not parallel: binding sets the process-global umask for
-	// the duration of the bind (see bindUnixSocket), and a directory another
-	// test creates inside that window comes back missing its execute bit.
+	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "unanswered.sock")
 	listener := listenUnixForTest(t, path)
@@ -355,13 +347,19 @@ func TestRepeatedFlag_AcceptsRepetitionAndCommas(t *testing.T) {
 // The cases are the ones an operator actually produces: a path whose directory
 // is not a directory (a typo, or a file where a directory was expected), a path
 // already occupied by something that is not a socket, and a path longer than
-// the address family allows. None of them is reachable through permission bits
-// here, because the tests run as root in CI containers, where permissions do
-// not refuse anything.
+// the address family allows. Every one of them fails the same way for anybody
+// who runs it.
+//
+// The permission case does not, so it is not in this table. Permission bits
+// refuse an ordinary account and never refuse root, which makes the expected
+// outcome depend on who is running the suite; it lives in
+// TestBindUnixSocket_UnwritableDirectoryIsRefused, which skips when the test
+// process is privileged. An earlier version of this comment justified leaving
+// it out by asserting that the suite always runs as root in CI. That was
+// false, and the CI failure this file's parallelism was rearranged for was a
+// permission denial.
 func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
-	// Deliberately not parallel: binding sets the process-global umask for
-	// the duration of the bind (see bindUnixSocket), and a directory another
-	// test creates inside that window comes back missing its execute bit.
+	t.Parallel()
 
 	dir := t.TempDir()
 	notADirectory := filepath.Join(dir, "file")
@@ -396,14 +394,18 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 		{
 			name: "the path is longer than a unix address",
 			path: filepath.Join(dir, strings.Repeat("a", 120)+".sock"),
-			// The kernel's message, not ours: what matters is that the bind
-			// failure surfaces instead of a listener nobody can reach.
-			wantErr: "",
+			// This one used to be the kernel's refusal. It is ours now: the
+			// socket is bound under a short staging name and published with
+			// link(2), which has no address limit, so an over-long path would
+			// otherwise bind cleanly into a listener no client can reach.
+			wantErr: "a unix address holds at most",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			listener, err := listenHTTP(t.Context(), tt.path, config.DefaultSocketMode)
 
 			if err == nil {
@@ -423,9 +425,7 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 // The default is the one that matters for a same-host proxy: a socket only the
 // proxy's group can open, rather than one every local account can.
 func TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault(t *testing.T) {
-	// Deliberately not parallel: binding sets the process-global umask for
-	// the duration of the bind (see bindUnixSocket), and a directory another
-	// test creates inside that window comes back missing its execute bit.
+	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "default-mode.sock")
 	listener, err := listenHTTP(t.Context(), path, 0)

@@ -540,9 +540,21 @@ func countActions(routes map[string]toolutil.ActionMap) int {
 // measurePrompts registers MCP prompts and estimates the token cost of their
 // advertised definitions.
 //
-// A failed listing used to be swallowed here and reported by the footprint
-// path's own copy of this function, the one disagreement between the two.
-// Neither can happen, and both now say so the same way.
+// This was the last of four helper pairs to be collapsed into one, and the
+// only pair whose halves disagreed rather than merely being spelled
+// differently: the audit half swallowed a failed listing and returned zero,
+// the footprint half returned an error. The disagreement is settled toward
+// neither.
+//
+// A swallowed zero is the worse of the two by a distance, because it is
+// written into the generated token-footprint artifacts as though it were a
+// measurement, and a footprint that quietly omits every prompt reads as a
+// smaller server rather than as a failure. An error return is honest but asks
+// every caller to handle something that cannot occur: the listing runs over an
+// in-memory transport against a server this process built moments earlier, so
+// there is no peer to be unreachable and nothing a report could say beyond
+// what a panic already carries. It panics at the leaf, like every other step
+// of [withSession].
 func measurePrompts(client *gitlabclient.Client) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
