@@ -5342,7 +5342,7 @@ func TestIntentBoost_SearchCodeSurfacesForCodeQueries(t *testing.T) {
 }
 
 // TestIntentBoost_CurrentUserSurfacesForIdentityQueries verifies user.current
-// ranks first for current-user phrasings (surface-eval task MT-114). The
+// ranks first for current-user phrasings (surface-eval task MT-203). The
 // canonical alias "current user" is multi-word and never reaches the
 // exact-alias score on word-tokenized queries, so user.get and member-get
 // actions previously outranked it.

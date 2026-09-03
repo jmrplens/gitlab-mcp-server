@@ -33,31 +33,37 @@ func readEvalCases() []Case {
 		baseReadEvalCase("MT-090", "List available Dockerfile templates.", readStep("gitlab_template", "dockerfile_list", nil, nil)),
 		baseReadEvalCase("MT-092", "List wiki pages in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_wiki", "list", params("project_id"), params("with_content"))),
 		baseReadEvalCase("MT-179", "Inspect merge request `7` changes in project `my-org/tools/gitlab-mcp-server` without running an LLM analyzer.", readStep("gitlab_mr_review", "changes_get", params("project_id", "merge_request_iid"), nil)),
-		baseReadEvalCase("MT-110", "List merged merge requests in project `my-org/tools/gitlab-mcp-server` ordered by updated date, with 5 results per page.", readStep("gitlab_merge_request", "list", params("project_id"), params("state", "order_by", "sort", "per_page"))),
-		baseReadEvalCase("MT-111", "Get all pending to-do items for the current user.", readStep("gitlab_todo", "list", nil, params("state", "per_page"))),
-		baseReadEvalCase("MT-112", "List all available MCP resources exposed by the server.", readStep("gitlab_list_resources", "", nil, nil)),
-		baseReadEvalCase("MT-121", "List all MCP capabilities exposed by the server.", readStep("gitlab_list_capabilities", "", nil, nil)),
-		baseReadEvalCase("MT-122", "Read MCP resource `gitlab://tools` to inspect the tool catalog manifest.", readStep("gitlab_read_resource", "", params("uri"), nil)),
+		// MT-199..MT-211 were MT-110..MT-122 until the collisions in
+		// https://github.com/jmrplens/gitlab-mcp-server/issues/361 were
+		// resolved. Those numbers already named destructive and Enterprise
+		// cases, so these read cases moved above the high-water mark and the
+		// older cases kept their identifiers. See the package doc comment for
+		// the allocation rule.
+		baseReadEvalCase("MT-199", "List merged merge requests in project `my-org/tools/gitlab-mcp-server` ordered by updated date, with 5 results per page.", readStep("gitlab_merge_request", "list", params("project_id"), params("state", "order_by", "sort", "per_page"))),
+		baseReadEvalCase("MT-200", "Get all pending to-do items for the current user.", readStep("gitlab_todo", "list", nil, params("state", "per_page"))),
+		baseReadEvalCase("MT-201", "List all available MCP resources exposed by the server.", readStep("gitlab_list_resources", "", nil, nil)),
+		baseReadEvalCase("MT-210", "List all MCP capabilities exposed by the server.", readStep("gitlab_list_capabilities", "", nil, nil)),
+		baseReadEvalCase("MT-211", "Read MCP resource `gitlab://tools` to inspect the tool catalog manifest.", readStep("gitlab_read_resource", "", params("uri"), nil)),
 		baseReadEvalCase(
-			"MT-113", "List available MCP prompts, then get prompt details for `my_open_mrs` using that exact prompt name.",
+			"MT-202", "List available MCP prompts, then get prompt details for `my_open_mrs` using that exact prompt name.",
 			readStep("gitlab_list_prompts", "", nil, nil),
 			readStep("gitlab_get_prompt", "", params("name"), nil),
 		),
 		baseReadEvalCase(
-			"MT-114", "Retrieve the current user info, then call parameter completion for prompt `my_issues` and argument `state` (use `ref_type` = `ref/prompt`, plus `name` and `argument_name`).",
+			"MT-203", "Retrieve the current user info, then call parameter completion for prompt `my_issues` and argument `state` (use `ref_type` = `ref/prompt`, plus `name` and `argument_name`).",
 			readStep("gitlab_user", "current", nil, nil),
 			readStep("gitlab_complete", "", params("ref_type", "name", "argument_name"), params("argument_value")),
 		),
-		baseReadEvalCase("MT-115", "List issues with status `closed` created in the last 60 days in project `my-org/tools/gitlab-mcp-server`, ordered by creation date.", readStep("gitlab_issue", "list", params("project_id"), params("state", "order_by", "sort", "created_after", "per_page"))),
+		baseReadEvalCase("MT-204", "List issues with status `closed` created in the last 60 days in project `my-org/tools/gitlab-mcp-server`, ordered by creation date.", readStep("gitlab_issue", "list", params("project_id"), params("state", "order_by", "sort", "created_after", "per_page"))),
 		baseReadEvalCase(
-			"MT-116", "For project `my-org/tools/gitlab-mcp-server`, first discover and execute `pipeline.list` for ref `main`, then discover and execute `job.list` for the returned pipeline ID and list job statuses.",
+			"MT-205", "For project `my-org/tools/gitlab-mcp-server`, first discover and execute `pipeline.list` for ref `main`, then discover and execute `job.list` for the returned pipeline ID and list job statuses.",
 			readStep("gitlab_pipeline", "list", params("project_id"), params("ref", "per_page")),
 			readStep("gitlab_job", "list", params("project_id", "pipeline_id"), params("scope", "per_page")),
 		),
-		baseReadEvalCase("MT-117", "Find issues labeled `bug` and in milestone `v2.0` for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_issue", "list", params("project_id"), params("labels", "milestone", "per_page"))),
-		baseReadEvalCase("MT-118", "Get the second page of releases (100 per page) for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_release", "list", params("project_id"), params("page", "per_page"))),
-		baseReadEvalCase("MT-119", "Search for branches starting with `feat` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_branch", "list", params("project_id"), params("search", "per_page"))),
-		baseReadEvalCase("MT-120", "List members with their roles in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_project", "members", params("project_id"), params("per_page", "query"))),
+		baseReadEvalCase("MT-206", "Find issues labeled `bug` and in milestone `v2.0` for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_issue", "list", params("project_id"), params("labels", "milestone", "per_page"))),
+		baseReadEvalCase("MT-207", "Get the second page of releases (100 per page) for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_release", "list", params("project_id"), params("page", "per_page"))),
+		baseReadEvalCase("MT-208", "Search for branches starting with `feat` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_branch", "list", params("project_id"), params("search", "per_page"))),
+		baseReadEvalCase("MT-209", "List members with their roles in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_project", "members", params("project_id"), params("per_page", "query"))),
 		baseReadEvalCase(
 			"MS-001", "Resolve remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git` for project `my-org/tools/gitlab-mcp-server`, verify the project metadata, then read `README.md` from `main`.",
 			readStep("gitlab_discover_project", "", params("remote_url"), nil),
@@ -167,23 +173,23 @@ func baseReadPromptTemplateAndFixtures(id string) (template string, fixtures []s
 		return "Get raw content of personal snippet ID `{{ .Values.snippet_id }}`.", []string{fixtureSnippet}
 	case "MT-179":
 		return "Inspect merge request `{{ .MergeRequest.IID }}` changes in project `{{ .Project.Path }}` without running an LLM analyzer.", []string{fixtureMergeRequest}
-	case "MT-110":
+	case "MT-199":
 		return "List merged merge requests in project `{{ .Project.Path }}` ordered by updated date, with 5 results per page.", []string{fixtureMergeRequest}
-	case "MT-113":
+	case "MT-202":
 		return "List available MCP prompts, then get prompt details for `my_open_mrs` using that exact prompt name.", nil
-	case "MT-114":
+	case "MT-203":
 		return "Retrieve the current user info, then call parameter completion for prompt `my_issues` and argument `state` (use `ref_type` = `ref/prompt`, plus `name` and `argument_name`).", nil
-	case "MT-115":
+	case "MT-204":
 		return "List issues with status closed created in the last 60 days in project `{{ .Project.Path }}`, ordered by creation date.", []string{fixtureIssue}
-	case "MT-116":
+	case "MT-205":
 		return "For project `{{ .Project.Path }}`, first discover and execute `pipeline.list` for ref `main`, then discover and execute `job.list` for pipeline `{{ .Pipeline.ID }}` and list job statuses.", []string{fixturePipelineJob}
-	case "MT-117":
+	case "MT-206":
 		return "Find issues labeled bug and in milestone v2.0 for project `{{ .Project.Path }}`.", []string{fixtureIssue}
-	case "MT-118":
+	case "MT-207":
 		return "Get the second page of releases (100 per page) for project `{{ .Project.Path }}`.", []string{fixtureRelease}
-	case "MT-119":
+	case "MT-208":
 		return "Search for branches starting with feat in project `{{ .Project.Path }}`.", []string{fixtureBranch}
-	case "MT-120":
+	case "MT-209":
 		return "List members with their roles in project `{{ .Project.Path }}`.", []string{fixtureMember}
 	case "MS-002":
 		return "Investigate failed pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}` and remote URL `{{ .Values.remote_url }}`: first resolve that exact remote URL to the project, inspect the pipeline, list failed jobs, fetch job `{{ .Job.ID }}` trace.", []string{fixtureFailedJobArtifact}
