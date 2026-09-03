@@ -2065,8 +2065,8 @@ const httpShutdownTimeout = 15 * time.Second
 // An exhausted budget is not an error, and that single line is the whole
 // history of this flake. One connection that had not gone idle turned an
 // ordinary stop into "http server shutdown: context deadline exceeded" and
-// exit 1 — a failed unit to a supervisor, a broken build to CI — and it was
-// answered twice by raising the number and once by widening a test's outer
+// exit 1, which is a failed unit to a supervisor and a broken build to CI. It
+// was answered twice by raising the number and once by widening a test's outer
 // wait, none of which touched the classification. The connections that did not
 // drain are about to be dropped by process exit anyway, so this drops them
 // itself and logs what it did. Anything else Shutdown reports is still an

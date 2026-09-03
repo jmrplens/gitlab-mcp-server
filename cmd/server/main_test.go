@@ -8689,7 +8689,7 @@ func TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger(t *testing.T) {
 // tight under CI load" look like a load problem. A tool call waiting on GitLab
 // keeps its connection out of the idle state [http.Server.Shutdown] waits for,
 // so the drain budget runs out however large it is, and until now that was
-// returned as "http server shutdown: context deadline exceeded" — exit 1, a
+// returned as "http server shutdown: context deadline exceeded" and exit 1: a
 // failed unit to a supervisor and a broken build to CI, for one straggler
 // connection that process exit was about to drop anyway.
 //
@@ -8800,7 +8800,7 @@ func TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure
 // setup cost varies by an order of magnitude, since the deadline would have to
 // be picked before the setup it must outlast.
 type armedDeadlineContext struct {
-	context.Context //nolint:containedctx // a context decorator, which is what this is
+	context.Context
 
 	mu       sync.Mutex
 	deadline time.Time
@@ -8902,7 +8902,7 @@ func TestShutdownHTTPServer_NothingInFlight_ReturnsWithoutSpendingTheBudget(t *t
 func TestHTTPShutdownBudget_TakesTheSmallerOfTheDefaultAndTheCallersDeadline(t *testing.T) {
 	cases := []struct {
 		name      string
-		ctx       context.Context //nolint:containedctx // the input under test
+		ctx       context.Context
 		wantExact time.Duration
 		wantRange [2]time.Duration
 	}{
