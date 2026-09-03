@@ -16,6 +16,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                   | `make audit-doc-coverage`                 |
 | `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                            | `make audit-dynamic-aliases`              |
 | `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                | `make audit-edition-tier`                 |
+| `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                          | `make check-readonly-graphql`             |
 | `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`              |
 | `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint` |
 | `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase)                                                                                                                                 | `make audit-metrics`                      |
@@ -251,6 +252,58 @@ A JSON report with per-action tier classification and doc-vs-binary discrepancie
 #### Notes
 
 Fetches the GitLab API reference docs from `gitlab.com` via the shared `cmd/internal/apidocs` fetcher. Docs are cached in `.cache/gitlab-api-docs/` (gitignored, shared with `audit_1to1 -validate-docs`) and reused while younger than the 7-day TTL; `-refresh` forces a re-download and `-offline` uses only the cache. The fetcher honors `Retry-After`, backs off with jitter, and spaces requests so a full sweep does not trip the raw rate limiter.
+
+### audit_readonly_graphql
+
+Fails when an action the canonical catalog classifies `ReadOnly` can reach a GraphQL mutation.
+
+`--read-only` removes actions through `FilterReadOnlyActions`, and the surface served to a `read_api` OAuth token is narrowed the same way. Both key on the action's catalog classification, not on what its handler does, so an action classified `ReadOnly` whose handler issues a mutation survives both filters and writes precisely where a write is supposed to be impossible.
+
+The HTTP method cannot be the test: `client-go` sends every GraphQL request as a POST, so around twenty read-only actions legitimately POST. The operation type in the document is the whole of the distinction, and it is in the source.
+
+The audit loads `./internal/...`, resolves every read-only catalog action to the function its route runs, walks what that function can call, and classifies every GraphQL document those bodies name. An action that sends no GraphQL is not a finding, and neither is a mutation reached from an action already classified as mutating.
+
+#### Usage
+
+```bash
+# CI gate
+go run ./cmd/audit_readonly_graphql/
+
+# Also list the read-only actions that touch GraphQL at all
+go run ./cmd/audit_readonly_graphql/ -v
+```
+
+#### Flags
+
+| Flag   | Type     | Default | Description                                   |
+| ------ | -------- | ------- | --------------------------------------------- |
+| `-dir` | `string` | `.`     | Repository root to audit                      |
+| `-v`   | `bool`   | `false` | Report what was checked, not only what failed |
+
+#### Output
+
+One block per finding on stderr, naming the action, the file the action is declared in, the function that sends the mutation, and the document. Exits `1` when any finding is reported and when the catalog or the source tree cannot be loaded, so a gate that cannot read its inputs never looks like a gate that passed.
+
+Three things count as findings, not only the obvious one:
+
+- a read-only action whose handler can reach a mutation document;
+- a read-only action no `ActionSpec` construction resolves to, or whose route resolves to no handler, because an action the audit cannot classify is one it cannot vouch for;
+- an exception directive that no longer excuses anything, so an exception cannot outlive its reason.
+
+#### Declaring an exception
+
+A deliberate exception is declared in the source next to the action, never in the auditor:
+
+```go
+//gitlab:allow-readonly-graphql-mutation <action_name>: <reason>
+```
+
+The directive has to sit in the package that owns the action and name that action, so the exception is visible to a reader of the handler.
+
+#### Make targets
+
+- `make check-readonly-graphql`: the CI gate.
+- `make audit-readonly-graphql`: the same gate, with the GraphQL-sending read-only actions listed.
 
 ## Surface quality audits
 
@@ -846,3 +899,4 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `audit-docs` → `format_md_tables -check` | `format_md_tables`             | All Markdown pipe tables are normalized                                              | Non-zero if any table needs formatting                    |
 | `audit-docs` → `gen_testing_docs -check` | `gen_testing_docs`             | The `docs/development/testing/testing.md` test-metrics block is current              | Non-zero if the generated section is stale                |
 | `check-supply-chain`                     | `audit_supply_chain`           | The five release-configuration invariants still hold                                 | Non-zero if any is broken, or if the audit cannot be run  |
+| `check-readonly-graphql`                 | `audit_readonly_graphql`       | No action classified ReadOnly can reach a GraphQL mutation                           | Non-zero on any finding, or if the audit cannot be run    |
