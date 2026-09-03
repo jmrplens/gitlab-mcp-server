@@ -153,6 +153,25 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --pub
 `--public-url` declara el origen accesible desde fuera y **es el identificador de recurso RFC 9728**; el servidor se niega a arrancar en modo OAuth sin uno válido. La URL de metadatos se deriva de él insertando el segmento well-known entre el host y la ruta, así que `--public-url=https://mcp.example.com/gitlab` publica los metadatos en `https://mcp.example.com/.well-known/oauth-protected-resource/gitlab` — una ruta en la **raíz del host**, que un proxy inverso debe enrutar sin reescribirla.
 :::
 
+### Dónde viven los metadatos: raíz del host o sub-ruta
+
+El segmento well-known se sitúa siempre en la raíz del host, y la ruta propia del recurso pasa por detrás. Eso da dos formas de despliegue:
+
+| Despliegue                       | `--public-url`                   | URL de metadatos                                                      |
+| -------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
+| Un servidor dueño del nombre     | `https://mcp.example.com`        | `https://mcp.example.com/.well-known/oauth-protected-resource`        |
+| Un servidor bajo prefijo de ruta | `https://mcp.example.com/gitlab` | `https://mcp.example.com/.well-known/oauth-protected-resource/gitlab` |
+
+La segunda fila es la que sorprende: los metadatos de un servidor en `/gitlab` **no** están en `/gitlab/.well-known/...`. Un proxy que reenvíe solo `/gitlab/*` deja el descubrimiento tirado mientras todas las llamadas MCP siguen funcionando, que es una forma confusa de fallar.
+
+:::danger[Varios servidores MCP en un mismo host]
+Enruta la ruta derivada **exacta**, nunca un prefijo. Un `location` que mande todo lo que cuelga de `/.well-known/oauth-protected-resource/` a un servidor hace que ese servidor responda por sus vecinos: quien pregunte por otro servidor del mismo host recibe la configuración de este despliegue, describiendo un servidor por el que no preguntó. El RFC 9728 sección 3.3 obliga a un cliente conforme a descartar ese documento, así que en el mejor caso no sirve de nada y en el peor engaña a un cliente laxo.
+
+La forma escueta, `/.well-known/oauth-protected-resource` sin sufijo, es el documento del recurso que **es** el origen. Un servidor que vive bajo una ruta no debería servirla ni recibirla.
+:::
+
+Un servidor único que es dueño de su nombre de host no tiene ninguno de los dos problemas: la forma derivada es la escueta, y no hay vecino por quien hablar.
+
 :::note[Se requiere un client ID pre-registrado]
 GitLab restringe los clientes OAuth registrados dinámicamente al scope `mcp`, que no concede acceso REST ni GraphQL — aquí fallarían todas las acciones. Crea una Aplicación OAuth de GitLab con el scope `api` y configura su Application ID en cada cliente.
 :::
