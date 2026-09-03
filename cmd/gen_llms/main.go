@@ -183,11 +183,23 @@ func run(surface llmsSurface, checkOnly bool) error {
 		Prompts:                 promptList,
 	}
 
-	if writeErr := writeLLMSTxt(version, catalog, checkOnly); writeErr != nil {
+	// The reference files are rendered before llms.txt is, because llms.txt
+	// quotes their sizes. That is the one fact a consumer needs before deciding
+	// which of them to fetch, and it cannot be hand-written: llms-full.txt has
+	// grown past every context window, and an index that does not say so sends
+	// models at it anyway.
+	references, buildErr := buildLLMSReferenceFiles(version, catalog)
+	if buildErr != nil {
+		return buildErr
+	}
+
+	if writeErr := writeLLMSTxt(version, catalog, referenceSizes(references), checkOnly); writeErr != nil {
 		return writeErr
 	}
-	if writeErr := writeLLMSFullTxt(version, catalog, checkOnly); writeErr != nil {
-		return writeErr
+	for _, file := range references {
+		if writeErr := writeGeneratedFile(file.name, file.content, checkOnly); writeErr != nil {
+			return fmt.Errorf("write %s: %w", file.name, writeErr)
+		}
 	}
 
 	if checkOnly {
@@ -240,8 +252,9 @@ func listToolsEnterprise(client *gitlabclient.Client) []*mcp.Tool {
 	return cmdutil.Must(session.ListTools(context.Background(), nil)).Tools
 }
 
-// writeLLMSTxt generates the concise llms.txt overview.
-func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
+// writeLLMSTxt generates the concise llms.txt overview. referenceSizeBytes maps
+// each companion file to its rendered size, which the Optional section quotes.
+func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[string]int, checkOnly bool) error {
 	var b strings.Builder
 	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates)
 	domains := classifyMetaDomains(catalog.MetaBase)
@@ -255,13 +268,13 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 		len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("Quick start:\n\n")
-	b.WriteString("1. Install it: the npm launcher, Homebrew, winget, the Docker image, the Claude Desktop extension, or a binary from the Releases page\n")
-	b.WriteString("2. Create a GitLab personal access token with `api` scope\n")
+	b.WriteString("1. Install it, or skip installing entirely. Every channel ships the same binary: `npx -y @jmrp.io/gitlab-mcp-server` (npm), `uvx jmrplens-gitlab-mcp-server` (PyPI; `pipx install` and `pip install` take the same name), `brew install jmrplens/tap/gitlab-mcp-server` (Homebrew), `winget install --id jmrplens.gitlab-mcp-server -e` (Windows), the `ghcr.io/jmrplens/gitlab-mcp-server` Docker image, the one-click `gitlab-mcp-server.mcpb` Claude Desktop extension, `/plugin install jmrplens/gitlab-mcp-server` as an Agent Plugin, or a binary from the Releases page. The hosted endpoint at https://mcp.jmrp.io/gitlab installs nothing at all\n")
+	b.WriteString("2. Create a GitLab personal access token with `api` scope. A `read_api` token is also admitted and is served a read-only surface; pair it with `GITLAB_READ_ONLY=true` when you want that explicitly\n")
 	b.WriteString("3. Add the server to your AI client's MCP configuration with that token in `GITLAB_TOKEN`\n\n")
 
 	b.WriteString("Installing for an AI assistant:\n\n")
-	fmt.Fprintf(&b, "If you are an AI assistant setting this up for a user from just this repository URL, write the MCP client configuration directly; there is no interactive setup to run. The default and recommended surface is dynamic mode over stdio (only two visible tools, lowest token cost). Minimum required: a GitLab personal access token with `api` scope in `GITLAB_TOKEN`; set `GITLAB_URL` only for self-managed instances (default `%s`).\n\n", config.DefaultGitLabURL)
-	b.WriteString("The config schema differs by client: Cursor, Claude Desktop, and Claude Code use a `mcpServers` key; VS Code and GitHub Copilot use a `servers` key (each entry also sets `\"type\": \"stdio\"`). The `mcpServers` form with Docker:\n\n")
+	fmt.Fprintf(&b, "If you are an AI assistant setting this up for a user from just this repository URL, write the MCP client configuration directly; there is no interactive setup to run. The default and recommended surface is dynamic mode over stdio (only two visible tools, lowest token cost). Minimum required: a GitLab personal access token in `GITLAB_TOKEN`; set `GITLAB_URL` only for self-managed instances (default `%s`).\n\n", config.DefaultGitLabURL)
+	b.WriteString("The config schema differs by client. Most use a `mcpServers` key: Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Kiro, opencode, Cline, Gemini CLI, and the GitLab Duo Agent Platform. VS Code and GitHub Copilot use a `servers` key, with `\"type\": \"stdio\"` on each entry. Zed uses `context_servers`, and OpenAI Codex uses TOML `[mcp_servers.gitlab]` in `~/.codex/config.toml`. The `mcpServers` form with Docker:\n\n")
 	b.WriteString("```json\n")
 	b.WriteString("{\n")
 	b.WriteString("  \"mcpServers\": {\n")
@@ -273,24 +286,31 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("  }\n")
 	b.WriteString("}\n")
 	b.WriteString("```\n\n")
-	b.WriteString("Native binary instead of Docker: download the release asset for the user's OS and architecture from the Releases page, then use its path as `command` with no `args` and the same `env`.\n\n")
-	b.WriteString("Claude Code (CLI): `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest` (Docker), or `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).\n\n")
-	fmt.Fprintf(&b, "The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](%s).\n\n",
+	b.WriteString("Without Docker: use `npx` as `command` with `args` `[\"-y\", \"@jmrp.io/gitlab-mcp-server\"]`, or `uvx` with `args` `[\"jmrplens-gitlab-mcp-server\"]`, keeping the same `env`. Both fetch a prebuilt binary for the platform and need no Node or Python project of their own.\n\n")
+	b.WriteString("Native binary instead: download the release asset for the user's OS and architecture (`gitlab-mcp-server-<os>-<arch>`, with `.exe` on Windows) from the Releases page, then use its path as `command` with no `args` and the same `env`.\n\n")
+	b.WriteString("Claude Code (CLI): `claude mcp add gitlab --env GITLAB_TOKEN=<token> --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest` (Docker), or `claude mcp add gitlab --env GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).\n\n")
+	b.WriteString("One Docker caveat, for images tagged v2.7.5 or earlier only: those default to HTTP and hang at `initialize` when a client speaks stdio to them. Append `--http=false` after the image name for such a tag. Later images infer the transport from stdin, so `docker run -i` is enough and no extra argument is needed.\n\n")
+	b.WriteString("Nothing installed at all: https://mcp.jmrp.io/gitlab is a public instance of this server, fixed to https://gitlab.com and serving the default dynamic surface over stateless streamable HTTP. An OAuth-capable client needs no header and discovers the authorization server from the RFC 9728 challenge; any other client sends a GitLab.com token as `Authorization: Bearer <token>`, verified per request and never stored. It is one person's personal service with no SLA, so deploy your own for anything that matters.\n\n")
+	fmt.Fprintf(&b, "The exact config-file path and JSON schema for each client (VS Code with GitHub Copilot, Claude Code, Claude Desktop, Cursor, OpenAI Codex CLI, Gemini CLI, LM Studio, mcp-remote, GitLab Duo Agent Platform, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](%s).\n\n",
 		absoluteLLMSTarget("docs/guides/ide-configuration.md"))
 
 	b.WriteString("Running the binary by hand:\n\n")
-	b.WriteString("- With no `GITLAB_TOKEN` and a terminal attached, the server prints what it needs and waits for Enter rather than starting a session it cannot serve. An MCP client never reaches that screen, because a client connects pipes rather than a terminal.\n")
-	b.WriteString("- Keeping the token out of client config: put `GITLAB_URL` and `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env`, which the server reads when they are not already in its environment.\n")
+	b.WriteString("- Without both `GITLAB_URL` and `GITLAB_TOKEN`, and with a terminal attached, the server prints what it needs on stderr and waits for Enter rather than starting a session it cannot serve. An MCP client never reaches that screen, because a client connects pipes rather than a terminal.\n")
+	b.WriteString("- Keeping the token out of client config: put `GITLAB_URL` and `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env`, or in the one file `GITLAB_MCP_ENV_FILE` names (give it an absolute path). Precedence, highest first: the process environment, then `GITLAB_MCP_ENV_FILE`, then the home file. A `.env` in the working directory is deliberately not loaded, only reported at WARN with the keys it wanted to set.\n")
 	b.WriteString("- Updating: use whichever channel installed it. The server never replaces its own binary.\n\n")
 
-	b.WriteString("Configuration (environment variables, stdio mode):\n\n")
+	b.WriteString("Configuration (environment variables, stdio mode). Settings this project defines are read as GITLAB_MCP_<NAME>; the older bare spellings still work and warn once at startup:\n\n")
 	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: `%s`; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
-	b.WriteString("- GITLAB_MCP_TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic\n")
-	b.WriteString("- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs\n")
+	b.WriteString("- GITLAB_MCP_TOOL_SURFACE: Canonical catalog selector: dynamic (default), meta, individual\n")
 	b.WriteString("- GITLAB_MCP_CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)\n")
-	b.WriteString("- GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n\n")
+	b.WriteString("- GITLAB_READ_ONLY: Remove mutating operations per action; reads keep working (default: false)\n")
+	b.WriteString("- GITLAB_SAFE_MODE: Answer a mutating action with a JSON preview naming it instead of running it; reads keep working (default: false). GITLAB_READ_ONLY takes precedence\n")
+	b.WriteString("- GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n")
+	b.WriteString("- GITLAB_MCP_LOG_LEVEL: debug, info (default), warn, error. Logs go to stderr; stdout carries nothing but JSON-RPC\n")
+	b.WriteString("- GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path\n")
+	b.WriteString("- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs\n\n")
 
 	b.WriteString("Tool domains:\n\n")
 	b.WriteString(strings.Join(domains, ", "))
@@ -337,7 +357,10 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("\n")
 
 	b.WriteString("## Documentation\n\n")
+	writeLLMSLink(&b, "Documentation site index", siteBaseURL+llmsFileName, "Index of every published documentation page, which is what the documentation domain serves at /llms.txt")
+	writeLLMSLink(&b, "Spanish documentation index", siteBaseURL+"es/"+llmsFileName, "The same documentation in Spanish, page for page")
 	writeLLMSLink(&b, "Getting started", "docs/getting-started.md", "Installation and first-run guide")
+	writeLLMSLink(&b, "Installation", "docs/guides/installation.md", "Every install channel with its exact command, and how each one upgrades")
 	writeLLMSLink(&b, "Claude Desktop extension", "docs/guides/claude-desktop-extension.md", "One-click .mcpb install for Claude Desktop (macOS universal + Windows)")
 	writeLLMSLink(&b, "Configuration", "docs/reference/configuration.md", "Full configuration reference")
 	writeLLMSLink(&b, "Environment variables", "docs/reference/env.md", "Environment variable reference")
@@ -354,11 +377,19 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	writeLLMSLink(&b, "Prompts", "docs/reference/prompts.md", "Reusable MCP prompt templates")
 
 	b.WriteString("\n## Optional\n\n")
-	writeLLMSLink(&b, "Medium LLM reference", siteBaseURL+llmsMediumFileName, "Every tool and action with descriptions, without per-action schemas. Sized to load into a context window")
-	writeLLMSLink(&b, "Full LLM reference", siteBaseURL+llmsFullFileName, "Complete reference with every per-action JSON schema; large, best used with search or retrieval")
-	writeLLMSLink(&b, "Meta-tools reference", siteBaseURL+llmsFullMetaFileName, "Full schemas for the dynamic and meta-tool surfaces only")
-	writeLLMSLink(&b, "Individual tools reference", siteBaseURL+llmsFullIndividualFileName, "Full schemas for the one-tool-per-operation surface only")
-	writeLLMSLink(&b, "Resources and prompts reference", siteBaseURL+llmsFullCapabilityFileName, "MCP resource and prompt definitions only")
+	sized := func(name, note string) string {
+		return fmt.Sprintf("%s. %s", describeSize(referenceSizeBytes[name]), note)
+	}
+	writeLLMSLink(&b, "Medium LLM reference", siteBaseURL+llmsMediumFileName,
+		sized(llmsMediumFileName, "Every tool and action with its description, without the per-action JSON schemas. The largest of these that still loads into a context window"))
+	writeLLMSLink(&b, "Meta-tools reference", siteBaseURL+llmsFullMetaFileName,
+		sized(llmsFullMetaFileName, "Full schemas for the dynamic and meta-tool surfaces only"))
+	writeLLMSLink(&b, "Individual tools reference", siteBaseURL+llmsFullIndividualFileName,
+		sized(llmsFullIndividualFileName, "Full schemas for the one-tool-per-operation surface only"))
+	writeLLMSLink(&b, "Resources and prompts reference", siteBaseURL+llmsFullCapabilityFileName,
+		sized(llmsFullCapabilityFileName, "MCP resource and prompt definitions only"))
+	writeLLMSLink(&b, "Full LLM reference", siteBaseURL+llmsFullFileName,
+		sized(llmsFullFileName, "The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead"))
 	writeLLMSLink(&b, "Architecture", "docs/concepts/architecture.md", "Internal architecture and catalog-first runtime overview")
 	writeLLMSLink(&b, "Output format", "docs/reference/output-format.md", "Markdown and structured output conventions")
 	writeLLMSLink(&b, "Troubleshooting", "docs/guides/troubleshooting.md", "Common setup and runtime issues")
@@ -379,6 +410,32 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 // verbatim.
 func writeLLMSLink(b *strings.Builder, label, target, description string) {
 	fmt.Fprintf(b, "- [%s](%s): %s\n", label, absoluteLLMSTarget(target), description)
+}
+
+// describeSize renders a generated file's size the way a consumer decides
+// whether to fetch it: a human size plus a token estimate.
+//
+// Four bytes per token is the usual English approximation, and is enough for
+// the only decision it informs. The precision that matters is the order of
+// magnitude: llms-full.txt is not near a context-window boundary, it is an
+// order past every one of them, and an index that omits the number invites a
+// model to try loading it anyway.
+func describeSize(bytes int) string {
+	if bytes <= 0 {
+		return "size unknown"
+	}
+	var size string
+	switch {
+	case bytes >= 1024*1024:
+		size = fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+	default:
+		size = fmt.Sprintf("%d KB", (bytes+512)/1024)
+	}
+	tokens := float64(bytes) / 4
+	if tokens >= 1_000_000 {
+		return fmt.Sprintf("%s, ~%.1fM tokens", size, tokens/1_000_000)
+	}
+	return fmt.Sprintf("%s, ~%dk tokens", size, int(tokens+500)/1000)
 }
 
 // absoluteLLMSTarget resolves a llms.txt link target to an absolute URL.
@@ -501,8 +558,34 @@ func validateLLMSFullTxt(content string) error {
 	return nil
 }
 
-// writeLLMSFullTxt generates the detailed llms-full.txt with tool schemas.
-func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error {
+// generatedFile pairs a generated file name with its rendered content, so the
+// whole set can be sized before any of it is written.
+type generatedFile struct {
+	name    string
+	content string
+}
+
+// referenceSizes maps each rendered file to its size in bytes.
+func referenceSizes(files []generatedFile) map[string]int {
+	sizes := make(map[string]int, len(files))
+	for _, file := range files {
+		sizes[file.name] = len(file.content)
+	}
+	return sizes
+}
+
+// buildLLMSReferenceFiles renders llms-full.txt and its four companions.
+func buildLLMSReferenceFiles(version string, catalog llmsCatalog) ([]generatedFile, error) {
+	full, err := buildLLMSFullTxt(version, catalog)
+	if err != nil {
+		return nil, err
+	}
+	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates)
+	return append([]generatedFile{full}, buildLLMSCompanions(version, catalog, resourceCount)...), nil
+}
+
+// buildLLMSFullTxt renders the detailed llms-full.txt with tool schemas.
+func buildLLMSFullTxt(version string, catalog llmsCatalog) (generatedFile, error) {
 	var b strings.Builder
 	// Must match the count in writeLLMSTxt exactly. These two files are the
 	// project's most AI-facing artifacts, and a disagreement between them
@@ -522,12 +605,9 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 
 	content := b.String()
 	if err := validateLLMSFullTxt(content); err != nil {
-		return fmt.Errorf("validate llms-full.txt: %w", err)
+		return generatedFile{}, fmt.Errorf("validate llms-full.txt: %w", err)
 	}
-	if err := writeGeneratedFile(llmsFullFileName, content, checkOnly); err != nil {
-		return fmt.Errorf("write llms-full.txt: %w", err)
-	}
-	return writeLLMSCompanions(version, catalog, resourceCount, checkOnly)
+	return generatedFile{name: llmsFullFileName, content: content}, nil
 }
 
 // llmsHeader renders the shared title + one-line summary every companion file
@@ -540,9 +620,9 @@ func llmsHeader(b *strings.Builder, version, subtitle string, catalog llmsCatalo
 		len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 }
 
-// writeLLMSCompanions emits the loadable medium reference and the three
+// buildLLMSCompanions renders the loadable medium reference and the three
 // per-section splits of llms-full.txt.
-func writeLLMSCompanions(version string, catalog llmsCatalog, resourceCount int, checkOnly bool) error {
+func buildLLMSCompanions(version string, catalog llmsCatalog, resourceCount int) []generatedFile {
 	files := []struct {
 		name  string
 		build func(*strings.Builder)
@@ -573,14 +653,13 @@ func writeLLMSCompanions(version string, catalog llmsCatalog, resourceCount int,
 		}},
 	}
 
+	rendered := make([]generatedFile, 0, len(files))
 	for _, f := range files {
 		var b strings.Builder
 		f.build(&b)
-		if err := writeGeneratedFile(f.name, b.String(), checkOnly); err != nil {
-			return fmt.Errorf("write %s: %w", f.name, err)
-		}
+		rendered = append(rendered, generatedFile{name: f.name, content: b.String()})
 	}
-	return nil
+	return rendered
 }
 
 // writeLLMSMediumMetaTools lists each meta-tool with its description and the

@@ -111,9 +111,12 @@ site/node_modules/
 site/dist/
 site/.astro/
 # site/public/ is Astro's static asset *source* directory and is committed. Only
-# these two are generated into it — `copy-llms.mjs` republishes them from the
-# canonical root-level files on every prebuild.
+# these are generated into it, by `site/scripts/gen-llms.mjs` on every prebuild:
+# the two documentation indexes are built from the content collection, the rest
+# are republished from the canonical root-level files.
 site/public/llms.txt
+site/public/es/llms.txt
+site/public/llms-server.txt
 site/public/llms-medium.txt
 site/public/llms-full.txt
 site/public/llms-full-meta-tools.txt

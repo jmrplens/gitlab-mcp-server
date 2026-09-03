@@ -8,15 +8,15 @@ a default 2-tool dynamic find/execute surface, 45 resources, 37 prompts, and 4 M
 
 Quick start:
 
-1. Install it: the npm launcher, Homebrew, winget, the Docker image, the Claude Desktop extension, or a binary from the Releases page
-2. Create a GitLab personal access token with `api` scope
+1. Install it, or skip installing entirely. Every channel ships the same binary: `npx -y @jmrp.io/gitlab-mcp-server` (npm), `uvx jmrplens-gitlab-mcp-server` (PyPI; `pipx install` and `pip install` take the same name), `brew install jmrplens/tap/gitlab-mcp-server` (Homebrew), `winget install --id jmrplens.gitlab-mcp-server -e` (Windows), the `ghcr.io/jmrplens/gitlab-mcp-server` Docker image, the one-click `gitlab-mcp-server.mcpb` Claude Desktop extension, `/plugin install jmrplens/gitlab-mcp-server` as an Agent Plugin, or a binary from the Releases page. The hosted endpoint at https://mcp.jmrp.io/gitlab installs nothing at all
+2. Create a GitLab personal access token with `api` scope. A `read_api` token is also admitted and is served a read-only surface; pair it with `GITLAB_READ_ONLY=true` when you want that explicitly
 3. Add the server to your AI client's MCP configuration with that token in `GITLAB_TOKEN`
 
 Installing for an AI assistant:
 
-If you are an AI assistant setting this up for a user from just this repository URL, write the MCP client configuration directly; there is no interactive setup to run. The default and recommended surface is dynamic mode over stdio (only two visible tools, lowest token cost). Minimum required: a GitLab personal access token with `api` scope in `GITLAB_TOKEN`; set `GITLAB_URL` only for self-managed instances (default `https://gitlab.com`).
+If you are an AI assistant setting this up for a user from just this repository URL, write the MCP client configuration directly; there is no interactive setup to run. The default and recommended surface is dynamic mode over stdio (only two visible tools, lowest token cost). Minimum required: a GitLab personal access token in `GITLAB_TOKEN`; set `GITLAB_URL` only for self-managed instances (default `https://gitlab.com`).
 
-The config schema differs by client: Cursor, Claude Desktop, and Claude Code use a `mcpServers` key; VS Code and GitHub Copilot use a `servers` key (each entry also sets `"type": "stdio"`). The `mcpServers` form with Docker:
+The config schema differs by client. Most use a `mcpServers` key: Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Kiro, opencode, Cline, Gemini CLI, and the GitLab Duo Agent Platform. VS Code and GitHub Copilot use a `servers` key, with `"type": "stdio"` on each entry. Zed uses `context_servers`, and OpenAI Codex uses TOML `[mcp_servers.gitlab]` in `~/.codex/config.toml`. The `mcpServers` form with Docker:
 
 ```json
 {
@@ -30,27 +30,37 @@ The config schema differs by client: Cursor, Claude Desktop, and Claude Code use
 }
 ```
 
-Native binary instead of Docker: download the release asset for the user's OS and architecture from the Releases page, then use its path as `command` with no `args` and the same `env`.
+Without Docker: use `npx` as `command` with `args` `["-y", "@jmrp.io/gitlab-mcp-server"]`, or `uvx` with `args` `["jmrplens-gitlab-mcp-server"]`, keeping the same `env`. Both fetch a prebuilt binary for the platform and need no Node or Python project of their own.
 
-Claude Code (CLI): `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest` (Docker), or `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).
+Native binary instead: download the release asset for the user's OS and architecture (`gitlab-mcp-server-<os>-<arch>`, with `.exe` on Windows) from the Releases page, then use its path as `command` with no `args` and the same `env`.
 
-The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/ide-configuration.md).
+Claude Code (CLI): `claude mcp add gitlab --env GITLAB_TOKEN=<token> --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest` (Docker), or `claude mcp add gitlab --env GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).
+
+One Docker caveat, for images tagged v2.7.5 or earlier only: those default to HTTP and hang at `initialize` when a client speaks stdio to them. Append `--http=false` after the image name for such a tag. Later images infer the transport from stdin, so `docker run -i` is enough and no extra argument is needed.
+
+Nothing installed at all: https://mcp.jmrp.io/gitlab is a public instance of this server, fixed to https://gitlab.com and serving the default dynamic surface over stateless streamable HTTP. An OAuth-capable client needs no header and discovers the authorization server from the RFC 9728 challenge; any other client sends a GitLab.com token as `Authorization: Bearer <token>`, verified per request and never stored. It is one person's personal service with no SLA, so deploy your own for anything that matters.
+
+The exact config-file path and JSON schema for each client (VS Code with GitHub Copilot, Claude Code, Claude Desktop, Cursor, OpenAI Codex CLI, Gemini CLI, LM Studio, mcp-remote, GitLab Duo Agent Platform, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/ide-configuration.md).
 
 Running the binary by hand:
 
-- With no `GITLAB_TOKEN` and a terminal attached, the server prints what it needs and waits for Enter rather than starting a session it cannot serve. An MCP client never reaches that screen, because a client connects pipes rather than a terminal.
-- Keeping the token out of client config: put `GITLAB_URL` and `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env`, which the server reads when they are not already in its environment.
+- Without both `GITLAB_URL` and `GITLAB_TOKEN`, and with a terminal attached, the server prints what it needs on stderr and waits for Enter rather than starting a session it cannot serve. An MCP client never reaches that screen, because a client connects pipes rather than a terminal.
+- Keeping the token out of client config: put `GITLAB_URL` and `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env`, or in the one file `GITLAB_MCP_ENV_FILE` names (give it an absolute path). Precedence, highest first: the process environment, then `GITLAB_MCP_ENV_FILE`, then the home file. A `.env` in the working directory is deliberately not loaded, only reported at WARN with the keys it wanted to set.
 - Updating: use whichever channel installed it. The server never replaces its own binary.
 
-Configuration (environment variables, stdio mode):
+Configuration (environment variables, stdio mode). Settings this project defines are read as GITLAB_MCP_<NAME>; the older bare spellings still work and warn once at startup:
 
 - GITLAB_URL: GitLab instance URL (default: `https://gitlab.com`; set for self-managed instances)
 - GITLAB_TOKEN: Personal Access Token (required)
 - GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)
-- GITLAB_MCP_TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic
-- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs
+- GITLAB_MCP_TOOL_SURFACE: Canonical catalog selector: dynamic (default), meta, individual
 - GITLAB_MCP_CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)
+- GITLAB_READ_ONLY: Remove mutating operations per action; reads keep working (default: false)
+- GITLAB_SAFE_MODE: Answer a mutating action with a JSON preview naming it instead of running it; reads keep working (default: false). GITLAB_READ_ONLY takes precedence
 - GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools
+- GITLAB_MCP_LOG_LEVEL: debug, info (default), warn, error. Logs go to stderr; stdout carries nothing but JSON-RPC
+- GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path
+- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs
 
 Tool domains:
 
@@ -197,7 +207,10 @@ Prompts:
 
 ## Documentation
 
+- [Documentation site index](https://jmrp.io/docs/gitlab-mcp-server/llms.txt): Index of every published documentation page, which is what the documentation domain serves at /llms.txt
+- [Spanish documentation index](https://jmrp.io/docs/gitlab-mcp-server/es/llms.txt): The same documentation in Spanish, page for page
 - [Getting started](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md): Installation and first-run guide
+- [Installation](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/installation.md): Every install channel with its exact command, and how each one upgrades
 - [Claude Desktop extension](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/claude-desktop-extension.md): One-click .mcpb install for Claude Desktop (macOS universal + Windows)
 - [Configuration](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/configuration.md): Full configuration reference
 - [Environment variables](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/env.md): Environment variable reference
@@ -216,11 +229,11 @@ Prompts:
 
 ## Optional
 
-- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): Every tool and action with descriptions, without per-action schemas. Sized to load into a context window
-- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): Complete reference with every per-action JSON schema; large, best used with search or retrieval
-- [Meta-tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt): Full schemas for the dynamic and meta-tool surfaces only
-- [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): Full schemas for the one-tool-per-operation surface only
-- [Resources and prompts reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-resources-prompts.txt): MCP resource and prompt definitions only
+- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): 150 KB, ~38k tokens. Every tool and action with its description, without the per-action JSON schemas. The largest of these that still loads into a context window
+- [Meta-tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt): 2.0 MB, ~532k tokens. Full schemas for the dynamic and meta-tool surfaces only
+- [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): 864 KB, ~221k tokens. Full schemas for the one-tool-per-operation surface only
+- [Resources and prompts reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-resources-prompts.txt): 29 KB, ~7k tokens. MCP resource and prompt definitions only
+- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 2.9 MB, ~760k tokens. The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead
 - [Architecture](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md): Internal architecture and catalog-first runtime overview
 - [Output format](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/output-format.md): Markdown and structured output conventions
 - [Troubleshooting](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md): Common setup and runtime issues
