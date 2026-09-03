@@ -460,9 +460,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |     1,020 |     215,173 |
-| Unit tests (`_test.go`)  |       592 |     353,338 |
+| Unit tests (`_test.go`)  |       592 |     353,339 |
 | End-to-end tests         |       215 |      58,596 |
-| **Total**                | **1,827** | **627,107** |
+| **Total**                | **1,827** | **627,108** |
 
 ### Functions
 
@@ -508,7 +508,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Record              | File                                   |
 | ------------------- | -------------------------------------- |
 | Longest source file | `cmd/server/main.go`. 4,065 lines      |
-| Longest test file   | `cmd/server/main_test.go`. 8,643 lines |
+| Longest test file   | `cmd/server/main_test.go`. 8,644 lines |
 
 ### Because why not
 
