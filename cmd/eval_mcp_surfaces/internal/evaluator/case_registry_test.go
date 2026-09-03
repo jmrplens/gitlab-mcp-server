@@ -361,21 +361,106 @@ func TestDestructiveEvalCases_DestructiveStepsRequireConfirm(t *testing.T) {
 	}
 }
 
-// TestValidateEvalCaseRegistry_BuiltInCatalog_ReportsOnlyDuplicateIDs
-// verifies the exported validator runs over the shipped catalog and that the
-// only structural complaint it has is a set of case IDs reused across
-// partitions (for example MT-110, which names both a read case and a
-// destructive one). Every other class of defect — empty prompts, missing
-// steps, unknown presets or partitions, destructive steps without confirm,
-// misplaced optional steps — must stay absent, so a new one fails here.
-func TestValidateEvalCaseRegistry_BuiltInCatalog_ReportsOnlyDuplicateIDs(t *testing.T) {
-	problems := ValidateEvalCaseRegistry(nil)
-	for _, problem := range problems {
+// TestValidateEvalCaseRegistry_BuiltInCatalog_ReportsNoProblems verifies the
+// exported validator runs over the shipped catalog and finds nothing to
+// complain about at all: no duplicate IDs, and no empty prompts, missing
+// steps, unknown presets or partitions, destructive steps without confirm or
+// misplaced optional steps either.
+//
+// This assertion used to accept duplicate-ID problems and reject every other
+// kind, which let thirteen known collisions
+// (https://github.com/jmrplens/gitlab-mcp-server/issues/361) sit in the
+// catalog while still failing the build on any other defect. The exemption is
+// gone, so a reused ID now fails here like anything else.
+func TestValidateEvalCaseRegistry_BuiltInCatalog_ReportsNoProblems(t *testing.T) {
+	for _, problem := range ValidateEvalCaseRegistry(nil) {
 		t.Run(problem, func(t *testing.T) {
-			if !strings.HasSuffix(problem, " has duplicate ID") {
-				t.Fatalf("ValidateEvalCaseRegistry(nil) reported %q, want only duplicate-ID problems", problem)
+			t.Errorf("ValidateEvalCaseRegistry(nil) reported %q, want no problems", problem)
+		})
+	}
+}
+
+// TestAllEvalCases_BuiltInCatalog_HasNoDuplicateIDs verifies no two shipped
+// cases share an ID, asserted directly against the catalog rather than through
+// the validator, so weakening the validator cannot hide a collision here.
+//
+// Partitions and case sets are not namespaces: [All] concatenates them into
+// one slice and every consumer keys on the bare ID. The failure names each
+// colliding case with its partition and prompt, because the useful question
+// when this breaks is which two cases claimed the number.
+func TestAllEvalCases_BuiltInCatalog_HasNoDuplicateIDs(t *testing.T) {
+	casesByID := map[EvalCaseID][]EvalCase{}
+	var collidingIDs []EvalCaseID
+	for _, evalCase := range AllEvalCases() {
+		if len(casesByID[evalCase.ID]) == 1 {
+			collidingIDs = append(collidingIDs, evalCase.ID)
+		}
+		casesByID[evalCase.ID] = append(casesByID[evalCase.ID], evalCase)
+	}
+	for _, id := range collidingIDs {
+		t.Run(string(id), func(t *testing.T) {
+			for _, evalCase := range casesByID[id] {
+				t.Logf("partition %q: %s", evalCase.Partition, casePrompt(evalCase))
+			}
+			t.Errorf("case ID %s names %d cases, want 1", id, len(casesByID[id]))
+		})
+	}
+}
+
+// TestCaseByID_BuiltInCatalog_ResolvesEveryCase verifies every shipped case is
+// reachable by its own ID.
+//
+// CaseByID returns the first match, so a duplicate does not fail the lookup,
+// it hides the later case behind the earlier one. This test fails on the
+// hidden case rather than on the duplication itself, which is the symptom a
+// caller of CaseByID or --task actually experiences: MT-110 used to resolve to
+// a merge-request listing while an award-emoji deletion sharing the number was
+// unreachable.
+func TestCaseByID_BuiltInCatalog_ResolvesEveryCase(t *testing.T) {
+	for _, evalCase := range AllEvalCases() {
+		t.Run(string(evalCase.ID), func(t *testing.T) {
+			resolved, ok := CaseByID(string(evalCase.ID))
+			if !ok {
+				t.Fatalf("CaseByID(%q) ok = false, want true", evalCase.ID)
+			}
+			if got, want := casePrompt(resolved), casePrompt(evalCase); got != want {
+				t.Errorf("CaseByID(%q) resolved to %q, want %q; the case is shadowed by another with the same ID", evalCase.ID, got, want)
 			}
 		})
+	}
+}
+
+// TestValidateEvalCaseRegistry_DuplicateIDAcrossPartitions_ReportsProblem
+// verifies a reused ID is reported even when the two cases sit in different
+// partitions and target different editions.
+//
+// That is the exact shape of the thirteen collisions the catalog used to
+// carry: a CE read case and a destructive or Enterprise case sharing one
+// number. A differing partition does not make the reuse safe, because no
+// consumer of a case ID carries the partition alongside it, so the validator
+// must not treat this pair as a special case.
+func TestValidateEvalCaseRegistry_DuplicateIDAcrossPartitions_ReportsProblem(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": {}}}
+	step := []ExpectedStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}}
+	cases := []EvalCase{
+		{
+			ID:        "MT-110",
+			Prompt:    "List merged merge requests.",
+			Steps:     step,
+			Edition:   EvalCaseEdition(editionCE),
+			Partition: EvalPartition(partitionBaseRead),
+		},
+		{
+			ID:        "MT-110",
+			Prompt:    "Force-push remote mirror ID 9.",
+			Steps:     step,
+			Edition:   EvalCaseEdition(editionEnterprise),
+			Partition: EvalPartition(partitionEnterpriseDestructive),
+		},
+	}
+	problems := validateEvalCaseRegistry(cases, routes)
+	if !slices.Contains(problems, "MT-110 has duplicate ID") {
+		t.Fatalf("problems = %v, want to contain %q", problems, "MT-110 has duplicate ID")
 	}
 }
 

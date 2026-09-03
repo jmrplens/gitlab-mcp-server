@@ -37,6 +37,14 @@ func CasesByPreset(preset string) []EvalCase {
 }
 
 // ValidateEvalCaseRegistry validates the migrated typed evaluation registry.
+//
+// Case IDs are unique across the whole catalog, with no exception for cases
+// that live in different partitions or different case sets. Nothing downstream
+// carries a partition alongside the ID that would let it tell two same-named
+// cases apart: [CaseByID] returns the first match and hides the rest, the
+// --task flag selects every case with a matching ID, and report rows are
+// labeled by ID alone. A duplicate is therefore reported unconditionally,
+// never downgraded to a warning for a known pair.
 func ValidateEvalCaseRegistry(routes map[string]toolutil.ActionMap) []string {
 	return validateEvalCaseRegistry(AllEvalCases(), routes)
 }
