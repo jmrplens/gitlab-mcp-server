@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -379,9 +380,12 @@ func TestDeferredIdentity_Middleware_OverlaysTheCallerOnceStartupResolvesIt(t *t
 // new credential.
 //
 // It is a test rather than a Benchmark so it runs in the ordinary suite and
-// reports its numbers, and it asserts only the ordering it exists to
-// establish. Absolute timings vary per machine, so nothing here fails on a
-// duration.
+// reports its numbers, and it asserts nothing about them. Elapsed time is not a
+// correctness invariant: a warm registration or a busy host can reorder the two
+// halves without anything being wrong, so an assertion here would fail the
+// ordinary suite for a machine rather than for a defect. What the split is
+// evidence FOR is proven where it can be: test/e2e/http/readiness_test.go
+// drives a real client and holds the handshake to a wall-clock ceiling.
 func TestPoolEntryCost_SplitsShellFromRegistration(t *testing.T) {
 	mock := newMockGitLabServer(t)
 	client, err := gitlabclient.NewClient(&config.Config{
@@ -420,12 +424,6 @@ func TestPoolEntryCost_SplitsShellFromRegistration(t *testing.T) {
 			t.Logf("%s surface: shell %v, registration %v (%.0f%% of the build is registration)",
 				s.name, shellCost.Round(time.Millisecond), registerCost.Round(time.Millisecond),
 				100*float64(registerCost)/float64(shellCost+registerCost))
-
-			if registerCost <= shellCost {
-				t.Errorf("registration (%v) did not dominate the shell (%v); "+
-					"if this ever holds, deferring registration buys nothing and the gate should go",
-					registerCost, shellCost)
-			}
 		})
 	}
 }
@@ -452,6 +450,20 @@ func TestReadinessGate_MarkFailed_ReleasesWaitersWithAnErrorRatherThanAnEmptyCat
 	case err := <-released:
 		if err == nil {
 			t.Fatal("await() returned no error after a failed registration, so the caller would be served an empty catalog")
+		}
+		// Not merely non-nil: a deadline expiring would also be non-nil, and
+		// would mean the waiter was held until its own timeout rather than
+		// told. The gate answers a refusal that says to retry, so that is what
+		// this asserts.
+		var rpcErr *jsonrpc.Error
+		if !errors.As(err, &rpcErr) {
+			t.Fatalf("await() returned %T, want the gate's own refusal", err)
+		}
+		if rpcErr.Code != codeServerBusy {
+			t.Errorf("await() answered code %d, want %d (server busy)", rpcErr.Code, codeServerBusy)
+		}
+		if !strings.Contains(rpcErr.Message, "retry") {
+			t.Errorf("the refusal %q does not tell the caller to retry", rpcErr.Message)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("await() never returned after markFailed; a failure has to reach the requests parked on the gate")
