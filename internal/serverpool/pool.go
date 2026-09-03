@@ -179,6 +179,13 @@ type ServerPool struct {
 	// build, so a client opening several connections at once costs one set of
 	// upstream lookups rather than one per connection.
 	building singleflight.Group
+	// probes bounds how many credential probes may be in flight at once. See
+	// [maxConcurrentCredentialProbes]; nil means unbounded, which only a pool
+	// built outside [New] can be.
+	probes chan struct{}
+	// probeQueueTimeout is how long a build waits for one of those slots,
+	// defaulting to [credentialProbeQueueTimeout].
+	probeQueueTimeout time.Duration
 	// baseContext supplies the lifetime that bounds the GitLab lookups which
 	// build an entry — the credential probe, tier and scope discovery,
 	// identity resolution.
@@ -303,6 +310,8 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		maxCredentialAge:   DefaultMaxCredentialAge,
 		createdAt:          time.Now(),
 		baseContext:        context.Background,
+		probes:             make(chan struct{}, maxConcurrentCredentialProbes),
+		probeQueueTimeout:  credentialProbeQueueTimeout,
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -450,7 +459,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 	}
 	client.SetTier(p.cfg.Tier)
 
-	if verifyErr := verifyCredential(p.lifetime(), client); verifyErr != nil {
+	if verifyErr := p.verifyUnderProbeBound(client); verifyErr != nil {
 		return nil, verifyErr
 	}
 
@@ -630,6 +639,93 @@ func verifyCredential(base context.Context, client *gitlabclient.Client) error {
 		return fmt.Errorf("%w", ErrInvalidCredential)
 	}
 	return nil
+}
+
+// maxConcurrentCredentialProbes is how many [verifyCredential] probes the pool
+// runs at once.
+//
+// The singleflight group collapses concurrent requests for the same credential,
+// so it bounds nothing here: every distinct token is a distinct key, and a
+// stream of invented ones is the whole shape of the attack. Each admitted key
+// costs one GET /user against the configured instance, so without a ceiling the
+// server relays an unauthenticated flood to GitLab at whatever rate it arrives,
+// amplified by nothing more than the cost of inventing a string.
+//
+// It is the measure that covers the distributed variant. The front door's
+// failure budgets bound one source at a time and need no header spoofing to
+// evade: enough sources each staying under the limit produce no blocked
+// request and any number of probes. This is on the other side of that, counting
+// work rather than callers.
+//
+// Sixteen: each probe is a single round trip with a five-second ceiling, so
+// sixteen in flight is a few requests per second of steady load against the
+// instance for credentials it has never seen, while a legitimate burst of new
+// clients drains through in well under a second at typical latencies.
+const maxConcurrentCredentialProbes = 16
+
+// credentialProbeQueueTimeout is how long a build waits for a probe slot.
+//
+// A bounded wait rather than an immediate refusal: the queue is only ever
+// contended by new credentials, so a legitimate burst should be served late
+// rather than refused, and the wait is short enough that a caller sees a
+// retryable answer well inside any sane client timeout.
+const credentialProbeQueueTimeout = 5 * time.Second
+
+// ErrCredentialProbeBusy reports that no credential probe slot came free in
+// time.
+//
+// It is deliberately not [ErrInvalidCredential]: nothing was learned about the
+// token, so the caller must map it to 503 and not to 401, and it must not be
+// charged to any authentication budget. Telling a client with a perfectly good
+// credential to reauthorize because the server was busy would be the same
+// conflation of causes the front door already avoids for pool failures.
+var ErrCredentialProbeBusy = errors.New("credential verification is saturated, retry shortly")
+
+// acquireProbeSlot takes one of the [maxConcurrentCredentialProbes] slots,
+// returning the function that gives it back.
+//
+// The wait is bounded by [credentialProbeQueueTimeout] and by the pool's
+// lifetime, so a shutdown does not leave builds parked on a queue that will
+// never move.
+func (p *ServerPool) acquireProbeSlot() (func(), error) {
+	if p.probes == nil {
+		return func() {}, nil
+	}
+	wait := p.probeQueueTimeout
+	if wait <= 0 {
+		wait = credentialProbeQueueTimeout
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case p.probes <- struct{}{}:
+		var once sync.Once
+		return func() { once.Do(func() { <-p.probes }) }, nil
+	case <-p.lifetime().Done():
+		return nil, fmt.Errorf("pool shutting down, not verifying credential: %w", p.lifetime().Err())
+	case <-timer.C:
+		slog.Warn("credential verification queue is saturated",
+			"in_flight", maxConcurrentCredentialProbes,
+			"waited", wait,
+		)
+		return nil, ErrCredentialProbeBusy
+	}
+}
+
+// verifyUnderProbeBound runs [verifyCredential] holding one of the pool's probe
+// slots.
+//
+// The release is deferred rather than called after the probe returns: a panic
+// escaping the client would otherwise retire a slot permanently, and a ceiling
+// that only ever shrinks ends up refusing every new credential on a server that
+// is otherwise healthy.
+func (p *ServerPool) verifyUnderProbeBound(client *gitlabclient.Client) error {
+	release, err := p.acquireProbeSlot()
+	if err != nil {
+		return err
+	}
+	defer release()
+	return verifyCredential(p.lifetime(), client)
 }
 
 // credentialCheckTimeout bounds the GET /user probe in verifyCredential. It

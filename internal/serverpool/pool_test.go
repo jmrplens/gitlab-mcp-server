@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2318,5 +2319,208 @@ func TestEvictServer_AServerThePoolDoesNotHold_IsReportedRatherThanGuessedAt(t *
 	}
 	if pool.Size() != 1 {
 		t.Errorf("pool.Size() = %d, want the untouched entry to survive", pool.Size())
+	}
+}
+
+// blockingGitLabStub answers every request only once release is closed, and
+// reports the highest number of requests it ever held at the same time.
+//
+// It is how the concurrency ceiling is observed: the pool's credential probe is
+// a single GET, so "probes in flight" and "requests this stub is holding" are
+// the same number.
+type blockingGitLabStub struct {
+	server   *httptest.Server
+	release  chan struct{}
+	inside   atomic.Int64
+	peak     atomic.Int64
+	entered  chan struct{}
+	released sync.Once
+}
+
+// releaseAll unblocks every held request. It is safe to call more than once,
+// which matters because a test releases explicitly and t.Cleanup releases again
+// on the way out.
+func (s *blockingGitLabStub) releaseAll() {
+	s.released.Do(func() { close(s.release) })
+}
+
+// newBlockingGitLabStub starts the stub. Callers must close its release
+// channel, which t.Cleanup does, or every held request leaks until the test
+// binary exits.
+func newBlockingGitLabStub(t *testing.T) *blockingGitLabStub {
+	t.Helper()
+	stub := &blockingGitLabStub{
+		release: make(chan struct{}),
+		entered: make(chan struct{}, 1024),
+	}
+	stub.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		now := stub.inside.Add(1)
+		for {
+			high := stub.peak.Load()
+			if now <= high || stub.peak.CompareAndSwap(high, now) {
+				break
+			}
+		}
+		select {
+		case stub.entered <- struct{}{}:
+		default:
+		}
+		select {
+		case <-stub.release:
+		case <-r.Context().Done():
+		}
+		stub.inside.Add(-1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}))
+	t.Cleanup(func() {
+		stub.releaseAll()
+		stub.server.Close()
+	})
+	return stub
+}
+
+// waitForRequests blocks until n requests have reached the handler, or fails
+// the test if they do not arrive in time.
+func (s *blockingGitLabStub) waitForRequests(t *testing.T, n int) {
+	t.Helper()
+	deadline := time.After(10 * time.Second)
+	for range n {
+		select {
+		case <-s.entered:
+		case <-deadline:
+			t.Fatalf("only %d of %d probes reached GitLab", s.inside.Load(), n)
+		}
+	}
+}
+
+// TestGetOrCreate_BoundsConcurrentCredentialProbes verifies the pool never has
+// more than maxConcurrentCredentialProbes credential probes in flight.
+//
+// The singleflight group collapses concurrent requests for the same credential
+// and therefore bounds nothing here: every invented token is a distinct key, so
+// before the ceiling existed an unauthenticated flood of them was relayed to
+// the configured GitLab instance one probe per token, at whatever rate it
+// arrived. This is the measure that covers the distributed variant of that,
+// where each source stays under the front door's failure budget and no request
+// is ever blocked.
+func TestGetOrCreate_BoundsConcurrentCredentialProbes(t *testing.T) {
+	stub := newBlockingGitLabStub(t)
+	cfg := testConfig(stub.server.URL)
+	pool := New(cfg, testFactory())
+
+	const callers = maxConcurrentCredentialProbes * 3
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Go(func() {
+			// Distinct token per caller, so singleflight collapses nothing and
+			// each one is a separate probe.
+			_, _ = pool.GetOrCreate("glpat-flood-"+strconv.Itoa(i), stub.server.URL)
+		})
+	}
+
+	stub.waitForRequests(t, maxConcurrentCredentialProbes)
+	// Give any unbounded surplus a chance to arrive before reading the peak, so
+	// a passing result means the ceiling held rather than that the test looked
+	// early.
+	time.Sleep(200 * time.Millisecond)
+	peak := stub.peak.Load()
+
+	stub.releaseAll()
+	wg.Wait()
+
+	if peak > maxConcurrentCredentialProbes {
+		t.Errorf("peak concurrent credential probes = %d, want at most %d", peak, maxConcurrentCredentialProbes)
+	}
+	if peak == 0 {
+		t.Error("no credential probe reached GitLab; the test observed nothing")
+	}
+}
+
+// TestGetOrCreate_SaturatedProbeQueueIsRetryableNotUnauthorized verifies what a
+// caller is told when every probe slot is taken.
+//
+// The distinction is the whole point of the separate error. Nothing was learned
+// about the credential, so answering 401 would tell a client holding a
+// perfectly good token to reauthorize because the server was busy, and would
+// charge the failure to an authentication budget that exists to count rejected
+// credentials. ErrCredentialProbeBusy is neither ErrInvalidCredential nor
+// wrapped around it, so the HTTP gate's own branch maps it to 503.
+func TestGetOrCreate_SaturatedProbeQueueIsRetryableNotUnauthorized(t *testing.T) {
+	stub := newBlockingGitLabStub(t)
+	cfg := testConfig(stub.server.URL)
+	pool := New(cfg, testFactory(), func(p *ServerPool) {
+		p.probeQueueTimeout = 50 * time.Millisecond
+	})
+
+	var wg sync.WaitGroup
+	for i := range maxConcurrentCredentialProbes {
+		wg.Go(func() {
+			_, _ = pool.GetOrCreate("glpat-holder-"+strconv.Itoa(i), stub.server.URL)
+		})
+	}
+	stub.waitForRequests(t, maxConcurrentCredentialProbes)
+
+	_, err := pool.GetOrCreate("glpat-latecomer", stub.server.URL)
+
+	stub.releaseAll()
+	wg.Wait()
+
+	if !errors.Is(err, ErrCredentialProbeBusy) {
+		t.Fatalf("GetOrCreate() error = %v, want ErrCredentialProbeBusy", err)
+	}
+	if errors.Is(err, ErrInvalidCredential) {
+		t.Error("a saturated probe queue must not read as a rejected credential")
+	}
+}
+
+// TestAcquireProbeSlot_ShutdownDoesNotWaitOutTheQueue verifies a pool whose
+// lifetime has ended stops waiting immediately instead of parking a build on a
+// queue that will never move.
+func TestAcquireProbeSlot_ShutdownDoesNotWaitOutTheQueue(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	pool := New(testConfig(stubGitLabBase), testFactory(), func(p *ServerPool) {
+		p.baseContext = func() context.Context { return ctx }
+		p.probeQueueTimeout = time.Hour
+	})
+	for range maxConcurrentCredentialProbes {
+		if _, err := pool.acquireProbeSlot(); err != nil {
+			t.Fatalf("acquireProbeSlot() unexpected error: %v", err)
+		}
+	}
+	cancel()
+
+	start := time.Now()
+	release, err := pool.acquireProbeSlot()
+	if err == nil {
+		release()
+		t.Fatal("acquireProbeSlot() error = nil, want the shutdown error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("acquireProbeSlot() error = %v, want it to wrap context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("acquireProbeSlot() waited %v after shutdown, want it to return at once", elapsed)
+	}
+}
+
+// TestAcquireProbeSlot_ReleaseIsIdempotent verifies the returned release
+// function gives the slot back exactly once.
+//
+// A release called twice would return a slot the pool never took, raising the
+// effective ceiling by one every time it happened until the bound meant
+// nothing.
+func TestAcquireProbeSlot_ReleaseIsIdempotent(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), testFactory())
+
+	release, err := pool.acquireProbeSlot()
+	if err != nil {
+		t.Fatalf("acquireProbeSlot() unexpected error: %v", err)
+	}
+	release()
+	release()
+
+	if got := len(pool.probes); got != 0 {
+		t.Errorf("slots held after a double release = %d, want 0", got)
 	}
 }
