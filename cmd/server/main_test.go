@@ -1257,6 +1257,7 @@ func TestPrintHelp_Transport_NamesEverySelectorAndThePrecedence(t *testing.T) {
 		{name: "http is named", want: transportHTTP},
 		{name: "auto is named", want: transportAuto},
 		{name: "the precedence over -http is stated", want: "defers to -http"},
+		{name: "and which of the two wins when both are given", want: "given both, -transport wins"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if !strings.Contains(entry, tc.want) {
