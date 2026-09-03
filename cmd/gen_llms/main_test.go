@@ -1368,9 +1368,11 @@ func TestReferenceSizes_MeasuresEveryRenderedFile(t *testing.T) {
 		t.Fatalf("referenceSizes() = %v, want %d entries", sizes, len(want))
 	}
 	for name, size := range want {
-		if sizes[name] != size {
-			t.Errorf("referenceSizes()[%q] = %d, want %d", name, sizes[name], size)
-		}
+		t.Run(name, func(t *testing.T) {
+			if sizes[name] != size {
+				t.Errorf("referenceSizes()[%q] = %d, want %d", name, sizes[name], size)
+			}
+		})
 	}
 }
 
