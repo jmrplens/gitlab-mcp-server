@@ -8680,3 +8680,318 @@ func TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger(t *testing.T) {
 		})
 	}
 }
+
+// TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure
+// pins that a connection which has not gone idle when the process context is
+// cancelled costs a forced close, not a failed shutdown.
+//
+// The failure this replaces is the one that made "the five second bound is too
+// tight under CI load" look like a load problem. A tool call waiting on GitLab
+// keeps its connection out of the idle state [http.Server.Shutdown] waits for,
+// so the drain budget runs out however large it is, and until now that was
+// returned as "http server shutdown: context deadline exceeded" — exit 1, a
+// failed unit to a supervisor and a broken build to CI, for one straggler
+// connection that process exit was about to drop anyway.
+//
+// The GitLab stand-in never answers the project list, which is what holds the
+// handler. The pool entry is warmed first on purpose: entry construction is
+// bounded by the serve context, so a request still building one would abort at
+// cancellation instead of holding the drain, and the test would prove nothing.
+//
+// The serve context states a drain budget of its own, which is also what keeps
+// the test to a few seconds rather than the full fifteen. It has to be armed
+// after the warm-up rather than declared up front, because that warm-up builds
+// a catalog and costs seconds on a plain run and an order of magnitude more
+// under the race detector: a deadline picked before it would expire during
+// setup on exactly the slow runners this has to survive.
+func TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure(t *testing.T) {
+	var enteredOnce, releaseOnce sync.Once
+	entered := make(chan struct{})
+	release := make(chan struct{})
+
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/version":
+			w.Header().Set(hdrContentType, mimeJSON)
+			_, _ = w.Write([]byte(`{"version":"16.0.0","revision":"test"}`))
+		case strings.HasPrefix(r.URL.Path, "/api/v4/projects"):
+			enteredOnce.Do(func() { close(entered) })
+			<-release
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	// Registered after the server's own close so it runs before it: Close
+	// waits for outstanding requests, and the handler above is one.
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+
+	inner, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx := &armedDeadlineContext{Context: inner}
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, statelessTestConfig(gitlab.URL, true), addr, listener, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	warm := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	warm.Body.Close()
+
+	callDone := make(chan struct{})
+	go func() {
+		defer close(callDone)
+		body := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"gitlab_execute_action",` +
+			`"arguments":{"action":"project.list","params":{}}}}`
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodPost,
+			"http://"+addr, strings.NewReader(body))
+		if reqErr != nil {
+			t.Errorf("build the tool call that shutdown must find in flight: %v", reqErr)
+			return
+		}
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		req.Header.Set("PRIVATE-TOKEN", testToken)
+		if resp, doErr := testHTTPClient.Do(req); doErr == nil {
+			resp.Body.Close()
+		}
+	}()
+	t.Cleanup(func() { <-callDone })
+
+	select {
+	case <-entered:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("the tool call never reached the GitLab stand-in, so no request was in flight at shutdown")
+	}
+
+	const budget = 2 * time.Second
+	ctx.arm(time.Now().Add(budget))
+	start := time.Now()
+	cancel()
+	select {
+	case serveErr := <-errCh:
+		if serveErr != nil {
+			t.Fatalf("serveHTTPOn() = %v after %s, want a clean stop: a connection that has not gone idle is not a process failure",
+				serveErr, time.Since(start))
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatalf("serveHTTPOn() did not return within %s of cancellation", testHTTPLivenessTimeout)
+	}
+	// The stated budget is what bounded the drain, not httpShutdownTimeout:
+	// with the constant in charge this is the full fifteen seconds.
+	if elapsed := time.Since(start); elapsed >= httpShutdownTimeout {
+		t.Errorf("the drain took %s with a stated budget of %s, want the caller's budget to bound it",
+			elapsed, budget)
+	}
+}
+
+// armedDeadlineContext is a context that gains a deadline when the test arms
+// it, and never fires [context.Context.Done] because of it.
+//
+// It exists for the one shape in which a caller-stated drain budget is
+// meaningful: a deadline still in the future when cancellation ends the
+// serving. A plain [context.WithTimeout] cannot express it in a test whose
+// setup cost varies by an order of magnitude, since the deadline would have to
+// be picked before the setup it must outlast.
+type armedDeadlineContext struct {
+	context.Context //nolint:containedctx // a context decorator, which is what this is
+
+	mu       sync.Mutex
+	deadline time.Time
+}
+
+// arm sets the deadline the context reports from now on.
+func (c *armedDeadlineContext) arm(at time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.deadline = at
+}
+
+// Deadline reports the armed deadline, and none until arm is called.
+func (c *armedDeadlineContext) Deadline() (time.Time, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.deadline, !c.deadline.IsZero()
+}
+
+// TestShutdownHTTPServer_CallersDeadline_BoundsTheDrain pins that the drain
+// budget comes from the caller's deadline when the caller stated a tighter one,
+// which is the rule [telemetry.Provider.Shutdown] follows.
+//
+// Both cases hold a request in flight, so the budget is genuinely spent rather
+// than short-circuited by an idle server, and both must end without an error.
+// The elapsed time is what says whose budget was used: [httpShutdownTimeout] is
+// fifteen seconds, so a run that honors the caller finishes in a fraction of
+// that, and a deadline already in the past skips the drain altogether.
+func TestShutdownHTTPServer_CallersDeadline_BoundsTheDrain(t *testing.T) {
+	cases := []struct {
+		name      string
+		remaining time.Duration
+		atLeast   time.Duration
+		atMost    time.Duration
+	}{
+		{
+			name:      "tighter than the default",
+			remaining: time.Second,
+			atLeast:   500 * time.Millisecond,
+			atMost:    8 * time.Second,
+		},
+		{
+			name:      "already passed",
+			remaining: -time.Second,
+			atLeast:   0,
+			atMost:    5 * time.Second,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			httpServer := blockedHTTPServer(t)
+
+			// The serve context is always done by the time the drain starts,
+			// which is exactly what makes a past deadline reachable here.
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(tc.remaining))
+			cancel()
+
+			start := time.Now()
+			if err := shutdownHTTPServer(ctx, httpServer); err != nil {
+				t.Fatalf("shutdownHTTPServer() = %v, want a clean stop", err)
+			}
+			elapsed := time.Since(start)
+			if elapsed < tc.atLeast || elapsed > tc.atMost {
+				t.Errorf("drain took %s, want between %s and %s: the budget did not come from the caller",
+					elapsed, tc.atLeast, tc.atMost)
+			}
+		})
+	}
+}
+
+// TestShutdownHTTPServer_NothingInFlight_ReturnsWithoutSpendingTheBudget pins
+// that a clean drain costs nothing, which is why the size of the default budget
+// is not a service-level objective: an idle server stops in milliseconds on any
+// runner, quick or slow.
+func TestShutdownHTTPServer_NothingInFlight_ReturnsWithoutSpendingTheBudget(t *testing.T) {
+	httpServer := newHTTPServer("", http.NotFoundHandler(), defaultHTTPIdleTimeout)
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	go func() { _ = httpServer.Serve(listener) }()
+
+	start := time.Now()
+	if shutdownErr := shutdownHTTPServer(t.Context(), httpServer); shutdownErr != nil {
+		t.Fatalf("shutdownHTTPServer() = %v, want a clean stop", shutdownErr)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("draining an idle server took %s, want a prompt return", elapsed)
+	}
+}
+
+// TestHTTPShutdownBudget_TakesTheSmallerOfTheDefaultAndTheCallersDeadline
+// verifies the arithmetic on its own, with no server to drain.
+//
+// The non-positive case is the one worth pinning: a deadline in the past is
+// honored literally rather than clamped back up to the default, because the
+// drain escalates to a forced close instead of reporting a failure, so a caller
+// with no time left gets exactly that.
+func TestHTTPShutdownBudget_TakesTheSmallerOfTheDefaultAndTheCallersDeadline(t *testing.T) {
+	cases := []struct {
+		name      string
+		ctx       context.Context //nolint:containedctx // the input under test
+		wantExact time.Duration
+		wantRange [2]time.Duration
+	}{
+		{name: "no deadline", ctx: context.Background(), wantExact: httpShutdownTimeout},
+		{
+			name:      "deadline beyond the default",
+			ctx:       cancelledDeadlineContext(t, httpShutdownTimeout+time.Minute),
+			wantExact: httpShutdownTimeout,
+		},
+		{
+			name:      "deadline inside the default",
+			ctx:       cancelledDeadlineContext(t, 2*time.Second),
+			wantRange: [2]time.Duration{time.Second, 2 * time.Second},
+		},
+		{
+			name:      "deadline already passed",
+			ctx:       cancelledDeadlineContext(t, -time.Second),
+			wantRange: [2]time.Duration{-time.Hour, 0},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := httpShutdownBudget(tc.ctx)
+			if tc.wantExact != 0 {
+				if got != tc.wantExact {
+					t.Errorf("httpShutdownBudget() = %s, want %s", got, tc.wantExact)
+				}
+				return
+			}
+			if got < tc.wantRange[0] || got > tc.wantRange[1] {
+				t.Errorf("httpShutdownBudget() = %s, want between %s and %s", got, tc.wantRange[0], tc.wantRange[1])
+			}
+		})
+	}
+}
+
+// cancelledDeadlineContext returns a context whose deadline is the given
+// distance from now, already cancelled so it matches the state the drain sees:
+// the serve context is done before the budget is ever computed.
+func cancelledDeadlineContext(t *testing.T, in time.Duration) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(in))
+	cancel()
+	return ctx
+}
+
+// blockedHTTPServer starts an [http.Server] on a loopback listener with a
+// handler that never returns, and comes back only once a request is provably in
+// flight, so draining it is guaranteed to spend the whole budget.
+func blockedHTTPServer(t *testing.T) *http.Server {
+	t.Helper()
+
+	var enteredOnce sync.Once
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	httpServer := newHTTPServer("", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		enteredOnce.Do(func() { close(entered) })
+		<-release
+	}), defaultHTTPIdleTimeout)
+
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	go func() { _ = httpServer.Serve(listener) }()
+
+	callDone := make(chan struct{})
+	// Registered before the release so it runs after it: the handler cannot
+	// return, and so the request cannot finish, until release is closed.
+	t.Cleanup(func() { <-callDone })
+	t.Cleanup(func() { close(release) })
+
+	go func() {
+		defer close(callDone)
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet,
+			"http://"+listener.Addr().String(), nil)
+		if reqErr != nil {
+			t.Errorf("build the request that must be in flight during the drain: %v", reqErr)
+			return
+		}
+		if resp, doErr := testHTTPClient.Do(req); doErr == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("the blocking handler never ran, so nothing was in flight to drain")
+	}
+	return httpServer
+}
