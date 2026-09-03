@@ -3,8 +3,12 @@
 package gitlab
 
 import (
+	"bytes"
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -188,5 +192,137 @@ func TestCredentialSafeRedirect_DestinationWithoutHost(t *testing.T) {
 	}
 	if req.Header.Get("PRIVATE-TOKEN") != "" {
 		t.Error("PRIVATE-TOKEN survived a redirect to a URL with no host")
+	}
+}
+
+// captureRedirectLog redirects slog to a buffer for the duration of the test.
+func captureRedirectLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	return &buf
+}
+
+// TestCredentialSafeRedirect_RecordsTheHopThatLostTheHeaders verifies the
+// policy says so when it withholds credentials, and says it once.
+//
+// The policy used to be completely silent, which left an operator looking at a
+// 401 from object storage unable to tell a credential this server deliberately
+// withheld from a credential that was never valid. The two need opposite
+// responses, so the line is the difference between a diagnosable failure and a
+// guess.
+//
+// The assertions are about what the record may and may not carry as much as
+// about its presence. A presigned object-storage URL authenticates through its
+// query parameters, so recording the destination URL would write a working
+// credential to stderr while reporting that a credential was withheld; only the
+// host and the scheme are recorded. Header names appear, header values must not.
+func TestCredentialSafeRedirect_RecordsTheHopThatLostTheHeaders(t *testing.T) {
+	buf := captureRedirectLog(t)
+	policy := credentialSafeRedirect("https://gitlab.example.com")
+
+	req := newRedirectRequest(t, "https://storage.example.net/artifacts/1?X-Amz-Signature=deadbeefsignature")
+	if err := policy(req, nil); err != nil {
+		t.Fatalf("policy() unexpected error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("log lines = %d, want 1: %s", len(lines), buf.String())
+	}
+	var record map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+		t.Fatalf("decoding the log record: %v (raw: %s)", err, lines[0])
+	}
+
+	for _, want := range []struct{ field, value string }{
+		{"level", "INFO"},
+		{"msg", "dropped credential headers on redirect"},
+		{"instance_host", "gitlab.example.com"},
+		{"redirect_host", "storage.example.net"},
+		{"redirect_scheme", "https"},
+	} {
+		t.Run(want.field, func(t *testing.T) {
+			if got, _ := record[want.field].(string); got != want.value {
+				t.Errorf("%s = %q, want %q", want.field, got, want.value)
+			}
+		})
+	}
+	t.Run("names every header it dropped", func(t *testing.T) {
+		headers, _ := record["headers"].(string)
+		for _, name := range credentialHeaders {
+			if !strings.Contains(headers, name) {
+				t.Errorf("headers = %q, want it to name %s", headers, name)
+			}
+		}
+	})
+	t.Run("carries no credential value and no signed URL", func(t *testing.T) {
+		for _, secret := range []string{"glpat-test", "gloas-test", "job-test", "X-Amz-Signature", "deadbeefsignature"} {
+			if strings.Contains(buf.String(), secret) {
+				t.Errorf("log record leaked %q: %s", secret, buf.String())
+			}
+		}
+	})
+}
+
+// TestCredentialSafeRedirect_LogsTheDowngradeReasonSeparately verifies an
+// https-to-http hop on the configured host is reported as the downgrade it is
+// rather than as an off-instance hop. net/http's own policy does not treat a
+// downgrade as leaving the instance at all, so an operator reading
+// "host outside the configured instance" for a hop whose host did not change
+// would reasonably conclude the log was wrong and stop reading it.
+func TestCredentialSafeRedirect_LogsTheDowngradeReasonSeparately(t *testing.T) {
+	buf := captureRedirectLog(t)
+	policy := credentialSafeRedirect("https://gitlab.example.com")
+
+	req := newRedirectRequest(t, "http://gitlab.example.com/api/v4/projects")
+	if err := policy(req, nil); err != nil {
+		t.Fatalf("policy() unexpected error: %v", err)
+	}
+
+	var record map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &record); err != nil {
+		t.Fatalf("decoding the log record: %v (raw: %s)", err, buf.String())
+	}
+	if got, _ := record["reason"].(string); got != "redirect downgrades https to http" {
+		t.Errorf("reason = %q, want the downgrade reason", got)
+	}
+}
+
+// TestCredentialSafeRedirect_SaysNothingWhenNothingWasDropped verifies the two
+// silent cases: a hop that stays on the instance, and a later hop off it that
+// finds the headers already gone.
+//
+// The second is the one worth pinning. The policy runs per hop and the scope
+// test keeps failing for every hop after the first, so reporting on the test
+// rather than on the deletion would log the same withheld credential once per
+// redirect in a chain, which reads as several separate incidents.
+func TestCredentialSafeRedirect_SaysNothingWhenNothingWasDropped(t *testing.T) {
+	tests := []struct {
+		name string
+		dest string
+		bare bool // the request arrives with the credential headers already removed
+	}{
+		{name: "hop stays on the instance", dest: "https://gitlab.example.com/api/v4/projects"},
+		{name: "second hop off the instance", dest: "https://storage.example.net/artifacts/2", bare: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := captureRedirectLog(t)
+			req := newRedirectRequest(t, tt.dest)
+			if tt.bare {
+				for _, name := range credentialHeaders {
+					req.Header.Del(name)
+				}
+			}
+			if err := credentialSafeRedirect("https://gitlab.example.com")(req, nil); err != nil {
+				t.Fatalf("policy() unexpected error: %v", err)
+			}
+			if buf.Len() != 0 {
+				t.Errorf("log output = %q, want nothing", buf.String())
+			}
+		})
 	}
 }
