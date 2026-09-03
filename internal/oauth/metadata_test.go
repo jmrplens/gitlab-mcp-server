@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -248,4 +250,81 @@ func TestProtectedResourceHandler_OptionalLinksAreOmittedUnlessNamed(t *testing.
 			t.Errorf("resource_tos_uri = %v, want it omitted; a deployment may have one page and not the other", value)
 		}
 	})
+}
+
+// TestMetadataPathFor_DerivesTheOnePathTheDocumentIsServedOn verifies the path
+// a deployment mounts its protected-resource document on, which is the path
+// component of the URL its challenge advertises and nothing wider.
+//
+// Two properties matter beyond the arithmetic. A resource that carries a path
+// derives a path-suffixed metadata URL and must NOT also answer the bare
+// well-known path, which belongs to the resource at the host root: answering it
+// is how one MCP server on a shared host speaks for its neighbors. And the
+// derived path must never end in a slash, because it is mounted as an
+// http.ServeMux pattern and a trailing slash there means "everything below
+// this", which is the wildcard this derivation exists to remove.
+func TestMetadataPathFor_DerivesTheOnePathTheDocumentIsServedOn(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		resource string
+		want     string
+	}{
+		{"a server owning the hostname serves the path-less form", "https://mcp.example.com", MetadataPath},
+		{"a server under a prefix serves the suffixed form", "https://mcp.example.com/gitlab", MetadataPath + "/gitlab"},
+		{"the endpoint path is a prefix like any other", "https://mcp.example.com/mcp", MetadataPath + "/mcp"},
+		{"a nested prefix keeps all of its segments", "https://mcp.example.com/team/gitlab", MetadataPath + "/team/gitlab"},
+		{"loopback development derives the same way", "http://localhost:8080", MetadataPath},
+		// Config validation rejects a trailing slash before it reaches here.
+		// The trim is what keeps the mount an exact ServeMux pattern anyway,
+		// so it is pinned rather than left to the validator.
+		{"a trailing slash is trimmed, not mounted as a subtree", "https://mcp.example.com/gitlab/", MetadataPath + "/gitlab"},
+		// An identifier with no host cannot be split into host and path. The
+		// fallback is the bare path rather than something derived from the
+		// junk, since a mount pattern has to be a path.
+		{"an unparseable identifier falls back to the bare path", "://not a url", MetadataPath},
+		{"a host-less identifier falls back to the bare path", "/gitlab/", MetadataPath},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := MetadataPathFor(tt.resource); got != tt.want {
+				t.Errorf("MetadataPathFor(%q) = %q, want %q", tt.resource, got, tt.want)
+			}
+			if strings.HasSuffix(MetadataPathFor(tt.resource), "/") {
+				t.Errorf("MetadataPathFor(%q) ends in a slash, which mounts a subtree and answers for every suffix", tt.resource)
+			}
+		})
+	}
+}
+
+// TestMetadataPathFor_IsThePathOfTheAdvertisedURL verifies that the mount and
+// the challenge cannot drift apart.
+//
+// The challenge carries MetadataURLFor and the mux answers MetadataPathFor. If
+// those two ever disagreed the failure would be silent and total: every client
+// would follow the challenge to a 404, having been told exactly where to look.
+func TestMetadataPathFor_IsThePathOfTheAdvertisedURL(t *testing.T) {
+	t.Parallel()
+
+	resources := []string{
+		"https://mcp.example.com",
+		"https://mcp.example.com/gitlab",
+		"https://mcp.example.com/mcp",
+		"https://mcp.example.com/team/gitlab",
+		"http://localhost:8080",
+	}
+	for _, resource := range resources {
+		t.Run(resource, func(t *testing.T) {
+			t.Parallel()
+			advertised, err := url.Parse(MetadataURLFor(resource))
+			if err != nil {
+				t.Fatalf("MetadataURLFor(%q) is not a URL: %v", resource, err)
+			}
+			if got := MetadataPathFor(resource); got != advertised.Path {
+				t.Errorf("mounted %q but advertised %q; a client following the challenge gets a 404", got, advertised.Path)
+			}
+		})
+	}
 }

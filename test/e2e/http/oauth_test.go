@@ -16,6 +16,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -650,28 +651,176 @@ func TestOAuth_SatisfiesRemoteDirectoryAuthProbe(t *testing.T) {
 }
 
 // TestOAuth_DirectoryReadableMetadata verifies the metadata document a remote
-// directory fetches after following the challenge, at both locations one may
-// request: the bare well-known path RFC 9728 names for a resource with no path
-// component, and the path-suffixed form for one mounted under a prefix. A
-// deployment serving only the suffixed form answers 404 to the only URL some
-// directories try.
+// directory fetches after following the challenge, for both shapes RFC 9728 §3
+// derives: a server that owns its hostname publishes at the bare well-known
+// path, and one mounted under a path prefix publishes at the suffixed form.
+//
+// The path is read out of the challenge rather than written down here, because
+// a readable document is only worth anything at the URL clients are told to
+// fetch. Which paths do NOT answer is
+// TestOAuth_MetadataAnswersOnlyItsOwnDerivedPath.
 func TestOAuth_DirectoryReadableMetadata(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	srv := oauthServer(t, gitlab.url)
 
-	paths := []string{
-		"/.well-known/oauth-protected-resource",
-		"/.well-known/oauth-protected-resource/mcp",
+	deployments := []struct {
+		name      string
+		publicURL string
+		want      string
+	}{
+		{"a server owning its hostname", publicURL, metadataBasePath},
+		{"a server under a path prefix", publicURL + "/gitlab", metadataBasePath + "/gitlab"},
 	}
 
-	for _, path := range paths {
-		t.Run(path, func(t *testing.T) {
+	for _, deployment := range deployments {
+		t.Run(deployment.name, func(t *testing.T) {
+			srv := startServer(t, nil,
+				"--gitlab-url="+gitlab.url,
+				"--auth-mode=oauth",
+				"--public-url="+deployment.publicURL,
+			)
+
+			path := metadataPathFromChallenge(t, srv)
+			if path != deployment.want {
+				t.Fatalf("challenge points at %q, want %q", path, deployment.want)
+			}
+
 			got := srv.do(t, request{method: http.MethodGet, path: path})
 			if got.status != http.StatusOK {
 				t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
 			}
 			assertDirectoryMetadata(t, got.body)
 		})
+	}
+}
+
+// metadataBasePath is the RFC 9728 well-known path suffix, and the whole
+// metadata path of a resource that has no path of its own.
+const metadataBasePath = "/.well-known/oauth-protected-resource"
+
+// metadataPathFromChallenge returns the path component of the resource_metadata
+// URL an unauthenticated request is answered with, which is where a client
+// actually goes looking for the document.
+func metadataPathFromChallenge(t *testing.T, srv *server) string {
+	t.Helper()
+
+	got := srv.do(t, mcpPOST(nil))
+	if got.status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 to get a challenge: %s", got.status, got.body)
+	}
+	challenge := got.header.Get("WWW-Authenticate")
+	_, after, found := strings.Cut(challenge, `resource_metadata="`)
+	if !found {
+		t.Fatalf("challenge %q carries no resource_metadata pointer", challenge)
+	}
+	raw, _, found := strings.Cut(after, `"`)
+	if !found {
+		t.Fatalf("challenge %q has an unterminated resource_metadata value", challenge)
+	}
+	metadataURL, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("resource_metadata %q is not a URL: %v", raw, err)
+	}
+	return metadataURL.Path
+}
+
+// TestOAuth_MetadataAnswersOnlyItsOwnDerivedPath pins that the
+// protected-resource document is served on exactly the one path RFC 9728 §3
+// derives from this deployment's resource identifier, and on no other.
+//
+// It used to be mounted twice, the second time under a "/{rest...}" wildcard,
+// so every suffix returned the same body. On a host running several MCP
+// servers behind one name, asking about the neighbor at
+// /.well-known/oauth-protected-resource/libgen got this deployment's document
+// back: a configuration demanding OAuth against this deployment's GitLab,
+// describing a server that is not it. RFC 9728 §3.3 tells a client to discard a
+// document whose resource value is not the identifier it derived the URL from,
+// so the extra paths were worthless to a conforming client and a false
+// statement to a lax one.
+//
+// This is on the wire rather than on the handler because what changed is a
+// property of the running server's routing table. The handler was right the
+// whole time, and every happy path kept working while the wildcard was there,
+// which is precisely why nothing noticed.
+func TestOAuth_MetadataAnswersOnlyItsOwnDerivedPath(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+
+	t.Run("a server under a path prefix answers only the suffixed form", func(t *testing.T) {
+		srv := startServer(t, nil,
+			"--gitlab-url="+gitlab.url,
+			"--auth-mode=oauth",
+			"--public-url="+publicURL+"/gitlab",
+		)
+
+		assertMetadataDocumentAt(t, srv, metadataBasePath+"/gitlab", publicURL+"/gitlab")
+
+		foreign := []struct {
+			name string
+			path string
+		}{
+			{"a neighboring MCP server on the same host", metadataBasePath + "/libgen"},
+			{"a suffix nobody deployed", metadataBasePath + "/zzz-invented"},
+			// The path-less form is the document of the resource that IS the
+			// origin. This deployment lives under /gitlab, so answering it
+			// would be claiming the host root's identity.
+			{"the host root's own document", metadataBasePath},
+			// A trailing-slash mount would be a ServeMux subtree, which is the
+			// wildcard again under another name.
+			{"anything below the derived path", metadataBasePath + "/gitlab/deeper"},
+			{"the derived path with a trailing slash", metadataBasePath + "/gitlab/"},
+		}
+		for _, probe := range foreign {
+			t.Run(probe.name, func(t *testing.T) {
+				assertNoMetadataAt(t, srv, probe.path)
+			})
+		}
+	})
+
+	t.Run("a server owning its hostname answers only the path-less form", func(t *testing.T) {
+		srv := oauthServer(t, gitlab.url)
+
+		assertMetadataDocumentAt(t, srv, metadataBasePath, publicURL)
+
+		for _, path := range []string{metadataBasePath + "/gitlab", metadataBasePath + "/libgen"} {
+			t.Run(path, func(t *testing.T) {
+				assertNoMetadataAt(t, srv, path)
+			})
+		}
+	})
+}
+
+// assertMetadataDocumentAt checks that the document is served at path and
+// claims exactly the identifier the deployment was started with. Both halves
+// matter: a client that fetched it compares the two and discards a mismatch.
+func assertMetadataDocumentAt(t *testing.T, srv *server, path, wantResource string) {
+	t.Helper()
+
+	got := srv.do(t, request{method: http.MethodGet, path: path})
+	if got.status != http.StatusOK {
+		t.Fatalf("GET %s = %d, want 200; the derived path must serve the document: %s", path, got.status, got.body)
+	}
+	var metadata struct {
+		Resource string `json:"resource"`
+	}
+	if err := json.Unmarshal([]byte(got.body), &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Resource != wantResource {
+		t.Errorf("resource = %q, want %q", metadata.Resource, wantResource)
+	}
+}
+
+// assertNoMetadataAt fails when a path this deployment does not own answers at
+// all, and says so loudly when it answers with the document, which is the harm
+// rather than the symptom.
+func assertNoMetadataAt(t *testing.T, srv *server, path string) {
+	t.Helper()
+
+	got := srv.do(t, request{method: http.MethodGet, path: path})
+	if strings.Contains(got.body, "authorization_servers") {
+		t.Errorf("GET %s served the protected-resource document; this deployment is speaking for a resource that is not it: %s", path, got.body)
+	}
+	if got.status != http.StatusNotFound {
+		t.Errorf("GET %s = %d, want 404", path, got.status)
 	}
 }
 

@@ -30,7 +30,11 @@ func TestProtectedResourceMetadata_BehavesLikeAnHTTPDocument(t *testing.T) {
 		"--public-url=https://mcp.example.invalid/gitlab",
 	)
 
-	const path = "/.well-known/oauth-protected-resource"
+	// The path RFC 9728 §3 derives from that identifier, and the only one this
+	// deployment serves the document on. See
+	// TestOAuth_MetadataAnswersOnlyItsOwnDerivedPath for why the bare form is
+	// not this server's to answer.
+	const path = "/.well-known/oauth-protected-resource/gitlab"
 
 	t.Run("GET returns the document and allows it to be cached", func(t *testing.T) {
 		got := srv.do(t, request{method: http.MethodGet, path: path})
@@ -75,12 +79,21 @@ func TestProtectedResourceMetadata_BehavesLikeAnHTTPDocument(t *testing.T) {
 		}
 	})
 
-	t.Run("the path-inserted derivation behaves the same", func(t *testing.T) {
-		// RFC 9728 §3 gives two derivations, and a client that computed the
-		// path-carrying one must not meet different rules.
-		got := srv.do(t, request{method: http.MethodHead, path: path + "/gitlab"})
-		if got.status != http.StatusOK {
-			t.Errorf("status = %d, want 200 for the path-inserted form", got.status)
+	t.Run("the CORS preflight is answered, not authenticated", func(t *testing.T) {
+		// The document is mounted without a method restriction so the SDK
+		// handler answers OPTIONS itself. A "GET "-restricted pattern would
+		// send the preflight to the catch-all instead, locking out the
+		// browser-based clients that fetch this cross-origin.
+		got := srv.do(t, request{
+			method:  http.MethodOptions,
+			path:    path,
+			headers: map[string]string{"Origin": "https://claude.ai", "Access-Control-Request-Method": "GET"},
+		})
+		if got.status != http.StatusNoContent && got.status != http.StatusOK {
+			t.Fatalf("status = %d, want the preflight answered rather than refused", got.status)
+		}
+		if allowed := got.header.Get("Access-Control-Allow-Origin"); allowed == "" {
+			t.Error("the preflight carries no Access-Control-Allow-Origin, so a browser drops the fetch")
 		}
 	})
 }

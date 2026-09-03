@@ -162,7 +162,7 @@ Expected output:
 
 ```json
 {
-  "resource": "http://localhost:8080/mcp",
+  "resource": "https://mcp.example.com",
   "authorization_servers": ["https://gitlab.example.com"],
   "bearer_methods_supported": ["header"],
   "scopes_supported": ["api", "read_api"]
@@ -182,12 +182,17 @@ https://mcp.example.com/.well-known/oauth-protected-resource/gitlab
 That path lives at the **root of the host**, so a proxy that only forwards `/gitlab/` will not serve it. Add a route without rewriting:
 
 ```nginx
-location /.well-known/oauth-protected-resource {
+location = /.well-known/oauth-protected-resource/gitlab {
     proxy_pass http://gitlab-mcp:8080;   # no path rewrite
 }
 ```
 
-The server answers both the bare and the path-suffixed form, so no rewriting is needed — and the suffix keeps multiple MCP servers on one host distinguishable.
+`location =` is an exact match, and that is the point rather than a detail: a
+prefix `location` would forward every suffix under
+`/.well-known/oauth-protected-resource/` to this server, which then answers for
+the neighbours sharing the host. The server itself serves only the one path its
+`--public-url` derives, so the proxy has nothing else to forward. A deployment
+that owns its hostname derives the bare path instead and routes that exact one.
 
 Two more things the deployment must get right:
 
