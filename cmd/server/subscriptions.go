@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -438,6 +442,14 @@ type listenStream struct {
 type listenStreams struct {
 	mu      sync.Mutex
 	streams map[*listenStream]struct{}
+	// closed records that closeAll has run, so a stream armed afterwards is
+	// ended straight away instead of being filed in a registry nothing will
+	// read again. Shutdown stops the listener but lets in-flight requests
+	// finish, and a request that was already on the wire can reach this
+	// middleware after the registry has been emptied; without the flag that
+	// one stream held the process open for the whole drain budget, which is
+	// the very outcome closeAll exists to prevent.
+	closed bool
 }
 
 func newListenStreams() *listenStreams {
@@ -452,8 +464,17 @@ func (s *listenStreams) arm(uris []string, cancel context.CancelFunc) (stream *l
 	}
 
 	s.mu.Lock()
-	s.streams[stream] = struct{}{}
+	closed := s.closed
+	if !closed {
+		s.streams[stream] = struct{}{}
+	}
 	s.mu.Unlock()
+
+	if closed {
+		// Outside the lock, like every other cancel here: the SDK's handler
+		// unwinds through the unsubscribe path.
+		stream.cancel()
+	}
 
 	return stream, func() {
 		s.mu.Lock()
@@ -505,6 +526,7 @@ func (s *listenStreams) closeAll() {
 		open = append(open, stream)
 	}
 	clear(s.streams)
+	s.closed = true
 	s.mu.Unlock()
 
 	for _, stream := range open {
@@ -712,28 +734,56 @@ func (b *sessionBridge) subscribeUnlessStateless(ctx context.Context, req *mcp.S
 	return errStatelessSubscribe
 }
 
-// attach connects the runtime to the server it notifies through, once that
-// server exists.
-func (r *subscriptionRuntime) attach(ctx context.Context, server *mcp.Server) {
+// streamRegistry returns the registry that can end this server's open
+// subscriptions/listen requests, building a standalone one when there is no
+// subscription runtime at all.
+//
+// A server without a runtime still needs one. Whether resource subscriptions
+// are offered is what the capability surface decides; whether a stream the SDK
+// is already holding can be closed is not. The SDK acknowledges a listen
+// carrying only list-changed notifications on every surface (the go-sdk client
+// opens one by itself at connect time whenever it registers a list-changed
+// handler), and it keeps that request open until the handler's context ends.
+// Nothing else ends it.
+//
+// So wiring the registry beside the runtime left --capability-surface=minimal
+// with open streams nobody could reach: SIGTERM was answered by the full
+// httpShutdownTimeout of waiting, then "http server shutdown: context deadline
+// exceeded" and exit 1, with the streams never getting their completion result
+// either. The per-server and per-process ceilings on open streams reduce how
+// many can pile up and do not change that outcome for the ones that do.
+func (r *subscriptionRuntime) streamRegistry() *listenStreams {
 	if r == nil {
-		return
+		return newListenStreams()
 	}
-	r.notifier.attach(server)
+	return r.streams
+}
+
+// attach connects the runtime to the server it notifies through, once that
+// server exists, and installs the listen-stream registry every server needs.
+//
+// The registry half runs even on a nil runtime, which is why this is not the
+// usual early return: see [subscriptionRuntime.streamRegistry].
+func (r *subscriptionRuntime) attach(ctx context.Context, server *mcp.Server) {
+	streams := r.streamRegistry()
+	middlewares := make([]mcp.Middleware, 0, 2)
+	if r != nil {
+		r.notifier.attach(server)
+		// Traffic on a session is the only evidence this server gets that
+		// a subscriber is still there, so it is what holds the watchers at
+		// full speed.
+		middlewares = append(middlewares, renewOnActivity(r.manager))
+	}
+	middlewares = append(middlewares, streams.middleware())
 
 	// Shutdown has to reach the open listen streams, and nothing else does:
 	// their handlers block on contexts derived from each session, which the
 	// SDK does not end while it is waiting for those same handlers to return.
 	go func() {
 		<-ctx.Done()
-		r.streams.closeAll()
+		streams.closeAll()
 	}()
-	server.AddReceivingMiddleware(
-		// Traffic on a session is the only evidence this server gets that
-		// a subscriber is still there, so it is what holds the watchers at
-		// full speed.
-		renewOnActivity(r.manager),
-		r.streams.middleware(),
-	)
+	server.AddReceivingMiddleware(middlewares...)
 }
 
 // renewOnActivity returns middleware that keeps a session's subscriptions
@@ -853,4 +903,159 @@ func newServerSettings(opts []serverOption) serverSettings {
 // tests running in parallel cannot change each other's cadence.
 func withSubscriptionOptions(opts subscriptions.Options) serverOption {
 	return func(settings *serverSettings) { settings.subscriptions = opts }
+}
+
+// Concurrency ceilings on open subscriptions/listen streams.
+//
+// A listen is a request the client leaves open, and the SDK holds its handler
+// on <-ctx.Done() for the lifetime of the connection: a blocked goroutine, an
+// ephemeral session and transport, and a file descriptor each. Nothing bounded
+// how many one caller could open. MaxWatchers reads like the valve for this
+// and is not: it counts resource watchers created through manager.Subscribe,
+// so a listen asking only for list-changed notifications creates none, and one
+// carrying a resource joins an existing watcher's subscriber set without a cap
+// check either. Measured at 2000 concurrent streams on one token: 2007 file
+// descriptors and 55 to 100 KB retained per stream, roughly tenfold what the
+// idle connection underneath already costs. With a container RLIMIT_NOFILE of
+// 1024, about a thousand held streams stop the process accepting anything.
+//
+// Two ceilings, because one is not enough in either direction. Per server is
+// per pool entry, which is per token and instance, and bounds fairness; it
+// multiplies by however many tokens an attacker holds, so the process-wide one
+// is what bounds the process. Both are generous next to any real client, which
+// opens a handful.
+const (
+	maxListenStreamsPerServer  = 64
+	maxListenStreamsPerProcess = 512
+)
+
+// maxListenStreamsEnv overrides the per-server ceiling. Zero disables it,
+// which leaves the process-wide one in place.
+const maxListenStreamsEnv = "GITLAB_MCP_MAX_LISTEN_STREAMS"
+
+// listenCounter counts open streams against a ceiling.
+type listenCounter struct {
+	open atomic.Int64
+}
+
+// acquire takes a slot, or reports that the ceiling is reached. A
+// non-positive limit means no ceiling.
+func (c *listenCounter) acquire(limit int) bool {
+	if limit <= 0 {
+		return true
+	}
+	if c.open.Add(1) > int64(limit) {
+		c.open.Add(-1)
+		return false
+	}
+	return true
+}
+
+// release gives a slot back. Safe to call only for an acquire that succeeded
+// against a positive limit.
+func (c *listenCounter) release() { c.open.Add(-1) }
+
+// count is how many slots are currently held.
+func (c *listenCounter) count() int64 { return c.open.Load() }
+
+// listenLimits bounds concurrent subscriptions/listen streams for one server
+// and for the process it runs in.
+type listenLimits struct {
+	perServer   int
+	perProcess  int
+	serverOpen  *listenCounter
+	processOpen *listenCounter
+}
+
+// processListenStreams is the ceiling shared by every server this process
+// builds. In HTTP mode the pool builds one MCP server per token and instance,
+// so a per-server counter alone would be per-token and multiply by however
+// many tokens the caller holds.
+var processListenStreams = &listenCounter{}
+
+// listenLimitsFromEnv builds the ceilings for one server, reading the
+// per-server override and sharing the process-wide counter.
+//
+// A bad value warns rather than refusing startup, for the same reason the
+// stdio line limit does: a mistyped number should not take the client down
+// with it.
+func listenLimitsFromEnv() listenLimits {
+	limits := listenLimits{
+		perServer:   maxListenStreamsPerServer,
+		perProcess:  maxListenStreamsPerProcess,
+		serverOpen:  &listenCounter{},
+		processOpen: processListenStreams,
+	}
+	raw := strings.TrimSpace(os.Getenv(maxListenStreamsEnv))
+	if raw == "" {
+		return limits
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		slog.Warn("listen stream limit could not be parsed; using the default",
+			"variable", maxListenStreamsEnv, "value", raw, "default", maxListenStreamsPerServer)
+		return limits
+	}
+	limits.perServer = value
+	return limits
+}
+
+// middleware refuses a subscriptions/listen once either ceiling is reached,
+// and holds a slot for as long as the stream is open.
+//
+// It is installed on EVERY server, unconditionally, rather than beside the
+// rest of the subscription machinery: under --capability-surface=minimal the
+// subscription runtime is nil while the SDK still acknowledges and holds a
+// list-changed listen. A cap that is absent on one configuration is not a cap.
+// The same reasoning is why [subscriptionRuntime.attach] installs the stream
+// registry on a nil runtime as well: a ceiling on how many streams may exist is
+// not a way to end the ones that do.
+//
+// Refusing with the busy code rather than closing the stream is deliberate:
+// the request is well formed and a retry later can succeed, which is exactly
+// what -32000 already means everywhere else in this file.
+func (l listenLimits) middleware() mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method != methodSubscriptionsListen {
+				return next(ctx, method, req)
+			}
+			if !l.serverOpen.acquire(l.perServer) {
+				return nil, l.busy(ctx, "per-credential", l.perServer)
+			}
+			defer l.releaseServer()
+			if !l.processOpen.acquire(l.perProcess) {
+				return nil, l.busy(ctx, "server-wide", l.perProcess)
+			}
+			defer l.releaseProcess()
+			return next(ctx, method, req)
+		}
+	}
+}
+
+// releaseServer and releaseProcess give a slot back only when one was taken:
+// a non-positive ceiling means acquire never counted.
+func (l listenLimits) releaseServer() {
+	if l.perServer > 0 {
+		l.serverOpen.release()
+	}
+}
+
+func (l listenLimits) releaseProcess() {
+	if l.perProcess > 0 {
+		l.processOpen.release()
+	}
+}
+
+// busy is the refusal, naming which ceiling was reached so an operator
+// reading the client's error knows which number to raise.
+func (l listenLimits) busy(ctx context.Context, scope string, limit int) error {
+	slog.WarnContext(ctx, "subscriptions/listen refused: too many open streams",
+		"scope", scope, "limit", limit)
+	return &jsonrpc.Error{
+		Code: codeServerBusy,
+		Message: fmt.Sprintf(
+			"too many open subscriptions/listen streams (%s limit %d); close one and retry", scope, limit,
+		),
+	}
 }

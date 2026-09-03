@@ -23,6 +23,29 @@ import (
 const (
 	authFailureLimit  = 10
 	authFailureWindow = 1 * time.Minute
+	// transportFailureLimit is the secondary budget, charged to the address
+	// the connection actually came from rather than to whatever a trusted
+	// proxy header claims.
+	//
+	// It exists because the primary budget's key is caller-controlled once
+	// --trusted-proxy-header is set: an attacker who can also reach the
+	// server directly supplies that header themselves and rotates it, so
+	// every request gets a distinct key, the ten-a-minute lockout never
+	// fires, and each invalid token is relayed one to one to GitLab as a
+	// /user verification, spending the deployment's own throttle budget
+	// there from a cheap client.
+	//
+	// It counts distinct primary keys, not failures. See [transportBudget]:
+	// charging it per failure aggregated a whole fleet behind one proxy, so
+	// fifty clients failing their own ten times each exhausted it between
+	// them and the next request through that proxy was refused before its
+	// credential was read.
+	//
+	// Five hundred distinct failing client identities inside a minute from
+	// one transport source is the rotation, or an incident either way. It
+	// also bounds the primary limiter's map: a blocked source is refused
+	// before a failure is recorded, so it stops minting keys.
+	transportFailureLimit = 500
 )
 
 // JSON-RPC error codes emitted by the request gate.
@@ -194,7 +217,14 @@ type mcpServerGate struct {
 	// mode it is the same limiter [bearerGuard] uses, so the two layers
 	// share one per-address budget and a caller cannot earn a fresh
 	// allowance by failing at whichever layer it has not exhausted yet.
-	limiter            *serverpool.AuthRateLimiter
+	limiter *serverpool.AuthRateLimiter
+	// sourceBudget is the secondary, far coarser budget charged to the
+	// transport source. Set only when trustedProxyHeader is configured,
+	// which is the only case in which the primary key is caller-controlled;
+	// without a trusted header the two keys are the same string and one
+	// budget is the whole story. Its limiter is shared with [bearerGuard],
+	// like limiter.
+	sourceBudget       *transportBudget
 	trustedProxyHeader string
 	// challenge is the WWW-Authenticate value sent with a 401.
 	challenge string
@@ -386,8 +416,9 @@ func sessionOwnershipFailure() *gateFailure {
 
 func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	ip := clientIP(r, g.trustedProxyHeader)
+	source := transportSource(r)
 
-	if g.limiter != nil && g.limiter.IsBlocked(ip) {
+	if g.blockedByBudget(ip, source) {
 		slog.WarnContext(r.Context(), "request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
 		return nil, &gateFailure{
 			status:  http.StatusTooManyRequests,
@@ -399,9 +430,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 
 	token := g.extractCredential(r)
 	if token == "" {
-		if g.limiter != nil {
-			g.limiter.RecordFailure(ip)
-		}
+		g.chargeFailure(ip, source)
 		slog.InfoContext(r.Context(), "request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
@@ -411,8 +440,32 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		}
 	}
 
+	if err := requireExplicitInstance(r, g.gitlabURLs); err != nil {
+		slog.InfoContext(r.Context(), "request rejected: no instance selected on a multi-instance deployment",
+			"instances", len(g.gitlabURLs))
+		return nil, &gateFailure{
+			status:  http.StatusBadRequest,
+			code:    errCodeInvalidRequest,
+			message: g.missingURLMessage(),
+		}
+	}
+
 	options, err := serverpool.ResolveRequestOptionsFor(r, g.gitlabURLs)
 	if err != nil {
+		// A request that named no instance on a deployment that publishes none
+		// is the caller's omission, not a broken server. It reaches this branch
+		// with an empty header, which used to mean only one thing: a
+		// --gitlab-url the operator typed wrong. Kept apart so the caller is
+		// told to send the header rather than to go and find the operator, and
+		// logged at INFO because nothing here is the deployment's fault.
+		if errors.Is(err, serverpool.ErrMissingGitLabURL) {
+			slog.InfoContext(r.Context(), "request rejected: no instance selected and none is published")
+			return nil, &gateFailure{
+				status:  http.StatusBadRequest,
+				code:    errCodeInvalidRequest,
+				message: capitalizeFirst(err.Error()) + ".",
+			}
+		}
 		slog.ErrorContext(r.Context(), "request rejected: invalid GITLAB-URL header", "error", err)
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
@@ -428,9 +481,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		// failure in the full sense: 401, and it does count against the
 		// limiter — this is the path that stops a stream of invented tokens
 		// from churning the pool.
-		if g.limiter != nil {
-			g.limiter.RecordFailure(ip)
-		}
+		g.chargeFailure(ip, source)
 		slog.InfoContext(r.Context(), "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
@@ -459,6 +510,172 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		}
 	}
 	return server, nil
+}
+
+// blockedByBudget reports whether either budget is exhausted: the caller's
+// key, or the transport source it arrived from.
+func (g *mcpServerGate) blockedByBudget(key, source string) bool {
+	if g.limiter != nil && g.limiter.IsBlocked(key) {
+		return true
+	}
+	return g.sourceBudget.blocked(source)
+}
+
+// chargeFailure charges one authentication failure to both budgets.
+func (g *mcpServerGate) chargeFailure(key, source string) {
+	if g.limiter != nil {
+		g.limiter.RecordFailure(key)
+	}
+	g.sourceBudget.charge(source, key)
+}
+
+// transportBudget is the secondary authentication budget of
+// [transportFailureLimit], charged to the transport source.
+//
+// It charges once per distinct primary key inside a window rather than once
+// per failure, and that distinction is the whole design. The budget exists to
+// bound header rotation, which mints a fresh primary key on every request; a
+// genuine proxy's clients keep theirs, and a client whose key is already known
+// is already bounded by its own ten-a-minute allowance. Counting failures
+// instead aggregated the fleet: fifty clients failing their own ten times each
+// spent all five hundred between them, and since both gates consult the budget
+// before the credential is read, the next request through that proxy was
+// refused whatever it carried, including a valid token, and including the
+// clients that had never failed at all.
+//
+// The zero value is not usable; a nil *transportBudget is, and is what a
+// deployment without --trusted-proxy-header gets. Every method tolerates it.
+type transportBudget struct {
+	limiter *serverpool.AuthRateLimiter
+
+	mu sync.Mutex
+	// charged records when a (source, key) pair last opened a window, so a
+	// key already counted against a source is not counted again until its
+	// window lapses. It cannot grow without bound: a source stops charging
+	// once it is blocked, and blocked sources are refused before a failure is
+	// recorded.
+	charged map[string]time.Time
+}
+
+// newTransportBudget wraps a limiter in the per-key accounting above.
+func newTransportBudget(limiter *serverpool.AuthRateLimiter) *transportBudget {
+	if limiter == nil {
+		return nil
+	}
+	return &transportBudget{limiter: limiter, charged: make(map[string]time.Time)}
+}
+
+// rateLimiter is the underlying limiter, for the layer that shares this budget
+// rather than owning it.
+func (b *transportBudget) rateLimiter() *serverpool.AuthRateLimiter {
+	if b == nil {
+		return nil
+	}
+	return b.limiter
+}
+
+// blocked reports whether a transport source has minted more distinct primary
+// keys than its budget allows.
+func (b *transportBudget) blocked(source string) bool {
+	if b == nil {
+		return false
+	}
+	return b.limiter.IsBlocked(source)
+}
+
+// charge counts one failure against the source, unless this key has already
+// been counted against it inside the current window.
+func (b *transportBudget) charge(source, key string) {
+	if b == nil {
+		return
+	}
+	pair := source + "\x00" + key
+	b.mu.Lock()
+	first, seen := b.charged[pair]
+	fresh := !seen || time.Since(first) > authFailureWindow
+	if fresh {
+		b.charged[pair] = time.Now()
+	}
+	b.mu.Unlock()
+	if fresh {
+		b.limiter.RecordFailure(source)
+	}
+}
+
+// cleanup drops lapsed pairs and the limiter's own expired records. It stands
+// in for the limiter's Cleanup wherever a budget owns one.
+func (b *transportBudget) cleanup() {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	now := time.Now()
+	for pair, first := range b.charged {
+		if now.Sub(first) > authFailureWindow {
+			delete(b.charged, pair)
+		}
+	}
+	b.mu.Unlock()
+	b.limiter.Cleanup()
+}
+
+// transportSource is the address the connection actually came from.
+//
+// It is [clientIP] with every header ignored, and it is the whole point of the
+// secondary budget: RemoteAddr is set by the kernel from the accepted socket,
+// so nothing a caller sends can change it.
+func transportSource(r *http.Request) string {
+	return clientIP(r, "")
+}
+
+// errMissingGitLabURL is returned when a deployment publishes several
+// instances and the request named none of them.
+var errMissingGitLabURL = errors.New("no GitLab instance was selected")
+
+// requireExplicitInstance refuses to choose an instance on the caller's
+// behalf when the deployment publishes more than one.
+//
+// The resolver's older answer was the first published instance, on the
+// reasoning that a client which does not care keeps working. That holds for a
+// client which does not care, and not for one that cares and failed to say so:
+// a proxy stripped the header, a client library cannot set custom headers, or
+// the configuration was copied wrong. The credential is then transmitted in
+// full to an instance its holder never named. In oauth mode this is worse
+// rather than better, because the verifier uses the same resolution, so the
+// bearer is POSTed to instance A's /api/v4/user before anything notices it
+// belongs to instance B — and both instances are advertised in the RFC 9728
+// authorization_servers array, while neither RFC 9728 nor MCP gives a client
+// an in-band way to say which one it used.
+//
+// A single published instance is unaffected: there is nothing to choose, and a
+// header naming something else is recorded as ignored exactly as before.
+// Do not "fix" the multi-instance case by verifying against each instance in
+// turn, which broadcasts the credential to all of them.
+func requireExplicitInstance(r *http.Request, instances []string) error {
+	if r == nil || len(instances) < 2 {
+		return nil
+	}
+	if strings.TrimSpace(r.Header.Get(serverpool.RequestOptionGitLabURL)) != "" {
+		return nil
+	}
+	return errMissingGitLabURL
+}
+
+// missingURLMessage tells a caller which header to set, naming the published
+// instances only where that list is already public.
+//
+// The set is served unauthenticated as RFC 9728 authorization_servers in oauth
+// mode, so naming it there gives nothing away and saves a client a guess.
+// Legacy mode publishes no metadata document and this rejection is reached
+// before the credential is judged, so echoing the list there would let any
+// non-empty token enumerate the operator's instance hostnames.
+func (g *mcpServerGate) missingURLMessage() string {
+	base := "This deployment serves several GitLab instances, so the " +
+		serverpool.RequestOptionGitLabURL + " header must name the one this request is for."
+	if !g.oauthMode {
+		return base + " Ask the operator which instances it publishes."
+	}
+	return base + " It publishes: " + strings.Join(g.gitlabURLs, ", ") + "."
 }
 
 // invalidURLMessage describes a GITLAB-URL rejection to the caller.

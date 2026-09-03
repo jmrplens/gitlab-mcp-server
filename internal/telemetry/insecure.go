@@ -56,7 +56,7 @@ func InsecureCredentialSignals(signals Signals) []string {
 		if !hasCredential(signal.name) {
 			continue
 		}
-		if isPlaintextRemote(endpointForSignal(signal.endpointKey)) {
+		if isPlaintextRemoteForSignal(signal.name, endpointForSignal(signal.endpointKey)) {
 			affected = append(affected, signal.name)
 		}
 	}
@@ -79,17 +79,105 @@ func hasCredential(signal string) bool {
 	return false
 }
 
-// isPlaintextRemote reports whether an endpoint is http and not loopback.
+// insecureKeys are the variables that decide transport security independently
+// of the endpoint's scheme, most specific first.
+var insecureKeys = map[string][]string{
+	"traces":  {"OTEL_EXPORTER_OTLP_TRACES_INSECURE", "OTEL_EXPORTER_OTLP_INSECURE"},
+	"metrics": {"OTEL_EXPORTER_OTLP_METRICS_INSECURE", "OTEL_EXPORTER_OTLP_INSECURE"},
+	"logs":    {"OTEL_EXPORTER_OTLP_LOGS_INSECURE", "OTEL_EXPORTER_OTLP_INSECURE"},
+}
+
+// isPlaintextRemoteForSignal reports whether one signal's batches actually
+// leave this host in the clear.
+//
+// # Why the scheme is not the answer
+//
+// The specification says OTEL_EXPORTER_OTLP_INSECURE "only applies to OTLP/gRPC
+// when an endpoint is provided without the http or https scheme". The Go trace
+// and metric exporters do not implement it that way: their environment
+// configuration appends the scheme's decision and then the INSECURE options, so
+// the later one wins and an https endpoint is downgraded to plaintext, with the
+// collector credential going out on it. The newer log exporters resolve the
+// scheme first and are correct. So the precedence has to be emulated per signal
+// rather than read off the URL, in both directions: an INSECURE=false beside an
+// http endpoint upgrades traces and metrics to TLS, and naming them in a
+// plaintext warning would be the same defect pointing the other way.
+//
+// This deviation is upstream and this function only describes it. Nothing here
+// refuses to start: see the type doc above for why that stays true.
+func isPlaintextRemoteForSignal(signal, endpoint string) bool {
+	if !isRemoteHost(endpoint) {
+		return false
+	}
+	insecure, decided := insecureFromEnv(signal)
+	switch {
+	case !decided:
+		return schemeOf(endpoint) == "http"
+	case signal == "logs" && schemeOf(endpoint) != "":
+		// The exporter this signal uses honors the specification, so a scheme
+		// on the endpoint settles it and the variable never applies.
+		return schemeOf(endpoint) == "http"
+	default:
+		return insecure
+	}
+}
+
+// insecureFromEnv reads the insecure variables for one signal, most specific
+// first, reporting whether any of them decided.
+//
+// Parsed the way each signal's own exporter parses it, and the two exporters
+// agree on nothing but "true" and "false". The trace and metric ones read it
+// through envconfig.WithBool, where any non-empty value decides and only "true"
+// case-insensitively means insecure, so INSECURE=1 upgrades an http endpoint to
+// TLS as surely as "false" does. The log one converts strictly, rejects every
+// other spelling, and falls through to the next variable and finally to the
+// endpoint's scheme.
+//
+// Parsing strictly for all three named traces and metrics as plaintext while
+// they were on TLS, which is the direction this warning can least afford to be
+// wrong in: naming a signal that is fine is how an operator learns to skip the
+// line.
+func insecureFromEnv(signal string) (insecure, decided bool) {
+	for _, key := range insecureKeys[signal] {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value == "" {
+			continue
+		}
+		if signal != "logs" {
+			return strings.EqualFold(value, "true"), true
+		}
+		switch strings.ToLower(value) {
+		case "true":
+			return true, true
+		case "false":
+			return false, true
+		}
+	}
+	return false, false
+}
+
+// schemeOf returns an endpoint's scheme, or "" when it has none or does not
+// parse.
+func schemeOf(endpoint string) string {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(parsed.Scheme)
+}
+
+// isRemoteHost reports whether an endpoint names a host other than this one.
 //
 // An unparseable or empty endpoint is not reported: the exporter will fail on
 // its own and say so, and guessing at a malformed URL to raise a second warning
-// about it would be noise on top of an error.
-func isPlaintextRemote(endpoint string) bool {
+// about it would be noise on top of an error. A credential that never leaves
+// the machine cannot be observed on a network, so loopback is not a disclosure.
+func isRemoteHost(endpoint string) bool {
 	if endpoint == "" {
 		return false
 	}
 	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Scheme != "http" {
+	if err != nil {
 		return false
 	}
 
@@ -101,4 +189,10 @@ func isPlaintextRemote(endpoint string) bool {
 		return false
 	}
 	return true
+}
+
+// isPlaintextRemote reports whether an endpoint's own scheme says http to
+// another host, which is the answer whenever no insecure variable overrides it.
+func isPlaintextRemote(endpoint string) bool {
+	return isRemoteHost(endpoint) && schemeOf(endpoint) == "http"
 }

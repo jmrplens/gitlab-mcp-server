@@ -101,9 +101,12 @@ func (r *indexRegistrar) AddResourceTemplate(template *mcp.ResourceTemplate, han
 // register onto. Resource handlers only close over the GitLab client, never
 // the server, so the index can be built first and the real registration can
 // happen later against the same client.
-func NewHandlerIndex(client *gitlabclient.Client) HandlerIndex {
+// It takes the same [RegisterOptions] as [Register] and must be given the same
+// ones: this index is what a subscription re-reads through, so an excluded
+// resource left in it would still be subscribable and still poll GitLab.
+func NewHandlerIndex(client *gitlabclient.Client, opts ...RegisterOptions) HandlerIndex {
 	r := &indexRegistrar{index: make(HandlerIndex)}
-	registerAll(r, client)
+	registerAll(registrarFor(r, opts), client)
 	return r.index
 }
 

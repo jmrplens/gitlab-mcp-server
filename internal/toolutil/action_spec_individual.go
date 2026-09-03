@@ -105,12 +105,42 @@ func applyIndividualRequiredFields(route ActionRoute) {
 	route.InputSchema["required"] = cloneSchemaValue(required)
 }
 
+// NarrowingOnly returns the overrides with every claim removed that would make
+// a mutating or non-repeatable action look safer than the action itself is.
+//
+// readOnlyHint and idempotentHint both say "this call is safe to make, and safe
+// to repeat", and both are consulted by things that act on them: --read-only
+// removes what is not read-only, safe mode previews what is not, and a gateway
+// may auto-allow readOnlyHint:true without asking anyone. An override that
+// raises either one is therefore not a presentation choice, it is a silent
+// widening of the operator's own controls.
+//
+// Overrides that narrow are untouched, and are the reason this type exists: a
+// delete whose confirmation is handled elsewhere may declare destructiveHint
+// false, and an update that is not repeatable may declare idempotentHint false.
+//
+// The case this was written for is system_hook_test, a mutating create that
+// declared readOnlyHint true on the individual surface alone because the test
+// event changes nothing on the instance. It changes no GitLab state, but it
+// makes GitLab deliver an event to the hook's configured URL, so it is not a
+// read — and one action classified read-only on one surface and mutating on the
+// other two cannot be right on more than one of them.
+func (o IndividualToolAnnotationOverrides) NarrowingOnly(readOnly, idempotent bool) IndividualToolAnnotationOverrides {
+	if !readOnly && o.ReadOnly != nil && *o.ReadOnly {
+		o.ReadOnly = nil
+	}
+	if !idempotent && o.Idempotent != nil && *o.Idempotent {
+		o.Idempotent = nil
+	}
+	return o
+}
+
 func annotationsFromActionSpec(spec ActionSpec) *mcp.ToolAnnotations {
 	readOnly := spec.ReadOnly
 	destructive := spec.Destructive
 	idempotent := spec.Idempotent
 	openWorld := spec.OpenWorld
-	overrides := spec.IndividualTool.AnnotationOverrides
+	overrides := spec.IndividualTool.AnnotationOverrides.NarrowingOnly(spec.ReadOnly, spec.Idempotent)
 	if overrides.ReadOnly != nil {
 		readOnly = *overrides.ReadOnly
 	}

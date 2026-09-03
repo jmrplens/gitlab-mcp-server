@@ -16,9 +16,11 @@ services:
     command:
       - "--http"
       - "--http-addr=0.0.0.0:8080"
-      # Single-instance: set GITLAB_URL in .env to use --gitlab-url as default for all clients
-      # Multi-instance: leave GITLAB_URL empty; clients send GITLAB-URL header per request
-      - "--gitlab-url=${GITLAB_URL:-}"
+      # Required: a deployment naming no instance would make requests to
+      # whatever host a caller puts in GITLAB-URL, with that caller's token,
+      # so the server refuses to start. Set GITLAB_URL in .env, or list
+      # several comma-separated and let the GITLAB-URL header select among them.
+      - "--gitlab-url=${GITLAB_URL:?set GITLAB_URL in .env: the server refuses to start without an instance allow-list}"
       - "--tool-surface=${TOOL_SURFACE:-dynamic}"
       - "--tier=${GITLAB_TIER:-}"
       - "--skip-tls-verify=${GITLAB_SKIP_TLS_VERIFY:-false}"

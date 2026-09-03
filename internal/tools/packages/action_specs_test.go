@@ -78,6 +78,41 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	})
 }
 
+// TestActionSpecs_LocalWriteClassification verifies that every package action
+// carries the read-only flag its handler deserves, and download in particular
+// does not: it writes a file to the machine the server runs on, and read-only
+// mode, safe mode, a read_api-scoped token and any client that auto-approves
+// readOnlyHint:true all key on this flag rather than on what the handler does.
+func TestActionSpecs_LocalWriteClassification(t *testing.T) {
+	byTool := packageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, packageActionHandler())))
+
+	tests := []struct {
+		name         string
+		tool         string
+		wantReadOnly bool
+	}{
+		{name: "download writes to local disk", tool: "gitlab_package_download"},
+		{name: "publish reads local disk and writes the registry", tool: "gitlab_package_publish"},
+		{name: "publish_directory reads local disk", tool: "gitlab_package_publish_directory"},
+		{name: "list only reads the registry", tool: "gitlab_package_list", wantReadOnly: true},
+		{name: "file_list only reads the registry", tool: "gitlab_package_file_list", wantReadOnly: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec, ok := byTool[tt.tool]
+			if !ok {
+				t.Fatalf("ActionSpecs() has no %s", tt.tool)
+			}
+			if spec.ReadOnly != tt.wantReadOnly {
+				t.Errorf("%s ReadOnly = %t, want %t", tt.tool, spec.ReadOnly, tt.wantReadOnly)
+			}
+			if spec.Destructive {
+				t.Errorf("%s Destructive = true, want false", tt.tool)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_PublishDirectoryGuidance verifies directory publishing exposes
 // LLM-facing guidance for include_pattern semantics.
 func TestActionSpecs_PublishDirectoryGuidance(t *testing.T) {

@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,6 +149,30 @@ func (s *server) httpClient() *http.Client {
 	return http.DefaultClient
 }
 
+// withInstancePolicy prepends the escape hatch that lets a server start
+// without publishing a GitLab instance, unless the caller has published one
+// itself.
+//
+// HTTP mode refuses to start when no --gitlab-url is given, because a
+// deployment that has not said which GitLab it serves will make requests to
+// whatever host a caller names in the GITLAB-URL header, carrying whatever
+// token that caller supplied. Almost nothing in this module reaches GitLab at
+// all: the behavior under test is decided before a request would leave the
+// process. Those tests take the hatch so they exercise the transport rather
+// than the instance policy.
+//
+// A test that publishes its own instance, and so is testing that policy, is
+// left exactly as it was written.
+func withInstancePolicy(flags []string) []string {
+	for _, f := range flags {
+		name, _, _ := strings.Cut(strings.TrimLeft(f, "-"), "=")
+		if name == "gitlab-url" || name == "allow-any-gitlab-url" {
+			return flags
+		}
+	}
+	return append([]string{"--allow-any-gitlab-url"}, flags...)
+}
+
 // startServer launches the binary with the given extra flags and environment,
 // waits for /health, and stops it when the test ends.
 //
@@ -167,10 +192,10 @@ func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...s
 	bin := serverBinary(t)
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 
-	args := append([]string{"--http", "--http-addr=" + addr}, flags...)
+	args := append([]string{"--http", "--http-addr=" + addr}, withInstancePolicy(flags)...)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(configFreeEnviron(),
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
 	)
@@ -389,9 +414,51 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = append(os.Environ(), "LOG_LEVEL=info")
+	cmd.Env = append(configFreeEnviron(), "LOG_LEVEL=info")
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// genericServerSettings are the settings this server reads under names generic
+// enough to belong to something else in the same shell. They are listed here
+// rather than imported because this module builds the binary rather than
+// linking it, so the list is duplicated on purpose and a name added to the
+// server without being added here only weakens the isolation, never the build.
+var genericServerSettings = []string{
+	"AUTH_MODE", "CAPABILITY_SURFACE", "CLIENT_COMPAT", "EXCLUDE_TOOLS",
+	"LOG_LEVEL", "MAX_HTTP_CLIENTS", "META_PARAM_SCHEMA", "META_TOOLS",
+	"OAUTH_CACHE_TTL", "OAUTH_CLIENT_UID", "POOL_IDLE_TIMEOUT", "PUBLIC_URL",
+	"RATE_LIMIT_BURST", "RATE_LIMIT_RPS", "TOOL_SURFACE", "TRUSTED_ORIGINS",
+	"UPLOAD_MAX_FILE_SIZE",
+}
+
+// configFreeEnviron is the process environment with every variable that
+// configures this server removed, so a test's flags decide its behavior and
+// nothing else does.
+//
+// The server reads its settings from the environment when a flag is absent, and
+// these tests start it as a child of whatever shell the developer or the runner
+// is using. A GITLAB_URL exported there therefore reaches the server as a
+// published instance, which silently defeats every test that pins what a
+// deployment publishing none does: they pass on a clean machine and fail on a
+// configured one, which is the worst way for a test to be wrong.
+//
+// Filtered rather than replaced, because the child still needs PATH, HOME and
+// the rest of the machine to run at all.
+func configFreeEnviron() []string {
+	kept := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(name, "GITLAB_") || strings.HasPrefix(name, "OTEL_") ||
+			slices.Contains(genericServerSettings, name) {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }
 
 // itoa keeps strconv out of every test file that needs one port number.

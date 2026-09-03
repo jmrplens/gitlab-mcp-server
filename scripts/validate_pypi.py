@@ -12,6 +12,10 @@ publish action ever sees the wheels:
 - METADATA carries the mcp-name ownership token the MCP Registry validates;
 - each wheel holds exactly one binary with the right magic number and
   machine type for its tag, the executable bit set, and a size floor;
+- every embedded binary is the exact one build_pypi.py verified against the
+  release's cosign-signed checksums.txt — the checks above are shape checks,
+  and a wrong-but-plausible file of the right size with the right first bytes
+  passes all of them for the five platforms this host cannot execute;
 - Linux binaries demand no glibc symbol newer than 2.17, which is what the
   manylinux_2_17 tag promises;
 - the wheel matching the host is installed into a throwaway venv and the
@@ -99,7 +103,42 @@ def check_glibc_floor(name, data):
             name, worst[0], worst[1], GLIBC_CEILING[0], GLIBC_CEILING[1]))
 
 
-def validate_wheel(path, version, tag):
+VERIFIED_MANIFEST = "verified-binaries.json"
+
+# Wheel platform tag -> the plat_key build_pypi.py records digests under.
+TAG_PLAT_KEYS = {
+    "manylinux_2_17_x86_64.manylinux2014_x86_64": "linux-amd64",
+    "manylinux_2_17_aarch64.manylinux2014_aarch64": "linux-arm64",
+    "macosx_11_0_x86_64": "darwin-amd64",
+    "macosx_11_0_arm64": "darwin-arm64",
+    "win_amd64": "windows-amd64",
+    "win_arm64": "windows-arm64",
+}
+
+
+def read_verified(wheels_dir, version):
+    """Load the digests build_pypi.py recorded, or fail if there are none.
+
+    The manifest lives in the wheelhouse and is removed once read, so the
+    publish step never sees a non-wheel file in packages-dir.
+    """
+    path = os.path.join(wheels_dir, VERIFIED_MANIFEST)
+    if not os.path.isfile(path):
+        fail("wheels were assembled without {} — build_pypi.py did not check them "
+             "against the release's checksums.txt".format(VERIFIED_MANIFEST))
+        return {}
+    with open(path, encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    os.remove(path)
+    if not manifest.get("verified"):
+        fail("{} says the wheels were built with --allow-unverified".format(VERIFIED_MANIFEST))
+    if manifest.get("version") != version:
+        fail("{} records version {} but this is {}".format(
+            VERIFIED_MANIFEST, manifest.get("version"), version))
+    return manifest.get("binaries") or {}
+
+
+def validate_wheel(path, version, tag, verified=None):
     name = os.path.basename(path)
     with zipfile.ZipFile(path) as zf:
         names = zf.namelist()
@@ -158,6 +197,13 @@ def validate_wheel(path, version, tag):
             fail("{}: {}".format(name, problem))
         if tag.startswith("manylinux"):
             check_glibc_floor(name, data)
+        if verified:
+            plat_key = TAG_PLAT_KEYS.get(tag)
+            want = verified.get(plat_key)
+            got = hashlib.sha256(data).hexdigest()
+            if want != got:
+                fail("{}: the embedded binary is sha256 {}, but the release's signed "
+                     "checksums.txt named {}".format(name, got, want))
 
 
 def host_tag():
@@ -246,13 +292,19 @@ def main():
 
     expected = {"{}-{}-py3-none-{}.whl".format(DIST, args.version, tag): tag
                 for tag in EXPECTED_TAGS}
+    verified = read_verified(args.wheels, args.version)
+
     present = sorted(f for f in os.listdir(args.wheels) if f.endswith(".whl"))
     if set(present) != set(expected):
         fail("wheelhouse holds {} but the release needs exactly {}".format(present, sorted(expected)))
 
+    leftovers = sorted(f for f in os.listdir(args.wheels) if not f.endswith(".whl"))
+    if leftovers:
+        fail("wheelhouse holds non-wheel files the publish step would try to upload: {}".format(leftovers))
+
     for fname in present:
         if fname in expected:
-            validate_wheel(os.path.join(args.wheels, fname), args.version, expected[fname])
+            validate_wheel(os.path.join(args.wheels, fname), args.version, expected[fname], verified)
 
     if not args.no_install and not failures:
         tag = host_tag()

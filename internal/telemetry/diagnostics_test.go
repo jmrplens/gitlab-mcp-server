@@ -212,3 +212,81 @@ func TestSDKVerbosityHandler_ADerivedHandlerKeepsTheClamp(t *testing.T) {
 		})
 	}
 }
+
+// TestSetDiagnosticSinks_AMalformedHeaderVariableIsNotPrinted is the regression
+// for a guarantee the guide states and a test could not fail on.
+//
+// docs/guides/telemetry.md says "This server never reads, logs or transforms
+// that variable ... a test asserts the credential never appears in this
+// server's own log output, including when an export fails". The server does not
+// print it; the SDK does, through the sinks this file installs. Its header
+// parser logs the raw pair when one has no "=", logs the raw value when
+// percent-decoding fails, and the log exporter hands otel.Handle the entire
+// variable, so a typo in a non-credential pair prints a perfectly well-formed
+// credential sitting beside it.
+//
+// Three shapes, because each reaches a different branch, and the third is the
+// one the original finding missed: the credential itself is valid and only a
+// neighboring key is not. Both exporters are built for every case, because the
+// worst path is the log exporter's and the trace exporter's is the one the SDK
+// logs at V(1).
+func TestSetDiagnosticSinks_AMalformedHeaderVariableIsNotPrinted(t *testing.T) {
+	const secret = "SUPERSECRET-COLLECTOR-TOKEN-9f3a"
+
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{
+			name:  "a pair with no equals sign",
+			value: "Authorization: Bearer " + secret,
+		},
+		{
+			name:  "a value that does not percent-decode",
+			value: "authorization=Bearer%2" + secret,
+		},
+		{
+			// The sharp case: this credential is well formed and would never
+			// be logged on its own. The invalid key beside it is what makes
+			// the exporter print the whole variable.
+			name:  "a valid credential beside an invalid key",
+			value: "api-key=" + secret + ",x tenant=acme",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", tt.value)
+			t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+			t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+
+			var buf bytes.Buffer
+			setDiagnosticSinks(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+			if _, err := newTraceExporter(context.Background(), ProtocolHTTP); err != nil {
+				t.Fatalf("building the trace exporter: %v", err)
+			}
+			logExporter, err := newLogExporter(context.Background(), ProtocolHTTP)
+			if err != nil {
+				t.Fatalf("building the log exporter: %v", err)
+			}
+			t.Cleanup(func() { _ = logExporter.Shutdown(context.Background()) })
+
+			printed := buf.String()
+			if strings.Contains(printed, secret) {
+				t.Errorf("the collector credential was printed by the SDK's own diagnostics: %s", printed)
+			}
+			// The absence above proves nothing on its own: an SDK that stopped
+			// logging these shapes, a level mapping that dropped them, or a
+			// sink that was never installed all leave it green. The variable
+			// name is kept in the line on purpose, so the pair below is the
+			// positive signal that the branch ran and the substitution with it.
+			if !strings.Contains(printed, "OTEL_EXPORTER_OTLP_HEADERS") {
+				t.Errorf("nothing named the malformed variable, so this row proves no redaction: %s", printed)
+			}
+			if !strings.Contains(printed, redactedPlaceholder) {
+				t.Errorf("nothing was substituted, so the credential was never in the line to begin with: %s", printed)
+			}
+		})
+	}
+}

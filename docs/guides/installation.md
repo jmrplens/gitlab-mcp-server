@@ -29,7 +29,7 @@ Not sure? Docker or the one-line installer for a first try, Homebrew or winget i
 
 ## What every channel shares
 
-- **The binary is the same everywhere.** Homebrew and winget point at the GitHub Release assets, pinned by the SHA-256 values in that release's `checksums.txt`; the npm and PyPI packages and the `.mcpb` are assembled in the release job from the same build outputs. `gitlab-mcp-server --version` prints `gitlab-mcp-server <version> (commit: <commit>)` on every channel, which is the quickest way to see what a client is actually running.
+- **The binary is the same everywhere.** Homebrew and winget point at the GitHub Release assets, pinned by the SHA-256 values in that release's `checksums.txt`; the `.mcpb` is assembled in the build job from the same outputs, and the npm and PyPI packages are assembled afterwards in separate jobs that download the published release assets and check them against the signed `checksums.txt` before packing. `gitlab-mcp-server --version` prints `gitlab-mcp-server <version> (commit: <commit>)` on every channel, which is the quickest way to see what a client is actually running.
 - **Two values configure it.** `GITLAB_TOKEN` is the only required setting: a Personal Access Token (`glpat-...`) with the `api` scope. A `read_api` token also works and is served a read-only tool surface; pair it with `GITLAB_READ_ONLY=true` for an explicit read-only setup. `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance. Everything else is optional and listed in the [configuration reference](../reference/configuration.md).
 - **The server never updates itself.** There is no update check and no in-place binary replacement on any channel. Upgrades come from whichever channel installed it: `brew upgrade`, `winget upgrade`, `npm update -g`, a newer image tag, a newer Claude Desktop extension, or a fresh download. An earlier self-update subsystem was removed; package managers own the files they install.
 - **There is no setup wizard.** Started in a terminal, or double-clicked on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set, the binary prints what it is and the two values it needs to stderr, then waits for Enter so a console window does not vanish before you read it. An MCP client never sees that screen, because a client connects pipes rather than a terminal. Configuration lives in the client's own JSON; see [Configure your client](#configure-your-client).
@@ -66,13 +66,37 @@ Download URLs have two forms: `https://github.com/jmrplens/gitlab-mcp-server/rel
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 ```
 
-The script detects Linux or macOS on amd64 or arm64 (`x86_64` and `aarch64` are mapped), refuses anything else and tells Windows users to use the PowerShell installer. It needs `curl` or `wget`, downloads the asset for the platform, and **verifies its SHA-256 against the release's `checksums.txt`** with `sha256sum` or `shasum`; a mismatch, a missing entry or an unreachable `checksums.txt` aborts the install (`ALLOW_UNVERIFIED=1` bypasses that, at your own risk). It removes any existing binary first so re-installing over a running server does not fail with "Text file busy", installs the file with mode `0755` as `$INSTALL_DIR/gitlab-mcp-server`, and warns when the directory is not on your `PATH`.
+The script detects Linux or macOS on amd64 or arm64 (`x86_64` and `aarch64` are mapped), refuses anything else and tells Windows users to use the PowerShell installer. It needs `curl` or `wget`, resolves `latest` to its actual tag before downloading anything, fetches the asset for the platform, and **verifies its SHA-256 against the release's `checksums.txt`** with `sha256sum` or `shasum`; a mismatch, a missing entry or an unreachable `checksums.txt` aborts the install (`ALLOW_UNVERIFIED=1` bypasses that, at your own risk). Each download is retried when the server does not answer, and not retried when it answers that the asset is not there — a 404 has already told the script what it asked.
 
-| Variable      | Default                      | Meaning                               |
-| ------------- | ---------------------------- | ------------------------------------- |
-| `INSTALL_DIR` | `$HOME/.local/bin`           | Where the binary is written           |
-| `VERSION`     | `latest`                     | A release tag such as `v2.7.5` to pin |
-| `REPO`        | `jmrplens/gitlab-mcp-server` | The repository to download from       |
+It then **checks a signature**, because `checksums.txt` comes from the same release as the binary and proves only that the two agree. With `cosign` installed it verifies `checksums.txt.sigstore.json` against this repository's release workflow identity, pinned to the version being installed. The `gh` CLI is asked whenever that verified nothing — not only when `cosign` is absent, since the build-provenance attestation lives in GitHub's own store and is still checkable when the bundle is the asset that went missing. Because `gh` has to ask GitHub, the script first checks that it can (`gh auth status`): a `gh` that cannot reach GitHub produced no verdict and only warns, while a `gh` that reached GitHub and rejected the binary aborts.
+
+What each outcome does:
+
+| Outcome                                                                            | Result                                |
+| ---------------------------------------------------------------------------------- | ------------------------------------- |
+| `cosign` or `gh` verifies                                                          | Install proceeds                      |
+| `cosign` rejects `checksums.txt`                                                   | **Abort**                             |
+| `gh` reaches GitHub and finds no valid attestation                                 | **Abort**                             |
+| Release serves no `checksums.txt.sigstore.json` (a 404), and nothing else verified | **Abort**                             |
+| The bundle could not be fetched at all, after the retries                          | Warning; `REQUIRE_SIGNATURE=1` aborts |
+| `gh` is installed but cannot reach GitHub                                          | Warning; `REQUIRE_SIGNATURE=1` aborts |
+| Neither `cosign` nor `gh` is installed                                             | Warning; `REQUIRE_SIGNATURE=1` aborts |
+
+The two fatal middle rows are the reason a machine with `cosign` cannot be walked past by deleting one release asset: every release since signing began publishes the bundle, so its absence is not an old release, it is the single file whoever replaced the binary and `checksums.txt` together also has to remove. A download that simply never came back is a different fact and is reported as one — it says nothing about whether the release is signed, so it warns rather than claiming the release is unsigned.
+
+The script removes any existing binary first so re-installing over a running server does not fail with "Text file busy", installs the file with mode `0755` as `$INSTALL_DIR/gitlab-mcp-server`, and warns when the directory is not on your `PATH`.
+
+| Variable            | Default                      | Meaning                                               |
+| ------------------- | ---------------------------- | ----------------------------------------------------- |
+| `INSTALL_DIR`       | `$HOME/.local/bin`           | Where the binary is written                           |
+| `VERSION`           | `latest`                     | A release tag such as `v2.7.5` to pin                 |
+| `REPO`              | `jmrplens/gitlab-mcp-server` | The repository to download from                       |
+| `REQUIRE_SIGNATURE` | unset                        | `1` aborts unless a signature or attestation verifies |
+| `ALLOW_UNVERIFIED`  | unset                        | `1` skips verification entirely, at your own risk     |
+| `FETCH_ATTEMPTS`    | `3`                          | Tries per download before giving up                   |
+| `FETCH_RETRY_DELAY` | `2`                          | Seconds between those tries                           |
+
+Setting both `REQUIRE_SIGNATURE=1` and `ALLOW_UNVERIFIED=1` is refused rather than resolved in either direction: they ask for opposite things, and silently picking one would be worse than saying so.
 
 Its printed next step is the Claude Code registration, `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server` (add `--env GITLAB_URL=https://gitlab.example.com` for a self-managed instance), or the hand configuration in [Configure your client](#configure-your-client).
 
@@ -82,7 +106,7 @@ Its printed next step is the Claude Code registration, `claude mcp add gitlab --
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 ```
 
-The script detects AMD64 or ARM64 (reading `PROCESSOR_ARCHITEW6432` first, so a 32-bit PowerShell on a 64-bit machine still picks the right build) and refuses 32-bit x86, for which no build is published. It downloads `gitlab-mcp-server-windows-<arch>.exe`, verifies it against `checksums.txt` with `Get-FileHash` (same `ALLOW_UNVERIFIED=1` bypass), installs it as `gitlab-mcp-server.exe` under `%LOCALAPPDATA%\Programs\gitlab-mcp-server` by default, and appends that directory to your user-scope `PATH`. Open a new PowerShell or Windows Terminal window before relying on the new `PATH`. `-Version`, `-InstallDir` and `-Repo` (or the `VERSION`, `INSTALL_DIR` and `REPO` environment variables) override the defaults.
+The script detects AMD64 or ARM64 (reading `PROCESSOR_ARCHITEW6432` first, so a 32-bit PowerShell on a 64-bit machine still picks the right build) and refuses 32-bit x86, for which no build is published. It downloads `gitlab-mcp-server-windows-<arch>.exe`, verifies it against `checksums.txt` with `Get-FileHash`, verifies the release signature by the same rules as the shell installer above — `cosign` over `checksums.txt.sigstore.json`, then `gh attestation verify` whenever that verified nothing, the same fatal and warning outcomes, the same `REQUIRE_SIGNATURE=1`, `ALLOW_UNVERIFIED=1`, `FETCH_ATTEMPTS` and `FETCH_RETRY_DELAY` — installs it as `gitlab-mcp-server.exe` under `%LOCALAPPDATA%\Programs\gitlab-mcp-server` by default, and appends that directory to your user-scope `PATH`. Open a new PowerShell or Windows Terminal window before relying on the new `PATH`. `-Version`, `-InstallDir` and `-Repo` (or the `VERSION`, `INSTALL_DIR` and `REPO` environment variables) override the defaults.
 
 ### Manual download
 
@@ -112,7 +136,7 @@ sha256sum --check --ignore-missing checksums.txt
 
 Two further artifacts are produced by the release workflow for **releases after v2.7.5**: one SPDX SBOM per binary (`<asset>.sbom.json`) and a SLSA build provenance attestation stored by GitHub, which `gh attestation verify <file> -R jmrplens/gitlab-mcp-server` checks. Both steps landed after the v2.7.5 tag, so that release carries neither; on v2.7.5 the checksum and signature above are the verification. Steps and background are in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity).
 
-Releases are created as drafts and published only after every asset is attached, so a release you can see is never a partial one.
+Releases are created as drafts and published only after every asset is attached **and attested**, so a release you can see is never a partial one. Everything published downstream — npm, PyPI, the Homebrew formula, the MCP Registry entry — is built from those published assets after their signature has been checked, and a separate job reads the npm and PyPI packages back out of the registries and compares the binaries inside them with the same signed `checksums.txt`. Nothing that advertises the version runs before that comparison passes: the Homebrew tap, the MCP Registry entry and the manifest commit to `main` all wait on it.
 
 ### Upgrade and uninstall
 
@@ -184,7 +208,7 @@ A winget release is not published by this repository directly. The release workf
 
 ## Docker
 
-The image is published to two registries with identical content: `ghcr.io/jmrplens/gitlab-mcp-server` and the mirror `docker.io/jmrplens/gitlab-mcp-server` (shown as `jmrplens/gitlab-mcp-server` on Docker Hub). Each release pushes the `<version>` tag and moves `latest`, for `linux/amd64` and `linux/arm64`, with provenance and SBOM attestations and a Cosign signature on the digest. The image runs as the non-root user `appuser` (uid 10001) on Alpine, has the binary at `/usr/local/bin/gitlab-mcp-server`, exposes port 8080, and carries a `HEALTHCHECK` against `http://localhost:8080/health`.
+The image is published to two registries with identical content: `ghcr.io/jmrplens/gitlab-mcp-server` and the mirror `docker.io/jmrplens/gitlab-mcp-server` (shown as `jmrplens/gitlab-mcp-server` on Docker Hub). Each release pushes the `<version>` tag and moves `latest`, for `linux/amd64` and `linux/arm64`, with provenance and SBOM attestations and a Cosign signature on the digest. Both variants are started and asked for their version before the manifest is pushed, so neither can ship unable to execute — which is what happened to the `linux/arm64` image of v2.7.5, whose binary requested a dynamic loader the Alpine runtime does not carry. The image runs as the non-root user `appuser` (uid 10001) on Alpine, has the binary at `/usr/local/bin/gitlab-mcp-server`, exposes port 8080, and carries a `HEALTHCHECK` against `http://localhost:8080/health`.
 
 Its `ENTRYPOINT` is `gitlab-mcp-server` and its `CMD` is `--http --http-addr 0.0.0.0:8080`, which is why the two ways to run it look different.
 
@@ -212,13 +236,15 @@ docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --h
 
 ### HTTP: a long-running container on a port
 
-The container's default mode serves HTTP on `:8080`, where each client sends its own token per request. The simplest form is:
+The container's default mode serves HTTP on `:8080`, where each client sends its own token per request. It has to be told which GitLab it serves, so the simplest form names one:
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest
+docker run --rm -p 8080:8080 -e GITLAB_URL=https://gitlab.com ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-That starts the server **without** `--gitlab-url`, so it is in multi-instance mode: a client chooses the instance with a `GITLAB-URL` header and gets `https://gitlab.com` when it sends none. To fix the instance, and for the hardening flags a shared deployment should have, pass the flags explicitly:
+The `CMD` carries no instance, so `docker run -p 8080:8080 <image>` with nothing else exits immediately with `--gitlab-url is required in HTTP mode`. That refusal is deliberate: a deployment that names no instance makes requests to whatever host a caller puts in the `GITLAB-URL` header, with whatever token that caller supplied. `-e GITLAB_URL=` fills the list without replacing the `CMD`; a comma-separated value publishes several, among which the header then chooses. For a local single-user run where you are the only caller, `--allow-any-gitlab-url` starts with no instance published and warns in the log that it did.
+
+To fix the instance on the command line, and for the hardening flags a shared deployment should have, pass the flags explicitly (any argument after the image name replaces the `CMD`, so `--http` and `--http-addr` come back with them):
 
 ```bash
 docker run -d --name gitlab-mcp \
@@ -399,7 +425,7 @@ Every stdio channel is configured the same way: the client starts `gitlab-mcp-se
 
 Add `"GITLAB_URL": "https://gitlab.example.com"` to `env` only for a self-managed instance. VS Code uses `.vscode/mcp.json` with a `servers` map and `"type": "stdio"`, and its `promptString` inputs keep the token out of plain text; Claude Code takes `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`. Per-client file locations and shapes are in [IDE Configuration](ide-configuration.md) and on the site's [Getting Started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/#manual-configuration).
 
-To keep the token out of client JSON entirely, put it in `~/.gitlab-mcp-server.env` (one `KEY=value` per line): an explicit environment variable beats a `.env` in the working directory, which beats that file. Then ask your assistant "List my GitLab projects." or "Who am I on GitLab?" to confirm the connection.
+To keep the token out of client JSON entirely, put it in `~/.gitlab-mcp-server.env` (one `KEY=value` per line): an explicit environment variable beats the file `GITLAB_MCP_ENV_FILE` names, which beats that one, and a `.env` in the working directory is not read at all. Then ask your assistant "List my GitLab projects." or "Who am I on GitLab?" to confirm the connection.
 
 ---
 

@@ -68,7 +68,7 @@ func startServerWithClient(t *testing.T, client *http.Client, baseURL string, fl
 
 	bin := serverBinary(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, append([]string{"--http"}, flags...)...)
+	cmd := exec.CommandContext(ctx, bin, append([]string{"--http"}, withInstancePolicy(flags)...)...)
 	cmd.Env = append(os.Environ(),
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
@@ -196,7 +196,8 @@ func TestListener_InvalidSocketMode_StopsStartup(t *testing.T) {
 	for _, mode := range []string{"rw-rw----", "0899", "0", "7777"} {
 		t.Run(mode, func(t *testing.T) {
 			out, err := runServerExpectingExit(t, serverBinary(t),
-				"--http", "--http-addr=/tmp/should-never-be-created.sock",
+				"--http", "--allow-any-gitlab-url",
+				"--http-addr=/tmp/should-never-be-created.sock",
 				"--http-socket-mode="+mode,
 			)
 			if err == nil {
@@ -287,7 +288,7 @@ func TestListener_HalfConfiguredTLS_StopsStartup(t *testing.T) {
 		{name: "cert that does not exist", flags: []string{"--tls-cert=/nonexistent.pem", "--tls-key=" + keyFile}, want: "loading the TLS certificate"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			args := append([]string{"--http", "--http-addr=127.0.0.1:0"}, tc.flags...)
+			args := append([]string{"--http", "--allow-any-gitlab-url", "--http-addr=127.0.0.1:0"}, tc.flags...)
 			out, err := runServerExpectingExit(t, serverBinary(t), args...)
 			if err == nil {
 				t.Fatalf("the server started with a half-configured TLS pair; output:\n%s", out)

@@ -3,11 +3,15 @@ package toolutil
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 type surfaceToolTestInput struct {
@@ -245,5 +249,56 @@ func TestRegisterSurfaceToolFromSpec_AProtocolFaultStopsTheRouteAsAnError(t *tes
 	}
 	if called.Load() {
 		t.Error("the destructive route ran despite a confirmation that could not be completed")
+	}
+}
+
+// TestSurfaceToolHandler_UpstreamResponseBody_IsNotReflected verifies that the
+// standalone-tool dispatcher contains a GitLab error before it becomes tool
+// output and before it is logged.
+//
+// The route wraps client-go's error the way gitlab_discover_project does, with
+// fmt.Errorf and %w, so it never passes through the wrapping helpers that bound
+// the body at the point of classification. On a deployment behind a proxy that
+// body is an nginx or WAF page naming internal hosts, and it needs no adversary
+// to leak: the model reads the tool error, and the operator reads the same text
+// in the "tool call failed" line.
+func TestSurfaceToolHandler_UpstreamResponseBody_IsNotReflected(t *testing.T) {
+	const internalHost = "gitlab-internal-07.corp.invalid"
+	target, parseErr := url.Parse("https://gitlab.example.com/api/v4/projects/group%2Fproject")
+	if parseErr != nil {
+		t.Fatalf("url.Parse() error = %v", parseErr)
+	}
+	// "failed to parse unknown error format: %s" is verbatim what client-go
+	// puts in Message when the body is not JSON, which a proxy's error page
+	// never is. Reproducing that prefix is what makes this the real shape
+	// rather than an invented one.
+	upstream := &gl.ErrorResponse{
+		Response: &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Request:    &http.Request{Method: http.MethodGet, URL: target},
+		},
+		Message: "failed to parse unknown error format: <html><head><title>502 Bad Gateway</title></head>" +
+			"<body>nginx/1.25.3 upstream " + internalHost + ":8080</body></html>",
+	}
+	handler := surfaceToolHandler("gitlab_discover_project", ActionRoute{
+		Handler: func(context.Context, map[string]any) (any, error) {
+			return nil, fmt.Errorf("project %q not found on GitLab: %w", "group/project", upstream)
+		},
+	}, MarkdownForResult)
+
+	_, _, err := handler(context.Background(), nil, map[string]any{})
+	if err == nil {
+		t.Fatal("handler() error = nil, want the route's failure")
+	}
+	if strings.Contains(err.Error(), internalHost) {
+		t.Errorf("handler() error = %q, want no upstream response body", err.Error())
+	}
+	// The wrapper's own context is the useful half and must survive: only the
+	// dangerous substring is replaced, never the whole message.
+	if !strings.Contains(err.Error(), "not found on GitLab") {
+		t.Errorf("handler() error = %q, want the handler's own context kept", err.Error())
+	}
+	if !errors.Is(err, upstream) {
+		t.Error("errors.Is(handler() error, upstream) = false, want the cause still reachable")
 	}
 }

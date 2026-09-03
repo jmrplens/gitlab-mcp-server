@@ -11,6 +11,15 @@
 //   node scripts/build-npm.mjs --binaries <dir> --version <x.y.z> [--out <dir>]
 //   node scripts/build-npm.mjs --sync-only --version <x.y.z>
 //
+// Every binary is checked against <dir>/checksums.txt — the release's own
+// manifest, cosign-signed at build time — before it is copied into a package.
+// The packages used to be assembled from an unverified `cp` of the build
+// directory, so a stale or swapped binary reached an immutable registry with
+// nothing looking at it: the validator checks a size floor, a magic number and
+// one handshake on the host platform, all of which a wrong-but-plausible file
+// passes. Pass --allow-unverified only when there is genuinely no manifest
+// (never in CI).
+//
 // <dir> holds the release assets under their published names
 // (gitlab-mcp-server-linux-amd64, …). Output is one directory per package under
 // <out> (default npm/packages), plus the main package's version and dependency
@@ -21,7 +30,8 @@
 // release version-stamp step can keep the checked-in file honest between
 // releases without staging a whole distribution.
 
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,19 +54,45 @@ const PLATFORMS = [
 ];
 
 function parseArgs(argv) {
-  const out = { binaries: null, version: null, out: join(repoRoot, "npm", "packages"), syncOnly: false };
+  const out = {
+    binaries: null,
+    version: null,
+    out: join(repoRoot, "npm", "packages"),
+    syncOnly: false,
+    allowUnverified: false,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--binaries") out.binaries = argv[++i];
     else if (arg === "--version") out.version = argv[++i];
     else if (arg === "--out") out.out = argv[++i];
     else if (arg === "--sync-only") out.syncOnly = true;
+    else if (arg === "--allow-unverified") out.allowUnverified = true;
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!out.version) throw new Error("--version <x.y.z> is required");
   if (!/^\d+\.\d+\.\d+$/.test(out.version)) throw new Error(`--version must be semver, got ${out.version}`);
   if (!out.syncOnly && !out.binaries) throw new Error("--binaries <dir> is required (or pass --sync-only)");
   return out;
+}
+
+// sha256 of a file, hex, the same form checksums.txt uses.
+function sha256(path) {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+// readChecksums parses GoReleaser's checksums.txt ("<hex>  <name>" lines).
+// Returns null when the file is absent so the caller can decide whether that
+// is acceptable.
+function readChecksums(binariesDir) {
+  const path = join(binariesDir, "checksums.txt");
+  if (!existsSync(path)) return null;
+  const entries = new Map();
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const m = line.trim().match(/^([0-9a-f]{64})\s+\*?(.+)$/);
+    if (m) entries.set(m[2], m[1]);
+  }
+  return entries;
 }
 
 const mainRepository = {
@@ -68,13 +104,23 @@ const mainRepository = {
 // stable name the launcher resolves, made executable so the bit survives into
 // the tarball, and a package.json whose os/cpu confine the install to the
 // platform it serves.
-function writePlatformPackage(plat, version, binariesDir, outDir) {
+function writePlatformPackage(plat, version, binariesDir, outDir, checksums) {
   const dir = join(outDir, plat.key);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 
   const binaryName = plat.exe ? "gitlab-mcp-server.exe" : "gitlab-mcp-server";
   const src = join(binariesDir, plat.asset);
+  const digest = sha256(src);
+  if (checksums) {
+    const want = checksums.get(plat.asset);
+    if (!want) {
+      throw new Error(`${plat.asset} is not listed in ${join(binariesDir, "checksums.txt")}`);
+    }
+    if (want !== digest) {
+      throw new Error(`${plat.asset} is sha256 ${digest}, but checksums.txt says ${want}`);
+    }
+  }
   const dst = join(dir, binaryName);
   copyFileSync(src, dst);
   // 0o755 both here and in the copy: npm records the file mode in the tarball,
@@ -105,7 +151,7 @@ function writePlatformPackage(plat, version, binariesDir, outDir) {
       `[@jmrp.io/gitlab-mcp-server](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server). ` +
       "You do not install this directly; it comes in as an optional dependency of the main package.\n",
   );
-  return { name: pkg.name, dir };
+  return { name: pkg.name, dir, binaryName, digest };
 }
 
 // syncMainPackage rewrites the launcher package's own version and pins every
@@ -134,10 +180,37 @@ function main() {
 
   mkdirSync(args.out, { recursive: true });
 
+  const checksums = readChecksums(args.binaries);
+  if (!checksums && !args.allowUnverified) {
+    throw new Error(
+      `${join(args.binaries, "checksums.txt")} not found — refusing to package unverified binaries ` +
+        "(pass --allow-unverified to override)",
+    );
+  }
+  if (!checksums) {
+    process.stderr.write("WARNING: --allow-unverified — binaries are being packaged without a checksum manifest\n");
+  }
+
   const platformPackages = PLATFORMS.map((p) =>
-    writePlatformPackage(p, args.version, args.binaries, args.out),
+    writePlatformPackage(p, args.version, args.binaries, args.out, checksums),
   );
   const mainPackage = syncMainPackage(args.version, args.out);
+
+  // Record what was verified so validate-npm.mjs can confirm the packed
+  // tarballs still carry those exact bytes. Written beside the package
+  // directories, never inside one, so it cannot be published.
+  writeFileSync(
+    join(args.out, "verified-binaries.json"),
+    JSON.stringify(
+      {
+        version: args.version,
+        verified: Boolean(checksums),
+        binaries: Object.fromEntries(platformPackages.map((p, i) => [PLATFORMS[i].key, p.digest])),
+      },
+      null,
+      2,
+    ) + "\n",
+  );
 
   // Publish order matters: the platform packages must exist on the registry
   // before the launcher that lists them, or an install racing the publish

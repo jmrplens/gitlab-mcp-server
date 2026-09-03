@@ -7,12 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
@@ -25,7 +28,83 @@ const (
 	// ImportArchiveAllowlistEnv names extra directories allowed for local
 	// GitLab project/group import archives, separated by the OS path-list separator.
 	ImportArchiveAllowlistEnv = "GITLAB_MCP_ALLOWED_IMPORT_DIRS"
+	// UploadDirAllowlistEnv names extra directories a tool may READ a local
+	// file from (every file_path input), separated by the OS path-list
+	// separator. The working directory and the OS temp directory are always
+	// allowed.
+	UploadDirAllowlistEnv = "GITLAB_MCP_ALLOWED_UPLOAD_DIRS"
+	// DownloadDirAllowlistEnv names extra directories a tool may WRITE a
+	// downloaded file into (output_path), separated by the OS path-list
+	// separator. The working directory and the OS temp directory are always
+	// allowed.
+	DownloadDirAllowlistEnv = "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS"
 )
+
+// localFilesystemAllowed reports whether tool handlers may name paths on the
+// machine the server runs on. It is the transport distinction, not a knob: a
+// stdio server runs on the same machine as the person driving it, and naming a
+// file by path is the whole point of file_path; a server reached over HTTP is
+// talking to somebody who has no files here, so every path they can name
+// belongs to someone else. See [SetLocalFilesystemAccess].
+var localFilesystemAllowed atomic.Bool
+
+func init() {
+	localFilesystemAllowed.Store(!httpTransportConfigured(os.Args))
+}
+
+// SetLocalFilesystemAccess overrides the transport inference for this process:
+// pass false to refuse every caller-supplied local path, true to allow the
+// allow-listed roots. Call it before any tool handler runs.
+//
+// The default is inferred from the process arguments rather than configured,
+// so a deployment that never heard of this policy still gets the right answer:
+// an operator who forgets a flag would otherwise be the one running the
+// exposed server. An explicit call always wins over the inference.
+func SetLocalFilesystemAccess(allowed bool) { localFilesystemAllowed.Store(allowed) }
+
+// LocalFilesystemAccessAllowed reports whether caller-supplied local paths are
+// honored in this process.
+func LocalFilesystemAccessAllowed() bool { return localFilesystemAllowed.Load() }
+
+// httpTransportConfigured reports whether args start this binary in HTTP mode,
+// recognizing every spelling of the boolean --http flag that Go's flag package
+// accepts and stopping at the -- terminator, as flag parsing does.
+func httpTransportConfigured(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if arg == "--" {
+			return false
+		}
+		if !strings.HasPrefix(arg, "-") {
+			continue
+		}
+		name, value, hasValue := strings.Cut(strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-"), "=")
+		if name != "http" {
+			continue
+		}
+		if !hasValue {
+			return true
+		}
+		enabled, err := strconv.ParseBool(value)
+		return err == nil && enabled
+	}
+	return false
+}
+
+// requireLocalFilesystemAccess refuses a caller-supplied local path when this
+// process is serving a remote transport. alternative names the input a remote
+// caller should use instead, or is empty when the action has none.
+func requireLocalFilesystemAccess(what, alternative string) error {
+	if localFilesystemAllowed.Load() {
+		return nil
+	}
+	if alternative != "" {
+		return fmt.Errorf("%s is disabled when the server is reached over HTTP: the file would be read from the server's own disk, not yours; send the bytes with %s instead", what, alternative)
+	}
+	return fmt.Errorf("%s is disabled when the server is reached over HTTP: it names a path on the server's own disk, not yours", what)
+}
 
 // UploadConfig holds runtime-configurable upload parameters. Initialized with
 // package defaults; use SetUploadConfig to override from environment config.
@@ -55,36 +134,198 @@ func GetUploadConfig() UploadConfig {
 	return uploadCfg
 }
 
-// OpenAndValidateFile opens a local file for reading after validating it
-// exists, is a regular file (not a directory, symlink, device or pipe), and
-// does not exceed maxSize bytes. Returns the open file handle and its FileInfo.
+// OpenAndValidateFile opens a caller-supplied local file for reading after
+// confining it to the allowed upload directories, resolving it through every
+// symlink on the way, and validating that what the resolved path names is a
+// regular file of at most maxSize bytes. Returns the open file handle and its
+// FileInfo.
+//
+// The containment is the point: file_path names a path on the machine the
+// server runs on, and the caller — a model following an instruction that may
+// have come from an issue description or a job log — is not the person whose
+// files these are. See [CanonicalLocalFilePath] for the roots.
 func OpenAndValidateFile(path string, maxSize int64) (*os.File, os.FileInfo, error) {
-	if path == "" {
-		return nil, nil, errors.New("file path is required")
+	canonicalPath, err := CanonicalLocalFilePath(path)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	cleanPath := filepath.Clean(path)
-
-	info, err := os.Stat(cleanPath)
+	// Lstat, not Stat: canonicalPath is already symlink-free, so the two agree
+	// unless the leaf became a symlink between resolution and here, and in
+	// that race Lstat is the answer that refuses.
+	info, err := os.Lstat(canonicalPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("stat %s: %w", cleanPath, err)
+		return nil, nil, fmt.Errorf("stat %s: %w", canonicalPath, err)
 	}
 
 	if !info.Mode().IsRegular() {
-		return nil, nil, fmt.Errorf("%s is not a regular file", cleanPath)
+		return nil, nil, fmt.Errorf("%s is not a regular file", canonicalPath)
 	}
 
 	if maxSize > 0 && info.Size() > maxSize {
 		return nil, nil, fmt.Errorf("file %s is %d bytes, exceeds maximum allowed size of %d bytes",
-			cleanPath, info.Size(), maxSize)
+			canonicalPath, info.Size(), maxSize)
 	}
 
-	f, err := os.Open(cleanPath) //#nosec G304 -- path is cleaned via filepath.Clean, validated as regular file with Stat, and size-checked before open
+	f, err := openLeafNoFollow(canonicalPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open %s: %w", cleanPath, err)
+		return nil, nil, fmt.Errorf("open %s: %w", canonicalPath, err)
 	}
 
-	return f, info, nil
+	// The checks above ran on a path; these run on the descriptor, which is
+	// the only thing that can still be read from. Between the Lstat and the
+	// open the leaf may have been replaced, and a swap the open itself could
+	// not refuse is caught here instead.
+	opened, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, fmt.Errorf("stat %s: %w", canonicalPath, err)
+	}
+	if !opened.Mode().IsRegular() {
+		_ = f.Close()
+		return nil, nil, fmt.Errorf("%s is not a regular file", canonicalPath)
+	}
+	if maxSize > 0 && opened.Size() > maxSize {
+		_ = f.Close()
+		return nil, nil, fmt.Errorf("file %s is %d bytes, exceeds maximum allowed size of %d bytes",
+			canonicalPath, opened.Size(), maxSize)
+	}
+
+	return f, opened, nil
+}
+
+// CreateDownloadOutputFile creates the destination a download writes to,
+// refusing a symlink at the leaf where the platform can.
+//
+// [CanonicalDownloadOutputPath] refuses a destination that is already a
+// symlink, but it refuses a path, and the file is created by a later syscall:
+// a local principal who can write in an allowed root can put a symlink there
+// in between and redirect the write to whatever the server may overwrite. The
+// creation is the only place that race can be closed, so it happens here
+// rather than at the call site.
+func CreateDownloadOutputFile(path string) (*os.File, error) {
+	return createLeafNoFollow(path)
+}
+
+// CanonicalLocalFilePath resolves a caller-supplied path to an existing local
+// file and returns it canonicalized, provided the resolved path lies under the
+// working directory, the OS temporary directory, or a directory listed in
+// GITLAB_MCP_ALLOWED_UPLOAD_DIRS. It refuses every path when the server is
+// reached over HTTP.
+func CanonicalLocalFilePath(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("file path is required")
+	}
+	if err := requireLocalFilesystemAccess("file_path", "content_base64"); err != nil {
+		return "", err
+	}
+	absolutePath, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("resolve file path: %w", err)
+	}
+	canonicalPath, err := filepath.EvalSymlinks(absolutePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve file path %s: %w", absolutePath, err)
+	}
+	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(UploadDirAllowlistEnv)) {
+		return "", outsideAllowedDirsError("file", canonicalPath, UploadDirAllowlistEnv)
+	}
+	return canonicalPath, nil
+}
+
+// CanonicalLocalDirPath resolves a caller-supplied path to an existing local
+// directory and returns it canonicalized, subject to the same roots and the
+// same HTTP refusal as [CanonicalLocalFilePath].
+func CanonicalLocalDirPath(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("directory path is required")
+	}
+	// No alternative to name here: a directory of files has no inline form.
+	// Publishing them one at a time with content_base64 is the remote path,
+	// and that is the publish action's own error to give.
+	if err := requireLocalFilesystemAccess("directory_path", ""); err != nil {
+		return "", err
+	}
+	canonicalPath, err := canonicalDirPath(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve directory path: %w", err)
+	}
+	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(UploadDirAllowlistEnv)) {
+		return "", outsideAllowedDirsError("directory", canonicalPath, UploadDirAllowlistEnv)
+	}
+	return canonicalPath, nil
+}
+
+// CanonicalDownloadOutputPath resolves a caller-supplied destination for a
+// file the server is about to write and returns it canonicalized, provided it
+// lies under the working directory, the OS temporary directory, or a directory
+// listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. It refuses every path when the
+// server is reached over HTTP.
+//
+// The destination does not exist yet and neither may its parents, so the
+// deepest existing ancestor is what gets resolved through symlinks; the
+// segments below it cannot be symlinks because they do not exist. A leaf that
+// does exist must be a regular file: a symlink there would redirect the write
+// to whatever it names, which is how an "output path" becomes a way to
+// overwrite an SSH key.
+//
+// Call it again after creating the parent directories. The second call
+// resolves a parent that now exists, which is what turns the check from a
+// promise about the path into a check on the directory being written to.
+func CanonicalDownloadOutputPath(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("output path is required")
+	}
+	if err := requireLocalFilesystemAccess("output_path", ""); err != nil {
+		return "", err
+	}
+	absolutePath, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("resolve output path: %w", err)
+	}
+	canonicalPath, err := canonicalizeThroughExistingAncestor(absolutePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve output path %s: %w", absolutePath, err)
+	}
+	if info, statErr := os.Lstat(canonicalPath); statErr == nil && !info.Mode().IsRegular() {
+		return "", fmt.Errorf("output path %s already exists and is not a regular file", canonicalPath)
+	}
+	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(DownloadDirAllowlistEnv)) {
+		return "", outsideAllowedDirsError("output path", canonicalPath, DownloadDirAllowlistEnv)
+	}
+	return canonicalPath, nil
+}
+
+// canonicalizeThroughExistingAncestor resolves the longest existing prefix of
+// an absolute path through symlinks and rejoins the not-yet-existing tail.
+func canonicalizeThroughExistingAncestor(absolutePath string) (string, error) {
+	dir := absolutePath
+	tail := ""
+	for {
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err == nil {
+			if tail == "" {
+				return resolved, nil
+			}
+			return filepath.Join(resolved, tail), nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", err
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no existing ancestor directory for %s", absolutePath)
+		}
+		tail = filepath.Join(filepath.Base(dir), tail)
+		dir = parent
+	}
+}
+
+// outsideAllowedDirsError explains a containment refusal in the terms the
+// caller can act on: what was refused, and which variable widens the roots.
+func outsideAllowedDirsError(kind, canonicalPath, envName string) error {
+	return fmt.Errorf("%s %s is outside allowed directories; use the current working directory, the OS temp directory, or set %s",
+		kind, canonicalPath, envName)
 }
 
 // CanonicalImportArchivePath validates a local GitLab export archive path and
@@ -94,6 +335,11 @@ func OpenAndValidateFile(path string, maxSize int64) (*os.File, os.FileInfo, err
 func CanonicalImportArchivePath(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("archive path is required")
+	}
+	// An archive path is the same primitive as file_path, so it answers to the
+	// same transport rule: a remote caller never placed an archive here.
+	if err := requireLocalFilesystemAccess("a local archive path", ""); err != nil {
+		return "", err
 	}
 
 	absolutePath, err := filepath.Abs(filepath.Clean(path))
@@ -130,7 +376,11 @@ func archiveHasUnsafePermissions(info os.FileInfo) bool {
 }
 
 func pathWithinAllowedImportDirs(canonicalPath string) bool {
-	for _, base := range allowedImportArchiveDirs() {
+	return pathWithinAllowedDirs(canonicalPath, allowedImportArchiveDirs())
+}
+
+func pathWithinAllowedDirs(canonicalPath string, dirs []string) bool {
+	for _, base := range dirs {
 		if pathWithinBase(canonicalPath, base) {
 			return true
 		}
@@ -139,18 +389,31 @@ func pathWithinAllowedImportDirs(canonicalPath string) bool {
 }
 
 func allowedImportArchiveDirs() []string {
-	type importDirEntry struct {
+	return allowedLocalDirs(ImportArchiveAllowlistEnv)
+}
+
+// allowedLocalDirs returns the canonical directories a caller-supplied local
+// path may resolve into: the working directory, the OS temporary directory,
+// and whatever envName lists.
+//
+// The working directory is skipped when it is a filesystem root. A stdio
+// server usually starts in the workspace the user just opened, which is what
+// makes it a sensible root; Claude Desktop starts its servers in "/", where
+// keeping it would allow-list the entire disk and quietly undo the whole
+// containment.
+func allowedLocalDirs(envName string) []string {
+	type dirEntry struct {
 		path       string
 		configured bool
 	}
-	dirs := []importDirEntry{}
-	if cwd, err := os.Getwd(); err == nil {
-		dirs = append(dirs, importDirEntry{path: cwd})
+	dirs := []dirEntry{}
+	if cwd, err := os.Getwd(); err == nil && filepath.Dir(cwd) != cwd {
+		dirs = append(dirs, dirEntry{path: cwd})
 	}
-	dirs = append(dirs, importDirEntry{path: os.TempDir()})
-	if configured := os.Getenv(ImportArchiveAllowlistEnv); configured != "" {
+	dirs = append(dirs, dirEntry{path: os.TempDir()})
+	if configured := os.Getenv(envName); configured != "" {
 		for _, dir := range filepath.SplitList(configured) {
-			dirs = append(dirs, importDirEntry{path: dir, configured: true})
+			dirs = append(dirs, dirEntry{path: dir, configured: true})
 		}
 	}
 
@@ -160,7 +423,7 @@ func allowedImportArchiveDirs() []string {
 		canonicalDir, err := canonicalDirPath(dir.path)
 		if err != nil {
 			if dir.configured {
-				slog.Warn("skipping invalid import archive allowlist directory", "env", ImportArchiveAllowlistEnv, "path", dir.path, "error", err)
+				slog.Warn("skipping invalid allowlist directory", "env", envName, "path", dir.path, "error", err)
 			}
 			continue
 		}

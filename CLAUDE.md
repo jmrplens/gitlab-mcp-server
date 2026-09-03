@@ -63,6 +63,7 @@ gitlab-mcp-server/
 │   ├── audit_gateway_chars/     # Audits served descriptions/titles for characters MCP gateway validators reject (make check-gateway-chars)
 │   ├── godoc_tool/              # Consolidated Go doc auditor + fixer (was audit_godocs + add_docs)
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
+│   ├── audit_supply_chain/      # Audits five release-configuration invariants: SHA-pinned uses:, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current SECURITY.md, signature-verifying installers (make check-supply-chain)
 │   ├── audit_surface_quality/   # Consolidated surface audit: metadata violations + output quality (was audit_tools + audit_output)
 │   ├── audit_test_goroutines/   # Audits testing.T aborts made off the test goroutine (A/B categories, --check gate)
 │   ├── audit_test_names/        # Audits test function naming compliance; -check-files gates test-file naming (make check-test-file-names)
@@ -360,9 +361,12 @@ make analyze-report                        # generate LLM-consumable report
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`, and the count decides the header's meaning: none lets `GITLAB-URL` select freely per request, falling back to `https://gitlab.com` when it is absent; exactly one fixes the instance and the header is ignored; several publish an allow-list the header selects among (anything else refused). A comma-separated value spells the list |
+| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode it is `--gitlab-url`, which is **required** unless `--allow-any-gitlab-url` is passed, and the count decides the header's meaning: none (with the escape hatch) lets `GITLAB-URL` select freely per request, and a request that omits it is refused rather than resolved to `https://gitlab.com`; exactly one fixes the instance and the header is ignored; several publish an allow-list among which the header is required, since choosing for the caller would send their token to an instance they never named. A comma-separated value spells the list |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
+| `GITLAB_MCP_ENV_FILE`    | No       | One dotenv file to load besides `~/.gitlab-mcp-server.env`, resolved **once** from the process environment before any loaded file could rewrite it, so a file this server loads cannot nominate another. Precedence, highest first: the process environment, this file, the home file. A working-directory `.env` is not loaded at all, only found and named at WARN with the keys it wanted to set. Give an absolute path: a relative one follows the client into every workspace it opens, which is the load this replaced, and startup says so. `internal/config.EnvFileVar` |
+| `GITLAB_MCP_STDIO_MAX_LINE_BYTES` | No | Longest stdio message assembled, in bytes (default 4 MiB, matching the SDK's own HTTP body default so both transports refuse the same messages). A longer line is refused and answered rather than accumulated. A value that is missing, unparseable or non-positive warns and keeps the default, because a mistyped number should not take the client down with the server. `cmd/server.stdioMaxLineBytesEnv` |
+| `GITLAB_MCP_MAX_LISTEN_STREAMS` | No | Concurrent `subscriptions/listen` streams one credential may hold open (default 64; `0` removes the per-credential ceiling). A second ceiling of 512 per process is deliberately not configurable: the per-credential one multiplies by however many tokens a caller holds, so only the process-wide one bounds the process. `MaxWatchers` does not cover this, since a listen asking only for list-changed notifications creates no watcher. Both transports. `cmd/server.maxListenStreamsEnv` |
 | `META_TOOLS`             | No       | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs |
 | `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; default is `dynamic` when unset, unless legacy `META_TOOLS` is explicitly set |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps the surface-aware `gitlab://tools` manifest |
@@ -370,6 +374,9 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
 | `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
 | `GITLAB_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |
+| `GITLAB_MCP_ALLOWED_UPLOAD_DIRS` | No | Extra directories a tool may READ a local file from (every `file_path` and `directory_path` input), separated by the OS path-list separator. The working directory and the OS temp directory are always allowed; a path is canonicalized through symlinks before the check. `internal/toolutil.UploadDirAllowlistEnv` |
+| `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS` | No | Extra directories a tool may WRITE a downloaded file into (`output_path`), same syntax and same always-allowed roots. Checked twice, once before creating the parent directories and once after, so the second call resolves a parent that now exists. `internal/toolutil.DownloadDirAllowlistEnv` |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | No | Extra directories a project or group import archive may be read from, same syntax and same always-allowed roots. `internal/toolutil.ImportArchiveAllowlistEnv` |
 | `GITLAB_ENTERPRISE`      | No       | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Logs a deprecation warning |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `PUBLIC_URL`             | No       | Externally reachable https origin; required with `AUTH_MODE=oauth` (RFC 9728 resource identifier; flag `--public-url`) |
@@ -393,11 +400,14 @@ make analyze-report                        # generate LLM-consumable report
 | `EVAL_SURFACE_FIXTURE_SMOKE` | No   | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) |
 | `--max-output-retries`  | No       | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output (`2` default, `0` disables) |
 
+None of the three `GITLAB_MCP_ALLOWED_*_DIRS` allow-lists applies in HTTP mode: a server reached over HTTP refuses every caller-supplied local path, since the caller has no files on the machine the server runs on and `content_base64` is the remote form. The transport is inferred from the process arguments in `internal/toolutil/fileutils.go`, so a deployment that never heard of this policy still gets the right answer.
+
 In **HTTP mode**, configuration comes from CLI flags instead of environment variables:
 
 | Flag                  | Default | Description                                              |
 | --------------------- | ------- | -------------------------------------------------------- |
-| `--gitlab-url`        | —       | GitLab instance URL (optional; omit to require `GITLAB-URL` per request). Repeatable/comma-separated: the first is the default, all are published in RFC 9728 `authorization_servers`, and `GITLAB-URL` then selects among them — anything else is refused with 403 rather than ignored |
+| `--gitlab-url`        | —       | GitLab instance URL. **Required in HTTP mode** unless `--allow-any-gitlab-url` is passed: a deployment that names no instance makes requests to whatever host a caller puts in `GITLAB-URL`, with whatever token that caller supplied. Repeatable/comma-separated: all are published in RFC 9728 `authorization_servers`, and `GITLAB-URL` then selects among them. With several published the header is **required** in both auth modes (400 without it), and a value outside the list is refused with 403 rather than ignored. The refusal names the published instances only in oauth mode, where RFC 9728 metadata already serves that same set unauthenticated; legacy mode publishes no metadata and rejects before the credential is judged, so it says to ask the operator rather than let any non-empty token enumerate the operator's hostnames |
+| `--allow-any-gitlab-url` | `false` | Start with no instance published, letting `GITLAB-URL` name any host. For a single-user local deployment where the operator is the caller; it warns at startup and must not be used on a listener anyone else can reach |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
 | `--meta-tools`        | `false` _(deprecated)_ | Legacy boolean tool selector, kept for compatibility and ignored when `--tool-surface` is set. Leave it unset for the default dynamic surface; use `--tool-surface=individual` when migrating an old `--meta-tools=false` config |
 | `--tool-surface`      | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
@@ -422,7 +432,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
 | `--oauth-client-uid`  | _(empty)_ | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts |
 | `--pool-idle-timeout` | `1h` | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h) |
-| `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
+| `--revalidate-interval` | `15m` | Token re-validation interval; `0` stops the periodic check, but an entry whose credential is older than 1h is still rebuilt, which re-runs the probe. Upper bound 24h |
 | `--trusted-proxy-header` | _(empty)_ | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`) |
 | `--rate-limit-rps` | `10` | Per-server tools/call rate limit in req/s (`0` disables it). On by default in HTTP mode; the `RATE_LIMIT_RPS` env var used by stdio still defaults to `0` |
 | `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |

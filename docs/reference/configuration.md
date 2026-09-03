@@ -1,6 +1,6 @@
 ﻿# Configuration
 
-gitlab-mcp-server is configured through environment variables. A `.env` file in the current directory is loaded automatically (via `godotenv`), and the server also loads `~/.gitlab-mcp-server.env` as a fallback, which is the usual place to keep the token out of client config files.
+gitlab-mcp-server is configured through environment variables. It also reads `~/.gitlab-mcp-server.env`, and the file `GITLAB_MCP_ENV_FILE` names, for values its environment does not already carry; the home file is the usual place to keep the token out of client config files. A `.env` in the current directory is not read, for the reason given under [Configuration Loading](#configuration-loading).
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
@@ -42,7 +42,9 @@ These are the settings every user needs to get started.
 | `CLIENT_COMPAT`          | `auto`               | Per-client response compatibility: OpenAI Codex sessions get the float `priority` in annotations rounded to 0 or 1 (their bundled parser rejects non-integer values); everything else is delivered unchanged. Set `off` to disable. Read from the process environment in both stdio and HTTP modes — there is no CLI flag equivalent. See [Client Compatibility](../guides/client-compatibility.md) |
 | `LOG_LEVEL`              | `info`               | Logging verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                                                                                                                                                                                 |
 
-### .env File Example
+### Dotenv File Example
+
+Write this to `~/.gitlab-mcp-server.env`, or to any path you then name in `GITLAB_MCP_ENV_FILE`:
 
 ```env
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
@@ -57,7 +59,7 @@ LOG_LEVEL=info
 
 For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
 
-> **Security**: The `.env` file is gitignored. Never commit tokens or credentials.
+> **Security**: Never commit tokens or credentials, and restrict whichever file holds the token to its owner (`chmod 600` on Unix).
 
 ---
 
@@ -185,15 +187,16 @@ These settings are for operators deploying the server for a team or managing adv
 
 This table summarizes the most common operational variables. For the complete source-of-truth list, see [Environment Variable Reference](env.md); for HTTP flags, see [CLI Reference](cli.md).
 
-| Variable           | Default   | Description                                                                                                                          |
-| ------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `YOLO_MODE`        | `false`   | Skip destructive action confirmation prompts                                                                                         |
-| `AUTOPILOT`        | `false`   | Same as `YOLO_MODE` — skip confirmation prompts                                                                                      |
-| `AUTH_MODE`        | `legacy`  | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification)                              |
-| `OAUTH_CACHE_TTL`  | `15m`     | TTL for verified OAuth token identity cache (min 1m, max 2h)                                                                         |
-| `OAUTH_CLIENT_UID` | *(empty)* | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts            |
-| `RATE_LIMIT_RPS`   | `0`       | Per-server tools/call rate limit in requests/second (`0` disables it). Stdio only; HTTP mode defaults to `10` via `--rate-limit-rps` |
-| `RATE_LIMIT_BURST` | `40`      | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                                                    |
+| Variable              | Default   | Description                                                                                                                                                   |
+| --------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_MCP_ENV_FILE` | *(empty)* | Absolute path of one dotenv file to load besides `~/.gitlab-mcp-server.env`. Read from the process environment only, so a loaded file cannot nominate another |
+| `YOLO_MODE`           | `false`   | Skip destructive action confirmation prompts                                                                                                                  |
+| `AUTOPILOT`           | `false`   | Same as `YOLO_MODE` — skip confirmation prompts                                                                                                               |
+| `AUTH_MODE`           | `legacy`  | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification)                                                       |
+| `OAUTH_CACHE_TTL`     | `15m`     | TTL for verified OAuth token identity cache (min 1m, max 2h)                                                                                                  |
+| `OAUTH_CLIENT_UID`    | *(empty)* | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts                                     |
+| `RATE_LIMIT_RPS`      | `0`       | Per-server tools/call rate limit in requests/second (`0` disables it). Stdio only; HTTP mode defaults to `10` via `--rate-limit-rps`                          |
+| `RATE_LIMIT_BURST`    | `40`      | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                                                                             |
 
 ### Tool Modes
 
@@ -308,13 +311,17 @@ See [Output Format](output-format.md) for details.
 
 ## Configuration Loading
 
-Configuration is loaded by `internal/config/` in this order:
+Configuration is loaded by `internal/config/` in this order, highest priority first:
 
-1. `.env` file in the current directory (if present) via `godotenv`
-2. `~/.gitlab-mcp-server.env` in the user's home directory
-3. Environment variables (override both `.env` files)
-4. Command-line flags (`--http`, `--http-addr`)
+1. Command-line flags (`--http`, `--http-addr`)
+2. Environment variables, which is what the MCP client passed to the server
+3. The dotenv file `GITLAB_MCP_ENV_FILE` names, if the process environment names one
+4. `~/.gitlab-mcp-server.env` in the user's home directory
 
-> **Note**: `godotenv` does not overwrite existing variables, so values from step 1 take precedence over step 2, and explicit environment variables (step 3) override both.
+> **Note**: `godotenv` never overwrites a variable that is already set, so an earlier step always wins over a later one.
+
+A `.env` in the current working directory is not loaded. A stdio server inherits that directory from its client, so the file arrives with whatever repository or archive was opened, and loading it first let two lines chosen by someone else redirect the token, disable certificate verification and rewrite the tool descriptions the model reads, before any tool call. One is still looked for and reported at `WARN` with its absolute path and the keys it wanted to set, so a repository-local file that stopped taking effect shows up in the startup log instead of being debugged.
+
+`GITLAB_MCP_ENV_FILE` is what the working-directory load becomes when someone actually wants it: name the file, by absolute path, in the client configuration or the launching shell. It is read from the process environment only, so a file this server loads cannot nominate another. A relative value is resolved against the working directory the client chose, which reintroduces exactly what this replaced, so startup warns about one.
 
 The `config.Load()` function validates that `GITLAB_TOKEN` is set and defaults `GITLAB_URL` to `https://gitlab.com` when it is omitted (stdio mode only). In HTTP mode, configuration comes from CLI flags and no token is required at startup — each client provides its own token per-request via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. Clients can provide `GITLAB-URL` whenever the server published no instance or more than one — with a single `--gitlab-url` the header is ignored and logged, and with several it may only name one of the published instances; all other MCP server settings are process policy and cannot be overridden per request. When `--auth-mode=oauth`, the server validates tokens against the GitLab `/api/v4/user` endpoint and caches verified identities with a configurable TTL (see [HTTP Server Mode — OAuth Mode](../guides/http-server-mode.md#oauth-mode)).

@@ -103,7 +103,7 @@ func wrapMarkdown(md string) *mcp.CallToolResult {
 	if md == "" {
 		return nil
 	}
-	md = stripTrailingLineWhitespace(md)
+	md = StripControlBytes(stripTrailingLineWhitespace(md))
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: md, Annotations: ContentAssistant},

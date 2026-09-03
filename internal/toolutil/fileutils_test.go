@@ -628,3 +628,371 @@ func TestPathWithinBase_RelError_ReturnsFalse(t *testing.T) {
 		t.Error(`pathWithinBase("/absolute/target", "relative-base") = true, want false`)
 	}
 }
+
+// makeDirs creates each directory or fails the test, so a containment fixture
+// reads as one line instead of a loop that asserts.
+func makeDirs(t *testing.T, dirs ...string) {
+	t.Helper()
+	for _, dir := range dirs {
+		if err := os.Mkdir(dir, 0o750); err != nil {
+			t.Fatalf("Mkdir(%q) error = %v", dir, err)
+		}
+	}
+}
+
+// confineLocalPathRoots points the default local-path allow-list roots (the
+// working directory and the OS temp directory) at dir, so that a sibling of
+// dir is genuinely outside every allowed root without the test needing a
+// writable location outside the sandbox.
+func confineLocalPathRoots(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("TMPDIR", dir)
+	t.Chdir(dir)
+}
+
+// TestOpenAndValidateFile_OutsideAllowedDirs_Rejected verifies that a
+// caller-supplied file_path is confined to the allow-listed roots: a file
+// inside the workspace is opened, while an absolute path outside it, a
+// parent-traversal escape and a symlink inside the workspace whose target
+// lives outside are all refused before any byte is read.
+func TestOpenAndValidateFile_OutsideAllowedDirs_Rejected(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "secrets")
+	makeDirs(t, allowed, outside)
+	secret := filepath.Join(outside, "id_rsa")
+	if err := os.WriteFile(secret, []byte("PRIVATE KEY"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	inside := filepath.Join(allowed, "upload.txt")
+	if err := os.WriteFile(inside, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(allowed, "innocent.txt")
+	symlinked := os.Symlink(secret, link) == nil
+
+	confineLocalPathRoots(t, allowed)
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+		skip    bool
+	}{
+		{name: "file inside the allowed root is opened", path: inside},
+		{name: "absolute path outside every allowed root is refused", path: secret, wantErr: true},
+		{name: "parent traversal out of the allowed root is refused", path: filepath.Join(allowed, "..", "secrets", "id_rsa"), wantErr: true},
+		{name: "symlink inside the root pointing outside is refused", path: link, wantErr: true, skip: !symlinked},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip {
+				t.Skip("symlinks unsupported on this platform")
+			}
+			f, _, err := OpenAndValidateFile(tt.path, 0)
+			if f != nil {
+				f.Close()
+			}
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("OpenAndValidateFile(%q) error = nil, want refusal", tt.path)
+				}
+				if !strings.Contains(err.Error(), "outside allowed") {
+					t.Errorf("OpenAndValidateFile(%q) error = %q, want it to name the allow-list", tt.path, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("OpenAndValidateFile(%q) error = %v, want success", tt.path, err)
+			}
+		})
+	}
+}
+
+// TestOpenAndValidateFile_ConfiguredUploadDir_Accepted verifies that an
+// operator can extend the read allow-list with GITLAB_MCP_ALLOWED_UPLOAD_DIRS
+// so a file outside the workspace remains uploadable when they say so.
+func TestOpenAndValidateFile_ConfiguredUploadDir_Accepted(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	configured := filepath.Join(root, "assets")
+	makeDirs(t, allowed, configured)
+	path := filepath.Join(configured, "logo.png")
+	if err := os.WriteFile(path, []byte("png"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	confineLocalPathRoots(t, allowed)
+
+	if f, _, err := OpenAndValidateFile(path, 0); err == nil {
+		f.Close()
+		t.Fatal("OpenAndValidateFile() error = nil before the directory is allow-listed, want refusal")
+	}
+
+	t.Setenv(UploadDirAllowlistEnv, configured)
+	f, _, err := OpenAndValidateFile(path, 0)
+	if err != nil {
+		t.Fatalf("OpenAndValidateFile() error = %v, want success once %s names the directory", err, UploadDirAllowlistEnv)
+	}
+	f.Close()
+}
+
+// TestOpenAndValidateFile_HTTPTransport_Refused verifies that a server reached
+// over HTTP refuses local file reads outright: the caller is remote and has no
+// files on this machine, so file_path can only ever name someone else's.
+func TestOpenAndValidateFile_HTTPTransport_Refused(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "upload.txt")
+	if err := os.WriteFile(path, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	SetLocalFilesystemAccess(false)
+	t.Cleanup(func() { SetLocalFilesystemAccess(true) })
+
+	f, _, err := OpenAndValidateFile(path, 0)
+	if f != nil {
+		f.Close()
+	}
+	if err == nil {
+		t.Fatal("OpenAndValidateFile() error = nil in HTTP mode, want refusal")
+	}
+	if !strings.Contains(err.Error(), "content_base64") {
+		t.Errorf("OpenAndValidateFile() error = %q, want it to point at content_base64", err)
+	}
+}
+
+// TestCanonicalDownloadOutputPath_Containment verifies that a download
+// destination is confined to the allow-listed roots, that a symlink anywhere
+// on the path cannot redirect the write, and that a rejected destination
+// leaves nothing behind on disk.
+func TestCanonicalDownloadOutputPath_Containment(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "home")
+	makeDirs(t, allowed, outside)
+	existing := filepath.Join(outside, ".gitlab-mcp-server.env")
+	if err := os.WriteFile(existing, []byte("GITLAB_URL=https://gitlab.example\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	linkDir := filepath.Join(allowed, "escape")
+	symlinked := os.Symlink(outside, linkDir) == nil
+
+	confineLocalPathRoots(t, allowed)
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+		skip    bool
+	}{
+		{name: "nested destination inside the allowed root is accepted", path: filepath.Join(allowed, "build", "artifact.bin")},
+		{name: "absolute destination outside every allowed root is refused", path: existing, wantErr: true},
+		{name: "parent traversal out of the allowed root is refused", path: filepath.Join(allowed, "..", "home", "stolen.bin"), wantErr: true},
+		{name: "symlinked parent directory pointing outside is refused", path: filepath.Join(linkDir, "planted.env"), wantErr: true, skip: !symlinked},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip {
+				t.Skip("symlinks unsupported on this platform")
+			}
+			_, beforeErr := os.Lstat(tt.path)
+			got, err := CanonicalDownloadOutputPath(tt.path)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("CanonicalDownloadOutputPath(%q) = %q, want refusal", tt.path, got)
+				}
+				_, afterErr := os.Lstat(tt.path)
+				if errors.Is(beforeErr, os.ErrNotExist) && !errors.Is(afterErr, os.ErrNotExist) {
+					t.Errorf("os.Lstat(%q) error = %v after refusal, want nothing created", tt.path, afterErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("CanonicalDownloadOutputPath(%q) error = %v, want success", tt.path, err)
+			}
+			if _, statErr := os.Lstat(filepath.Dir(got)); !errors.Is(statErr, os.ErrNotExist) {
+				t.Errorf("os.Lstat(parent of %q) error = %v, want the parent still uncreated", got, statErr)
+			}
+		})
+	}
+}
+
+// TestCanonicalDownloadOutputPath_RejectsNonRegularDestination verifies that a
+// destination that already exists as something other than a regular file — a
+// symlink, most importantly — is refused rather than followed.
+func TestCanonicalDownloadOutputPath_RejectsNonRegularDestination(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "home")
+	makeDirs(t, allowed, outside)
+	target := filepath.Join(outside, "authorized_keys")
+	if err := os.WriteFile(target, []byte("ssh-ed25519 AAAA\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(allowed, "artifact.bin")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	confineLocalPathRoots(t, allowed)
+
+	if got, err := CanonicalDownloadOutputPath(link); err == nil {
+		t.Fatalf("CanonicalDownloadOutputPath(symlink) = %q, want refusal", got)
+	}
+}
+
+// TestCanonicalImportArchivePath_HTTPTransport_Refused verifies that an import
+// archive path answers to the same transport rule as file_path: a remote
+// caller never placed an archive on this machine.
+func TestCanonicalImportArchivePath_HTTPTransport_Refused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "project-export.tar.gz")
+	if err := os.WriteFile(path, []byte("archive"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	SetLocalFilesystemAccess(false)
+	t.Cleanup(func() { SetLocalFilesystemAccess(true) })
+
+	if got, err := CanonicalImportArchivePath(path); err == nil {
+		t.Fatalf("CanonicalImportArchivePath() = %q in HTTP mode, want refusal", got)
+	}
+}
+
+// TestCanonicalDownloadOutputPath_HTTPTransport_Refused verifies that a server
+// reached over HTTP writes nothing to its own disk on a remote caller's word.
+func TestCanonicalDownloadOutputPath_HTTPTransport_Refused(t *testing.T) {
+	dir := t.TempDir()
+	SetLocalFilesystemAccess(false)
+	t.Cleanup(func() { SetLocalFilesystemAccess(true) })
+
+	if got, err := CanonicalDownloadOutputPath(filepath.Join(dir, "artifact.bin")); err == nil {
+		t.Fatalf("CanonicalDownloadOutputPath() = %q in HTTP mode, want refusal", got)
+	}
+}
+
+// TestCanonicalLocalDirPath_Containment verifies that a caller-supplied
+// directory (package.publish_directory) is confined the same way a single
+// file path is, and that a symlinked directory cannot escape the allow-list.
+func TestCanonicalLocalDirPath_Containment(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "secrets")
+	makeDirs(t, allowed, outside)
+	link := filepath.Join(allowed, "linked")
+	symlinked := os.Symlink(outside, link) == nil
+	confineLocalPathRoots(t, allowed)
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+		skip    bool
+	}{
+		{name: "directory inside the allowed root is accepted", path: allowed},
+		{name: "directory outside every allowed root is refused", path: outside, wantErr: true},
+		{name: "symlinked directory pointing outside is refused", path: link, wantErr: true, skip: !symlinked},
+		{name: "missing directory is refused", path: filepath.Join(allowed, "absent"), wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip {
+				t.Skip("symlinks unsupported on this platform")
+			}
+			got, err := CanonicalLocalDirPath(tt.path)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("CanonicalLocalDirPath(%q) = %q, want refusal", tt.path, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("CanonicalLocalDirPath(%q) error = %v, want success", tt.path, err)
+			}
+		})
+	}
+}
+
+// TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory verifies that a
+// server started with the filesystem root as its working directory — which is
+// what Claude Desktop does — does not thereby allow-list the whole disk.
+func TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the filesystem root is spelled per volume on Windows")
+	}
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Chdir("/")
+
+	for _, dir := range allowedLocalDirs(UploadDirAllowlistEnv) {
+		if dir == "/" {
+			t.Fatal(`allowedLocalDirs() included "/", want the filesystem root skipped`)
+		}
+	}
+}
+
+// TestHTTPTransportConfigured verifies how the default local-filesystem policy
+// reads the process arguments: the server is remote-facing when --http is
+// present in any of the forms Go's flag package accepts, and local otherwise.
+func TestHTTPTransportConfigured(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "no arguments is stdio", args: []string{"gitlab-mcp-server"}},
+		{name: "single dash http", args: []string{"gitlab-mcp-server", "-http"}, want: true},
+		{name: "double dash http", args: []string{"gitlab-mcp-server", "--http"}, want: true},
+		{name: "explicit true value", args: []string{"gitlab-mcp-server", "--http=true"}, want: true},
+		{name: "explicit false value", args: []string{"gitlab-mcp-server", "--http=false"}},
+		{name: "http-addr alone does not enable http", args: []string{"gitlab-mcp-server", "--http-addr=:8080"}},
+		{name: "arguments after the terminator are not flags", args: []string{"gitlab-mcp-server", "--", "--http"}},
+		{name: "test binary flags are stdio", args: []string{"toolutil.test", "-test.timeout=10m", "-test.v=true"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := httpTransportConfigured(tt.args); got != tt.want {
+				t.Errorf("httpTransportConfigured(%q) = %t, want %t", tt.args, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCreateDownloadOutputFile_CreatesAndTruncates verifies that the download
+// destination helper creates a missing file and truncates an existing one, so
+// closing the symlink race at the creation costs a download nothing it did
+// before. The refusal itself is platform-specific and is pinned in
+// fileutils_unix_test.go.
+func TestCreateDownloadOutputFile_CreatesAndTruncates(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "existing.bin")
+	if err := os.WriteFile(existing, []byte("old content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "destination does not exist", path: filepath.Join(dir, "fresh.bin")},
+		{name: "destination already holds a longer file", path: existing},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := CreateDownloadOutputFile(tt.path)
+			if err != nil {
+				t.Fatalf("CreateDownloadOutputFile(%q) error = %v, want nil", tt.path, err)
+			}
+			if _, err = f.WriteString("new"); err != nil {
+				t.Errorf("write error = %v, want nil", err)
+			}
+			if err = f.Close(); err != nil {
+				t.Errorf("close error = %v, want nil", err)
+			}
+			got, err := os.ReadFile(tt.path)
+			if err != nil {
+				t.Fatalf("read back error = %v, want nil", err)
+			}
+			if string(got) != "new" {
+				t.Errorf("file content = %q, want %q", got, "new")
+			}
+		})
+	}
+}

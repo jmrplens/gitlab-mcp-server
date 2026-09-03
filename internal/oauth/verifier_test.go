@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -1354,4 +1355,187 @@ func TestEffectiveCacheTTL_NeverOutlivesTheToken(t *testing.T) {
 			t.Errorf("effectiveCacheTTL = %s, want at most the token's own two minutes", got)
 		}
 	})
+}
+
+// TestNewGitLabVerifier_CrossHostRedirect_IsRefused verifies that an instance
+// answering /api/v4/user with a redirect to another host cannot supply the
+// caller's identity, while a redirect that stays on the instance still works.
+//
+// Stripping the bearer, which is what the GitLab API clients do, would not be
+// enough here: the value being trusted is the *response*, and a host reached
+// by a redirect can answer {"id":1,"username":"root"} with no credential at
+// all — and that answer would be admitted and cached under the caller's token.
+// The test asserts the identity never comes from the redirect target and that
+// the target is not even asked.
+func TestNewGitLabVerifier_CrossHostRedirect_IsRefused(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		crossHost     bool
+		wantErr       bool
+		wantUsername  string
+		wantTargetHit bool
+	}{
+		{name: "redirect leaving the instance", crossHost: true, wantErr: true},
+		{name: "redirect staying on the instance", wantUsername: "impostor", wantTargetHit: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			targetHit := false
+			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				targetHit = true
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(gitlabUserResponse{ID: 1, Username: "impostor"})
+			}))
+			defer target.Close()
+
+			// The Location header is set by hand rather than through
+			// http.Redirect so that the destination, which is this test's own
+			// server, is not read as a caller-controlled redirect target.
+			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Location", target.URL+r.URL.EscapedPath())
+				w.WriteHeader(http.StatusFound)
+			}))
+			defer origin.Close()
+
+			instanceURL := origin.URL
+			if tt.crossHost {
+				instanceURL = strings.Replace(instanceURL, "127.0.0.1", "localhost", 1)
+			}
+
+			verifier := NewGitLabVerifier(instanceURL, false, 15*time.Minute, nil)
+			info, err := verifier(
+				context.Background(),
+				"valid-token",
+				httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil),
+			)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("verifier() error = nil, want a refusal; got identity %+v", info)
+				}
+				if targetHit {
+					t.Error("the redirect target was asked for an identity")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("verifier() unexpected error: %v", err)
+			}
+			if info.Extra["username"] != tt.wantUsername {
+				t.Errorf("username = %v, want %q", info.Extra["username"], tt.wantUsername)
+			}
+			if targetHit != tt.wantTargetHit {
+				t.Errorf("redirect target hit = %v, want %v", targetHit, tt.wantTargetHit)
+			}
+		})
+	}
+}
+
+// TestVerificationRedirect_Policy verifies which hops a verification request
+// may follow: the instance itself and its subdomains, never another host,
+// never an https-to-http downgrade, never an address literal wearing the
+// instance's name, and never more than ten in a row.
+//
+// The address-literal rows are CVE-2023-45289. url.Hostname reduces
+// "[::1%25.gitlab.example.com]" to "::1%.gitlab.example.com", which clears
+// both the dot boundary and the suffix test while Go dials ::1, so a
+// loopback service would answer the question "who is this caller" and its
+// reply would be cached as the caller's identity. The last row is the
+// regression that guard must not cause: an instance that genuinely is an
+// address literal still matches itself.
+func TestVerificationRedirect_Policy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		origin  string
+		dest    string
+		hops    int
+		wantErr bool
+	}{
+		{name: "same host", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user/"},
+		{name: "http upgraded to https", origin: "http://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user"},
+		{name: "subdomain of the instance", origin: "https://gitlab.example.com/api/v4/user", dest: "https://eu.gitlab.example.com/api/v4/user"},
+		{name: "another host", origin: "https://gitlab.example.com/api/v4/user", dest: "https://evil.example.net/api/v4/user", wantErr: true},
+		{name: "parent domain", origin: "https://gitlab.example.com/api/v4/user", dest: "https://example.com/api/v4/user", wantErr: true},
+		{name: "suffix without a dot boundary", origin: "https://gitlab.example.com/api/v4/user", dest: "https://evilgitlab.example.com/x", wantErr: true},
+		{name: "https downgraded to http", origin: "https://gitlab.example.com/api/v4/user", dest: "http://gitlab.example.com/api/v4/user", wantErr: true},
+		{name: "ipv6 zone literal spelled as a subdomain", origin: "https://gitlab.example.com/api/v4/user", dest: "https://[::1%25.gitlab.example.com]/api/v4/user", wantErr: true},
+		{name: "ipv6 zone literal on a plain http instance", origin: "http://gitlab.internal/api/v4/user", dest: "http://[::1%25.gitlab.internal]:9102/api/v4/user", wantErr: true},
+		{name: "the instance is itself an ipv6 literal", origin: "https://[2001:db8::1]/api/v4/user", dest: "https://[2001:db8::1]/api/v4/user/"},
+		{name: "ten hops already made", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user", hops: 10, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			via := make([]*http.Request, max(tt.hops, 1))
+			via[0] = redirectRequest(t, tt.origin)
+
+			err := verificationRedirect(redirectRequest(t, tt.dest), via)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("verificationRedirect() error = %v, want error %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// redirectRequest builds the value net/http hands a CheckRedirect policy: a
+// request addressed at one end of a hop. Nothing is ever sent.
+func redirectRequest(t *testing.T, rawURL string) *http.Request {
+	t.Helper()
+	return httptest.NewRequestWithContext(t.Context(), http.MethodGet, rawURL, nil)
+}
+
+// TestVerificationRedirect_MissingContext verifies the policy answers safely
+// when net/http hands it a chain it cannot read: the first hop, which has no
+// previous request to compare against, is allowed, and a request carrying no
+// URL is refused rather than panicking.
+func TestVerificationRedirect_MissingContext(t *testing.T) {
+	t.Parallel()
+
+	const instance = "https://gitlab.example.com/x"
+
+	tests := []struct {
+		name      string
+		emptyVia  bool
+		viaNoURL  bool
+		destNoURL bool
+		wantErr   bool
+	}{
+		{name: "no previous hop", emptyVia: true},
+		{name: "previous hop with no url", viaNoURL: true},
+		{name: "destination with no url", destNoURL: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var via []*http.Request
+			switch {
+			case tt.emptyVia:
+				via = nil
+			case tt.viaNoURL:
+				via = []*http.Request{{}}
+			default:
+				via = []*http.Request{redirectRequest(t, instance)}
+			}
+			dest := redirectRequest(t, instance)
+			if tt.destNoURL {
+				dest = &http.Request{}
+			}
+
+			err := verificationRedirect(dest, via)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("verificationRedirect() error = %v, want error %v", err, tt.wantErr)
+			}
+		})
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,11 +13,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -80,6 +83,121 @@ func TestStreamDownloadPackageFile_Success(t *testing.T) {
 	if out.SHA256 != expectedSHA {
 		t.Errorf("SHA256 = %q, want %q", out.SHA256, expectedSHA)
 	}
+}
+
+// makeDirs creates each directory or fails the test, so a containment fixture
+// reads as one line instead of a loop that asserts.
+func makeDirs(t *testing.T, dirs ...string) {
+	t.Helper()
+	for _, dir := range dirs {
+		if err := os.Mkdir(dir, 0o750); err != nil {
+			t.Fatalf("Mkdir(%q) error = %v", dir, err)
+		}
+	}
+}
+
+// confineDownloadRoots points the default local-path allow-list roots (the
+// working directory and the OS temp directory) at dir, so a sibling of dir is
+// genuinely outside every allowed destination.
+func confineDownloadRoots(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("TMPDIR", dir)
+	t.Chdir(dir)
+}
+
+// TestDownload_OutputPathOutsideAllowedDirs_Rejected verifies that a download
+// destination is confined to the allow-listed roots: a path outside them, a
+// parent-traversal escape and a symlinked parent are all refused, nothing is
+// created on the way, and the package is never even requested. The one
+// legitimate destination inside the workspace still works.
+func TestDownload_OutputPathOutsideAllowedDirs_Rejected(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "home")
+	makeDirs(t, allowed, outside)
+	linkDir := filepath.Join(allowed, "escape")
+	symlinked := os.Symlink(outside, linkDir) == nil
+	confineDownloadRoots(t, allowed)
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+		skip    bool
+	}{
+		{name: "destination inside the workspace is written", path: filepath.Join(allowed, "artifact.bin")},
+		{name: "destination outside every allowed root is refused", path: filepath.Join(outside, ".gitlab-mcp-server.env"), wantErr: true},
+		{name: "parent traversal out of the workspace is refused", path: filepath.Join(allowed, "..", "home", "stolen.bin"), wantErr: true},
+		{name: "symlinked parent directory pointing outside is refused", path: filepath.Join(linkDir, "planted.env"), wantErr: true, skip: !symlinked},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip {
+				t.Skip("symlinks unsupported on this platform")
+			}
+			if tt.wantErr {
+				assertDownloadRefused(t, tt.path, outside)
+				return
+			}
+			assertDownloadWritten(t, tt.path)
+		})
+	}
+}
+
+// assertDownloadRefused runs a download to path and asserts it is refused
+// without reaching the package endpoint and without creating anything, at the
+// destination or under outside.
+func assertDownloadRefused(t *testing.T, path, outside string) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Errorf("package file was requested for a refused output_path %q", path)
+		w.WriteHeader(http.StatusForbidden)
+	}))
+
+	if _, err := downloadTo(t, client, path); err == nil {
+		t.Fatalf("Download(%q) error = nil, want refusal", path)
+	}
+	if _, statErr := os.Lstat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("os.Lstat(%q) error = %v after refusal, want nothing written", path, statErr)
+	}
+	escaped := filepath.Join(outside, filepath.Base(path))
+	if _, statErr := os.Lstat(escaped); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("os.Lstat(%q) error = %v, want no file outside the allowed roots", escaped, statErr)
+	}
+}
+
+// assertDownloadWritten runs a download to path and asserts it reaches the
+// package endpoint and lands on disk.
+func assertDownloadWritten(t *testing.T, path string) {
+	t.Helper()
+	var served atomic.Bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		served.Store(true)
+		w.Header().Set(headerContentType, testOctetStream)
+		_, _ = w.Write([]byte("payload"))
+	}))
+
+	if _, err := downloadTo(t, client, path); err != nil {
+		t.Fatalf("Download(%q) error = %v, want success", path, err)
+	}
+	if !served.Load() {
+		t.Error("the legitimate download did not reach the package endpoint")
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		t.Errorf("os.Stat(%q) error = %v, want the file written", path, statErr)
+	}
+}
+
+// downloadTo issues one package download to path against client.
+func downloadTo(t *testing.T, client *gitlabclient.Client, path string) (DownloadOutput, error) {
+	t.Helper()
+	return Download(context.Background(), nil, client, DownloadInput{
+		ProjectID:      "42",
+		PackageName:    testPackageName,
+		PackageVersion: testPkgVersion,
+		FileName:       testAppBin,
+		OutputPath:     path,
+	})
 }
 
 // TestStreamDownloadPackageFile_CreatesDirectory verifies StreamDownloadPackageFile creates directory.
@@ -240,7 +358,9 @@ func TestStreamDownload_UnwritablePath(t *testing.T) {
 }
 
 // TestStreamDownload_OutputPathIsDirectory verifies streamDownloadPackageFile
-// returns the os.Create error when the requested output path is a directory.
+// refuses an output path that already exists as something other than a regular
+// file, before it opens anything. A directory is the harmless instance of that
+// rule; a symlink is the one it exists for.
 func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
@@ -254,16 +374,16 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when output_path is a directory")
 	}
-	if !strings.Contains(err.Error(), "create output file") {
-		t.Fatalf("error = %q, want create output file message", err.Error())
+	if !strings.Contains(err.Error(), "is not a regular file") {
+		t.Fatalf("error = %q, want the not-a-regular-file refusal", err.Error())
 	}
 }
 
 // ----- branch coverage -----
 
-// TestStreamDownload_DeadBranches documents why three of the four
-// error-return branches inside streamDownloadPackageFile are unreachable
-// through any public call path:
+// TestStreamDownload_DeadBranches documents why the error-return branches
+// inside streamDownloadPackageFile are unreachable through any public call
+// path:
 //
 //  1. FormatPackageURL error: the function only fails on invalid pid
 //     types in parseID. streamDownloadPackageFile always feeds it
@@ -273,17 +393,17 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 //     path with PathEscape, so the result is always well-formed.
 //  3. outFile.Stat error: the file handle is still open, so Stat
 //     succeeds unconditionally under normal conditions.
-//
-// The fourth, outFile.Sync error, is reachable and covered separately by
-// TestStreamDownload_SyncErrorOnFIFO (packages_stream_sync_unix_test.go):
-// fsync(2) genuinely fails with EINVAL when the output path is a named
-// pipe rather than a regular file, so the "file handle is still open"
-// reasoning above does not make Sync infallible -- it only rules out the
-// permission/existence failures that regular-file tricks would hit.
+//  4. outFile.Sync error: fsync(2) genuinely fails with EINVAL on a named
+//     pipe, which is how TestStreamDownload_SyncErrorOnFIFO used to reach
+//     this branch. Confining output_path now refuses any destination that
+//     already exists and is not a regular file, so no caller-supplied path
+//     reaches Sync on a pipe any more; what is left are real I/O failures
+//     (a full or failing filesystem), which a unit test cannot stage. The
+//     wrap stays because those failures are what it names.
 //
 // We assert the documented contract below: a happy-path download
 // streams the payload to disk, syncs the file, and reports its size
-// without invoking any of the three unreachable branches.
+// without invoking any of the unreachable branches.
 func TestStreamDownload_DeadBranches(t *testing.T) {
 	fileBody := "dead-branch-fixture"
 	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))

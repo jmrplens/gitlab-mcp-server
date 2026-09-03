@@ -138046,7 +138046,7 @@
           "type": "string"
         },
         "output_path": {
-          "description": "Absolute path where the file will be saved on the local filesystem",
+          "description": "Absolute path where the file will be saved on the local filesystem, confined to the current working directory, the OS temp directory, or a directory listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. Symlinks are resolved and destinations outside those roots are rejected",
           "type": "string"
         },
         "package_name": {
@@ -138104,7 +138104,7 @@
       "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": true,
-      "readOnlyHint": true
+      "readOnlyHint": false
     }
   },
   {
@@ -201291,9 +201291,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
-      "readOnlyHint": true
+      "readOnlyHint": false
     }
   },
   {

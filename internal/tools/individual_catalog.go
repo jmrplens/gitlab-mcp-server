@@ -261,6 +261,11 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		actionCtx := toolutil.ContextWithRequest(ctx, req)
 		start := time.Now()
 		result, err := action.Route.Handler(actionCtx, input)
+		// The containment the other two dispatchers apply, for the same reason:
+		// a handler that wraps a client-go error with %w itself never reaches
+		// the wrapping helpers, and its rendering carries the upstream response
+		// body. See [toolutil.SanitizeError].
+		err = toolutil.SanitizeError(err)
 		if inputResult, needsInput := toolutil.InputRequiredResultFromError(err); needsInput {
 			return inputResult, nil, nil
 		}
@@ -276,15 +281,20 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 	}
 }
 
-// individualCatalogActionReadOnly reports whether the action is
-// read-only for individual tool registration. Honors the explicit
-// [toolutil.IndividualToolSpec.AnnotationOverrides.ReadOnly] override
-// when set so compatibility aliases can mark otherwise mutating actions
-// as read-only.
+// individualCatalogActionReadOnly reports whether the action is read-only for
+// individual tool registration.
+//
+// It reads the same annotation overrides the projection does, through the same
+// [toolutil.IndividualToolAnnotationOverrides.NarrowingOnly] rule, so the bit
+// safe mode branches on and the readOnlyHint the client is served can never
+// disagree. They did: an override could declare a mutating action read-only
+// here and nowhere else, and --read-only then kept on this surface an action it
+// removed on the other two.
 func individualCatalogActionReadOnly(action actioncatalog.Action) bool {
 	readOnly := action.ReadOnly
-	if action.IndividualTool.AnnotationOverrides.ReadOnly != nil {
-		readOnly = *action.IndividualTool.AnnotationOverrides.ReadOnly
+	overrides := action.IndividualTool.AnnotationOverrides.NarrowingOnly(action.ReadOnly, action.Idempotent)
+	if overrides.ReadOnly != nil {
+		readOnly = *overrides.ReadOnly
 	}
 	return readOnly
 }

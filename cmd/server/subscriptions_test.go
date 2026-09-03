@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -805,6 +806,137 @@ func TestNewSubscriptionRuntime_MinimalSurface_IsNil(t *testing.T) {
 	if sub != nil || unsub != nil {
 		t.Error("handlers() on no runtime returned non-nil handlers; the SDK would advertise a capability with no backing")
 	}
+
+	if runtime.streamRegistry() == nil {
+		t.Error("streamRegistry() on no runtime returned nil; nothing could then end a stream the SDK is holding")
+	}
+}
+
+// TestSubscriptionRuntime_NoRuntime_ShutdownStillEndsListenStreams verifies a
+// server that offers no resource subscriptions still ends the listen streams
+// the SDK holds on its behalf.
+//
+// The capability surface decides whether subscriptions are advertised. It does
+// not decide whether the SDK acknowledges a subscriptions/listen carrying only
+// list-changed notifications: it always does, and the go-sdk client opens one
+// by itself at connect time whenever it registers a list-changed handler. That
+// request is then held open until its handler's context ends, and nothing but
+// the stream registry ends it.
+//
+// So on --capability-surface=minimal, where newSubscriptionRuntime returns nil,
+// the registry used to be absent and those streams became unreachable. The
+// visible symptom was in shutdown: the process ignored its signal for the full
+// HTTP drain budget and then died with "http server shutdown: context deadline
+// exceeded" and exit 1. The wire half of this is pinned in
+// test/e2e/http/shutdown_test.go, which drives the real binary with that flag
+// and a real signal; this half pins the wiring that makes it possible.
+//
+// The server here is a bare one carrying the capabilities the minimal surface
+// declares, rather than one from createServer. What changed is attach's
+// contract on a nil runtime, and registering the whole catalog to reach it
+// would add several seconds to a package that is already close to the test
+// timeout.
+func TestSubscriptionRuntime_NoRuntime_ShutdownStillEndsListenStreams(t *testing.T) {
+	// The server's own context, which is what the signal handler cancels.
+	ctx, shutdown := context.WithCancel(context.Background())
+	t.Cleanup(shutdown)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "no-subscriptions", Version: "1"}, &mcp.ServerOptions{
+		// What createServer declares on the minimal capability surface: list
+		// changes, and no resources.subscribe.
+		Capabilities: &mcp.ServerCapabilities{
+			Tools:     &mcp.ToolCapabilities{ListChanged: true},
+			Resources: &mcp.ResourceCapabilities{ListChanged: true},
+		},
+	})
+
+	// Nil is exactly what the minimal capability surface produces, and attach
+	// is called on it unconditionally.
+	var runtime *subscriptionRuntime
+	runtime.attach(ctx, server)
+
+	// Applied last, so it wraps the stream registry's middleware and sees what
+	// the SDK's handler finally returned.
+	ended := make(chan error, 1)
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method != methodSubscriptionsListen {
+				return next(ctx, method, req)
+			}
+			result, listenErr := next(ctx, method, req)
+			select {
+			case ended <- listenErr:
+			default:
+			}
+			return result, listenErr
+		}
+	})
+
+	// The acknowledgment is the SDK's own signal that the stream is registered
+	// and it is about to block, so waiting for it is what makes the shutdown
+	// below land on an established stream every time. Canceling earlier would
+	// exercise the arrived-during-the-drain path instead, which is
+	// TestListenStreams_ArmedAfterCloseAll_EndsImmediately's job.
+	acknowledged := make(chan struct{}, 1)
+	server.AddSendingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			result, sendErr := next(ctx, method, req)
+			if method == "notifications/subscriptions/acknowledged" {
+				select {
+				case acknowledged <- struct{}{}:
+				default:
+				}
+			}
+			return result, sendErr
+		}
+	})
+
+	session := connectListeningForToolChanges(t, server)
+	if session.InitializeResult().ProtocolVersion < "2026-07-28" {
+		t.Skip("subscriptions/listen only exists from protocol 2026-07-28")
+	}
+
+	select {
+	case <-acknowledged:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the client's listen stream was never acknowledged, so there was nothing for shutdown to close")
+	}
+
+	shutdown()
+
+	select {
+	case listenErr := <-ended:
+		if listenErr != nil {
+			t.Errorf("the listen stream ended with %v, want the graceful result", listenErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown left a listen stream open; the process would wait out its whole drain budget and exit with an error")
+	}
+}
+
+// connectListeningForToolChanges connects a client that asks for tools/list
+// change notifications, which is what makes the SDK open a subscriptions/listen
+// of its own during the handshake.
+//
+// It is the shape a real 2026-07-28 client has, since a list-changed handler is
+// ordinary, and therefore the shape that produced open streams on a server
+// advertising no subscriptions at all.
+func connectListeningForToolChanges(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "listening-client", Version: "1"}, &mcp.ClientOptions{
+		ToolListChangedHandler: func(context.Context, *mcp.ToolListChangedRequest) {},
+	})
+	session, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
 }
 
 // TestServerNotifier_BeforeAttach_IsQuiet verifies the notifier tolerates
@@ -936,6 +1068,68 @@ func TestListenStreams_ReleasedStream_IsNotCancelled(t *testing.T) {
 	streams.stopped("uri", subscriptions.ErrInaccessible)
 	if cancelled {
 		t.Error("a released stream was cancelled; its request had already returned")
+	}
+}
+
+// TestListenStreams_CloseAll_EndsEveryStreamItHolds verifies shutdown reaches
+// streams no URI will ever close on its own.
+//
+// stopped() only ever ends a stream once every URI it named has stopped, so a
+// listen carrying only list-changed subscriptions names none and can never be
+// ended that way. closeAll is the only thing that ends those, and the SDK's
+// handler blocks until it does, so a stream missed here is a process that
+// outlives its own shutdown.
+func TestListenStreams_CloseAll_EndsEveryStreamItHolds(t *testing.T) {
+	streams := newListenStreams()
+
+	cases := []struct {
+		name string
+		uris []string
+	}{
+		{name: "a stream watching resources", uris: []string{"gitlab://project/42/pipeline/99"}},
+		{name: "a list-changed stream, which names no URI", uris: nil},
+	}
+
+	// One armed stream per case, each recording its own cancellation, so the
+	// assertions below can tell which of them closeAll reached. The real cancel
+	// is a context's; a bare function is enough to observe the call, and
+	// closeAll makes it on this goroutine.
+	ended := make([]bool, len(cases))
+	for i, tc := range cases {
+		_, release := streams.arm(tc.uris, func() { ended[i] = true })
+		t.Cleanup(release)
+	}
+
+	streams.closeAll()
+
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !ended[i] {
+				t.Error("closeAll left the stream open; its handler would block shutdown until the drain deadline")
+			}
+		})
+	}
+}
+
+// TestListenStreams_ArmedAfterCloseAll_EndsImmediately verifies a listen that
+// arrives during the drain is ended rather than filed away.
+//
+// Shutdown stops the listener and lets in-flight requests finish, so a request
+// already on the wire can reach this middleware after closeAll has emptied the
+// registry. Registering it there would put it beyond anyone's reach a second
+// time, and one such stream is enough to hold the process open for the whole
+// shutdown budget, which is the exact outcome closeAll exists to prevent.
+func TestListenStreams_ArmedAfterCloseAll_EndsImmediately(t *testing.T) {
+	streams := newListenStreams()
+	streams.closeAll()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, release := streams.arm(nil, cancel)
+	defer release()
+
+	if ctx.Err() == nil {
+		t.Error("a listen armed after shutdown was left open, so its handler would never return")
 	}
 }
 
@@ -1523,4 +1717,198 @@ func TestSessionBridge_OneRenewalTickerPerStream(t *testing.T) {
 	if got := bridge.activeRenewals(); got != 0 {
 		t.Errorf("%d renewal ticker(s) still running after the stream ended", got)
 	}
+}
+
+// TestListenLimit_CapsConcurrentStreams verifies that concurrent
+// subscriptions/listen requests are bounded per server and process-wide, that
+// the refusal is the busy code rather than a closed stream, and that streams
+// under the cap stay open.
+//
+// Each listen blocks server-side until its context ends, holding a goroutine,
+// an ephemeral session and transport, and a file descriptor. The documented
+// valve, MaxWatchers, counts only resource watchers created through
+// manager.Subscribe: a listen that asks only for list-changed notifications
+// creates none, and one that carries a resource joins an existing watcher's
+// subscriber set with no cap check either — so stream count has never been
+// bounded on any path. Measured at 2000 concurrent streams on one token:
+// 2007 descriptors and 55 to 100 KB retained each, about tenfold what an idle
+// connection costs. The last assertion is the one that matters: a "fix" that
+// closed every stream would satisfy the cap and destroy the feature.
+func TestListenLimit_CapsConcurrentStreams(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		perServer   int
+		perProcess  int
+		streams     int
+		wantServed  int
+		wantRefused int
+	}{
+		{"under_the_per_server_cap", 4, 100, 3, 3, 0},
+		{"at_the_per_server_cap", 4, 100, 4, 4, 0},
+		{"over_the_per_server_cap", 4, 100, 7, 4, 3},
+		{"the_process_cap_binds_first", 100, 2, 5, 2, 3},
+		{"disabled_by_a_non_positive_cap", 0, 0, 6, 6, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limits := listenLimits{
+				perServer:   tc.perServer,
+				perProcess:  tc.perProcess,
+				processOpen: &listenCounter{},
+				serverOpen:  &listenCounter{},
+			}
+
+			held := make(chan struct{})
+			var inFlight atomic.Int64
+			handler := limits.middleware()(func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+				inFlight.Add(1)
+				defer inFlight.Add(-1)
+				<-held
+				return &mcp.CallToolResult{}, nil
+			})
+
+			var served, refused atomic.Int64
+			var wg sync.WaitGroup
+			for range tc.streams {
+				wg.Go(func() {
+					_, err := handler(t.Context(), methodSubscriptionsListen, nil)
+					if err != nil {
+						refused.Add(1)
+						return
+					}
+					served.Add(1)
+				})
+			}
+
+			// Let the refusals land while the served streams are still held.
+			waitFor(t, func() bool {
+				return refused.Load() == int64(tc.wantRefused) && inFlight.Load() == int64(tc.wantServed)
+			})
+			if got := inFlight.Load(); got != int64(tc.wantServed) {
+				t.Errorf("streams held open = %d, want %d", got, tc.wantServed)
+			}
+			close(held)
+			wg.Wait()
+
+			if got := served.Load(); got != int64(tc.wantServed) {
+				t.Errorf("streams served = %d, want %d", got, tc.wantServed)
+			}
+			if got := refused.Load(); got != int64(tc.wantRefused) {
+				t.Errorf("streams refused = %d, want %d", got, tc.wantRefused)
+			}
+		})
+	}
+}
+
+// TestListenLimit_RefusalCarriesTheBusyCode verifies the wire shape of the
+// refusal: -32000, the code this server already uses for state-dependent
+// refusals a retry can clear, rather than an invalid-params verdict on a
+// request that was well formed.
+func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
+	limits := listenLimits{
+		perServer:   1,
+		perProcess:  1,
+		processOpen: &listenCounter{},
+		serverOpen:  &listenCounter{},
+	}
+	held := make(chan struct{})
+	defer close(held)
+	handler := limits.middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		<-held
+		return &mcp.CallToolResult{}, nil
+	})
+
+	opened := make(chan struct{})
+	go func() {
+		close(opened)
+		_, _ = handler(t.Context(), methodSubscriptionsListen, nil)
+	}()
+	<-opened
+	waitFor(t, func() bool { return limits.serverOpen.count() == 1 })
+
+	_, err := handler(t.Context(), methodSubscriptionsListen, nil)
+	if err == nil {
+		t.Fatal("a stream over the cap was accepted")
+	}
+	wireErr, ok := errors.AsType[*jsonrpc.Error](err)
+	if !ok {
+		t.Fatalf("refusal is %T, want *jsonrpc.Error so the code reaches the client", err)
+	}
+	if wireErr.Code != codeServerBusy {
+		t.Errorf("code = %d, want %d", wireErr.Code, codeServerBusy)
+	}
+	if !strings.Contains(wireErr.Message, "subscriptions/listen") {
+		t.Errorf("message = %q, want it to name the method that was refused", wireErr.Message)
+	}
+}
+
+// TestListenLimit_OtherMethodsAreNotCounted verifies that the cap applies to
+// subscriptions/listen alone: an ordinary request must not consume a slot, or
+// a busy server would start refusing subscriptions for reasons unrelated to
+// them.
+func TestListenLimit_OtherMethodsAreNotCounted(t *testing.T) {
+	limits := listenLimits{
+		perServer:   1,
+		perProcess:  1,
+		processOpen: &listenCounter{},
+		serverOpen:  &listenCounter{},
+	}
+	handler := limits.middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		return &mcp.CallToolResult{}, nil
+	})
+	for _, method := range []string{"tools/call", "tools/list", "resources/read", "ping"} {
+		t.Run(method, func(t *testing.T) {
+			if _, err := handler(t.Context(), method, nil); err != nil {
+				t.Fatalf("%s: %v", method, err)
+			}
+			if open := limits.serverOpen.count(); open != 0 {
+				t.Errorf("%s left %d listen slots taken, want 0", method, open)
+			}
+		})
+	}
+}
+
+// TestListenLimitsFromEnv verifies that the ceilings are configurable and that
+// anything that is not a positive number leaves the defaults in place.
+func TestListenLimitsFromEnv(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		perServer      string
+		wantPerServer  int
+		wantPerProcess int
+	}{
+		{"unset", "", maxListenStreamsPerServer, maxListenStreamsPerProcess},
+		{"explicit", "8", 8, maxListenStreamsPerProcess},
+		{"zero_disables", "0", 0, maxListenStreamsPerProcess},
+		{"garbage_keeps_the_default", "many", maxListenStreamsPerServer, maxListenStreamsPerProcess},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.perServer != "" {
+				t.Setenv(maxListenStreamsEnv, tc.perServer)
+			}
+			got := listenLimitsFromEnv()
+			if got.perServer != tc.wantPerServer {
+				t.Errorf("perServer = %d, want %d", got.perServer, tc.wantPerServer)
+			}
+			if got.perProcess != tc.wantPerProcess {
+				t.Errorf("perProcess = %d, want %d", got.perProcess, tc.wantPerProcess)
+			}
+			if got.processOpen == nil || got.serverOpen == nil {
+				t.Error("the counters must be non-nil, or the middleware cannot count")
+			}
+		})
+	}
+}
+
+// waitFor blocks until cond holds or the test's budget runs out, so a test
+// asserting on concurrent state does not race the goroutines it started.
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Error("condition never held within the budget")
 }

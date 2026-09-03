@@ -8,6 +8,12 @@
 //      the exact file set, the executable bit on the binary, the binary's magic
 //      number for the platform it claims, a size floor, and the package.json
 //      os/cpu/name/version. This runs anywhere; it does not execute anything.
+//   1b. Provenance: every packed binary is compared against the digest
+//      build-npm.mjs recorded when it verified that binary against the
+//      release's signed checksums.txt. Without this, the checks below are
+//      shape checks only — a random file with the right first four bytes and
+//      the right size passes all of them, and five of the six platforms are
+//      never executed by anything.
 //   2. Runtime, for the one platform the validating host can run (linux-x64
 //      inside the node:22 container `make validate-npm` uses). It installs the
 //      launcher plus that platform package from their tarballs into a throwaway
@@ -18,7 +24,8 @@
 // Usage: node scripts/validate-npm.mjs --packages <dir> --main <dir> --version <x.y.z>
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -83,12 +90,20 @@ function packAndList(dir, destDir) {
   return { tgz, entries };
 }
 
-function firstBytes(tgz, entryName, n) {
-  const buf = execFileSync("tar", ["-xzOf", tgz, entryName], { maxBuffer: 1 << 30 });
-  return Array.from(buf.subarray(0, n));
+function entryBytes(tgz, entryName) {
+  return execFileSync("tar", ["-xzOf", tgz, entryName], { maxBuffer: 1 << 30 });
 }
 
-function validatePlatform(plat, packagesDir, version, workDir) {
+// readVerifiedBinaries loads the digests build-npm.mjs recorded after checking
+// each binary against the release's signed checksums.txt. Absent means the
+// packages were assembled by something that skipped that check.
+function readVerifiedBinaries(packagesDir) {
+  const path = join(packagesDir, "verified-binaries.json");
+  if (!existsSync(path)) return null;
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function validatePlatform(plat, packagesDir, version, workDir, verified) {
   const label = `@jmrp.io/gitlab-mcp-server-${plat.key}`;
   const dir = join(packagesDir, plat.key);
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
@@ -113,9 +128,19 @@ function validatePlatform(plat, packagesDir, version, workDir) {
   if (check(binEntry, `${plat.key}: binary ${binaryName} not in tarball`)) {
     check(binEntry.mode.includes("x"), `${plat.key}: binary is not executable in the tarball (mode ${binEntry.mode})`);
     check(binEntry.size >= MIN_BINARY_BYTES, `${plat.key}: binary is ${binEntry.size} bytes, below the ${MIN_BINARY_BYTES} floor`);
-    const magic = firstBytes(tgz, `package/${binaryName}`, 4);
+    const bytes = entryBytes(tgz, `package/${binaryName}`);
+    const magic = Array.from(bytes.subarray(0, 4));
     const ok = MAGIC[plat.os].some((sig) => sig.every((b, i) => magic[i] === b));
     check(ok, `${plat.key}: binary magic ${magic.map((b) => b.toString(16)).join(" ")} is not ${plat.os}`);
+
+    if (verified) {
+      const want = verified.binaries?.[plat.key];
+      const got = createHash("sha256").update(bytes).digest("hex");
+      check(
+        want === got,
+        `${plat.key}: the packed binary is sha256 ${got}, but the release's signed checksums.txt named ${want}`,
+      );
+    }
   }
 }
 
@@ -212,10 +237,24 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const workDir = mkdtempSync(join(tmpdir(), "validate-npm-"));
   process.stdout.write(`Validating npm distribution v${args.version}\n`);
+  const verified = readVerifiedBinaries(args.packages);
+  check(
+    verified !== null,
+    "packages were assembled without verified-binaries.json — build-npm.mjs did not check them against the release's checksums.txt",
+  );
+  check(
+    verified === null || verified.verified === true,
+    "verified-binaries.json says the binaries were packaged with --allow-unverified",
+  );
+  check(
+    verified === null || verified.version === args.version,
+    `verified-binaries.json records version ${verified?.version}, but this is v${args.version}`,
+  );
+
   try {
-    for (const plat of PLATFORMS) validatePlatform(plat, args.packages, args.version, workDir);
+    for (const plat of PLATFORMS) validatePlatform(plat, args.packages, args.version, workDir, verified);
     validateMain(args.main, args.version, workDir);
-    process.stdout.write(`  structural: 7 packages checked (files, exec bit, magic, os/cpu, pins)${failures.length ? "" : " ✓"}\n`);
+    process.stdout.write(`  structural: 7 packages checked (files, exec bit, magic, sha256 vs checksums.txt, os/cpu, pins)${failures.length ? "" : " ✓"}\n`);
     await runtimeCheck(args.packages, args.main, args.version, workDir);
   } finally {
     rmSync(workDir, { recursive: true, force: true });

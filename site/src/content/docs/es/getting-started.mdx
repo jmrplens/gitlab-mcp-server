@@ -311,7 +311,7 @@ GITLAB_URL=https://gitlab.com
 GITLAB_TOKEN=glpat-xxxx
 ```
 
-Un `.env` en el directorio de trabajo tiene prioridad sobre él, y una variable de entorno explícita tiene prioridad sobre ambos.
+Una variable de entorno explícita tiene prioridad sobre él, igual que un archivo nombrado en `GITLAB_MCP_ENV_FILE`. Un `.env` en el directorio de trabajo no se lee en absoluto: ese directorio viene del repositorio que abrió tu editor, así que su contenido lo eligió otra persona. Si existe uno, el arranque lo nombra a nivel `WARN` junto con las claves que pretendía definir.
 :::
 
 ## Instalar como Agent Plugin (Cursor / Claude Code / VS Code)
@@ -450,7 +450,7 @@ Luego establece el token requerido:
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
 
-Establece `GITLAB_URL` aquí solo para instancias autogestionadas, o crea un archivo `.env` en tu directorio de trabajo con las variables anteriores.
+Establece `GITLAB_URL` aquí solo para instancias autogestionadas, o pon las variables anteriores en `~/.gitlab-mcp-server.env`.
 
 </TabItem>
 <TabItem label="Windsurf">
@@ -543,17 +543,19 @@ Abre la barra lateral de Cline → haz clic en el icono de servidores MCP → **
 </TabItem>
 </Tabs>
 
-## Uso de un archivo .env
+## Uso de un archivo dotenv
 
-En lugar de colocar secretos en archivos de configuración del cliente, puedes usar un archivo `.env`:
+En lugar de colocar secretos en archivos de configuración del cliente, puedes ponerlos en un archivo dotenv:
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
 Añade `GITLAB_URL=https://gitlab.example.com` para GitLab autogestionado.
 
-El servidor carga `.env` desde el directorio de trabajo actual automáticamente. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para el orden de carga completo.
+El servidor lee `~/.gitlab-mcp-server.env` para los valores que su entorno no traiga ya. Para guardar el archivo en otro sitio, nómbralo por ruta absoluta en `GITLAB_MCP_ENV_FILE`.
+
+Un `.env` en el directorio de trabajo **no** se lee. Tu editor fija ese directorio en el espacio de trabajo que abrió, así que el archivo llega con el repositorio y no de tu mano; si existe uno, el arranque lo nombra en el log junto con las claves que pretendía definir. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para el orden de carga completo.
 
 ## Modo HTTP
 
@@ -583,7 +585,7 @@ Los clientes deben configurarse con el `clientId` de la Aplicación OAuth de Git
 
 Si te conectas a una instancia de GitLab autoalojada (Community Edition o Enterprise Edition), la configuración es la misma — solo asegúrate de que `GITLAB_URL` apunte a tu instancia interna:
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.internal.company.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -592,7 +594,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 Muchas instancias autoalojadas usan certificados autofirmados o de CA interna. Si ves errores `x509: certificate signed by unknown authority`, añade:
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_SKIP_TLS_VERIFY=true
 ```
 
@@ -605,7 +607,7 @@ Omitir la verificación TLS desactiva la validación de certificados para todas 
 <Tabs>
 <TabItem label="HTTPS interno">
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.internal.company.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -613,7 +615,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 </TabItem>
 <TabItem label="Puerto personalizado">
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.company.com:8443
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -621,7 +623,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 </TabItem>
 <TabItem label="HTTP (solo dev)">
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=http://gitlab.local:3000
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -633,7 +635,7 @@ Las conexiones HTTP transmiten tokens en texto plano. Usa HTTP solo para instanc
 </TabItem>
 <TabItem label="Cert. autofirmado">
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.internal.company.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 GITLAB_SKIP_TLS_VERIFY=true

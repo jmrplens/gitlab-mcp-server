@@ -37,11 +37,11 @@ func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string 
 	fmt.Fprintf(&b, FmtMdID, label.ID)
 	fmt.Fprintf(&b, "- **Color**: %s\n", label.Color)
 	if label.Description != "" {
-		description := label.Description
 		if opts.EscapeDescription {
-			description = EscapeMdTableCell(description)
+			fmt.Fprintf(&b, FmtMdDescription, EscapeMdTableCell(label.Description))
+		} else {
+			WriteDescription(&b, label.Description)
 		}
-		fmt.Fprintf(&b, FmtMdDescription, description)
 	}
 	if label.PrioritySpecified || label.Priority != 0 {
 		fmt.Fprintf(&b, "- **Priority**: %d\n", label.Priority)

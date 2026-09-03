@@ -120,8 +120,16 @@ func Middleware(opts Options) mcp.Middleware {
 			// context, "and SHOULD link current ambient context, if it's
 			// present". Without the link, a trace that arrives through _meta
 			// loses every trace of which HTTP request carried it.
+			//
+			// The extracted context is bounded before it is used, for the
+			// tracestate reason in [sanitizeRemoteContext]. The sampling half
+			// of that helper is deliberately off here: this layer runs after
+			// the credential check, so the caller is one the deployment
+			// admitted, and honoring their sampled flag is what the convention
+			// asks for. The unauthenticated edge is the HTTP middleware.
 			ambient := trace.SpanContextFromContext(ctx)
-			ctx = otel.GetTextMapPropagator().Extract(ctx, carrierFor(req))
+			extracted := otel.GetTextMapPropagator().Extract(ctx, carrierFor(req))
+			ctx = sanitizeRemoteContext(extracted, true)
 			parent := trace.SpanContextFromContext(ctx)
 
 			// Identity is resolved before the span starts, like everything

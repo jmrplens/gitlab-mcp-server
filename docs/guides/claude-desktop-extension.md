@@ -46,13 +46,20 @@ signature, and their own provenance attestation — see
 ## Build locally
 
 ```bash
-make mcpb          # builds dist/gitlab-mcp-server.mcpb (requires macOS lipo + npx)
+make mcpb          # builds dist/gitlab-mcp-server.mcpb (requires macOS lipo + zip)
 make check-mcpb    # validates mcpb/manifest.json with the official CLI
 ```
 
 `make mcpb` cross-compiles the darwin arm64/amd64 binaries, merges them with
-`lipo`, cross-compiles the Windows amd64 binary, and packs everything with the
-pinned `@anthropic-ai/mcpb` CLI via `scripts/build-mcpb.sh`.
+`lipo`, cross-compiles the Windows amd64 binary, and packs everything into the
+bundle with `scripts/build-mcpb.sh`.
+
+A `.mcpb` is a plain zip with `manifest.json` at its root, so the script builds
+it with `zip` and fixed entry timestamps: the same inputs produce the same
+bytes, which matters because `server.json` records the bundle's SHA-256. It used
+to shell out to `npx --yes @anthropic-ai/mcpb@<pin>`, which pinned the CLI but
+resolved its dependency tree fresh from the registry on every release, inside
+the job that holds this project's signing and publishing identities.
 
 In CI, the release workflow builds the bundle from the GoReleaser artifacts
 (including the `universal_binaries` darwin build) and uploads it as a release

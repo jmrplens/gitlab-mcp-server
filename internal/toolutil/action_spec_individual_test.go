@@ -99,7 +99,16 @@ func TestIndividualToolFromActionSpec_FallsBackToOptionDescriptionAndGeneratedTi
 	}
 }
 
-// TestIndividualToolFromActionSpec_AppliesAnnotationOverrides verifies IndividualToolFromActionSpec applies annotation overrides.
+// TestIndividualToolFromActionSpec_AppliesAnnotationOverrides verifies that
+// IndividualToolFromActionSpec applies the annotation overrides that narrow and
+// refuses the one that widens.
+//
+// The spec is a mutating archive that overrides all four hints. Three of them
+// make the tool look less capable or less safe and are applied verbatim. The
+// fourth claims readOnlyHint on an action the spec itself calls mutating, and
+// is dropped: --read-only, safe mode and a gateway's auto-allow all act on that
+// bit, so honoring it would widen the operator's controls rather than describe
+// the tool.
 func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
 	overrideReadOnly := true
 	overrideDestructive := false
@@ -128,17 +137,22 @@ func TestIndividualToolFromActionSpec_AppliesAnnotationOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
 	}
-	if !tool.Annotations.ReadOnlyHint {
-		t.Fatal("read-only annotation = false, want override true")
+	checks := []struct {
+		name string
+		got  bool
+		want bool
+	}{
+		{"the widening read-only override is dropped", tool.Annotations.ReadOnlyHint, false},
+		{"the narrowing destructive override is applied", tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint, false},
+		{"the narrowing idempotent override is applied", tool.Annotations.IdempotentHint, false},
+		{"the narrowing open-world override is applied", tool.Annotations.OpenWorldHint != nil && *tool.Annotations.OpenWorldHint, false},
 	}
-	if tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
-		t.Fatalf("destructive annotation = %v, want override false", tool.Annotations.DestructiveHint)
-	}
-	if tool.Annotations.IdempotentHint {
-		t.Fatal("idempotent annotation = true, want override false")
-	}
-	if tool.Annotations.OpenWorldHint == nil || *tool.Annotations.OpenWorldHint {
-		t.Fatalf("open-world annotation = %v, want override false", tool.Annotations.OpenWorldHint)
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			if check.got != check.want {
+				t.Errorf("annotation = %t, want %t", check.got, check.want)
+			}
+		})
 	}
 }
 
@@ -366,4 +380,136 @@ func testActionSpecSchema(properties ...string) map[string]any {
 		props[name] = map[string]any{"type": "string"}
 	}
 	return map[string]any{"type": "object", "properties": props}
+}
+
+// TestIndividualToolAnnotationOverrides_NarrowingOnly verifies that an
+// individual-tool annotation override may make an action look less safe than
+// the action is, never safer.
+//
+// readOnlyHint and idempotentHint are acted on, not merely displayed:
+// --read-only removes what is not read-only, safe mode previews what is not,
+// and a gateway may auto-allow readOnlyHint:true with no human in the loop. An
+// override that raises either therefore widens the operator's controls rather
+// than describing the tool, which is how one mutating action came to be
+// read-only on the individual surface and mutating on the other two.
+func TestIndividualToolAnnotationOverrides_NarrowingOnly(t *testing.T) {
+	truth, falsehood := true, false
+	tests := []struct {
+		name           string
+		overrides      IndividualToolAnnotationOverrides
+		readOnly       bool
+		idempotent     bool
+		wantReadOnly   *bool
+		wantIdempotent *bool
+	}{
+		{name: "no overrides"},
+		{
+			name:         "read-only claim on a mutating action is dropped",
+			overrides:    IndividualToolAnnotationOverrides{ReadOnly: &truth},
+			wantReadOnly: nil,
+		},
+		{
+			name:         "read-only claim on a read-only action is kept",
+			overrides:    IndividualToolAnnotationOverrides{ReadOnly: &truth},
+			readOnly:     true,
+			wantReadOnly: &truth,
+		},
+		{
+			name:         "a narrowing read-only override is kept",
+			overrides:    IndividualToolAnnotationOverrides{ReadOnly: &falsehood},
+			readOnly:     true,
+			wantReadOnly: &falsehood,
+		},
+		{
+			name:           "idempotent claim on a non-repeatable action is dropped",
+			overrides:      IndividualToolAnnotationOverrides{Idempotent: &truth},
+			wantIdempotent: nil,
+		},
+		{
+			name:           "idempotent claim on an idempotent action is kept",
+			overrides:      IndividualToolAnnotationOverrides{Idempotent: &truth},
+			idempotent:     true,
+			wantIdempotent: &truth,
+		},
+		{
+			name:           "a narrowing idempotent override is kept",
+			overrides:      IndividualToolAnnotationOverrides{Idempotent: &falsehood},
+			idempotent:     true,
+			wantIdempotent: &falsehood,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.overrides.NarrowingOnly(tt.readOnly, tt.idempotent)
+			if !sameOptionalBool(got.ReadOnly, tt.wantReadOnly) {
+				t.Errorf("ReadOnly = %s, want %s", optionalBoolString(got.ReadOnly), optionalBoolString(tt.wantReadOnly))
+			}
+			if !sameOptionalBool(got.Idempotent, tt.wantIdempotent) {
+				t.Errorf("Idempotent = %s, want %s", optionalBoolString(got.Idempotent), optionalBoolString(tt.wantIdempotent))
+			}
+		})
+	}
+
+	t.Run("destructive and open-world overrides are untouched", func(t *testing.T) {
+		overrides := IndividualToolAnnotationOverrides{Destructive: &falsehood, OpenWorld: &falsehood}
+		got := overrides.NarrowingOnly(false, false)
+		if !sameOptionalBool(got.Destructive, &falsehood) || !sameOptionalBool(got.OpenWorld, &falsehood) {
+			t.Errorf("Destructive/OpenWorld = %s/%s, want false/false", optionalBoolString(got.Destructive), optionalBoolString(got.OpenWorld))
+		}
+	})
+}
+
+// TestAnnotationsFromActionSpec_WideningOverridesDoNotReachTheClient verifies
+// the served annotations apply the same rule, which is the only place a client
+// or a gateway can see it.
+func TestAnnotationsFromActionSpec_WideningOverridesDoNotReachTheClient(t *testing.T) {
+	truth := true
+	spec := NewActionSpec("hook_test", ActionRoute{
+		Handler:     func(context.Context, map[string]any) (any, error) { return struct{}{}, nil },
+		InputSchema: map[string]any{"type": "object"},
+	}, ActionSpecOptions{
+		OwnerPackage: "toolutil",
+		IndividualTool: IndividualToolSpec{
+			Name: "gitlab_test_hook_test",
+			AnnotationOverrides: IndividualToolAnnotationOverrides{
+				ReadOnly:   &truth,
+				Idempotent: &truth,
+			},
+		},
+	})
+
+	annotations := annotationsFromActionSpec(spec)
+	checks := []struct {
+		name string
+		got  bool
+	}{
+		{"readOnlyHint", annotations.ReadOnlyHint},
+		{"idempotentHint", annotations.IdempotentHint},
+	}
+	for _, check := range checks {
+		t.Run(check.name+" stays false for a mutating action", func(t *testing.T) {
+			if check.got {
+				t.Errorf("%s = true, want false", check.name)
+			}
+		})
+	}
+}
+
+// sameOptionalBool reports whether two optional booleans carry the same value.
+func sameOptionalBool(got, want *bool) bool {
+	if got == nil || want == nil {
+		return got == nil && want == nil
+	}
+	return *got == *want
+}
+
+// optionalBoolString renders an optional boolean for a failure message.
+func optionalBoolString(value *bool) string {
+	if value == nil {
+		return "<nil>"
+	}
+	if *value {
+		return "true"
+	}
+	return "false"
 }

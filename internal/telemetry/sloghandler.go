@@ -2,9 +2,11 @@ package telemetry
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
-	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel/log/global"
@@ -115,10 +117,11 @@ func (h *fanOutHandler) Handle(ctx context.Context, record slog.Record) error {
 
 // redactRecord returns the record as it may leave the process.
 //
-// Only resource URIs, and only on the exported copy. The rule is the one the
-// span attributes already follow: which resource a request named is governed by
-// the identity policy, and a value that arrives by another route is a second
-// carrier the policy does not reach.
+// Resource URIs, identity fields, the named strip list, error text and
+// oversized values, and only on the exported copy. The rule is the one the span
+// attributes already follow: what a request named is governed by the identity
+// policy, and a value that arrives by another route is a second carrier the
+// policy does not reach.
 //
 // It has to happen here rather than at the call sites because the records are
 // not all ours. The Go SDK logs "resource subscribed" with the URI through the
@@ -126,14 +129,17 @@ func (h *fanOutHandler) Handle(ctx context.Context, record slog.Record) error {
 // calls slog would leave the dependency's records untouched, which is how this
 // was found: the span carried a digest and the log beside it carried the path.
 //
-// The common case allocates nothing. A record with no URI in it is returned as
-// it came, which is every record this server writes except a handful about
-// subscriptions.
+// # Why it is unconditional
+//
+// It used to return the record untouched unless something in it mentioned a
+// gitlab:// URI or an identity field, which is exactly the shape of the
+// anonymous "tool call failed" record — the one carrying the GitLab URL and
+// GitLab's response body inside its error value. An early return that has to
+// enumerate what needs redacting is a second copy of the redaction rules that
+// silently disagrees with the first the next time one grows. The exported leg
+// starts at Info, so the copy is made on a record that is already leaving the
+// process over a network.
 func redactRecord(record slog.Record, identity *Redactor) slog.Record {
-	if !recordNeedsRedaction(record) && !recordNamesSomebody(record) {
-		return record
-	}
-
 	redacted := slog.NewRecord(record.Time, record.Level,
 		RedactResourceURIs(record.Message), record.PC)
 
@@ -144,6 +150,24 @@ func redactRecord(record slog.Record, identity *Redactor) slog.Record {
 	})
 	redacted.AddAttrs(exportAttrs(attrs, identity)...)
 	return redacted
+}
+
+// exportStrippedFields are the log fields removed from the exported copy at
+// any depth, by name.
+//
+// A named list rather than a memory. Both this and the identity fields are the
+// same shape of defect: a field added to a log line that the export-side
+// redactor had no reason to know about, found in production twice. A field
+// belongs here when it identifies a caller without being an identity the policy
+// governs — token_suffix is the last four characters of the client's
+// credential, which authenticates nothing and correlates everything, and it
+// survived both the none and the pseudonymous policies untouched because
+// neither had heard of it.
+//
+// The call sites keep writing it: stderr is the operator's own terminal, and
+// the suffix is what they correlate a refusal by.
+var exportStrippedFields = map[string]bool{
+	LogFieldTokenSuffix: true,
 }
 
 // exportAttrs returns what the exported copy of an attribute set may carry.
@@ -175,6 +199,8 @@ func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
 				userID = attr.Value.String()
 			case attr.Key == LogFieldUser:
 				username = attr.Value.String()
+			case exportStrippedFields[attr.Key]:
+				// Dropped outright: see exportStrippedFields.
 			case attr.Value.Kind() == slog.KindGroup:
 				out = append(out, slog.Attr{
 					Key:   attr.Key,
@@ -194,51 +220,17 @@ func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
 	return out
 }
 
-// recordNamesSomebody reports whether a record carries the identity fields, so
-// the copy above is made when there is a policy to apply even if nothing in it
-// mentions a resource.
-func recordNamesSomebody(record slog.Record) bool {
-	found := false
-	record.Attrs(func(attr slog.Attr) bool {
-		if attrNamesSomebody(attr) {
-			found = true
-			return false
-		}
-		return true
-	})
-	return found
-}
-
-// attrNamesSomebody descends groups, because slog.Group is an ordinary value a
-// caller can pass and a flat key check let a grouped user field through.
-func attrNamesSomebody(attr slog.Attr) bool {
-	if attr.Key == LogFieldUser || attr.Key == LogFieldUserID {
-		return true
-	}
-	if attr.Value.Kind() == slog.KindGroup {
-		return slices.ContainsFunc(attr.Value.Group(), attrNamesSomebody)
-	}
-	return false
-}
-
-// recordNeedsRedaction reports whether anything in the record mentions a
-// resource URI, so the copy above is made only when it changes something.
-func recordNeedsRedaction(record slog.Record) bool {
-	if strings.Contains(record.Message, resourceURIScheme) {
-		return true
-	}
-	found := false
-	record.Attrs(func(attr slog.Attr) bool {
-		if strings.Contains(attr.Value.String(), resourceURIScheme) {
-			found = true
-			return false
-		}
-		return true
-	})
-	return found
-}
-
-// redactAttr rewrites one attribute, descending into groups.
+// redactAttr rewrites one attribute for the exported leg.
+//
+// Three rules, in the order they can each defeat the next:
+//
+//   - An error value never exports its text. See [errorTypeName].
+//   - A gitlab:// URI is rewritten wherever it appears.
+//   - Every value is bounded, so no attribute can be sized by whoever supplied
+//     its content.
+//
+// Groups are descended, because slog.Group is an ordinary value a caller can
+// pass and a flat scan reads one as a single opaque value.
 func redactAttr(attr slog.Attr) slog.Attr {
 	if attr.Value.Kind() == slog.KindGroup {
 		group := attr.Value.Group()
@@ -249,11 +241,98 @@ func redactAttr(attr slog.Attr) slog.Attr {
 		return slog.Attr{Key: attr.Key, Value: slog.GroupValue(rewritten...)}
 	}
 
+	if attr.Value.Kind() == slog.KindAny {
+		if err, ok := attr.Value.Any().(error); ok {
+			return slog.String(attr.Key, errorTypeName(err))
+		}
+	}
+
 	text := attr.Value.String()
-	if !strings.Contains(text, resourceURIScheme) {
+	if strings.Contains(text, resourceURIScheme) {
+		text = RedactResourceURIs(text)
+	} else if len(text) <= maxExportedAttrValue && utf8.ValidString(text) {
+		// Nothing to change: hand back the original so a typed value keeps its
+		// type on the wire rather than becoming a string.
 		return attr
 	}
-	return slog.String(attr.Key, RedactResourceURIs(text))
+	return slog.String(attr.Key, truncateForExport(text))
+}
+
+// maxExportedAttrValue bounds one exported attribute value.
+//
+// Nothing in the logs SDK applies a length limit, so without this an attribute
+// built from a caller-controlled string is relayed to the collector byte for
+// byte: an unauthenticated request can carry roughly a megabyte in a header,
+// and the refusal paths log what they refused. The number is generous enough
+// that no legitimate field this server writes is near it, and small enough that
+// a flood of them is a rounding error on the operator's bill.
+const maxExportedAttrValue = 1024
+
+// truncateForExport bounds a value, saying so where it was cut, and hands back
+// something a proto3 string field will accept.
+//
+// The marker matters more than the bound: a value that was silently shortened
+// reads as the whole value, and somebody eventually debugs the difference
+// between a truncated host name and a wrong one.
+//
+// The bound is a byte count, so the cut can land inside a multi-byte character,
+// and that costs more than the character. The OTLP log exporters serialize with
+// proto.Marshal, which validates every string field, so one partial rune fails
+// the upload for the entire batch: every record in it, from every caller, is
+// dropped and an SDK error line is all that is left. The value is caller-chosen
+// on reachable paths, a refused tools/call being logged with the name the
+// caller sent, so the repair covers what arrives as well as what is cut here.
+func truncateForExport(text string) string {
+	if len(text) <= maxExportedAttrValue {
+		return strings.ToValidUTF8(text, string(utf8.RuneError))
+	}
+	return strings.ToValidUTF8(text[:maxExportedAttrValue], string(utf8.RuneError)) + "[truncated]"
+}
+
+// errorTypeName reports the type an error should be classified as, and is the
+// whole of what the exported copy says about it.
+//
+// The otelslog bridge promotes any error-valued attribute into
+// exception.message equal to err.Error(), and for this server that string is
+// client-go's "METHOD scheme://host/path: CODE body": the URL-encoded project
+// path, the query string, and GitLab's own response text, on every failed tool
+// call and under every identity policy. Replacing the value with a string both
+// removes the text and defeats the promotion at its source, since the bridge
+// only promotes a value that still is an error.
+//
+// A type name is a compile-time constant, so it can carry no request data, and
+// it answers the question an operator actually has at this level: whether the
+// call failed at the transport or was refused by the API. The status code and
+// the timing are on the GitLab client span, which records neither URL nor body.
+//
+// The chain is walked past the generic wrappers, because fmt.Errorf produces
+// *fmt.wrapError for every wrapped error in this tree and classifying every
+// failure as that would be the same as classifying none.
+func errorTypeName(err error) string {
+	for range maxUnwrapDepth {
+		name := fmt.Sprintf("%T", err)
+		if !genericErrorTypes[name] {
+			return name
+		}
+		unwrapped := errors.Unwrap(err)
+		if unwrapped == nil {
+			return name
+		}
+		err = unwrapped
+	}
+	return "error"
+}
+
+// maxUnwrapDepth bounds the walk, because an error chain is built by whatever
+// wrapped it and a cyclic Unwrap is a hang rather than a panic.
+const maxUnwrapDepth = 16
+
+// genericErrorTypes are the wrapper types that say nothing about what failed.
+var genericErrorTypes = map[string]bool{
+	"*fmt.wrapError":      true,
+	"*fmt.wrapErrors":     true,
+	"*errors.errorString": true,
+	"*errors.joinError":   true,
 }
 
 // WithAttrs applies to both legs, so a logger derived from this one keeps

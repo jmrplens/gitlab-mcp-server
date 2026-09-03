@@ -91,33 +91,103 @@ func ListHints(hints ...string) []string {
 	return out
 }
 
+// The server's guidance section, and what that section becomes when it turns up
+// in text the server did not write.
+//
+// next_steps is a trusted channel: the MCP instructions and the evaluator
+// prompts both tell the model these are the server's own suggestions, and
+// [ExtractHints] lifts them back out of the rendered Markdown into a structured
+// field. Nothing distinguished a section the server wrote from one that arrived
+// inside a README, a job log, a project description or a discussion note, so an
+// attacker who typed the heading got their bullets promoted into next_steps
+// verbatim — as the server's advice, on the server's authority.
+//
+// Defusing rewrites the glyph as its HTML entity. A Markdown client renders the
+// two identically, so the reader loses nothing and sees the text that was
+// really there; what changes is that the line is no longer the marker, so
+// nothing downstream can mistake it for one.
+const (
+	hintsHeading        = "\U0001F4A1 **Next steps:**"
+	defusedHintsHeading = "&#128161; **Next steps:**"
+	// hintsBlockOpening is the whole opening of a server-authored section: the
+	// horizontal rule, the heading, and the newline before the first bullet.
+	hintsBlockOpening = "---\n" + hintsHeading + "\n"
+)
+
+// DefuseHintsHeading rewrites every copy of the server's guidance heading in s
+// so it can no longer pass for one. Text with no such heading is returned
+// unchanged.
+func DefuseHintsHeading(s string) string {
+	if !strings.Contains(s, hintsHeading) {
+		return s
+	}
+	return strings.ReplaceAll(s, hintsHeading, defusedHintsHeading)
+}
+
 // WriteHints appends a "💡 Next steps" section to the Markdown builder.
 // Each hint is a short string describing a related action the LLM can take
-// (e.g. "Use action 'delete' to remove this package").
-// If no hints are provided, nothing is written.
+// (e.g. "Use action 'delete' to remove this package"). If no hints are
+// provided, no section is written.
+//
+// Whether or not there are hints, any guidance heading already in the builder
+// is defused first. This is the one place every formatter passes through on its
+// way to a response — including the raw file, job trace, snippet and discussion
+// renderers that embed GitLab bytes verbatim — so doing it here covers them all
+// without each renderer having to remember, and covers the ones added later.
 func WriteHints(b *strings.Builder, hints ...string) {
+	defuseWrittenHints(b)
 	if len(hints) == 0 {
 		return
 	}
-	b.WriteString("\n---\n\U0001F4A1 **Next steps:**\n")
+	b.WriteString("\n" + hintsBlockOpening)
 	for _, h := range hints {
-		fmt.Fprintf(b, "- %s\n", h)
+		fmt.Fprintf(b, "- %s\n", StripControlBytes(h))
 	}
+}
+
+// defuseWrittenHints rewrites the builder's contents when they already carry a
+// guidance heading, which at this point can only have come from GitLab text a
+// formatter embedded.
+func defuseWrittenHints(b *strings.Builder) {
+	written := b.String()
+	if !strings.Contains(written, hintsHeading) {
+		return
+	}
+	b.Reset()
+	b.WriteString(DefuseHintsHeading(written))
 }
 
 // ExtractHints parses the "💡 Next steps" section from a Markdown tool
 // response and returns the individual hint strings. Returns nil when
 // the section is absent.
+//
+// Only a section in a position the server could have written it is read, and
+// there are exactly two: [WriteHints] is called either on an empty builder, so
+// the section opens the response (nineteen list formatters do this), or after
+// the body, so it closes it. A section anywhere in between is content that
+// happens to look like guidance — a README, a job log, a project description —
+// and content does not get to speak as the server. This used to be the first
+// match anywhere in the response, which is what let a file's contents fill
+// next_steps.
 func ExtractHints(md string) []string {
-	const marker = "\U0001F4A1 **Next steps:**\n"
-	_, after, ok := strings.Cut(md, marker)
-	if !ok {
+	if start, ok := leadingHintsBlock(md); ok {
+		// Nothing precedes it, so it is the server's; the body follows the
+		// bullets and ends them.
+		return parseHintBullets(md[start:], false)
+	}
+	start := lastHintsBlock(md)
+	if start < 0 {
 		return nil
 	}
-	section := after
-	var hints []string
+	return parseHintBullets(md[start:], true)
+}
 
-lines:
+// parseHintBullets reads the bullet list that follows a section opening. When
+// mustEndResponse is set, anything after the bullets other than blank lines
+// means the section did not close the response and is therefore not one the
+// server appended.
+func parseHintBullets(section string, mustEndResponse bool) []string {
+	var hints []string
 	for line := range strings.SplitSeq(section, "\n") {
 		switch {
 		case strings.HasPrefix(line, "- "):
@@ -125,11 +195,42 @@ lines:
 		case line == "":
 			continue
 		default:
-			break lines
+			if mustEndResponse {
+				return nil
+			}
+			if len(hints) == 0 {
+				return nil
+			}
+			return hints
 		}
 	}
 	if len(hints) == 0 {
 		return nil
 	}
 	return hints
+}
+
+// leadingHintsBlock returns the offset just past a section opening the
+// response, and whether there was one. The optional newline is what WriteHints
+// writes before the rule when the builder it is handed is still empty.
+func leadingHintsBlock(md string) (int, bool) {
+	for _, prefix := range []string{hintsBlockOpening, "\n" + hintsBlockOpening} {
+		if strings.HasPrefix(md, prefix) {
+			return len(prefix), true
+		}
+	}
+	return 0, false
+}
+
+// lastHintsBlock returns the offset just past the opening of the last
+// server-authored guidance section, or -1 when the response carries none. The
+// rule has to start a line: a "---" in the middle of one is not a rule, and a
+// section the server wrote always follows the line it ended.
+func lastHintsBlock(md string) int {
+	for i := strings.LastIndex(md, hintsBlockOpening); i >= 0; i = strings.LastIndex(md[:i], hintsBlockOpening) {
+		if i == 0 || md[i-1] == '\n' {
+			return i + len(hintsBlockOpening)
+		}
+	}
+	return -1
 }

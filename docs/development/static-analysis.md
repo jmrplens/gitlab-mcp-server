@@ -93,32 +93,33 @@ gotestsum --version
 
 ### Combined Targets
 
-| Target                | Description                                                                                                                                          |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make analyze`        | Run `golangci-lint config verify`, `golangci-lint fmt --diff`, `golangci-lint run`, `govulncheck`, `markdownlint`, and the test-goroutine abort gate |
-| `make analyze-fix`    | Apply auto-fixes with `golangci-lint fmt`, `golangci-lint run --fix`, and `markdownlint --fix`                                                       |
-| `make analyze-report` | Generate a combined Markdown report at `dist/analysis/report.txt`                                                                                    |
-| `make lint`           | Backward-compatible alias for `make golangci-lint`                                                                                                   |
+| Target                | Description                                                                                                                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make analyze`        | Run `golangci-lint config verify`, `golangci-lint fmt --diff`, `golangci-lint run`, `govulncheck`, `markdownlint`, the test-goroutine abort gate, the subtest gate, and the supply-chain policy gate |
+| `make analyze-fix`    | Apply auto-fixes with `golangci-lint fmt`, `golangci-lint run --fix`, and `markdownlint --fix`                                                                                                       |
+| `make analyze-report` | Generate a combined Markdown report at `dist/analysis/report.txt`                                                                                                                                    |
+| `make lint`           | Backward-compatible alias for `make golangci-lint`                                                                                                                                                   |
 
 ### Project Audit Targets
 
 > Full CLI reference (flags, usage, output formats): [cmd-utilities.md](cmd-utilities.md)
 
-| Target                       | Description                                                                                        |
-| ---------------------------- | -------------------------------------------------------------------------------------------------- |
-| `make audit-surface-quality` | Consolidated MCP surface audit (metadata + output quality)                                         |
-| `make audit-tokens`          | Measure exposed tool token overhead (`--compare-schemas` for meta-tool sizing spike)               |
-| `make audit-metrics`         | Report MCP tool/resource/prompt counts                                                             |
-| `make audit-1to1`            | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata + merged backlog)                    |
-| `make audit-catalog-first`   | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`                 |
-| `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability                                     |
-| `make audit-test-names`      | Audit test function naming convention compliance                                                   |
-| `make audit-test-goroutines` | Report `testing.T` aborts (`t.Fatal`/`FailNow`) made off the test goroutine, with a JSON work list |
-| `make check-test-goroutines` | Fail when any off-goroutine abort site remains (errorf-without-return stays advisory)              |
-| `make audit-test-subtests`   | Report case loops in Test functions that assert without a `t.Run` subtest, with a JSON work list   |
-| `make check-test-subtests`   | Fail when any case loop still asserts without a subtest                                            |
-| `make audit-godocs`          | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings   |
-| `make audit-godocs-check`    | Run the same Godoc audit and fail if findings remain                                               |
+| Target                       | Description                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `make audit-surface-quality` | Consolidated MCP surface audit (metadata + output quality)                                                                                                                     |
+| `make audit-tokens`          | Measure exposed tool token overhead (`--compare-schemas` for meta-tool sizing spike)                                                                                           |
+| `make audit-metrics`         | Report MCP tool/resource/prompt counts                                                                                                                                         |
+| `make audit-1to1`            | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata + merged backlog)                                                                                                |
+| `make audit-catalog-first`   | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`                                                                                             |
+| `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability                                                                                                                 |
+| `make audit-test-names`      | Audit test function naming convention compliance                                                                                                                               |
+| `make audit-test-goroutines` | Report `testing.T` aborts (`t.Fatal`/`FailNow`) made off the test goroutine, with a JSON work list                                                                             |
+| `make check-test-goroutines` | Fail when any off-goroutine abort site remains (errorf-without-return stays advisory)                                                                                          |
+| `make audit-test-subtests`   | Report case loops in Test functions that assert without a `t.Run` subtest, with a JSON work list                                                                               |
+| `make check-test-subtests`   | Fail when any case loop still asserts without a subtest                                                                                                                        |
+| `make check-supply-chain`    | Fail when a release-configuration invariant breaks (pinned actions, locked release jobs, stated Dependabot cooldowns, current security policy, signature-verifying installers) |
+| `make audit-godocs`          | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings                                                                               |
+| `make audit-godocs-check`    | Run the same Godoc audit and fail if findings remain                                                                                                                           |
 
 ## Tool Details
 
@@ -212,12 +213,6 @@ An entry here is a vulnerability shipped on purpose in code we actually call.
 To accept a new advisory, add its OSV ID to `ALLOWLIST` in
 `scripts/govulncheck.sh` and add a row here with the justification. To retire one
 (e.g. once a fix ships), remove it from both.
-
-The only way to drop `openpgp` from the build is an upstream change in
-`go-selfupdate` — either migrating to the maintained
-`github.com/ProtonMail/go-crypto/openpgp` fork that the advisory recommends, or
-moving the PGP validators into a separate package so consumers that do not use
-them never link it.
 
 ### markdownlint-cli2
 

@@ -9,7 +9,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
@@ -555,13 +555,14 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/7] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/7] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/7] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/7] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/7] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/7] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/7] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[1/8] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/8] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/8] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/8] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/8] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/8] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/8] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[8/8] supply-chain policy" go run ./cmd/audit_supply_chain; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1068,6 +1069,13 @@ audit-test-names:
 ## qualifiers, and test/e2e are the codified exemptions).
 check-test-file-names:
 	go run ./cmd/audit_test_names/ -check-files cmd internal test
+
+## check-supply-chain: fail when a release-configuration invariant nothing else
+## in the pipeline can see has broken — an unpinned uses:, a credentialed job
+## that runs code resolved at run time, a dropped Dependabot cooldown, a stale
+## security policy, or an installer that stopped verifying the signature.
+check-supply-chain:
+	go run ./cmd/audit_supply_chain/
 
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:

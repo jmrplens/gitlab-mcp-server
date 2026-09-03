@@ -510,6 +510,125 @@ func TestProjectUpload_FilePath_TooLarge(t *testing.T) {
 	}
 }
 
+// makeDirs creates each directory or fails the test, so a containment fixture
+// reads as one line instead of a loop that asserts.
+func makeDirs(t *testing.T, dirs ...string) {
+	t.Helper()
+	for _, dir := range dirs {
+		if err := os.Mkdir(dir, 0o750); err != nil {
+			t.Fatalf("Mkdir(%q) error = %v", dir, err)
+		}
+	}
+}
+
+// TestUpload_FilePathOutsideAllowedDirs_Rejected verifies that the shared
+// containment reaches this caller: a file_path outside the allow-listed roots,
+// a parent-traversal escape and a symlink pointing outside are all refused, and
+// the refusal happens before any byte leaves the machine — the mock handler
+// fails the test if it is reached at all.
+//
+// It is the integration half of the toolutil check. This handler is one of the
+// nine that take a caller-supplied path, and "the model was told to attach the
+// local config for context" is an instruction that can arrive in an issue
+// description.
+func TestUpload_FilePathOutsideAllowedDirs_Rejected(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "home")
+	makeDirs(t, allowed, outside)
+	secret := filepath.Join(outside, ".gitlab-mcp-server.env")
+	if err := os.WriteFile(secret, []byte("GITLAB_TOKEN=glpat-SECRET-FROM-DISK\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(allowed, "notes.txt")
+	symlinked := os.Symlink(secret, link) == nil
+
+	t.Setenv("TMPDIR", allowed)
+	t.Chdir(allowed)
+
+	tests := []struct {
+		name string
+		path string
+		skip bool
+	}{
+		{name: "absolute path outside every allowed root is refused", path: secret},
+		{name: "parent traversal out of the workspace is refused", path: filepath.Join(allowed, "..", "home", ".gitlab-mcp-server.env")},
+		{name: "symlink inside the workspace pointing outside is refused", path: link, skip: !symlinked},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip {
+				t.Skip("symlinks unsupported on this platform")
+			}
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+			_, err := Upload(context.Background(), nil, client, UploadInput{
+				ProjectID: "42",
+				Filename:  "notes.txt",
+				FilePath:  tt.path,
+			})
+			if err == nil {
+				t.Fatalf("Upload(%q) error = nil, want refusal", tt.path)
+			}
+			if !strings.Contains(err.Error(), "outside allowed") {
+				t.Errorf("Upload(%q) error = %q, want it to name the allow-list", tt.path, err)
+			}
+		})
+	}
+}
+
+// TestUpload_FilePathOverHTTPTransport_Rejected verifies that a server reached
+// over HTTP refuses file_path outright, whatever it names, while
+// content_base64 — the input a remote caller can actually satisfy — keeps
+// working in the same session.
+func TestUpload_FilePathOverHTTPTransport_Rejected(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(path, []byte("local file"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	toolutil.SetLocalFilesystemAccess(false)
+	t.Cleanup(func() { toolutil.SetLocalFilesystemAccess(true) })
+
+	t.Run("file_path is refused", func(t *testing.T) {
+		client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+		_, err := Upload(context.Background(), nil, client, UploadInput{
+			ProjectID: "42",
+			Filename:  "notes.txt",
+			FilePath:  path,
+		})
+		if err == nil {
+			t.Fatal("Upload(file_path) error = nil over HTTP, want refusal")
+		}
+		if !strings.Contains(err.Error(), "content_base64") {
+			t.Errorf("Upload(file_path) error = %q, want it to point at content_base64", err)
+		}
+	})
+
+	t.Run("content_base64 still works", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"alt": "upload",
+				"url": "/uploads/aaa/notes.txt",
+				"full_path": "/g/p/uploads/aaa/notes.txt",
+				"markdown": "![upload](/uploads/aaa/notes.txt)"
+			}`)
+		})
+		client := testutil.NewTestClient(t, handler)
+		out, err := Upload(context.Background(), nil, client, UploadInput{
+			ProjectID:     "42",
+			Filename:      "notes.txt",
+			ContentBase64: base64.StdEncoding.EncodeToString([]byte("local file")),
+		})
+		if err != nil {
+			t.Fatalf("Upload(content_base64) error = %v, want success", err)
+		}
+		if out.URL != "/uploads/aaa/notes.txt" {
+			t.Errorf("URL = %q, want %q", out.URL, "/uploads/aaa/notes.txt")
+		}
+	})
+}
+
 // TestProjectUploadList_Success verifies listing markdown uploads.
 func TestProjectUploadList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

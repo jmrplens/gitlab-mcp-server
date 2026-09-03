@@ -22,7 +22,7 @@ import FAQ from "../../../../components/FAQ.astro";
 ```mermaid
 flowchart TB
     subgraph Local["Máquina Local"]
-        Token["Token de GitLab<br/>(variable de entorno / archivo .env)"]
+        Token["Token de GitLab<br/>(variable de entorno / ~/.gitlab-mcp-server.env)"]
         Server["Proceso del Servidor MCP"]
         Client["Cliente MCP<br/>(VS Code, etc.)"]
     end
@@ -46,19 +46,21 @@ flowchart TB
 
 ### Recomendado: Archivo de entorno
 
-Almacena tu token en un archivo `.env` con permisos restringidos:
+Almacena tu token en `~/.gitlab-mcp-server.env` con permisos restringidos:
 
 ```bash
-# Crear archivo .env
-echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > .env
+# Crear el archivo de entorno en el home
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
 # Añade GITLAB_URL aquí solo para instancias autogestionadas.
 
 # Restringir permisos (solo lectura/escritura del propietario)
-chmod 600 .env
+chmod 600 ~/.gitlab-mcp-server.env
 ```
 
+Para guardar el archivo en otro sitio, nómbralo por ruta absoluta en `GITLAB_MCP_ENV_FILE`.
+
 :::danger
-Nunca hagas commit de archivos `.env` en el control de versiones. Añade `.env` a tu archivo `.gitignore`.
+Un `.env` en tu directorio de trabajo **no** se lee, así que poner ahí el token no hace nada. Ese directorio pertenece al repositorio que abrió tu editor. Nunca hagas commit de un archivo que contenga un token.
 :::
 
 ### Variables de entrada en VS Code
@@ -314,8 +316,8 @@ Un reporte útil incluye la versión afectada (`gitlab-mcp-server --version`), e
 ### Seguridad del token
 
 - ☐ Usa un token de GitLab dedicado con los scopes mínimos requeridos
-- ☐ Almacena tokens en archivos `.env` con permisos `chmod 600`
-- ☐ Añade `.env` al `.gitignore`
+- ☐ Almacena tokens en `~/.gitlab-mcp-server.env` con permisos `chmod 600`
+- ☐ Mantén fuera del control de versiones cualquier archivo que contenga un token
 - ☐ Rota los tokens periódicamente
 - ☐ Usa el scope `read_api` cuando no se necesita acceso de escritura
 

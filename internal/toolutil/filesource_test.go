@@ -130,6 +130,9 @@ func TestReadFileOrBase64_TruncatedReadReturnsWrappedError(t *testing.T) {
 	if info.Size() <= int64(len(data)) {
 		t.Skipf("%s no longer over-reports its size (stat=%d, actual=%d); sysfs quirk not present", path, info.Size(), len(data))
 	}
+	// sysfs is nobody's workspace, so the allow-list has to name it before the
+	// short-read branch is reachable at all.
+	t.Setenv(UploadDirAllowlistEnv, "/sys")
 
 	_, err := ReadFileOrBase64("op", path, "")
 	if err == nil {
@@ -175,4 +178,88 @@ func TestFileOrBase64_Base64SizeLimit(t *testing.T) {
 			t.Errorf("OpenFileOrBase64Source oversized err = %v, want the pre-decode size refusal", err)
 		}
 	})
+}
+
+// TestOpenFileOrBase64Source_ZeroStatSizeFile_Bounded verifies that the
+// streaming branch bounds what it reads by the configured limit rather than by
+// the size os.Stat reports. A procfs entry is a regular file whose reported
+// size is zero and whose content is not, which is how /proc/self/environ — the
+// server's own credentials — streamed past a size cap that only ever looked at
+// os.Stat.
+func TestOpenFileOrBase64Source_ZeroStatSizeFile_Bounded(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("procfs zero-size regular files exist only on Linux")
+	}
+	const procDir = "/proc"
+	if _, err := os.Stat("/proc/self/environ"); err != nil {
+		t.Skipf("procfs unavailable: %v", err)
+	}
+	t.Setenv(UploadDirAllowlistEnv, procDir)
+
+	const limit = 8
+	original := GetUploadConfig()
+	SetUploadConfig(limit)
+	t.Cleanup(func() { SetUploadConfig(original.MaxFileSize) })
+
+	reader, size, cleanup, err := OpenFileOrBase64Source("op", "/proc/self/environ", "")
+	if err != nil {
+		// Not a skip. The environment gates above already ran, so an error here
+		// is the allow-list or the open path refusing for some new reason, and
+		// skipping would report a regression in the containment as a pass.
+		t.Fatalf("OpenFileOrBase64Source() error = %v, want the procfs entry opened through the allow-list", err)
+	}
+	defer cleanup()
+	if size != 0 {
+		t.Fatalf("procfs entry reported size %d, want 0: the zero-size shape is what this test exists to bound", size)
+	}
+
+	read, err := io.ReadAll(reader)
+	if err == nil {
+		t.Fatalf("io.ReadAll() read %d bytes with no error, want the configured limit to stop it", len(read))
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum allowed size") {
+		t.Errorf("io.ReadAll() error = %q, want the size-limit refusal", err)
+	}
+	if len(read) > limit {
+		t.Errorf("io.ReadAll() read %d bytes, want no more than the configured limit of %d", len(read), limit)
+	}
+}
+
+// TestNewLimitedFileReader_BoundsWhatItYields verifies the streaming bound on a
+// synthetic source, so the limit is proven without procfs and stays proven on
+// the platforms and in the sandboxes where procfs is not there to prove it.
+//
+// The boundary is the whole point: a source of exactly the limit reads to EOF,
+// and one byte past it is what the reader refuses, because a source that lies
+// about its size is only detectable by reading further than it claimed.
+func TestNewLimitedFileReader_BoundsWhatItYields(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		maxSize  int64
+		wantRead int
+		wantErr  bool
+	}{
+		{name: "empty source", content: "", maxSize: 8, wantRead: 0},
+		{name: "under the limit", content: "abc", maxSize: 8, wantRead: 3},
+		{name: "exactly the limit", content: "abcdefgh", maxSize: 8, wantRead: 8},
+		{name: "one byte over the limit", content: "abcdefghi", maxSize: 8, wantRead: 8, wantErr: true},
+		{name: "far over the limit", content: strings.Repeat("x", 4096), maxSize: 8, wantRead: 8, wantErr: true},
+		{name: "no limit configured", content: strings.Repeat("x", 4096), maxSize: 0, wantRead: 4096},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := newLimitedFileReader("op", strings.NewReader(tt.content), tt.maxSize)
+			read, err := io.ReadAll(reader)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("io.ReadAll() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && !strings.Contains(err.Error(), "op: file exceeds maximum allowed size") {
+				t.Errorf("io.ReadAll() error = %q, want the op-prefixed size refusal", err)
+			}
+			if len(read) > tt.wantRead {
+				t.Errorf("io.ReadAll() yielded %d bytes, want no more than %d", len(read), tt.wantRead)
+			}
+		})
+	}
 }

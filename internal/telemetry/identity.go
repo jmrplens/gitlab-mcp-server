@@ -109,6 +109,14 @@ func ParseIdentityPolicy(value string) (IdentityPolicy, error) {
 const (
 	LogFieldUser   = "user"
 	LogFieldUserID = "user_id"
+	// LogFieldTokenSuffix is the masked tail of a client credential the pool
+	// and the refusal paths log. It is declared here for the same reason as the
+	// two above: the export-side strip list has to find it by name, and it is
+	// stripped rather than policy-governed because four characters of a token
+	// are a correlation handle and not an identity anyone chose to publish.
+	// The name of a field, never a credential: the value it names is four
+	// masked characters, and this constant is what removes them.
+	LogFieldTokenSuffix = "token_suffix" //nolint:gosec // a log field name, not a secret
 )
 
 // identitySaltBytes sizes the pseudonymisation key.

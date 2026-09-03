@@ -30,11 +30,7 @@ func FormatOutputMarkdownString(t Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## To-Do #%d\n\n", t.ID)
 	fmt.Fprintf(&b, "**Action:** %s\n", t.ActionName)
-	if t.TargetURL != "" {
-		fmt.Fprintf(&b, "**Target:** [%s](%s) (type: %s)\n", targetTitle(t), t.TargetURL, t.TargetType)
-	} else {
-		fmt.Fprintf(&b, "**Target:** %s (type: %s)\n", targetTitle(t), t.TargetType)
-	}
+	fmt.Fprintf(&b, "**Target:** %s (type: %s)\n", toolutil.MdTitleLink(targetTitle(t), t.TargetURL), t.TargetType)
 	fmt.Fprintf(&b, "**State:** %s\n", t.State)
 	fmt.Fprintf(&b, "**Project:** %s\n", projectName(t))
 	if t.Author != nil {
@@ -65,15 +61,11 @@ func FormatListMarkdownString(v ListOutput) string {
 	b.WriteString("| ID | Action | Target | Type | State | Project |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, t := range v.Todos {
-		target := toolutil.EscapeMdTableCell(targetTitle(t))
-		if t.TargetURL != "" {
-			target = fmt.Sprintf("[%s](%s)", target, t.TargetURL)
-		}
 		fmt.Fprintf(
 			&b, "| %d | %s | %s | %s | %s | %s |\n",
 			t.ID,
 			toolutil.EscapeMdTableCell(string(t.ActionName)),
-			target,
+			toolutil.MdTitleLink(targetTitle(t), t.TargetURL),
 			toolutil.EscapeMdTableCell(string(t.TargetType)),
 			toolutil.EscapeMdTableCell(t.State),
 			toolutil.EscapeMdTableCell(projectName(t)),

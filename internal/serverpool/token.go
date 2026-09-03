@@ -1,12 +1,11 @@
 package serverpool
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"slices"
 	"strings"
-
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // RequestOptionGitLabURL identifies the per-request GitLab URL header option.
@@ -131,10 +130,9 @@ func ExtractGitLabURL(r *http.Request, defaultURL string) (string, error) {
 // ResolveRequestOptions applies server-wide MCP configuration precedence to
 // the request-provided options. When defaultURL is set, it is authoritative and
 // any GITLAB-URL header is ignored. When defaultURL is empty, a GITLAB-URL
-// header selects the instance per request; if that header is also absent, the
-// public GitLab instance (config.DefaultGitLabURL) is used, mirroring the stdio
-// default so HTTP clients may omit the URL entirely. Effective URLs are
-// normalized so equivalent values hash to the same server-pool session key.
+// header selects the instance per request and is required, because there is
+// nothing else left to name one. Effective URLs are normalized so equivalent
+// values hash to the same server-pool session key.
 func ResolveRequestOptions(r *http.Request, defaultURL string) (RequestOptions, error) {
 	if strings.TrimSpace(defaultURL) == "" {
 		return ResolveRequestOptionsFor(r, nil)
@@ -147,8 +145,13 @@ func ResolveRequestOptions(r *http.Request, defaultURL string) (RequestOptions, 
 //
 // The three cases are distinct on purpose:
 //
-//   - No allowed instances: the header selects freely, falling back to the
-//     public GitLab. This is the unfixed legacy deployment.
+//   - No allowed instances: the header selects freely and must be present.
+//     This is --allow-any-gitlab-url, where the operator has said any host is
+//     acceptable; they have not said gitlab.com is, and a request that names
+//     no instance carries a credential nobody has aimed anywhere. Answering it
+//     with the public GitLab sent a self-managed instance's token to a third
+//     party whenever a proxy stripped the header or a client could not set
+//     one.
 //   - Exactly one: it is authoritative and the header is ignored, which is
 //     what a deployment pinning --gitlab-url has always done.
 //   - More than one: the header selects among them, and a value that is not
@@ -197,11 +200,7 @@ func ResolveRequestOptionsFor(r *http.Request, allowed []string) (RequestOptions
 	}
 
 	if header == "" {
-		// No fixed --gitlab-url and no per-request GITLAB-URL header: fall back to
-		// the public GitLab instance instead of leaving the URL empty (which would
-		// surface downstream as "no server available"). DefaultGitLabURL is already
-		// canonical, so it needs no normalization.
-		return RequestOptions{GitLabURL: config.DefaultGitLabURL, IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
+		return RequestOptions{}, ErrMissingGitLabURL
 	}
 	normalizedHeader, err := normalizeGitLabURL(header)
 	if err != nil {
@@ -280,6 +279,15 @@ func NormalizeGitLabURLs(raw []string) ([]string, error) {
 	}
 	return normalized, nil
 }
+
+// ErrMissingGitLabURL reports a request that named no GitLab instance on a
+// deployment that publishes none either.
+//
+// It is the empty-allow-list counterpart of the refusal a multi-instance
+// deployment makes: in both, choosing on the caller's behalf means transmitting
+// their credential in full to a host they never named.
+var ErrMissingGitLabURL = errors.New("this deployment publishes no GitLab instance, so the " +
+	RequestOptionGitLabURL + " header must name the one this request is for")
 
 // DisallowedGitLabURLError reports a GITLAB-URL header naming an instance the
 // deployment does not publish.

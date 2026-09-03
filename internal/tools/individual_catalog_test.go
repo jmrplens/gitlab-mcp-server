@@ -4,14 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
@@ -551,22 +556,56 @@ func TestMustIndividualToolFromCatalogAction_InvalidActionPanics(t *testing.T) {
 	assertPanics(t, func() { _ = mustIndividualToolFromCatalogAction(action, nil, IndividualCatalogRegisterOptions{}) })
 }
 
-// TestIndividualCatalogActionReadOnly_AnnotationOverride verifies individual
-// annotation overrides can mark an otherwise mutating action as read-only.
+// TestIndividualCatalogActionReadOnly_AnnotationOverride verifies that the
+// read-only decision registration makes honors an individual annotation
+// override only where the override narrows.
 //
-// The action metadata is mutating, but the individual tool override sets
-// ReadOnly to true. The helper should honor that override because it controls
-// MCP annotations exposed by individual tools.
+// An override that declares a mutating action read-only is ignored: this helper
+// is what safe mode branches on and what the ReadOnlyOnly filter follows, so
+// honoring it would let a spec silently widen --read-only and --safe-mode on
+// one surface while the dynamic and meta surfaces removed the same action.
+// An override that declares a read-only action mutating is honored, because it
+// only ever removes access.
 func TestIndividualCatalogActionReadOnly_AnnotationOverride(t *testing.T) {
-	readOnly := true
-	action := actioncatalog.Action{
-		ReadOnly: false,
-		IndividualTool: toolutil.IndividualToolSpec{AnnotationOverrides: toolutil.IndividualToolAnnotationOverrides{
-			ReadOnly: &readOnly,
-		}},
+	truth, falsehood := true, false
+	tests := []struct {
+		name     string
+		action   actioncatalog.Action
+		wantRead bool
+	}{
+		{
+			name:     "no override follows the catalog",
+			action:   actioncatalog.Action{ReadOnly: false},
+			wantRead: false,
+		},
+		{
+			name: "read-only claim on a mutating action is ignored",
+			action: actioncatalog.Action{ReadOnly: false, IndividualTool: toolutil.IndividualToolSpec{
+				AnnotationOverrides: toolutil.IndividualToolAnnotationOverrides{ReadOnly: &truth},
+			}},
+			wantRead: false,
+		},
+		{
+			name: "mutating claim on a read-only action is honored",
+			action: actioncatalog.Action{ReadOnly: true, IndividualTool: toolutil.IndividualToolSpec{
+				AnnotationOverrides: toolutil.IndividualToolAnnotationOverrides{ReadOnly: &falsehood},
+			}},
+			wantRead: false,
+		},
+		{
+			name: "read-only claim on a read-only action changes nothing",
+			action: actioncatalog.Action{ReadOnly: true, IndividualTool: toolutil.IndividualToolSpec{
+				AnnotationOverrides: toolutil.IndividualToolAnnotationOverrides{ReadOnly: &truth},
+			}},
+			wantRead: true,
+		},
 	}
-	if !individualCatalogActionReadOnly(action) {
-		t.Fatal("individualCatalogActionReadOnly() = false, want override true")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := individualCatalogActionReadOnly(tt.action); got != tt.wantRead {
+				t.Errorf("individualCatalogActionReadOnly() = %t, want %t", got, tt.wantRead)
+			}
+		})
 	}
 }
 
@@ -687,4 +726,167 @@ func diffStringSlices(want, got []string) ([]string, []string) {
 	sort.Strings(missing)
 	sort.Strings(extra)
 	return missing, extra
+}
+
+// TestIndividualToolAnnotations_AgreeWithCatalogClassification is the audit
+// that makes a surface-dependent safety classification impossible.
+//
+// It walks every action in the full Ultimate catalog, projects each one to the
+// individual tool a client is actually served, and asserts that no tool claims
+// to be safer than the catalog says the action is: readOnlyHint may not be true
+// for an action the catalog calls mutating, and idempotentHint may not be true
+// for one the catalog calls non-repeatable. It also asserts that the read-only
+// decision registration makes for that action is the same bit the client is
+// shown, since --read-only and safe mode consult one and gateways trust the
+// other.
+//
+// An invariant over the whole catalog rather than a named-tool assertion: a
+// per-tool test can be silenced by adding a name to an allow-list, and the
+// defect it exists to catch (system_hook_test, read-only on the individual
+// surface and mutating on the other two) was introduced one spec at a time.
+func TestIndividualToolAnnotations_AgreeWithCatalogClassification(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	opts := IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true}
+
+	type violation struct {
+		tool    string
+		action  string
+		hint    string
+		catalog bool
+	}
+	var readOnlyViolations, idempotentViolations, disagreements []violation
+	for _, group := range catalog.Groups() {
+		for _, action := range group.ActionsInOrder() {
+			if strings.TrimSpace(action.IndividualTool.Name) == "" {
+				continue
+			}
+			tool := mustIndividualToolFromCatalogAction(action, group.Icons, opts)
+			if tool.Annotations == nil {
+				continue
+			}
+			if tool.Annotations.ReadOnlyHint && !action.ReadOnly {
+				readOnlyViolations = append(readOnlyViolations, violation{tool.Name, string(action.ID), "readOnlyHint", action.ReadOnly})
+			}
+			if tool.Annotations.IdempotentHint && !action.Idempotent {
+				idempotentViolations = append(idempotentViolations, violation{tool.Name, string(action.ID), "idempotentHint", action.Idempotent})
+			}
+			if individualCatalogActionReadOnly(action) != tool.Annotations.ReadOnlyHint {
+				disagreements = append(disagreements, violation{tool.Name, string(action.ID), "readOnlyHint", action.ReadOnly})
+			}
+		}
+	}
+
+	checks := []struct {
+		name       string
+		violations []violation
+		detail     string
+	}{
+		{
+			name:       "no tool claims readOnlyHint for a mutating action",
+			violations: readOnlyViolations,
+			detail:     "an operator's --read-only keeps these on the individual surface and removes them everywhere else",
+		},
+		{
+			name:       "no tool claims idempotentHint for a non-repeatable action",
+			violations: idempotentViolations,
+			detail:     "idempotentHint invites a model to retry a call whose side effect repeats",
+		},
+		{
+			name:       "the read-only bit registration uses is the bit the client is served",
+			violations: disagreements,
+			detail:     "safe mode reads one and the gateway trusts the other",
+		},
+	}
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			for _, v := range check.violations {
+				t.Errorf("tool %s (action %s) served %s=true while the catalog says %t: %s", v.tool, v.action, v.hint, v.catalog, check.detail)
+			}
+		})
+	}
+}
+
+// TestRegisterIndividualCatalogTools_ReadOnlyRemovesSystemHookTest pins the one
+// action GT-03 was found on, behaviourally, against the real catalog.
+//
+// gitlab_test_system_hook makes GitLab deliver a test event to the hook's
+// configured URL, which is an outbound side effect rather than a read, so
+// --read-only must remove it on the individual surface exactly as it already
+// does on the dynamic and meta ones. The default-mode subtest is the control:
+// the tool is still there when the operator did not ask for it to go.
+func TestRegisterIndividualCatalogTools_ReadOnlyRemovesSystemHookTest(t *testing.T) {
+	const toolName = "gitlab_test_system_hook"
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	tests := []struct {
+		name         string
+		opts         IndividualCatalogRegisterOptions
+		wantRegister bool
+	}{
+		{name: "default mode registers it", opts: IndividualCatalogRegisterOptions{}, wantRegister: true},
+		{name: "read-only mode removes it", opts: IndividualCatalogRegisterOptions{ReadOnlyOnly: true}, wantRegister: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
+			RegisterIndividualCatalogTools(server, catalog, tt.opts)
+			registered := slices.Contains(toolNamesFromServer(t, server), toolName)
+			if registered != tt.wantRegister {
+				t.Errorf("%s registered = %t, want %t", toolName, registered, tt.wantRegister)
+			}
+		})
+	}
+}
+
+// TestIndividualCatalogHandler_UpstreamResponseBody_IsNotReflected verifies
+// that the individual-surface dispatcher contains a GitLab error before it
+// becomes tool output and before it is logged.
+//
+// It is the same hole the standalone dispatcher had, and it needs its own test
+// because it is a second copy of the same few lines: a route that wraps
+// client-go's error with fmt.Errorf never reaches the wrapping helpers, so
+// whatever a proxy answered, an nginx or WAF page naming hosts inside the
+// deployment, reached the model and the "tool call failed" line verbatim.
+func TestIndividualCatalogHandler_UpstreamResponseBody_IsNotReflected(t *testing.T) {
+	const internalHost = "gitlab-internal-11.corp.invalid"
+	target, parseErr := url.Parse("https://gitlab.example.com/api/v4/projects/42")
+	if parseErr != nil {
+		t.Fatalf("url.Parse() error = %v", parseErr)
+	}
+	// The prefix is verbatim what client-go writes into Message when the body
+	// is not JSON, which a proxy error page never is.
+	upstream := &gl.ErrorResponse{
+		Response: &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Request:    &http.Request{Method: http.MethodGet, URL: target},
+		},
+		Message: "failed to parse unknown error format: <html><body>nginx/1.25.3 upstream " + internalHost + ":8080</body></html>",
+	}
+	spec := toolutil.NewActionSpec("get", toolutil.RouteFunc(
+		func(context.Context, struct{}) (struct{}, error) {
+			return struct{}{}, fmt.Errorf("project %q not found on GitLab: %w", "group/project", upstream)
+		},
+	), toolutil.ActionSpecOptions{
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_get", Title: "Test Get", Description: "Test get."},
+	})
+	catalog := testIndividualCatalog(t, spec)
+	actions := catalog.Actions()
+	if len(actions) != 1 {
+		t.Fatalf("catalog.Actions() length = %d, want 1", len(actions))
+	}
+	handler := individualCatalogHandler("gitlab_test_get", actions[0], markdownForResult, IndividualCatalogRegisterOptions{})
+
+	_, _, err := handler(context.Background(), nil, map[string]any{})
+	if err == nil {
+		t.Fatal("handler() error = nil, want the route's failure")
+	}
+	if strings.Contains(err.Error(), internalHost) {
+		t.Errorf("handler() error = %q, want no upstream response body", err.Error())
+	}
+	if !strings.Contains(err.Error(), "not found on GitLab") {
+		t.Errorf("handler() error = %q, want the handler's own context kept", err.Error())
+	}
+	if !errors.Is(err, upstream) {
+		t.Error("errors.Is(handler() error, upstream) = false, want the cause still reachable")
+	}
 }

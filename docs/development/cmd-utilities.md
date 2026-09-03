@@ -8,29 +8,30 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 
 ## Quick reference
 
-| Utility                        | Category                  | Purpose                                                                                                                           | Make target                               |
-| ------------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `audit_1to1`                   | SDK/API parity audits     | Consolidated SDK↔API parity audit (struct/action/metadata gap streams)                                                            | `make audit-1to1`                         |
-| `audit_catalog_first`          | Catalog & metadata audits | Source-discovered ActionSpec catalog-first coverage inventory                                                                     | `make audit-catalog-first`                |
-| `audit_discovery_completeness` | Catalog & metadata audits | Extended META-001 model-discovery metadata quality auditor                                                                        | `make audit-discovery`                    |
-| `audit_doc_coverage`           | Catalog & metadata audits | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                 | `make audit-doc-coverage`                 |
-| `audit_dynamic_aliases`        | Catalog & metadata audits | Dynamic-toolset alias governance (collisions, ambiguity)                                                                          | `make audit-dynamic-aliases`              |
-| `audit_edition_tier`           | Catalog & metadata audits | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                              | `make audit-edition-tier`                 |
-| `audit_surface_quality`        | Surface quality audits    | Consolidated MCP tool surface quality audit (metadata + output)                                                                   | `make audit-surface-quality`              |
-| `audit_tokens`                 | Surface quality audits    | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section | `make audit-tokens`, `make gen-footprint` |
-| `audit_metrics`                | Surface quality audits    | Comprehensive metrics summary (tools, resources, prompts, codebase)                                                               | `make audit-metrics`                      |
-| `godoc_tool`                   | Source quality audits     | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                      | `make audit-godocs`                       |
-| `audit_test_names`             | Source quality audits     | Classifies `Test*` functions by naming pattern; emits rename hints                                                                | `make audit-test-names`                   |
-| `audit_string_dupes`           | Source quality audits     | Finds duplicated string literals missing `const`/`var` declarations                                                               | —                                         |
-| `gen_action_catalog_manifest`  | Generators                | Generates the ActionSpec group-builder manifest                                                                                   | `make gen-action-catalog-manifest`        |
-| `gen_lhm_manifest`             | Generators                | Generates the tools/prompts/resources arrays in `lhm.plugin.json` (LobeHub Marketplace)                                           | `make gen-lhm-manifest`                   |
-| `gen_llms`                     | Generators                | Generates `llms.txt` and `llms-full.txt`                                                                                          | `make gen-llms`                           |
-| `gen_stats`                    | Generators                | Regenerates the managed repository statistics section in `README.md`                                                              | `make gen-stats`                          |
-| `gen_testing_docs`             | Generators                | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                       | `make gen-testing-docs`                   |
-| `gen_docker_tools`             | Generators                | Generates a Docker MCP Registry-compatible `tools.json`                                                                           | —                                         |
-| `format_md_tables`             | Formatters                | Normalizes Markdown pipe tables in `README.md` and `docs/`                                                                        | part of `make audit-docs`                 |
-| `eval_mcp_surfaces`            | Evaluation                | Evaluates model behavior across MCP tool surfaces                                                                                 | `make eval-surfaces-docker*`              |
-| `server`                       | Server                    | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                     | `make build`, `make run`                  |
+| Utility                        | Category                      | Purpose                                                                                                                                                                                             | Make target                               |
+| ------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `audit_1to1`                   | SDK/API parity audits         | Consolidated SDK↔API parity audit (struct/action/metadata gap streams)                                                                                                                              | `make audit-1to1`                         |
+| `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                       | `make audit-catalog-first`                |
+| `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                          | `make audit-discovery`                    |
+| `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                   | `make audit-doc-coverage`                 |
+| `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                            | `make audit-dynamic-aliases`              |
+| `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                | `make audit-edition-tier`                 |
+| `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`              |
+| `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint` |
+| `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase)                                                                                                                                 | `make audit-metrics`                      |
+| `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                       |
+| `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints                                                                                                                                  | `make audit-test-names`                   |
+| `audit_string_dupes`           | Source quality audits         | Finds duplicated string literals missing `const`/`var` declarations                                                                                                                                 | —                                         |
+| `audit_supply_chain`           | Release & supply-chain audits | Five release-configuration invariants: pinned actions, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current security policy, signature-verifying installers | `make check-supply-chain`                 |
+| `gen_action_catalog_manifest`  | Generators                    | Generates the ActionSpec group-builder manifest                                                                                                                                                     | `make gen-action-catalog-manifest`        |
+| `gen_lhm_manifest`             | Generators                    | Generates the tools/prompts/resources arrays in `lhm.plugin.json` (LobeHub Marketplace)                                                                                                             | `make gen-lhm-manifest`                   |
+| `gen_llms`                     | Generators                    | Generates `llms.txt` and `llms-full.txt`                                                                                                                                                            | `make gen-llms`                           |
+| `gen_stats`                    | Generators                    | Regenerates the managed repository statistics section in `README.md`                                                                                                                                | `make gen-stats`                          |
+| `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                         | `make gen-testing-docs`                   |
+| `gen_docker_tools`             | Generators                    | Generates a Docker MCP Registry-compatible `tools.json`                                                                                                                                             | —                                         |
+| `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md` and `docs/`                                                                                                                                          | part of `make audit-docs`                 |
+| `eval_mcp_surfaces`            | Evaluation                    | Evaluates model behavior across MCP tool surfaces                                                                                                                                                   | `make eval-surfaces-docker*`              |
+| `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                       | `make build`, `make run`                  |
 
 ## SDK/API parity audits
 
@@ -508,7 +509,7 @@ Per-file tallies (`sites`, `fixable`), a summary line, and optionally the JSON w
 #### Make targets
 
 - `make audit-test-subtests` — writes `plan/test-subtests-backlog.json`.
-- `make check-test-subtests` — CI gate; also step [7/7] of `make analyze`.
+- `make check-test-subtests` — CI gate; also step [7/8] of `make analyze`.
 
 ### audit_string_dupes
 
@@ -545,6 +546,39 @@ Per-file sections to stdout using a `[Ndx] "value"` format that shows the occurr
 #### Make targets
 
 None. Run directly with `go run`.
+
+## Release & supply-chain audits
+
+### audit_supply_chain
+
+Checks five properties of the release configuration, each of which was false at some point and none of which any other gate in this repository can see:
+
+1. Every `uses:` in `.github/workflows` is pinned to a 40-character commit SHA. A mutable tag is resolved by the runner at job start, so a hijacked `v7` is consumed with no pull request, no cooldown and no review.
+2. A job holding `contents: write` or `id-token: write` runs no code resolved at run time: no `npx`, no `@latest`, no `curl` piped into a shell, no `pip install` without `--require-hashes`, in its own `run:` blocks or in any `scripts/` file those blocks invoke. `actions/checkout` must set `persist-credentials: false`, a downloaded tool (GoReleaser) must be pinned to an exact `vX.Y.Z`, and `anchore/sbom-action` is refused outright, because on Linux it fetches `install.sh` from syft's `main` branch and runs it.
+3. Dependabot states a cooldown of its own rather than inheriting a platform default GitHub can change.
+4. `SECURITY.md` names the major version the repository actually ships, and marks no older major as supported.
+5. Both installers verify the release's Sigstore bundle, not only a `checksums.txt` fetched from the same mutable release.
+
+Pinning is decided on the raw file text and job structure on the parsed YAML, so a `uses:` inside a comment or an unparsed region still counts. A version pin held in the workflow's top-level `env:` block and referenced from a step is resolved through that one indirection.
+
+```bash
+go run ./cmd/audit_supply_chain/
+go run ./cmd/audit_supply_chain/ --root /path/to/a/checkout
+```
+
+#### Flags
+
+| Flag     | Type   | Default             | Description                                  |
+| -------- | ------ | ------------------- | -------------------------------------------- |
+| `--root` | string | _(the module root)_ | Repository root to audit instead of this one |
+
+#### Output
+
+One line per violation under a `supply-chain audit FAILED (N problems):` header, or a single success line naming the five properties. Exits `1` when any invariant is broken and when the audit cannot be performed at all, so a gate that cannot read its inputs never looks like a gate that passed.
+
+#### Make targets
+
+- `make check-supply-chain` — CI gate; also step [8/8] of `make analyze`.
 
 ## Generators
 
@@ -811,3 +845,4 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `audit-dynamic-aliases`                  | `audit_dynamic_aliases`        | No error-severity alias governance finding (collisions, ambiguity)                   | Non-zero (`1`) if any error-severity finding exists       |
 | `audit-docs` → `format_md_tables -check` | `format_md_tables`             | All Markdown pipe tables are normalized                                              | Non-zero if any table needs formatting                    |
 | `audit-docs` → `gen_testing_docs -check` | `gen_testing_docs`             | The `docs/development/testing/testing.md` test-metrics block is current              | Non-zero if the generated section is stale                |
+| `check-supply-chain`                     | `audit_supply_chain`           | The five release-configuration invariants still hold                                 | Non-zero if any is broken, or if the audit cannot be run  |

@@ -3,8 +3,10 @@ package mcpotel
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel"
@@ -298,4 +300,188 @@ func TestRequestScheme_ReadsTheConnectionAndNotAHeader(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestServerMiddleware_AnUnrecognizedMethodIsBoundedOnTheSpan keeps an
+// unauthenticated caller from sizing an exported record.
+//
+// This middleware runs before the credential check, and net/http accepts any
+// token as a method, so http.request.method_original was a value the caller
+// chose with no ceiling but net/http's 1 MiB header budget. Twenty requests
+// carrying a 500 KB verb produced ten megabytes of exported traces. The file's
+// own comment said "the span is where an unbounded value is affordable", which
+// is true of cardinality — the point it was making — and false of bytes.
+//
+// The prefix is kept because that is what the attribute is for: an operator
+// looking at a misbehaving client wants to see what it sent, and the first few
+// dozen characters answer that as well as a megabyte does.
+func TestServerMiddleware_AnUnrecognizedMethodIsBoundedOnTheSpan(t *testing.T) {
+	const marker = "TAILMARKERZZ"
+
+	tests := []struct {
+		name   string
+		method string
+		want   string
+	}{
+		{
+			name:   "a short invented verb is recorded whole",
+			method: "FROBNICATE",
+			want:   "FROBNICATE",
+		},
+		{
+			name:   "an oversized verb keeps its prefix and loses its tail",
+			method: strings.Repeat("Q", 64*1024) + marker,
+			want:   strings.Repeat("Q", maxOriginalMethod),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := newRecorder(t)
+
+			handler := ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			handler.ServeHTTP(httptest.NewRecorder(),
+				httptest.NewRequestWithContext(t.Context(), tt.method, "/mcp", nil))
+
+			spans := recorder.Ended()
+			if len(spans) == 0 {
+				t.Fatal("no span was recorded")
+			}
+			value, ok := attrOf(spans[0], attrHTTPRequestMethodOriginal)
+			if !ok {
+				t.Fatal("the span carries no http.request.method_original, so nothing records what the client sent")
+			}
+			if got := value.AsString(); got != tt.want {
+				t.Errorf("http.request.method_original is %d bytes, want the %d-byte %q",
+					len(got), len(tt.want), tt.want)
+			}
+		})
+	}
+}
+
+// TestServerMiddleware_ACallerCannotSuppressTheServersOwnSpan covers the
+// decision an anonymous caller does not get to make.
+//
+// Trace context is extracted from every request's headers before the credential
+// check, and the SDK's default sampler is ParentBased(AlwaysOn), whose
+// remoteParentNotSampled branch is NeverSample. So a scanner sending
+// "traceparent: 00-<id>-<id>-00" produced no HTTP span at all, including for
+// the 401 it was about to receive: the party being refused decided whether the
+// refusal was recorded. W3C calls the flags "recommendations given by the
+// caller rather than strict rules", and at an unauthenticated front door a
+// recommendation is all this one is.
+//
+// The trace id is asserted alongside, because the fix must not cost the joining
+// this middleware exists to provide.
+func TestServerMiddleware_ACallerCannotSuppressTheServersOwnSpan(t *testing.T) {
+	const upstream = "4bf92f3577b34da6a3ce929d0e0e4736"
+
+	tests := []struct {
+		name  string
+		flags string
+	}{
+		{name: "the caller sampled the trace", flags: "01"},
+		{name: "the caller cleared the sampled flag", flags: "00"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := newRecorder(t)
+
+			handler := ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusUnauthorized)
+			}))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+			req.Header.Set("traceparent", "00-"+upstream+"-00f067aa0ba902b7-"+tt.flags)
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+
+			spans := recorder.Ended()
+			if len(spans) == 0 {
+				t.Fatal("the caller's trace flags suppressed this server's own span, so an anonymous party decides whether a refusal is recorded")
+			}
+			if got := spans[0].SpanContext().TraceID().String(); got != upstream {
+				t.Errorf("the HTTP span has trace id %s; the caller sent %s, so their trace breaks at this server's front door",
+					got, upstream)
+			}
+		})
+	}
+}
+
+// TestServerMiddleware_AnOperatorsSamplerKeepsTheCallersDecision is the guard
+// on the fix above, and the reason it is guarded rather than unconditional.
+//
+// Ignoring a caller's sampled flag is right when nobody chose otherwise. It is
+// wrong when the operator did: the SDK applies OTEL_TRACES_SAMPLER before any
+// option, so an operator running a ratio to keep their bill down has already
+// decided how much of a fronting gateway's traffic to record, and overriding
+// that from inside a middleware would be exactly the silent override this
+// project refuses everywhere else it reads the OTEL_ namespace.
+func TestServerMiddleware_AnOperatorsSamplerKeepsTheCallersDecision(t *testing.T) {
+	t.Setenv("OTEL_TRACES_SAMPLER", "parentbased_always_on")
+
+	recorder := newRecorder(t)
+	handler := ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+	req.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00")
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if spans := recorder.Ended(); len(spans) != 0 {
+		t.Errorf("recorded %d spans while the operator's own sampler said not to; the middleware overrode a configured decision",
+			len(spans))
+	}
+}
+
+// TestServerMiddleware_BoundsACallersTracestate bounds the other value a caller
+// writes straight onto an exported span.
+//
+// The W3C propagator accepts 32 tracestate members of up to 256 characters each
+// and the SDK exports the value verbatim, before authentication, so an
+// anonymous request carries about 16 KiB of chosen bytes onto every span
+// including the one for its own 401. The bound drops whole entries from the
+// end, which is what the specification requires of a truncation ("the vendor
+// MUST truncate whole entries"), so a fronting gateway's own vendor state
+// survives at the head.
+func TestServerMiddleware_BoundsACallersTracestate(t *testing.T) {
+	const upstream = "4bf92f3577b34da6a3ce929d0e0e4736"
+
+	recorder := newRecorder(t)
+	handler := ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+	req.Header.Set("traceparent", "00-"+upstream+"-00f067aa0ba902b7-01")
+	req.Header.Set("tracestate", maximalTraceState())
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	spans := recorder.Ended()
+	if len(spans) == 0 {
+		t.Fatal("no span was recorded")
+	}
+	state := spans[0].SpanContext().TraceState().String()
+	if len(state) > maxTraceStateBytes {
+		t.Errorf("the span carries %d bytes of caller-chosen tracestate, over the %d bound",
+			len(state), maxTraceStateBytes)
+	}
+	if state == "" {
+		t.Error("the whole tracestate was dropped; truncation is supposed to keep the head, so a gateway's vendor state survives")
+	}
+	if got := spans[0].SpanContext().TraceID().String(); got != upstream {
+		t.Errorf("bounding the tracestate broke the join: trace id %s, want %s", got, upstream)
+	}
+}
+
+// maximalTraceState builds the largest tracestate the W3C parser accepts: 32
+// members, each with a 256-character value.
+func maximalTraceState() string {
+	members := make([]string, 0, 32)
+	for i := range 32 {
+		members = append(members, fmt.Sprintf("vendor%02d=%s", i, strings.Repeat("v", 256)))
+	}
+	return strings.Join(members, ",")
 }

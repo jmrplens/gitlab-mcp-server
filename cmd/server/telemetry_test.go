@@ -5,6 +5,8 @@ import (
 	"context"
 	"flag"
 	"log/slog"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -378,5 +380,72 @@ func TestTelemetryEnabled_ThePassedFlagIsTheAnswer(t *testing.T) {
 				t.Errorf("telemetryEnabled() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// levelCapturingHandler records the messages a logger emits, refusing anything
+// below its threshold exactly as the stderr handler built from LOG_LEVEL does.
+type levelCapturingHandler struct {
+	threshold slog.Level
+	mu        *sync.Mutex
+	messages  *[]string
+}
+
+func (h levelCapturingHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= h.threshold
+}
+
+func (h levelCapturingHandler) Handle(_ context.Context, record slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	*h.messages = append(*h.messages, record.Message)
+	return nil
+}
+
+func (h levelCapturingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h levelCapturingHandler) WithGroup(string) slog.Handler { return h }
+
+// TestStartTelemetry_TheEnabledAnnouncement_SurvivesAWarnLogLevel verifies that
+// the record naming the collector this process exports to is emitted above the
+// level LOG_LEVEL can suppress.
+//
+// It is the only local evidence the channel exists. A deployment running at
+// LOG_LEVEL=warn or error otherwise ships its whole operational log to a
+// collector with nothing on its own stderr saying so, and the exported copy is
+// no help: an operator looking for that is looking at the machine, not at the
+// destination they are trying to discover.
+func TestStartTelemetry_TheEnabledAnnouncement_SurvivesAWarnLogLevel(t *testing.T) {
+	restore := telemetryFlag
+	t.Cleanup(func() { telemetryFlag = restore })
+	telemetryFlag = nil
+
+	t.Setenv("GITLAB_MCP_TELEMETRY", "true")
+
+	var mu sync.Mutex
+	var messages []string
+	capture := levelCapturingHandler{threshold: slog.LevelWarn, mu: &mu, messages: &messages}
+	// Both, because both are what LOG_LEVEL reaches: main builds the stderr
+	// handler at that level and keeps it as baseLogHandler, and the telemetry
+	// bridge gates its stderr leg on that handler rather than on the default
+	// logger it replaces.
+	previous, previousBase := slog.Default(), baseLogHandler
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+		baseLogHandler = previousBase
+	})
+	baseLogHandler = capture
+	slog.SetDefault(slog.New(capture))
+
+	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	t.Cleanup(func() { stop(boundedShutdown(t)) })
+	if !provider.Enabled() {
+		t.Fatal("telemetry did not start, so there was no announcement to make")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.Contains(messages, "telemetry enabled") {
+		t.Errorf("the startup announcement was suppressed at LOG_LEVEL=warn; captured %v", messages)
 	}
 }

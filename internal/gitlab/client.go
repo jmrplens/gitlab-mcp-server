@@ -69,6 +69,10 @@ type Client struct {
 	token        string       // Token for health check authentication
 	healthClient *http.Client // Raw HTTP client without resilience wrapper
 
+	// maxResponse caps how many bytes of one decompressed response body this
+	// client will read. See [DefaultMaxResponseBytes].
+	maxResponse atomic.Int64
+
 	// initialized tracks whether Initialize() completed successfully.
 	// Uses atomic.Bool for lock-free reads in the hot path (EnsureInitialized).
 	initialized atomic.Bool
@@ -142,19 +146,24 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	base := buildBaseTransport(cfg.SkipTLSVerify)
 
 	c := &Client{
-		baseURL:      cfg.GitLabURL,
-		healthURL:    strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
-		token:        cfg.GitLabToken,
-		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
+		baseURL:   cfg.GitLabURL,
+		healthURL: strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
+		token:     cfg.GitLabToken,
 	}
 	c.SetTier(cfg.Tier)
+	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.healthClient = newHealthClient(base, cfg.GitLabURL, c)
 
-	sdkHTTPClient := &http.Client{Transport: apiTransport(base, c)}
+	sdkHTTPClient := &http.Client{
+		Transport:     apiTransport(base, c),
+		CheckRedirect: credentialSafeRedirect(cfg.GitLabURL),
+	}
 
 	options := []gl.ClientOptionFunc{
 		gl.WithBaseURL(cfg.GitLabURL),
 		gl.WithHTTPClient(sdkHTTPClient),
 	}
+	options = append(options, retryOptions()...)
 	if cfg.DisableRetries {
 		options = append(options, gl.WithoutRetries())
 	}
@@ -190,18 +199,23 @@ func NewClientWithTokenRetries(baseURL, token string, skipTLSVerify, disableRetr
 	base := buildBaseTransport(skipTLSVerify)
 
 	c := &Client{
-		baseURL:      baseURL,
-		healthURL:    strings.TrimRight(baseURL, "/") + versionAPIPath,
-		token:        token,
-		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
+		baseURL:   baseURL,
+		healthURL: strings.TrimRight(baseURL, "/") + versionAPIPath,
+		token:     token,
 	}
+	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.healthClient = newHealthClient(base, baseURL, c)
 
-	sdkHTTPClient := &http.Client{Transport: apiTransport(base, c)}
+	sdkHTTPClient := &http.Client{
+		Transport:     apiTransport(base, c),
+		CheckRedirect: credentialSafeRedirect(baseURL),
+	}
 
 	options := []gl.ClientOptionFunc{
 		gl.WithBaseURL(baseURL),
 		gl.WithHTTPClient(sdkHTTPClient),
 	}
+	options = append(options, retryOptions()...)
 	if disableRetries {
 		options = append(options, gl.WithoutRetries())
 	}
@@ -229,19 +243,28 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 	base := buildBaseTransport(skipTLSVerify)
 
 	c := &Client{
-		baseURL:      baseURL,
-		healthURL:    strings.TrimRight(baseURL, "/") + versionAPIPath,
-		token:        token,
-		bearerAuth:   true,
-		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
+		baseURL:    baseURL,
+		healthURL:  strings.TrimRight(baseURL, "/") + versionAPIPath,
+		token:      token,
+		bearerAuth: true,
+	}
+	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.healthClient = newHealthClient(base, baseURL, c)
+
+	sdkHTTPClient := &http.Client{
+		Transport:     apiTransport(base, c),
+		CheckRedirect: credentialSafeRedirect(baseURL),
 	}
 
-	sdkHTTPClient := &http.Client{Transport: apiTransport(base, c)}
+	options := []gl.ClientOptionFunc{
+		gl.WithBaseURL(baseURL),
+		gl.WithHTTPClient(sdkHTTPClient),
+	}
+	options = append(options, retryOptions()...)
 
 	inner, err := gl.NewAuthSourceClient(
 		gl.OAuthTokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})},
-		gl.WithBaseURL(baseURL),
-		gl.WithHTTPClient(sdkHTTPClient),
+		options...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating gitlab oauth client: %w", err)
@@ -265,7 +288,10 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	v, _, err := c.inner.Version.GetVersion()
+	// client-go builds every request from context.Background() and only
+	// WithContext replaces it, so without this the caller's deadline bounds
+	// the check above and nothing else.
+	v, _, err := c.inner.Version.GetVersion(gl.WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("gitlab ping failed: %w", err)
 	}
@@ -508,19 +534,98 @@ func (c *Client) CredentialRejected(ctx context.Context) bool {
 	return resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden
 }
 
+// IsCredentialRejection reports whether err is GitLab judging the credential,
+// as opposed to any of the many ways a request can fail without producing a
+// verdict about it.
+//
+// Only an explicit 401 or 403 counts, the same rule [Client.CredentialRejected]
+// applies to its own probe. A transport error, a timeout, a 404 and a 5xx all
+// mean the question went unanswered, and treating those as a rejection turns a
+// GitLab that is briefly unreachable into a mass revocation.
+func IsCredentialRejection(err error) bool {
+	var errResp *gl.ErrorResponse
+	if !errors.As(err, &errResp) || errResp == nil {
+		return false
+	}
+	return errResp.StatusCode == http.StatusUnauthorized || errResp.StatusCode == http.StatusForbidden
+}
+
+// newHealthClient builds the raw HTTP client used for the version, credential
+// and edition probes that bypass the SDK.
+//
+// It carries the same redirect policy as the SDK client, and needs it more:
+// this client sets PRIVATE-TOKEN or Authorization by hand in [Client.setAuthHeader]
+// and runs at startup, before any tool call, so an instance answering
+// /api/v4/version with a redirect collects the credential before the server
+// has served a single request.
+//
+// The response ceiling is here for the same reason and not because these
+// bodies are large: the version probe is the first request the process makes
+// and it runs again on every SDK call while degraded, so it is the earliest
+// point at which a configured instance gets to answer with whatever it likes.
+// It is the client's own ceiling rather than a private one, so
+// [Client.SetMaxResponseBytes] means the same thing everywhere.
+func newHealthClient(base http.RoundTripper, baseURL string, c *Client) *http.Client {
+	return &http.Client{
+		Transport:     &responseLimitTransport{base: base, client: c},
+		Timeout:       healthTimeout,
+		CheckRedirect: credentialSafeRedirect(baseURL),
+	}
+}
+
+// responseHeaderTimeout bounds the wait for an upstream's response headers.
+//
+// [http.Client.Timeout] would be the obvious knob and is the wrong one here:
+// it covers the body as well, so any ceiling low enough to be useful against a
+// stalled instance also kills a legitimate artifact or export download that is
+// streaming fine. A response-header timeout separates the two — an upstream
+// that accepts the connection and never answers is bounded, a slow but
+// progressing download is not — which is the case that otherwise pins a
+// goroutine and a socket with no upper bound at all, since client-go's clients
+// carry no timeout and net/http's default transport sets none.
+//
+// Sixty seconds is above anything GitLab takes to produce headers (its own
+// worker timeout is of that order) and far below "forever".
+const responseHeaderTimeout = 60 * time.Second
+
+// sharedBaseTransport is the verifying transport every client shares.
+//
+// It is built once because the connection pool lives in the transport: a
+// per-client transport would give each of up to --max-http-clients pool
+// entries its own idle-connection set. It is a clone rather than
+// [http.DefaultTransport] itself because setting ResponseHeaderTimeout on that
+// would change the behavior of every other package in the process.
+var sharedBaseTransport = sync.OnceValue(func() http.RoundTripper {
+	return newBaseTransport(nil)
+})
+
+// newBaseTransport clones net/http's default transport and applies this
+// package's timeouts, optionally replacing the TLS configuration.
+func newBaseTransport(tlsConfig *tls.Config) *http.Transport {
+	var t *http.Transport
+	if def, ok := http.DefaultTransport.(*http.Transport); ok {
+		t = def.Clone()
+	} else {
+		t = &http.Transport{}
+	}
+	t.ResponseHeaderTimeout = responseHeaderTimeout
+	if tlsConfig != nil {
+		t.TLSClientConfig = tlsConfig
+	}
+	return t
+}
+
 // buildBaseTransport returns the base HTTP round tripper with optional TLS
 // configuration. When skipTLSVerify is true, TLS certificate verification is
 // disabled to support self-signed certificates in development environments.
 func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 	if skipTLSVerify {
-		return &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion:         tls.VersionTLS12,
-				InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates via GITLAB_SKIP_TLS_VERIFY
-			},
-		}
+		return newBaseTransport(&tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates via GITLAB_SKIP_TLS_VERIFY
+		})
 	}
-	return http.DefaultTransport
+	return sharedBaseTransport()
 }
 
 // apiTransport is the full chain the GitLab SDK client speaks through.
@@ -547,10 +652,18 @@ func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 // rather than in response to anything, so its spans would have no parent and
 // would arrive steadily forever, burying the calls somebody actually asked for
 // under an unbounded stream of liveness checks.
+//
+// The response ceiling is the innermost wrapper for the same kind of reason:
+// what it must bound is the body net/http has already decompressed, so it
+// belongs on the far side of the base transport rather than anywhere that
+// happens to see the wire bytes.
 func apiTransport(base http.RoundTripper, c *Client) http.RoundTripper {
 	return mcpotel.NewTransport(&outboundBoundaryTransport{
 		base: &dotUnescapeTransport{
-			base: &resilienceTransport{base: base, client: c},
+			base: &resilienceTransport{
+				base:   &responseLimitTransport{base: base, client: c},
+				client: c,
+			},
 		},
 	})
 }

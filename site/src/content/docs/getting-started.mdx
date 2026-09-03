@@ -310,7 +310,7 @@ GITLAB_URL=https://gitlab.com
 GITLAB_TOKEN=glpat-xxxx
 ```
 
-A `.env` in the working directory takes precedence over it, and an explicit environment variable takes precedence over both.
+An explicit environment variable takes precedence over it, and so does a file named in `GITLAB_MCP_ENV_FILE`. A `.env` in the working directory is not read at all: that directory comes from whatever repository your editor opened, so its contents were chosen by someone else. One that exists is named at `WARN` on startup, with the keys it wanted to set.
 :::
 
 ## Install as an Agent Plugin (Cursor / Claude Code / VS Code)
@@ -449,7 +449,7 @@ Then set the required token:
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
 
-Set `GITLAB_URL` here only for self-managed instances, or create a `.env` file in your working directory with the variables above.
+Set `GITLAB_URL` here only for self-managed instances, or put the variables above in `~/.gitlab-mcp-server.env`.
 
 </TabItem>
 <TabItem label="Windsurf">
@@ -542,17 +542,19 @@ Open the Cline sidebar → click the MCP servers icon → **Edit Global MCP**, o
 </TabItem>
 </Tabs>
 
-## Using an .env file
+## Using a dotenv file
 
-Instead of placing secrets in client config files, you can use a `.env` file:
+Instead of placing secrets in client config files, you can put them in a dotenv file:
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
 Add `GITLAB_URL=https://gitlab.example.com` for self-managed GitLab.
 
-The server loads `.env` from the current working directory automatically. See [Configuration](/gitlab-mcp-server/configuration/) for the full load order.
+The server reads `~/.gitlab-mcp-server.env` for values its environment does not already carry. To keep the file somewhere else, name it by absolute path in `GITLAB_MCP_ENV_FILE`.
+
+A `.env` in the working directory is **not** read. Your editor sets that directory to the workspace it opened, so the file arrives with the repository rather than from you; one that exists is named in the startup log with the keys it wanted to set. See [Configuration](/gitlab-mcp-server/configuration/) for the full load order.
 
 ## HTTP mode
 
@@ -582,7 +584,7 @@ Clients must be configured with the `clientId` from the GitLab OAuth Application
 
 If you're connecting to a self-hosted GitLab instance (Community Edition or Enterprise Edition), the setup is the same — just make sure `GITLAB_URL` points to your internal instance:
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.internal.company.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -591,7 +593,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 Many self-hosted instances use self-signed or internal CA certificates. If you see `x509: certificate signed by unknown authority` errors, add:
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_SKIP_TLS_VERIFY=true
 ```
 
@@ -604,7 +606,7 @@ Skipping TLS verification disables certificate validation for all GitLab API req
 <Tabs>
 <TabItem label="Internal HTTPS">
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.internal.company.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -612,7 +614,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 </TabItem>
 <TabItem label="Custom port">
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.company.com:8443
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -620,7 +622,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 </TabItem>
 <TabItem label="HTTP (dev only)">
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=http://gitlab.local:3000
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
@@ -632,7 +634,7 @@ HTTP connections transmit tokens in plaintext. Only use HTTP for local developme
 </TabItem>
 <TabItem label="Self-signed cert">
 
-```bash title=".env"
+```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.internal.company.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 GITLAB_SKIP_TLS_VERIFY=true

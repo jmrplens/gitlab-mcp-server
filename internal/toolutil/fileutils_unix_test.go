@@ -68,3 +68,56 @@ func TestOpenAndValidateFile_FileDescriptorLimitReached_ReturnsOpenError(t *test
 		t.Errorf("OpenAndValidateFile(fd limit reached) error = %q, want it to mention open", err)
 	}
 }
+
+// TestOpenLeafNoFollow_SymlinkAtTheLeaf_Refused verifies that the two leaf-open
+// primitives refuse a symlink at the last path component rather than following
+// it.
+//
+// The path checks in fileutils.go run on a path string: EvalSymlinks resolves
+// it, Lstat proves the result is a regular file, and only then does the open
+// happen. A local principal able to write in an allowed root (the OS temp
+// directory is always one, and /tmp is world-writable) can replace the leaf
+// with a symlink in between, and os.Open and os.Create both follow one, so the
+// file read or written is not the file that was checked. The refusal has to
+// live in the open itself, which is what this pins.
+func TestOpenLeafNoFollow_SymlinkAtTheLeaf_Refused(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "secret.txt")
+	if err := os.WriteFile(target, []byte("secret"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(dir, "swapped.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		open    func(string) (*os.File, error)
+		path    string
+		wantErr bool
+	}{
+		{name: "read refuses a symlink at the leaf", open: openLeafNoFollow, path: link, wantErr: true},
+		{name: "read opens a regular file", open: openLeafNoFollow, path: target, wantErr: false},
+		{name: "create refuses a symlink at the leaf", open: createLeafNoFollow, path: link, wantErr: true},
+		{name: "create makes a new file", open: createLeafNoFollow, path: filepath.Join(dir, "new.txt"), wantErr: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := tt.open(tt.path)
+			if err == nil {
+				defer func() { _ = f.Close() }()
+			}
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("open(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
+			}
+		})
+	}
+
+	// os.ReadFile follows the symlink, which is exactly what the calls above
+	// used to do, and it is what makes their refusals meaningful: the target is
+	// readable, so they declined to follow rather than failing to find it.
+	if _, err := os.ReadFile(link); err != nil {
+		t.Errorf("the symlink target became unreadable, so the refusals above prove nothing: %v", err)
+	}
+}

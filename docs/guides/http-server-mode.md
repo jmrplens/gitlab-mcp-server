@@ -66,7 +66,7 @@ gitlab-mcp-server --http \
 | `--public-url`             | _(empty)_      | Externally reachable https origin of this deployment. **Required with `--auth-mode=oauth`**: it is the RFC 9728 protected-resource identifier, and the metadata URL is derived from it (well-known segment inserted between host and path)     |
 | `--oauth-cache-ttl`        | `15m`          | How long verified OAuth tokens are cached before re-validation (1m–2h)                                                                                                                                                                         |
 | `--pool-idle-timeout`      | `1h`           | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h)                                                                                             |
-| `--revalidate-interval`    | `15m`          | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                                |
+| `--revalidate-interval`    | `15m`          | Token re-validation interval; `0` stops the periodic check, but an entry older than 1h is rebuilt anyway (upper bound: 24h)                                                                                                                    |
 | `--http-idle-timeout`      | `0` (disabled) | HTTP server idle connection timeout. Default `0` disables idle connection closure entirely, so `--session-timeout` is the effective session lifetime. Set a positive duration to recycle idle connections sooner                               |
 | `--trusted-proxy-header`   | _(empty)_      | HTTP header containing the real client IP (e.g. `CF-Connecting-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies                                                                                                      |
 | `--rate-limit-rps`         | `0`            | Per-server `tools/call` rate limit in requests per second (`0` = disabled)                                                                                                                                                                     |
@@ -793,27 +793,27 @@ disconnecting if the work should stop.
 
 The following settings are **server-wide** — they apply to all clients regardless of their token or GitLab URL:
 
-| Setting                     | Source                                                   | Description                                                                                                                                                                            |
-| --------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fixed GitLab URL            | `--gitlab-url`                                           | Authoritative GitLab instance for all clients when set. If omitted, `GITLAB-URL` selects the instance per request, and a request without it falls back to `https://gitlab.com`         |
-| TLS verification            | `--skip-tls-verify`                                      | Applied to all GitLab client connections                                                                                                                                               |
-| Tool and capability surface | `--meta-tools`, `--tool-surface`, `--capability-surface` | Same tool catalog and resource/prompt exposure for all clients (`meta`/`individual`/`dynamic`; `full`/`minimal` capabilities); scope and CE/EE filtering still happen per server entry |
-| Upload limits               | Compile-time defaults                                    | Max file size                                                                                                                                                                          |
+| Setting                     | Source                                                   | Description                                                                                                                                                                                             |
+| --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fixed GitLab URL            | `--gitlab-url`                                           | Authoritative GitLab instance for all clients when set. Required unless `--allow-any-gitlab-url` is passed, and with that hatch `GITLAB-URL` selects per request while a request omitting it is refused |
+| TLS verification            | `--skip-tls-verify`                                      | Applied to all GitLab client connections                                                                                                                                                                |
+| Tool and capability surface | `--meta-tools`, `--tool-surface`, `--capability-surface` | Same tool catalog and resource/prompt exposure for all clients (`meta`/`individual`/`dynamic`; `full`/`minimal` capabilities); scope and CE/EE filtering still happen per server entry                  |
+| Upload limits               | Compile-time defaults                                    | Max file size                                                                                                                                                                                           |
 
 The **GitLab token** always varies per client. The **GitLab URL** can vary per client only when `--gitlab-url` is omitted. Each unique `(token, URL)` pair creates a separate server-pool entry.
 
 ## Comparison with Stdio Mode
 
-| Aspect                    | Stdio Mode                     | HTTP Mode                              |
-| ------------------------- | ------------------------------ | -------------------------------------- |
-| Configuration source      | Environment variables / `.env` | CLI flags                              |
-| Token required at startup | Yes (`GITLAB_TOKEN`)           | No — per-request                       |
-| Clients per process       | 1                              | Many (bounded by `--max-http-clients`) |
-| Process lifecycle         | AI client spawns/kills         | Long-running daemon                    |
-| Memory per client         | ~50 MB (full process)          | ~130 KB (pool entry)                   |
-| Client isolation          | Process-level                  | Pool entry-level (same guarantees)     |
-| Network requirement       | None (stdio pipes)             | TCP/HTTP                               |
-| Session management        | SDK handles                    | SDK + server pool                      |
+| Aspect                    | Stdio Mode                           | HTTP Mode                              |
+| ------------------------- | ------------------------------------ | -------------------------------------- |
+| Configuration source      | Environment variables / dotenv files | CLI flags                              |
+| Token required at startup | Yes (`GITLAB_TOKEN`)                 | No — per-request                       |
+| Clients per process       | 1                                    | Many (bounded by `--max-http-clients`) |
+| Process lifecycle         | AI client spawns/kills               | Long-running daemon                    |
+| Memory per client         | ~50 MB (full process)                | ~130 KB (pool entry)                   |
+| Client isolation          | Process-level                        | Pool entry-level (same guarantees)     |
+| Network requirement       | None (stdio pipes)                   | TCP/HTTP                               |
+| Session management        | SDK handles                          | SDK + server pool                      |
 
 ## Monitoring
 

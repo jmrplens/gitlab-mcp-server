@@ -45,13 +45,14 @@ docker run -i --rm -e GITLAB_TOKEN -e GITLAB_URL \
 
 ## HTTP: la imagen como servicio
 
-Ejecútala sin argumentos adicionales y el comando por defecto del contenedor escucha en el puerto 8080:
+El comando por defecto del contenedor escucha en el puerto 8080, pero no arranca hasta que le digas a qué GitLab sirve:
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest
+docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
-Esa forma no pasa `--gitlab-url`, que es el modo multi-instancia: cada petición elige la instancia con una cabecera `GITLAB-URL` y recurre a `https://gitlab.com` cuando no la lleva. Cada cliente envía además su propio token de GitLab en cada petición, y el servidor no guarda ninguno. Para fijar la instancia y endurecer el contenedor como hace el despliegue de referencia:
+Un despliegue que no nombra ninguna instancia haría peticiones al host que quien llama ponga en la cabecera `GITLAB-URL`, con el token que esa misma persona enviara, así que se rechaza al arrancar. `--allow-any-gitlab-url` lo acepta para un despliegue local de un único usuario y avisa; en un puerto que otros puedan alcanzar, publica las instancias. Cada cliente envía además su propio token de GitLab en cada petición, y el servidor no guarda ninguno. Para endurecer el contenedor como hace el despliegue de referencia:
 
 <Tabs>
 <TabItem label="Instancia única">
@@ -74,7 +75,8 @@ docker run -d \
 <TabItem label="Multi-instancia">
 
 ```bash
-# Omitir --gitlab-url; los clientes envían la cabecera GITLAB-URL por petición
+# Publica cada instancia; la cabecera GITLAB-URL elige entre ellas y es
+# obligatoria, porque elegir por quien llama enviaría su token a otra parte
 docker run -d \
   --name gitlab-mcp \
   --read-only \
@@ -84,7 +86,9 @@ docker run -d \
   -p 8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
-  --http-addr=0.0.0.0:8080
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.com \
+  --gitlab-url=https://gitlab.example.com
 ```
 
 </TabItem>

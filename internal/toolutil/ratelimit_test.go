@@ -538,3 +538,187 @@ func TestAttachRateLimit_CompletionOverBudget_AnswersWithNoSuggestions(t *testin
 		t.Errorf("no completion was refused after %d requests; the method is ungated", completionBurstFactor+3)
 	}
 }
+
+// deepArguments is the input schema of the echo tool the argument-limit tests
+// register: one free-form member, so the nesting under test is the caller's
+// and not the schema's.
+type deepArguments struct {
+	Extra any `json:"extra,omitempty"`
+}
+
+// nestedArrays returns a value that marshals to depth levels of nested JSON
+// arrays, the shape whose decode is quadratic in the SDK's JSON package.
+func nestedArrays(depth int) any {
+	var value any = []any{}
+	for range depth - 1 {
+		value = []any{value}
+	}
+	return value
+}
+
+// TestExceedsJSONDepth verifies the linear depth scanner: nesting is counted
+// across both bracket kinds, brackets inside strings and escaped quotes do not
+// count, and the limit is a strict ceiling.
+func TestExceedsJSONDepth(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		raw   string
+		limit int
+		want  bool
+	}{
+		{"empty", "", 4, false},
+		{"scalar", `"x"`, 4, false},
+		{"at_the_limit", `[[[[1]]]]`, 4, false},
+		{"one_over_the_limit", `[[[[[1]]]]]`, 4, true},
+		{"objects_count_too", `{"a":{"b":{"c":{"d":{"e":1}}}}}`, 4, true},
+		{"mixed_kinds", `{"a":[{"b":[1]}]}`, 4, false},
+		{"brackets_in_a_string_do_not_count", `{"a":"[[[[[[[[[["}`, 4, false},
+		{"escaped_quote_does_not_end_the_string", `{"a":"\"[[[[[[["}`, 4, false},
+		{"escaped_backslash_ends_the_string", `{"a":"x\\"}`, 4, false},
+		{"siblings_do_not_accumulate", `[[1],[2],[3]]`, 2, false},
+		{"limit_zero_rejects_any_container", `[]`, 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ExceedsJSONDepth([]byte(tc.raw), tc.limit); got != tc.want {
+				t.Errorf("ExceedsJSONDepth(%q, %d) = %v, want %v", tc.raw, tc.limit, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestJSONDepthScanner_ScansAcrossChunkBoundaries verifies that the streaming
+// scanner carries its state between calls, so a body split at any byte — which
+// is what an io.Reader delivers — is measured the same as the whole.
+func TestJSONDepthScanner_ScansAcrossChunkBoundaries(t *testing.T) {
+	t.Parallel()
+	const raw = `{"a":"[[[[[[[","b":[[[[[[1]]]]]]}`
+	for _, tc := range []struct {
+		name  string
+		size  int
+		limit int
+		want  bool
+	}{
+		{"byte_at_a_time_under", 1, 8, false},
+		{"byte_at_a_time_over", 1, 4, true},
+		{"three_at_a_time_over", 3, 4, true},
+		{"whole_body_under", len(raw), 8, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			scanner := NewJSONDepthScanner(tc.limit)
+			for start := 0; start < len(raw); start += tc.size {
+				end := min(start+tc.size, len(raw))
+				scanner.Scan([]byte(raw[start:end]))
+			}
+			if got := scanner.Exceeded(); got != tc.want {
+				t.Errorf("Exceeded() = %v, want %v (chunk size %d, limit %d)", got, tc.want, tc.size, tc.limit)
+			}
+		})
+	}
+}
+
+// TestAttachArgumentLimits_RefusesOverNestedArguments verifies that a
+// tools/call whose arguments nest deeper than the cap is refused with
+// InvalidParams before the handler runs, and that an ordinary call still
+// reaches it.
+//
+// The nesting is the whole attack: the SDK unmarshals params.arguments into a
+// map[string]any with a decoder that has no depth cap and is quadratic in
+// nesting, so one 40 KB request buys tens of CPU-seconds. The guard has to
+// short-circuit ahead of that decode, which is why the assertion is on the
+// handler never running rather than only on the error.
+func TestAttachArgumentLimits_RefusesOverNestedArguments(t *testing.T) {
+	t.Parallel()
+	// depth is the depth of the whole arguments value, the object the SDK
+	// decodes, so the nested member under it is one level shallower.
+	for _, tc := range []struct {
+		name      string
+		depth     int
+		wantCalls int
+		wantErr   bool
+	}{
+		{"shallow", 3, 1, false},
+		{"at_the_limit", 8, 1, false},
+		{"one_over_the_limit", 9, 0, true},
+		{"far_over_the_limit", 4000, 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+			calls := 0
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "echo",
+				Description: "Counts how many times the underlying handler runs.",
+			}, func(_ context.Context, _ *mcp.CallToolRequest, _ deepArguments) (*mcp.CallToolResult, any, error) {
+				calls++
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+			})
+			AttachArgumentLimits(server, 8)
+
+			session, ctx := connectClient(t, server)
+			_, err := session.CallTool(ctx, &mcp.CallToolParams{
+				Name:      "echo",
+				Arguments: map[string]any{"extra": nestedArrays(tc.depth - 1)},
+			})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("CallTool at depth %d succeeded, want a refusal", tc.depth)
+				}
+				if !strings.Contains(err.Error(), "nest") {
+					t.Errorf("refusal = %q, want it to name the nesting limit", err.Error())
+				}
+			} else if err != nil {
+				t.Fatalf("CallTool at depth %d: %v", tc.depth, err)
+			}
+			if calls != tc.wantCalls {
+				t.Errorf("handler invocations = %d, want %d", calls, tc.wantCalls)
+			}
+		})
+	}
+}
+
+// TestAttachArgumentLimits_LeavesOtherMethodsAlone verifies that a
+// non-positive cap disables the guard and that methods other than tools/call
+// are never inspected, so discovery keeps working whatever the arguments cap
+// is set to.
+func TestAttachArgumentLimits_LeavesOtherMethodsAlone(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		limit int
+	}{
+		{"disabled_by_zero", 0},
+		{"disabled_by_negative", -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+			calls := 0
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "echo",
+				Description: "Counts how many times the underlying handler runs.",
+			}, func(_ context.Context, _ *mcp.CallToolRequest, _ deepArguments) (*mcp.CallToolResult, any, error) {
+				calls++
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+			})
+			AttachArgumentLimits(server, tc.limit)
+
+			session, ctx := connectClient(t, server)
+			if _, err := session.ListTools(ctx, nil); err != nil {
+				t.Fatalf("ListTools: %v", err)
+			}
+			if _, err := session.CallTool(ctx, &mcp.CallToolParams{
+				Name:      "echo",
+				Arguments: map[string]any{"extra": nestedArrays(200)},
+			}); err != nil {
+				t.Fatalf("CallTool with the guard disabled: %v", err)
+			}
+			if calls != 1 {
+				t.Errorf("handler invocations = %d, want 1", calls)
+			}
+		})
+	}
+}

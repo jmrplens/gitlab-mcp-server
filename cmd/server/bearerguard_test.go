@@ -4,12 +4,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -663,5 +666,127 @@ func TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenAndNotCached(t 
 	}
 	if g.rejected.Contains("", "gloas-narrow") {
 		t.Error("a scope refusal was cached; the token would keep being refused after the user granted the scope")
+	}
+}
+
+// newProxiedGuard returns a guard wired the way a deployment behind a reverse
+// proxy is: the caller's key comes from a trusted header, which is what makes
+// the coarse transport budget necessary in the first place.
+//
+// The budgets carry their production sizes rather than the small ones the rest
+// of this file uses, because the defect these tests pin is entirely about the
+// ratio between them.
+func newProxiedGuard(verify auth.TokenVerifier) *bearerGuard {
+	g := newTestGuard(verify)
+	g.limiter = serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
+	g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
+	g.trustedProxyHeader = "X-Forwarded-For"
+	return g
+}
+
+// proxiedRequest builds a POST that reached the server through one proxy,
+// carrying client as the forwarded address and token as the bearer.
+func proxiedRequest(t *testing.T, client, token string) *http.Request {
+	t.Helper()
+
+	r := guardRequest(t, token)
+	r.RemoteAddr = "203.0.113.7:44444"
+	r.Header.Set("X-Forwarded-For", client)
+	return r
+}
+
+// TestBearerGuard_TrustedProxy_TheFleetBudgetCountsClientsNotFailures is the
+// oauth half of the fleet lockout the gate already answers.
+//
+// The guard runs in front of the gate, and consults the budget before it even
+// extracts the token, so a budget the gate charges correctly is still spent
+// here first. Behind a genuine proxy the transport source is the proxy for
+// every client, so charging it once per failure aggregates the fleet: fifty
+// clients failing their own ten times each spend the five hundred between
+// them, and the next request through that proxy is refused whatever it
+// carries, valid tokens and never-failing clients included.
+func TestBearerGuard_TrustedProxy_TheFleetBudgetCountsClientsNotFailures(t *testing.T) {
+	t.Parallel()
+
+	g := newProxiedGuard(okVerifier(oauth.ScopeAPI))
+
+	// Every client stays inside its own ten-a-minute allowance, so none of
+	// this is abuse the primary limiter would catch. It is one bad afternoon
+	// for a fleet of fifty behind one proxy.
+	clients := transportFailureLimit / authFailureLimit
+	for client := range clients {
+		address := "198.51.100." + strconv.Itoa(client+1)
+		for range authFailureLimit {
+			failure := g.check(proxiedRequest(t, address, ""))
+			if failure == nil || failure.status != http.StatusUnauthorized {
+				t.Fatalf("client %s got %+v for a credential-less request, want 401", address, failure)
+			}
+		}
+	}
+
+	if failure := g.check(proxiedRequest(t, "198.51.100.251", "gloas-valid")); failure != nil {
+		t.Errorf("a client presenting a valid token through the same proxy was refused %+v; %d failures spread over %d clients locked the fleet out",
+			failure, transportFailureLimit, clients)
+	}
+}
+
+// TestBearerGuard_SpoofedProxyHeaderRotation_StaysBounded is the property the
+// test above must not be fixed by discarding.
+//
+// The trusted header is caller-controlled the moment the server is reachable
+// other than through the proxy. An attacker rotates it, every request mints a
+// distinct primary key, the ten-a-minute lockout never fires, and each invalid
+// token is relayed one to one to GitLab as a /user verification. Counting
+// distinct keys per transport source is what separates that from the fleet
+// above, where the keys are few and the failures many.
+func TestBearerGuard_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
+	t.Parallel()
+
+	g := newProxiedGuard(okVerifier(oauth.ScopeAPI))
+
+	blocked := false
+	for i := range transportFailureLimit + 1 {
+		failure := g.check(proxiedRequest(t, "198.51.100."+strconv.Itoa(i%250+1)+":"+strconv.Itoa(i), ""))
+		if failure != nil && failure.status == http.StatusTooManyRequests {
+			blocked = true
+			break
+		}
+	}
+
+	if !blocked {
+		t.Errorf("a caller rotating the trusted header was still unblocked after %d requests", transportFailureLimit+1)
+	}
+}
+
+// TestBearerGuard_BlockedByTheFleetBudget_NamesTheTransportSource verifies the
+// 429 log line identifies whoever exhausted the budget.
+//
+// The refusal is charged to the transport source, so the caller in the line is
+// very often not the cause: behind a proxy it is whichever client happened to
+// arrive next. An operator reading "too many authentication failures" against
+// an innocent forwarded address has been pointed at the wrong machine, and the
+// address that actually matters, the one no header can change, was absent.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestBearerGuard_BlockedByTheFleetBudget_NamesTheTransportSource(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+	g := newProxiedGuard(okVerifier(oauth.ScopeAPI))
+	// A tiny fleet budget, so the lockout is reached without five hundred
+	// requests. The accounting under test is which address the line names.
+	g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, authFailureWindow))
+
+	g.check(proxiedRequest(t, "198.51.100.1", ""))
+	failure := g.check(proxiedRequest(t, "198.51.100.2", ""))
+
+	if failure == nil || failure.status != http.StatusTooManyRequests {
+		t.Fatalf("failure = %+v, want 429 once the fleet budget is spent", failure)
+	}
+	line := logged.String()
+	if !strings.Contains(line, "203.0.113.7") {
+		t.Errorf("the 429 line does not name the transport source that spent the budget: %s", line)
 	}
 }

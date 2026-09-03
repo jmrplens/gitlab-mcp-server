@@ -60,6 +60,11 @@ type RateLimiter struct {
 // that a burst is visible while it is happening.
 const defaultThrottleWindow = 10 * time.Second
 
+// methodToolsCall is the JSON-RPC method this limiter meters. It is also the
+// name a refusal is logged under when the call was refused before the tool it
+// names could be read.
+const methodToolsCall = "tools/call"
+
 // NewRateLimiter builds a RateLimiter with the given rate (requests per
 // second) and burst (maximum concurrent tokens in the bucket). Returns nil
 // if rps <= 0, which the middleware treats as "disabled". Burst is clamped
@@ -112,7 +117,7 @@ func (r *RateLimiter) reportRefusal(ctx context.Context, tool string) {
 	r.reportMu.Unlock()
 
 	if tool == "" {
-		tool = "tools/call"
+		tool = methodToolsCall
 	}
 	slog.WarnContext(ctx, "tool call refused: rate limit exceeded",
 		"tool", tool,
@@ -165,7 +170,7 @@ func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			switch method {
-			case "tools/call":
+			case methodToolsCall:
 				if !limiter.allow() {
 					result := rateLimitedResult(req)
 					limiter.reportRefusal(ctx, extractToolName(req))
@@ -245,3 +250,134 @@ func ValidateRateLimit(rps float64, burst int) error {
 	}
 	return nil
 }
+
+// DefaultMaxArgumentDepth is the nesting ceiling applied to a tools/call
+// arguments object.
+//
+// No schema this server registers nests anywhere near it — the deepest is a
+// few objects inside a few arrays — so it is a ceiling on shapes nothing
+// legitimate produces rather than a budget a caller could plausibly spend.
+const DefaultMaxArgumentDepth = 64
+
+// AttachArgumentLimits registers a receiving middleware that refuses a
+// tools/call whose arguments nest deeper than maxDepth, before the SDK
+// decodes them.
+//
+// # Why this is not the HTTP body cap
+//
+// The SDK hands tools/call arguments to middleware as raw bytes and unmarshals
+// them into a map[string]any only when it applies the tool's schema. That
+// decoder (github.com/segmentio/encoding/json, through the SDK's internal json
+// package) has no maximum-nesting guard, where the standard library refuses
+// past 10000, and it is quadratic in nesting depth: measured on v0.5.4, an
+// 18 KB value nested 9000 deep costs over a second of CPU, and a 4 MiB body
+// admits depth in the millions. The decode runs ahead of additionalProperties
+// validation and ahead of the handler, so read-only mode, safe mode and the
+// tool's own logic are all downstream of the burn, and the per-second rate
+// limiter counts requests rather than cycles.
+//
+// A body-size cap alone only narrows the window: 256 KiB still admits depth
+// 128000. The bound that closes it is on the shape, and it belongs in a
+// receiving middleware rather than in the HTTP front door so that stdio — the
+// transport with no body cap at all — is covered by the same check.
+//
+// The scan is a single linear pass over bytes the SDK has already framed, so
+// the guard costs about a microsecond on an ordinary call. A non-positive
+// maxDepth disables it; a nil server is a no-op.
+func AttachArgumentLimits(server *mcp.Server, maxDepth int) {
+	if server == nil || maxDepth <= 0 {
+		return
+	}
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method == methodToolsCall {
+				if raw, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok && raw != nil &&
+					ExceedsJSONDepth(raw.Arguments, maxDepth) {
+					mcpotel.RecordRefusal(ctx, RefusalInvalidParams)
+					slog.WarnContext(ctx, "tool call refused: arguments nest too deeply",
+						"tool", extractToolName(req),
+						"max_depth", maxDepth,
+						"bytes", len(raw.Arguments),
+					)
+					return nil, InvalidParams(fmt.Errorf(
+						"arguments nest deeper than %d levels; flatten the value and call again", maxDepth,
+					))
+				}
+			}
+			return next(ctx, method, req)
+		}
+	})
+}
+
+// ExceedsJSONDepth reports whether raw nests containers deeper than limit.
+//
+// Convenience wrapper over [JSONDepthScanner] for a value that is already
+// whole in memory.
+func ExceedsJSONDepth(raw []byte, limit int) bool {
+	scanner := NewJSONDepthScanner(limit)
+	scanner.Scan(raw)
+	return scanner.Exceeded()
+}
+
+// JSONDepthScanner measures the nesting depth of a JSON value one chunk at a
+// time, so a body can be judged as it streams rather than after it is
+// buffered.
+//
+// It counts brackets and braces outside string literals, which is all that
+// nesting depth is, and deliberately does not validate the JSON: a scanner
+// that also parsed would be a second, divergent implementation of a decoder
+// this server already runs twice. Miscounting a malformed document is harmless
+// because the decoder behind it refuses that document anyway, and the count is
+// never an undercount for the shape this exists to stop.
+//
+// The zero value is not usable; construct one with [NewJSONDepthScanner].
+type JSONDepthScanner struct {
+	limit    int
+	depth    int
+	exceeded bool
+	inString bool
+	escaped  bool
+}
+
+// NewJSONDepthScanner returns a scanner that trips once nesting passes limit.
+func NewJSONDepthScanner(limit int) *JSONDepthScanner {
+	return &JSONDepthScanner{limit: limit}
+}
+
+// Scan folds the next chunk of bytes into the measurement and reports whether
+// the limit has been passed. State carries across calls, so the chunk
+// boundaries an io.Reader happens to produce do not change the answer.
+func (s *JSONDepthScanner) Scan(chunk []byte) bool {
+	if s == nil || s.exceeded {
+		return s != nil && s.exceeded
+	}
+	for _, c := range chunk {
+		if s.inString {
+			switch {
+			case s.escaped:
+				s.escaped = false
+			case c == '\\':
+				s.escaped = true
+			case c == '"':
+				s.inString = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			s.inString = true
+		case '[', '{':
+			s.depth++
+			if s.depth > s.limit {
+				s.exceeded = true
+				return true
+			}
+		case ']', '}':
+			s.depth--
+		}
+	}
+	return false
+}
+
+// Exceeded reports whether any chunk scanned so far passed the limit.
+func (s *JSONDepthScanner) Exceeded() bool { return s != nil && s.exceeded }

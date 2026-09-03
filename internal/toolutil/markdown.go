@@ -675,9 +675,29 @@ func FormatDiscussionNoteMarkdown(note DiscussionNoteMarkdown, hints ...string) 
 	return b.String()
 }
 
+// writeDiscussionNotes renders each note in a thread as a list item whose body
+// is quoted underneath it.
+//
+// The body used to be interpolated into the item itself, which is the one
+// discussion path that did not quote — [FormatNoteMarkdown] and
+// [FormatDiscussionNoteMarkdown] both do. A note body is written by anybody who
+// can comment on the issue or merge request, and printed raw at column 0 it
+// could add list items of its own, impersonate a system note, open a heading,
+// or forge the server's guidance section.
 func writeDiscussionNotes(b *strings.Builder, notes []DiscussionNoteMarkdown) {
 	for _, note := range notes {
-		fmt.Fprintf(b, "- **@%s** (%s): %s\n", note.Author, FormatTime(note.CreatedAt), note.Body)
+		fmt.Fprintf(b, "- **@%s** (%s):\n", EscapeMdTableCell(note.Author), FormatTime(note.CreatedAt))
+		quoted := WrapGFMBody(note.Body)
+		if quoted == "" {
+			continue
+		}
+		// Indented so the quote belongs to the list item rather than ending
+		// the list.
+		for line := range strings.SplitSeq(quoted, "\n") {
+			b.WriteString("  ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
 	}
 }
 
@@ -781,16 +801,25 @@ func FormatTemplateListMarkdown(templates []TemplateMarkdown, pagination Paginat
 func FormatTemplateContentMarkdown(title, name, language, content string, hints ...string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s: %s\n\n", title, name)
-	fence := markdownCodeFence(content)
-	safeLanguage := strings.NewReplacer("`", "", "\r", "", "\n", "").Replace(language)
-	fmt.Fprintf(&b, "%s%s\n", fence, safeLanguage)
+	fence := MarkdownCodeFence(content)
+	fmt.Fprintf(&b, "%s%s\n", fence, sanitizeFenceInfo(language))
 	b.WriteString(content)
 	fmt.Fprintf(&b, FmtMdSectionText, fence)
 	WriteHints(&b, hints...)
 	return b.String()
 }
 
-func markdownCodeFence(content string) string {
+// MarkdownCodeFence returns a backtick fence long enough to contain content:
+// three backticks, or one more than the longest run inside it.
+//
+// A fixed three-backtick fence is closed by any content that contains one, and
+// the content here is a repository file, a job log, a snippet or a diff —
+// written by whoever can push a branch or run a pipeline. Everything after the
+// run they wrote renders as live Markdown at the top level of the response:
+// headings, links, and the server's own guidance section. Sizing the fence to
+// the body is the rule Markdown itself uses for nesting code, and it is why
+// this helper exists rather than a literal.
+func MarkdownCodeFence(content string) string {
 	longestRun := 0
 	currentRun := 0
 	for _, char := range content {
@@ -803,6 +832,66 @@ func markdownCodeFence(content string) string {
 	}
 	fenceLength := max(3, longestRun+1)
 	return strings.Repeat("`", fenceLength)
+}
+
+// WriteDescription writes a GitLab-authored description field.
+//
+// A description is prose somebody typed into GitLab, and the "- **Description**:
+// %s" line it used to be interpolated into puts it at column zero after a list
+// bullet: its second line is no longer part of the item, so an embedded heading
+// is a heading of the response and an embedded bullet is an item of the
+// server's own list. A one-line description keeps the compact form with the
+// cell escaping applied; anything longer becomes a blockquote, which is what
+// the merge request, wiki and release renderers already do.
+func WriteDescription(b *strings.Builder, description string) {
+	if description == "" {
+		return
+	}
+	if !strings.ContainsAny(description, "\n\r") {
+		fmt.Fprintf(b, FmtMdDescription, inlineUntrusted(description))
+		return
+	}
+	b.WriteString("- **Description**:\n\n")
+	b.WriteString(WrapGFMBody(description))
+	b.WriteString("\n")
+}
+
+// inlineUntrusted renders a GitLab-authored value on a line the server wrote,
+// without the pipe escaping a table cell needs: line breaks collapse, control
+// characters are dropped, and the guidance heading is defused.
+func inlineUntrusted(s string) string {
+	s = DefuseHintsHeading(StripControlBytes(s))
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
+}
+
+// MarkdownFencedBlock renders content as a complete fenced code block: a fence
+// sized by [MarkdownCodeFence], the info string, the body, and the matching
+// closing fence on its own line. Pass an empty language for a bare fence.
+//
+// Prefer it over writing a fence by hand wherever the body is GitLab-authored.
+func MarkdownFencedBlock(language, content string) string {
+	fence := MarkdownCodeFence(content)
+	var b strings.Builder
+	b.WriteString(fence)
+	b.WriteString(sanitizeFenceInfo(language))
+	b.WriteString("\n")
+	b.WriteString(content)
+	if content != "" && !strings.HasSuffix(content, "\n") {
+		b.WriteString("\n")
+	}
+	b.WriteString(fence)
+	b.WriteString("\n")
+	return b.String()
+}
+
+// fenceInfoSanitizer strips the characters that would let an info string end
+// its own fence or start a line of its own.
+var fenceInfoSanitizer = strings.NewReplacer("`", "", "\r", "", "\n", "")
+
+// sanitizeFenceInfo renders a language name as a code fence's info string.
+func sanitizeFenceInfo(language string) string {
+	return fenceInfoSanitizer.Replace(StripControlBytes(language))
 }
 
 // NoteMarkdown carries common fields rendered by issue, merge request, and
@@ -945,13 +1034,19 @@ func markdownTableLine(cells []string) string {
 // with a single TextContent entry annotated for assistant-only audience.
 // This prevents MCP clients (e.g. VS Code) from displaying raw Markdown
 // inline — the LLM processes it and presents formatted output to the user.
+//
+// Control characters are dropped here as well as in the helpers that build the
+// Markdown, because this is the last point every rendered response passes
+// through and a formatter that writes a GitLab field straight into its builder
+// would otherwise deliver an escape sequence to whatever prints the text. See
+// [StripControlBytes].
 func ToolResultWithMarkdown(md string) *mcp.CallToolResult {
 	if md == "" {
 		return nil
 	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: md, Annotations: ContentAssistant},
+			&mcp.TextContent{Text: StripControlBytes(md), Annotations: ContentAssistant},
 		},
 	}
 }
@@ -965,7 +1060,7 @@ func ToolResultAnnotated(md string, ann *mcp.Annotations) *mcp.CallToolResult {
 	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: md, Annotations: ann},
+			&mcp.TextContent{Text: StripControlBytes(md), Annotations: ann},
 		},
 	}
 }
@@ -976,7 +1071,7 @@ func ToolResultAnnotated(md string, ann *mcp.Annotations) *mcp.CallToolResult {
 func ToolResultWithImage(md string, ann *mcp.Annotations, imageData []byte, mimeType string) *mcp.CallToolResult {
 	result := &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: md, Annotations: ann},
+			&mcp.TextContent{Text: StripControlBytes(md), Annotations: ann},
 			&mcp.ImageContent{Data: imageData, MIMEType: mimeType},
 		},
 	}

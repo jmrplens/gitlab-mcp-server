@@ -88,7 +88,7 @@ func FormatTemplateDetailMarkdown(detail TemplateDetailMarkdown) string {
 		} else {
 			b.WriteString("\n")
 		}
-		fmt.Fprintf(&b, "```\n%s\n```\n", detail.Content)
+		b.WriteString(MarkdownFencedBlock("", detail.Content))
 	}
 	WriteHints(&b, detail.Hints...)
 	return b.String()
@@ -96,10 +96,10 @@ func FormatTemplateDetailMarkdown(detail TemplateDetailMarkdown) string {
 
 func writeTemplateDescription(b *strings.Builder, description string, plain bool) {
 	if plain {
-		fmt.Fprintf(b, "**Description**: %s\n\n", description)
+		fmt.Fprintf(b, "**Description**: %s\n\n", inlineUntrusted(description))
 		return
 	}
-	fmt.Fprintf(b, FmtMdDescription, description)
+	WriteDescription(b, description)
 }
 
 func writeTemplateDetailList(b *strings.Builder, label string, values []string, plain bool) {

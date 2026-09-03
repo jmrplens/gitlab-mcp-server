@@ -988,3 +988,62 @@ func TestCatalogTextFields_NameReferencesResolve(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildActionCatalog_ExclusionByIndividualToolNameHoldsOnTheRealCatalog
+// verifies action-level exclusion against the production catalog rather than a
+// two-action fixture.
+//
+// Removing one action rebuilds its group and re-validates it, and the real
+// groups carry schema URIs, aliases and compatibility aliases that a fixture
+// does not. The surviving catalog must still validate, must still resolve its
+// other actions, and must not have lost the group the excluded action lived in
+// — a dispatcher losing 40 read actions because one write action was named
+// would be a worse outcome than the silent no-op this replaced.
+func TestBuildActionCatalog_ExclusionByIndividualToolNameHoldsOnTheRealCatalog(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	tests := []struct {
+		name    string
+		exclude string
+		goneID  actioncatalog.ActionID
+		keptID  actioncatalog.ActionID
+		group   string
+	}{
+		{
+			name:    "individual tool name",
+			exclude: "gitlab_issue_delete",
+			goneID:  "issue.delete",
+			keptID:  "issue.list",
+			group:   "gitlab_issue",
+		},
+		{
+			name:    "canonical action ID",
+			exclude: "project.get",
+			goneID:  "project.get",
+			keptID:  "project.list",
+			group:   "gitlab_project",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filtered, unmatched := catalog.FilterExcludedToolNames([]string{tt.exclude})
+			if len(unmatched) != 0 {
+				t.Fatalf("FilterExcludedToolNames(%q) unmatched = %v, want none", tt.exclude, unmatched)
+			}
+			if err := filtered.Validate(); err != nil {
+				t.Fatalf("filtered catalog Validate() error = %v", err)
+			}
+			if _, ok := filtered.Action(tt.goneID); ok {
+				t.Errorf("action %s survived exclusion by %q", tt.goneID, tt.exclude)
+			}
+			if _, ok := filtered.Action(tt.keptID); !ok {
+				t.Errorf("action %s was removed by excluding %q, which does not name it", tt.keptID, tt.exclude)
+			}
+			if _, ok := filtered.Group(tt.group); !ok {
+				t.Errorf("group %s disappeared because one of its actions was excluded", tt.group)
+			}
+			if got, want := filtered.CountActions(), catalog.CountActions()-1; got != want {
+				t.Errorf("filtered CountActions() = %d, want %d (exactly one action removed)", got, want)
+			}
+		})
+	}
+}

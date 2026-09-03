@@ -10280,12 +10280,12 @@ Download a single file from the Generic Package Registry to a local path. Return
 **Parameters:**
 
 - `file_name` (string) (required): File name to download. May include / to describe a directory structure (segments must not be empty or . or ..)
-- `output_path` (string) (required): Absolute path where the file will be saved on the local filesystem
+- `output_path` (string) (required): Absolute path where the file will be saved on the local filesystem, confined to the current working directory, the OS temp directory, or a directory listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. Symlinks are resolved and destinations outside those roots are rejected
 - `package_name` (string) (required): Package name
 - `package_version` (string) (required): Package version
 - `project_id` (string) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_package_file_delete
 
@@ -15033,7 +15033,7 @@ Send a test event to a system hook. Returns: the delivery status of the test eve
 
 - `id` (integer) (required): System hook ID to test
 
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ### todo (3 tools)
 

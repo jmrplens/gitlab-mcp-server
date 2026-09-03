@@ -43,6 +43,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // HTTP header names, MIME types, and test values reused across tests.
@@ -943,28 +944,53 @@ func TestRunWithContext_ClientCreationError(t *testing.T) {
 	}
 }
 
-// TestRunWithContext_HTTPMissingURL verifies that HTTP mode starts correctly
-// when --gitlab-url is omitted and the request-level GITLAB-URL header is
-// expected instead.
+// TestRunWithContext_HTTPMissingURL verifies that HTTP mode starts only when
+// the caller's free choice of instance was asked for explicitly.
+//
+// This used to assert the opposite, and the behavior it pinned is the finding:
+// with no --gitlab-url the GITLAB-URL header selected any host, the credential
+// was verified against that same host, and every tool call went wherever the
+// caller pointed it.
 func TestRunWithContext_HTTPMissingURL(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	for _, tc := range []struct {
+		name       string
+		allowAny   bool
+		wantsStart bool
+	}{
+		{"without_the_escape_hatch", false, false},
+		{"with_the_escape_hatch", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 
-	go func() {
-		// Give the HTTP server a brief moment to start, then stop it to avoid
-		// waiting on the global test timeout.
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
+			go func() {
+				// Give the HTTP server a brief moment to start, then stop it
+				// to avoid waiting on the global test timeout.
+				time.Sleep(50 * time.Millisecond)
+				cancel()
+			}()
 
-	err := runWithContext(ctx, &httpConfig{
-		addr:           ":0",
-		gitlabURL:      "",
-		maxHTTPClients: config.DefaultMaxHTTPClients,
-		sessionTimeout: config.DefaultSessionTimeout,
-	})
-	if err != nil {
-		t.Fatalf("expected nil error when --gitlab-url is missing, got: %v", err)
+			err := runWithContext(ctx, &httpConfig{
+				addr:              "127.0.0.1:0",
+				gitlabURL:         "",
+				allowAnyGitLabURL: tc.allowAny,
+				maxHTTPClients:    config.DefaultMaxHTTPClients,
+				sessionTimeout:    config.DefaultSessionTimeout,
+			})
+			if tc.wantsStart {
+				if err != nil {
+					t.Fatalf("runWithContext with --allow-any-gitlab-url: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("HTTP mode started with no instance and no escape hatch")
+			}
+			if !strings.Contains(err.Error(), "--gitlab-url") {
+				t.Errorf("error = %q, want it to name the missing flag", err)
+			}
+		})
 	}
 }
 
@@ -1189,6 +1215,63 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 	}
 }
 
+// TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification
+// verifies that the help says what the pool now does.
+//
+// The pool rebuilds any entry whose credential was last checked more than
+// [serverpool.DefaultMaxCredentialAge] ago, and that ceiling cannot be turned
+// off. "0 to disable" was true before the ceiling existed; leaving it there
+// tells an operator who needs re-verification stopped, for a long-lived
+// stateful session that a rebuild answers 404, that a flag they set achieved
+// it.
+func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+
+	printHelp()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+
+	// The entry is its own line plus any indented continuation lines, since a
+	// flag long enough to need this correction is long enough to wrap.
+	var entry []string
+	lines := strings.Split(string(out), "\n")
+	for i, candidate := range lines {
+		if !strings.Contains(candidate, "-revalidate-interval") {
+			continue
+		}
+		entry = append(entry, candidate)
+		for _, next := range lines[i+1:] {
+			trimmed := strings.TrimSpace(next)
+			if trimmed == "" || strings.HasPrefix(trimmed, "-") {
+				break
+			}
+			entry = append(entry, trimmed)
+		}
+		break
+	}
+	if len(entry) == 0 {
+		t.Fatal("the help does not document -revalidate-interval at all")
+	}
+	line := strings.Join(entry, " ")
+	if strings.Contains(line, "0 to disable") {
+		t.Errorf("the help still promises that 0 disables re-validation: %q", line)
+	}
+	if !strings.Contains(line, serverpool.DefaultMaxCredentialAge.String()) {
+		t.Errorf("the help does not name the credential ceiling that keeps running at 0: %q", line)
+	}
+}
+
 // TestPrintHelp_NoPanic verifies that printHelp can be called without panicking.
 func TestPrintHelp_NoPanic(t *testing.T) {
 	oldStdout := os.Stdout
@@ -1406,6 +1489,87 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/project.get"})
 	if err != nil {
 		t.Fatalf("dynamic surface should expose tool manifest detail resources: %v", err)
+	}
+}
+
+// TestCreateServer_DynamicSurface_ReportsWhatTheExclusionRemoved verifies that
+// a working exclusion says so at startup.
+//
+// The dynamic surface registers two tools, neither of which is ever an
+// exclusion target, so the only line an operator saw counted registered names
+// and read "excluded=0" beside an exclusion that had just removed an action
+// from the catalog. That is the same line a typo produces, which makes the
+// startup log useless for the one question it is read for.
+func TestCreateServer_DynamicSurface_ReportsWhatTheExclusionRemoved(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+	client := newMockGitLabClient(t)
+	mustCreateServer(t, client, &config.ServerConfig{
+		ToolSurface:  config.ToolSurfaceDynamic,
+		ExcludeTools: []string{"gitlab_issue_delete"},
+	})
+
+	if !strings.Contains(logged.String(), `"msg":"excluded catalog actions by configuration","excluded":1`) {
+		t.Errorf("the startup log does not report the catalog action the exclusion removed: %s", logged.String())
+	}
+}
+
+// TestCreateServer_IndividualSurface_ExcludesByEveryNameAnOperatorMayUse
+// verifies that EXCLUDE_TOOLS means the same thing here as on the dynamic and
+// meta surfaces.
+//
+// Exclusion used to run against the registered tool names alone, and on this
+// surface those are the per-action names declared in the ActionSpec, so the two
+// other spellings an operator legitimately uses, the meta group name (which is
+// what the documented example carries) and the canonical action ID, removed
+// nothing and reported nothing. A configuration reused across surfaces was
+// therefore half applied on one of them, with no warning either way.
+func TestCreateServer_IndividualSurface_ExcludesByEveryNameAnOperatorMayUse(t *testing.T) {
+	const (
+		excluded = "gitlab_issue_delete"
+		control  = "gitlab_issue_list"
+	)
+	for _, tc := range []struct {
+		name    string
+		exclude []string
+	}{
+		{name: "the meta group name", exclude: []string{"gitlab_issue"}},
+		{name: "the canonical action ID", exclude: []string{"issue.delete"}},
+		{name: "the individual tool name", exclude: []string{excluded}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newMockGitLabClient(t)
+			server := mustCreateServer(t, client, &config.ServerConfig{
+				ToolSurface:  config.ToolSurfaceIndividual,
+				ExcludeTools: tc.exclude,
+			})
+			session := newInMemorySession(t, server)
+
+			listed, err := session.ListTools(t.Context(), nil)
+			if err != nil {
+				t.Fatalf("ListTools() error = %v", err)
+			}
+			var sawExcluded, sawControl bool
+			for _, tool := range listed.Tools {
+				switch tool.Name {
+				case excluded:
+					sawExcluded = true
+				case control:
+					sawControl = true
+				}
+			}
+			if sawExcluded {
+				t.Errorf("%q is still registered after excluding %v", excluded, tc.exclude)
+			}
+			// A group-name exclusion removes the whole group, so the control
+			// only has to survive the two narrower spellings.
+			if !sawControl && tc.exclude[0] != "gitlab_issue" {
+				t.Errorf("%q disappeared as well; the exclusion removed more than it was given", control)
+			}
+		})
 	}
 }
 
@@ -2351,14 +2515,22 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 	}
 }
 
-// TestServeHTTP_MissingGitLabURLDefaultsToPublic verifies that in HTTP mode with
-// no default --gitlab-url configured and no GITLAB-URL header, the request falls
-// back to the public gitlab.com instance instead of being rejected (see
-// serverpool.ResolveRequestOptions). TierExplicit and IgnoreScopes are set so the
-// server-pool entry skips live tier/scope detection against gitlab.com, keeping
-// the test hermetic (no outbound network) while still exercising the default-URL
-// resolution path end to end.
-func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
+// TestServeHTTP_NoInstanceAndNoHeader_IsRefused verifies that a deployment
+// publishing no instance refuses a request that names none either, rather than
+// resolving it to the public gitlab.com.
+//
+// The old contract, which this test asserted under its previous name, was that
+// an absent header fell back to gitlab.com. That put the caller's token on the
+// wire to a host they never named, which is the defect the multi-instance
+// refusal already closes, so the fallback is gone (see
+// serverpool.ErrMissingGitLabURL). Such a deployment can only exist at all with
+// --allow-any-gitlab-url, where the operator has said the header chooses.
+//
+// The refusal must also name the header rather than blame the operator's
+// configuration: with no header, an unresolvable instance used to mean only a
+// mistyped --gitlab-url, and that message would now send the caller looking for
+// someone else over an omission of their own.
+func TestServeHTTP_NoInstanceAndNoHeader_IsRefused(t *testing.T) {
 	cfg := &config.Config{
 		GitLabURL:      "",
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
@@ -2403,25 +2575,17 @@ func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
 	}
 	respBody := readAndCloseBody(t, resp)
 
-	// The assertion is that omitting GITLAB-URL is accepted rather than
-	// rejected as a missing or malformed instance URL. It deliberately does
-	// not assert 200.
-	//
-	// The default resolves to the public gitlab.com, so the outcome now
-	// depends on what that instance says about the test token: with network
-	// access the credential probe is refused and the gate answers 401,
-	// without it the probe fails open and the handshake succeeds. Pinning
-	// either one would make this test depend on the runner having internet.
-	// The resolution semantics themselves are covered hermetically by
-	// TestResolveRequestOptions in internal/serverpool.
-	if resp.StatusCode == http.StatusBadRequest {
-		t.Errorf("omitting GITLAB-URL was rejected as a bad request: %s", respBody)
+	// Refused, and refused for the caller's own reason. The request never
+	// reaches GitLab, so this stays hermetic without pinning the network
+	// behavior the old fallback depended on.
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d: %s", resp.StatusCode, http.StatusBadRequest, respBody)
 	}
-	if strings.Contains(respBody, "GITLAB-URL") {
-		t.Errorf("response complains about the instance URL, so the default did not apply: %s", respBody)
+	if !strings.Contains(respBody, serverpool.RequestOptionGitLabURL) {
+		t.Errorf("the refusal must name the header the caller has to send: %s", respBody)
 	}
-	if resp.StatusCode == http.StatusOK {
-		closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	if strings.Contains(respBody, "contact the operator") {
+		t.Errorf("a caller who omitted the header is not looking at a broken deployment: %s", respBody)
 	}
 
 	cancel()
@@ -3389,13 +3553,19 @@ func TestRunHTTP_InvalidAuthMode(t *testing.T) {
 
 // TestRunHTTP_OAuthRequiresGitLabURL verifies that OAuth mode requires a
 // fixed GitLab URL and cannot silently fall back to HTTP multi-instance mode.
+//
+// --allow-any-gitlab-url is passed so the general allow-list requirement is
+// satisfied and this reaches the oauth-specific check: the escape hatch that
+// makes free instance selection tolerable for a local single-user deployment
+// does not open it for a deployment forwarding bearer tokens.
 func TestRunHTTP_OAuthRequiresGitLabURL(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
-		gitlabURL:      "",
-		maxHTTPClients: config.DefaultMaxHTTPClients,
-		sessionTimeout: config.DefaultSessionTimeout,
-		authMode:       "oauth",
-		oauthCacheTTL:  config.DefaultOAuthCacheTTL,
+		gitlabURL:         "",
+		allowAnyGitLabURL: true,
+		maxHTTPClients:    config.DefaultMaxHTTPClients,
+		sessionTimeout:    config.DefaultSessionTimeout,
+		authMode:          "oauth",
+		oauthCacheTTL:     config.DefaultOAuthCacheTTL,
 	})
 	if err == nil {
 		t.Fatal("expected error when OAuth mode has no fixed GitLab URL")
@@ -3473,31 +3643,6 @@ func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "revalidate-interval") {
 		t.Errorf("error should mention revalidate-interval, got: %v", err)
-	}
-}
-
-// TestRunHTTP_MissingGitLabURL verifies that runHTTP accepts an empty
-// --gitlab-url and relies on per-request GITLAB-URL headers.
-func TestRunHTTP_MissingGitLabURL(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		cancel()
-	}()
-
-	err := runHTTP(ctx, &httpConfig{
-		gitlabURL: "",
-		// An explicit ephemeral port: with addr empty, net/http listens on
-		// ":http" — real port 80 — and the test's outcome then depends on
-		// whether anything on the machine already owns it.
-		addr:           "127.0.0.1:0",
-		maxHTTPClients: config.DefaultMaxHTTPClients,
-		sessionTimeout: config.DefaultSessionTimeout,
-	})
-	if err != nil {
-		t.Fatalf("expected nil error for empty gitlab-url, got: %v", err)
 	}
 }
 
@@ -3619,7 +3764,10 @@ func TestSecurityHeaders_CoverRejectionsToo(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	handler := securityHeadersMiddleware(hostValidationMiddleware(map[string]bool{"localhost": true}, inner))
+	handler := securityHeadersMiddleware(
+		inboundLimits{maxDepth: maxInboundJSONDepth},
+		hostValidationMiddleware(map[string]bool{"localhost": true}, inner),
+	)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://evil.example.com/", http.NoBody)
 	req.Host = "evil.example.com"
@@ -4419,6 +4567,53 @@ func TestNewHTTPServer_Timeouts(t *testing.T) {
 				t.Errorf("ReadTimeout = %s, want %s", srv.ReadTimeout, baseHTTPReadTimeout)
 			}
 		})
+	}
+}
+
+// TestNewHTTPServer_HeaderCeiling_IsFarBelowTheStandardLibraryDefault verifies
+// that a request's headers are bounded before anything reads them.
+//
+// Every header-borne carrier is written to the log before the caller is
+// authenticated: the Host of a refused request, the method of a cross-origin
+// one. Go's own ceiling is 1 MiB, so twenty requests were enough to write 18 MB
+// of stderr and 2500 to write 157 MB, from a client that never presented a
+// credential. The timeouts above bound how long a request may take; this bounds
+// how much of one there can be.
+func TestNewHTTPServer_HeaderCeiling_IsFarBelowTheStandardLibraryDefault(t *testing.T) {
+	srv := newHTTPServer(":0", http.NewServeMux(), 0)
+	if srv.MaxHeaderBytes != baseHTTPMaxHeaderBytes {
+		t.Errorf("MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, baseHTTPMaxHeaderBytes)
+	}
+	if srv.MaxHeaderBytes >= http.DefaultMaxHeaderBytes {
+		t.Errorf("MaxHeaderBytes = %d, which is not below the standard library's %d default",
+			srv.MaxHeaderBytes, http.DefaultMaxHeaderBytes)
+	}
+}
+
+// TestHostValidationMiddleware_LogsABoundedHost verifies that the refusal an
+// unauthenticated caller triggers cannot write an arbitrary amount to the log.
+//
+// The Host header is caller-supplied and was logged verbatim, so the refusal
+// meant to protect against DNS rebinding was also the cheapest way to fill an
+// operator's disk. The bounded prefix keeps the line diagnostic, since a
+// rebinding attempt is recognizable from its first bytes, and host_len keeps
+// the fact that it was truncated visible.
+func TestHostValidationMiddleware_LogsABoundedHost(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+	handler := hostValidationMiddleware(map[string]bool{"localhost": true}, http.NotFoundHandler())
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost/mcp", http.NoBody)
+	req.Host = strings.Repeat("a", 32_000)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if logged.Len() > 4096 {
+		t.Errorf("a single refused request wrote %d bytes of log for a %d byte Host", logged.Len(), len(req.Host))
+	}
+	if !strings.Contains(logged.String(), `"host_len":32000`) {
+		t.Errorf("the log does not report the real Host length: %s", logged.String())
 	}
 }
 
@@ -7502,8 +7697,12 @@ func TestRunWithContext_DeclaresWhichGitLabHostsAMetricMayName(t *testing.T) {
 			hcfg: &httpConfig{authMode: "saml"},
 		},
 		{
+			// Free selection now has to be asked for: without
+			// --allow-any-gitlab-url the deployment is refused before it
+			// reaches the mode's own validation, which is a different
+			// refusal from the one this test is about.
 			name: "an http deployment that lets callers choose",
-			hcfg: &httpConfig{authMode: "saml"},
+			hcfg: &httpConfig{authMode: "saml", allowAnyGitLabURL: true},
 		},
 	}
 
@@ -7997,6 +8196,391 @@ func TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly(t *testing.T) {
 				}
 			case <-time.After(testHTTPLivenessTimeout):
 				t.Fatal("serveStdio did not return")
+			}
+		})
+	}
+}
+
+// endlessBytes yields a single repeated byte forever, so a body of any size
+// can be posted without allocating it.
+type endlessBytes struct{ b byte }
+
+func (e endlessBytes) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = e.b
+	}
+	return len(p), nil
+}
+
+// readBodyHandler drains the request body and records what the read reported,
+// which is where a body cap and a depth cap both surface.
+func readBodyHandler(t *testing.T, observed *error) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.Copy(io.Discard, r.Body)
+		*observed = err
+		w.WriteHeader(http.StatusOK)
+	})
+}
+
+// TestSecurityHeaders_BodyCapFollowsConfiguration verifies that the outermost
+// middleware enforces the configured --max-request-body-bytes rather than a
+// constant of its own.
+//
+// The middleware used to wrap every body in a hardcoded 10 MiB reader, and the
+// SDK's configured limiter then wrapped the already-wrapped body, so above
+// 10 MiB the constant always bound: a deployment raising the cap for the
+// documented inline-upload workflow was silently held to about 7.5 MiB of
+// binary, and the 413 it got back named a number no operator had typed. The
+// deviation failed closed, which is why it is a correctness defect rather than
+// a hole, but a limit that ignores its configuration is not a limit anyone can
+// reason about.
+func TestSecurityHeaders_BodyCapFollowsConfiguration(t *testing.T) {
+	t.Parallel()
+	const mib = 1 << 20
+	for _, tc := range []struct {
+		name       string
+		configured int64
+		bodyBytes  int64
+		wantTooBig bool
+	}{
+		{"unset_falls_back_to_the_sdk_default", 0, 5 * mib, true},
+		{"unset_admits_what_fits_the_default", 0, 1 * mib, false},
+		{"raised_above_the_old_constant", 12 * mib, 11 * mib, false},
+		{"raised_still_refuses_beyond_itself", 12 * mib, 13 * mib, true},
+		{"lowered_below_the_old_constant", 1 * mib, 2 * mib, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var observed error
+			handler := securityHeadersMiddleware(
+				inboundLimits{maxBytes: tc.configured, maxDepth: maxInboundJSONDepth},
+				readBodyHandler(t, &observed),
+			)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost/mcp",
+				io.LimitReader(endlessBytes{b: 'a'}, tc.bodyBytes))
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+
+			var tooBig *http.MaxBytesError
+			if errors.As(observed, &tooBig) != tc.wantTooBig {
+				t.Fatalf("body read error = %v, want too-big %v", observed, tc.wantTooBig)
+			}
+			if !tc.wantTooBig {
+				return
+			}
+			want := tc.configured
+			if want == 0 {
+				want = mcp.DefaultMaxRequestBodyBytes
+			}
+			if tooBig.Limit != want {
+				t.Errorf("refused at %d bytes, want the configured %d", tooBig.Limit, want)
+			}
+		})
+	}
+}
+
+// TestSecurityHeaders_RefusesDeeplyNestedBody verifies that the front door
+// refuses a body whose JSON nests past the ceiling, before any decoder sees
+// it.
+//
+// This is the half of MP-01 a receiving middleware cannot reach. The SDK
+// unmarshals params._meta into a map[string]any on EVERY method, ahead of any
+// middleware, using a decoder with no depth guard that is quadratic in nesting
+// depth — so a deeply nested _meta on a bare ping costs the same CPU as one on
+// a tools/call, and the argument guard never gets a say. The scan here is
+// streaming and linear, so it costs a pass over bytes the server was going to
+// read anyway.
+func TestSecurityHeaders_RefusesDeeplyNestedBody(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		depth     int
+		wantRefus bool
+	}{
+		{"ordinary_request", 6, false},
+		{"at_the_ceiling", maxInboundJSONDepth, false},
+		{"one_past_the_ceiling", maxInboundJSONDepth + 1, true},
+		{"the_amplification_payload", 20000, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var observed error
+			handler := securityHeadersMiddleware(
+				inboundLimits{maxBytes: 8 << 20, maxDepth: maxInboundJSONDepth},
+				readBodyHandler(t, &observed),
+			)
+			body := `{"jsonrpc":"2.0","id":1,"method":"ping","params":{"_meta":` +
+				strings.Repeat("[", tc.depth-2) + strings.Repeat("]", tc.depth-2) + `}}`
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost/mcp",
+				strings.NewReader(body))
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+
+			if tc.wantRefus {
+				if observed == nil {
+					t.Fatalf("body at depth %d was read whole, want a refusal", tc.depth)
+				}
+				if !strings.Contains(observed.Error(), "nests") {
+					t.Errorf("refusal = %q, want it to name the nesting ceiling", observed)
+				}
+				return
+			}
+			if observed != nil {
+				t.Fatalf("body at depth %d: %v", tc.depth, observed)
+			}
+		})
+	}
+}
+
+// TestRequireInstanceAllowList verifies that HTTP mode refuses to start
+// without an instance allow-list, and that the escape hatch is the only way
+// past it.
+//
+// With no --gitlab-url the resolver treated the GITLAB-URL header as a free
+// choice, and admission does not compensate: the credential probe runs against
+// the host the CALLER named, and reports a rejection only on an explicit 401
+// or 403. So an unauthenticated caller pointing the header at a host they
+// control was admitted with any string as a token, and every tool then ran
+// against that host — an SSRF pivot whose responses are reflected back into
+// the caller's own result. That was the shipped default, container CMD
+// included. Refusing to start is the same shape as --auth-mode=oauth refusing
+// without --public-url: a deployment that has not said which GitLab it serves
+// has not been configured.
+func TestRequireInstanceAllowList(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		hcfg    httpConfig
+		wantErr string
+	}{
+		{
+			name:    "no_instance_is_refused",
+			hcfg:    httpConfig{},
+			wantErr: "--gitlab-url",
+		},
+		{
+			name: "no_instance_with_the_escape_hatch_starts",
+			hcfg: httpConfig{allowAnyGitLabURL: true},
+		},
+		{
+			name: "one_instance",
+			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://gitlab.example.com"}},
+		},
+		{
+			name: "several_instances",
+			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://a.example.com", "https://b.example.com"}},
+		},
+		{
+			name: "the_escape_hatch_is_ignored_when_an_instance_is_named",
+			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://a.example.com"}, allowAnyGitLabURL: true},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := requireInstanceAllowList(&tc.hcfg)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("requireInstanceAllowList: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("a deployment naming no instance started, want a refusal")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error = %q, want it to name %s", err, tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), "--allow-any-gitlab-url") {
+				t.Errorf("error = %q, want it to name the escape hatch", err)
+			}
+		})
+	}
+}
+
+// TestRunHTTP_RefusesWithoutAnInstance verifies the refusal at the entry point
+// rather than only in the helper, so a deployment cannot reach a listener
+// through some other path.
+func TestRunHTTP_RefusesWithoutAnInstance(t *testing.T) {
+	err := runHTTP(t.Context(), &httpConfig{
+		addr:           "127.0.0.1:0",
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+	})
+	if err == nil {
+		t.Fatal("runHTTP with no --gitlab-url started, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "--gitlab-url") {
+		t.Errorf("error = %q, want it to name the missing flag", err)
+	}
+}
+
+// TestRunHTTP_AllowAnyGitLabURLStarts verifies that the escape hatch restores
+// the old free-selection behavior for the single-user local deployment it
+// exists for.
+func TestRunHTTP_AllowAnyGitLabURLStarts(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	err := runHTTP(ctx, &httpConfig{
+		// An explicit ephemeral port: with addr empty, net/http listens on
+		// ":http" — real port 80 — and the test's outcome then depends on
+		// whether anything on the machine already owns it.
+		addr:              "127.0.0.1:0",
+		allowAnyGitLabURL: true,
+		maxHTTPClients:    config.DefaultMaxHTTPClients,
+		sessionTimeout:    config.DefaultSessionTimeout,
+	})
+	if err != nil {
+		t.Fatalf("runHTTP with --allow-any-gitlab-url: %v", err)
+	}
+}
+
+// TestRequireExplicitInstance verifies that a request leaving the instance
+// choice to a multi-instance deployment is refused instead of being answered
+// with the first published one.
+//
+// The resolver returned normalizedAllowed[0] when the header was absent, on
+// the reasoning that a client which does not care keeps working. That holds
+// for a client which does not care, not for one that cares and failed to say
+// so — a proxy stripped the header, a library cannot set custom ones — and the
+// token is then transmitted in full to an instance its holder never named. In
+// oauth mode it is worse: both instances are advertised in the RFC 9728
+// authorization_servers array and neither RFC 9728 nor MCP gives a client an
+// in-band way to say which one it used, so a conformant client selecting the
+// second sends its bearer to the first with no user error at all.
+func TestRequireExplicitInstance(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		instances []string
+		header    string
+		wantErr   bool
+	}{
+		{"free_selection_absent_header", nil, "", false},
+		{"free_selection_present_header", nil, "https://gitlab.example.com", false},
+		{"one_instance_absent_header", []string{"https://a.example.com"}, "", false},
+		{"one_instance_present_header", []string{"https://a.example.com"}, "https://b.example.com", false},
+		{"two_instances_absent_header", []string{"https://a.example.com", "https://b.example.com"}, "", true},
+		{"two_instances_blank_header", []string{"https://a.example.com", "https://b.example.com"}, "   ", true},
+		{"two_instances_present_header", []string{"https://a.example.com", "https://b.example.com"}, "https://b.example.com", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost/mcp", http.NoBody)
+			if tc.header != "" {
+				req.Header.Set(serverpool.RequestOptionGitLabURL, tc.header)
+			}
+			err := requireExplicitInstance(req, tc.instances)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("a request naming no instance was resolved, want a refusal")
+				}
+				if !errors.Is(err, errMissingGitLabURL) {
+					t.Errorf("error = %v, want errMissingGitLabURL", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("requireExplicitInstance: %v", err)
+			}
+		})
+	}
+}
+
+// TestMCPServerGate_MultiInstanceWithoutHeader_Refused verifies the wire
+// rendering of that refusal: 400 rather than a silent choice, naming the
+// instances only where the list is already public.
+//
+// The published set is served unauthenticated as RFC 9728
+// authorization_servers in oauth mode, so naming it there helps a client that
+// guessed wrong and gives away nothing. Legacy mode publishes no metadata
+// document and this rejection is reached before the credential is judged, so
+// echoing the list there would let any non-empty token enumerate the
+// operator's instance hostnames.
+func TestMCPServerGate_MultiInstanceWithoutHeader_Refused(t *testing.T) {
+	t.Parallel()
+	const other = "https://b.example.com"
+	for _, tc := range []struct {
+		name      string
+		oauthMode bool
+		wantNamed bool
+	}{
+		{"legacy_redacts_the_list", false, false},
+		{"oauth_names_the_list", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			gate := &mcpServerGate{
+				gitlabURLs: []string{"https://a.example.com", other},
+				oauthMode:  tc.oauthMode,
+				challenge:  legacyAuthChallenge,
+			}
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost/mcp", http.NoBody)
+			req.Header.Set("PRIVATE-TOKEN", testToken)
+
+			_, failure := gate.resolve(req)
+			if failure == nil {
+				t.Fatal("the gate resolved a request naming no instance, want a refusal")
+			}
+			if failure.status != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", failure.status, http.StatusBadRequest)
+			}
+			if named := strings.Contains(failure.message, other); named != tc.wantNamed {
+				t.Errorf("message = %q, names the instances = %v, want %v", failure.message, named, tc.wantNamed)
+			}
+			if !strings.Contains(failure.message, serverpool.RequestOptionGitLabURL) {
+				t.Errorf("message = %q, want it to name the header the client must set", failure.message)
+			}
+		})
+	}
+}
+
+// TestApplyLocalFilesystemPolicy_FollowsTheParsedFlag_NotTheArgumentScan
+// verifies that the local-path policy is settled from the flag the server
+// actually runs on.
+//
+// [toolutil] infers it once at init time by scanning os.Args, and that scanner
+// stops at the first --http token while Go's flag package keeps the last one it
+// parses. `--http=false --http` is the command line a launcher produces when a
+// unit file carries a default and a person appends an override: the parsers
+// disagree, the server listens on HTTP, and every file_path a remote caller
+// sends is honored against the operator's own disk. Both rows are driven
+// through the real flag parser so the divergence is measured rather than
+// assumed.
+func TestApplyLocalFilesystemPolicy_FollowsTheParsedFlag_NotTheArgumentScan(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		args        []string
+		wantAllowed bool
+	}{
+		{name: "no flag at all is stdio", args: nil, wantAllowed: true},
+		{name: "an explicit false is stdio", args: []string{"--http=false"}, wantAllowed: true},
+		{name: "http refuses local paths", args: []string{"--http"}, wantAllowed: false},
+		{name: "a later http beats an earlier false", args: []string{"--http=false", "--http"}, wantAllowed: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			previous := toolutil.LocalFilesystemAccessAllowed()
+			t.Cleanup(func() { toolutil.SetLocalFilesystemAccess(previous) })
+			// Start from the wrong answer so a policy that never ran is
+			// distinguishable from one that ran and agreed.
+			toolutil.SetLocalFilesystemAccess(!tc.wantAllowed)
+
+			withFreshFlagSet(t)
+			var useHTTP bool
+			flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
+			if err := flag.CommandLine.Parse(tc.args); err != nil {
+				t.Fatalf("parsing %v: %v", tc.args, err)
+			}
+
+			applyLocalFilesystemPolicy(useHTTP)
+
+			if got := toolutil.LocalFilesystemAccessAllowed(); got != tc.wantAllowed {
+				t.Errorf("local filesystem access = %v after %v, want %v", got, tc.args, tc.wantAllowed)
 			}
 		})
 	}

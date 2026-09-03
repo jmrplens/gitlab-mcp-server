@@ -100,7 +100,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Milestone Progress: %s\n\n", toolutil.EscapeMdHeading(projectID))
+	fmt.Fprintf(&b, "# Milestone Progress: %s\n\n", mdHeading(projectID))
 
 	if len(milestones) == 0 {
 		b.WriteString("No active milestones found.\n")
@@ -108,7 +108,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	for _, ms := range milestones {
-		fmt.Fprintf(&b, "## %s\n\n", toolutil.EscapeMdHeading(ms.Title))
+		fmt.Fprintf(&b, "## %s\n\n", mdHeading(ms.Title))
 
 		issues, _, _ := client.GL().Milestones.GetMilestoneIssues(projectID, ms.ID, &gl.GetMilestoneIssuesOptions{
 			PerPage: maxListItems,
@@ -172,7 +172,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Label Distribution: %s (%d labels)\n\n", toolutil.EscapeMdHeading(projectID), len(labels))
+	fmt.Fprintf(&b, "# Label Distribution: %s (%d labels)\n\n", mdHeading(projectID), len(labels))
 
 	if len(labels) == 0 {
 		b.WriteString("No labels found in this project.\n")
@@ -194,7 +194,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 		if total == 0 {
 			continue // skip unused labels
 		}
-		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d |\n", l.Name, l.OpenIssuesCount, l.ClosedIssuesCount, l.OpenMergeRequestsCount, total)
+		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d |\n", mdInline(l.Name), l.OpenIssuesCount, l.ClosedIssuesCount, l.OpenMergeRequestsCount, total)
 		totalOpen += l.OpenIssuesCount
 		totalClosed += l.ClosedIssuesCount
 		totalMRs += l.OpenMergeRequestsCount
@@ -253,7 +253,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Group Milestone Progress: %s\n\n", toolutil.EscapeMdHeading(groupID))
+	fmt.Fprintf(&b, "# Group Milestone Progress: %s\n\n", mdHeading(groupID))
 
 	if len(milestones) == 0 {
 		b.WriteString("No active group milestones found.\n")
@@ -261,7 +261,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 	}
 
 	for _, ms := range milestones {
-		fmt.Fprintf(&b, "## %s\n\n", toolutil.EscapeMdHeading(ms.Title))
+		fmt.Fprintf(&b, "## %s\n\n", mdHeading(ms.Title))
 
 		issues, _, _ := client.GL().GroupMilestones.GetGroupMilestoneIssues(groupID, ms.ID, &gl.GetGroupMilestoneIssuesOptions{
 			PerPage: maxListItems,
@@ -321,7 +321,7 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Contributors: %s (%d contributors)\n\n", toolutil.EscapeMdHeading(projectID), len(contributors))
+	fmt.Fprintf(&b, "# Project Contributors: %s (%d contributors)\n\n", mdHeading(projectID), len(contributors))
 
 	if len(contributors) == 0 {
 		b.WriteString("No contributors found.\n")
@@ -333,7 +333,7 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 	b.WriteString("|-------------|---------|-----------|----------|\n")
 	var totalCommits, totalAdditions, totalDeletions int64
 	for _, c := range contributors {
-		fmt.Fprintf(&b, "| %s | %d | +%d | -%d |\n", c.Name, c.Commits, c.Additions, c.Deletions)
+		fmt.Fprintf(&b, "| %s | %d | +%d | -%d |\n", mdInline(c.Name), c.Commits, c.Additions, c.Deletions)
 		totalCommits += c.Commits
 		totalAdditions += c.Additions
 		totalDeletions += c.Deletions

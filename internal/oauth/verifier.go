@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -217,6 +218,92 @@ type gitlabUserResponse struct {
 	Username string `json:"username"`
 }
 
+// verificationBodyLimit bounds every response body read while verifying a
+// token. The bodies are two small JSON objects — an identity and a scope list
+// — and nothing legitimate approaches this, so the limit costs nothing and
+// stops a compressed reply from an untrustworthy instance being expanded into
+// memory on the authentication path, which runs before any other check.
+const verificationBodyLimit = 64 << 10
+
+// maxVerificationRedirects bounds a verification's redirect chain. Setting
+// CheckRedirect at all replaces net/http's default policy, and its ten-hop cap
+// lives inside that default.
+const maxVerificationRedirects = 10
+
+// verificationRedirect refuses to follow a redirect that leaves the instance
+// the verification request was addressed to.
+//
+// This is deliberately stricter than the credential-stripping policy the
+// GitLab API clients use, and the difference is what is being trusted. There,
+// the credential is the asset and the response is just data, so removing the
+// credential and following the hop is both safe and necessary — object storage
+// answers artifact downloads that way. Here the *response is the asset*: a 200
+// carrying {"id":1,"username":"root"} is accepted as the caller's identity and
+// cached under their token. Stripping the bearer would leave that intact,
+// because a host chosen by the redirect can answer whatever it likes with no
+// credential at all. So the only safe answer is not to ask a stranger who the
+// caller is.
+//
+// A hop that stays on the instance, or moves to a subdomain of it — the same
+// relation net/http applies to its own sensitive headers — is followed, so an
+// instance that redirects http to https, or /api/v4/user to a canonical path,
+// keeps working.
+func verificationRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxVerificationRedirects {
+		return fmt.Errorf("token verification: stopped after %d redirects", maxVerificationRedirects)
+	}
+	if len(via) == 0 || via[0].URL == nil || req.URL == nil {
+		return nil
+	}
+	origin := via[0].URL
+	if sameVerificationHost(origin, req.URL) {
+		return nil
+	}
+	return fmt.Errorf(
+		"token verification: refusing to follow a redirect from %s to %s; an identity may only come from the instance itself",
+		origin.Hostname(), req.URL.Hostname(),
+	)
+}
+
+// sameVerificationHost reports whether dest is still the instance origin names,
+// or a subdomain of it, without downgrading https to http.
+func sameVerificationHost(origin, dest *url.URL) bool {
+	if strings.EqualFold(origin.Scheme, "https") && !strings.EqualFold(dest.Scheme, "https") {
+		return false
+	}
+	originHost := strings.ToLower(origin.Hostname())
+	destHost := strings.ToLower(dest.Hostname())
+	if originHost == "" || destHost == "" {
+		return false
+	}
+	if destHost == originHost {
+		return true
+	}
+	// An address literal is not a subdomain of anything, and one carrying an
+	// IPv6 zone can be spelled to end in any parent: url.Hostname() reduces
+	// "[::1%25.gitlab.example.com]" to "::1%.gitlab.example.com", which clears
+	// both tests below while Go dials ::1. That is CVE-2023-45289, and net/http
+	// grew the same guard in the same place.
+	//
+	// It sits after the equality test, not before it, so an instance that
+	// genuinely is an address literal still matches itself. What it rules out
+	// is only the subdomain relation, which an address literal can never
+	// legitimately stand in.
+	//
+	// The consequence here is harsher than in the GitLab clients' redirect
+	// policy, which strips the credential and follows the hop: this refuses it.
+	// There the credential is the asset and the body is data; here the body is
+	// the asset, since a 200 is accepted as the caller's identity and cached
+	// under their token, and a loopback service can answer that with no
+	// credential at all.
+	if strings.ContainsAny(destHost, ":%") {
+		return false
+	}
+	return len(destHost) > len(originHost) &&
+		destHost[len(destHost)-len(originHost)-1] == '.' &&
+		strings.HasSuffix(destHost, originHost)
+}
+
 // NewGitLabVerifier returns an [auth.TokenVerifier] that validates Bearer
 // tokens by calling the GitLab /api/v4/user endpoint. Verified identities
 // are cached in cache (if non-nil) to avoid redundant API calls.
@@ -265,8 +352,9 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		}
 	}
 	client := &http.Client{
-		Transport: transport,
-		Timeout:   10 * time.Second,
+		Transport:     transport,
+		Timeout:       10 * time.Second,
+		CheckRedirect: verificationRedirect,
 	}
 
 	return func(ctx context.Context, token string, r *http.Request) (*auth.TokenInfo, error) {
@@ -323,7 +411,7 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		}
 
 		var user gitlabUserResponse
-		if decErr := json.NewDecoder(resp.Body).Decode(&user); decErr != nil {
+		if decErr := json.NewDecoder(io.LimitReader(resp.Body, verificationBodyLimit)).Decode(&user); decErr != nil {
 			return nil, fmt.Errorf("decode GitLab user response: %w", decErr)
 		}
 		if user.ID == 0 {
@@ -577,7 +665,7 @@ func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, toke
 		return nil
 	}
 	var payload map[string]any
-	if json.NewDecoder(resp.Body).Decode(&payload) != nil {
+	if json.NewDecoder(io.LimitReader(resp.Body, verificationBodyLimit)).Decode(&payload) != nil {
 		return nil
 	}
 	return payload

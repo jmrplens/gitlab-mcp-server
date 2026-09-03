@@ -78,14 +78,14 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Settings Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Project Settings Audit: %s\n\n", mdHeading(project.PathWithNamespace))
 
 	// General info
 	b.WriteString("## General\n\n")
 	b.WriteString(settingValueTableHeader)
-	fmt.Fprintf(&b, "| Name | %s |\n", project.Name)
-	fmt.Fprintf(&b, "| Path | %s |\n", project.PathWithNamespace)
-	fmt.Fprintf(&b, "| Description | %s |\n", emptyDash(project.Description))
+	fmt.Fprintf(&b, "| Name | %s |\n", mdInline(project.Name))
+	fmt.Fprintf(&b, "| Path | %s |\n", mdInline(project.PathWithNamespace))
+	fmt.Fprintf(&b, "| Description | %s |\n", mdInline(emptyDash(project.Description)))
 	fmt.Fprintf(&b, "| Visibility | %s |\n", string(project.Visibility))
 	fmt.Fprintf(&b, "| Default branch | %s |\n", emptyDash(project.DefaultBranch))
 	fmt.Fprintf(&b, "| Created | %s |\n", formatAuditDate(project.CreatedAt))
@@ -182,7 +182,7 @@ func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Clien
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Branch Protection Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Branch Protection Audit: %s\n\n", mdHeading(project.PathWithNamespace))
 	fmt.Fprintf(&b, "**Default branch**: %s\n\n", project.DefaultBranch)
 
 	defaultProtected := isDefaultBranchProtected(protectedBranches, project.DefaultBranch)
@@ -215,7 +215,7 @@ func writeBranchDetail(b *strings.Builder, pb *gl.ProtectedBranch, defaultBranch
 	if pb.Name == defaultBranch {
 		suffix = " (default)"
 	}
-	fmt.Fprintf(b, "### %s%s\n\n", toolutil.EscapeMdHeading(pb.Name), toolutil.EscapeMdHeading(suffix))
+	fmt.Fprintf(b, "### %s%s\n\n", mdHeading(pb.Name), mdHeading(suffix))
 
 	writeAccessLevelLine(b, "Push access", pb.PushAccessLevels)
 	writeAccessLevelLine(b, "Merge access", pb.MergeAccessLevels)
@@ -323,7 +323,7 @@ func handleAuditProjectAccess(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Access Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Project Access Audit: %s\n\n", mdHeading(project.PathWithNamespace))
 
 	g := classifyMembers(members)
 
@@ -416,7 +416,7 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Workflow Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Workflow Audit: %s\n\n", mdHeading(project.PathWithNamespace))
 
 	labels, _, labelsErr := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
 		PerPage: maxListItems,
@@ -507,7 +507,7 @@ func writeMilestonesAudit(b *strings.Builder, active, closed []*gl.Milestone) {
 					expired = "No"
 				}
 			}
-			fmt.Fprintf(b, "| %s | %s | %s |\n", m.Title, due, expired)
+			fmt.Fprintf(b, "| %s | %s | %s |\n", mdInline(m.Title), due, expired)
 		}
 		b.WriteString("\n")
 	}
@@ -528,14 +528,14 @@ func writeTemplatesAudit(b *strings.Builder, issueTPL, mrTPL []*gl.ProjectTempla
 	if len(issueTPL) > 0 {
 		b.WriteString("### Issue Templates\n\n")
 		for _, t := range issueTPL {
-			fmt.Fprintf(b, "- %s\n", t.Name)
+			fmt.Fprintf(b, "- %s\n", mdInline(t.Name))
 		}
 		b.WriteString("\n")
 	}
 	if len(mrTPL) > 0 {
 		b.WriteString("### MR Templates\n\n")
 		for _, t := range mrTPL {
-			fmt.Fprintf(b, "- %s\n", t.Name)
+			fmt.Fprintf(b, "- %s\n", mdInline(t.Name))
 		}
 		b.WriteString("\n")
 	}
@@ -607,7 +607,7 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Full Project Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Full Project Audit: %s\n\n", mdHeading(project.PathWithNamespace))
 
 	writeFullScorecard(&b, scorecardData{
 		project:    project,
@@ -751,7 +751,7 @@ func writeFullMilestonesSection(b *strings.Builder, active []*gl.Milestone) {
 		if m.DueDate != nil {
 			due = "due " + m.DueDate.String()
 		}
-		fmt.Fprintf(b, "- %s (%s)\n", m.Title, due)
+		fmt.Fprintf(b, "- %s (%s)\n", mdInline(m.Title), due)
 	}
 	b.WriteString("\n")
 }

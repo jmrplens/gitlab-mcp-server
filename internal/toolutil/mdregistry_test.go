@@ -525,3 +525,42 @@ func TestMarkdownFormatterCount_IncludesInitRegistrations(t *testing.T) {
 		t.Errorf("MarkdownFormatterCount() = %d, want >= 2", n)
 	}
 }
+
+// TestWrapMarkdown_CarriesNoControlBytes verifies that the registry's own
+// result builder drops terminal control sequences, like the builders in
+// markdown.go. It is the path every registered formatter's output takes on its
+// way to a tool result, so a formatter that writes a GitLab field straight into
+// its builder is contained here even when nothing else contained it.
+func TestWrapMarkdown_CarriesNoControlBytes(t *testing.T) {
+	tests := []struct {
+		name string
+		md   string
+		want string
+	}{
+		{name: "empty markdown returns no result", md: "", want: ""},
+		{name: "ordinary markdown is unchanged", md: "## Title\n\nbody\n", want: "## Title\n\nbody\n"},
+		{name: "clear screen and window title are dropped", md: "trace\x1b[2J\x1b]0;pwned\x07\n", want: "trace[2J]0;pwned\n"},
+		{name: "trailing whitespace still stripped", md: "line   \nnext\t\n", want: "line\nnext\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := wrapMarkdown(tt.md)
+			if tt.want == "" {
+				if result != nil {
+					t.Errorf("wrapMarkdown(%q) = %v, want nil", tt.md, result)
+				}
+				return
+			}
+			if result == nil || len(result.Content) == 0 {
+				t.Fatalf("wrapMarkdown(%q) returned no content", tt.md)
+			}
+			text, ok := result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("wrapMarkdown content is %T, want *mcp.TextContent", result.Content[0])
+			}
+			if text.Text != tt.want {
+				t.Errorf("wrapMarkdown(%q) = %q, want %q", tt.md, text.Text, tt.want)
+			}
+		})
+	}
+}

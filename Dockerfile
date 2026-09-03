@@ -19,12 +19,29 @@ ARG VERSION=""
 ARG COMMIT=""
 ARG TARGETOS
 ARG TARGETARCH
+# -buildmode=pie makes the binary dynamically linked, and Go picks its
+# PT_INTERP by stat-ing the *build* host: it uses the glibc path unless the
+# musl loader for that architecture exists locally (cmd/link/internal/ld/elf.go).
+# The builder runs on $BUILDPLATFORM, so the native architecture got Alpine's
+# musl loader and every cross-compiled one got a glibc loader the runtime image
+# does not ship — the published linux/arm64 image died at exec with
+# "Could not open '/lib/ld-linux-aarch64.so.1'". Name the interpreter
+# explicitly instead of letting the linker guess from the wrong filesystem, and
+# refuse to build an architecture whose musl name we have not spelled out.
 RUN --mount=type=cache,target=/go/pkg/mod \
 	--mount=type=cache,target=/root/.cache/go-build \
+	set -eu; \
+	case "${TARGETARCH}" in \
+	amd64) MUSL_ARCH=x86_64 ;; \
+	arm64) MUSL_ARCH=aarch64 ;; \
+	*) echo "unsupported TARGETARCH=${TARGETARCH}: no musl loader name for it" >&2; exit 1 ;; \
+	esac; \
 	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
 	-trimpath -buildmode=pie \
-	-ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
-	-o /out/gitlab-mcp-server ./cmd/server
+	-ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -I /lib/ld-musl-${MUSL_ARCH}.so.1" \
+	-o /out/gitlab-mcp-server ./cmd/server; \
+	grep -a -q "/lib/ld-musl-${MUSL_ARCH}.so.1" /out/gitlab-mcp-server || \
+	{ echo "built binary does not request the musl loader for ${TARGETARCH}" >&2; exit 1; }
 
 # --- Runtime stage ---
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b

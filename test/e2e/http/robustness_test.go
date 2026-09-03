@@ -191,19 +191,24 @@ func TestRobust_RawSocketAttacks(t *testing.T) {
 	}
 }
 
-// TestRobust_GitLabURLHostIsNotRestricted records that the per-request
-// GITLAB-URL header may name any host, including private and link-local
-// addresses.
+// TestRobust_GitLabURLHostIsNotRestricted pins what the GITLAB-URL header may
+// still reach, and the configuration that is now the only way to get there.
 //
-// This is the accepted design of a per-request instance selector — the client
-// supplies both the URL and the credential — and it is what a self-hosted
-// deployment needs. It is written down here rather than left implicit, because
-// on a *public* deployment it is a blind server-side request forgery primitive:
-// a caller can make the server connect somewhere it chooses and infer from the
-// timing and status whether that address answers.
+// The header names the host only when the deployment published no instance,
+// and that no longer happens by accident: HTTP mode refuses to start without
+// --gitlab-url, so a server in this state was started with
+// --allow-any-gitlab-url over a startup warning. The harness supplies that flag
+// here (see withInstancePolicy), which is why the first half runs at all.
 //
-// Pinning --gitlab-url closes it completely: the header is then ignored, which
-// the second half asserts.
+// Under the hatch the header still names any host, private and link-local
+// addresses included, and the upstream body is returned to the caller, so this
+// is a request-forgery pivot rather than a blind one. That is the whole trade
+// the flag exists to make, for the single-user deployment where the operator is
+// the caller, and it is asserted rather than left implicit so that a change
+// narrowing it is a visible failure here.
+//
+// Publishing an instance closes it: the header is then ignored, which the
+// second half asserts.
 func TestRobust_GitLabURLHostIsNotRestricted(t *testing.T) {
 	t.Run("unpinned deployment accepts any host", func(t *testing.T) {
 		srv := startServer(t, nil)

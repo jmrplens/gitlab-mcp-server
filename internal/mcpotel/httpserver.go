@@ -2,6 +2,7 @@ package mcpotel
 
 import (
 	"net/http"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -52,6 +53,22 @@ func ServerMiddleware(next http.Handler) http.Handler {
 	tracer := otel.Tracer(scopeName)
 	duration := newHTTPServerDurationHistogram(otel.Meter(scopeName))
 
+	// Whether an anonymous caller's cleared sampled flag is honored, resolved
+	// once at wiring rather than per request.
+	//
+	// This package otherwise reads no configuration at all, deliberately, and
+	// this one variable is the exception because of what the alternative would
+	// be. The default sampler is ParentBased(AlwaysOn), so a caller sending
+	// flags 00 makes this span non-recording — including the span for the 401
+	// it is about to be sent, which means the party being refused decides
+	// whether the refusal is recorded. Ignoring the flag closes that, and
+	// ignoring it unconditionally would silently override an operator who
+	// deliberately configured a ratio: the SDK applies OTEL_TRACES_SAMPLER
+	// before any option, so a sampler set there is a decision already taken.
+	// An operator who took charge keeps it; one who never asked gets a front
+	// door an anonymous caller cannot switch off.
+	_, keepCallerSampling := os.LookupEnv("OTEL_TRACES_SAMPLER")
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method, original := knownMethod(r.Method)
 		attrs := []attribute.KeyValue{
@@ -62,12 +79,19 @@ func ServerMiddleware(next http.Handler) http.Handler {
 
 		// The original goes on the span and never on the metric. The
 		// convention asks for it when the method was substituted, and the span
-		// is where an unbounded value is affordable: it is the metric's label
-		// space that a caller must not be able to choose.
+		// is where the value's *cardinality* is affordable: it is the metric's
+		// label space that a caller must not be able to choose.
+		//
+		// Its length is another matter, and this comment used to say the span
+		// could afford that too. It cannot: this middleware runs before the
+		// credential check, net/http accepts any token as a method, and the
+		// header budget is a megabyte, so twenty anonymous requests carrying a
+		// 500 KB verb relayed ten megabytes to the operator's collector. The
+		// prefix answers the question the attribute exists for.
 		spanAttrs := attrs
 		if original != "" {
 			spanAttrs = append(append([]attribute.KeyValue(nil), attrs...),
-				attrHTTPRequestMethodOriginal.String(original))
+				attrHTTPRequestMethodOriginal.String(boundMethod(original)))
 		}
 
 		// "HTTP" rather than "_OTHER" for the span name, which the convention
@@ -84,8 +108,11 @@ func ServerMiddleware(next http.Handler) http.Handler {
 		// of the MCP layer, and that layer already honors _meta. A malformed
 		// or absent header leaves the context untouched, which is the
 		// propagator's contract and the reason nothing is checked here.
-		parent := otel.GetTextMapPropagator().Extract(r.Context(),
-			propagation.HeaderCarrier(r.Header))
+		//
+		// What arrives here arrives from an unauthenticated party, though, so
+		// what it decides is bounded: see [sanitizeRemoteContext].
+		extracted := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		parent := sanitizeRemoteContext(extracted, keepCallerSampling)
 
 		ctx, span := tracer.Start(parent, name,
 			trace.WithSpanKind(trace.SpanKindServer),
@@ -209,4 +236,20 @@ func knownMethod(method string) (recorded, original string) {
 		return method, ""
 	}
 	return "_OTHER", method
+}
+
+// maxOriginalMethod bounds the substituted method the span carries.
+//
+// Every method the convention names is at most seven characters, so anything
+// longer is already not a method; this is generous enough to show a reader what
+// a misbehaving client is sending and short enough that a flood of them costs
+// the operator nothing.
+const maxOriginalMethod = 32
+
+// boundMethod truncates a caller-chosen verb to what the span will carry.
+func boundMethod(method string) string {
+	if len(method) <= maxOriginalMethod {
+		return method
+	}
+	return method[:maxOriginalMethod]
 }

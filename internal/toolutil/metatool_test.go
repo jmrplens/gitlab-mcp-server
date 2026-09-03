@@ -11,12 +11,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -5145,5 +5148,43 @@ func TestEnrichWithHints_NonObjectJSONResult(t *testing.T) {
 	got := enrichWithHints(result, callResult)
 	if _, ok := got.([]string); !ok {
 		t.Errorf("enrichWithHints(non-object) = %T, want original []string", got)
+	}
+}
+
+// TestMakeMetaHandler_HandlerErrorDoesNotReflectUpstreamResponseBody verifies
+// that the dispatcher bounds whatever error the handler produced, not only the
+// errors the wrapping helpers in errors.go built.
+//
+// A handler is free to wrap a client-go error itself, and several do. For those
+// actions nothing between the handler and the SDK ever looked at the body, so
+// an nginx page, a WAF block or a captive portal answering between this server
+// and GitLab reached the model and the "tool call failed" line whole, carrying
+// the operator's internal hostnames and request identifiers.
+func TestMakeMetaHandler_HandlerErrorDoesNotReflectUpstreamResponseBody(t *testing.T) {
+	glErr := upstreamErrorResponse(t, http.StatusBadGateway)
+	routes := ActionMap{
+		"list": Route(func(context.Context, map[string]any) (any, error) {
+			return nil, fmt.Errorf("list group service accounts: %w", glErr)
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+
+	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "list", Params: map[string]any{}})
+	if err == nil {
+		t.Fatal("handler error = nil, want the failure the action produced")
+	}
+	got := err.Error()
+	for _, fragment := range []string{upstreamBodySentinel, upstreamBodyMarker, "<html>"} {
+		t.Run(fragment, func(t *testing.T) {
+			if strings.Contains(got, fragment) {
+				t.Errorf("dispatcher error = %q, must not carry the upstream body fragment %q", got, fragment)
+			}
+		})
+	}
+	if !strings.Contains(got, "list group service accounts") {
+		t.Errorf("dispatcher error = %q, want the handler's own context kept", got)
+	}
+	if !errors.As(err, new(*gl.ErrorResponse)) {
+		t.Errorf("dispatcher error = %q, want the GitLab response still reachable through errors.As", got)
 	}
 }

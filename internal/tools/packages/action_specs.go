@@ -32,8 +32,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_package_publish — publish a file to the Generic Package Registry.
 		packageCreateSpec("publish", toolutil.RouteActionWithRequest(client, Publish), "gitlab_package_publish"),
-		// gitlab_package_download — download a file from the Generic Package Registry.
-		packageReadSpec("download", toolutil.RouteActionWithRequest(client, Download), "gitlab_package_download"),
+		// gitlab_package_download — download a file from the Generic Package
+		// Registry. Classified as mutating, not read-only: the read is of the
+		// registry, but the write is to this machine's disk, and every
+		// protective mode keys on that flag rather than on what the handler
+		// does. Read-only removes it, safe mode previews it, and a client that
+		// auto-approves readOnlyHint:true no longer auto-approves a file write.
+		packageWriteSpec("download", toolutil.RouteActionWithRequest(client, Download), "gitlab_package_download"),
 		// gitlab_package_list — list project packages with optional filters and ordering.
 		packageReadSpec(actionNameList, toolutil.RouteAction(client, List), "gitlab_package_list"),
 		// gitlab_list_group_packages — list packages across a group and its descendant projects.
@@ -78,6 +83,13 @@ func fileDeleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *git
 // [packageOptions].
 func packageReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, packageOptions(name, individualTool))
+}
+
+// packageWriteSpec builds a mutating, idempotent [toolutil.ActionSpec] for a
+// Generic Package Registry action that writes to the local filesystem, using
+// the package's default [packageOptions].
+func packageWriteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewUpdateActionSpec(name, route, packageOptions(name, individualTool))
 }
 
 // packageCreateSpec builds a create-style [toolutil.ActionSpec] for a

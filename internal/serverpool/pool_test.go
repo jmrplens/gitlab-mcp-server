@@ -1983,3 +1983,277 @@ func TestStartRevalidation_PanickingEvictionCallback_DoesNotKillTheProcess(t *te
 		t.Error("the failed revalidation was not counted")
 	}
 }
+
+// revalidationEntry inserts one entry into pool pointing at baseURL, with
+// lastValidated set to the given moment, and returns its key.
+func revalidationEntry(t *testing.T, pool *ServerPool, baseURL, token string, validatedAt time.Time) string {
+	t.Helper()
+
+	client, err := gitlabclient.NewClientWithTokenRetries(baseURL, token, false, true)
+	if err != nil {
+		t.Fatalf("building a client for %q: %v", token, err)
+	}
+	key := tokenHash(token)
+	pool.entries[key] = &poolEntry{
+		server:        mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil),
+		client:        client,
+		element:       pool.lru.PushFront(key),
+		createdAt:     validatedAt,
+		lastValidated: validatedAt,
+		lastUsed:      validatedAt,
+	}
+	return key
+}
+
+// TestRevalidateAll_EvictsOnlyOnCredentialVerdict verifies that revalidation
+// drops an entry only when GitLab actually judged the credential, and leaves
+// it alone whenever the check failed to reach a verdict.
+//
+// Evicting on any error at all makes an instance that is unreachable, or
+// answers 500 for ten seconds, drop every tenant's entry at once — and each is
+// then rebuilt on its next request with a fresh credential probe, tier lookup,
+// scope lookup and identity lookup, a thundering herd against an instance that
+// has just come back. Admission already draws this distinction; the periodic
+// path did not.
+//
+// The retained rows also assert lastValidated did not move, so a transient
+// failure cannot pass for a successful check and postpone the real one.
+func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
+	tests := []struct {
+		name          string
+		status        int
+		unreachable   bool
+		wantEvicted   bool
+		wantFailed    int64
+		wantTransient int64
+		wantSucceeded int64
+		wantRevalid   bool // lastValidated moved forward
+	}{
+		{name: "gitlab rejects the credential with 401", status: http.StatusUnauthorized, wantEvicted: true, wantFailed: 1},
+		{name: "gitlab rejects the credential with 403", status: http.StatusForbidden, wantEvicted: true, wantFailed: 1},
+		{name: "instance answers 500", status: http.StatusInternalServerError, wantTransient: 1},
+		{name: "instance answers 404", status: http.StatusNotFound, wantTransient: 1},
+		{name: "instance is unreachable", unreachable: true, wantTransient: 1},
+		{name: "instance answers 200", status: http.StatusOK, wantSucceeded: 1, wantRevalid: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if tt.status == http.StatusOK {
+					_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abc"}`))
+					return
+				}
+				http.Error(w, fmt.Sprintf(`{"message":"%d"}`, tt.status), tt.status)
+			}))
+			baseURL := srv.URL
+			if tt.unreachable {
+				// Closing it first leaves a port nothing answers on, which is
+				// a dial error rather than any HTTP status.
+				srv.Close()
+			} else {
+				t.Cleanup(srv.Close)
+			}
+
+			pool := New(testConfig(stubGitLabBase), testFactory())
+			validatedAt := time.Now().Add(-30 * time.Minute)
+			key := revalidationEntry(t, pool, baseURL, "tok-"+tt.name, validatedAt)
+
+			pool.revalidateAll(context.Background())
+
+			entry, stillThere := pool.entries[key]
+			if stillThere == tt.wantEvicted {
+				t.Errorf("entry present = %v, want evicted = %v", stillThere, tt.wantEvicted)
+			}
+			assertRevalidationCounts(t, pool.Stats(), tt.wantFailed, tt.wantTransient, tt.wantSucceeded)
+			if stillThere {
+				if moved := entry.lastValidated.After(validatedAt); moved != tt.wantRevalid {
+					t.Errorf("lastValidated moved = %v, want %v", moved, tt.wantRevalid)
+				}
+			}
+		})
+	}
+}
+
+// assertRevalidationCounts checks the three revalidation outcomes a round can
+// record, so a verdict is never counted as a transient failure or the reverse.
+func assertRevalidationCounts(t *testing.T, s Snapshot, wantFailed, wantTransient, wantSucceeded int64) {
+	t.Helper()
+	if s.RevalidationsFailed != wantFailed {
+		t.Errorf("RevalidationsFailed = %d, want %d", s.RevalidationsFailed, wantFailed)
+	}
+	if s.RevalidationsTransient != wantTransient {
+		t.Errorf("RevalidationsTransient = %d, want %d", s.RevalidationsTransient, wantTransient)
+	}
+	if s.RevalidationsSucceeded != wantSucceeded {
+		t.Errorf("RevalidationsSucceeded = %d, want %d", s.RevalidationsSucceeded, wantSucceeded)
+	}
+}
+
+// TestGetOrCreate_CredentialCeilingForcesRebuild verifies an entry stops
+// answering from cache once its credential has gone unchecked for longer than
+// the pool's ceiling, and is rebuilt — which re-runs the credential probe.
+//
+// This is the bound that survives an operator turning revalidation off.
+// Without it the fast path returns a cached entry and refreshes lastUsed with
+// no re-verification, so an entry in continuous use is never re-checked and a
+// revoked token keeps its admitted surface for the life of the process.
+func TestGetOrCreate_CredentialCeilingForcesRebuild(t *testing.T) {
+	tests := []struct {
+		name      string
+		age       time.Duration
+		wait      time.Duration
+		wantStale int64
+		wantProbe bool // the credential was probed again on the second call
+	}{
+		{name: "inside the ceiling", age: time.Hour, wantStale: 0},
+		{name: "past the ceiling", age: time.Millisecond, wait: 20 * time.Millisecond, wantStale: 1, wantProbe: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var probes atomic.Int64
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/user") {
+					probes.Add(1)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":7,"username":"probe","version":"17.0.0"}`))
+			}))
+			t.Cleanup(srv.Close)
+
+			pool := New(testConfig(srv.URL), testFactory(), WithMaxCredentialAge(tt.age))
+
+			first := mustGetOrCreate(t, pool, "glpat-ceiling", srv.URL)
+			afterFirst := probes.Load()
+			if afterFirst == 0 {
+				t.Fatal("the first call did not probe the credential at all")
+			}
+
+			if tt.wait > 0 {
+				time.Sleep(tt.wait)
+			}
+			second := mustGetOrCreate(t, pool, "glpat-ceiling", srv.URL)
+
+			if probed := probes.Load() > afterFirst; probed != tt.wantProbe {
+				t.Errorf("credential re-probed = %v, want %v", probed, tt.wantProbe)
+			}
+			if got := pool.Stats().StaleCredentialEvictions; got != tt.wantStale {
+				t.Errorf("StaleCredentialEvictions = %d, want %d", got, tt.wantStale)
+			}
+			if sameServer := first == second; sameServer == tt.wantProbe {
+				t.Errorf("second call returned the same server = %v, want %v", sameServer, !tt.wantProbe)
+			}
+		})
+	}
+}
+
+// mustGetOrCreate returns the pooled server for a credential, failing the test
+// if the pool refuses it.
+func mustGetOrCreate(t *testing.T, pool *ServerPool, token, gitlabURL string) *mcp.Server {
+	t.Helper()
+	server, err := pool.GetOrCreate(token, gitlabURL)
+	if err != nil {
+		t.Fatalf("GetOrCreate(%q): %v", token, err)
+	}
+	return server
+}
+
+// TestGetOrCreate_CredentialCeilingRefusesARevokedToken verifies the rebuild
+// the ceiling forces is a real check: once GitLab starts refusing the
+// credential, the next request past the ceiling is refused too rather than
+// being served the entry admitted before the revocation.
+func TestGetOrCreate_CredentialCeilingRefusesARevokedToken(t *testing.T) {
+	var revoked atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if revoked.Load() && strings.HasSuffix(r.URL.Path, "/user") {
+			http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":7,"username":"probe","version":"17.0.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	// Revalidation off, which is the supported setting that used to remove
+	// the upper bound on the revocation window altogether.
+	pool := New(testConfig(srv.URL), testFactory(),
+		WithRevalidateInterval(0),
+		WithMaxCredentialAge(time.Millisecond),
+	)
+
+	if _, err := pool.GetOrCreate("glpat-revoked", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate before revocation: %v", err)
+	}
+
+	revoked.Store(true)
+	time.Sleep(20 * time.Millisecond)
+
+	_, err := pool.GetOrCreate("glpat-revoked", srv.URL)
+	if !errors.Is(err, ErrInvalidCredential) {
+		t.Errorf("GetOrCreate after revocation error = %v, want %v", err, ErrInvalidCredential)
+	}
+}
+
+// TestWithMaxCredentialAge_CannotBeDisabled verifies the ceiling option
+// narrows but never removes the bound: a non-positive value falls back to the
+// default rather than turning the check off, and a value beyond the supported
+// range is clamped down.
+func TestWithMaxCredentialAge_CannotBeDisabled(t *testing.T) {
+	tests := []struct {
+		name string
+		set  time.Duration
+		want time.Duration
+	}{
+		{name: "zero keeps the default", set: 0, want: DefaultMaxCredentialAge},
+		{name: "negative keeps the default", set: -time.Hour, want: DefaultMaxCredentialAge},
+		{name: "a shorter ceiling is honored", set: 5 * time.Minute, want: 5 * time.Minute},
+		{name: "a longer ceiling is clamped", set: 72 * time.Hour, want: maxCredentialAgeCeiling},
+		{name: "exactly the ceiling", set: maxCredentialAgeCeiling, want: maxCredentialAgeCeiling},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := New(testConfig(stubGitLabBase), testFactory(), WithMaxCredentialAge(tt.set))
+
+			if pool.maxCredentialAge != tt.want {
+				t.Errorf("maxCredentialAge = %v, want %v", pool.maxCredentialAge, tt.want)
+			}
+		})
+	}
+}
+
+// TestEvictStaleCredential_LeavesFreshEntriesAlone verifies the
+// stale-credential path drops nothing it was not asked to: a key that is gone,
+// and a key another request has already rebuilt between the read lock that
+// spotted the staleness and the write lock that acts on it, are both left as
+// they are.
+func TestEvictStaleCredential_LeavesFreshEntriesAlone(t *testing.T) {
+	tests := []struct {
+		name    string
+		present bool
+	}{
+		{name: "the key is gone"},
+		{name: "the key was rebuilt in the meantime", present: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := New(testConfig(stubGitLabBase), testFactory())
+			key := "a key nothing was ever stored under"
+			if tt.present {
+				key = revalidationEntry(t, pool, stubGitLabBase, "tok-fresh", time.Now())
+			}
+
+			pool.evictStaleCredential(key)
+
+			if _, stillThere := pool.entries[key]; stillThere != tt.present {
+				t.Errorf("entry present = %v, want %v", stillThere, tt.present)
+			}
+			if got := pool.Stats().StaleCredentialEvictions; got != 0 {
+				t.Errorf("StaleCredentialEvictions = %d, want 0", got)
+			}
+		})
+	}
+}
