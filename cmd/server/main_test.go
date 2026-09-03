@@ -1149,24 +1149,11 @@ func initializeTestServer(t *testing.T, cfg *config.ServerConfig) map[string]any
 // TestPrintHelp_ContainsExpectedSections verifies that printHelp outputs
 // all expected sections: version, author, flags, env vars, and JSON examples.
 func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
-	// Capture stdout.
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
+	stdout := captureStdout(t)
 
 	printHelp()
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-	output := string(out)
+	output := stdout()
 
 	checks := []struct {
 		name, want string
@@ -1225,26 +1212,14 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 // stating there too, because -http is in every existing deployment and the
 // answer to "what happens if I keep it" is the first question this flag raises.
 func TestPrintHelp_Transport_NamesEverySelectorAndThePrecedence(t *testing.T) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
+	stdout := captureStdout(t)
 
 	printHelp()
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
 	// The entry is its own line plus its indented continuation lines: the
 	// description is long enough to wrap, and a value named on a wrapped line
 	// is still documented.
-	entry := helpEntry(string(out), "-transport string")
+	entry := helpEntry(stdout(), "-transport string")
 	if entry == "" {
 		t.Fatal("the help does not document -transport at all")
 	}
@@ -1298,26 +1273,13 @@ func helpEntry(help, flagName string) string {
 // stateful session that a rebuild answers 404, that a flag they set achieved
 // it.
 func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(t *testing.T) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
+	stdout := captureStdout(t)
 
 	printHelp()
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-
 	// The entry is its own line plus any indented continuation lines, since a
 	// flag long enough to need this correction is long enough to wrap.
-	line := helpEntry(string(out), "-revalidate-interval")
+	line := helpEntry(stdout(), "-revalidate-interval")
 	if line == "" {
 		t.Fatal("the help does not document -revalidate-interval at all")
 	}
@@ -1330,17 +1292,12 @@ func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(
 }
 
 // TestPrintHelp_NoPanic verifies that printHelp can be called without panicking.
+//
+// This one had no reader at all, only a write end nothing ever emptied, which
+// is the shape from [captureStdout]'s comment at its most direct: discarding
+// output still means writing it. The capture is what makes the discard work.
 func TestPrintHelp_NoPanic(t *testing.T) {
-	oldStdout := os.Stdout
-	_, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
-	defer func() {
-		_ = w.Close()
-		os.Stdout = oldStdout
-	}()
+	captureStdout(t)
 
 	// Should not panic.
 	printHelp()
@@ -1373,31 +1330,20 @@ func TestStaticConfigurationExamplesPreferToolSurface(t *testing.T) {
 func TestMain_HelpParsesTierFlag(t *testing.T) {
 	oldArgs := os.Args
 	oldCommandLine := flag.CommandLine
-	oldStdout := os.Stdout
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
 	os.Args = []string{"gitlab-mcp-server", "-h", "-tier", "ultimate"}
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(io.Discard)
-	os.Stdout = w
 	t.Cleanup(func() {
 		os.Args = oldArgs
 		flag.CommandLine = oldCommandLine
-		os.Stdout = oldStdout
 	})
+	stdout := captureStdout(t)
 
 	main()
 
-	_ = w.Close()
-	out, readErr := io.ReadAll(r)
-	if readErr != nil {
-		t.Fatalf("ReadAll: %v", readErr)
-	}
-	if !strings.Contains(string(out), "gitlab-mcp-server") {
-		t.Fatalf("help output missing project name: %s", string(out))
+	if out := stdout(); !strings.Contains(out, "gitlab-mcp-server") {
+		t.Fatalf("help output missing project name: %s", out)
 	}
 }
 
@@ -3015,24 +2961,13 @@ func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oldStdout := os.Stdout
-			r, w, err := os.Pipe()
-			if err != nil {
-				t.Fatalf("os.Pipe: %v", err)
-			}
-			os.Stdout = w
-			t.Cleanup(func() { os.Stdout = oldStdout })
+			stdout := captureStdout(t)
 
 			if searchErr := doToolSearch(tt.query, tt.toolSurface, edition.Free); searchErr != nil {
 				t.Fatalf("doToolSearch() error: %v", searchErr)
 			}
-			_ = w.Close()
-			out, readErr := io.ReadAll(r)
-			if readErr != nil {
-				t.Fatalf("ReadAll: %v", readErr)
-			}
-			if !strings.Contains(string(out), "Found") {
-				t.Fatalf("tool search output missing matches: %s", string(out))
+			if out := stdout(); !strings.Contains(out, "Found") {
+				t.Fatalf("tool search output missing matches: %s", out)
 			}
 		})
 	}
@@ -7907,6 +7842,21 @@ func TestMain_StdioMode_StartsAndStopsWithTheClient(t *testing.T) {
 
 // captureStdout redirects os.Stdout for the duration of the test and returns a
 // function that stops the capture and yields what was written.
+//
+// The pipe is drained by a goroutine started before the capture begins, and
+// that is load-bearing rather than tidy. A pipe holds only what its buffer
+// holds, and a writer that fills it blocks until somebody reads, so a capture
+// that reads only after the writer has finished works exactly until the output
+// outgrows the buffer. Linux gives 64 KiB and hides the problem for anything a
+// test is likely to print. Windows gives a few kilobytes, and [printHelp]
+// writes about 12 KB, so there the writer parked in os.(*File).Write and never
+// came back: that is what timed this package out at thirty minutes on the first
+// Windows CI run, with eighteen parallel tests stuck behind a serial phase that
+// had no way to end.
+//
+// Every capture of stdout in this package goes through here for that reason. A
+// site that opens its own pipe and reads afterwards is the same bug again, and
+// it is invisible until the output grows or the platform changes.
 func captureStdout(t *testing.T) func() string {
 	t.Helper()
 
@@ -7914,6 +7864,17 @@ func captureStdout(t *testing.T) func() string {
 	if err != nil {
 		t.Fatalf("os.Pipe: %v", err)
 	}
+
+	type capture struct {
+		out []byte
+		err error
+	}
+	drained := make(chan capture, 1)
+	go func() {
+		out, readErr := io.ReadAll(reader)
+		drained <- capture{out: out, err: readErr}
+	}()
+
 	original := os.Stdout
 	os.Stdout = writer
 
@@ -7922,18 +7883,50 @@ func captureStdout(t *testing.T) func() string {
 	stop := func() string {
 		once.Do(func() {
 			os.Stdout = original
+			// Closing the writer is what ends the drain: ReadAll returns on
+			// EOF, which arrives only once the last write end is gone.
 			_ = writer.Close()
-			out, readErr := io.ReadAll(reader)
-			if readErr != nil {
-				t.Errorf("reading captured stdout: %v", readErr)
+			result := <-drained
+			if result.err != nil {
+				t.Errorf("reading captured stdout: %v", result.err)
 			}
-			captured = string(out)
+			captured = string(result.out)
 			_ = reader.Close()
 		})
 		return captured
 	}
 	t.Cleanup(func() { stop() })
 	return stop
+}
+
+// TestCaptureStdout_OutputLargerThanThePipeBuffer_DoesNotBlock pins the drain
+// that [captureStdout] depends on.
+//
+// The reason this test exists rather than trusting the comment is that the bug
+// it guards is invisible on the platform most of us develop on. A capture that
+// reads only after the writer finishes works for any output up to the pipe
+// buffer, which is 64 KiB on Linux and a few kilobytes on Windows, so the same
+// code passes here and hangs there. Writing past the larger of the two makes
+// the failure reachable everywhere.
+//
+// Note what failure looks like: without the concurrent drain this test does not
+// report anything, it blocks until the package timeout takes the whole run
+// down. That is exactly the symptom it is here to prevent, so a run of this
+// package that stops making progress should be read as this assertion firing.
+func TestCaptureStdout_OutputLargerThanThePipeBuffer_DoesNotBlock(t *testing.T) {
+	// Comfortably past Linux's 64 KiB, which is the largest buffer in play.
+	const size = 256 << 10
+
+	stdout := captureStdout(t)
+	_, writeErr := os.Stdout.Write(bytes.Repeat([]byte("x"), size))
+	captured := stdout()
+
+	if writeErr != nil {
+		t.Fatalf("writing past the pipe buffer: %v", writeErr)
+	}
+	if len(captured) != size {
+		t.Errorf("captured %d bytes, want %d", len(captured), size)
+	}
 }
 
 // TestBuildServerCard_AnUnusableInstanceURL_IsReportedNotServed covers the one
