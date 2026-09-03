@@ -800,24 +800,56 @@ Regenerates the managed test-metrics block in `docs/development/testing/testing.
 # Regenerate, including coverage runs
 go run ./cmd/gen_testing_docs/
 
-# CI gate
+# CI gate: everything a checkout determines, in seconds
+go run ./cmd/gen_testing_docs/ --check -skip-coverage
+
+# Refresh the counts without recomputing coverage, keeping the recorded values
+go run ./cmd/gen_testing_docs/ -skip-coverage
+
+# Verify the coverage values as well, which takes minutes
 go run ./cmd/gen_testing_docs/ -check
 
-# Fast path: skip the coverage runs
-go run ./cmd/gen_testing_docs/ -skip-coverage
+# Give a slow package more room than the 30 minutes each go test run gets
+go run ./cmd/gen_testing_docs/ -timeout 45m
 ```
+
+`-skip-coverage` carries the coverage already recorded in the document forward
+instead of blanking it, so it is a real refresh of everything else and, with
+`--check`, a freshness gate that holds everything the source tree determines:
+the counts, the naming breakdown, the per-layer tables, and the set of packages
+in the coverage tables, which is what caught `cmd/audit_install_buttons` missing
+from them. It takes seconds, because it runs no coverage at all.
+
+The coverage values are not gated, because they are a property of the machine as
+much as of the tree. Several tests assert refusals that permission bits never
+produce for uid 0 and skip when the process is privileged, so
+`cmd/format_md_tables` measures 95.8% as root and 96.7% otherwise, and
+`internal/tools/projectimportexport` 99.5% and 100.0%. `rsvg-convert` and
+`cwebp`, installed on the maintainer machine and deliberately absent from CI,
+move `cmd/gen_icon_webp` from 90.2% to 92.3%. `cmd/server` measures 95.7% run on
+its own and 95.6% inside a loaded full pass, on a branch that depends on timing.
+A byte-exact check of those columns cannot pass in two places at once, so
+`make gen-testing-docs` refreshes them and no gate holds them.
+
+`-timeout` is the bound handed to every `go test` this generator runs, not just
+its own deadline. Without it the coverage pass obeyed the 10 minutes `go test`
+applies by default, which `cmd/audit_metrics` exceeds under coverage
+instrumentation on a loaded machine, and nothing outside the generator could
+raise it. The generation as a whole gets that budget once per `go test` run it
+issues, plus five minutes for package listing, the coverage summary and the
+document write.
 
 #### Flags
 
-| Flag               | Type     | Default                               | Description                                                              |
-| ------------------ | -------- | ------------------------------------- | ------------------------------------------------------------------------ |
-| `-check`           | `bool`   | `false`                               | Fail if the generated section is not current                             |
-| `-coverage-dir`    | `string` | `""`                                  | Directory for temporary coverage profiles; defaults to a temp directory  |
-| `-file`            | `string` | `docs/development/testing/testing.md` | Testing documentation file to update                                     |
-| `-include-e2e-run` | `bool`   | `false`                               | Also run the build-tagged E2E suite; requires a GitLab test environment  |
-| `-skip-coverage`   | `bool`   | `false`                               | Skip `go test` coverage execution and update count-only sections         |
-| `-timeout`         | `string` | (from environment)                    | `go test` timeout for coverage runs                                      |
-| `-top-tool-rows`   | `int`    | `25`                                  | Number of high-test-count tool sub-packages to show in the summary table |
+| Flag               | Type       | Default                               | Description                                                              |
+| ------------------ | ---------- | ------------------------------------- | ------------------------------------------------------------------------ |
+| `-check`           | `bool`     | `false`                               | Fail if the generated section is not current                             |
+| `-coverage-dir`    | `string`   | `""`                                  | Directory for temporary coverage profiles; defaults to a temp directory  |
+| `-file`            | `string`   | `docs/development/testing/testing.md` | Testing documentation file to update                                     |
+| `-include-e2e-run` | `bool`     | `false`                               | Also run the build-tagged E2E suite; requires a GitLab test environment  |
+| `-skip-coverage`   | `bool`     | `false`                               | Skip the `go test` coverage run and keep the values already recorded     |
+| `-timeout`         | `duration` | `30m`                                 | Per-package timeout handed to each `go test` run                         |
+| `-top-tool-rows`   | `int`      | `25`                                  | Number of high-test-count tool sub-packages to show in the summary table |
 
 #### Output
 
@@ -825,7 +857,9 @@ Rewrites the managed sections of `docs/development/testing/testing.md`.
 
 #### Make targets
 
-- `make gen-testing-docs`, also part of `make audit-docs` (with `-check`).
+- `make gen-testing-docs` to regenerate, `make check-testing-docs` to verify.
+  The check runs in `make audit-docs` and in the CI `Test` job, beside the
+  other generated-artifact gates.
 
 ### gen_docker_tools
 
@@ -932,6 +966,6 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `audit-godocs-check`                     | `godoc_tool audit`             | No package, symbol, or test Godoc findings remain                                    | Non-zero when findings are present                        |
 | `audit-dynamic-aliases`                  | `audit_dynamic_aliases`        | No error-severity alias governance finding (collisions, ambiguity)                   | Non-zero (`1`) if any error-severity finding exists       |
 | `audit-docs` → `format_md_tables -check` | `format_md_tables`             | All Markdown pipe tables are normalized                                              | Non-zero if any table needs formatting                    |
-| `audit-docs` → `gen_testing_docs -check` | `gen_testing_docs`             | The `docs/development/testing/testing.md` test-metrics block is current              | Non-zero if the generated section is stale                |
+| `check-testing-docs`                     | `gen_testing_docs`             | The `docs/development/testing/testing.md` test-metrics block is current              | Non-zero if the generated section is stale                |
 | `check-supply-chain`                     | `audit_supply_chain`           | The five release-configuration invariants still hold                                 | Non-zero if any is broken, or if the audit cannot be run  |
 | `check-readonly-graphql`                 | `audit_readonly_graphql`       | No action classified ReadOnly can reach a GraphQL mutation                           | Non-zero on any finding, or if the audit cannot be run    |
