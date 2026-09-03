@@ -269,7 +269,7 @@ La ventana de frescura depende de cómo se resolvió el nivel de licencia. Un ni
 
 ### Cancelación de peticiones
 
-Las cancelaciones del cliente siempre se propagan a los contextos de los manejadores, de modo que un POST abandonado cancela sus llamadas en curso a la API de GitLab. El SDK lo aplica solo a las peticiones con protocolo `2026-07-28`.
+Las cancelaciones del cliente siempre se propagan a los contextos de los manejadores, de modo que un POST abandonado cancela sus llamadas en curso a la API de GitLab, incluidos los reintentos de client-go. Esto vale para cualquier versión del protocolo y tanto en modo stateless como stateful: el POST es toda la vida de las llamadas que transporta, porque no hay ningún almacén de eventos configurado y una respuesta cuyo POST ha terminado ya no tiene dónde escribirse. La propagación propia del SDK solo cubre el protocolo `2026-07-28`, y un cliente anterior no tiene ningún `notifications/cancelled` que enviar, así que el servidor ata cada llamada al POST que la transportó.
 
 ### Anotación de enrutado para gateways
 

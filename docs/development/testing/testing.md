@@ -6,7 +6,7 @@
 >
 > Comprehensive test documentation for gitlab-mcp-server.
 >
-> **Maintenance Rule**: Whenever tests are added, modified, or removed, run `go run ./cmd/gen_testing_docs/` to refresh the generated counts and coverage values. CI verifies the generated block on every push and pull request (`make check-testing-docs`): the counts, the tables, and which packages appear in the coverage tables. The coverage **percentages** are indicative and are not gated, because they depend on the machine that measured them: tests asserting permission refusals skip for uid 0, `cmd/gen_icon_webp` needs `rsvg-convert` and `cwebp` installed, and `cmd/server` has a load-dependent branch. A full local run refreshes them.
+> **Maintenance Rule**: Whenever tests are added, modified, or removed, run `go run ./cmd/gen_testing_docs/` to refresh the generated counts and coverage values.
 
 ---
 
@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,520 |
-| Unit test functions                                   | 12,956 |
-| E2E test functions                                    |    564 |
-| cmd test functions                                    |  2,040 |
-| Test files (internal/)                                |    498 |
-| Test files (cmd/)                                     |    117 |
-| Test files (test/e2e/)                                |    220 |
+| Total test functions                                  | 13,513 |
+| Unit test functions                                   | 12,948 |
+| E2E test functions                                    |    565 |
+| cmd test functions                                    |  2,034 |
+| Test files (internal/)                                |    497 |
+| Test files (cmd/)                                     |    118 |
+| Test files (test/e2e/)                                |    221 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     21 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  97.8% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,248 | 83.2% |
+| `TestFunc_Scenario` (2-part)           | 11,256 | 83.3% |
 | `TestFunc` (no underscore)             |    968 |  7.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,304 |  9.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,289 |  9.5% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,182 |        131 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,180 |        130 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            301 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          8,433 |        354 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            564 |        220 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,040 |        117 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,520** |    **835** |                                                                                                 |
+| E2E integration         |            565 |        221 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          2,034 |        118 | server entry point and developer command utilities                                              |
+| **Total**               |     **13,513** |    **836** |                                                                                                 |
 
 ### Core Packages
 
@@ -68,16 +68,16 @@
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
 | gitlab        |        71 |    98.9% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
 | mcpotel       |        76 |    99.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
-| oauth         |        68 |    98.4% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
+| oauth         |        68 |    98.3% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
 | prompts       |       272 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
 | resources     |       180 |    99.4% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
 | serverpool    |        91 |    98.3% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                                                                    |
 | subscriptions |        90 |    98.5% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
-| testutil      |        37 |    89.6% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
+| testutil      |        35 |    89.8% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       793 |    98.4% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,182** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**  | **2,180** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -148,7 +148,7 @@
 | customemoji             |        26 |          2 |   100.0% |         3 |
 | dbmigrations            |         7 |          1 |   100.0% |         1 |
 | dependencies            |        15 |          2 |   100.0% |         4 |
-| dependencyfirewall      |        20 |          3 |      n/a |         1 |
+| dependencyfirewall      |        20 |          3 |   100.0% |         1 |
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
 | deploykeys              |        71 |          2 |   100.0% |         9 |
 | deploymentmergerequests |        25 |          1 |   100.0% |         1 |
@@ -338,7 +338,7 @@
 | cmd/gen_lhm_manifest                           |    89.4% |
 | cmd/gen_llms                                   |    98.9% |
 | cmd/gen_stats                                  |    98.6% |
-| cmd/gen_testing_docs                           |    97.8% |
+| cmd/gen_testing_docs                           |    97.7% |
 | cmd/godoc_tool                                 |    93.7% |
 | cmd/internal/apidocs                           |   100.0% |
 | cmd/internal/auditshared                       |   100.0% |
@@ -362,14 +362,14 @@
 | gatewaycompat |    99.4% |
 | gitlab        |    98.9% |
 | mcpotel       |    99.0% |
-| oauth         |    98.4% |
+| oauth         |    98.3% |
 | progress      |    83.8% |
 | prompts       |   100.0% |
 | resources     |    99.4% |
 | serverpool    |    98.3% |
 | subscriptions |    98.5% |
 | telemetry     |    93.1% |
-| testutil      |    89.6% |
+| testutil      |    89.8% |
 | toolutil      |    98.4% |
 
 ### Tool Sub-Packages
@@ -409,7 +409,7 @@
 | customemoji             |   100.0% |
 | dbmigrations            |   100.0% |
 | dependencies            |   100.0% |
-| dependencyfirewall      |      n/a |
+| dependencyfirewall      |   100.0% |
 | dependencyproxy         |   100.0% |
 | deploykeys              |   100.0% |
 | deploymentmergerequests |   100.0% |
@@ -567,7 +567,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_test_names** (89.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_lhm_manifest** (89.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **testutil** (89.6%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
+- **testutil** (89.8%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 
 <!-- END TESTING STATS -->
 
