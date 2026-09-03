@@ -9,6 +9,12 @@
 // backlog that gen_1to1_backlog previously generated from three separate files,
 // via the same merge pipeline (byte-identical by construction).
 //
+// The sdk scope is a fourth, separate one, deliberately outside the merged
+// backlog: the three streams above are candidate lists a human adjudicates,
+// while sdk is a gate that exits non-zero on a finding. Keeping it out of the
+// merge also leaves plan/1to1-backlog.json's shape untouched for the tooling
+// that reads it.
+//
 // Usage:
 //
 //	go run ./cmd/audit_1to1/                                  # merged backlog to stdout
@@ -16,6 +22,7 @@
 //	go run ./cmd/audit_1to1/ -scope=structs                   # struct report only
 //	go run ./cmd/audit_1to1/ -scope=actions -gaps-only
 //	go run ./cmd/audit_1to1/ -scope=metadata
+//	go run ./cmd/audit_1to1/ -scope=sdk -gaps-only            # SDK parity gate
 package main
 
 import (
@@ -26,6 +33,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -33,6 +41,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/actions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/merge"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/metadata"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/sdk"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
@@ -41,7 +50,7 @@ import (
 func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
-	scope := flag.String("scope", "structs,actions,metadata", "one of {structs,actions,metadata} for a single-scope report, or all three (default) for the merged backlog; two-scope combinations are not supported")
+	scope := flag.String("scope", "structs,actions,metadata", "one of {structs,actions,metadata,sdk} for a single-scope report, or the first three (default) for the merged backlog; two-scope combinations are not supported")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
 	refresh := flag.Bool("refresh", false, "with -validate-docs, force re-fetch of cited docs even when cached and fresh")
 	offline := flag.Bool("offline", false, "with -validate-docs, use only cached docs; do not fetch")
@@ -68,20 +77,26 @@ func run(scope string, gapsOnly bool, outputPath string) error {
 	}
 
 	var content []byte
+	clean := true
 	switch {
-	case len(scopes) == 3:
+	case isMergedScope(scopes):
 		content, err = runMerged(gapsOnly)
 	case len(scopes) == 1:
-		content, err = runSingle(scopes[0], gapsOnly)
+		content, clean, err = runSingle(scopes[0], gapsOnly)
 	default:
-		return fmt.Errorf("scope must be a single value or all three (got %d: %s); partial two-scope combinations are not supported",
-			len(scopes), strings.Join(scopes, ","))
+		return fmt.Errorf("scope must be a single value or the merged trio %s (got %d: %s); other combinations are not supported",
+			strings.Join(mergedScopes, ","), len(scopes), strings.Join(scopes, ","))
 	}
 	if err != nil {
 		return err
 	}
 	if writeErr := writeOutput(outputPath, content); writeErr != nil {
 		return fmt.Errorf("write output: %w", writeErr)
+	}
+	// The report is written before the gate fails, so whoever reads the failure
+	// has the same artifact a passing run would have produced.
+	if !clean {
+		return errors.New("audit_1to1: SDK parity findings (see report)")
 	}
 	return nil
 }
@@ -146,46 +161,67 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 	return merge.BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes)
 }
 
-// runSingle runs one analyzer and returns its native JSON shape.
-func runSingle(scope string, gapsOnly bool) ([]byte, error) {
+// runSingle runs one analyzer and returns its native JSON shape plus whether
+// that scope's gate passes. Only sdk gates; the three candidate streams always
+// report clean, because a listed candidate is a backlog entry rather than a
+// defect.
+func runSingle(scope string, gapsOnly bool) (content []byte, clean bool, err error) {
 	switch scope {
-	case "structs", "actions":
-		root, err := cmdutil.RepositoryRoot(".")
-		if err != nil {
-			return nil, fmt.Errorf("find repository root: %w", err)
+	case "structs", "actions", "sdk":
+		root, rootErr := cmdutil.RepositoryRoot(".")
+		if rootErr != nil {
+			return nil, false, fmt.Errorf("find repository root: %w", rootErr)
 		}
-		if scope == "structs" {
-			return structs.Run(root, gapsOnly)
+		switch scope {
+		case "structs":
+			content, err = structs.Run(root, gapsOnly)
+			return content, true, err
+		case "actions":
+			content, err = actions.Run(root, gapsOnly)
+			return content, true, err
+		default:
+			return sdk.Run(root, gapsOnly)
 		}
-		return actions.Run(root, gapsOnly)
 	case "metadata":
 		// The metadata analyzer reads the in-memory catalog, not the tree, so
 		// unlike the two filesystem scanners it has nothing to fail at.
-		return metadata.Run(gapsOnly), nil
+		return metadata.Run(gapsOnly), true, nil
 	default:
-		return nil, fmt.Errorf("unknown scope %q (valid: structs, actions, metadata)", scope)
+		return nil, false, fmt.Errorf("unknown scope %q (valid: structs, actions, metadata, sdk)", scope)
 	}
 }
 
+// mergedScopes is the trio the merged backlog is built from, sorted. The sdk
+// scope is deliberately not one of them: it gates rather than accumulating
+// candidates, and adding it would change the shape of plan/1to1-backlog.json.
+var mergedScopes = []string{"actions", "metadata", "structs"}
+
+// isMergedScope reports whether scopes is exactly the merged trio, so a
+// three-value selection that merely happens to have three entries (say
+// structs,actions,sdk) is rejected instead of silently merging.
+func isMergedScope(scopes []string) bool {
+	return slices.Equal(scopes, mergedScopes)
+}
+
 // parseScope validates and normalizes the -scope flag. Returns the deduplicated,
-// sorted list of scopes. An empty value or "all" expands to all three.
+// sorted list of scopes. An empty value or "all" expands to the merged trio.
 func parseScope(s string) ([]string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "all" {
-		return []string{"actions", "metadata", "structs"}, nil
+		return slices.Clone(mergedScopes), nil
 	}
 	seen := map[string]bool{}
 	var scopes []string
 	for raw := range strings.SplitSeq(s, ",") {
 		v := strings.TrimSpace(raw)
 		switch v {
-		case "structs", "actions", "metadata":
+		case "structs", "actions", "metadata", "sdk":
 			if !seen[v] {
 				seen[v] = true
 				scopes = append(scopes, v)
 			}
 		default:
-			return nil, fmt.Errorf("invalid scope %q (valid: structs, actions, metadata, all)", v)
+			return nil, fmt.Errorf("invalid scope %q (valid: structs, actions, metadata, sdk, all)", v)
 		}
 	}
 	sort.Strings(scopes)

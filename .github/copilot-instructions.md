@@ -18,7 +18,7 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 gitlab-mcp-server/
 ├── cmd/                    # 20 dev utility binaries — see docs/development/cmd-utilities.md for the full reference
 │   ├── server/             # MCP server entry point (+ --shutdown flag)
-│   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata; -validate-docs)
+│   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata|sdk; -validate-docs)
 │   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Discovery-metadata quality audit (META-001)
 │   ├── audit_doc_coverage/ # docs/tools/*.md vs catalog coverage gaps (DOC-002)

@@ -136,6 +136,14 @@ If `client-go` adds typed wrappers for any of these 5 domains in the future, mig
 3. Keep the same input/output types and tool handler signatures
 4. No changes to tool registration, meta-tools, or tests (only mock handlers switch from `/api/graphql` to REST endpoints)
 
+### The exemption is checked, not permanent
+
+This decision admits raw GraphQL **for a domain without a wrapper**, so the wrapper arriving is what retires the exemption. Nothing enforced that for a long time, which made the exemption permanent in practice: wrappers appeared upstream and the handlers stayed as they were, because no gate could see the difference.
+
+`go run ./cmd/audit_1to1/ -scope=sdk` now holds every raw-GraphQL operation whose package maps to a client-go service to a recorded decision, `KEEP` or `MIGRATE`, in `cmd/audit_1to1/internal/sdk/decisions.go`. An operation with no decision fails the build, and so does a decision left behind for an operation that no longer exists. The unit is the operation rather than the package, because several packages use GraphQL for one operation and the SDK for the rest.
+
+`KEEP` is a real answer, not a way of avoiding the migration. The wrapper existing does not always mean it should be used: `EpicIssues` and `ProjectVulnerabilities` are both wrappers over REST APIs whose own upstream doc comments direct callers to the very GraphQL these handlers already call, so moving onto them would be moving onto the path GitLab is removing. What the rule forbids is leaving that judgement unwritten.
+
 ## References
 
 - [ADR-0004: Modular tools sub-packages](adr-0004-modular-tools-subpackages.md)
