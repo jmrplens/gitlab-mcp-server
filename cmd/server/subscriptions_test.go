@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1926,6 +1927,10 @@ func waitFor(t *testing.T, cond func() bool) {
 // resources/read has been given a guard that does not guard. The mechanism for
 // this lived in internal/resources, fully tested, and cmd/server never passed
 // it anything, which is the state this test exists to prevent returning to.
+//
+// It names the action and the URI rather than counting handlers. A count proves
+// only that something was removed, and would pass just as well if the excluded
+// action stayed reachable while an unrelated resource disappeared.
 func TestExcludedActions_NarrowResourcesAndSubscriptions_NotOnlyTools(t *testing.T) {
 	// The catalog resolves the operator's spelling, so ask it rather than
 	// hardcoding an action ID that a rename would silently invalidate.
@@ -1937,31 +1942,118 @@ func TestExcludedActions_NarrowResourcesAndSubscriptions_NotOnlyTools(t *testing
 		t.Fatalf("building the catalog: %v", err)
 	}
 
-	const excludedTool = "gitlab_project"
+	// project.get backs gitlab://project/{project_id}, which is the pairing
+	// this whole mechanism exists for: the same object, two request paths.
+	const (
+		excludedTool = "gitlab_project"
+		excludedID   = "project.get"
+		excludedURI  = "gitlab://project/{project_id}"
+	)
+
 	excluded := catalog.ExcludedActionIDs([]string{excludedTool})
-	if len(excluded) == 0 {
-		t.Fatalf("excluding %q resolved to no actions, so this test would pass vacuously", excludedTool)
+	if !slices.Contains(excluded, excludedID) {
+		t.Fatalf("excluding %q did not remove %q, so this test is not measuring what it claims: %v",
+			excludedTool, excludedID, excluded)
 	}
 
 	full := resources.NewHandlerIndex(nil)
 	narrowed := resources.NewHandlerIndex(nil, resources.RegisterOptions{ExcludedActions: excluded})
 
-	if len(narrowed) >= len(full) {
-		t.Fatalf("the narrowed index has %d handlers and the full one %d; the exclusion reached nothing",
-			len(narrowed), len(full))
+	if _, ok := full[excludedURI]; !ok {
+		t.Fatalf("%s is not registered at all, so its absence below would prove nothing", excludedURI)
+	}
+	if _, ok := narrowed[excludedURI]; ok {
+		t.Errorf("%s is still registered after excluding %q, so resources/read still serves what the operator removed",
+			excludedURI, excludedTool)
 	}
 
-	// Every URI the narrowing removed must be gone from the subscription
-	// reader too, since that is the path a client uses without ever calling
-	// resources/list.
-	removed := 0
-	for uri := range full {
-		if _, ok := narrowed[uri]; !ok {
-			removed++
-		}
+	// A resource backed by no excluded action must survive, or the narrowing
+	// is removing more than it was asked to.
+	const keptURI = "gitlab://user/current"
+	if _, ok := narrowed[keptURI]; !ok {
+		t.Errorf("%s was removed too; excluding %q must not take unrelated resources with it", keptURI, excludedTool)
 	}
-	t.Logf("excluding %q removed %d action(s) and %d resource handler(s)", excludedTool, len(excluded), removed)
-	if removed == 0 {
-		t.Error("no resource handler was removed, so resources/read still serves what the operator excluded")
+
+	// The subscription path reads through this index, so it has to refuse the
+	// excluded URI as well: a client that knows the URI never calls
+	// resources/list and would otherwise still be served.
+	reader := &resourceReader{}
+	reader.setIndex(narrowed)
+	if _, readErr := reader.Read(t.Context(), "gitlab://project/42"); readErr == nil {
+		t.Error("the subscription reader served an excluded resource, so a subscription would poll GitLab for it")
 	}
+}
+
+// TestExcludeTools_RemovesTheResourceFromTheServerItself covers the wiring
+// rather than the mechanism.
+//
+// internal/resources has always been able to narrow itself, with its own tests.
+// What was missing was cmd/server passing it anything, so an operator's
+// exclusion reached the tool surface and stopped there. A test that calls
+// NewHandlerIndex directly cannot see that: it passes whether or not the server
+// is wired up, which is exactly how the gap survived being tested.
+//
+// So this builds the real server through createServer with ExcludeTools set,
+// and asks it over a session, the way a client would.
+func TestExcludeTools_RemovesTheResourceFromTheServerItself(t *testing.T) {
+	const (
+		excludedTool = "gitlab_project"
+		excludedURI  = "gitlab://project/{project_id}"
+		keptURI      = "gitlab://user/current"
+	)
+
+	// Two servers built the same way apart from the exclusion, so any
+	// difference between their listings is the exclusion and nothing else.
+	base := &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+	}
+	excludedCfg := *base
+	excludedCfg.ExcludeTools = []string{excludedTool}
+
+	client := sharedCreateServerClient(t)
+	fullURIs := resourceTemplateURIs(t, mustCreateServer(t, client, base))
+	narrowedURIs := resourceTemplateURIs(t, mustCreateServer(t, client, &excludedCfg))
+
+	if !fullURIs[excludedURI] {
+		t.Fatalf("%s is not served without the exclusion, so its absence below would prove nothing", excludedURI)
+	}
+	if narrowedURIs[excludedURI] {
+		t.Errorf("%s is still served after excluding %q: the exclusion reached the tools and not the resources",
+			excludedURI, excludedTool)
+	}
+	if !narrowedURIs[keptURI] {
+		t.Errorf("%s was removed too; excluding %q must not take unrelated resources with it", keptURI, excludedTool)
+	}
+}
+
+// resourceTemplateURIs lists the resource template URIs a server serves.
+//
+// Templates rather than resources: the ones this exclusion removes are
+// parameterised (gitlab://project/{project_id}), so they appear in
+// resources/templates/list rather than resources/list.
+func resourceTemplateURIs(t *testing.T, server *mcp.Server) map[string]bool {
+	t.Helper()
+
+	session := newInMemorySession(t, server)
+	uris := map[string]bool{}
+
+	templates, err := session.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates: %v", err)
+	}
+	for _, tmpl := range templates.ResourceTemplates {
+		uris[tmpl.URITemplate] = true
+	}
+
+	listed, err := session.ListResources(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResources: %v", err)
+	}
+	for _, r := range listed.Resources {
+		uris[r.URI] = true
+	}
+	return uris
 }
