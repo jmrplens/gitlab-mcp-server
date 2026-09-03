@@ -42,6 +42,8 @@ jobs:
         run: make check-lhm-manifest
       - name: Check documented tool names exist
         run: make check-doc-tool-names
+      - name: Check no read-only action reaches a GraphQL mutation
+        run: make check-readonly-graphql
       - name: Check the one-click install buttons
         run: make check-install-buttons
       - name: Check MCP Registry manifest

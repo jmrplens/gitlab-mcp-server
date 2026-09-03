@@ -10,6 +10,7 @@
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	check-readonly-graphql audit-readonly-graphql \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
@@ -1063,6 +1064,19 @@ audit-gateway-chars:
 ## character, so a rejection at a gateway's door cannot ship silently.
 check-gateway-chars:
 	go run ./cmd/audit_gateway_chars/ -check
+
+## check-readonly-graphql: fail when an action classified ReadOnly can reach a
+## GraphQL mutation. --read-only and the surface served to a read_api token
+## both keep such an action, so it would write exactly where a write is
+## supposed to be impossible. The HTTP method cannot see this: client-go POSTs
+## every GraphQL request, reads included.
+check-readonly-graphql:
+	go run ./cmd/audit_readonly_graphql/
+
+## audit-readonly-graphql: same gate, listing the read-only actions that touch
+## GraphQL at all rather than only what failed.
+audit-readonly-graphql:
+	go run ./cmd/audit_readonly_graphql/ -v
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

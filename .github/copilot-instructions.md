@@ -27,6 +27,7 @@ gitlab-mcp-server/
 │   ├── audit_surface_quality/ # MCP surface metadata + output quality (-view; was audit_tools + audit_output)
 │   ├── audit_tokens/       # Token overhead; -footprint, --compare-schemas (was audit_meta_schema); cl100k_base tokenizer (tokens.go)
 │   ├── audit_metrics/      # MCP tool/resource/prompt metrics
+│   ├── audit_readonly_graphql/ # No ReadOnly action may reach a GraphQL mutation (make check-readonly-graphql)
 │   ├── audit_test_goroutines/ # Off-goroutine testing.T abort audit (--check gate)
 │   ├── audit_test_names/   # Test naming convention (+ -apply/-dry-run)
 │   ├── audit_string_dupes/ # Duplicated string literals missing constants
