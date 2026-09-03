@@ -109,7 +109,8 @@ gotestsum --version
 | `make audit-surface-quality` | Consolidated MCP surface audit (metadata + output quality)                                                                                                                     |
 | `make audit-tokens`          | Measure exposed tool token overhead (`--compare-schemas` for meta-tool sizing spike)                                                                                           |
 | `make audit-metrics`         | Report MCP tool/resource/prompt counts                                                                                                                                         |
-| `make audit-1to1`            | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata + merged backlog)                                                                                                |
+| `make audit-1to1`            | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata + merged backlog), then the SDK parity gate                                                                      |
+| `make audit-1to1-sdk`        | Gate every client-go service and raw-GraphQL operation on a decision; fails on a finding                                                                                       |
 | `make audit-catalog-first`   | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`                                                                                             |
 | `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability                                                                                                                 |
 | `make audit-test-names`      | Audit test function naming convention compliance                                                                                                                               |

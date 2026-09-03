@@ -8,7 +8,7 @@
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
+	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-doc-coverage audit-doc-coverage-check \
@@ -970,12 +970,23 @@ audit-catalog-first:
 audit-action-spec-coverage:
 	go run ./cmd/audit_catalog_first/
 
-## audit-1to1: run all three 1:1-audit gap streams (struct/action/metadata) and merge into plan/1to1-backlog.json.
+## audit-1to1: run all three 1:1-audit gap streams (struct/action/metadata), merge into
+## plan/1to1-backlog.json, then gate on SDK parity (audit-1to1-sdk).
 ## Single binary cmd/audit_1to1 consolidates the former audit_struct_completeness,
 ## audit_action_coverage, audit_metadata_completeness, and gen_1to1_backlog.
+## The backlog is written first so a gate failure still leaves the artifact behind.
 audit-1to1:
 	go run ./cmd/audit_1to1/ -gaps-only -output plan/1to1-backlog.json
 	@echo "1:1 audit backlog written to plan/1to1-backlog.json"
+	$(MAKE) audit-1to1-sdk
+
+## audit-1to1-sdk: gate every client-go service and every raw-GraphQL operation on a
+## decision (R-SERVICE/R-GRAPHQL). Unlike the three candidate streams this one FAILS on
+## a finding: a new SDK service that is neither called nor declared, a raw-GraphQL
+## operation whose wrapper now exists and is not adjudicated, or a declaration that has
+## gone stale.
+audit-1to1-sdk:
+	go run ./cmd/audit_1to1/ -scope=sdk -gaps-only
 
 ## audit-1to1-validate-docs: verify every doc/api citation behind the 1:1 adjudication tables is still fetchable.
 audit-1to1-validate-docs:

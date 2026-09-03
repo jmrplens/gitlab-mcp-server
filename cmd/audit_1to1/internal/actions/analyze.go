@@ -10,24 +10,22 @@
 // The output is a candidate backlog, not a hard gate: a method may be
 // intentionally unexposed, or owned by a sibling package. A human adjudicates
 // each entry.
+//
+// Its universe is this repository's call sites, which bounds what it can see: a
+// service no handler references never enters the map, so it cannot report one.
+// The sibling sdk package enumerates the services from client-go's Client
+// struct and covers exactly that blind spot.
 package actions
 
 import (
 	"encoding/json"
 	"fmt"
-	"go/ast"
-	"go/types"
 	"sort"
-	"strings"
-
-	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 )
 
 const (
-	requestOptionMarker = "RequestOptionFunc"
-
 	coveredRawGeneric     = "COVERED_RAW. Generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)"
 	coveredGenericSearch  = "COVERED_GENERIC. Method-value scoped search"
 	coveredGraphQLEpicDsc = "COVERED_GRAPHQL. Epicdiscussions pkg"
@@ -64,14 +62,6 @@ type reportSummary struct {
 	MissingMethods   int `json:"missing_methods"`
 }
 
-// serviceUsage accumulates, for one client-go service interface, the set of
-// methods called and the internal/tools packages that reference it.
-type serviceUsage struct {
-	named  *types.Named
-	called map[string]struct{}
-	pkgs   map[string]struct{}
-}
-
 // Run builds the report for the given repository root and returns it as
 // indented JSON (with a trailing newline). gapsOnly filters to entries with at
 // least one finding, matching the original -gaps-only flag.
@@ -92,10 +82,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	if err != nil {
 		return report{}, err
 	}
-	usage := map[string]*serviceUsage{}
-	for _, pkg := range pkgs {
-		collectServiceUsage(pkg, usage)
-	}
+	usage := shared.CollectServiceUsage(pkgs)
 	services := make([]serviceCoverage, 0, len(usage))
 	for _, use := range usage {
 		cov := coverageForService(use)
@@ -108,8 +95,8 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 
 	var staleAcceptances []string
 	for _, use := range usage {
-		service := strings.TrimSuffix(use.named.Obj().Name(), "ServiceInterface")
-		for method := range use.called {
+		service := use.Service()
+		for method := range use.Called {
 			key := service + "." + method
 			if _, ok := acceptedMissingMethods[key]; ok {
 				staleAcceptances = append(staleAcceptances, key)
@@ -125,42 +112,6 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		Services:         services,
 		StaleAcceptances: staleAcceptances,
 	}, nil
-}
-
-// collectServiceUsage walks every call expression in pkg and records calls whose
-// receiver type is a client-go service interface.
-func collectServiceUsage(pkg *packages.Package, usage map[string]*serviceUsage) {
-	pkgName := shortPackage(pkg.PkgPath)
-	for _, file := range pkg.Syntax {
-		ast.Inspect(file, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			named, ok := clientGoServiceInterface(pkg.TypesInfo.TypeOf(sel.X))
-			if !ok {
-				return true
-			}
-			use := usageFor(usage, named)
-			use.called[sel.Sel.Name] = struct{}{}
-			use.pkgs[pkgName] = struct{}{}
-			return true
-		})
-	}
-}
-
-func usageFor(usage map[string]*serviceUsage, named *types.Named) *serviceUsage {
-	key := named.Obj().Name()
-	use, ok := usage[key]
-	if !ok {
-		use = &serviceUsage{named: named, called: map[string]struct{}{}, pkgs: map[string]struct{}{}}
-		usage[key] = use
-	}
-	return use
 }
 
 // acceptedMissingMethods adjudicates SDK service methods that the call-expression
@@ -355,13 +306,13 @@ func isAcceptedMissingMethod(service, method string) bool {
 	return ok
 }
 
-func coverageForService(use *serviceUsage) serviceCoverage {
-	apiMethods := apiMethodNames(use.named)
-	service := strings.TrimSuffix(use.named.Obj().Name(), "ServiceInterface")
+func coverageForService(use *shared.ServiceUsage) serviceCoverage {
+	apiMethods := shared.APIMethodNames(use.Named)
+	service := use.Service()
 	covered := 0
 	var missing []string
 	for _, method := range apiMethods {
-		if _, ok := use.called[method]; ok {
+		if _, ok := use.Called[method]; ok {
 			covered++
 			continue
 		}
@@ -374,74 +325,12 @@ func coverageForService(use *serviceUsage) serviceCoverage {
 	}
 	sort.Strings(missing)
 	return serviceCoverage{
-		Service:        use.named.Obj().Name(),
-		Packages:       sortedSet(use.pkgs),
+		Service:        use.Named.Obj().Name(),
+		Packages:       shared.SortedSet(use.Packages),
 		APIMethods:     len(apiMethods),
 		CoveredMethods: covered,
 		MissingMethods: missing,
 	}
-}
-
-// apiMethodNames returns the exported methods of a client-go service interface
-// whose signature ends in a variadic ...RequestOptionFunc (the REST endpoint
-// marker).
-func apiMethodNames(named *types.Named) []string {
-	iface, ok := named.Underlying().(*types.Interface)
-	if !ok {
-		return nil
-	}
-	var names []string
-	for method := range iface.Methods() {
-		if !method.Exported() {
-			continue
-		}
-		if sig, isSig := method.Type().(*types.Signature); isSig && signatureIsAPICall(sig) {
-			names = append(names, method.Name())
-		}
-	}
-	sort.Strings(names)
-	return names
-}
-
-func signatureIsAPICall(sig *types.Signature) bool {
-	if !sig.Variadic() || sig.Params().Len() == 0 {
-		return false
-	}
-	last := sig.Params().At(sig.Params().Len() - 1)
-	slice, ok := last.Type().(*types.Slice)
-	if !ok {
-		return false
-	}
-	named, ok := slice.Elem().(*types.Named)
-	if !ok {
-		return false
-	}
-	if named.Obj().Pkg() == nil || !strings.Contains(named.Obj().Pkg().Path(), shared.ClientGoPkgPath) {
-		return false
-	}
-	return strings.Contains(named.Obj().Name(), requestOptionMarker)
-}
-
-// clientGoServiceInterface returns the named interface if t is a client-go
-// service interface (e.g. BranchesServiceInterface).
-func clientGoServiceInterface(t types.Type) (*types.Named, bool) {
-	if t == nil {
-		return nil, false
-	}
-	if ptr, ok := t.(*types.Pointer); ok {
-		t = ptr.Elem()
-	}
-	named, ok := t.(*types.Named)
-	if !ok {
-		return nil, false
-	}
-	if _, isIface := named.Underlying().(*types.Interface); !isIface {
-		return nil, false
-	}
-	if named.Obj().Pkg() == nil || !strings.Contains(named.Obj().Pkg().Path(), shared.ClientGoPkgPath) {
-		return nil, false
-	}
-	return named, true
 }
 
 func summarize(services []serviceCoverage) reportSummary {
@@ -455,24 +344,4 @@ func summarize(services []serviceCoverage) reportSummary {
 		s.MissingMethods += len(svc.MissingMethods)
 	}
 	return s
-}
-
-func sortedSet(set map[string]struct{}) []string {
-	out := make([]string, 0, len(set))
-	for value := range set {
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func shortPackage(pkgPath string) string {
-	_, after, ok := strings.Cut(pkgPath, shared.ToolsPkgInfix)
-	if !ok {
-		if last := strings.LastIndex(pkgPath, "/"); last >= 0 {
-			return pkgPath[last+1:]
-		}
-		return pkgPath
-	}
-	return after
 }

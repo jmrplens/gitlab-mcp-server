@@ -29,6 +29,7 @@ func TestParseScope(t *testing.T) {
 		{name: "keyword all expands", input: "all", wantCount: 3},
 		{name: "empty expands to all", input: "", wantCount: 3},
 		{name: "single scope", input: "structs", wantCount: 1, wantFirst: "structs"},
+		{name: "sdk scope", input: "sdk", wantCount: 1, wantFirst: "sdk"},
 		{name: "deduplicates repeats", input: "structs,structs,actions,actions", wantCount: 2},
 		{name: "trims whitespace", input: " structs , actions , metadata ", wantCount: 3},
 		{name: "rejects unknown token", input: "structs,unknown", wantErr: true, errSubstr: "unknown"},
@@ -62,14 +63,43 @@ func TestParseScope(t *testing.T) {
 }
 
 // TestRunSingle_UnknownScope verifies the single-scope dispatcher refuses a
-// scope name it does not know instead of running nothing silently.
+// scope name it does not know instead of running nothing silently, and that a
+// refusal reports the gate as failed rather than clean.
 func TestRunSingle_UnknownScope(t *testing.T) {
-	_, err := runSingle("bogus", false)
+	_, clean, err := runSingle("bogus", false)
 	if err == nil {
 		t.Fatal("expected error for unknown scope")
 	}
 	if !strings.Contains(err.Error(), "unknown scope") {
 		t.Errorf("error should mention 'unknown scope', got: %v", err)
+	}
+	if clean {
+		t.Error("an unknown scope reported a clean gate")
+	}
+}
+
+// TestIsMergedScope_Combinations_MatchOnlyTheTrio verifies the merged backlog
+// runs for exactly the three candidate streams. Adding the sdk scope made the
+// old "three entries means all of them" test wrong: structs,actions,sdk also
+// has three entries and must not be merged.
+func TestIsMergedScope_Combinations_MatchOnlyTheTrio(t *testing.T) {
+	cases := []struct {
+		name   string
+		scopes []string
+		want   bool
+	}{
+		{name: "the_trio", scopes: []string{"actions", "metadata", "structs"}, want: true},
+		{name: "trio_with_sdk_substituted", scopes: []string{"actions", "sdk", "structs"}, want: false},
+		{name: "all_four", scopes: []string{"actions", "metadata", "sdk", "structs"}, want: false},
+		{name: "single", scopes: []string{"sdk"}, want: false},
+		{name: "empty", scopes: nil, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isMergedScope(tc.scopes); got != tc.want {
+				t.Errorf("isMergedScope(%v) = %v, want %v", tc.scopes, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -170,7 +200,8 @@ func TestRun_ScopeSelection_RejectsUnsupportedScopes(t *testing.T) {
 		wantErr string
 	}{
 		{name: "unknown_scope", scope: "bogus", wantErr: `invalid scope "bogus"`},
-		{name: "two_scopes", scope: "structs,actions", wantErr: "partial two-scope combinations are not supported"},
+		{name: "two_scopes", scope: "structs,actions", wantErr: "other combinations are not supported"},
+		{name: "three_scopes_that_are_not_the_trio", scope: "structs,actions,sdk", wantErr: "other combinations are not supported"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -198,6 +229,7 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 		{name: "metadata", scope: "metadata", wantKeys: []string{"schema_version", "summary", "packages"}},
 		{name: "structs", scope: "structs", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
 		{name: "actions", scope: "actions", wantKeys: []string{"schema_version", "client_go_path", "summary", "services"}},
+		{name: "sdk", scope: "sdk", wantKeys: []string{"schema_version", "client_go_path", "summary", "services", "graphql_operations"}},
 		{name: "merged", scope: "all", wantKeys: []string{"schema_version", "note", "summary", "packages"}},
 	}
 	for _, tc := range cases {

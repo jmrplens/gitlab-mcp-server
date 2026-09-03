@@ -53,7 +53,7 @@ The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `q
 gitlab-mcp-server/
 ├── cmd/
 │   ├── server/                  # MCP server entry point and --shutdown support
-│   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (R-INPUT/R-OUTPUT/R-ACTION/R-META + merge)
+│   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (R-INPUT/R-OUTPUT/R-ACTION/R-META + merge; -scope=sdk gates the service universe and the raw-GraphQL exemptions)
 │   ├── audit_catalog_first/     # Enforces catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Audits discovery metadata (aliases/usage/related/param-guidance/sibling-cluster; input-enum candidates) — META-001
 │   ├── audit_doc_coverage/      # Audits docs/tools/*.md vs canonical action catalog (DOC-002); reads doc-ownership.json

@@ -10,7 +10,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 
 | Utility                        | Category                      | Purpose                                                                                                                                                                                             | Make target                               |
 | ------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `audit_1to1`                   | SDK/API parity audits         | Consolidated SDK↔API parity audit (struct/action/metadata gap streams)                                                                                                                              | `make audit-1to1`                         |
+| `audit_1to1`                   | SDK/API parity audits         | Consolidated SDK↔API parity audit (struct/action/metadata gap streams, plus the `sdk` service and raw-GraphQL gate)                                                                                 | `make audit-1to1`                         |
 | `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                       | `make audit-catalog-first`                |
 | `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                          | `make audit-discovery`                    |
 | `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                   | `make audit-doc-coverage`                 |
@@ -40,6 +40,8 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 
 Consolidated 1:1 SDK↔API parity audit. It combines three gap streams behind a single `-scope` flag: struct field mapping (R-INPUT/R-OUTPUT), action coverage (R-ACTION), and discovery metadata (R-META). When all three scopes run (the default), it produces a merged per-package backlog. It replaces the former `audit_struct_completeness`, `audit_action_coverage`, `audit_metadata_completeness`, and `gen_1to1_backlog` binaries.
 
+A fourth scope, `sdk`, differs from those three in both its universe and its severity, and is described under [SDK parity gate](#sdk-parity-gate) below.
+
 #### Usage
 
 ```bash
@@ -48,6 +50,9 @@ go run ./cmd/audit_1to1/
 
 # Single-scope run, gaps only, to stdout
 go run ./cmd/audit_1to1/ -scope=structs -gaps-only -output=-
+
+# SDK parity gate: exits non-zero on a finding
+go run ./cmd/audit_1to1/ -scope=sdk -gaps-only
 
 # Validate that every doc/api citation behind the adjudication tables is still
 # fetchable (the official API doc is the 1:1 ground truth)
@@ -60,7 +65,7 @@ go run ./cmd/audit_1to1/ -validate-docs
 | ---------------- | ---------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-gaps-only`     | `bool`     | `false`                    | Only include entries with at least one finding                                                                                                     |
 | `-output`        | `string`   | `-`                        | Path to write the JSON report, or `-` for stdout                                                                                                   |
-| `-scope`         | `string`   | `structs,actions,metadata` | A single `{structs,actions,metadata}` scope, or all three (default, merged backlog); two-scope combinations are rejected                           |
+| `-scope`         | `string`   | `structs,actions,metadata` | A single `{structs,actions,metadata,sdk}` scope, or exactly the first three (default, merged backlog); any other combination is rejected           |
 | `-validate-docs` | `bool`     | `false`                    | Instead of the audit, verify every `doc/api/<area>.md` citation in the adjudication tables is still fetchable (exits non-zero on a stale citation) |
 | `-refresh`       | `bool`     | `false`                    | With `-validate-docs`, force re-fetch of cited docs even when cached and fresh                                                                     |
 | `-offline`       | `bool`     | `false`                    | With `-validate-docs`, use only cached docs; do not fetch                                                                                          |
@@ -70,9 +75,28 @@ go run ./cmd/audit_1to1/ -validate-docs
 
 JSON. A single-scope run produces that auditor's native shape. An all-scopes run produces a merged backlog containing `schema_version`, a `summary` block (9 counters), and a `packages[]` array. `-validate-docs` emits `{schema_version, checked, ok, stale[]}`.
 
+#### SDK parity gate
+
+`-scope=sdk`. The three candidate streams derive their universe from this repository: they walk our call expressions and report what those calls miss. That cannot answer "is there a service we call nothing on", because a service nothing references never enters the map. `WorkItemSavedViewsService` arrived upstream with seven methods, sat entirely unexposed, and the audit went on reporting zero gaps.
+
+The `sdk` scope enumerates the services from client-go's `Client` struct instead, and holds each one to a decision:
+
+- **covered** — a handler calls it;
+- **declared** — `declaredServices` in `cmd/audit_1to1/internal/sdk/decisions.go` names it, with a category (`COVERED_RAW`, `COVERED_GENERIC`, `COVERED_GRAPHQL`, `SUPERSEDED_UPSTREAM`, `UNWRAPPED_TRACKED`) and the evidence behind it;
+- **undeclared** — a finding.
+
+It carries a second rule for the same reason. [ADR-0006](adr/adr-0006-raw-graphql-for-uncovered-domains.md) admits raw `GraphQL.Do()` for domains **without** a client-go service wrapper; the wrapper appearing later is what retires that exemption, and nothing was checking. Every raw-GraphQL operation whose package maps to a client-go service is therefore held to a decision too, `KEEP` or `MIGRATE`, in `graphqlDecisions`. The unit is the **operation**, not the package: several packages use GraphQL for one operation and the SDK for the rest, so a package-level verdict would be mostly noise.
+
+Both tables are checked for staleness in the same run: a declaration for a service the tree now calls, a declaration for a service upstream removed, or a decision for an operation that no longer exists is itself a finding.
+
+Unlike the other scopes this one **exits non-zero** on a finding, and is deliberately kept out of the merged backlog so `plan/1to1-backlog.json` keeps its shape for the tooling that reads it.
+
+Report keys: `schema_version`, `client_go_path`, a `summary` block (8 counters), `services[]`, `graphql_operations[]`, and `stale_declarations[]`. With `-gaps-only` the two arrays hold only findings.
+
 #### Make targets
 
-- `make audit-1to1` — writes `plan/1to1-backlog.json`.
+- `make audit-1to1` — writes `plan/1to1-backlog.json`, then runs `audit-1to1-sdk`.
+- `make audit-1to1-sdk` — the SDK parity gate; fails the build on a finding.
 - `make audit-1to1-validate-docs` — validates the doc/api citations (CI gate).
 - `make audit-struct-completeness` — legacy wrapper running `-scope=structs`.
 - `make audit-action-coverage` — legacy wrapper running `-scope=actions`.
