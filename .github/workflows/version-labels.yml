@@ -1,0 +1,116 @@
+name: Version labels
+
+# Keeps a milestone and its version label saying the same thing, in both
+# directions, so neither view of "which release is this for" can drift from the
+# other. The convention is one character wide: milestone "2.8.0" pairs with
+# label "v2.8.0".
+#
+# This cannot loop. GitHub does not start a workflow run from an event caused by
+# the repository's own GITHUB_TOKEN, so the label this job adds does not trigger
+# the label half, and the milestone it sets does not trigger the milestone half.
+# That guarantee is the reason this is safe to write in both directions at once,
+# and it is why nothing here needs a "skip if I did it" marker. Giving this
+# workflow a personal access token instead would remove the guarantee and the
+# two halves would feed each other.
+on:
+  issues:
+    types: [milestoned, demilestoned, labeled, unlabeled]
+
+# Only what it edits. No contents access: this job reads the API and writes
+# labels and milestones, and never touches the tree.
+permissions:
+  issues: write
+
+# One run at a time per issue. Two rapid edits to the same issue would
+# otherwise race and could leave the pair disagreeing, which is the single
+# thing this workflow exists to prevent.
+concurrency:
+  group: version-labels-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Keep milestone and label in step
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply the pairing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          ACTION: ${{ github.event.action }}
+          MILESTONE: ${{ github.event.issue.milestone.title }}
+          # On demilestoned the issue no longer carries the milestone, so the
+          # title has to come from the event's own payload.
+          EVENT_MILESTONE: ${{ github.event.milestone.title }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          set -euo pipefail
+
+          # Every milestone title, which is also the set of version labels this
+          # workflow is allowed to touch. Anything else on the issue is somebody
+          # else's label and is left alone.
+          gh api "repos/$REPO/milestones?state=all&per_page=100" \
+            --jq '.[].title' > /tmp/milestones.txt
+
+          known_milestone() {
+            grep -qxF "$1" /tmp/milestones.txt
+          }
+
+          case "$ACTION" in
+            milestoned)
+              want="v$MILESTONE"
+              echo "milestone $MILESTONE set, pairing label $want"
+              # Create the label rather than letting the API invent it. A label
+              # added by addLabels arrives default grey with no description,
+              # which is indistinguishable from a typo in the milestone title.
+              gh label create "$want" --color "1D76DB" \
+                --description "Targeted at the $MILESTONE release" 2>/dev/null || true
+              gh issue edit "$ISSUE" --add-label "$want"
+              # An issue belongs to one release. Drop the label of every other
+              # milestone so a retarget does not leave both showing.
+              while read -r other; do
+                [ -n "$other" ] || continue
+                [ "$other" = "$MILESTONE" ] && continue
+                gh issue edit "$ISSUE" --remove-label "v$other" 2>/dev/null || true
+              done < /tmp/milestones.txt
+              ;;
+
+            demilestoned)
+              echo "milestone $EVENT_MILESTONE removed, dropping label v$EVENT_MILESTONE"
+              gh issue edit "$ISSUE" --remove-label "v$EVENT_MILESTONE" 2>/dev/null || true
+              ;;
+
+            labeled)
+              # Only labels that name a milestone: "v2.8.0" pairs with "2.8.0",
+              # while "vulnerability" pairs with nothing and is ignored.
+              candidate="${LABEL#v}"
+              if [ "$candidate" = "$LABEL" ] || ! known_milestone "$candidate"; then
+                echo "label $LABEL names no milestone, nothing to do"
+                exit 0
+              fi
+              if [ "$MILESTONE" = "$candidate" ]; then
+                echo "already on milestone $candidate"
+                exit 0
+              fi
+              echo "label $LABEL added, setting milestone $candidate"
+              gh issue edit "$ISSUE" --milestone "$candidate"
+              ;;
+
+            unlabeled)
+              candidate="${LABEL#v}"
+              if [ "$candidate" = "$LABEL" ] || ! known_milestone "$candidate"; then
+                echo "label $LABEL names no milestone, nothing to do"
+                exit 0
+              fi
+              # Only clear the milestone the removed label was pairing with.
+              # Removing a stale label from an issue that has since been
+              # retargeted must not unset the milestone it now belongs to.
+              if [ "$MILESTONE" != "$candidate" ]; then
+                echo "issue is on milestone ${MILESTONE:-none}, not $candidate; leaving it"
+                exit 0
+              fi
+              echo "label $LABEL removed, clearing milestone $candidate"
+              gh issue edit "$ISSUE" --remove-milestone
+              ;;
+          esac
