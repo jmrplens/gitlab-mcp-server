@@ -471,19 +471,19 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,041 |     221,041 |
-| Unit tests (`_test.go`)  |       612 |     361,716 |
+| Source (`.go`, non-test) |     1,041 |     220,889 |
+| Unit tests (`_test.go`)  |       612 |     361,792 |
 | End-to-end tests         |       222 |      60,221 |
-| **Total**                | **1,875** | **642,978** |
+| **Total**                | **1,875** | **642,902** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,305 |
+| Source functions                |  8,303 |
 | . Exported (public)             |  2,787 |
-| . Unexported (private)          |  5,518 |
-| Unit test functions (`TestXxx`) | 12,934 |
+| . Unexported (private)          |  5,516 |
+| Unit test functions (`TestXxx`) | 12,936 |
 | Subtests (`t.Run(...)`)         |  4,768 |
 | End-to-end test functions       |    564 |
 
@@ -494,7 +494,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.64× more tests than code |
 | Average source file length         |                 ~212 lines |
 | Average test file length           |                 ~591 lines |
-| Comment lines in source            |  32,919 (~14.9% of source) |
+| Comment lines in source            |  32,954 (~14.9% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -503,7 +503,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | ----: |
 | `if err != nil` checks             | 6,959 |
 | `defer` statements                 | 1,132 |
-| `struct` types defined             | 2,843 |
+| `struct` types defined             | 2,835 |
 | `//nolint` suppressions            |   270 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -526,8 +526,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,018 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,209 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,016 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,204 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

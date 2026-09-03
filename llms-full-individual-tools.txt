@@ -8694,7 +8694,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_work_items
 
-List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, labels, child work items, and timestamps. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.
+List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the next-page cursor. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.
 
 **Parameters:**
 

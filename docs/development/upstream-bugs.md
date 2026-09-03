@@ -84,6 +84,7 @@ readable without opening the tracker:
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | No | No | No | No | None possible |
+| 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -226,6 +227,46 @@ counts as JSON strings, so decoding fails.
 
 **Before reporting**: as with `GetNamespace`, pin down which versions send
 strings.
+
+### The security attribute and category mutations discard GraphQL errors
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. It is why the eight mutations stay on raw GraphQL, not a
+  fix we need to ship.
+- **Workaround**: yes. `internal/tools/securityattributes` and
+  `internal/tools/securitycategories` issue the same mutations themselves and
+  read the errors array through `toolutil.GraphQLTopLevelError`. It retires
+  when the wrappers check that array, at which point the handlers can move onto
+  them unchanged: the field selections already match exactly.
+
+**Where**: `security_attributes.go` and `security_categories.go`, in all eight
+of `CreateSecurityAttributes`, `UpdateSecurityAttribute`,
+`DestroySecurityAttribute`, `ProjectUpdateSecurityAttribute`,
+`BulkUpdateSecurityAttributes`, `CreateSecurityCategory`,
+`UpdateSecurityCategory` and `DestroySecurityCategory`.
+
+**What**: each one unmarshals into a struct that embeds `GenericGraphQLErrors`
+and then never reads it. Only the mutation payload's own `errors` field is
+checked. `GraphQL.Do` returns an error solely for a non-2xx status, and GitLab
+answers a query-level failure with HTTP 200 and a top-level `errors` array, so
+a refused mutation reaches the caller as a success: `DestroySecurityAttribute`
+and `BulkUpdateSecurityAttributes` return a nil error, `CreateSecurityAttributes`
+returns an empty slice with no error, and the update methods degrade to a bare
+`ErrNotFound` that throws GitLab's message away.
+
+**Root cause**: an omission rather than a design choice, and the same file set
+shows what the fix looks like. `WorkItems.ListWorkItems` checks
+`len(result.Errors) != 0` and returns `&GraphQLResponseError{...}`; these eight
+need the same three lines.
+
+**How we found it**: auditing whether the wrappers could replace this server's
+raw mutations. The field selections match ours character for character, so the
+migration looked mechanical until the error paths were compared.
+
+**Effort**: small. Three lines per method plus a test each, and no signature
+changes: every one of them already returns an `error`.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

@@ -82,7 +82,7 @@ func TestList_Success(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf(fmtUnexpMethod, r.Method)
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item 1","description":"Desc 1","confidential":true,"webUrl":"https://gitlab.example.com/work_items/10","author":{"username":"dev1"},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":""},{"id":"gid://gitlab/WorkItem/2","iid":"11","workItemType":{"name":"Task"},"state":"CLOSED","title":"Item 2","author":{"username":"dev2"}}]}}}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item 1","description":"Desc 1","confidential":true,"webUrl":"https://gitlab.example.com/work_items/10","author":{"username":"dev1"},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null},{"id":"gid://gitlab/WorkItem/2","iid":"11","workItemType":{"name":"Task"},"state":"CLOSED","title":"Item 2","author":{"username":"dev2"}}],"pageInfo":{"hasNextPage":true,"endCursor":"cursor-2","hasPreviousPage":false,"startCursor":"cursor-1"}}}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
@@ -98,6 +98,44 @@ func TestList_Success(t *testing.T) {
 	}
 	if !first.Confidential || first.WebURL == "" || first.CreatedAt == "" || first.UpdatedAt == "" {
 		t.Fatalf("expected mapped optional fields, got %+v", first)
+	}
+	if first.CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("CreatedAt = %q, want RFC 3339", first.CreatedAt)
+	}
+	if !out.Pagination.HasNextPage || out.Pagination.EndCursor != "cursor-2" {
+		t.Errorf("Pagination = %+v, want the connection's pageInfo", out.Pagination)
+	}
+}
+
+// TestList_WidgetFields_ArePopulatedFromTheDefaultFieldSet verifies that listed work items carry the assignees,
+// labels and linked items the SDK's default field set requests. The
+// hand-written query this handler replaced selected none of them, so every
+// listed item came back with those three fields empty even when GitLab held
+// values for them.
+func TestList_WidgetFields_ArePopulatedFromTheDefaultFieldSet(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item 1","author":{"username":"dev1"},"features":{"assignees":{"assignees":{"nodes":[{"id":"gid://gitlab/User/3","username":"bob"},{"id":"gid://gitlab/User/4","username":"carol"}]}},"labels":{"labels":{"nodes":[{"id":"gid://gitlab/ProjectLabel/7","title":"bug"}]}},"linkedItems":{"linkedItems":{"nodes":[{"workItem":{"iid":"7","namespace":{"fullPath":"my-group/other"}},"linkType":"blocks"}]}}}}]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.WorkItems) != 1 {
+		t.Fatalf("expected 1 work item, got %d", len(out.WorkItems))
+	}
+	item := out.WorkItems[0]
+	if len(item.Assignees) != 2 || item.Assignees[0] != testAuthorBob || item.Assignees[1] != testAuthorCarol {
+		t.Errorf("Assignees = %v, want [bob carol]", item.Assignees)
+	}
+	if len(item.Labels) != 1 || item.Labels[0] != testLabelBug {
+		t.Errorf("Labels = %v, want [bug]", item.Labels)
+	}
+	if len(item.LinkedItems) != 1 {
+		t.Fatalf("LinkedItems = %d, want 1", len(item.LinkedItems))
+	}
+	if item.LinkedItems[0].IID != 7 || item.LinkedItems[0].LinkType != "blocks" || item.LinkedItems[0].Path != "my-group/other" {
+		t.Errorf("LinkedItems[0] = %+v, want {7 blocks my-group/other}", item.LinkedItems[0])
 	}
 }
 
@@ -237,16 +275,27 @@ func TestList_ChildrenAbsent(t *testing.T) {
 	}
 }
 
-// TestList_ChildrenInvalidIID verifies List surfaces a parse error when a child
-// node carries a malformed IID rather than returning a misleading zero.
+// TestList_ChildrenInvalidIID verifies List drops a child whose IID does not
+// parse rather than reporting a misleading zero.
+//
+// The SDK skips such a node, which is what Get, Create and Update have always
+// done because they have always gone through the SDK; the hand-written list
+// query failed the whole call instead. GitLab does not emit a non-numeric IID,
+// so the two only differ on a response no instance sends.
 func TestList_ChildrenInvalidIID(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Parent","features":{"hierarchy":{"hasChildren":true,"children":{"nodes":[{"iid":"not-a-number","namespace":{"fullPath":"my-group/child"}}]}}}}]}}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	_, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
-	if err == nil {
-		t.Fatal("expected parse error for malformed child IID, got nil")
+	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.WorkItems) != 1 {
+		t.Fatalf("expected 1 work item, got %d", len(out.WorkItems))
+	}
+	if len(out.WorkItems[0].Children) != 0 {
+		t.Errorf("Children = %+v, want the unparseable child dropped", out.WorkItems[0].Children)
 	}
 }
 
@@ -289,18 +338,28 @@ func TestList_GraphQLErrors(t *testing.T) {
 	}
 }
 
-// TestList_NamespaceNotFound verifies List gives an actionable error when full_path is absent.
+// TestList_NamespaceNotFound verifies List reports an unknown namespace as an
+// empty list whose Markdown says how to check the path.
+//
+// GitLab answers a namespace that does not exist, or that the token cannot
+// read, with a null namespace and HTTP 200, which is indistinguishable from a
+// namespace holding no work items once the SDK has decoded the connection. The
+// hint is where that ambiguity is made visible to the caller.
 func TestList_NamespaceNotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":null}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	_, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
-	if err == nil {
-		t.Fatal(errExpectedNil)
+	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
-	if !strings.Contains(err.Error(), "gitlab_project_list") {
-		t.Fatalf("expected actionable hint, got %v", err)
+	if len(out.WorkItems) != 0 {
+		t.Fatalf("expected 0 work items, got %d", len(out.WorkItems))
+	}
+	md := extractText(t, FormatListMarkdown(out))
+	if !strings.Contains(md, "gitlab_project_list") {
+		t.Fatalf("expected actionable hint, got %q", md)
 	}
 }
 
@@ -314,12 +373,12 @@ func TestList_InvalidGraphQLIDs(t *testing.T) {
 		{
 			name: "invalid gid",
 			body: `{"data":{"namespace":{"workItems":{"nodes":[{"id":"not-a-gid","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item"}]}}}}`,
-			want: "invalid work item id",
+			want: `invalid global ID format: "not-a-gid"`,
 		},
 		{
 			name: "invalid iid",
 			body: `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"abc","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item"}]}}}}`,
-			want: "invalid work item iid",
+			want: `failed parsing "abc" as numeric ID`,
 		},
 	}
 	for _, tt := range tests {
@@ -444,6 +503,23 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
 		t.Fatal(errExpNonNilResult)
+	}
+}
+
+// TestFormatListMarkdown_WithNextPage_EmitsTheCursorLine verifies that the next-page cursor is
+// rendered when the connection reports a further page, so a caller can pass it
+// back through the after input.
+func TestFormatListMarkdown_WithNextPage_EmitsTheCursorLine(t *testing.T) {
+	out := ListOutput{
+		WorkItems: []WorkItemItem{{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "A", Author: testAuthorDev}},
+		Pagination: toolutil.GraphQLPaginationOutput{
+			HasNextPage: true,
+			EndCursor:   "next-page-cursor",
+		},
+	}
+	text := extractText(t, FormatListMarkdown(out))
+	if !strings.Contains(text, "next-page-cursor") {
+		t.Errorf("expected next-page cursor in output:\n%s", text)
 	}
 }
 
