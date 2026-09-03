@@ -348,3 +348,71 @@ func TestAttemptCaseSuffix_KeepsAlphanumericsOnly(t *testing.T) {
 		})
 	}
 }
+
+// TestFixtureOutputCache_Ensure_EmptyKeyMeansNoIdentity verifies that a caller
+// which computed no idempotency key gets the creation run every time, and that
+// two different keys are remembered apart.
+//
+// The empty key is the contract a test relies on when what it is testing is the
+// work a fixture does rather than the memo around it: the merge-request source
+// fixture test asserts on the API calls the fixture makes, and going through
+// the memo meant its second run in one process made no calls at all.
+// TestFixtureOutputCache_ReusesClonedOutputForSameKey covers the remembering
+// half and the defensive copies.
+func TestFixtureOutputCache_Ensure_EmptyKeyMeansNoIdentity(t *testing.T) {
+	cache := newFixtureOutputCache()
+	calls := map[string]int{}
+	create := func(name string) func() (FixtureOutput, error) {
+		return func() (FixtureOutput, error) {
+			calls[name]++
+			return FixtureOutput{"name": name}, nil
+		}
+	}
+
+	// The repeated keys only mean anything in order, as a second call after a
+	// first against the same cache.
+	// sequential: dependent steps against one cache, not independent cases
+	for _, key := range []string{"scope:one", "scope:one", "scope:two", "", ""} {
+		if _, err := cache.ensure(key, create(key)); err != nil {
+			t.Fatalf("ensure(%q) error = %v", key, err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		key  string
+		want int
+	}{
+		{name: "remembered key", key: "scope:one", want: 1},
+		{name: "second key", key: "scope:two", want: 1},
+		{name: "no key", key: "", want: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if calls[tc.key] != tc.want {
+				t.Errorf("creations for key %q = %d, want %d", tc.key, calls[tc.key], tc.want)
+			}
+		})
+	}
+}
+
+// TestFixtureOutputCache_Ensure_RemembersNothingAfterAFailure verifies a failed
+// creation is not memoized, so the next case that needs the fixture retries it
+// rather than inheriting the failure for the rest of the run.
+func TestFixtureOutputCache_Ensure_RemembersNothingAfterAFailure(t *testing.T) {
+	cache := newFixtureOutputCache()
+	if _, err := cache.ensure("scope:one", func() (FixtureOutput, error) {
+		return nil, errors.New("provisioning failed")
+	}); err == nil {
+		t.Fatal("ensure() error = nil, want the creation failure")
+	}
+
+	output, err := cache.ensure("scope:one", func() (FixtureOutput, error) {
+		return FixtureOutput{"name": "second try"}, nil
+	})
+	if err != nil {
+		t.Fatalf("ensure() after a failure error = %v", err)
+	}
+	if output["name"] != "second try" {
+		t.Errorf("ensure() = %+v, want the retry to have run", output)
+	}
+}
