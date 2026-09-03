@@ -1,7 +1,8 @@
 # CI pipeline for gitlab-mcp-server
 #
 # Runs on: pull requests to main, pushes to main
-# Jobs: test, sonarcloud, build, Go analysis, markdown, docker (PR+paths)
+# Jobs: test, sonarcloud, build, Go analysis, markdown, docker (PR+paths),
+#       cross-platform (Linux, macOS, Windows)
 
 name: CI
 
@@ -156,6 +157,20 @@ jobs:
       - run: go build -o /dev/null ./cmd/server
       - name: Verify E2E tests compile
         run: go test -tags e2e -c -o /dev/null ./test/e2e/suite/
+
+      # Seconds on a Linux runner, and it type-checks every build-constrained
+      # file including the tests, for all three platforms this project ships.
+      # The cross-platform matrix does this too, on real runners, but that
+      # matrix is expensive enough that somebody may reasonably narrow it
+      # later; this step means narrowing it can never take the compile of
+      # cmd/server/socketmode_windows.go with it, which before either existed
+      # was first compiled by GoReleaser during a release.
+      - name: Type-check every shipped platform
+        run: |
+          for target in windows/amd64 darwin/arm64 linux/arm64; do
+            echo "==> ${target}"
+            GOOS="${target%%/*}" GOARCH="${target##*/}" go vet ./...
+          done
 
       # The HTTP transport module needs no GitLab and no credentials, so it
       # runs here rather than only on demand. It is the gate for the handler
@@ -415,3 +430,94 @@ jobs:
         run: go test ./cmd/audit_supply_chain/ -count=1
       - name: Test the installer and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
+
+  # Every job above runs on Linux, and until this one existed that was the only
+  # platform any test in this repository had ever seen, while the project ships
+  # binaries for three. cmd/server/socketmode_windows.go was first compiled by
+  # GoReleaser during a release, where a compile error breaks the release
+  # instead of a pull request.
+  #
+  # This job asks only the platform question, and deliberately runs none of the
+  # generated-artifact gates or the coverage floor: their answers cannot depend
+  # on the operating system, so running them three times would triple the flake
+  # surface and add no signal. What does depend on the platform is here, namely
+  # the build constraints, every path the code touches, and the two transport
+  # modules that spawn the real binary.
+  #
+  # Linux is in the matrix even though Test already runs the suite there,
+  # because it is the control: without it, a macOS-only failure cannot be told
+  # apart from a command that would have failed anywhere.
+  cross_platform:
+    name: Cross-platform (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # A hung test must not sit for the six-hour default on a runner billing ten
+    # times the Linux rate (macOS) or twice it (Windows). The Linux unit suite
+    # takes about twenty minutes, so this allows being substantially slower
+    # without allowing a hang.
+    timeout-minutes: 60
+    strategy:
+      # Every platform reports. Stopping at the first failure would hide a
+      # second, different one, and telling them apart is the entire point.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      # Build constraints resolve against the host, so these two steps are the
+      # first thing in the pipeline that compiles the windows-only source at
+      # all, and the first that type-checks the unix-only source anywhere other
+      # than Linux.
+      - name: Build every package
+        run: go build ./...
+      - name: Vet every package
+        run: go vet ./...
+      - name: Unit suite
+        run: go test -count=1 ./cmd/... ./internal/...
+      # The two transport modules need neither GitLab nor a credential, and
+      # they are why this is not a build-only check: they start the real binary
+      # and drive it the way a client does, over pipes and sockets, which is
+      # where a platform difference actually surfaces.
+      #
+      # Not on Windows yet, and the reason is in the harnesses rather than in
+      # the server: both terminate the process with syscall.SIGTERM, which
+      # Windows does not implement, so every case that asserts on shutdown
+      # would fail for a reason that has nothing to do with the code under
+      # test. Giving the harnesses a Windows-native termination path is tracked
+      # in https://github.com/jmrplens/gitlab-mcp-server/issues/439. macOS runs
+      # them today because SIGTERM and unix sockets both behave there.
+      - name: HTTP transport end-to-end
+        if: matrix.os != 'windows-latest'
+        run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
+      - name: stdio transport end-to-end
+        if: matrix.os != 'windows-latest'
+        run: go test -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/
+
+  # A stable check name over the matrix above, for the same reason the
+  # "Docker Build" job below the docker matrix exists: GitHub appends the matrix
+  # value to the job name, so branch protection can only require a name that
+  # names a platform, which would tie a repository setting to the platform list
+  # in this file. This job keeps the contract while the matrix stays free.
+  cross_platform_summary:
+    name: Cross-platform
+    needs: cross_platform
+    # always(), so a failing platform is reported rather than skipped along
+    # with the job it belongs to.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the platform suites
+        env:
+          # Underscored job ids on purpose: a hyphen in a job id has to be
+          # reached as needs['cross-platform'], because the expression parser
+          # reads needs.cross-platform as a subtraction.
+          RESULT: ${{ needs.cross_platform.result }}
+        run: |
+          echo "Cross-platform matrix result: $RESULT"
+          case "$RESULT" in
+            success) ;;
+            *) echo "::error::the cross-platform suites did not succeed ($RESULT)"; exit 1 ;;
+          esac
