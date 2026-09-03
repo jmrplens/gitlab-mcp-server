@@ -348,6 +348,39 @@ jobs:
         if: steps.filter.outputs.docker == 'true'
         run: bash scripts/smoke-test-image.sh ci "gitlab-mcp-server:ci=${{ matrix.platform }}"
 
+  # Branch protection requires a check named exactly "Docker Build", and the
+  # job above stopped producing one the moment it became a matrix: GitHub
+  # appends the matrix value, so it now reports "Docker Build (linux/amd64)"
+  # and "Docker Build (linux/arm64)". The required check was left permanently
+  # "expected" and every pull request became unmergeable, which is a strange
+  # way for a build fix to fail.
+  #
+  # Naming the required check after the matrix instead would tie branch
+  # protection, which lives in repository settings rather than in this file,
+  # to the platform list right below it: adding linux/arm/v7 here would block
+  # main until somebody edited a setting nothing in the repository mentions.
+  # This job keeps the contract stable, so the matrix stays free to change.
+  docker-build:
+    name: Docker Build
+    needs: docker
+    # always(), so a failing matrix is reported rather than skipped along with
+    # it. The event guard matches the matrix's own, so pushes to main see this
+    # check no more than they see the job it summarizes.
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the platform builds
+        env:
+          RESULT: ${{ needs.docker.result }}
+        run: |
+          echo "Docker matrix result: $RESULT"
+          # skipped is a pass: the matrix skips its own steps when no Docker
+          # file changed, and a skipped job must not hold a pull request.
+          case "$RESULT" in
+            success|skipped) ;;
+            *) echo "::error::the Docker platform builds did not succeed ($RESULT)"; exit 1 ;;
+          esac
+
   # Configuration invariants nothing else in this pipeline can see: pinned
   # actions, release jobs that run no code resolved at run time, stated
   # Dependabot cooldowns, a security policy that names the shipping major, and
