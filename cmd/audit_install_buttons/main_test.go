@@ -180,3 +180,144 @@ func TestConfigParam_DoesNotRunFromOneURLIntoTheNext(t *testing.T) {
 		t.Errorf("captured %q, want the payload without the trailing parenthesis", got)
 	}
 }
+
+// writeButtonsIn is [writeButtons] for a file at an arbitrary path under the
+// repository root, so a test can exercise the directory walk rather than only
+// the single-file root.
+func writeButtonsIn(t *testing.T, rel string, links ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	full := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+		t.Fatalf("creating %s: %v", filepath.Dir(full), err)
+	}
+	body := "# Install\n\n" + strings.Join(links, "\n") + "\n"
+	if err := os.WriteFile(full, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing %s: %v", full, err)
+	}
+	return dir
+}
+
+// TestCollectRoot_WalksDirectoriesAndSkipsGeneratedTrees verifies that buttons
+// are found below a directory root, and that a copy of one under a generated
+// tree is not reported a second time.
+//
+// site/dist and node_modules hold copies of the same pages; counting them
+// would report every button twice and make a real disagreement harder to see
+// rather than easier.
+func TestCollectRoot_WalksDirectoriesAndSkipsGeneratedTrees(t *testing.T) {
+	dir := writeButtonsIn(t, "docs/getting-started.md", base64Link("cursor.com", dockerEntry))
+
+	generated := filepath.Join(dir, "docs", "node_modules")
+	if err := os.MkdirAll(generated, 0o750); err != nil {
+		t.Fatalf("creating the generated tree: %v", err)
+	}
+	copyOf := filepath.Join(generated, "copy.md")
+	if err := os.WriteFile(copyOf, []byte(base64Link("cursor.com", dockerEntryWithFlag)), 0o600); err != nil {
+		t.Fatalf("writing the copy: %v", err)
+	}
+
+	buttons, err := collect(dir)
+	if err != nil {
+		t.Fatalf("collect() error = %v", err)
+	}
+	if len(buttons) != 1 {
+		t.Fatalf("collect() found %d buttons, want only the one outside the generated tree: %+v", len(buttons), buttons)
+	}
+	if buttons[0].File != "docs/getting-started.md" {
+		t.Errorf("collect() reported %q, want the documented page", buttons[0].File)
+	}
+}
+
+// TestCollect_IgnoresFilesWhoseExtensionCarriesNoButtons verifies that a
+// payload inside a file the documentation never renders is not audited.
+//
+// The scan is by extension because a button only matters where a reader can
+// click it; a fixture or a log that happens to contain an install URL is not a
+// button, and holding it to the same rule would fail the audit over nothing.
+func TestCollect_IgnoresFilesWhoseExtensionCarriesNoButtons(t *testing.T) {
+	dir := writeButtonsIn(t, "docs/page.md", base64Link("cursor.com", dockerEntry))
+	stray := filepath.Join(dir, "docs", "capture.log")
+	if err := os.WriteFile(stray, []byte(base64Link("cursor.com", dockerEntryWithFlag)), 0o600); err != nil {
+		t.Fatalf("writing the stray file: %v", err)
+	}
+
+	buttons, err := collect(dir)
+	if err != nil {
+		t.Fatalf("collect() error = %v", err)
+	}
+	if len(buttons) != 1 {
+		t.Errorf("collect() found %d buttons, want only the one in a rendered page", len(buttons))
+	}
+}
+
+// TestRun_AgreeingButtons_ReportTheCountAndSucceed covers the passing path,
+// including the -v listing, which is the only way to see what a payload
+// actually decodes to.
+func TestRun_AgreeingButtons_ReportTheCountAndSucceed(t *testing.T) {
+	dir := writeButtons(t,
+		base64Link("cursor.com", dockerEntry),
+		base64Link("lmstudio.ai", dockerEntry),
+	)
+
+	var out, errOut strings.Builder
+	if code := run(dir, true, &out, &errOut); code != 0 {
+		t.Fatalf("run() = %d, want success; stderr: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "2 buttons decode cleanly") {
+		t.Errorf("run() did not report the button count: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "cursor.com") {
+		t.Errorf("-v did not list the buttons it checked: %s", out.String())
+	}
+}
+
+// TestRun_DisagreeingButtons_FailAndSayWhichAndHowMany covers the failing path.
+func TestRun_DisagreeingButtons_FailAndSayWhichAndHowMany(t *testing.T) {
+	dir := writeButtons(t,
+		base64Link("cursor.com", dockerEntry),
+		base64Link("lmstudio.ai", dockerEntryWithFlag),
+	)
+
+	var out, errOut strings.Builder
+	if code := run(dir, false, &out, &errOut); code != 1 {
+		t.Fatalf("run() = %d, want failure", code)
+	}
+	for _, want := range []string{"lmstudio.ai", "1 problem(s)"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errOut.String(), want) {
+				t.Errorf("the report does not mention %q: %s", want, errOut.String())
+			}
+		})
+	}
+}
+
+// TestRun_ARepositoryWithNoButtons_FailsRatherThanPassingVacuously verifies
+// that finding nothing is treated as the audit looking in the wrong place.
+//
+// A rename of README.md or of the docs directory would otherwise turn this
+// gate into one that passes on every commit while checking nothing, which is
+// the failure mode a gate must not have.
+func TestRun_ARepositoryWithNoButtons_FailsRatherThanPassingVacuously(t *testing.T) {
+	var out, errOut strings.Builder
+	if code := run(t.TempDir(), false, &out, &errOut); code != 1 {
+		t.Fatalf("run() = %d over a repository with no buttons, want failure", code)
+	}
+	if !strings.Contains(errOut.String(), "looking in the wrong place") {
+		t.Errorf("run() did not say why an empty result is a failure: %s", errOut.String())
+	}
+}
+
+// TestRun_AnUnreadablePayload_FailsWithTheFileAndLine verifies that a decode
+// failure names where to look.
+func TestRun_AnUnreadablePayload_FailsWithTheFileAndLine(t *testing.T) {
+	dir := writeButtons(t, base64Link("cursor.com", "not a client entry, but long enough to be matched as one"))
+
+	var out, errOut strings.Builder
+	if code := run(dir, false, &out, &errOut); code != 1 {
+		t.Fatalf("run() = %d over an unreadable payload, want failure", code)
+	}
+	if !strings.Contains(errOut.String(), "README.md:") {
+		t.Errorf("the failure does not name the file and line: %s", errOut.String())
+	}
+}

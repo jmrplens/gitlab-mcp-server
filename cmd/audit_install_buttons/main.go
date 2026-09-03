@@ -22,6 +22,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -79,31 +80,39 @@ func main() {
 	verbose := flag.Bool("v", false, "list every button that was checked")
 	flag.Parse()
 
-	buttons, err := collect(*dir)
+	os.Exit(run(*dir, *verbose, os.Stdout, os.Stderr))
+}
+
+// run is main with its streams and its exit status handed to it, so the three
+// ways this audit ends are reachable from a test instead of only from a
+// process. It returns the exit status rather than calling os.Exit.
+func run(dir string, verbose bool, out, errOut io.Writer) int {
+	buttons, err := collect(dir)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "audit_install_buttons:", err)
-		os.Exit(1)
+		fmt.Fprintln(errOut, "audit_install_buttons:", err)
+		return 1
 	}
 	if len(buttons) == 0 {
-		fmt.Fprintln(os.Stderr, "audit_install_buttons: no install buttons found, which means this audit is looking in the wrong place")
-		os.Exit(1)
+		fmt.Fprintln(errOut, "audit_install_buttons: no install buttons found, which means this audit is looking in the wrong place")
+		return 1
 	}
 
-	if *verbose {
+	if verbose {
 		for _, b := range buttons {
-			fmt.Printf("%s:%d (%s) %s\n", b.File, b.Line, b.Host, b.Decoded)
+			fmt.Fprintf(out, "%s:%d (%s) %s\n", b.File, b.Line, b.Host, b.Decoded)
 		}
 	}
 
 	problems := check(buttons)
 	if len(problems) > 0 {
 		for _, p := range problems {
-			fmt.Fprintln(os.Stderr, p)
+			fmt.Fprintln(errOut, p)
 		}
-		fmt.Fprintf(os.Stderr, "\naudit_install_buttons: %d problem(s) across %d button(s)\n", len(problems), len(buttons))
-		os.Exit(1)
+		fmt.Fprintf(errOut, "\naudit_install_buttons: %d problem(s) across %d button(s)\n", len(problems), len(buttons))
+		return 1
 	}
-	fmt.Printf("audit_install_buttons: %d buttons decode cleanly and agree within each command\n", len(buttons))
+	fmt.Fprintf(out, "audit_install_buttons: %d buttons decode cleanly and agree within each command\n", len(buttons))
+	return 0
 }
 
 // collect finds and decodes every install button under dir.
