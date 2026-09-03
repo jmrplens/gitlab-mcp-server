@@ -282,7 +282,7 @@ When exactly one instance is pinned with `--gitlab-url`, the server always uses 
 
 ### Publishing more than one instance
 
-`--gitlab-url` may be given more than once (or once, comma-separated). The first entry is the deployment's default, and `GITLAB-URL` becomes a choice **among the published instances**:
+`--gitlab-url` may be given more than once (or once, comma-separated). `GITLAB-URL` then becomes a choice **among the published instances**, and a required one: choosing for the caller would send their token to an instance they never named.
 
 ```bash
 gitlab-mcp-server --http --auth-mode=oauth \
@@ -291,13 +291,17 @@ gitlab-mcp-server --http --auth-mode=oauth \
   --gitlab-url=https://gitlab.internal.example.com
 ```
 
-| Instances published | No `GITLAB-URL` header | Header naming a published instance | Header naming anything else                       |
-| ------------------- | ---------------------- | ---------------------------------- | ------------------------------------------------- |
-| none                | public `gitlab.com`    | honored                            | honored                                           |
-| one                 | that instance          | ignored                            | ignored                                           |
-| several             | the first              | honored                            | **refused**: `403` in OAuth mode, `400` in legacy |
+| Instances published             | No `GITLAB-URL` header | Header naming a published instance | Header naming anything else                       |
+| ------------------------------- | ---------------------- | ---------------------------------- | ------------------------------------------------- |
+| none (`--allow-any-gitlab-url`) | **refused**: `400`     | honored                            | honored                                           |
+| one                             | that instance          | ignored                            | ignored                                           |
+| several                         | **refused**: `400`     | honored                            | **refused**: `403` in OAuth mode, `400` in legacy |
 
-The two statuses differ because the layers differ: OAuth mode refuses in the bearer guard, before the credential is sent anywhere, which is a permission decision (`403`); legacy mode refuses while resolving the request options, which is a malformed request (`400`). Either way the instance is never contacted.
+A request that names no instance is refused rather than resolved to a default, in both the none and several rows. Publishing nothing means the caller chooses, so there is nothing to fall back to; publishing several means the operator deliberately declined to choose, so falling back to the first would put the caller's token on the wire to an instance they never named. Only the one-instance row has an unambiguous answer, and it is the instance the operator pinned.
+
+The two refusal statuses for a header naming an unpublished instance differ because the layers differ: OAuth mode refuses in the bearer guard, before the credential is sent anywhere, which is a permission decision (`403`); legacy mode refuses while resolving the request options, which is a malformed request (`400`). Either way the instance is never contacted.
+
+The refusal for a **missing** header is `400` in both modes, and only its message differs: OAuth mode names the published instances, since RFC 9728 metadata already serves that same set unauthenticated, while legacy mode says to ask the operator, so that any non-empty token cannot be used to enumerate the operator's hostnames.
 
 The refusal is the point. In OAuth mode the server **verifies the bearer token against the instance it is about to use**, so a free-form header would let a caller name a host of their own and be handed the token. An allow-list keeps that choice with the operator: the published instances are listed in the RFC 9728 `authorization_servers` array, so a client discovers which ones it may pick, and a token is verified — and cached — per instance, never across them. A rejection is scoped the same way, so a `401` from one published instance never refuses a valid token on another.
 

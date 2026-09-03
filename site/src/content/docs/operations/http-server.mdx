@@ -85,7 +85,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--max-request-body-bytes` | `0`            | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB); negative values are rejected at startup. Oversized bodies are rejected with `413`                                                                                                                     |
 
 :::note
-What `GITLAB-URL` means depends on how many instances the deployment publishes. **None**: only possible with `--allow-any-gitlab-url`, and then the client chooses, with a request naming no instance refused rather than sent to `https://gitlab.com`. **One**: it is authoritative, the header is ignored and logged in `ignored_options`. **Several**: the header is **required** and selects among the published instances. A request that sends none is refused with `400` naming them, because answering it would put the caller's token on the wire to an instance they never named; a value outside the list is **refused** too — `403` in OAuth mode, `400` in legacy — never silently answered with someone else's instance. In OAuth mode every published instance must be `https`, because the bearer token is forwarded to whichever one the request selected.
+What `GITLAB-URL` means depends on how many instances the deployment publishes. **None**: only possible with `--allow-any-gitlab-url`, and then the client chooses, with a request naming no instance refused rather than sent to `https://gitlab.com`. **One**: it is authoritative, the header is ignored and logged in `ignored_options`. **Several**: the header is **required** and selects among the published instances. A request that sends none is refused with `400`, because answering it would put the caller's token on the wire to an instance they never named; the refusal names the published instances in OAuth mode and tells you to ask the operator in legacy mode, so that no non-empty token can enumerate them. A value outside the list is **refused** too — `403` in OAuth mode, `400` in legacy — never silently answered with someone else's instance. In OAuth mode every published instance must be `https`, because the bearer token is forwarded to whichever one the request selected.
 :::
 
 ### Tool and capability surface options
@@ -118,7 +118,7 @@ When the server starts with `--allow-any-gitlab-url` and publishes no instance, 
 GITLAB-URL: https://gitlab.example.com
 ```
 
-If the deployment pins exactly one instance, this header is ignored and logged. If it publishes several, the header picks one of them and any other value is refused. If it pins none and the header is omitted, `https://gitlab.com` is used.
+If the deployment pins exactly one instance, this header is ignored and logged. If it publishes several, the header picks one of them and any other value is refused. If it pins none and the header is omitted, the request is refused with `400` rather than resolved to `https://gitlab.com`.
 
 ### Private-token header (recommended)
 
