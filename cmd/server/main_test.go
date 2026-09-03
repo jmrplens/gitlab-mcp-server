@@ -8762,7 +8762,16 @@ func TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure
 			resp.Body.Close()
 		}
 	}()
-	t.Cleanup(func() { <-callDone })
+	// Releasing here rather than leaving it to the cleanup registered above:
+	// this one runs first, and on the happy path the forced close ends the
+	// request for it. On a failure path between here and the shutdown there is
+	// no forced close, so waiting first would wait on a handler nothing has
+	// released, and the request would sit there for the client's full timeout.
+	// A failing test must not also hang.
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(release) })
+		<-callDone
+	})
 
 	select {
 	case <-entered:
@@ -8826,27 +8835,35 @@ func (c *armedDeadlineContext) Deadline() (time.Time, bool) {
 //
 // Both cases hold a request in flight, so the budget is genuinely spent rather
 // than short-circuited by an idle server, and both must end without an error.
-// The elapsed time is what says whose budget was used: [httpShutdownTimeout] is
-// fifteen seconds, so a run that honors the caller finishes in a fraction of
-// that, and a deadline already in the past skips the drain altogether.
+// The elapsed time is what says whose budget was used, so the ceiling is the
+// caller's own budget plus a tolerance rather than a round number: an upper
+// bound loose enough to admit some fixed budget of the implementation's own
+// would stay green with the very bug this test exists to catch.
 func TestShutdownHTTPServer_CallersDeadline_BoundsTheDrain(t *testing.T) {
+	// drainTolerance is how much longer than the caller's budget the drain may
+	// take. Shutdown selects on the deadline, so it returns as that passes and
+	// what remains is goroutine scheduling plus the forced close, measured in
+	// milliseconds. Two seconds is loose enough for a loaded runner under the
+	// race detector and still tight enough to fail any implementation that
+	// substituted a budget of its own, the smallest this project has shipped
+	// being five seconds.
+	const drainTolerance = 2 * time.Second
+
 	cases := []struct {
 		name      string
 		remaining time.Duration
 		atLeast   time.Duration
-		atMost    time.Duration
 	}{
 		{
 			name:      "tighter than the default",
 			remaining: time.Second,
-			atLeast:   500 * time.Millisecond,
-			atMost:    8 * time.Second,
+			// Proves the drain happened at all rather than being skipped.
+			atLeast: 500 * time.Millisecond,
 		},
 		{
 			name:      "already passed",
 			remaining: -time.Second,
 			atLeast:   0,
-			atMost:    5 * time.Second,
 		},
 	}
 	for _, tc := range cases {
@@ -8863,9 +8880,10 @@ func TestShutdownHTTPServer_CallersDeadline_BoundsTheDrain(t *testing.T) {
 				t.Fatalf("shutdownHTTPServer() = %v, want a clean stop", err)
 			}
 			elapsed := time.Since(start)
-			if elapsed < tc.atLeast || elapsed > tc.atMost {
+			atMost := max(tc.remaining, 0) + drainTolerance
+			if elapsed < tc.atLeast || elapsed > atMost {
 				t.Errorf("drain took %s, want between %s and %s: the budget did not come from the caller",
-					elapsed, tc.atLeast, tc.atMost)
+					elapsed, tc.atLeast, atMost)
 			}
 		})
 	}

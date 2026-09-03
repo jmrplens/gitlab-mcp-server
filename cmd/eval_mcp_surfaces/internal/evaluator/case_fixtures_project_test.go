@@ -398,6 +398,11 @@ func TestFixtureOutputCache_Ensure_EmptyKeyMeansNoIdentity(t *testing.T) {
 // TestFixtureOutputCache_Ensure_RemembersNothingAfterAFailure verifies a failed
 // creation is not memoized, so the next case that needs the fixture retries it
 // rather than inheriting the failure for the rest of the run.
+//
+// Two ordered steps against one cache, not two cases, which is why there is no
+// table here and no subtest per step: the retry means nothing except as the
+// call after the failure, and neither step can be read or run on its own. The
+// sibling above asserts per key independently, so it is a table and has them.
 func TestFixtureOutputCache_Ensure_RemembersNothingAfterAFailure(t *testing.T) {
 	cache := newFixtureOutputCache()
 	if _, err := cache.ensure("scope:one", func() (FixtureOutput, error) {
