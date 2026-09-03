@@ -526,3 +526,105 @@ func TestBindUnixSocket_RefusesAPathNoAddressCanHold(t *testing.T) {
 		})
 	}
 }
+
+// TestNewStagingDir_AParentThatCannotHoldIt_IsReported covers the reservation
+// failing, which is the branch that decides whether a bind proceeds at all.
+//
+// It matters because the staging directory is what makes the chmod safe: the
+// socket is assembled somewhere no other account can reach. If the directory
+// could not be created and the code carried on regardless, the mode would be
+// applied on a path anyone could have swapped underneath it, which is the race
+// this whole file exists to avoid.
+func TestNewStagingDir_AParentThatCannotHoldIt_IsReported(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	missing := filepath.Join(t.TempDir(), "no-such-directory")
+
+	if _, err := newStagingDir(missing); err == nil {
+		t.Fatal("newStagingDir() accepted a parent that does not exist")
+	}
+}
+
+// TestRestrictDirToOwner_ANonDirectory_IsRefused verifies the O_DIRECTORY half
+// of the descriptor-based mode application.
+//
+// The mode is applied through a descriptor rather than by path so that
+// anything swapping the directory between the mkdir and the chmod makes the
+// open fail rather than the mode land somewhere else. A regular file standing
+// where a directory should be is the readable form of that swap.
+func TestRestrictDirToOwner_ANonDirectory_IsRefused(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	notADir := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(notADir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("writing the stand-in: %v", err)
+	}
+
+	if err := restrictDirToOwner(notADir); err == nil {
+		t.Fatal("restrictDirToOwner() accepted something that is not a directory")
+	}
+}
+
+// TestRestrictDirToOwner_ASymlink_IsRefused verifies the O_NOFOLLOW half.
+//
+// A symlink pointing at a directory this process may legitimately open is the
+// exact shape the flag is for: without it the mode would be applied to the
+// target, which is chosen by whoever planted the link rather than by this
+// process.
+func TestRestrictDirToOwner_ASymlink_IsRefused(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatalf("creating the target directory: %v", err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("this filesystem does not support symlinks: %v", err)
+	}
+
+	if err := restrictDirToOwner(link); err == nil {
+		t.Fatal("restrictDirToOwner() followed a symlink, so the mode could land on a directory it did not choose")
+	}
+}
+
+// TestConfirmReachable_APathNothingIsServing_IsReported covers the check that
+// turns an unverifiable assumption into a startup failure.
+//
+// The published path is reached through a hard link, and whether a hard link
+// to a bound socket is connectable is a filesystem property this project
+// cannot read on every platform it ships to. So it is proven once per start
+// with a real connect rather than assumed, and this is the failing half of
+// that proof.
+func TestConfirmReachable_APathNothingIsServing_IsReported(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	absent := filepath.Join(t.TempDir(), "nothing.sock")
+
+	if err := confirmReachable(t.Context(), absent); err == nil {
+		t.Fatal("confirmReachable() reported a path nothing is serving as reachable")
+	}
+}
+
+// TestPublishStagedSocket_AListenerThatIsNotUnix_IsRefused covers the type
+// assertion, which is the one branch that cannot be reached through
+// bindUnixSocket at all.
+//
+// It is worth a test rather than a panic because the function hands back a
+// listener that owns a filesystem path: a TCP listener given the same job
+// would report an address nothing published and unlink a path it never
+// created.
+func TestPublishStagedSocket_AListenerThatIsNotUnix_IsRefused(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	tcp, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listening on tcp: %v", err)
+	}
+	t.Cleanup(func() { _ = tcp.Close() })
+
+	dir := t.TempDir()
+	_, err = publishStagedSocket(tcp, filepath.Join(dir, "staged"), filepath.Join(dir, "published"), 0o660)
+	if err == nil {
+		t.Fatal("publishStagedSocket() accepted a listener that cannot own a path")
+	}
+	if !strings.Contains(err.Error(), "cannot own its path") {
+		t.Errorf("error = %q, want it to say the listener cannot own a path", err)
+	}
+}
