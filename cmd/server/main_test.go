@@ -7913,6 +7913,16 @@ func captureStdout(t *testing.T) func() string {
 // report anything, it blocks until the package timeout takes the whole run
 // down. That is exactly the symptom it is here to prevent, so a run of this
 // package that stops making progress should be read as this assertion firing.
+//
+// One size, and deliberately not a table of them. A second case below the
+// buffer would pass whether the drain is there or not, since working below the
+// buffer is precisely what the broken shape does, so it could never fail for
+// the reason this test exists. It would also have to name a size below the
+// smallest buffer anyone runs, and buffer capacity is not a portable constant:
+// Linux defaults to 64 KiB and is tunable per pipe and system-wide, macOS
+// starts smaller and grows, and Windows treats the size as a hint. Needing only
+// an upper bound is what keeps this test true everywhere, so the one number
+// here is the whole scenario rather than a row waiting for siblings.
 func TestCaptureStdout_OutputLargerThanThePipeBuffer_DoesNotBlock(t *testing.T) {
 	// Comfortably past Linux's 64 KiB, which is the largest buffer in play.
 	const size = 256 << 10
