@@ -2524,7 +2524,7 @@ var (
 // Callers that memoize a registered surface must key on it, because the
 // same registration produces different input schemas under each mode.
 func MetaParamSchemaMode() string {
-	return metaParamSchemaMode
+	return currentMetaParamSchemaMode()
 }
 
 func SetMetaParamSchemaMode(mode string) {

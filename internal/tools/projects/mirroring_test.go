@@ -85,9 +85,11 @@ func TestGetPullMirror_NotMirroredHint(t *testing.T) {
 		t.Fatal(errExpectedAPI)
 	}
 	for _, want := range []string{"not mirrored", "pull_mirror_configure", "pull_mirror_get"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 

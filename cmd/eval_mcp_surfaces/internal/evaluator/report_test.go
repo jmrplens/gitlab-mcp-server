@@ -25,9 +25,11 @@ func TestWriteStatusReport_WritesStartupAndErrorSections(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{"# Dynamic Surface Model Evaluation", "Status: `failed`", "Trace artifacts: `traces`", "    line one", "MCP capability bridge: `enabled`"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("report missing %q:\n%s", want, content)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Fatalf("report missing %q:\n%s", want, content)
+			}
+		})
 	}
 }
 
@@ -53,9 +55,11 @@ func TestWriteReport_WritesFullEvaluationMarkdown(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{"# Dynamic Surface Model Evaluation", "Catalog tools: 1", "## Metrics", "## Failure Diagnostics", "## Fixture Tool Coverage", "MT-001", "missing final text"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("report missing %q:\n%s", want, content)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Fatalf("report missing %q:\n%s", want, content)
+			}
+		})
 	}
 }
 
@@ -180,9 +184,11 @@ func TestReportMetricSections_RenderRunModelUsageAndBridgeTables(t *testing.T) {
 	writeCapabilityBridgeUsage(&b, results, false)
 	content := b.String()
 	for _, want := range []string{"## Per-Run Metrics", "## Per-Model Metrics", "## API Usage", "$0.0160", "gitlab://tools/project.get", "completion:ref/prompt"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("report content missing %q:\n%s", want, content)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Fatalf("report content missing %q:\n%s", want, content)
+			}
+		})
 	}
 	if !resultsHaveMultipleModels(results) || len(resultsByModel(results)) != 2 {
 		t.Fatalf("model grouping failed: %#v", resultsByModel(results))
@@ -310,9 +316,11 @@ func TestBuildRouteCoverageReport_ListsUncoveredHighRiskRoutes(t *testing.T) {
 
 	report := buildRouteCoverageReport(options{TasksPath: "fixture.md", Partition: "base-read"}, results, routes)
 	for _, want := range []string{"Schema Route Coverage Report", "project.delete", "repository.file_get", "merge_train.list_project", "enterprise_schema_only"} {
-		if !strings.Contains(report, want) {
-			t.Fatalf("coverage report missing %q:\n%s", want, report)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(report, want) {
+				t.Fatalf("coverage report missing %q:\n%s", want, report)
+			}
+		})
 	}
 }
 
@@ -467,13 +475,15 @@ func TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles(t *testing.T) {
 	}
 
 	for _, name := range []string{"index.md", "traces.jsonl", "run-002-MT-002.json"} {
-		data, err := os.ReadFile(filepath.Join(dir, name))
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		if !strings.Contains(string(data), "MT-002") {
-			t.Fatalf("%s = %s, want task ID", name, data)
-		}
+		t.Run(name, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join(dir, name))
+			if err != nil {
+				t.Fatalf("read %s: %v", name, err)
+			}
+			if !strings.Contains(string(data), "MT-002") {
+				t.Fatalf("%s = %s, want task ID", name, data)
+			}
+		})
 	}
 
 	index, err := os.ReadFile(filepath.Join(dir, "index.md"))

@@ -248,12 +248,14 @@ func TestProxy_HealthAndCardSurviveTheProxy(t *testing.T) {
 	plain := &server{baseURL: base + "/plain"}
 
 	for _, path := range []string{"/health", "/.well-known/mcp/server-card.json"} {
-		got := plain.do(t, request{method: http.MethodGet, path: path})
-		if got.status != http.StatusOK {
-			t.Errorf("GET %s through the proxy = %d, want %d", path, got.status, http.StatusOK)
-		}
-		if strings.Contains(path, "server-card") && !strings.Contains(got.body, "\"name\"") {
-			t.Errorf("the server card came back without a name: %s", got.body)
-		}
+		t.Run(path, func(t *testing.T) {
+			got := plain.do(t, request{method: http.MethodGet, path: path})
+			if got.status != http.StatusOK {
+				t.Errorf("GET %s through the proxy = %d, want %d", path, got.status, http.StatusOK)
+			}
+			if strings.Contains(path, "server-card") && !strings.Contains(got.body, "\"name\"") {
+				t.Errorf("the server card came back without a name: %s", got.body)
+			}
+		})
 	}
 }

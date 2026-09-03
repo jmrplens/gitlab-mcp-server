@@ -529,9 +529,11 @@ func TestListProject_WithKeyset(t *testing.T) {
 		t.Fatalf("expected 1 token, got %d", len(out.DeployTokens))
 	}
 	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=5"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 }
 
@@ -640,9 +642,11 @@ func TestListGroup_WithKeyset(t *testing.T) {
 		t.Fatalf("expected 1 token, got %d", len(out.DeployTokens))
 	}
 	for _, want := range []string{"order_by=id", "sort=asc", "pagination=keyset", "page_token=3"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 }
 
@@ -1046,9 +1050,11 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"| Expired | false |",
 		"| Expires | 15 Jun 2027 00:00 UTC |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1133,9 +1139,11 @@ func TestFormatListMarkdown_WithTokens(t *testing.T) {
 		"read_repository",
 		"read_registry, write_registry",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

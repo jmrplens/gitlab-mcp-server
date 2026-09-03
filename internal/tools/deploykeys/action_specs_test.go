@@ -53,14 +53,16 @@ func TestActionSpecs_DeployKeyIDGuidance(t *testing.T) {
 	}
 
 	for _, toolName := range []string{"gitlab_deploy_key_get", "gitlab_deploy_key_update", "gitlab_deploy_key_delete", "gitlab_deploy_key_enable"} {
-		spec := byTool[toolName]
-		if !strings.Contains(spec.Usage, "deploy_key_id") || !strings.Contains(spec.Usage, "deploy_token_id") {
-			t.Fatalf("%s Usage = %q, want deploy_key_id vs deploy_token_id guidance", toolName, spec.Usage)
-		}
-		guidance := spec.ParameterGuidance["deploy_key_id"]
-		if guidance.SemanticRole != "deploy_key" || !deployKeyContainsText(guidance.CommonConfusions, "deploy_token_id") {
-			t.Fatalf("%s deploy_key_id guidance = %+v, want deploy_token_id warning", toolName, guidance)
-		}
+		t.Run(toolName, func(t *testing.T) {
+			spec := byTool[toolName]
+			if !strings.Contains(spec.Usage, "deploy_key_id") || !strings.Contains(spec.Usage, "deploy_token_id") {
+				t.Fatalf("%s Usage = %q, want deploy_key_id vs deploy_token_id guidance", toolName, spec.Usage)
+			}
+			guidance := spec.ParameterGuidance["deploy_key_id"]
+			if guidance.SemanticRole != "deploy_key" || !deployKeyContainsText(guidance.CommonConfusions, "deploy_token_id") {
+				t.Fatalf("%s deploy_key_id guidance = %+v, want deploy_token_id warning", toolName, guidance)
+			}
+		})
 	}
 }
 

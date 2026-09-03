@@ -177,9 +177,11 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 		"pagination": "keyset",
 		"page_token": "abc",
 	} {
-		if got.Get(key) != want {
-			t.Errorf("query %q = %q, want %q", key, got.Get(key), want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if got.Get(key) != want {
+				t.Errorf("query %q = %q, want %q", key, got.Get(key), want)
+			}
+		})
 	}
 }
 

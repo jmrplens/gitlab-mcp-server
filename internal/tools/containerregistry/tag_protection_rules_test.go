@@ -358,9 +358,11 @@ func TestUpdateTagProtectionRule_AccessLevels(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, field := range []string{"minimum_access_level_for_push", "minimum_access_level_for_delete"} {
-		if !strings.Contains(body, field) {
-			t.Errorf("expected %s in request body, got: %s", field, body)
-		}
+		t.Run(field, func(t *testing.T) {
+			if !strings.Contains(body, field) {
+				t.Errorf("expected %s in request body, got: %s", field, body)
+			}
+		})
 	}
 	if out.MinimumAccessLevelForPush != "owner" {
 		t.Errorf("expected push level owner, got %s", out.MinimumAccessLevelForPush)

@@ -849,9 +849,11 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		"- **Issues**: 5 open, 3 closed",
 		"- **Open MRs**: 1",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -877,9 +879,11 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 		"**Issues**",
 		"**Open MRs**",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -922,9 +926,11 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 		"| #d9534f |",
 		"| #428bca |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

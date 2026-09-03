@@ -96,9 +96,11 @@ func TestCollectorAuth_EveryOption(t *testing.T) {
 					"X-Tenant":      "acme",
 					"X-Env":         "prod",
 				} {
-					if value := got.Get(header); value != want {
-						t.Errorf("%s = %q, want %q", header, value, want)
-					}
+					t.Run(header, func(t *testing.T) {
+						if value := got.Get(header); value != want {
+							t.Errorf("%s = %q, want %q", header, value, want)
+						}
+					})
 				}
 			},
 		},

@@ -87,9 +87,11 @@ func TestRunEfficiencyCheck_WritesPassingReport(t *testing.T) {
 	}
 	text := string(content)
 	for _, want := range []string{"# Trace Efficiency Check", "Status: `pass`", "| Attempts | 1 |", "## By Model"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("efficiency report = %q, want %q", text, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Fatalf("efficiency report = %q, want %q", text, want)
+			}
+		})
 	}
 }
 
@@ -110,9 +112,11 @@ func TestRunEfficiencyCheck_WritesViolationReportAndFails(t *testing.T) {
 	}
 	text := string(content)
 	for _, want := range []string{"Status: `fail`", "## Violations", "per_attempt_call_budget"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("efficiency report = %q, want %q", text, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Fatalf("efficiency report = %q, want %q", text, want)
+			}
+		})
 	}
 }
 
@@ -208,9 +212,11 @@ func TestRunTraceComparison_WritesReport(t *testing.T) {
 		t.Fatalf("read comparison report: %v", err)
 	}
 	for _, want := range []string{"# Trace Surface Comparison", "| Comparable rows | 1 |", "## Largest Dynamic Overheads"} {
-		if !strings.Contains(string(content), want) {
-			t.Fatalf("comparison report = %q, want %q", string(content), want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(string(content), want) {
+				t.Fatalf("comparison report = %q, want %q", string(content), want)
+			}
+		})
 	}
 }
 

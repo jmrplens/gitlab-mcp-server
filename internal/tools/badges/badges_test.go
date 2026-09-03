@@ -1100,9 +1100,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		}
 	}
 	for _, toolName := range []string{"gitlab_delete_project_badge", "gitlab_delete_group_badge"} {
-		if !byTool[toolName].Route.Destructive {
-			t.Fatalf("%s should be destructive", toolName)
-		}
+		t.Run(toolName, func(t *testing.T) {
+			if !byTool[toolName].Route.Destructive {
+				t.Fatalf("%s should be destructive", toolName)
+			}
+		})
 	}
 	assertBadgeEditNameGuidance(t, byTool)
 	assertBadgeCreateScopeGuidance(t, byTool)
@@ -1361,14 +1363,16 @@ func TestBadgeActionDescription_AllBranches(t *testing.T) {
 func TestBadgeIndividualDescription_AllBranches(t *testing.T) {
 	verbs := []string{"list", "get", "add", "edit", "delete", "preview", "rotate"}
 	for _, scope := range []string{"project", "group"} {
-		for _, verb := range verbs {
-			got := badgeIndividualDescription(verb, scope)
-			if !strings.Contains(got, "Returns:") || !strings.Contains(got, "See also:") {
-				t.Errorf("badgeIndividualDescription(%q, %q) missing Returns:/See also:: %q", verb, scope, got)
+		t.Run(scope, func(t *testing.T) {
+			for _, verb := range verbs {
+				got := badgeIndividualDescription(verb, scope)
+				if !strings.Contains(got, "Returns:") || !strings.Contains(got, "See also:") {
+					t.Errorf("badgeIndividualDescription(%q, %q) missing Returns:/See also:: %q", verb, scope, got)
+				}
+				if !strings.Contains(got, scope) {
+					t.Errorf("badgeIndividualDescription(%q, %q) does not mention scope: %q", verb, scope, got)
+				}
 			}
-			if !strings.Contains(got, scope) {
-				t.Errorf("badgeIndividualDescription(%q, %q) does not mention scope: %q", verb, scope, got)
-			}
-		}
+		})
 	}
 }

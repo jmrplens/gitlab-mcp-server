@@ -39,9 +39,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 
 	byTool := groupProtectedEnvSpecsByTool(t, specs)
 	for _, name := range []string{"gitlab_group_protected_environment_list", "gitlab_group_protected_environment_get"} {
-		if !byTool[name].ReadOnly {
-			t.Errorf("%s should be read-only", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !byTool[name].ReadOnly {
+				t.Errorf("%s should be read-only", name)
+			}
+		})
 	}
 	spec := byTool["gitlab_group_protected_environment_unprotect"]
 	if !spec.Destructive || !spec.Route.Destructive {
@@ -125,10 +127,12 @@ func TestGroupProtectedEnvDescription(t *testing.T) {
 		"gitlab_group_protected_environment_unprotect",
 	}
 	for _, name := range tools {
-		desc := groupProtectedEnvDescription(name)
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("description for %s = %q, want Returns:/See also: form", name, desc)
-		}
+		t.Run(name, func(t *testing.T) {
+			desc := groupProtectedEnvDescription(name)
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("description for %s = %q, want Returns:/See also: form", name, desc)
+			}
+		})
 	}
 	if got := groupProtectedEnvDescription("gitlab_unknown_tool"); got != "" {
 		t.Errorf("description for unknown tool = %q, want empty", got)

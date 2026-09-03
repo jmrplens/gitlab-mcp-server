@@ -325,9 +325,11 @@ func TestCreateExport_NotFoundHint(t *testing.T) {
 	}
 	errText := err.Error()
 	for _, want := range []string{"pipeline_id", "gitlab_pipeline", "dependency scanning", "SBOM"} {
-		if !strings.Contains(errText, want) {
-			t.Fatalf("error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errText, want) {
+				t.Fatalf("error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 

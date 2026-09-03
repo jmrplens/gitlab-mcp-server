@@ -256,9 +256,11 @@ func TestFormatServiceAccountListMarkdownString_WithData(t *testing.T) {
 		"| 1 | svc-1 | Service 1 |",
 		"| 2 | svc-2 | Service 2 |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -285,9 +287,11 @@ func TestFormatCurrentUserPATMarkdownString_WithAllFields(t *testing.T) {
 		"**Expires At**: 2026-01-15",
 		"`glpat-secret`",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -437,9 +441,11 @@ func TestFormatServiceAccountMarkdownString_WithEmail(t *testing.T) {
 		"**Email**: svc7@example.com",
 		"**Unconfirmed Email**: pending@example.com",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

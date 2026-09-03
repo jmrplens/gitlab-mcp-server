@@ -82,9 +82,11 @@ func TestAddPromptData_HandlesPointersAndNonStructValues(t *testing.T) {
 		t.Fatalf("Project data = %#v, want pointer struct fields", out["Project"])
 	}
 	for _, name := range []string{"NilPointer", "Text", "Nil"} {
-		if _, exists := out[name]; exists {
-			t.Fatalf("out[%q] exists in %#v, want skipped", name, out)
-		}
+		t.Run(name, func(t *testing.T) {
+			if _, exists := out[name]; exists {
+				t.Fatalf("out[%q] exists in %#v, want skipped", name, out)
+			}
+		})
 	}
 }
 

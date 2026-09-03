@@ -782,9 +782,11 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 		"### Body",
 		"Draft review comment",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -838,9 +840,11 @@ func TestFormatListMarkdown_WithDraftNotes(t *testing.T) {
 		"abcdef12", // commit truncated to 8 chars
 		"Short note",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	// Full 16-char commit should not appear (truncated to 8)
 	if strings.Contains(md, "abcdef1234567890") {
@@ -1291,9 +1295,11 @@ func TestFormatOutputMarkdown_PositionAndLineCode(t *testing.T) {
 		"**Line Code**: `code_3_4`",
 		"**Position**: `main.go` line 7",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

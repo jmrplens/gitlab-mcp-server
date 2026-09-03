@@ -153,9 +153,11 @@ func TestAPIErrorIncludesActionableHint(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 	for _, want := range []string{"LDAP provider name", "cn or filter", "Premium/Ultimate", "Owner access"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("error %q does not contain %q", err.Error(), want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("error %q does not contain %q", err.Error(), want)
+			}
+		})
 	}
 }
 

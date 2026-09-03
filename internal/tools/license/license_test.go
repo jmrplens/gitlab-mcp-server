@@ -116,11 +116,20 @@ func TestDelete_InvalidID(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	for _, id := range []int64{0, -1} {
-		err := Delete(t.Context(), client, DeleteInput{ID: id})
-		if err == nil {
-			t.Errorf("expected error for ID %d", id)
-		}
+	cases := []struct {
+		name string
+		id   int64
+	}{
+		{"zero", 0},
+		{"negative", -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Delete(t.Context(), client, DeleteInput{ID: tc.id})
+			if err == nil {
+				t.Errorf("expected error for ID %d", tc.id)
+			}
+		})
 	}
 }
 
@@ -195,9 +204,11 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 	result := FormatLicenseMarkdown(item)
 	text := result.Content[0].(*mcp.TextContent).Text
 	for _, want := range []string{"ultimate", "1 Jan 2026", "31 Dec 2026", "Jane", "Corp", "true"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("missing %q in markdown", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("missing %q in markdown", want)
+			}
+		})
 	}
 }
 

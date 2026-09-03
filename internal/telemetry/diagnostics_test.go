@@ -102,9 +102,11 @@ func TestSetDiagnosticSinks_NeverWritesToStdout(t *testing.T) {
 
 	out := buf.String()
 	for _, want := range []string{"handled error", "parse duration"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("%q did not reach the provided handler; a sink is writing somewhere else", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(out, want) {
+				t.Errorf("%q did not reach the provided handler; a sink is writing somewhere else", want)
+			}
+		})
 	}
 }
 

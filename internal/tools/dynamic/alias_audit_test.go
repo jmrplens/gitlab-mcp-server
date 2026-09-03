@@ -41,9 +41,11 @@ func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
 		"unsearchable_alias",
 	}
 	for _, problem := range wantProblems {
-		if !slices.ContainsFunc(findings, func(finding AliasAuditFinding) bool { return finding.Problem == problem }) {
-			t.Fatalf("findings = %+v, want problem %q", findings, problem)
-		}
+		t.Run(problem, func(t *testing.T) {
+			if !slices.ContainsFunc(findings, func(finding AliasAuditFinding) bool { return finding.Problem == problem }) {
+				t.Fatalf("findings = %+v, want problem %q", findings, problem)
+			}
+		})
 	}
 
 	for index := 1; index < len(findings); index++ {
@@ -133,9 +135,11 @@ func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T
 		t.Fatalf("AuditCatalogDiscoveryTerms() returned %d findings, want 14: %+v", len(findings), findings)
 	}
 	for _, ignored := range []string{"project.weak_action_a", "project.weak_action_b"} {
-		if slices.ContainsFunc(findings, func(finding CatalogDiscoveryFinding) bool { return finding.ID == ignored }) {
-			t.Fatalf("findings = %+v, want %s ignored because it has discovery signals", findings, ignored)
-		}
+		t.Run(ignored, func(t *testing.T) {
+			if slices.ContainsFunc(findings, func(finding CatalogDiscoveryFinding) bool { return finding.ID == ignored }) {
+				t.Fatalf("findings = %+v, want %s ignored because it has discovery signals", findings, ignored)
+			}
+		})
 	}
 	for _, finding := range findings {
 		if finding.Severity != "warning" || finding.Problem != "weak_discovery_terms" || finding.Message == "" {

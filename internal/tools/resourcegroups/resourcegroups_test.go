@@ -172,9 +172,11 @@ func TestFormatGroupMarkdown(t *testing.T) {
 		"**Key**: staging",
 		"**Process Mode**: oldest_first",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -200,9 +202,11 @@ func TestFormatJobsMarkdown_WithData(t *testing.T) {
 		"pending",
 		"created",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

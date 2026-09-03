@@ -19,6 +19,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// invalidIIDCases lists the work item IIDs every handler must reject before
+// reaching the API: Get, Delete and Update share the same guard.
+var invalidIIDCases = []struct {
+	name string
+	iid  int64
+}{
+	{"zero", 0},
+	{"negative", -1},
+	{"large_negative", -100},
+}
+
 // TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,14 +51,16 @@ func TestGet_Success(t *testing.T) {
 // TestGet_InvalidIID verifies Get when invalid IID.
 func TestGet_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, iid := range []int64{0, -1, -100} {
-		_, err := Get(t.Context(), client, GetInput{FullPath: testFullPath, IID: iid})
-		if err == nil {
-			t.Fatalf("expected error for IID=%d, got nil", iid)
-		}
-		if !strings.Contains(err.Error(), "work_item_iid") {
-			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
-		}
+	for _, tc := range invalidIIDCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Get(t.Context(), client, GetInput{FullPath: testFullPath, IID: tc.iid})
+			if err == nil {
+				t.Fatalf("expected error for IID=%d, got nil", tc.iid)
+			}
+			if !strings.Contains(err.Error(), "work_item_iid") {
+				t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", tc.iid, err)
+			}
+		})
 	}
 }
 
@@ -132,11 +145,13 @@ func TestList_Filters(t *testing.T) {
 			"includeDescendants": false,
 		}
 		for key, want := range expected {
-			if got := request.Variables[key]; got != want {
-				t.Errorf("variable %s = %#v, want %#v", key, got, want)
-				http.Error(w, "variable, want", http.StatusInternalServerError)
-				return
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := request.Variables[key]; got != want {
+					t.Errorf("variable %s = %#v, want %#v", key, got, want)
+					http.Error(w, "variable, want", http.StatusInternalServerError)
+					return
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[]}}}}`)
 	})
@@ -182,9 +197,11 @@ func TestList_Children(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, field := range []string{"hierarchy", "hasChildren", "children"} {
-		if !strings.Contains(capturedQuery, field) {
-			t.Errorf("list query missing %q field:\n%s", field, capturedQuery)
-		}
+		t.Run(field, func(t *testing.T) {
+			if !strings.Contains(capturedQuery, field) {
+				t.Errorf("list query missing %q field:\n%s", field, capturedQuery)
+			}
+		})
 	}
 	if len(out.WorkItems) != 1 {
 		t.Fatalf("expected 1 work item, got %d", len(out.WorkItems))
@@ -387,14 +404,16 @@ func TestDelete_Success(t *testing.T) {
 // TestDelete_InvalidIID verifies that Delete rejects invalid IIDs.
 func TestDelete_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, iid := range []int64{0, -1, -100} {
-		err := Delete(t.Context(), client, DeleteInput{FullPath: testFullPath, IID: iid})
-		if err == nil {
-			t.Fatalf("expected error for IID=%d, got nil", iid)
-		}
-		if !strings.Contains(err.Error(), "work_item_iid") {
-			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
-		}
+	for _, tc := range invalidIIDCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Delete(t.Context(), client, DeleteInput{FullPath: testFullPath, IID: tc.iid})
+			if err == nil {
+				t.Fatalf("expected error for IID=%d, got nil", tc.iid)
+			}
+			if !strings.Contains(err.Error(), "work_item_iid") {
+				t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", tc.iid, err)
+			}
+		})
 	}
 }
 
@@ -729,9 +748,11 @@ func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 		"A very detailed description.",
 	}
 	for _, s := range expects {
-		if !strings.Contains(text, s) {
-			t.Errorf("missing %q in output:\n%s", s, text)
-		}
+		t.Run(s, func(t *testing.T) {
+			if !strings.Contains(text, s) {
+				t.Errorf("missing %q in output:\n%s", s, text)
+			}
+		})
 	}
 }
 
@@ -754,9 +775,11 @@ func TestFormatGetMarkdown_Children(t *testing.T) {
 	}
 	text := extractText(t, result)
 	for _, s := range []string{"### Children", "| 20 | my-group/child-a |", "| 21 | my-group/child-b |"} {
-		if !strings.Contains(text, s) {
-			t.Errorf("missing %q in output:\n%s", s, text)
-		}
+		t.Run(s, func(t *testing.T) {
+			if !strings.Contains(text, s) {
+				t.Errorf("missing %q in output:\n%s", s, text)
+			}
+		})
 	}
 }
 
@@ -1335,14 +1358,16 @@ func TestUpdate_AllOptions(t *testing.T) {
 // with an error mentioning "iid".
 func TestUpdate_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, iid := range []int64{0, -1, -100} {
-		_, err := Update(t.Context(), client, UpdateInput{FullPath: testFullPath, IID: iid, Title: "x"})
-		if err == nil {
-			t.Fatalf("expected error for IID=%d, got nil", iid)
-		}
-		if !strings.Contains(err.Error(), "work_item_iid") {
-			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
-		}
+	for _, tc := range invalidIIDCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Update(t.Context(), client, UpdateInput{FullPath: testFullPath, IID: tc.iid, Title: "x"})
+			if err == nil {
+				t.Fatalf("expected error for IID=%d, got nil", tc.iid)
+			}
+			if !strings.Contains(err.Error(), "work_item_iid") {
+				t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", tc.iid, err)
+			}
+		})
 	}
 }
 
@@ -2057,9 +2082,11 @@ func TestFormatWorkItemTypeListMarkdown_WithTypes(t *testing.T) {
 		"Issue",
 		"Task",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("markdown missing %q:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown missing %q:\n%s", want, text)
+			}
+		})
 	}
 }
 

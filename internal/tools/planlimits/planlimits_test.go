@@ -171,9 +171,11 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	}
 	md := FormatGetMarkdown(out)
 	for _, want := range []string{"100", "200", "300", "400", "500", "600", "700", "800", "Plan Limits"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("missing %q in markdown", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in markdown", want)
+			}
+		})
 	}
 }
 
@@ -198,9 +200,11 @@ func TestFormatChangeMarkdown_AllFields(t *testing.T) {
 		t.Error("missing title")
 	}
 	for _, want := range []string{"Conan", "Generic", "Helm", "Maven", "NPM", "NuGet", "PyPI", "Terraform"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("missing %q in markdown", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in markdown", want)
+			}
+		})
 	}
 }
 

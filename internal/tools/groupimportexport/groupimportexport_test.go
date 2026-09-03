@@ -465,9 +465,11 @@ func TestFormatExportDownloadMarkdown_ContentCheck(t *testing.T) {
 func TestValidActions(t *testing.T) {
 	actions := ValidActions()
 	for _, expected := range []string{"schedule_export", "export_download", "import_file"} {
-		if !strings.Contains(actions, expected) {
-			t.Errorf("ValidActions() missing %q, got %q", expected, actions)
-		}
+		t.Run(expected, func(t *testing.T) {
+			if !strings.Contains(actions, expected) {
+				t.Errorf("ValidActions() missing %q, got %q", expected, actions)
+			}
+		})
 	}
 }
 

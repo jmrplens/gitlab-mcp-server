@@ -1233,9 +1233,11 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	}
 	md := FormatBoardListMarkdown(out)
 	for _, want := range []string{"To Do", "Max Issue Count", "Max Issue Weight", "alice", "v1.0"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatBoardListMarkdown missing %q in:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatBoardListMarkdown missing %q in:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "(ID:") {
 		t.Errorf("should not contain redundant (ID:) patterns:\n%s", md)

@@ -1342,9 +1342,11 @@ func TestFormatListMarkdown_WithPipelines(t *testing.T) {
 		"abc123de", // SHA truncated to 8 chars
 		"short",    // SHA shorter than 8 kept as-is
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1431,9 +1433,11 @@ func TestFormatDetailMarkdown_Full(t *testing.T) {
 		"**User**: testuser",
 		"**URL**:",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1461,9 +1465,11 @@ func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 		"**YAML Errors**",
 		"**User**",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -1489,9 +1495,11 @@ func TestFormatVariablesMarkdown_WithData(t *testing.T) {
 		"env_var",
 		"file",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1546,9 +1554,11 @@ func TestFormatTestReportMarkdown_WithSuites(t *testing.T) {
 		"60.00s",
 		"60.50s",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1596,9 +1606,11 @@ func TestFormatTestReportSummaryMarkdown_WithSuites(t *testing.T) {
 		"Unit",
 		"100.00s",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2076,9 +2088,11 @@ func TestCreate_WithInputs(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/pipeline" {
 			body, _ := io.ReadAll(r.Body)
 			for _, want := range []string{`"environment":"production"`, `"replicas":3`, `"debug":false`, `"regions":["us","eu"]`} {
-				if !strings.Contains(string(body), want) {
-					t.Errorf("request body missing %q:\n%s", want, body)
-				}
+				t.Run(want, func(t *testing.T) {
+					if !strings.Contains(string(body), want) {
+						t.Errorf("request body missing %q:\n%s", want, body)
+					}
+				})
 			}
 			testutil.RespondJSON(w, http.StatusCreated, pipelineDetailJSON)
 			return

@@ -56,9 +56,11 @@ func TestRealCollector_ToolNamePolicyOff(t *testing.T) {
 
 	t.Run("the span keeps both", func(t *testing.T) {
 		for _, key := range []string{"gen_ai.tool.name", "gitlab_mcp.action"} {
-			if _, present := attr(span.Attributes, key); !present {
-				t.Errorf("%s is absent from the span; the policy is about metric series, not about hiding the value", key)
-			}
+			t.Run(key, func(t *testing.T) {
+				if _, present := attr(span.Attributes, key); !present {
+					t.Errorf("%s is absent from the span; the policy is about metric series, not about hiding the value", key)
+				}
+			})
 		}
 	})
 
@@ -67,9 +69,11 @@ func TestRealCollector_ToolNamePolicyOff(t *testing.T) {
 			t.Fatalf("no %s metric, so this would pass vacuously", durationMetric)
 		}
 		for _, key := range []string{"gen_ai.tool.name", "gitlab_mcp.action"} {
-			if instrument := metricDimensionExists(t, c, key); instrument != "" {
-				t.Errorf("%s is still a dimension of %s under the off policy", key, instrument)
-			}
+			t.Run(key, func(t *testing.T) {
+				if instrument := metricDimensionExists(t, c, key); instrument != "" {
+					t.Errorf("%s is still a dimension of %s under the off policy", key, instrument)
+				}
+			})
 		}
 	})
 }
@@ -106,9 +110,11 @@ func TestRealCollector_IdentityFullExportsTheReadableUser(t *testing.T) {
 			t.Fatalf("no %s metric, so this would pass vacuously", durationMetric)
 		}
 		for _, key := range []string{"user.id", "user.name", "user.hash"} {
-			if instrument := metricDimensionExists(t, c, key); instrument != "" {
-				t.Errorf("%q is a dimension of %s; identity must never reach a metric under any policy", key, instrument)
-			}
+			t.Run(key, func(t *testing.T) {
+				if instrument := metricDimensionExists(t, c, key); instrument != "" {
+					t.Errorf("%q is a dimension of %s; identity must never reach a metric under any policy", key, instrument)
+				}
+			})
 		}
 	})
 }

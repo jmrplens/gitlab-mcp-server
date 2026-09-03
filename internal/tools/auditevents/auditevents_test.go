@@ -766,9 +766,11 @@ func TestFormatMarkdown_Full(t *testing.T) {
 		"| Entity Path | group/project |",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q", want)
+			}
+		})
 	}
 }
 

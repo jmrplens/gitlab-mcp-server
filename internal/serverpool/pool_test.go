@@ -1310,9 +1310,11 @@ func TestEvictIdle_ReclaimsOnlyStaleEntries(t *testing.T) {
 	pool := New(cfg, testFactory(), WithIdleTimeout(30*time.Minute))
 
 	for _, token := range []string{"stale-token", "fresh-token"} {
-		if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
-			t.Fatalf("GetOrCreate(%s) error: %v", token, err)
-		}
+		t.Run(token, func(t *testing.T) {
+			if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+				t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+			}
+		})
 	}
 
 	// Age one entry past the timeout without waiting for wall-clock time.
@@ -1901,9 +1903,11 @@ func TestPool_OnEvictFiresOnEveryRemovalPath(t *testing.T) {
 
 		pool := newRecordingPool(&evicted, &mu)
 		for _, token := range []string{"glpat-a", "glpat-b"} {
-			if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
-				t.Fatalf("entry %s: %v", token, err)
-			}
+			t.Run(token, func(t *testing.T) {
+				if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+					t.Fatalf("entry %s: %v", token, err)
+				}
+			})
 		}
 		pool.Close()
 

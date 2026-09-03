@@ -172,9 +172,11 @@ func TestPrintRegisterMetaDefinitions_WritesInventorySummary(t *testing.T) {
 		"| unexpected | `runners` | `internal/tools/runners/register.go` | `-` |",
 	}
 	for _, expected := range expectedFragments {
-		if !strings.Contains(output, expected) {
-			t.Fatalf("output missing %q:\n%s", expected, output)
-		}
+		t.Run(expected, func(t *testing.T) {
+			if !strings.Contains(output, expected) {
+				t.Fatalf("output missing %q:\n%s", expected, output)
+			}
+		})
 	}
 }
 

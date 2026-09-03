@@ -860,9 +860,11 @@ func TestValidationRepairMessage_DynamicWrongActionIncludesOrderingHint(t *testi
 		"not the current scenario step",
 		"do not skip ahead",
 	} {
-		if !strings.Contains(message, want) {
-			t.Fatalf("message = %q, want substring %q", message, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(message, want) {
+				t.Fatalf("message = %q, want substring %q", message, want)
+			}
+		})
 	}
 }
 
@@ -877,9 +879,11 @@ func TestValidationRepairMessage_UnknownParamsDropsCarriedFields(t *testing.T) {
 		"Remove every unknown param",
 		"do not carry IDs from a previous action",
 	} {
-		if !strings.Contains(message, want) {
-			t.Fatalf("message = %q, want substring %q", message, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(message, want) {
+				t.Fatalf("message = %q, want substring %q", message, want)
+			}
+		})
 	}
 }
 
@@ -894,9 +898,11 @@ func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) 
 	})
 
 	for _, want := range []string{`"action":"pipeline.trigger_get"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"trigger_id":67`} {
-		if !strings.Contains(message, want) {
-			t.Fatalf("message = %q, want substring %q", message, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(message, want) {
+				t.Fatalf("message = %q, want substring %q", message, want)
+			}
+		})
 	}
 }
 

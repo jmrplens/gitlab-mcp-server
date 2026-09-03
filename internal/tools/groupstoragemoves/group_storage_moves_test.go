@@ -759,9 +759,11 @@ func TestFormatScheduleAllMarkdown(t *testing.T) {
 		"All group repository storage moves have been scheduled",
 	}
 	for _, want := range wantAll {
-		if !strings.Contains(got, want) {
-			t.Errorf("output missing %q\ngot:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("output missing %q\ngot:\n%s", want, got)
+			}
+		})
 	}
 }
 

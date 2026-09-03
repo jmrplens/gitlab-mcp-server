@@ -608,9 +608,11 @@ func TestFormatOutputMarkdown_WithAttributes_RendersTable(t *testing.T) {
 		}},
 	})
 	for _, want := range []string{"Business &#124; impact", "Business &#124; labels", "| Multiple selection | true |", "| Template type | `CUSTOM` |", "High &#124; Risk"} {
-		if !strings.Contains(md, want) {
-			t.Fatalf("FormatOutputMarkdown() missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Fatalf("FormatOutputMarkdown() missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

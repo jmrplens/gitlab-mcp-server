@@ -58,17 +58,19 @@ func TestLDAPMetadata_IndividualToolDescriptions(t *testing.T) {
 		"gitlab_group_ldap_link_delete",
 		"gitlab_group_ldap_link_delete_for_provider",
 	} {
-		desc := byTool[name].IndividualTool.Description
-		if desc == "" {
-			t.Errorf("%s: IndividualTool.Description is empty", name)
-			continue
-		}
-		if !strings.Contains(desc, "Returns:") {
-			t.Errorf("%s: description missing 'Returns:': %q", name, desc)
-		}
-		if !strings.Contains(desc, "See also:") {
-			t.Errorf("%s: description missing 'See also:': %q", name, desc)
-		}
+		t.Run(name, func(t *testing.T) {
+			desc := byTool[name].IndividualTool.Description
+			if desc == "" {
+				t.Errorf("%s: IndividualTool.Description is empty", name)
+				return
+			}
+			if !strings.Contains(desc, "Returns:") {
+				t.Errorf("%s: description missing 'Returns:': %q", name, desc)
+			}
+			if !strings.Contains(desc, "See also:") {
+				t.Errorf("%s: description missing 'See also:': %q", name, desc)
+			}
+		})
 	}
 }
 
@@ -107,13 +109,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		t.Error("list action should be read-only")
 	}
 	for _, name := range []string{"gitlab_group_ldap_link_delete", "gitlab_group_ldap_link_delete_for_provider"} {
-		spec := byTool[name]
-		if !spec.Destructive || !spec.Route.Destructive {
-			t.Errorf("%s should be destructive", name)
-		}
-		if !spec.Idempotent {
-			t.Errorf("%s should be idempotent", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			spec := byTool[name]
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s should be destructive", name)
+			}
+			if !spec.Idempotent {
+				t.Errorf("%s should be idempotent", name)
+			}
+		})
 	}
 }
 

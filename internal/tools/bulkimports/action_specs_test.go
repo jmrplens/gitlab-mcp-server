@@ -54,9 +54,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		"gitlab_get_bulk_import_entity",
 		"gitlab_list_bulk_import_entity_failures",
 	} {
-		if !byTool[name].ReadOnly || !byTool[name].Idempotent {
-			t.Errorf("%s should be read-only and idempotent", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !byTool[name].ReadOnly || !byTool[name].Idempotent {
+				t.Errorf("%s should be read-only and idempotent", name)
+			}
+		})
 	}
 	if !byTool["gitlab_cancel_bulk_import"].Idempotent {
 		t.Error("gitlab_cancel_bulk_import should be idempotent")

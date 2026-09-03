@@ -85,9 +85,11 @@ func TestMain(m *testing.M) {}
 		patternTestCov:      1,
 	}
 	for pattern, want := range expected {
-		if got := counts[pattern]; got != want {
-			t.Fatalf("pattern %s count = %d, want %d", pattern, got, want)
-		}
+		t.Run(pattern, func(t *testing.T) {
+			if got := counts[pattern]; got != want {
+				t.Fatalf("pattern %s count = %d, want %d", pattern, got, want)
+			}
+		})
 	}
 }
 
@@ -194,9 +196,11 @@ func TestReplaceGeneratedBlock_MigratesLegacySection(t *testing.T) {
 		t.Fatalf("replaceGeneratedBlock() error = %v", err)
 	}
 	for _, want := range []string{startMarker, "new metrics", endMarker, "## Test Types", "manual content"} {
-		if !strings.Contains(updated, want) {
-			t.Fatalf("updated content missing %q:\n%s", want, updated)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(updated, want) {
+				t.Fatalf("updated content missing %q:\n%s", want, updated)
+			}
+		})
 	}
 	if strings.Contains(updated, "old metrics") {
 		t.Fatalf("legacy metrics should have been replaced:\n%s", updated)

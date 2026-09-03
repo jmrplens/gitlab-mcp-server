@@ -841,9 +841,11 @@ func TestMarkdown_EscapesTableCells_PreservesLinkHint(t *testing.T) {
 
 	outputMarkdown := FormatOutputMarkdown(attribute)
 	for _, want := range []string{"#FF&#124;0000", "Needs &#124; review", "| Editable state | `EDITABLE` |"} {
-		if !strings.Contains(outputMarkdown, want) {
-			t.Fatalf("FormatOutputMarkdown() missing %q:\n%s", want, outputMarkdown)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(outputMarkdown, want) {
+				t.Fatalf("FormatOutputMarkdown() missing %q:\n%s", want, outputMarkdown)
+			}
+		})
 	}
 }
 
@@ -878,9 +880,11 @@ func TestMarkdownFormatsProjectAndBulkUpdates(t *testing.T) {
 		AttributeIDs: []int64{9, 10},
 	})
 	for _, want := range []string{"| Mode | `REPLACE` |", "| Attributes | `[9 10]` |", "| Groups | `[5]` |", "| Projects | `[42]` |"} {
-		if !strings.Contains(bulkMarkdown, want) {
-			t.Fatalf("FormatBulkUpdateMarkdown() missing %q:\n%s", want, bulkMarkdown)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(bulkMarkdown, want) {
+				t.Fatalf("FormatBulkUpdateMarkdown() missing %q:\n%s", want, bulkMarkdown)
+			}
+		})
 	}
 }
 

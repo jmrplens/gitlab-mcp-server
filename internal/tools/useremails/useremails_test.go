@@ -548,9 +548,11 @@ func TestFormatListMarkdownString_WithEmails(t *testing.T) {
 		{"unconfirmed email dash", "| 2 | unconfirmed@example.com | - |"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c.contains) {
-			t.Errorf("%s: markdown missing %q\ngot:\n%s", c.label, c.contains, md)
-		}
+		t.Run(c.label, func(t *testing.T) {
+			if !strings.Contains(md, c.contains) {
+				t.Errorf("%s: markdown missing %q\ngot:\n%s", c.label, c.contains, md)
+			}
+		})
 	}
 }
 

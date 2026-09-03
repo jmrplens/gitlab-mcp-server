@@ -250,9 +250,11 @@ func TestDynamicSingleTaskPrompt_TerraformStateUnlockExactCallAvoidsLegacyEnvelo
 	}
 	requireContainsAll(t, "taskPromptForSurface()", prompt, required)
 	for _, unwanted := range []string{`"action":"terraform_state.unlock"`, `"terraform_state_name":`, `"action":"admin.terraform_state_unlock"`} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPromptForSurface() = %q, want no legacy terraform state envelope %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPromptForSurface() = %q, want no legacy terraform state envelope %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -325,9 +327,11 @@ func TestDynamicRepositoryFileCRUDPrompt_UsesFilePathFromOperation(t *testing.T)
 		"my-org/tools/gitlab-mcp-server",
 	})
 	for _, unwanted := range []string{`"action":"repository.file_create"`, `"file_path":"my-org/tools/gitlab-mcp-server"`, "repository.file_create"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPromptForSurface() = %q, want no exact file CRUD content %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPromptForSurface() = %q, want no exact file CRUD content %q", prompt, unwanted)
+			}
+		})
 	}
 }
 

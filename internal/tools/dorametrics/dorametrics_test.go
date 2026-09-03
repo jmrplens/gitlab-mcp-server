@@ -257,9 +257,11 @@ func TestGetProjectMetrics_BadRequestHint(t *testing.T) {
 	}
 	errText := err.Error()
 	for _, want := range []string{"environment_tiers", "omit environment_tiers", "deployment environment tiers"} {
-		if !strings.Contains(errText, want) {
-			t.Fatalf("error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errText, want) {
+				t.Fatalf("error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 
@@ -438,9 +440,11 @@ func TestGetGroupMetrics_BadRequestHint(t *testing.T) {
 	}
 	errText := err.Error()
 	for _, want := range []string{"environment_tiers", "omit environment_tiers", "deployment environment tiers"} {
-		if !strings.Contains(errText, want) {
-			t.Fatalf("error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errText, want) {
+				t.Fatalf("error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 

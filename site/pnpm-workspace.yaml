@@ -15,11 +15,13 @@ overrides:
   "brace-expansion@<1.1.18": 1.1.18
   "brace-expansion@>=3.0.0 <5.0.9": 5.0.9
   # fast-uri host confusion via failed IDN / backslash authority
-  # (GHSA-4c8g-83qw-93j6, GHSA-v2hh-gcrm-f6hx, GHSA-6q2v-7v5f-6qmw);
-  # dev/build deps only (html-validate > @sidvind/better-ajv-errors > ajv).
+  # (GHSA-4c8g-83qw-93j6, GHSA-v2hh-gcrm-f6hx, GHSA-6q2v-7v5f-6qmw), and via
+  # percent-encoded scheme normalization (GHSA-jqff-g426-hqxp, which the 3.1.5
+  # this line used to pin does not carry a fix for). Dev/build deps only, now
+  # reached through @astrojs/check's language server as well as html-validate.
   # Pinned exactly rather than ">=": an open range now resolves to 4.x, and a
   # major bump of ajv's URI parser is not what an advisory fix should drag in.
-  "fast-uri@<3.1.5": 3.1.5
+  "fast-uri@<3.1.6": 3.1.6
   # ip-address Address4 decodes leading-zero octets as decimal (GHSA-8gjw-6f7c-jmc4);
   # dev/build deps only (pa11y-ci > puppeteer > socks-proxy-agent > socks).
   "ip-address@<10.3.1": 10.3.1

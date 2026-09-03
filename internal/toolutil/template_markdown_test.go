@@ -16,9 +16,11 @@ func TestFormatTemplateAttributeListMarkdown(t *testing.T) {
 	})
 
 	for _, want := range []string{"## Templates", "mit", "MIT &#124; License", "Yes", "Use a get action"} {
-		if !strings.Contains(md, want) {
-			t.Fatalf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Fatalf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	empty := FormatTemplateAttributeListMarkdown(nil, TemplateAttributeListMarkdownOptions{Title: "Templates", EmptyMessage: "No templates found.", AttributeHeader: "Popular"})
@@ -45,9 +47,11 @@ func TestFormatTemplateDetailMarkdown(t *testing.T) {
 	})
 
 	for _, want := range []string{"Project Template: MIT", "mit", "Nickname", "Popular", "A permissive license", "commercial-use", "include-copyright", "no-liability", "```\nlicense text\n```", "Use this template"} {
-		if !strings.Contains(md, want) {
-			t.Fatalf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Fatalf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	minimal := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{Title: "License: Minimal"})
@@ -70,9 +74,11 @@ func TestFormatTemplateDetailMarkdown_PlainFields(t *testing.T) {
 	})
 
 	for _, want := range []string{"**Description**: A permissive license", "**Permissions**: commercial-use", "**Conditions**: include-copyright", "**Limitations**: no-liability"} {
-		if !strings.Contains(md, want) {
-			t.Fatalf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Fatalf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "- **Permissions**") {
 		t.Fatalf("plain markdown should not render bulleted detail fields:\n%s", md)

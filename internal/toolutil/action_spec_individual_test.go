@@ -216,9 +216,11 @@ func TestIndividualToolFromActionSpec_PreservesIndividualRequiredFields(t *testi
 		t.Fatalf("schema required = %T, want []any", schema["required"])
 	}
 	for _, field := range []string{"project_id", "environment_scope"} {
-		if !slices.ContainsFunc(required, func(value any) bool { return value == field }) {
-			t.Fatalf("required fields = %#v, want %q", required, field)
-		}
+		t.Run(field, func(t *testing.T) {
+			if !slices.ContainsFunc(required, func(value any) bool { return value == field }) {
+				t.Fatalf("required fields = %#v, want %q", required, field)
+			}
+		})
 	}
 }
 

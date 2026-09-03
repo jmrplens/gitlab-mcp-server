@@ -159,9 +159,11 @@ func TestBuildInstructions_SurfacesDifferInNamesNotAdvice(t *testing.T) {
 		text := buildInstructions(surface, config.CapabilitySurfaceFull, false)
 		rendered[surface] = text
 		for _, section := range sections {
-			if !strings.Contains(text, section) {
-				t.Errorf("surface %q instructions are missing the %q section", surface, section)
-			}
+			t.Run(section, func(t *testing.T) {
+				if !strings.Contains(text, section) {
+					t.Errorf("surface %q instructions are missing the %q section", surface, section)
+				}
+			})
 		}
 	}
 
@@ -179,16 +181,20 @@ func TestBuildInstructions_SurfacesDifferInNamesNotAdvice(t *testing.T) {
 func TestBuildInstructions_DynamicExplainsTheTwoToolWorkflow(t *testing.T) {
 	dynamic := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, false)
 	for _, want := range []string{"gitlab_find_action", "gitlab_execute_action", "FINDING TOOLS"} {
-		if !strings.Contains(dynamic, want) {
-			t.Errorf("dynamic instructions missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(dynamic, want) {
+				t.Errorf("dynamic instructions missing %q", want)
+			}
+		})
 	}
 
 	// The other surfaces must not advertise a workflow they cannot run.
 	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
-		if strings.Contains(buildInstructions(surface, config.CapabilitySurfaceFull, false), "gitlab_find_action") {
-			t.Errorf("surface %q instructions mention gitlab_find_action, which only dynamic mode exposes", surface)
-		}
+		t.Run(surface, func(t *testing.T) {
+			if strings.Contains(buildInstructions(surface, config.CapabilitySurfaceFull, false), "gitlab_find_action") {
+				t.Errorf("surface %q instructions mention gitlab_find_action, which only dynamic mode exposes", surface)
+			}
+		})
 	}
 }
 

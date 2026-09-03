@@ -1717,9 +1717,11 @@ func TestEnterpriseOrbit_NotRegisteredOnSelfManaged(t *testing.T) {
 		orbitGraphTool,
 	}
 	for _, expected := range expectedOrbitIndividualTools {
-		if registeredOrbit[expected] {
-			t.Fatalf("individual tool %q should not be registered on self-managed Enterprise", expected)
-		}
+		t.Run(expected, func(t *testing.T) {
+			if registeredOrbit[expected] {
+				t.Fatalf("individual tool %q should not be registered on self-managed Enterprise", expected)
+			}
+		})
 	}
 	t.Logf("Confirmed none of the 6 expected gitlab_orbit_* individual tools are registered on self-managed Enterprise")
 

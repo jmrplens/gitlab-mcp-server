@@ -656,9 +656,11 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	for key, want := range map[string]string{
 		"order_by": "created_at", "sort": "desc", "pagination": "keyset", "page_token": "tok", "per_page": "50",
 	} {
-		if got.Get(key) != want {
-			t.Errorf("query %s = %q, want %q", key, got.Get(key), want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if got.Get(key) != want {
+				t.Errorf("query %s = %q, want %q", key, got.Get(key), want)
+			}
+		})
 	}
 }
 

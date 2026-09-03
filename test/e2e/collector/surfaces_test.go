@@ -133,9 +133,11 @@ func TestRealCollector_IndividualSurfaceDropsTheNameFromMetricsByDefault(t *test
 
 	t.Run("the span still says what was called", func(t *testing.T) {
 		for _, key := range []string{"gen_ai.tool.name", "gitlab_mcp.action"} {
-			if _, present := attr(span.Attributes, key); !present {
-				t.Errorf("%s is absent from the span; the policy bounds series and does not hide values", key)
-			}
+			t.Run(key, func(t *testing.T) {
+				if _, present := attr(span.Attributes, key); !present {
+					t.Errorf("%s is absent from the span; the policy bounds series and does not hide values", key)
+				}
+			})
 		}
 	})
 
@@ -144,10 +146,12 @@ func TestRealCollector_IndividualSurfaceDropsTheNameFromMetricsByDefault(t *test
 			t.Fatalf("no %s metric, so this would pass vacuously", durationMetric)
 		}
 		for _, key := range []string{"gen_ai.tool.name", "gitlab_mcp.action"} {
-			if instrument := metricDimensionExists(t, c, key); instrument != "" {
-				t.Errorf("%s is a dimension of %s on the individual surface; about a thousand values against a 2000-series budget",
-					key, instrument)
-			}
+			t.Run(key, func(t *testing.T) {
+				if instrument := metricDimensionExists(t, c, key); instrument != "" {
+					t.Errorf("%s is a dimension of %s on the individual surface; about a thousand values against a 2000-series budget",
+						key, instrument)
+				}
+			})
 		}
 	})
 }

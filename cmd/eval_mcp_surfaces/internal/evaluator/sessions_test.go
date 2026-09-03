@@ -103,17 +103,23 @@ func TestToolResultContent_HandlesStructuredTextAndEmptyResults(t *testing.T) {
 // TestParseToolsSnapshot_AcceptsRawAndWrappedShapes verifies snapshots can be
 // loaded from both tools/list-compatible and plain array fixtures.
 func TestParseToolsSnapshot_AcceptsRawAndWrappedShapes(t *testing.T) {
-	for _, data := range [][]byte{
-		[]byte(`[{"name":"gitlab_project","inputSchema":{"type":"object"}}]`),
-		[]byte(`{"tools":[{"name":"gitlab_project","inputSchema":{"type":"object"}}]}`),
-	} {
-		snapshot, err := parseToolsSnapshot(data)
-		if err != nil {
-			t.Fatalf("parseToolsSnapshot(%s) error = %v", data, err)
-		}
-		if len(snapshot) != 1 || snapshot[0].Name != "gitlab_project" {
-			t.Fatalf("snapshot = %#v, want gitlab_project", snapshot)
-		}
+	shapes := []struct {
+		name string
+		data []byte
+	}{
+		{"plain_array", []byte(`[{"name":"gitlab_project","inputSchema":{"type":"object"}}]`)},
+		{"tools_list_wrapper", []byte(`{"tools":[{"name":"gitlab_project","inputSchema":{"type":"object"}}]}`)},
+	}
+	for _, tc := range shapes {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot, err := parseToolsSnapshot(tc.data)
+			if err != nil {
+				t.Fatalf("parseToolsSnapshot(%s) error = %v", tc.data, err)
+			}
+			if len(snapshot) != 1 || snapshot[0].Name != "gitlab_project" {
+				t.Fatalf("snapshot = %#v, want gitlab_project", snapshot)
+			}
+		})
 	}
 	if _, err := parseToolsSnapshot([]byte(`{"tools":`)); err == nil {
 		t.Fatal("parseToolsSnapshot(invalid) error = nil, want error")

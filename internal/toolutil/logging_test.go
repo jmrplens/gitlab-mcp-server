@@ -223,26 +223,36 @@ func TestCancellation_IsNotReportedAsAFailure(t *testing.T) {
 // TestWasCancelled_SeparatesCallerDepartureFromFailure checks the predicate the
 // log level turns on.
 func TestWasCancelled_SeparatesCallerDepartureFromFailure(t *testing.T) {
-	canceled := []error{
-		context.Canceled,
-		context.DeadlineExceeded,
-		fmt.Errorf("listing issues: %w", context.Canceled),
+	canceled := []struct {
+		name string
+		err  error
+	}{
+		{name: "canceled", err: context.Canceled},
+		{name: "deadline_exceeded", err: context.DeadlineExceeded},
+		{name: "wrapped_canceled", err: fmt.Errorf("listing issues: %w", context.Canceled)},
 	}
-	for _, err := range canceled {
-		if !wasCancelled(err) {
-			t.Errorf("wasCancelled(%v) = false, want true", err)
-		}
+	for _, tc := range canceled {
+		t.Run(tc.name, func(t *testing.T) {
+			if !wasCancelled(tc.err) {
+				t.Errorf("wasCancelled(%v) = false, want true", tc.err)
+			}
+		})
 	}
 
-	failures := []error{
-		nil,
-		errors.New("boom"),
-		fmt.Errorf("listing issues: %w", errors.New("500 from GitLab")),
+	failures := []struct {
+		name string
+		err  error
+	}{
+		{name: "nil_error", err: nil},
+		{name: "plain_failure", err: errors.New("boom")},
+		{name: "wrapped_failure", err: fmt.Errorf("listing issues: %w", errors.New("500 from GitLab"))},
 	}
-	for _, err := range failures {
-		if wasCancelled(err) {
-			t.Errorf("wasCancelled(%v) = true; a real failure would be logged at INFO and lost", err)
-		}
+	for _, tc := range failures {
+		t.Run(tc.name, func(t *testing.T) {
+			if wasCancelled(tc.err) {
+				t.Errorf("wasCancelled(%v) = true; a real failure would be logged at INFO and lost", tc.err)
+			}
+		})
 	}
 }
 

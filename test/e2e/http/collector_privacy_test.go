@@ -76,14 +76,19 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 	// Calls carrying every category. Whether each succeeds is beside the point:
 	// a failing call is exactly where a server is most tempted to record what it
 	// was given.
-	calls := []request{
-		authorizedCall(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{`+protocolMeta+`,"name":"gitlab_execute_action","arguments":{"action":"issue.list","project_id":"`+projectPath+`"}}}`, withAction("issue.list")),
-		authorizedCall(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{`+protocolMeta+`,"name":"gitlab_execute_action","arguments":{"action":"search.code","search":"`+searchQuery+`"}}}`, withAction("search.code")),
-		authorizedCall(`{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{`+protocolMeta+`,"uri":"gitlab://projects/`+projectPath+`/issues"}}`, nil),
-		{body: `{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{` + protocolMeta + `}}`, headers: map[string]string{"PRIVATE-TOKEN": clientToken}},
+	calls := []struct {
+		name string
+		call request
+	}{
+		{"project_path_in_tool_arguments", authorizedCall(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{`+protocolMeta+`,"name":"gitlab_execute_action","arguments":{"action":"issue.list","project_id":"`+projectPath+`"}}}`, withAction("issue.list"))},
+		{"search_query_in_tool_arguments", authorizedCall(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{`+protocolMeta+`,"name":"gitlab_execute_action","arguments":{"action":"search.code","search":"`+searchQuery+`"}}}`, withAction("search.code"))},
+		{"project_path_in_resource_uri", authorizedCall(`{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{`+protocolMeta+`,"uri":"gitlab://projects/`+projectPath+`/issues"}}`, nil)},
+		{"client_token_in_header", request{body: `{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{` + protocolMeta + `}}`, headers: map[string]string{"PRIVATE-TOKEN": clientToken}}},
 	}
-	for _, call := range calls {
-		srv.do(t, call)
+	for _, tc := range calls {
+		t.Run(tc.name, func(t *testing.T) {
+			srv.do(t, tc.call)
+		})
 	}
 
 	c.awaitExport(t, 20*time.Second)

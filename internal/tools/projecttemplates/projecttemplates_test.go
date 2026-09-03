@@ -144,9 +144,11 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 		Content:     "MIT License text",
 	})
 	for _, want := range []string{"MIT License", "MIT", "Popular", "A permissive license", "commercial-use", "include-copyright", "no-liability", "MIT License text"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("missing %q in markdown output", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in markdown output", want)
+			}
+		})
 	}
 }
 
@@ -261,9 +263,11 @@ func TestList_WithFiltersAndKeyset(t *testing.T) {
 			"pagination": "keyset",
 			"page_token": "tok123",
 		} {
-			if q.Get(key) != want {
-				t.Errorf("query %s = %q, want %q (raw=%s)", key, q.Get(key), want, r.URL.RawQuery)
-			}
+			t.Run(key, func(t *testing.T) {
+				if q.Get(key) != want {
+					t.Errorf("query %s = %q, want %q (raw=%s)", key, q.Get(key), want, r.URL.RawQuery)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License"}]`)
 	}))

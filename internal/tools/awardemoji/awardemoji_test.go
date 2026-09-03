@@ -1507,9 +1507,11 @@ func TestListIssueAwardEmoji_ForwardsListQuery(t *testing.T) {
 		"pagination": "keyset",
 		"page_token": "42",
 	} {
-		if got := gotQuery.Get(key); got != want {
-			t.Errorf("query %s = %q, want %q", key, got, want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if got := gotQuery.Get(key); got != want {
+				t.Errorf("query %s = %q, want %q", key, got, want)
+			}
+		})
 	}
 }
 

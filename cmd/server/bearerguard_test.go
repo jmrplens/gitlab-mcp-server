@@ -124,9 +124,12 @@ func TestBearerGuard_InvalidToken_ChallengesWithInvalidTokenCode(t *testing.T) {
 	}
 	challenge := failure.header.Get("WWW-Authenticate")
 	for _, want := range []string{`error="invalid_token"`, `error_description="`, `resource_metadata="`} {
-		if !strings.Contains(challenge, want) {
-			t.Errorf("challenge %q is missing %s", challenge, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+			if !strings.Contains(challenge, want) {
+				t.Errorf("challenge %q is missing %s", challenge, want)
+			}
+		})
 	}
 }
 
@@ -285,9 +288,12 @@ func TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized(t *testing.T) {
 	// error_description.
 	challenge := failure.header.Get("WWW-Authenticate")
 	for _, want := range []string{`error="insufficient_scope"`, `scope="` + oauth.MinimumScope + `"`} {
-		if !strings.Contains(challenge, want) {
-			t.Errorf("challenge %q is missing %s", challenge, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+			if !strings.Contains(challenge, want) {
+				t.Errorf("challenge %q is missing %s", challenge, want)
+			}
+		})
 	}
 	if strings.Contains(challenge, `scope="`+oauth.ScopeAPI+`"`) {
 		t.Errorf("challenge %q demands the write scope for a request that only needs %s", challenge, oauth.MinimumScope)
@@ -442,16 +448,19 @@ func TestBearerGuard_Middleware_AuthenticatedRequestContinues(t *testing.T) {
 func TestQuotedStringEscape_EscapesQuotesAndBackslashes(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct{ in, want string }{
-		{"plain", "plain"},
-		{`with "quotes"`, `with \"quotes\"`},
-		{`back\slash`, `back\\slash`},
-		{"", ""},
+	tests := []struct{ name, in, want string }{
+		{"no_special_characters", "plain", "plain"},
+		{"double_quotes", `with "quotes"`, `with \"quotes\"`},
+		{"backslash", `back\slash`, `back\\slash`},
+		{"empty", "", ""},
 	}
 	for _, tt := range tests {
-		if got := quotedStringEscape(tt.in); got != tt.want {
-			t.Errorf("quotedStringEscape(%q) = %q, want %q", tt.in, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := quotedStringEscape(tt.in); got != tt.want {
+				t.Errorf("quotedStringEscape(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 

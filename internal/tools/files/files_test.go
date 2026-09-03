@@ -1156,9 +1156,11 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 	}
 	// Verify optional fields were sent in the request body
 	for _, want := range []string{"start_branch", "encoding", "author_email", "author_name", "execute_filemode"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -1202,9 +1204,11 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 		t.Errorf("FilePath = %q, want %q", out.FilePath, "script.sh")
 	}
 	for _, want := range []string{"start_branch", "encoding", "author_email", "author_name", "last_commit_id", "execute_filemode"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -1448,9 +1452,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			"**Encoding**: base64",
 			"**Blob ID**: blob123",
 		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, got)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(got, want) {
+					t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, got)
+				}
+			})
 		}
 	})
 }
@@ -1469,9 +1475,11 @@ func TestFormatFileInfoMarkdown(t *testing.T) {
 			"**File**: new_file.txt",
 			"**Branch**: feature",
 		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(got, want) {
+					t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
+				}
+			})
 		}
 		if strings.Contains(got, "Commit ID") {
 			t.Errorf("FormatFileInfoMarkdown should omit empty commit IDs:\n%s", got)
@@ -1486,9 +1494,11 @@ func TestFormatFileInfoMarkdown(t *testing.T) {
 			LastCommitID: "last456",
 		})
 		for _, want := range []string{"**Commit ID**: commit123", "**Last commit ID**: last456"} {
-			if !strings.Contains(got, want) {
-				t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(got, want) {
+					t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
+				}
+			})
 		}
 	})
 }
@@ -1530,9 +1540,11 @@ func TestFormatBlameMarkdown(t *testing.T) {
 			"package main",
 			"func main() {}",
 		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("FormatBlameMarkdown missing %q in:\n%s", want, got)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(got, want) {
+					t.Errorf("FormatBlameMarkdown missing %q in:\n%s", want, got)
+				}
+			})
 		}
 	})
 
@@ -1578,9 +1590,11 @@ func TestFormatMetaDataMarkdown(t *testing.T) {
 			"**Size**: 512 bytes",
 			"**SHA-256**: sha256val",
 		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("FormatMetaDataMarkdown missing %q in:\n%s", want, got)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(got, want) {
+					t.Errorf("FormatMetaDataMarkdown missing %q in:\n%s", want, got)
+				}
+			})
 		}
 		if strings.Contains(got, "Executable") {
 			t.Error("should not contain 'Executable' when ExecuteFilemode is false")
@@ -1614,9 +1628,11 @@ func TestFormatRawMarkdown(t *testing.T) {
 		"# Hello World",
 		"```",
 	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("FormatRawMarkdown missing %q in:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("FormatRawMarkdown missing %q in:\n%s", want, got)
+			}
+		})
 	}
 }
 
@@ -1624,23 +1640,25 @@ func TestFormatRawMarkdown(t *testing.T) {
 // minLen helper
 // ---------------------------------------------------------------------------.
 
-// TestMinLen verifies the MinLen handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestMinLen verifies minLen returns the smaller of its two arguments,
+// including when they are equal or one of them is zero.
 func TestMinLen(t *testing.T) {
 	tests := []struct {
+		name       string
 		a, b, want int
 	}{
-		{3, 8, 3},
-		{8, 3, 3},
-		{5, 5, 5},
-		{0, 1, 0},
+		{"first_smaller", 3, 8, 3},
+		{"second_smaller", 8, 3, 3},
+		{"equal", 5, 5, 5},
+		{"zero", 0, 1, 0},
 	}
 	for _, tt := range tests {
-		got := minLen(tt.a, tt.b)
-		if got != tt.want {
-			t.Errorf("minLen(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got := minLen(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("minLen(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.want)
+			}
+		})
 	}
 }
 

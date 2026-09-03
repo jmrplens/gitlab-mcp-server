@@ -119,9 +119,11 @@ func TestList_PaginationParameters(t *testing.T) {
 			"pagination": "keyset",
 			"page_token": "tok-123",
 		} {
-			if got := q.Get(key); got != want {
-				t.Errorf("query %s = %q, want %q", key, got, want)
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := q.Get(key); got != want {
+					t.Errorf("query %s = %q, want %q", key, got, want)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":7,"title":"cert-7","key":"ssh-rsa AAAA7","created_at":"2026-03-01T00:00:00Z"}]`)
 	}))

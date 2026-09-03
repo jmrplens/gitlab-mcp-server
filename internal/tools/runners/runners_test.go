@@ -1702,9 +1702,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		"| Shared | ✅ |",
 		"| Online | ✅ |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1753,9 +1755,11 @@ func TestFormatDetailsMarkdown_Full(t *testing.T) {
 		"| Projects | 2 |",
 		"| Groups | 1 |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1775,9 +1779,11 @@ func TestFormatDetailsMarkdown_Minimal(t *testing.T) {
 		"| Maintenance Note |",
 		"| Last Contact |",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -1806,9 +1812,11 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 		"instance_type",
 		"project_type",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1849,9 +1857,11 @@ func TestFormatJobListMarkdown_WithData(t *testing.T) {
 		"running",
 		"12.5s",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1882,9 +1892,11 @@ func TestFormatAuthTokenMarkdown_Full(t *testing.T) {
 		"**Token**: glrt-abc123",
 		"**Expires At**: 31 Dec 2026 23:59 UTC",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1912,9 +1924,11 @@ func TestFormatRegTokenMarkdown_Full(t *testing.T) {
 		"**Token**: reg-tok-123",
 		"**Expires At**: 1 Jun 2026 00:00 UTC",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

@@ -108,9 +108,11 @@ func TestGenerate_ReportsCapabilityCounts(t *testing.T) {
 		t.Fatalf("generate() error: %v", err)
 	}
 	for _, want := range []string{"tools", "prompts", "resources"} {
-		if !strings.Contains(counts, want) {
-			t.Fatalf("counts summary = %q, want it to mention %q", counts, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(counts, want) {
+				t.Fatalf("counts summary = %q, want it to mention %q", counts, want)
+			}
+		})
 	}
 }
 
@@ -130,10 +132,12 @@ func TestGenerate_DeclaresDefaultDynamicSurface(t *testing.T) {
 	}
 	names := []string{m.Tools[0].Name, m.Tools[1].Name}
 	want := []string{"gitlab_execute_action", "gitlab_find_action"}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Fatalf("tools = %v, want %v", names, want)
-		}
+	for i, name := range want {
+		t.Run(name, func(t *testing.T) {
+			if names[i] != name {
+				t.Fatalf("tools = %v, want %v", names, want)
+			}
+		})
 	}
 }
 
@@ -161,13 +165,15 @@ func TestGenerate_OmitsOutputSchemaAndIcons(t *testing.T) {
 		"tool": raw.Tools, "prompt": raw.Prompts, "resource": raw.Resources,
 	}
 	for kind, entries := range groups {
-		for _, entry := range entries {
-			for _, unwanted := range []string{"outputSchema", "icons", "_meta"} {
-				if _, found := entry[unwanted]; found {
-					t.Fatalf("%s entry carries %q, want it dropped", kind, unwanted)
+		t.Run(kind, func(t *testing.T) {
+			for _, entry := range entries {
+				for _, unwanted := range []string{"outputSchema", "icons", "_meta"} {
+					if _, found := entry[unwanted]; found {
+						t.Fatalf("%s entry carries %q, want it dropped", kind, unwanted)
+					}
 				}
 			}
-		}
+		})
 	}
 }
 
@@ -253,10 +259,12 @@ func TestManifestPrompts_SortedByName(t *testing.T) {
 	})
 
 	want := []string{"audit_project_full", "my_open_mrs", "review_mr"}
-	for i := range want {
-		if got[i].Name != want[i] {
-			t.Fatalf("position %d = %q, want %q", i, got[i].Name, want[i])
-		}
+	for i, name := range want {
+		t.Run(name, func(t *testing.T) {
+			if got[i].Name != name {
+				t.Fatalf("position %d = %q, want %q", i, got[i].Name, name)
+			}
+		})
 	}
 }
 

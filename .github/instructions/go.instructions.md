@@ -322,7 +322,7 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 ### Writing Tests
 
 - Use table-driven tests for multiple test cases
-- Use subtests with `t.Run` for better organization
+- Use subtests with `t.Run` for better organization: every range over a case table that asserts opens one subtest per case (`make check-test-subtests` fails otherwise). Name cases with a `name` field, or let the string element or map key be the name; mark a loop of dependent steps with `// sequential: <reason>` on the line above it
 - Test both success and error cases
 - Consider using `testify` or similar libraries when they add value, but don't over-complicate simple tests
 

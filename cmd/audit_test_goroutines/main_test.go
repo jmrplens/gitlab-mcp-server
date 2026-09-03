@@ -102,9 +102,11 @@ func TestScan_FixtureClassification(t *testing.T) {
 		boundaries[f.Boundary] = true
 	}
 	for _, want := range []string{"http.HandlerFunc", "go statement", ".Go(...)", "handler field ElicitationHandler"} {
-		if !boundaries[want] {
-			t.Errorf("missing boundary kind %q in %v", want, boundaries)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !boundaries[want] {
+				t.Errorf("missing boundary kind %q in %v", want, boundaries)
+			}
+		})
 	}
 }
 

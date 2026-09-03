@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io/fs"
 	"net"
@@ -57,7 +58,9 @@ func TestIsUnixSocketAddr_DistinguishesPathsFromHostPort(t *testing.T) {
 // reach the server and one that cannot — and, in the other direction, between
 // a socket only the proxy's group can open and one every local account can.
 func TestListenHTTP_UnixSocket_ServesAndAppliesTheMode(t *testing.T) {
-	t.Parallel()
+	// Deliberately not parallel: binding sets the process-global umask for
+	// the duration of the bind (see bindUnixSocket), and a directory another
+	// test creates inside that window comes back missing its execute bit.
 
 	path := filepath.Join(t.TempDir(), "mcp.sock")
 	listener, err := listenHTTP(t.Context(), path, config.DefaultSocketMode)
@@ -117,7 +120,9 @@ func TestClearStaleSocket_AbsentPathIsFine(t *testing.T) {
 // exists to allow: a restart after a process died without unlinking its
 // socket, which would otherwise fail to bind forever.
 func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
-	t.Parallel()
+	// Deliberately not parallel: binding sets the process-global umask for
+	// the duration of the bind (see bindUnixSocket), and a directory another
+	// test creates inside that window comes back missing its execute bit.
 
 	path := filepath.Join(t.TempDir(), "dead.sock")
 	listener := listenUnixForTest(t, path)
@@ -143,7 +148,9 @@ func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
 // running server is still serving, leaving it holding a listener nobody can
 // reach. A successful connect is the proof somebody is there.
 func TestClearStaleSocket_LiveSocketIsRefused(t *testing.T) {
-	t.Parallel()
+	// Deliberately not parallel: binding sets the process-global umask for
+	// the duration of the bind (see bindUnixSocket), and a directory another
+	// test creates inside that window comes back missing its execute bit.
 
 	path := filepath.Join(t.TempDir(), "live.sock")
 	listener := listenUnixForTest(t, path)
@@ -179,7 +186,9 @@ func TestClearStaleSocket_LiveSocketIsRefused(t *testing.T) {
 // racing restart. Here the probe is cancelled before it can complete, which
 // stands in for every unanswered question.
 func TestClearStaleSocket_UnansweredProbeIsRefused(t *testing.T) {
-	t.Parallel()
+	// Deliberately not parallel: binding sets the process-global umask for
+	// the duration of the bind (see bindUnixSocket), and a directory another
+	// test creates inside that window comes back missing its execute bit.
 
 	path := filepath.Join(t.TempDir(), "unanswered.sock")
 	listener := listenUnixForTest(t, path)
@@ -327,11 +336,177 @@ func TestRepeatedFlag_AcceptsRepetitionAndCommas(t *testing.T) {
 		t.Fatalf("collected %v, want %v", got, want)
 	}
 	for i, value := range want {
-		if flagValue[i] != value {
-			t.Errorf("entry %d = %q, want %q", i, flagValue[i], value)
-		}
+		t.Run(value, func(t *testing.T) {
+			t.Parallel()
+			if flagValue[i] != value {
+				t.Errorf("entry %d = %q, want %q", i, flagValue[i], value)
+			}
+		})
 	}
 	if got := flagValue.String(); got != strings.Join(want, ",") {
 		t.Errorf("String() = %q, want %q", got, strings.Join(want, ","))
+	}
+}
+
+// TestListenUnix_RefusesAPathItCannotOwn covers the failures that stop a unix
+// socket from being bound, each of which has to arrive as an error naming
+// --http-addr rather than as a partially started server.
+//
+// The cases are the ones an operator actually produces: a path whose directory
+// is not a directory (a typo, or a file where a directory was expected), a path
+// already occupied by something that is not a socket, and a path longer than
+// the address family allows. None of them is reachable through permission bits
+// here, because the tests run as root in CI containers, where permissions do
+// not refuse anything.
+func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
+	// Deliberately not parallel: binding sets the process-global umask for
+	// the duration of the bind (see bindUnixSocket), and a directory another
+	// test creates inside that window comes back missing its execute bit.
+
+	dir := t.TempDir()
+	notADirectory := filepath.Join(dir, "file")
+	if err := os.WriteFile(notADirectory, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("writing the blocking file: %v", err)
+	}
+	occupied := filepath.Join(dir, "occupied.sock")
+	if err := os.WriteFile(occupied, []byte("not a socket"), 0o600); err != nil {
+		t.Fatalf("writing the blocking file: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr string
+	}{
+		{
+			name:    "its directory does not exist",
+			path:    filepath.Join(dir, "absent", "mcp.sock"),
+			wantErr: "its directory is not usable",
+		},
+		{
+			name:    "its directory is a file",
+			path:    filepath.Join(notADirectory, "mcp.sock"),
+			wantErr: "--http-addr",
+		},
+		{
+			name:    "the path is already something else",
+			path:    occupied,
+			wantErr: "refusing to replace it",
+		},
+		{
+			name: "the path is longer than a unix address",
+			path: filepath.Join(dir, strings.Repeat("a", 120)+".sock"),
+			// The kernel's message, not ours: what matters is that the bind
+			// failure surfaces instead of a listener nobody can reach.
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listener, err := listenHTTP(t.Context(), tt.path, config.DefaultSocketMode)
+
+			if err == nil {
+				_ = listener.Close()
+				t.Fatalf("listenHTTP(%q) bound a path it must refuse", tt.path)
+			}
+			if tt.wantErr != "" && !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want it to say %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault covers the zero mode,
+// which is what a Config assembled without the flag carries.
+//
+// The default is the one that matters for a same-host proxy: a socket only the
+// proxy's group can open, rather than one every local account can.
+func TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault(t *testing.T) {
+	// Deliberately not parallel: binding sets the process-global umask for
+	// the duration of the bind (see bindUnixSocket), and a directory another
+	// test creates inside that window comes back missing its execute bit.
+
+	path := filepath.Join(t.TempDir(), "default-mode.sock")
+	listener, err := listenHTTP(t.Context(), path, 0)
+	if err != nil {
+		t.Fatalf("listenHTTP: %v", err)
+	}
+	defer listener.Close()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat socket: %v", err)
+	}
+	if got := info.Mode().Perm(); got != config.DefaultSocketMode {
+		t.Errorf("socket mode = %#o, want the default %#o", got, config.DefaultSocketMode)
+	}
+}
+
+// TestClearStaleSocket_AnUnreadablePath_IsRefusedRatherThanRemoved covers the
+// lstat failing for a reason other than the path being absent.
+//
+// Absent is the ordinary case and means "nothing to clear". Anything else means
+// the question went unanswered, and removing on an unanswered question is how a
+// running deployment loses its socket to a racing restart.
+func TestClearStaleSocket_AnUnreadablePath_IsRefusedRatherThanRemoved(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	blocking := filepath.Join(dir, "file")
+	if err := os.WriteFile(blocking, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("writing the blocking file: %v", err)
+	}
+
+	err := clearStaleSocket(t.Context(), filepath.Join(blocking, "mcp.sock"))
+
+	if err == nil {
+		t.Fatal("clearStaleSocket accepted a path it could not examine")
+	}
+	if !strings.Contains(err.Error(), "--http-addr") {
+		t.Errorf("error = %q, want it to name the flag the operator typed", err)
+	}
+}
+
+// TestRepeatedFlag_TheZeroValueRenders covers String on a flag nobody set,
+// which the flag package calls while printing usage.
+//
+// Usage printing happens on the help path, before any value exists, so a nil
+// receiver here would turn --help into a panic.
+func TestRepeatedFlag_TheZeroValueRenders(t *testing.T) {
+	t.Parallel()
+
+	var absent *repeatedFlag
+	if got := absent.String(); got != "" {
+		t.Errorf("(*repeatedFlag)(nil).String() = %q, want the empty string", got)
+	}
+	empty := repeatedFlag{}
+	if got := empty.String(); got != "" {
+		t.Errorf("repeatedFlag{}.String() = %q, want the empty string", got)
+	}
+}
+
+// TestValidateTLSFiles_ALoadablePairIsAccepted covers the success path of the
+// startup check.
+//
+// The pair is loaded at startup precisely so a typo becomes an error naming the
+// file, instead of a TLS handshake failure on the first request that nobody
+// sees until a client reports it. The loader is stubbed because what is under
+// test is the decision, not crypto/tls.
+func TestValidateTLSFiles_ALoadablePairIsAccepted(t *testing.T) {
+	original := loadTLSKeyPair
+	t.Cleanup(func() { loadTLSKeyPair = original })
+	var loadedCert, loadedKey string
+	loadTLSKeyPair = func(cert, key string) (tls.Certificate, error) {
+		loadedCert, loadedKey = cert, key
+		return tls.Certificate{}, nil
+	}
+
+	err := validateTLSFiles(&config.Config{TLSCertFile: "/etc/ssl/mcp.crt", TLSKeyFile: "/etc/ssl/mcp.key"})
+	if err != nil {
+		t.Fatalf("validateTLSFiles = %v, want nil for a loadable pair", err)
+	}
+	if loadedCert != "/etc/ssl/mcp.crt" || loadedKey != "/etc/ssl/mcp.key" {
+		t.Errorf("loaded (%q, %q), want the configured pair", loadedCert, loadedKey)
 	}
 }

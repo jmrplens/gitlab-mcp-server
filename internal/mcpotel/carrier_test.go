@@ -35,7 +35,9 @@ func TestMetaCarrier_KeysNamesOnlyThePropagationKeys(t *testing.T) {
 		delete(want, key)
 	}
 	for missing := range want {
-		t.Errorf("Keys did not report %q, which is present and readable", missing)
+		t.Run(missing, func(t *testing.T) {
+			t.Errorf("Keys did not report %q, which is present and readable", missing)
+		})
 	}
 }
 

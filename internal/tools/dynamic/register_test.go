@@ -592,12 +592,14 @@ func TestAddStandaloneCatalog_MatchesRouteCompatibilityWrapper(t *testing.T) {
 	fromCatalog := NewRegistryFromCatalog(standaloneCatalog)
 
 	for _, actionID := range []string{"project.list", "discover_project.resolve", "interactive.issue_create"} {
-		if _, ok := fromRoutes.resolveAction(actionID); !ok {
-			t.Fatalf("route wrapper registry missing %s", actionID)
-		}
-		if _, ok := fromCatalog.resolveAction(actionID); !ok {
-			t.Fatalf("catalog registry missing %s", actionID)
-		}
+		t.Run(actionID, func(t *testing.T) {
+			if _, ok := fromRoutes.resolveAction(actionID); !ok {
+				t.Fatalf("route wrapper registry missing %s", actionID)
+			}
+			if _, ok := fromCatalog.resolveAction(actionID); !ok {
+				t.Fatalf("catalog registry missing %s", actionID)
+			}
+		})
 	}
 }
 
@@ -913,9 +915,11 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 	}
 	markdown := textContent(result)
 	for _, notWant := range []string{"input_schema", "output_schema"} {
-		if strings.Contains(markdown, notWant) {
-			t.Fatalf("Describe() markdown contains %q: %s", notWant, markdown)
-		}
+		t.Run(notWant, func(t *testing.T) {
+			if strings.Contains(markdown, notWant) {
+				t.Fatalf("Describe() markdown contains %q: %s", notWant, markdown)
+			}
+		})
 	}
 	if !strings.Contains(markdown, "**Input schema**") || !strings.Contains(markdown, "```json") || !strings.Contains(markdown, "properties") {
 		t.Fatalf("Describe() markdown missing compact input schema: %s", markdown)
@@ -993,19 +997,21 @@ func TestDynamicCatalog_DelegatedSpecBackedDomainsPreserveIDsAndSchemas(t *testi
 	}
 
 	for _, actionID := range actionIDs {
-		description := actionDescriptionByID(t, output, actionID)
-		catalogAction, ok := catalog.Action(actioncatalog.ActionID(actionID))
-		if !ok {
-			t.Fatalf("catalog missing %s", actionID)
-		}
-		if !catalogAction.SpecBacked {
-			t.Fatalf("%s SpecBacked = false, want true", actionID)
-		}
-		assertSchemaPropertyNamesEqual(t, actionID, description.InputSchema, catalogAction.Route.InputSchema)
-		if !slices.Equal(description.RequiredParams, requiredParams(catalogAction.Route.InputSchema)) {
-			t.Fatalf("%s RequiredParams = %v, want %v", actionID, description.RequiredParams, requiredParams(catalogAction.Route.InputSchema))
-		}
-		assertSchemaPropertyNamesEqual(t, actionID+" output", description.OutputSchema, catalogAction.Route.OutputSchema)
+		t.Run(actionID, func(t *testing.T) {
+			description := actionDescriptionByID(t, output, actionID)
+			catalogAction, ok := catalog.Action(actioncatalog.ActionID(actionID))
+			if !ok {
+				t.Fatalf("catalog missing %s", actionID)
+			}
+			if !catalogAction.SpecBacked {
+				t.Fatalf("%s SpecBacked = false, want true", actionID)
+			}
+			assertSchemaPropertyNamesEqual(t, actionID, description.InputSchema, catalogAction.Route.InputSchema)
+			if !slices.Equal(description.RequiredParams, requiredParams(catalogAction.Route.InputSchema)) {
+				t.Fatalf("%s RequiredParams = %v, want %v", actionID, description.RequiredParams, requiredParams(catalogAction.Route.InputSchema))
+			}
+			assertSchemaPropertyNamesEqual(t, actionID+" output", description.OutputSchema, catalogAction.Route.OutputSchema)
+		})
 	}
 
 	searchCode := actionDescriptionByID(t, output, "search.code")
@@ -1125,9 +1131,11 @@ func TestFind_MarkdownGuidesImmediateExecuteAndConfirm(t *testing.T) {
 		"before starting another catalog operation",
 		"top-level `confirm:true`",
 	} {
-		if !strings.Contains(markdown, want) {
-			t.Fatalf("Find() markdown = %q, want %q", markdown, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(markdown, want) {
+				t.Fatalf("Find() markdown = %q, want %q", markdown, want)
+			}
+		})
 	}
 }
 
@@ -1616,9 +1624,11 @@ func TestDescribe_JobSingleArtifactRequiresArtifactPath(t *testing.T) {
 	}
 	description := actionDescriptionByID(t, output, "job.download_single_artifact")
 	for _, required := range []string{"artifact_path", "job_id", "project_id"} {
-		if !slices.Contains(description.RequiredParams, required) {
-			t.Fatalf("required params = %v, want %s", description.RequiredParams, required)
-		}
+		t.Run(required, func(t *testing.T) {
+			if !slices.Contains(description.RequiredParams, required) {
+				t.Fatalf("required params = %v, want %s", description.RequiredParams, required)
+			}
+		})
 	}
 	if params, ok := description.Example.Arguments["params"].(map[string]any); !ok || params["artifact_path"] == nil {
 		t.Fatalf("example arguments = %#v, want artifact_path in params", description.Example.Arguments)
@@ -2148,9 +2158,11 @@ func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
 		"snippet.project_create",
 	}
 	for _, actionID := range wantActions {
-		if !slices.ContainsFunc(aliases, func(alias actioncompat.ParameterAlias) bool { return alias.ActionID == actionID }) {
-			t.Fatalf("ParameterAliases() = %+v, want action %s", aliases, actionID)
-		}
+		t.Run(actionID, func(t *testing.T) {
+			if !slices.ContainsFunc(aliases, func(alias actioncompat.ParameterAlias) bool { return alias.ActionID == actionID }) {
+				t.Fatalf("ParameterAliases() = %+v, want action %s", aliases, actionID)
+			}
+		})
 	}
 }
 
@@ -2168,9 +2180,11 @@ func TestDynamicRegister_DoesNotOwnCompatibilityPolicyTables(t *testing.T) {
 		"func gitlabAccessLevelValue(",
 		"func boolStringValue(",
 	} {
-		if strings.Contains(string(source), forbidden) {
-			t.Fatalf("register.go still owns compatibility policy table/helper %q; move policy to actioncompat", forbidden)
-		}
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(string(source), forbidden) {
+				t.Fatalf("register.go still owns compatibility policy table/helper %q; move policy to actioncompat", forbidden)
+			}
+		})
 	}
 }
 
@@ -2192,9 +2206,11 @@ func TestExecute_ReportsUnknownAndMissingParamsBeforeDispatch(t *testing.T) {
 	}
 	text := textContent(result)
 	for _, want := range []string{"Unknown params: reff", "Did you mean reff -> ref", "Missing required params: ref", "Valid params: file_path, project_id, ref"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("Execute() error text = %q, want %q", text, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Fatalf("Execute() error text = %q, want %q", text, want)
+			}
+		})
 	}
 }
 
@@ -2222,9 +2238,11 @@ func TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields(t *tes
 	}
 	text := textContent(result)
 	for _, want := range []string{"Unknown params: masked, protected", "Valid params: key, project_id, schedule_id, value, variable_type"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("Execute() error text = %q, want %q", text, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Fatalf("Execute() error text = %q, want %q", text, want)
+			}
+		})
 	}
 }
 
@@ -2779,9 +2797,11 @@ func TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches(t *testing.T) {
 		t.Fatalf("Search() result = %+v, want non-error", result)
 	}
 	for _, want := range []string{"discover_project.resolve", "merge_request.list"} {
-		if !slices.ContainsFunc(output.Results, func(r SearchResult) bool { return r.ID == want }) {
-			t.Fatalf("Search() results = %+v, want %s", output.Results, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !slices.ContainsFunc(output.Results, func(r SearchResult) bool { return r.ID == want }) {
+				t.Fatalf("Search() results = %+v, want %s", output.Results, want)
+			}
+		})
 	}
 }
 
@@ -4163,6 +4183,39 @@ func assertExecuteInitializesNilParams(t *testing.T, registry *Registry) {
 // search ranking, examples, confirmations, and Markdown formatting. The cases
 // target defensive branches that are easy to regress while refactoring the low
 // token dynamic action surface.
+// TestRegistry_ActionTagHints verifies the tag derivation helpers: schema
+// property names contribute their hint words, and protected-environment
+// and member-role actions carry their domain phrases.
+func TestRegistry_ActionTagHints(t *testing.T) {
+	t.Run("action tags include schema property hints", func(t *testing.T) {
+		schema := map[string]any{"properties": map[string]any{
+			"state_event": map[string]any{},
+			"ref":         map[string]any{},
+			"file_path":   map[string]any{},
+			"url":         map[string]any{},
+		}}
+		got := actionTags("repository.file_create", "repository", "file_create", schema)
+		for _, want := range []string{"repository file", "branch", "url", "close"} {
+			t.Run(want, func(t *testing.T) {
+				if !stringInSlice(got, want) {
+					t.Fatalf("actionTags() = %v, want %q", got, want)
+				}
+			})
+		}
+	})
+
+	t.Run("action tags include protected environment and member role hints", func(t *testing.T) {
+		protected := actionTags("group.protected_environment_create", "group", "protected_environment_create", nil)
+		if !stringInSlice(protected, "protected environment") {
+			t.Fatalf("actionTags(protected environment) = %v, want protected environment", protected)
+		}
+		memberRole := actionTags("member_role.create", "member_role", "create", nil)
+		if !stringInSlice(memberRole, "member role") {
+			t.Fatalf("actionTags(member role) = %v, want member role", memberRole)
+		}
+	})
+}
+
 func TestRegistry_HelperCoverage(t *testing.T) {
 	t.Run("annotations with nil base", func(t *testing.T) {
 		got := copyAnnotations(nil)
@@ -4179,32 +4232,6 @@ func TestRegistry_HelperCoverage(t *testing.T) {
 		want := []string{"project", "issue"}
 		if strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Fatalf("dedupeStrings() = %v, want %v", got, want)
-		}
-	})
-
-	t.Run("action tags include schema property hints", func(t *testing.T) {
-		schema := map[string]any{"properties": map[string]any{
-			"state_event": map[string]any{},
-			"ref":         map[string]any{},
-			"file_path":   map[string]any{},
-			"url":         map[string]any{},
-		}}
-		got := actionTags("repository.file_create", "repository", "file_create", schema)
-		for _, want := range []string{"repository file", "branch", "url", "close"} {
-			if !stringInSlice(got, want) {
-				t.Fatalf("actionTags() = %v, want %q", got, want)
-			}
-		}
-	})
-
-	t.Run("action tags include protected environment and member role hints", func(t *testing.T) {
-		protected := actionTags("group.protected_environment_create", "group", "protected_environment_create", nil)
-		if !stringInSlice(protected, "protected environment") {
-			t.Fatalf("actionTags(protected environment) = %v, want protected environment", protected)
-		}
-		memberRole := actionTags("member_role.create", "member_role", "create", nil)
-		if !stringInSlice(memberRole, "member role") {
-			t.Fatalf("actionTags(member role) = %v, want member role", memberRole)
 		}
 	})
 
@@ -4523,12 +4550,21 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 // helpers for issue state events, GitLab access levels, and boolean strings. It
 // covers accepted inputs and rejected edge cases without external fixtures.
 func TestActionScopedParamValueConversions(t *testing.T) {
-	stateCases := map[any]string{"closed": "close", "OPEN": "reopen"}
-	for input, want := range stateCases {
-		got, ok := actioncompat.IssueStateEventValue(input)
-		if !ok || got != want {
-			t.Fatalf("issueStateEventValue(%v) = %q, %t; want %q, true", input, got, ok, want)
-		}
+	stateCases := []struct {
+		name  string
+		input any
+		want  string
+	}{
+		{name: "state_closed_becomes_close", input: "closed", want: "close"},
+		{name: "state_uppercase_open_becomes_reopen", input: "OPEN", want: "reopen"},
+	}
+	for _, tc := range stateCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := actioncompat.IssueStateEventValue(tc.input)
+			if !ok || got != tc.want {
+				t.Fatalf("issueStateEventValue(%v) = %q, %t; want %q, true", tc.input, got, ok, tc.want)
+			}
+		})
 	}
 	if _, ok := actioncompat.IssueStateEventValue(123); ok {
 		t.Fatal("issueStateEventValue(non-string) converted unexpectedly")
@@ -4537,36 +4573,64 @@ func TestActionScopedParamValueConversions(t *testing.T) {
 		t.Fatal("issueStateEventValue(archived) converted unexpectedly")
 	}
 
-	accessCases := map[any]int{
-		10:             10,
-		int64(20):      20,
-		float64(30):    30,
-		"40":           40,
-		"guest":        10,
-		"reporter":     20,
-		"developer":    30,
-		" maintainer ": 40,
-		"owner":        50,
+	accessCases := []struct {
+		name  string
+		input any
+		want  int
+	}{
+		{name: "access_int", input: 10, want: 10},
+		{name: "access_int64", input: int64(20), want: 20},
+		{name: "access_float64", input: float64(30), want: 30},
+		{name: "access_numeric_string", input: "40", want: 40},
+		{name: "access_guest", input: "guest", want: 10},
+		{name: "access_reporter", input: "reporter", want: 20},
+		{name: "access_developer", input: "developer", want: 30},
+		{name: "access_padded_maintainer", input: " maintainer ", want: 40},
+		{name: "access_owner", input: "owner", want: 50},
 	}
-	for input, want := range accessCases {
-		got, ok := actioncompat.GitLabAccessLevelValue(input)
-		if !ok || got != want {
-			t.Fatalf("gitlabAccessLevelValue(%v) = %d, %t; want %d, true", input, got, ok, want)
-		}
+	for _, tc := range accessCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := actioncompat.GitLabAccessLevelValue(tc.input)
+			if !ok || got != tc.want {
+				t.Fatalf("gitlabAccessLevelValue(%v) = %d, %t; want %d, true", tc.input, got, ok, tc.want)
+			}
+		})
 	}
-	for _, input := range []any{float64(30.5), 70, int64(70), "70", "admin", true} {
-		if got, ok := actioncompat.GitLabAccessLevelValue(input); ok {
-			t.Fatalf("gitlabAccessLevelValue(%v) = %d, true; want false", input, got)
-		}
+	rejectedAccess := []struct {
+		name  string
+		input any
+	}{
+		{name: "access_rejects_fractional_float", input: float64(30.5)},
+		{name: "access_rejects_unknown_int", input: 70},
+		{name: "access_rejects_unknown_int64", input: int64(70)},
+		{name: "access_rejects_unknown_numeric_string", input: "70"},
+		{name: "access_rejects_admin", input: "admin"},
+		{name: "access_rejects_bool", input: true},
+	}
+	for _, tc := range rejectedAccess {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, ok := actioncompat.GitLabAccessLevelValue(tc.input); ok {
+				t.Fatalf("gitlabAccessLevelValue(%v) = %d, true; want false", tc.input, got)
+			}
+		})
 	}
 
 	if value, ok := actioncompat.BoolStringValue(" true "); !ok || !value {
 		t.Fatalf("boolStringValue(true) = %t, %t; want true, true", value, ok)
 	}
-	for _, input := range []any{true, "not-bool"} {
-		if _, ok := actioncompat.BoolStringValue(input); ok {
-			t.Fatalf("boolStringValue(%v) converted unexpectedly", input)
-		}
+	rejectedBools := []struct {
+		name  string
+		input any
+	}{
+		{name: "bool_rejects_true_not_string", input: true},
+		{name: "bool_rejects_unrecognized_string", input: "not-bool"},
+	}
+	for _, tc := range rejectedBools {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := actioncompat.BoolStringValue(tc.input); ok {
+				t.Fatalf("boolStringValue(%v) converted unexpectedly", tc.input)
+			}
+		})
 	}
 }
 
@@ -4621,9 +4685,11 @@ func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
 		t.Fatalf("NormalizeCompatibilityActionAlias() = %q, %t; want feature_flags.ff_user_list_create, true", got, ok)
 	}
 	for _, actionID := range []string{"", "project.get", "project.unknown"} {
-		if got, ok := NormalizeCompatibilityActionAlias(actionID); ok || got != strings.ToLower(strings.TrimSpace(actionID)) {
-			t.Fatalf("NormalizeCompatibilityActionAlias(%q) = %q, %t; want unchanged false", actionID, got, ok)
-		}
+		t.Run(actionID, func(t *testing.T) {
+			if got, ok := NormalizeCompatibilityActionAlias(actionID); ok || got != strings.ToLower(strings.TrimSpace(actionID)) {
+				t.Fatalf("NormalizeCompatibilityActionAlias(%q) = %q, %t; want unchanged false", actionID, got, ok)
+			}
+		})
 	}
 
 	aliases := dedupeActionAliases([]actionAlias{{Alias: "", Canonical: "project.get"}, {Alias: "project.lookup", Canonical: "project.get"}, {Alias: "project.lookup", Canonical: "project.get"}})
@@ -4691,9 +4757,11 @@ func TestSchemaSearchTermHelpers_Branches(t *testing.T) {
 	}
 	enums := strings.Join(schemaPropertyEnumValues(schema), ",")
 	for _, want := range []string{"opened", "closed", "30", "true", "bug", "feature"} {
-		if !strings.Contains(enums, want) {
-			t.Fatalf("schemaPropertyEnumValues() = %q, missing %q", enums, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(enums, want) {
+				t.Fatalf("schemaPropertyEnumValues() = %q, missing %q", enums, want)
+			}
+		})
 	}
 }
 
@@ -4851,24 +4919,27 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 
 	t.Run("explicit confirm parses supported values", func(t *testing.T) {
 		cases := []struct {
+			name   string
 			params map[string]any
 			want   bool
 		}{
-			{params: nil, want: false},
-			{params: map[string]any{"confirm": false}, want: false},
-			{params: map[string]any{"confirm": true}, want: true},
-			{params: map[string]any{"confirm": " true "}, want: true},
-			{params: map[string]any{"confirm": "yes"}, want: false},
-			{params: map[string]any{"confirm": "no"}, want: false},
-			{params: map[string]any{"confirm": 1}, want: false},
-			{params: map[string]any{"confirm": int64(1)}, want: false},
-			{params: map[string]any{"confirm": 1.0}, want: false},
-			{params: map[string]any{"confirm": 2}, want: false},
+			{name: "nil_params", params: nil, want: false},
+			{name: "bool_false", params: map[string]any{"confirm": false}, want: false},
+			{name: "bool_true", params: map[string]any{"confirm": true}, want: true},
+			{name: "padded_true_string", params: map[string]any{"confirm": " true "}, want: true},
+			{name: "yes_string", params: map[string]any{"confirm": "yes"}, want: false},
+			{name: "no_string", params: map[string]any{"confirm": "no"}, want: false},
+			{name: "int_one", params: map[string]any{"confirm": 1}, want: false},
+			{name: "int64_one", params: map[string]any{"confirm": int64(1)}, want: false},
+			{name: "float_one", params: map[string]any{"confirm": 1.0}, want: false},
+			{name: "int_two", params: map[string]any{"confirm": 2}, want: false},
 		}
 		for _, tt := range cases {
-			if got := hasExplicitConfirm(tt.params); got != tt.want {
-				t.Fatalf("hasExplicitConfirm(%v) = %v, want %v", tt.params, got, tt.want)
-			}
+			t.Run(tt.name, func(t *testing.T) {
+				if got := hasExplicitConfirm(tt.params); got != tt.want {
+					t.Fatalf("hasExplicitConfirm(%v) = %v, want %v", tt.params, got, tt.want)
+				}
+			})
 		}
 	})
 
@@ -4893,9 +4964,11 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 			}},
 		})
 		for _, want := range []string{"top-level `action`", "one `params` object", "Required Params key below belongs inside `params`"} {
-			if !strings.Contains(findText, want) {
-				t.Fatalf("formatFindOutput() = %q, want %q", findText, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(findText, want) {
+					t.Fatalf("formatFindOutput() = %q, want %q", findText, want)
+				}
+			})
 		}
 	})
 }
@@ -5791,9 +5864,11 @@ func TestScoreProjectGetIntent_PositiveCase(t *testing.T) {
 
 	// "find", "path", "id" alternatives all return the boost.
 	for _, q := range []string{"project find", "project path", "project id"} {
-		if v := scoreProjectGetIntentValue(entry, normalizeSearchTerms(q)); v != scoreProjectGetIntentBoost {
-			t.Fatalf("scoreProjectGetIntentValue(%q) = %d, want %d", q, v, scoreProjectGetIntentBoost)
-		}
+		t.Run(q, func(t *testing.T) {
+			if v := scoreProjectGetIntentValue(entry, normalizeSearchTerms(q)); v != scoreProjectGetIntentBoost {
+				t.Fatalf("scoreProjectGetIntentValue(%q) = %d, want %d", q, v, scoreProjectGetIntentBoost)
+			}
+		})
 	}
 }
 
@@ -6028,41 +6103,50 @@ func TestRegistrySearch_ProjectListSearchQuery_RanksSearchProjectsFirst(t *testi
 // credential is narrow and reauthorizing would fix it. The two causes carry
 // different remedies, so they get different sentences, and the control case
 // keeps the old message where it is still correct.
-func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing.T) {
-	narrowedCatalog := func(t *testing.T) *actioncatalog.Catalog {
-		t.Helper()
-		routes := testRoutes(t)
-		delete(routes["gitlab_project"], "hook_add")
-		return actioncatalog.FromActionMaps(routes)
-	}
-	executeText := func(t *testing.T, registry *Registry, action string) string {
-		t.Helper()
-		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: action})
-		if err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
-		if result == nil || !result.IsError {
-			t.Fatalf("Execute() result = %+v, want tool error", result)
-		}
-		if output != nil {
-			t.Fatalf("Execute() output = %+v, want nil", output)
-		}
-		return textContent(result)
-	}
+// narrowedCatalog is the standard test catalog with project.hook_add removed,
+// the shape a withheld action leaves behind.
+func narrowedCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	routes := testRoutes(t)
+	delete(routes["gitlab_project"], "hook_add")
+	return actioncatalog.FromActionMaps(routes)
+}
 
+// executeText runs an action that must fail as a tool error and returns the
+// error text the client would read.
+func executeText(t *testing.T, registry *Registry, action string) string {
+	t.Helper()
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: action})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	return textContent(result)
+}
+
+func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing.T) {
 	t.Run("token scope says reauthorize", func(t *testing.T) {
 		registry := newCatalogRegistry(narrowedCatalog(t),
 			WithWithheldActions([]string{"project.hook_add"}, nil))
 		text := executeText(t, registry, "project.hook_add")
 		for _, want := range []string{"exists but is not available", "credential in use", "api scope"} {
-			if !strings.Contains(text, want) {
-				t.Errorf("Execute() error text = %q, want it to contain %q", text, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(text, want) {
+					t.Errorf("Execute() error text = %q, want it to contain %q", text, want)
+				}
+			})
 		}
 		for _, unwanted := range []string{"unknown action", "Did you mean"} {
-			if strings.Contains(text, unwanted) {
-				t.Errorf("Execute() error text = %q, must not contain %q: the action is not unknown", text, unwanted)
-			}
+			t.Run(unwanted, func(t *testing.T) {
+				if strings.Contains(text, unwanted) {
+					t.Errorf("Execute() error text = %q, must not contain %q: the action is not unknown", text, unwanted)
+				}
+			})
 		}
 	})
 

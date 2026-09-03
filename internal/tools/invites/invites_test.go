@@ -765,9 +765,11 @@ func TestListPendingProjectInvitations_KeysetAndSort(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=cursor-7", "per_page=50"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -793,9 +795,11 @@ func TestListPendingGroupInvitations_KeysetAndSort(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=id", "sort=asc", "pagination=keyset", "page_token=cursor-3"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 

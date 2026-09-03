@@ -192,9 +192,11 @@ func TestSlogHandler_ADerivedLoggerStillExports(t *testing.T) {
 			want: func(t *testing.T, record sdklog.Record) {
 				t.Helper()
 				for key, value := range map[string]string{"component": "telemetry", "phase": "startup"} {
-					if !recordHasAttr(record, key, value) {
-						t.Errorf("%s=%s did not reach the exported record", key, value)
-					}
+					t.Run(key, func(t *testing.T) {
+						if !recordHasAttr(record, key, value) {
+							t.Errorf("%s=%s did not reach the exported record", key, value)
+						}
+					})
 				}
 			},
 		},
@@ -489,9 +491,11 @@ func TestSlogHandler_TheTerminalStillNamesTheCaller(t *testing.T) {
 
 	written := terminal.String()
 	for _, want := range []string{"jane", "42", LogFieldUser, LogFieldUserID} {
-		if !strings.Contains(written, want) {
-			t.Errorf("stderr lost %q under the strictest policy: %s", want, written)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(written, want) {
+				t.Errorf("stderr lost %q under the strictest policy: %s", want, written)
+			}
+		})
 	}
 }
 
@@ -544,9 +548,11 @@ func TestSlogHandler_ADerivedLoggerObeysTheIdentityPolicy(t *testing.T) {
 	})
 
 	for _, forbidden := range []string{"jane", AttrUserID, AttrUserName} {
-		if strings.Contains(exported, forbidden) {
-			t.Errorf("%s reached the collector through a derived logger: %s", forbidden, exported)
-		}
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(exported, forbidden) {
+				t.Errorf("%s reached the collector through a derived logger: %s", forbidden, exported)
+			}
+		})
 	}
 	if !strings.Contains(exported, AttrUserHash) {
 		t.Errorf("the digest is absent, so the derived handler lost the redactor: %s", exported)

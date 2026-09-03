@@ -120,9 +120,11 @@ func TestList_KeysetPagination(t *testing.T) {
 		"per_page":   "50",
 	}
 	for key, want := range checks {
-		if got := q.Get(key); got != want {
-			t.Errorf("query %q = %q, want %q", key, got, want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if got := q.Get(key); got != want {
+				t.Errorf("query %q = %q, want %q", key, got, want)
+			}
+		})
 	}
 }
 
@@ -391,9 +393,11 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 		t.Errorf("expected name 'go', got %q", out.Topic.Name)
 	}
 	for _, want := range []string{"title", "description"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -439,9 +443,11 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 		t.Errorf("expected topic ID 1, got %d", out.Topic.ID)
 	}
 	for _, want := range []string{"title", "description"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -492,8 +498,10 @@ func TestFormatDelegatorMarkdown_GetCreateUpdate(t *testing.T) {
 		"create": FormatCreateMarkdown(CreateOutput{Topic: topic}),
 		"update": FormatUpdateMarkdown(UpdateOutput{Topic: topic}),
 	} {
-		if result == nil || len(result.Content) == 0 {
-			t.Errorf("%s delegator returned empty result", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if result == nil || len(result.Content) == 0 {
+				t.Errorf("%s delegator returned empty result", name)
+			}
+		})
 	}
 }

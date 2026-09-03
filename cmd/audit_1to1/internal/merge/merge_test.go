@@ -73,10 +73,12 @@ func TestBuildBacklog_MergesThreeStreams(t *testing.T) {
 		t.Errorf("branches metadata not merged: %+v", branches.Metadata)
 	}
 	for _, name := range []string{"mrdiscussions", "issuediscussions"} {
-		pkg, found := pkgs[name]
-		if !found || len(pkg.Actions) != 1 || len(pkg.Actions[0].MissingMethods) != 2 {
-			t.Errorf("%s did not receive shared service gap: %+v", name, pkg.Actions)
-		}
+		t.Run(name, func(t *testing.T) {
+			pkg, found := pkgs[name]
+			if !found || len(pkg.Actions) != 1 || len(pkg.Actions[0].MissingMethods) != 2 {
+				t.Errorf("%s did not receive shared service gap: %+v", name, pkg.Actions)
+			}
+		})
 	}
 	if _, found := pkgs["clean"]; found {
 		t.Error("clean service has no missing methods and must not appear")

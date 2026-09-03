@@ -80,9 +80,11 @@ func TestFirstRunGuidance_NamesWhatItNeeds(t *testing.T) {
 	got := out.String()
 
 	for _, want := range []string{"GITLAB_URL", "GITLAB_TOKEN", "2.7.5", "--help"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the screen never mentions %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("the screen never mentions %q", want)
+			}
+		})
 	}
 	if strings.Contains(got, "/guides/") {
 		t.Errorf("the screen links into /guides/, a path the documentation site does not serve:\n%s", got)

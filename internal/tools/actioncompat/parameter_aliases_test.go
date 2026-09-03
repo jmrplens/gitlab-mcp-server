@@ -601,9 +601,11 @@ func TestDefaultPaginationValue_PageVsOthers(t *testing.T) {
 		t.Fatalf("defaultPaginationValue(page) = %d, want 1", got)
 	}
 	for _, name := range []string{"first", "last", "per_page"} {
-		if got := defaultPaginationValue(name); got != 100 {
-			t.Fatalf("defaultPaginationValue(%q) = %d, want 100", name, got)
-		}
+		t.Run(name, func(t *testing.T) {
+			if got := defaultPaginationValue(name); got != 100 {
+				t.Fatalf("defaultPaginationValue(%q) = %d, want 100", name, got)
+			}
+		})
 	}
 }
 
@@ -1074,28 +1076,31 @@ func TestReleaseLinkBatchEntries_DuplicateRecord(t *testing.T) {
 // environment access level value parser accepts both label strings and numbers.
 func TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues(t *testing.T) {
 	cases := []struct {
+		name      string
 		value     any
 		wantLevel int
 		wantOK    bool
 	}{
-		{value: float64(40), wantLevel: 40, wantOK: true},
-		{value: int(30), wantLevel: 30, wantOK: true},
-		{value: int64(20), wantLevel: 20, wantOK: true},
-		{value: "developer", wantLevel: 30, wantOK: true},
-		{value: "guest", wantLevel: 10, wantOK: true},
-		{value: "reporter", wantLevel: 20, wantOK: true},
-		{value: "owner", wantLevel: 50, wantOK: true},
-		{value: "admin", wantLevel: 60, wantOK: true},
-		{value: "no access", wantLevel: 0, wantOK: true},
-		{value: "unknown-role", wantOK: false},
-		{value: 99, wantOK: false},
-		{value: true, wantOK: false},
+		{name: "float64", value: float64(40), wantLevel: 40, wantOK: true},
+		{name: "int", value: int(30), wantLevel: 30, wantOK: true},
+		{name: "int64", value: int64(20), wantLevel: 20, wantOK: true},
+		{name: "developer_label", value: "developer", wantLevel: 30, wantOK: true},
+		{name: "guest_label", value: "guest", wantLevel: 10, wantOK: true},
+		{name: "reporter_label", value: "reporter", wantLevel: 20, wantOK: true},
+		{name: "owner_label", value: "owner", wantLevel: 50, wantOK: true},
+		{name: "admin_label", value: "admin", wantLevel: 60, wantOK: true},
+		{name: "no_access_label", value: "no access", wantLevel: 0, wantOK: true},
+		{name: "unknown_label", value: "unknown-role", wantOK: false},
+		{name: "unknown_number", value: 99, wantOK: false},
+		{name: "bool", value: true, wantOK: false},
 	}
 	for _, tc := range cases {
-		got, ok := environmentAccessLevelValue(tc.value)
-		if ok != tc.wantOK || got != tc.wantLevel {
-			t.Fatalf("environmentAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := environmentAccessLevelValue(tc.value)
+			if ok != tc.wantOK || got != tc.wantLevel {
+				t.Fatalf("environmentAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
+			}
+		})
 	}
 }
 
@@ -1104,30 +1109,33 @@ func TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues(t *testing.T) {
 // unknown values consistently.
 func TestGitLabBranchProtectionAccessLevelValue_Defaults(t *testing.T) {
 	cases := []struct {
+		name      string
 		value     any
 		wantLevel int
 		wantOK    bool
 	}{
-		{value: int(30), wantLevel: 30, wantOK: true},
-		{value: int(40), wantLevel: 40, wantOK: true},
-		{value: int(0), wantLevel: 0, wantOK: true},
-		{value: int(99), wantOK: false},
-		{value: int64(40), wantLevel: 40, wantOK: true},
-		{value: float64(30.0), wantLevel: 30, wantOK: true},
-		{value: float64(30.5), wantOK: false},
-		{value: "developer", wantLevel: 30, wantOK: true},
-		{value: "maintainer", wantLevel: 40, wantOK: true},
-		{value: "no_access", wantLevel: 0, wantOK: true},
-		{value: "30", wantLevel: 30, wantOK: true},
-		{value: "99", wantOK: false},
-		{value: "unknown", wantOK: false},
-		{value: true, wantOK: false},
+		{name: "int_developer", value: int(30), wantLevel: 30, wantOK: true},
+		{name: "int_maintainer", value: int(40), wantLevel: 40, wantOK: true},
+		{name: "int_no_access", value: int(0), wantLevel: 0, wantOK: true},
+		{name: "int_unknown", value: int(99), wantOK: false},
+		{name: "int64", value: int64(40), wantLevel: 40, wantOK: true},
+		{name: "whole_float", value: float64(30.0), wantLevel: 30, wantOK: true},
+		{name: "fractional_float", value: float64(30.5), wantOK: false},
+		{name: "developer_label", value: "developer", wantLevel: 30, wantOK: true},
+		{name: "maintainer_label", value: "maintainer", wantLevel: 40, wantOK: true},
+		{name: "no_access_label", value: "no_access", wantLevel: 0, wantOK: true},
+		{name: "numeric_string", value: "30", wantLevel: 30, wantOK: true},
+		{name: "unknown_numeric_string", value: "99", wantOK: false},
+		{name: "unknown_label", value: "unknown", wantOK: false},
+		{name: "bool", value: true, wantOK: false},
 	}
 	for _, tc := range cases {
-		got, ok := gitLabBranchProtectionAccessLevelValue(tc.value)
-		if ok != tc.wantOK || got != tc.wantLevel {
-			t.Fatalf("gitLabBranchProtectionAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := gitLabBranchProtectionAccessLevelValue(tc.value)
+			if ok != tc.wantOK || got != tc.wantLevel {
+				t.Fatalf("gitLabBranchProtectionAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
+			}
+		})
 	}
 }
 
@@ -1159,53 +1167,60 @@ func TestGitLabAccessLevelValue_InvalidLevel(t *testing.T) {
 // variant must resolve to the documented numeric value.
 func TestGitLabAccessLevelValue_ExtendedAliases(t *testing.T) {
 	cases := []struct {
+		name      string
 		value     any
 		wantLevel int
 		wantOK    bool
 	}{
-		{value: "minimal access", wantLevel: 5, wantOK: true},
-		{value: "Minimal Access", wantLevel: 5, wantOK: true},
-		{value: "minimal", wantLevel: 5, wantOK: true},
-		{value: "planner", wantLevel: 15, wantOK: true},
-		{value: "Planners", wantLevel: 15, wantOK: true},
-		{value: "security manager", wantLevel: 25, wantOK: true},
-		{value: "security_manager", wantLevel: 25, wantOK: true},
-		{value: "SecurityManager", wantLevel: 25, wantOK: true},
+		{name: "minimal_access_label", value: "minimal access", wantLevel: 5, wantOK: true},
+		{name: "minimal_access_title_case", value: "Minimal Access", wantLevel: 5, wantOK: true},
+		{name: "minimal_short_form", value: "minimal", wantLevel: 5, wantOK: true},
+		{name: "planner_label", value: "planner", wantLevel: 15, wantOK: true},
+		{name: "planner_plural", value: "Planners", wantLevel: 15, wantOK: true},
+		{name: "security_manager_label", value: "security manager", wantLevel: 25, wantOK: true},
+		{name: "security_manager_underscore", value: "security_manager", wantLevel: 25, wantOK: true},
+		{name: "security_manager_camel_case", value: "SecurityManager", wantLevel: 25, wantOK: true},
 		// Numeric string of a newly-valid level should also resolve.
-		{value: "5", wantLevel: 5, wantOK: true},
-		{value: "15", wantLevel: 15, wantOK: true},
-		{value: "60", wantLevel: 60, wantOK: true},
+		{name: "numeric_string_minimal_access", value: "5", wantLevel: 5, wantOK: true},
+		{name: "numeric_string_planner", value: "15", wantLevel: 15, wantOK: true},
+		{name: "numeric_string_admin", value: "60", wantLevel: 60, wantOK: true},
 	}
 	for _, tc := range cases {
-		got, ok := gitlabAccessLevelValue(tc.value)
-		if ok != tc.wantOK || got != tc.wantLevel {
-			t.Errorf("gitlabAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := gitlabAccessLevelValue(tc.value)
+			if ok != tc.wantOK || got != tc.wantLevel {
+				t.Errorf("gitlabAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
+			}
+		})
 	}
 }
 
-// TestIntegerValue_TypeCoverage verifies the IntegerValue_TypeCoverage handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestIntegerValue_TypeCoverage verifies integerValue accepts every
+// integer-bearing input type (int, int64, a whole float64, and numeric strings
+// with or without padding) and rejects a fractional float, a non-numeric
+// string, and a bool, one subtest per input type.
 func TestIntegerValue_TypeCoverage(t *testing.T) {
 	cases := []struct {
+		name    string
 		value   any
 		wantInt int
 		wantOK  bool
 	}{
-		{value: int(7), wantInt: 7, wantOK: true},
-		{value: int64(42), wantInt: 42, wantOK: true},
-		{value: float64(10.0), wantInt: 10, wantOK: true},
-		{value: float64(10.5), wantInt: 10, wantOK: false},
-		{value: "5", wantInt: 5, wantOK: true},
-		{value: " 8 ", wantInt: 8, wantOK: true},
-		{value: "abc", wantOK: false},
-		{value: true, wantOK: false},
+		{name: "int", value: int(7), wantInt: 7, wantOK: true},
+		{name: "int64", value: int64(42), wantInt: 42, wantOK: true},
+		{name: "whole_float", value: float64(10.0), wantInt: 10, wantOK: true},
+		{name: "fractional_float", value: float64(10.5), wantInt: 10, wantOK: false},
+		{name: "numeric_string", value: "5", wantInt: 5, wantOK: true},
+		{name: "padded_numeric_string", value: " 8 ", wantInt: 8, wantOK: true},
+		{name: "non_numeric_string", value: "abc", wantOK: false},
+		{name: "bool", value: true, wantOK: false},
 	}
 	for _, tc := range cases {
-		got, ok := integerValue(tc.value)
-		if ok != tc.wantOK || got != tc.wantInt {
-			t.Fatalf("integerValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantInt, tc.wantOK)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := integerValue(tc.value)
+			if ok != tc.wantOK || got != tc.wantInt {
+				t.Fatalf("integerValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantInt, tc.wantOK)
+			}
+		})
 	}
 }

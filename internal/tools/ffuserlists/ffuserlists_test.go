@@ -397,9 +397,11 @@ func TestListUserLists_KeysetAndOrdering(t *testing.T) {
 			"page_token": "cursor-7",
 			"per_page":   "50",
 		} {
-			if got := q.Get(key); got != want {
-				t.Errorf("query %s = %q, want %q", key, got, want)
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := q.Get(key); got != want {
+					t.Errorf("query %s = %q, want %q", key, got, want)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[`+covUserListJSON+`]`)
 	})

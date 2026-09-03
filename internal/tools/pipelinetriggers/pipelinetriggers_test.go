@@ -368,9 +368,11 @@ func TestListTriggers_OrderBySort(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=5"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query = %q, want to contain %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query = %q, want to contain %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -825,9 +827,11 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 		"1 Jan 2026 00:00 UTC",
 		"1 Dec 2026 00:00 UTC",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -846,9 +850,11 @@ func TestFormatTriggerMarkdown_MinimalFields(t *testing.T) {
 		"| Created |",
 		"| Last Used |",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -879,9 +885,11 @@ func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 		"admin",
 		"user1",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -904,9 +912,11 @@ func TestFormatRunOutputMarkdown_WithoutWebURL(t *testing.T) {
 		"| Ref | develop |",
 		"| Status | pending |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "| URL |") {
 		t.Errorf("should not contain URL row when WebURL is empty:\n%s", md)
@@ -928,9 +938,11 @@ func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 		"| Pipeline ID | 99 |",
 		"| URL | [Pipeline #99](https://gl/p/1/-/pipelines/99) |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

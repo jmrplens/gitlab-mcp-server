@@ -441,7 +441,9 @@ func respondMergeTrainList(w http.ResponseWriter, body string) {
 func TestListProjectMergeTrains_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for k, v := range map[string]string{"order_by": "id", "sort": "desc", "pagination": "keyset", "page_token": "tok"} {
-			testutil.AssertQueryParam(t, r, k, v)
+			t.Run(k, func(t *testing.T) {
+				testutil.AssertQueryParam(t, r, k, v)
+			})
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
@@ -462,7 +464,9 @@ func TestListProjectMergeTrains_KeysetAndOrdering(t *testing.T) {
 func TestListMergeRequestInMergeTrain_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for k, v := range map[string]string{"order_by": "id", "pagination": "keyset", "page_token": "tok"} {
-			testutil.AssertQueryParam(t, r, k, v)
+			t.Run(k, func(t *testing.T) {
+				testutil.AssertQueryParam(t, r, k, v)
+			})
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})

@@ -298,9 +298,11 @@ func TestEnsureCIVariables_RecreatesProjectGroupAndInstanceVariables(t *testing.
 		t.Fatalf("ensureCIVariables() error = %v", err)
 	}
 	for _, scope := range []string{"project", "group", "instance"} {
-		if !created[scope] {
-			t.Fatalf("%s variable was not recreated", scope)
-		}
+		t.Run(scope, func(t *testing.T) {
+			if !created[scope] {
+				t.Fatalf("%s variable was not recreated", scope)
+			}
+		})
 	}
 }
 

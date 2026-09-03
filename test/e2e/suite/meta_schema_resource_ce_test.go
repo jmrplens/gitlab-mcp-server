@@ -137,9 +137,11 @@ func TestToolManifestResource_ReadMergeRequestCreate(t *testing.T) {
 	}
 	body := result.Contents[0].Text
 	for _, want := range []string{"project_id", "source_branch", "target_branch", "title"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("schema missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("schema missing %q", want)
+			}
+		})
 	}
 
 	var schema map[string]any
@@ -185,8 +187,10 @@ func TestToolManifestResource_IndexEnumeratesMetaTools(t *testing.T) {
 	}
 	body := result.Contents[0].Text
 	for _, want := range []string{"gitlab_project.get", "gitlab_merge_request.create", "gitlab_issue.get"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("manifest missing meta-tool action %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("manifest missing meta-tool action %q", want)
+			}
+		})
 	}
 }

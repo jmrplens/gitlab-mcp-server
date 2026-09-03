@@ -712,9 +712,11 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 		"**Description**: Database host",
 		"**Value**: localhost",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -761,9 +763,11 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 		"| API_KEY |",
 		"env_var",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

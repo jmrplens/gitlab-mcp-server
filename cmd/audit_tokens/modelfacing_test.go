@@ -92,9 +92,11 @@ func TestMarshalModelFacing_KeepsEverythingElse(t *testing.T) {
 		t.Fatalf("unmarshal: %v", unmarshalErr)
 	}
 	for _, key := range []string{"name", "title", "description", "inputSchema", "annotations"} {
-		if _, ok := got[key]; !ok {
-			t.Errorf("%q was dropped alongside the icons: %s", key, raw)
-		}
+		t.Run(key, func(t *testing.T) {
+			if _, ok := got[key]; !ok {
+				t.Errorf("%q was dropped alongside the icons: %s", key, raw)
+			}
+		})
 	}
 }
 

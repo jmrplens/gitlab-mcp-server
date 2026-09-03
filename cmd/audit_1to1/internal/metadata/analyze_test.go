@@ -20,18 +20,22 @@ func TestIsGenericUsage_FlagsPlaceholders(t *testing.T) {
 		"use to execute markdown_render action",
 	}
 	for _, usage := range generic {
-		if !auditshared.IsGenericUsage(usage) {
-			t.Errorf("isGenericUsage(%q) = false, want true", usage)
-		}
+		t.Run(usage, func(t *testing.T) {
+			if !auditshared.IsGenericUsage(usage) {
+				t.Errorf("isGenericUsage(%q) = false, want true", usage)
+			}
+		})
 	}
 	specific := []string{
 		"List branches for a project with optional search and pagination.",
 		"Create a new branch from a ref. Returns the created branch.",
 	}
 	for _, usage := range specific {
-		if auditshared.IsGenericUsage(usage) {
-			t.Errorf("isGenericUsage(%q) = true, want false", usage)
-		}
+		t.Run(usage, func(t *testing.T) {
+			if auditshared.IsGenericUsage(usage) {
+				t.Errorf("isGenericUsage(%q) = true, want false", usage)
+			}
+		})
 	}
 }
 

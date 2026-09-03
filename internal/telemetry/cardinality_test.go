@@ -28,9 +28,11 @@ func TestDropToolName_AutoProtectsTheSurfaceThatNeedsIt(t *testing.T) {
 		"dynamic":    false,
 		"":           false,
 	} {
-		if got := DropToolName(ToolNameAuto, surface); got != wantDropped {
-			t.Errorf("auto on the %q surface drops the tool name = %v, want %v", surface, got, wantDropped)
-		}
+		t.Run(surface, func(t *testing.T) {
+			if got := DropToolName(ToolNameAuto, surface); got != wantDropped {
+				t.Errorf("auto on the %q surface drops the tool name = %v, want %v", surface, got, wantDropped)
+			}
+		})
 	}
 }
 
@@ -40,12 +42,14 @@ func TestDropToolName_AutoProtectsTheSurfaceThatNeedsIt(t *testing.T) {
 // footprint whatever they are running.
 func TestDropToolName_ExplicitPoliciesOverrideTheSurface(t *testing.T) {
 	for _, surface := range []string{"individual", "meta", "dynamic"} {
-		if DropToolName(ToolNameOn, surface) {
-			t.Errorf("on dropped the tool name on the %q surface", surface)
-		}
-		if !DropToolName(ToolNameOff, surface) {
-			t.Errorf("off kept the tool name on the %q surface", surface)
-		}
+		t.Run(surface, func(t *testing.T) {
+			if DropToolName(ToolNameOn, surface) {
+				t.Errorf("on dropped the tool name on the %q surface", surface)
+			}
+			if !DropToolName(ToolNameOff, surface) {
+				t.Errorf("off kept the tool name on the %q surface", surface)
+			}
+		})
 	}
 }
 
@@ -70,14 +74,16 @@ func TestParseToolNamePolicy_RefusesAnUnknownValueByName(t *testing.T) {
 		"Off":    ToolNameOff,
 		"auto":   ToolNameAuto,
 	} {
-		got, err := ParseToolNamePolicy(input)
-		if err != nil {
-			t.Errorf("ParseToolNamePolicy(%q): %v", input, err)
-			continue
-		}
-		if got != want {
-			t.Errorf("ParseToolNamePolicy(%q) = %q, want %q", input, got, want)
-		}
+		t.Run(input, func(t *testing.T) {
+			got, err := ParseToolNamePolicy(input)
+			if err != nil {
+				t.Errorf("ParseToolNamePolicy(%q): %v", input, err)
+				return
+			}
+			if got != want {
+				t.Errorf("ParseToolNamePolicy(%q) = %q, want %q", input, got, want)
+			}
+		})
 	}
 }
 
@@ -116,9 +122,11 @@ func TestToolNameView_RemovesTheToolNameAndTheAction(t *testing.T) {
 	// catalog action, so the two keys carry the same eleven hundred values and
 	// filtering one of them sheds no series whatever.
 	for _, key := range []string{"gen_ai.tool.name", "gitlab_mcp.action"} {
-		if _, present := found[key]; present {
-			t.Errorf("%s survived the view; on the individual surface it mints one series per tool", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if _, present := found[key]; present {
+				t.Errorf("%s survived the view; on the individual surface it mints one series per tool", key)
+			}
+		})
 	}
 
 	// The allow-list concern is real and is what this half keeps: an attribute

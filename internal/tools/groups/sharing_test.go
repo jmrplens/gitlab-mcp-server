@@ -51,18 +51,24 @@ func TestShareGroupWithGroup_Success(t *testing.T) {
 	}
 }
 
-// TestShareGroupWithGroup_Guards verifies the required-input guards.
+// TestShareGroupWithGroup_Guards verifies the required-input guards: each case
+// omits one required field, in the order the handler checks them.
 func TestShareGroupWithGroup_Guards(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	cases := []ShareGroupInput{
-		{},
-		{GroupID: "99"},
-		{GroupID: "99", SharedGroupID: 1},
+	cases := []struct {
+		name string
+		in   ShareGroupInput
+	}{
+		{name: "missing_group_id", in: ShareGroupInput{}},
+		{name: "missing_shared_group_id", in: ShareGroupInput{GroupID: "99"}},
+		{name: "missing_group_access", in: ShareGroupInput{GroupID: "99", SharedGroupID: 1}},
 	}
-	for i, in := range cases {
-		if _, err := ShareGroupWithGroup(context.Background(), client, in); err == nil {
-			t.Errorf("case %d: expected error, got nil", i)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ShareGroupWithGroup(context.Background(), client, tc.in); err == nil {
+				t.Error("expected error, got nil")
+			}
+		})
 	}
 }
 
@@ -317,9 +323,11 @@ func TestListSharedProjects_AllFilters(t *testing.T) {
 		t.Fatalf("ListSharedProjects() error: %v", err)
 	}
 	for _, want := range []string{"order_by=name", "simple=true", "sort=asc", "starred=true", "visibility=private", "with_custom_attributes=true", "with_issues_enabled=true", "with_merge_requests_enabled=true"} {
-		if !strings.Contains(q, want) {
-			t.Errorf("query missing %q: %s", want, q)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(q, want) {
+				t.Errorf("query missing %q: %s", want, q)
+			}
+		})
 	}
 }
 

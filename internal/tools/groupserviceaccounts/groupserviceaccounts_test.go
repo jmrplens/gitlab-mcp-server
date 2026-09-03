@@ -756,9 +756,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{ID: 42, Name: "svc-bot", Username: "svc-bot", Email: "svc@test.com"}
 	md := FormatOutputMarkdown(out)
 	for _, want := range []string{"svc-bot", "42", "svc@test.com", "gitlab_group_service_account_update"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -806,9 +808,11 @@ func TestFormatPATOutputMarkdown(t *testing.T) {
 		}
 		md := FormatPATOutputMarkdown(out)
 		for _, want := range []string{"deploy", "api", "glpat-secret", "2026-01-15", "gitlab_group_service_account_pat_revoke"} {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatPATOutputMarkdown missing %q:\n%s", want, md)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(md, want) {
+					t.Errorf("FormatPATOutputMarkdown missing %q:\n%s", want, md)
+				}
+			})
 		}
 	})
 	t.Run("without optional fields", func(t *testing.T) {
@@ -858,9 +862,11 @@ func TestFormatMarkdownString(t *testing.T) {
 	out := Output{ID: 10, Name: "svc", Username: "svc-user", Email: "svc@e.com"}
 	md := FormatMarkdownString(out)
 	for _, want := range []string{"svc-user", "10", "svc@e.com"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdownString missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdownString missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -899,9 +905,11 @@ func TestFormatPATMarkdownString(t *testing.T) {
 		}
 		md := FormatPATMarkdownString(out)
 		for _, want := range []string{"tok", "api", "secret", "2026-12-31", "2026-01-01", "2026-06-20", "Last Used"} {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatPATMarkdownString missing %q:\n%s", want, md)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(md, want) {
+					t.Errorf("FormatPATMarkdownString missing %q:\n%s", want, md)
+				}
+			})
 		}
 	})
 	t.Run("minimal fields", func(t *testing.T) {

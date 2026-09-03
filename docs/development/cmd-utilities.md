@@ -449,7 +449,7 @@ Human report to stdout (per-site `file:line [category] boundary`), summary line,
 #### Make targets
 
 - `make audit-test-goroutines` — writes `plan/test-goroutines-backlog.json`.
-- `make check-test-goroutines` — CI gate; also step [6/6] of `make analyze`.
+- `make check-test-goroutines` — CI gate; also step [6/7] of `make analyze`.
 
 ### audit_test_names
 
@@ -479,6 +479,36 @@ CSV to stdout (`file,current_name,pattern,suggested_name`), with a summary print
 #### Make targets
 
 - `make audit-test-names` — runs with `cmd internal test`.
+
+### audit_test_subtests
+
+Finds range loops over case tables (slice or map literals, inline or bound to a local) inside `Test*` functions whose body asserts (`t.Error*`, `t.Fatal*`, or a helper that receives `t`) without opening a `t.Run` subtest, which is the shape the table-driven rule in `go.instructions.md` forbids. A `// sequential: <reason>` comment on the line above a loop declares a sequence of dependent steps and is reported separately instead of failing, and so is a loop inside a `synctest.Test` bubble, where the testing package panics on `t.Run`.
+
+```bash
+go run ./cmd/audit_test_subtests/
+go run ./cmd/audit_test_subtests/ -json plan/test-subtests-backlog.json
+go run ./cmd/audit_test_subtests/ -fix
+go run ./cmd/audit_test_subtests/ -check ./internal/toolutil
+```
+
+#### Flags
+
+| Flag     | Type   | Default | Description                                                      |
+| -------- | ------ | ------- | ---------------------------------------------------------------- |
+| `-json`  | string | _(off)_ | Write the JSON work list to this path                            |
+| `-check` | bool   | `false` | Exit non-zero when any case loop still asserts without a subtest |
+| `-fix`   | bool   | `false` | Rewrite the unambiguous sites in place, then report what remains |
+
+`-fix` wraps the loop body in `t.Run(name, func(t *testing.T) { ... })` when the name is unambiguous: a `[]string` table names each case after its element, a struct table after a string field called `name`, `desc`, `description`, `label`, `title` or `id`, and a `map[string]...` table after its key. A bare `continue` becomes `return`. Loops that `break` or `goto`, and tables with no such field, stay in the report for a hand rewrite (add a `name` field). The mechanical pass of 2026-09-01 rewrote 827 of 911 sites this way.
+
+#### Output
+
+Per-file tallies (`sites`, `fixable`), a summary line, and optionally the JSON work list (`findings` with the rewrite each site qualifies for, `sequential`, `summary`).
+
+#### Make targets
+
+- `make audit-test-subtests` — writes `plan/test-subtests-backlog.json`.
+- `make check-test-subtests` — CI gate; also step [7/7] of `make analyze`.
 
 ### audit_string_dupes
 

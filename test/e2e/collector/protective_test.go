@@ -139,9 +139,11 @@ func TestRealCollector_ReadOnlyRemovesTheToolRatherThanRefusingIt(t *testing.T) 
 	// deployment working.
 	if errorType, present := attr(span.Attributes, "error.type"); present {
 		for _, serverFault := range []string{"-32603", "_OTHER"} {
-			if errorType == serverFault {
-				t.Errorf("error.type = %q under read-only; refusing a mutating call is not this server failing", errorType)
-			}
+			t.Run(serverFault, func(t *testing.T) {
+				if errorType == serverFault {
+					t.Errorf("error.type = %q under read-only; refusing a mutating call is not this server failing", errorType)
+				}
+			})
 		}
 	}
 }

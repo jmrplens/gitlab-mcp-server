@@ -1095,9 +1095,11 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"| Created | 1 Jun 2026 00:00 UTC |",
 		"| Updated | 1 Jun 2026 01:00 UTC |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1132,9 +1134,11 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		"| Created |",
 		"| Updated |",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -1197,9 +1201,11 @@ func TestFormatListMarkdown_WithDeployments(t *testing.T) {
 		"admin",
 		"dev",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1301,9 +1307,11 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		"| Created | 1 Dec 2026 00:00 UTC |",
 		"| Updated | 1 Dec 2026 12:00 UTC |",
 	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("markdown missing %q:\n%s", want, out)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(out, want) {
+				t.Errorf("markdown missing %q:\n%s", want, out)
+			}
+		})
 	}
 }
 

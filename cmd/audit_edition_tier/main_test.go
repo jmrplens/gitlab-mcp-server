@@ -15,22 +15,25 @@ import (
 // because a badge lists every tier the endpoint is available in.
 func TestParseTierBadge_Values_MapToMinimumTier(t *testing.T) {
 	cases := []struct {
+		name  string
 		value string
 		want  tier
 		ok    bool
 	}{
-		{"Free, Premium, Ultimate", tierFree, true},
-		{"Premium, Ultimate", tierPremium, true},
-		{"Ultimate", tierUltimate, true},
-		{"premium, ultimate", tierPremium, true},
-		{"", tierFree, false},
-		{"Something else", tierFree, false},
+		{"all_tiers_is_free", "Free, Premium, Ultimate", tierFree, true},
+		{"premium_and_ultimate_is_premium", "Premium, Ultimate", tierPremium, true},
+		{"ultimate_only", "Ultimate", tierUltimate, true},
+		{"lowercase_names", "premium, ultimate", tierPremium, true},
+		{"empty_value", "", tierFree, false},
+		{"unknown_value", "Something else", tierFree, false},
 	}
 	for _, c := range cases {
-		got, ok := parseTierBadge(c.value)
-		if got != c.want || ok != c.ok {
-			t.Errorf("parseTierBadge(%q) = (%v, %v); want (%v, %v)", c.value, got, ok, c.want, c.ok)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := parseTierBadge(c.value)
+			if got != c.want || ok != c.ok {
+				t.Errorf("parseTierBadge(%q) = (%v, %v); want (%v, %v)", c.value, got, ok, c.want, c.ok)
+			}
+		})
 	}
 }
 
@@ -116,10 +119,12 @@ func TestClassifyDomain_Buckets(t *testing.T) {
 		{"mixed", domainReport{}, []tier{tierUltimate}, tierFree, true, "mixed", true},
 	}
 	for _, c := range cases {
-		gotClass, gotWork := classifyDomain(c.dr, c.overrides, c.page, c.fetched)
-		if gotClass != c.wantClass || gotWork != c.wantWork {
-			t.Errorf("%s: classifyDomain = (%q, %v); want (%q, %v)", c.name, gotClass, gotWork, c.wantClass, c.wantWork)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			gotClass, gotWork := classifyDomain(c.dr, c.overrides, c.page, c.fetched)
+			if gotClass != c.wantClass || gotWork != c.wantWork {
+				t.Errorf("%s: classifyDomain = (%q, %v); want (%q, %v)", c.name, gotClass, gotWork, c.wantClass, c.wantWork)
+			}
+		})
 	}
 }
 
@@ -143,11 +148,13 @@ func TestDocOverrideForAction_PrefixMatch(t *testing.T) {
 		{"project.hook_list", "", false, false},
 	}
 	for _, c := range cases {
-		ref, ok := docOverrideForAction(c.id)
-		if ok != c.wantOK || ref.area != c.wantArea || ref.userDoc != c.wantUser {
-			t.Errorf("docOverrideForAction(%q) = (%+v, %v); want (area %q, userDoc %v, %v)",
-				c.id, ref, ok, c.wantArea, c.wantUser, c.wantOK)
-		}
+		t.Run(c.id, func(t *testing.T) {
+			ref, ok := docOverrideForAction(c.id)
+			if ok != c.wantOK || ref.area != c.wantArea || ref.userDoc != c.wantUser {
+				t.Errorf("docOverrideForAction(%q) = (%+v, %v); want (area %q, userDoc %v, %v)",
+					c.id, ref, ok, c.wantArea, c.wantUser, c.wantOK)
+			}
+		})
 	}
 }
 
@@ -215,13 +222,15 @@ func TestExpectedTierForAction_DocOverride_GradesAgainstReferencedPage(t *testin
 		{"merge_request.dependencies_list", tierPremium, "doc/user/project/merge_requests/dependencies.md"},
 	}
 	for _, c := range cases {
-		got, note := res.expectedTierForAction(context.Background(), c.id, tierFree)
-		if got != c.wantTier {
-			t.Errorf("expectedTierForAction(%q) tier = %v; want %v", c.id, got, c.wantTier)
-		}
-		if !strings.Contains(note, c.wantNote) {
-			t.Errorf("expectedTierForAction(%q) note = %q; want it to cite %q", c.id, note, c.wantNote)
-		}
+		t.Run(c.id, func(t *testing.T) {
+			got, note := res.expectedTierForAction(context.Background(), c.id, tierFree)
+			if got != c.wantTier {
+				t.Errorf("expectedTierForAction(%q) tier = %v; want %v", c.id, got, c.wantTier)
+			}
+			if !strings.Contains(note, c.wantNote) {
+				t.Errorf("expectedTierForAction(%q) note = %q; want it to cite %q", c.id, note, c.wantNote)
+			}
+		})
 	}
 }
 
@@ -256,15 +265,17 @@ func TestExpectedTierForAction_ExceptionWinsOverPageTier(t *testing.T) {
 		{"merge_request.approval_state", "live-verified Premium"},
 	}
 	for _, c := range cases {
-		got, note := res.expectedTierForAction(context.Background(), c.id, tierFree)
-		if got != tierPremium {
-			t.Errorf("expectedTierForAction(%q) tier = %v; want premium", c.id, got)
-		}
-		if note == "" {
-			t.Errorf("expectedTierForAction(%q) note is empty; want the audited rationale", c.id)
-		}
-		if c.wantNote != "" && !strings.Contains(note, c.wantNote) {
-			t.Errorf("expectedTierForAction(%q) note = %q; want it to contain %q", c.id, note, c.wantNote)
-		}
+		t.Run(c.id, func(t *testing.T) {
+			got, note := res.expectedTierForAction(context.Background(), c.id, tierFree)
+			if got != tierPremium {
+				t.Errorf("expectedTierForAction(%q) tier = %v; want premium", c.id, got)
+			}
+			if note == "" {
+				t.Errorf("expectedTierForAction(%q) note is empty; want the audited rationale", c.id)
+			}
+			if c.wantNote != "" && !strings.Contains(note, c.wantNote) {
+				t.Errorf("expectedTierForAction(%q) note = %q; want it to contain %q", c.id, note, c.wantNote)
+			}
+		})
 	}
 }

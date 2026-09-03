@@ -588,9 +588,11 @@ func TestFormatUserActivitiesMarkdownString_WithData(t *testing.T) {
 		"| alice | 2026-06-15 |",
 		"| bob | 2026-06-14 |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -620,9 +622,11 @@ func TestFormatUserMembershipsMarkdownString_WithData(t *testing.T) {
 		"| 1 | my-project | Project | 30 |",
 		"| 2 | my-group | Namespace | 50 |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -647,9 +651,11 @@ func TestFormatUserRunnerMarkdownString(t *testing.T) {
 		"glrt-abc123",
 		"Token Expires At",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -667,9 +673,11 @@ func TestFormatDeleteUserIdentityMarkdownString(t *testing.T) {
 		UserID: 42, Provider: "saml", Deleted: true,
 	})
 	for _, want := range []string{"42", "saml", "true"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

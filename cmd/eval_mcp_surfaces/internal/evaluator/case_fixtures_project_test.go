@@ -42,13 +42,15 @@ func TestBaseMutatingFixtureSpecs_DefineRequiredResourceBuilders(t *testing.T) {
 		"pipeline_schedule",
 		"member",
 	} {
-		fixture, ok := byName[name]
-		if !ok {
-			t.Fatalf("fixture %q missing from %s", name, fixtureNames(fixtures))
-		}
-		if fixture.Ensure == nil || fixture.Validate == nil || fixture.Cleanup == nil {
-			t.Fatalf("fixture %q callbacks = ensure:%t validate:%t cleanup:%t", name, fixture.Ensure != nil, fixture.Validate != nil, fixture.Cleanup != nil)
-		}
+		t.Run(name, func(t *testing.T) {
+			fixture, ok := byName[name]
+			if !ok {
+				t.Fatalf("fixture %q missing from %s", name, fixtureNames(fixtures))
+			}
+			if fixture.Ensure == nil || fixture.Validate == nil || fixture.Cleanup == nil {
+				t.Fatalf("fixture %q callbacks = ensure:%t validate:%t cleanup:%t", name, fixture.Ensure != nil, fixture.Validate != nil, fixture.Cleanup != nil)
+			}
+		})
 	}
 }
 
@@ -89,9 +91,11 @@ func TestFixtureOutputFromLiveState_ExposesTypedPromptValues(t *testing.T) {
 		"package_release_dir":     "/tmp/pkg",
 		"package_release_files":   "a.txt,b.txt",
 	} {
-		if got := output[key]; got != want {
-			t.Fatalf("output[%s] = %q, want %q", key, got, want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if got := output[key]; got != want {
+				t.Fatalf("output[%s] = %q, want %q", key, got, want)
+			}
+		})
 	}
 }
 
@@ -117,9 +121,11 @@ func TestAttemptNameFixtureOutput_UsesModelRunSuffix(t *testing.T) {
 		"package_release_name":     "eval-release-package-qwen36flash-r3-abc123",
 		"package_release_tag":      "v0.0.0-eval-packages-qwen36flash-r3-abc123",
 	} {
-		if got := output[key]; got != want {
-			t.Fatalf("output[%s] = %q, want %q", key, got, want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if got := output[key]; got != want {
+				t.Fatalf("output[%s] = %q, want %q", key, got, want)
+			}
+		})
 	}
 }
 
@@ -138,9 +144,11 @@ func TestAttemptNameFixtureOutput_IsolatesCaseResources(t *testing.T) {
 		"release_tag_name":  "v0.0.0-eval-qwen36flash-r1-abc123-ms018",
 		"release_link_name": "eval-crud-link-qwen36flash-r1-abc123-ms018",
 	} {
-		if got := output[key]; got != want {
-			t.Fatalf("output[%s] = %q, want %q", key, got, want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if got := output[key]; got != want {
+				t.Fatalf("output[%s] = %q, want %q", key, got, want)
+			}
+		})
 	}
 }
 
@@ -171,9 +179,11 @@ func TestBaseMutatingPromptTemplate_RendersAttemptNamesWithoutChangingStoredProm
 		t.Fatalf("RenderCasePrompt() error = %v", err)
 	}
 	for _, want := range []string{"v0.0.0-eval-gpt54mini-r1-abc123", liveFixtureProjectPath, liveFixtureDefaultRef} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("rendered prompt = %q, want %q", rendered, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(rendered, want) {
+				t.Fatalf("rendered prompt = %q, want %q", rendered, want)
+			}
+		})
 	}
 }
 

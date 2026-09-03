@@ -1817,9 +1817,11 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"glpat-secret123",
 	}
 	for _, s := range checks {
-		if !strings.Contains(md, s) {
-			t.Errorf("FormatOutputMarkdown missing %q in:\n%s", s, md)
-		}
+		t.Run(s, func(t *testing.T) {
+			if !strings.Contains(md, s) {
+				t.Errorf("FormatOutputMarkdown missing %q in:\n%s", s, md)
+			}
+		})
 	}
 }
 
@@ -2069,9 +2071,11 @@ func TestGroupList_WithAllFilters(t *testing.T) {
 				"page_token":       "xyz",
 			}
 			for key, want := range checks {
-				if got := q.Get(key); got != want {
-					t.Errorf("expected %s=%s, got %s", key, want, got)
-				}
+				t.Run(key, func(t *testing.T) {
+					if got := q.Get(key); got != want {
+						t.Errorf("expected %s=%s, got %s", key, want, got)
+					}
+				})
 			}
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
@@ -2135,9 +2139,11 @@ func TestPersonalList_WithAllFilters(t *testing.T) {
 				"page_token":       "pat-cursor",
 			}
 			for key, want := range checks {
-				if got := q.Get(key); got != want {
-					t.Errorf("expected %s=%s, got %s", key, want, got)
-				}
+				t.Run(key, func(t *testing.T) {
+					if got := q.Get(key); got != want {
+						t.Errorf("expected %s=%s, got %s", key, want, got)
+					}
+				})
 			}
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return

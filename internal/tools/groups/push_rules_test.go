@@ -288,9 +288,11 @@ func TestFormatPushRuleMarkdown(t *testing.T) {
 	}
 	md := FormatPushRuleMarkdown(r)
 	for _, want := range []string{"Group Push Rules", "Commit Message Regex", "^JIRA-", "Prevent Secrets", "Max File Size"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -325,9 +327,11 @@ func TestAddPushRule_AllFields(t *testing.T) {
 		t.Fatalf("AddPushRule() error: %v", err)
 	}
 	for _, want := range []string{"author_email_regex", "branch_name_regex", "commit_committer_check", "file_name_regex", "max_file_size", "member_check", "reject_unsigned_commits"} {
-		if !strings.Contains(gotBody, want) {
-			t.Errorf("body missing %q: %s", want, gotBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotBody, want) {
+				t.Errorf("body missing %q: %s", want, gotBody)
+			}
+		})
 	}
 }
 
@@ -363,9 +367,11 @@ func TestEditPushRule_AllFields(t *testing.T) {
 		t.Fatalf("EditPushRule() error: %v", err)
 	}
 	for _, want := range []string{"author_email_regex", "branch_name_regex", "commit_committer_check", "file_name_regex", "max_file_size", "member_check", "reject_unsigned_commits"} {
-		if !strings.Contains(gotBody, want) {
-			t.Errorf("body missing %q: %s", want, gotBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotBody, want) {
+				t.Errorf("body missing %q: %s", want, gotBody)
+			}
+		})
 	}
 }
 

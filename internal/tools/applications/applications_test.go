@@ -155,10 +155,19 @@ func TestRenewSecret(t *testing.T) {
 // before touching the GitLab API.
 func TestRenewSecret_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, id := range []int64{0, -1} {
-		if _, err := RenewSecret(t.Context(), client, RenewSecretInput{ID: id}); err == nil {
-			t.Errorf("ID=%d: expected error, got nil", id)
-		}
+	ids := []struct {
+		name string
+		id   int64
+	}{
+		{"zero_id", 0},
+		{"negative_id", -1},
+	}
+	for _, tc := range ids {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := RenewSecret(t.Context(), client, RenewSecretInput{ID: tc.id}); err == nil {
+				t.Errorf("ID=%d: expected error, got nil", tc.id)
+			}
+		})
 	}
 }
 
@@ -179,16 +188,24 @@ func TestRenewSecret_Error(t *testing.T) {
 	}
 }
 
-// TestDelete_ValidationError verifies that Delete_ValidationError returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDelete_ValidationError verifies Delete rejects non-positive ids before
+// touching the GitLab API.
 func TestDelete_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, id := range []int64{0, -1} {
-		err := Delete(t.Context(), client, DeleteInput{ID: id})
-		if err == nil {
-			t.Errorf("ID=%d: expected error, got nil", id)
-		}
+	ids := []struct {
+		name string
+		id   int64
+	}{
+		{"zero_id", 0},
+		{"negative_id", -1},
+	}
+	for _, tc := range ids {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Delete(t.Context(), client, DeleteInput{ID: tc.id})
+			if err == nil {
+				t.Errorf("ID=%d: expected error, got nil", tc.id)
+			}
+		})
 	}
 }
 

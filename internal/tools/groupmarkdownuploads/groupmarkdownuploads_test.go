@@ -85,19 +85,28 @@ func TestDeleteByID_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_ValidationUploadID verifies the DeleteByID_ValidationUploadID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDeleteByID_ValidationUploadID verifies that DeleteByID rejects a
+// non-positive upload_id before reaching the API, naming the field in the
+// error.
 func TestDeleteByID_ValidationUploadID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, id := range []int64{0, -1} {
-		err := DeleteByID(t.Context(), client, DeleteByIDInput{GroupID: "5", UploadID: id})
-		if err == nil {
-			t.Fatalf("expected error for upload_id=%d, got nil", id)
-		}
-		if !strings.Contains(err.Error(), "upload_id") {
-			t.Errorf("error %q does not mention upload_id", err.Error())
-		}
+	cases := []struct {
+		name string
+		id   int64
+	}{
+		{"zero", 0},
+		{"negative", -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := DeleteByID(t.Context(), client, DeleteByIDInput{GroupID: "5", UploadID: tc.id})
+			if err == nil {
+				t.Fatalf("expected error for upload_id=%d, got nil", tc.id)
+			}
+			if !strings.Contains(err.Error(), "upload_id") {
+				t.Errorf("error %q does not mention upload_id", err.Error())
+			}
+		})
 	}
 }
 
@@ -469,9 +478,11 @@ func TestFormatList_MultipleRows(t *testing.T) {
 	}
 	md := FormatList(out)
 	for _, want := range []string{"a.txt", "b.txt", "c.txt", "| 1 |", "| 2 |", "| 3 |"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -549,9 +560,11 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok123"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -569,9 +582,11 @@ func TestFormatListMarkdownString_UploadedBy(t *testing.T) {
 	}
 	md := FormatListMarkdownString(out)
 	for _, want := range []string{"Group Markdown Uploads (1)", "Uploaded By", "Bob (@bob)", "image.png"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -597,8 +612,10 @@ func TestUploadedByLabel(t *testing.T) {
 		{"empty", &UploadedByOutput{}, ""},
 	}
 	for _, tc := range cases {
-		if got := uploadedByLabel(tc.in); got != tc.want {
-			t.Errorf("%s: uploadedByLabel = %q, want %q", tc.name, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if got := uploadedByLabel(tc.in); got != tc.want {
+				t.Errorf("%s: uploadedByLabel = %q, want %q", tc.name, got, tc.want)
+			}
+		})
 	}
 }

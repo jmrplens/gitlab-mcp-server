@@ -345,14 +345,18 @@ func TestIsGeneratedLLMSFile_CoversEveryCompanion(t *testing.T) {
 		llmsFileName, llmsFullFileName, llmsMediumFileName,
 		llmsFullMetaFileName, llmsFullIndividualFileName, llmsFullCapabilityFileName,
 	} {
-		if !isGeneratedLLMSFile(name) {
-			t.Errorf("isGeneratedLLMSFile(%q) = false, want true", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !isGeneratedLLMSFile(name) {
+				t.Errorf("isGeneratedLLMSFile(%q) = false, want true", name)
+			}
+		})
 	}
 	for _, name := range []string{"README.md", "llms.txt.bak", "../llms.txt", ""} {
-		if isGeneratedLLMSFile(name) {
-			t.Errorf("isGeneratedLLMSFile(%q) = true, want false", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if isGeneratedLLMSFile(name) {
+				t.Errorf("isGeneratedLLMSFile(%q) = true, want false", name)
+			}
+		})
 	}
 }
 
@@ -376,17 +380,21 @@ func TestWriteLLMSMediumMetaTools_OmitsSchemas(t *testing.T) {
 	got := b.String()
 
 	for _, want := range []string{"### gitlab_issue", "**Issue**", "Actions (3):", "create, get, list"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("medium meta-tools output missing %q\ngot:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("medium meta-tools output missing %q\ngot:\n%s", want, got)
+			}
+		})
 	}
 	// Actions must be sorted so regeneration is deterministic.
 	if strings.Index(got, "create") > strings.Index(got, "get") {
 		t.Error("actions are not sorted alphabetically")
 	}
 	for _, unwanted := range []string{"inputSchema", "\"properties\"", "Input Schema"} {
-		if strings.Contains(got, unwanted) {
-			t.Errorf("medium meta-tools output must not embed schemas, found %q", unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(got, unwanted) {
+				t.Errorf("medium meta-tools output must not embed schemas, found %q", unwanted)
+			}
+		})
 	}
 }

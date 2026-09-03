@@ -717,9 +717,11 @@ func TestFormatParameters_AllFields(t *testing.T) {
 	}
 	result := formatParameters(p)
 	for _, want := range []string{"percentage=50", "groupId=g1", "userIds=1,2,3", "rollout=random", "stickiness=default"} {
-		if !strings.Contains(result, want) {
-			t.Errorf("formatParameters missing %q in %q", want, result)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(result, want) {
+				t.Errorf("formatParameters missing %q in %q", want, result)
+			}
+		})
 	}
 }
 
@@ -957,29 +959,31 @@ func TestFeatureFlagActionSpecs_Metadata(t *testing.T) {
 		"gitlab_feature_flag_delete",
 	}
 	for _, tool := range wantTools {
-		spec, ok := byTool[tool]
-		if !ok {
-			t.Fatalf("missing spec for %s", tool)
-		}
-		if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute featureflags domain action") {
-			t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
-		}
-		nlAliases := 0
-		for _, a := range spec.Aliases {
-			if a != tool {
-				nlAliases++
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("missing spec for %s", tool)
 			}
-		}
-		if nlAliases < 2 {
-			t.Errorf("%s: expected >=2 natural-language aliases, got %v", tool, spec.Aliases)
-		}
-		if len(spec.RelatedActions) == 0 {
-			t.Errorf("%s: missing RelatedActions", tool)
-		}
-		desc := spec.IndividualTool.Description
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s: description missing Returns:/See also:: %q", tool, desc)
-		}
+			if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute featureflags domain action") {
+				t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
+			}
+			nlAliases := 0
+			for _, a := range spec.Aliases {
+				if a != tool {
+					nlAliases++
+				}
+			}
+			if nlAliases < 2 {
+				t.Errorf("%s: expected >=2 natural-language aliases, got %v", tool, spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s: missing RelatedActions", tool)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s: description missing Returns:/See also:: %q", tool, desc)
+			}
+		})
 	}
 }
 

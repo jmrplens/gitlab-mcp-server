@@ -565,9 +565,11 @@ func TestStart_RefusesAnUnhonorableProtocolBeforeBuildingAnything(t *testing.T) 
 		t.Fatal("Start accepted an unknown protocol")
 	}
 	for _, want := range []string{"http/protobuff", ProtocolHTTP, ProtocolGRPC} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not mention %q", err, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not mention %q", err, want)
+			}
+		})
 	}
 }
 

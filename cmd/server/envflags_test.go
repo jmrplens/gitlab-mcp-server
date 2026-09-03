@@ -74,9 +74,11 @@ func TestEnvBackedFlags_AnUnpassedFlagLeavesTheEnvironmentAlone(t *testing.T) {
 		"UPLOAD_MAX_FILE_SIZE": "1048576",
 		"YOLO_MODE":            "true",
 	} {
-		if got := os.Getenv(name); got != want {
-			t.Errorf("%s = %q, want %q; an unpassed flag cleared a variable the operator set", name, got, want)
-		}
+		t.Run(name, func(t *testing.T) {
+			if got := os.Getenv(name); got != want {
+				t.Errorf("%s = %q, want %q; an unpassed flag cleared a variable the operator set", name, got, want)
+			}
+		})
 	}
 }
 
@@ -102,9 +104,11 @@ func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) 
 	}
 
 	for flagName, envName := range want {
-		if got[flagName] != envName {
-			t.Errorf("-%s maps to %q, want %q", flagName, got[flagName], envName)
-		}
+		t.Run(flagName, func(t *testing.T) {
+			if got[flagName] != envName {
+				t.Errorf("-%s maps to %q, want %q", flagName, got[flagName], envName)
+			}
+		})
 	}
 	if len(got) != len(want) {
 		t.Errorf("%d env-backed flags declared, expected %d; a new one needs a case here", len(got), len(want))

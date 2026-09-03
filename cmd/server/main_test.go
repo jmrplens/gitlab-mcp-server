@@ -463,14 +463,16 @@ func TestHTTPHandler_Initialize_AdvertisesListChangedCapabilities(t *testing.T) 
 	}
 
 	for _, key := range []string{"tools", "resources", "prompts"} {
-		group, gok := caps[key].(map[string]any)
-		if !gok {
-			t.Errorf("capabilities.%s missing or not an object: %v", key, caps[key])
-			continue
-		}
-		if got := group["listChanged"]; got != true {
-			t.Errorf("capabilities.%s.listChanged = %v, want true", key, got)
-		}
+		t.Run(key, func(t *testing.T) {
+			group, gok := caps[key].(map[string]any)
+			if !gok {
+				t.Errorf("capabilities.%s missing or not an object: %v", key, caps[key])
+				return
+			}
+			if got := group["listChanged"]; got != true {
+				t.Errorf("capabilities.%s.listChanged = %v, want true", key, got)
+			}
+		})
 	}
 }
 
@@ -1177,9 +1179,11 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"opencode example", "OpenCode"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(output, c.want) {
-			t.Errorf("printHelp missing %s: want substring %q", c.name, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			if !strings.Contains(output, c.want) {
+				t.Errorf("printHelp missing %s: want substring %q", c.name, c.want)
+			}
+		})
 	}
 }
 
@@ -1390,9 +1394,11 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 		wantTools[tool.Name] = true
 	}
 	for name, found := range wantTools {
-		if !found {
-			t.Fatalf("dynamic tool %q was not registered", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !found {
+				t.Fatalf("dynamic tool %q was not registered", name)
+			}
+		})
 	}
 
 	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/project.get"})
@@ -1441,9 +1447,11 @@ func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
 		}
 	}
 	for name, found := range wantTools {
-		if !found {
-			t.Fatalf("meta standalone tool %q was not registered", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !found {
+				t.Fatalf("meta standalone tool %q was not registered", name)
+			}
+		})
 	}
 }
 
@@ -3626,9 +3634,12 @@ func TestSecurityHeaders_CoverRejectionsToo(t *testing.T) {
 		"Referrer-Policy":         "no-referrer",
 	}
 	for name, value := range want {
-		if got := rr.Header().Get(name); got != value {
-			t.Errorf("%s = %q, want %q", name, got, value)
-		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := rr.Header().Get(name); got != value {
+				t.Errorf("%s = %q, want %q", name, got, value)
+			}
+		})
 	}
 }
 
@@ -4206,17 +4217,19 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 	// every icon-bearing entry; the card must not show less on any of the
 	// four collections that carry them.
 	for _, collection := range []string{"tools", "prompts", "resources", "resourceTemplates"} {
-		entries, _ := card[collection].([]any)
-		if len(entries) == 0 {
-			t.Errorf("card %s array missing or empty", collection)
-			continue
-		}
-		for i, raw := range entries {
-			entry, _ := raw.(map[string]any)
-			if icons, _ := entry["icons"].([]any); len(icons) != 3 {
-				t.Errorf("card %s[%d] icons = %d entries, want 3", collection, i, len(icons))
+		t.Run(collection, func(t *testing.T) {
+			entries, _ := card[collection].([]any)
+			if len(entries) == 0 {
+				t.Errorf("card %s array missing or empty", collection)
+				return
 			}
-		}
+			for i, raw := range entries {
+				entry, _ := raw.(map[string]any)
+				if icons, _ := entry["icons"].([]any); len(icons) != 3 {
+					t.Errorf("card %s[%d] icons = %d entries, want 3", collection, i, len(icons))
+				}
+			}
+		})
 	}
 
 	// Verify serverInfo presence
@@ -5397,9 +5410,12 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 		"Access-Control-Max-Age": corsMaxAge,
 	}
 	for name, value := range want {
-		if got := rec.Header().Get(name); got != value {
-			t.Errorf("%s = %q, want %q", name, got, value)
-		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := rec.Header().Get(name); got != value {
+				t.Errorf("%s = %q, want %q", name, got, value)
+			}
+		})
 	}
 	// The origin is echoed, never "*": these requests carry Authorization,
 	// and a browser rejects the wildcard on a credentialed request.
@@ -6486,9 +6502,11 @@ func TestServerCard_AnnouncesTelemetryWithoutNamingTheCollector(t *testing.T) {
 		t.Error("the telemetry block names no signals, so a reader cannot tell what is recorded")
 	}
 	for _, key := range []string{"recorded", "not_recorded"} {
-		if text, _ := block[key].(string); text == "" {
-			t.Errorf("the telemetry block has no %q line; the point of announcing is to say what is captured", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if text, _ := block[key].(string); text == "" {
+				t.Errorf("the telemetry block has no %q line; the point of announcing is to say what is captured", key)
+			}
+		})
 	}
 }
 

@@ -103,9 +103,11 @@ func TestFormatProject_Markdown(t *testing.T) {
 		"**Description**: A test project", "**URL**: [https://gitlab.example.com/group/my-project](https://gitlab.example.com/group/my-project)",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf("missing %q in:\n%s", c, md)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf("missing %q in:\n%s", c, md)
+			}
+		})
 	}
 }
 
@@ -285,9 +287,11 @@ func TestFormatMR_Markdown(t *testing.T) {
 		"@dev1", "enhancement", "@dev2", "@dev3",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf(fmtMissing, c)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf(fmtMissing, c)
+			}
+		})
 	}
 }
 
@@ -513,9 +517,11 @@ func TestFormatGroup_Markdown(t *testing.T) {
 		"**Parent ID**: 5",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf(fmtMissing, c)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf(fmtMissing, c)
+			}
+		})
 	}
 }
 
@@ -563,9 +569,11 @@ func TestFormatIssue_Markdown(t *testing.T) {
 		mdDescriptionHdr, "Something is broken",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf(fmtMissing, c)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf(fmtMissing, c)
+			}
+		})
 	}
 }
 
@@ -753,9 +761,11 @@ func TestFormatPipeline_DetailMarkdown(t *testing.T) {
 	md := pipelines.FormatDetailMarkdown(p)
 	checks := []string{"Pipeline #100", "success", "**Duration**: 120s", "**Coverage**: 85.5%", "**User**: admin"}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf(fmtMissing, c)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf(fmtMissing, c)
+			}
+		})
 	}
 }
 
@@ -862,9 +872,11 @@ func TestFormatCommit_DetailMarkdown(t *testing.T) {
 	md := commits.FormatDetailMarkdown(c)
 	checks := []string{"## Commit abc1234", "+10 -3", "parent1, parent2", "### Message"}
 	for _, ch := range checks {
-		if !strings.Contains(md, ch) {
-			t.Errorf(fmtMissing, ch)
-		}
+		t.Run(ch, func(t *testing.T) {
+			if !strings.Contains(md, ch) {
+				t.Errorf(fmtMissing, ch)
+			}
+		})
 	}
 }
 
@@ -1109,9 +1121,11 @@ func TestFormatJob_Markdown(t *testing.T) {
 	md := jobs.FormatOutputMarkdown(j)
 	checks := []string{"Job #200", "build", "**Stage**: build", "**Failure Reason**: script_failure", "45.5s"}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf(fmtMissing, c)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf(fmtMissing, c)
+			}
+		})
 	}
 }
 

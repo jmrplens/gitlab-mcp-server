@@ -178,9 +178,11 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 		"gitlab_user",
 	}
 	for _, name := range regularTools {
-		if _, ok := toolSet[name]; !ok {
-			t.Errorf("regular tool %s should still be registered for non-admin token", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if _, ok := toolSet[name]; !ok {
+				t.Errorf("regular tool %s should still be registered for non-admin token", name)
+			}
+		})
 	}
 
 	t.Logf("Scope filter test passed: %d tools registered, %d removed", len(result.Tools), removed)

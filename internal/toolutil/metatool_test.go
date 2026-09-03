@@ -299,10 +299,20 @@ func TestUnmarshalParams_CoercesStructuredAccessLevelShapes(t *testing.T) {
 // rejects values that overflow the valid access-level range (oversized strings, ints,
 // and floats) while still accepting an in-range numeric string.
 func TestGitLabRoleAccessLevel_RejectsOutOfRangeIntegers(t *testing.T) {
-	for _, value := range []any{"9223372036854775807", int64(1 << 62), float64(1e20)} {
-		if got, ok := gitLabRoleAccessLevel(value); ok {
-			t.Fatalf("gitLabRoleAccessLevel(%v) = %d, true; want rejected", value, got)
-		}
+	oversized := []struct {
+		name  string
+		value any
+	}{
+		{"max_int64_string", "9223372036854775807"},
+		{"int64_two_pow_62", int64(1 << 62)},
+		{"float64_1e20", float64(1e20)},
+	}
+	for _, tc := range oversized {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, ok := gitLabRoleAccessLevel(tc.value); ok {
+				t.Fatalf("gitLabRoleAccessLevel(%v) = %d, true; want rejected", tc.value, got)
+			}
+		})
 	}
 
 	if got, ok := gitLabRoleAccessLevel("60"); !ok || got != 60 {
@@ -407,14 +417,18 @@ func TestJSONFieldReflectionHelpers(t *testing.T) {
 
 	fields := jsonFieldNames(reflect.TypeFor[namedInput]())
 	for _, want := range []string{"embedded_name", "Plain", "tagged", "Anonymous", "string_list"} {
-		if _, ok := fields[want]; !ok {
-			t.Fatalf("jsonFieldNames() missing %q in %#v", want, fields)
-		}
+		t.Run(want, func(t *testing.T) {
+			if _, ok := fields[want]; !ok {
+				t.Fatalf("jsonFieldNames() missing %q in %#v", want, fields)
+			}
+		})
 	}
 	for _, unwanted := range []string{"-", "_"} {
-		if _, ok := fields[unwanted]; ok {
-			t.Fatalf("jsonFieldNames() contains %q in %#v", unwanted, fields)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if _, ok := fields[unwanted]; ok {
+				t.Fatalf("jsonFieldNames() contains %q in %#v", unwanted, fields)
+			}
+		})
 	}
 	if got := jsonFieldNames(reflect.TypeFor[string]()); got != nil {
 		t.Fatalf("jsonFieldNames(non-struct) = %#v, want nil", got)
@@ -575,9 +589,11 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 		t.Fatalf("note/storage shard values = %#v", got)
 	}
 	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active", "file_path", "body", "shard"} {
-		if _, exists := got[alias]; exists {
-			t.Fatalf("alias %q still present in %#v", alias, got)
-		}
+		t.Run(alias, func(t *testing.T) {
+			if _, exists := got[alias]; exists {
+				t.Fatalf("alias %q still present in %#v", alias, got)
+			}
+		})
 	}
 }
 
@@ -1769,9 +1785,11 @@ func TestMetaToolDescriptionPrefix_IncludesParameterGuidance(t *testing.T) {
 		"Source: Owning project whose allowlist is being changed.",
 		"Avoid: Do not use the project being removed as project_id.",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("prefix missing %q: %q", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("prefix missing %q: %q", want, got)
+			}
+		})
 	}
 
 	description := got + "Manage GitLab CI job token scope."
@@ -1794,9 +1812,11 @@ func TestMetaToolDescriptionPrefix_IncludesActionGuidance(t *testing.T) {
 		"metadata_get: Read GitLab instance metadata such as version and revision.",
 		"settings_get: Read current GitLab application settings.",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("prefix missing %q: %q", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("prefix missing %q: %q", want, got)
+			}
+		})
 	}
 
 	description := got + "Manage GitLab instance administration."
@@ -3254,10 +3274,12 @@ func TestInputSchemaForType_SecretFieldsWriteOnly(t *testing.T) {
 	schema := inputSchemaForType(reflect.TypeFor[secretInput]())
 	properties := schema["properties"].(map[string]any)
 	for _, key := range []string{"token", "signing_token"} {
-		property := properties[key].(map[string]any)
-		if property["writeOnly"] != true {
-			t.Fatalf("%s writeOnly = %v, want true", key, property["writeOnly"])
-		}
+		t.Run(key, func(t *testing.T) {
+			property := properties[key].(map[string]any)
+			if property["writeOnly"] != true {
+				t.Fatalf("%s writeOnly = %v, want true", key, property["writeOnly"])
+			}
+		})
 	}
 	name := properties["name"].(map[string]any)
 	if _, ok := name["writeOnly"]; ok {
@@ -3326,9 +3348,11 @@ func TestFieldTiers_ReadsTierTag(t *testing.T) {
 		t.Fatalf("FieldTiers = %v, want %v", got, want)
 	}
 	for name, tier := range want {
-		if got[name] != tier {
-			t.Errorf("FieldTiers[%q] = %q, want %q", name, got[name], tier)
-		}
+		t.Run(name, func(t *testing.T) {
+			if got[name] != tier {
+				t.Errorf("FieldTiers[%q] = %q, want %q", name, got[name], tier)
+			}
+		})
 	}
 	if _, ok := got["title"]; ok {
 		t.Error("untagged field title must not appear")
@@ -4476,63 +4500,117 @@ func TestStructHasJSONField(t *testing.T) {
 // integer, including negative and out-of-range values.
 func TestValidGitLabRoleAccessLevelDirect(t *testing.T) {
 	cases := []struct {
+		name   string
 		value  int
 		wantOK bool
 	}{
-		{0, true},
-		{10, true},
-		{20, true},
-		{30, true},
-		{40, true},
-		{50, true},
-		{60, true},
-		{1, false},
-		{5, false},
-		{15, false},
-		{25, false},
-		{70, false},
-		{100, false},
-		{-1, false},
-		{-10, false},
+		{"no_access", 0, true},
+		{"guest", 10, true},
+		{"reporter", 20, true},
+		{"developer", 30, true},
+		{"maintainer", 40, true},
+		{"owner", 50, true},
+		{"admin", 60, true},
+		{"one", 1, false},
+		{"minimal_access_5", 5, false},
+		{"planner_15", 15, false},
+		{"between_roles_25", 25, false},
+		{"above_admin_70", 70, false},
+		{"hundred", 100, false},
+		{"negative_one", -1, false},
+		{"negative_ten", -10, false},
 	}
 	for _, tc := range cases {
-		got, ok := validGitLabRoleAccessLevel(tc.value)
-		if ok != tc.wantOK {
-			t.Errorf("validGitLabRoleAccessLevel(%d) ok = %v, want %v", tc.value, ok, tc.wantOK)
-		}
-		if ok && got != tc.value {
-			t.Errorf("validGitLabRoleAccessLevel(%d) = %d, want %d", tc.value, got, tc.value)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := validGitLabRoleAccessLevel(tc.value)
+			if ok != tc.wantOK {
+				t.Errorf("validGitLabRoleAccessLevel(%d) ok = %v, want %v", tc.value, ok, tc.wantOK)
+			}
+			if ok && got != tc.value {
+				t.Errorf("validGitLabRoleAccessLevel(%d) = %d, want %d", tc.value, got, tc.value)
+			}
+		})
 	}
 }
 
 // TestValidGitLabRoleAccessLevelInt64Direct verifies the int64 variant
 // rejects out-of-int-range and negative values before narrowing.
 func TestValidGitLabRoleAccessLevelInt64Direct(t *testing.T) {
-	for _, value := range []int64{0, 10, 20, 30, 40, 50, 60} {
-		if got, ok := validGitLabRoleAccessLevelInt64(value); !ok || got != int(value) {
-			t.Errorf("validGitLabRoleAccessLevelInt64(%d) = %d/%v, want %d/true", value, got, ok, value)
-		}
+	accepted := []struct {
+		name  string
+		value int64
+	}{
+		{"no_access", 0},
+		{"guest", 10},
+		{"reporter", 20},
+		{"developer", 30},
+		{"maintainer", 40},
+		{"owner", 50},
+		{"admin", 60},
 	}
-	for _, value := range []int64{-1, 5, 70, 1 << 40, 1 << 60} {
-		if _, ok := validGitLabRoleAccessLevelInt64(value); ok {
-			t.Errorf("validGitLabRoleAccessLevelInt64(%d) ok = true, want false", value)
-		}
+	for _, tc := range accepted {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, ok := validGitLabRoleAccessLevelInt64(tc.value); !ok || got != int(tc.value) {
+				t.Errorf("validGitLabRoleAccessLevelInt64(%d) = %d/%v, want %d/true", tc.value, got, ok, tc.value)
+			}
+		})
+	}
+	rejected := []struct {
+		name  string
+		value int64
+	}{
+		{"negative", -1},
+		{"minimal_access_5", 5},
+		{"above_admin_70", 70},
+		{"two_pow_40", 1 << 40},
+		{"two_pow_60", 1 << 60},
+	}
+	for _, tc := range rejected {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := validGitLabRoleAccessLevelInt64(tc.value); ok {
+				t.Errorf("validGitLabRoleAccessLevelInt64(%d) ok = true, want false", tc.value)
+			}
+		})
 	}
 }
 
 // TestValidGitLabRoleAccessLevelFloat64Direct verifies the float64 variant
 // only accepts whole-number values in the canonical set.
 func TestValidGitLabRoleAccessLevelFloat64Direct(t *testing.T) {
-	for _, value := range []float64{0, 10, 20, 30, 40, 50, 60} {
-		if got, ok := validGitLabRoleAccessLevelFloat64(value); !ok || got != int(value) {
-			t.Errorf("validGitLabRoleAccessLevelFloat64(%v) = %d/%v, want %d/true", value, got, ok, int(value))
-		}
+	accepted := []struct {
+		name  string
+		value float64
+	}{
+		{"no_access", 0},
+		{"guest", 10},
+		{"reporter", 20},
+		{"developer", 30},
+		{"maintainer", 40},
+		{"owner", 50},
+		{"admin", 60},
 	}
-	for _, value := range []float64{1.5, 5, 70, -10} {
-		if _, ok := validGitLabRoleAccessLevelFloat64(value); ok {
-			t.Errorf("validGitLabRoleAccessLevelFloat64(%v) ok = true, want false", value)
-		}
+	for _, tc := range accepted {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, ok := validGitLabRoleAccessLevelFloat64(tc.value); !ok || got != int(tc.value) {
+				t.Errorf("validGitLabRoleAccessLevelFloat64(%v) = %d/%v, want %d/true", tc.value, got, ok, int(tc.value))
+			}
+		})
+	}
+	rejected := []struct {
+		name  string
+		value float64
+	}{
+		{"fractional", 1.5},
+		{"minimal_access_5", 5},
+		{"above_admin_70", 70},
+		{"negative", -10},
+	}
+	for _, tc := range rejected {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := validGitLabRoleAccessLevelFloat64(tc.value); ok {
+				t.Errorf("validGitLabRoleAccessLevelFloat64(%v) ok = true, want false", tc.value)
+			}
+		})
 	}
 }
 
@@ -4562,10 +4640,20 @@ func TestNumericRoleAccessLevel(t *testing.T) {
 	if _, ok := numericRoleAccessLevel(float64(70)); ok {
 		t.Error("numericRoleAccessLevel(float64 70) ok = true, want false")
 	}
-	for _, value := range []any{"30", true, nil} {
-		if _, ok := numericRoleAccessLevel(value); ok {
-			t.Errorf("numericRoleAccessLevel(%T %v) ok = true, want false", value, value)
-		}
+	nonNumeric := []struct {
+		name  string
+		value any
+	}{
+		{"numeric_string", "30"},
+		{"bool", true},
+		{"nil", nil},
+	}
+	for _, tc := range nonNumeric {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := numericRoleAccessLevel(tc.value); ok {
+				t.Errorf("numericRoleAccessLevel(%T %v) ok = true, want false", tc.value, tc.value)
+			}
+		})
 	}
 }
 
@@ -4604,10 +4692,12 @@ func TestCoercePaginationBooleanDirect(t *testing.T) {
 
 	// name in {first,last,per_page} → 100
 	for _, name := range []string{"first", "last", "per_page"} {
-		got, ok = coercePaginationBoolean(name, true, intType)
-		if !ok || got != 100 {
-			t.Errorf("coercePaginationBoolean(%s, true) = %v/%v, want 100/true", name, got, ok)
-		}
+		t.Run(name, func(t *testing.T) {
+			got, ok = coercePaginationBoolean(name, true, intType)
+			if !ok || got != 100 {
+				t.Errorf("coercePaginationBoolean(%s, true) = %v/%v, want 100/true", name, got, ok)
+			}
+		})
 	}
 
 	// bool false → unchanged
@@ -4690,12 +4780,14 @@ func TestIsStringSliceTypeAndIsStringTypeDirect(t *testing.T) {
 		{"bool", reflect.TypeFor[bool](), false, false},
 	}
 	for _, tc := range cases {
-		if got := isStringType(tc.typ); got != tc.isString {
-			t.Errorf("%s: isStringType = %v, want %v", tc.name, got, tc.isString)
-		}
-		if got := isStringSliceType(tc.typ); got != tc.isSlice {
-			t.Errorf("%s: isStringSliceType = %v, want %v", tc.name, got, tc.isSlice)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isStringType(tc.typ); got != tc.isString {
+				t.Errorf("%s: isStringType = %v, want %v", tc.name, got, tc.isString)
+			}
+			if got := isStringSliceType(tc.typ); got != tc.isSlice {
+				t.Errorf("%s: isStringSliceType = %v, want %v", tc.name, got, tc.isSlice)
+			}
+		})
 	}
 }
 

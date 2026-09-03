@@ -375,9 +375,11 @@ func TestToOutput_FullUser(t *testing.T) {
 		{"namespace_id", out.NamespaceID, int64(7)},
 	}
 	for _, c := range checks {
-		if c.got != c.want {
-			t.Errorf("%s: got %v, want %v", c.name, c.got, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			if c.got != c.want {
+				t.Errorf("%s: got %v, want %v", c.name, c.got, c.want)
+			}
+		})
 	}
 
 	if len(out.Identities) != 1 || out.Identities[0].Provider != "ldap" || out.Identities[0].ExternUID != "ext-1" {

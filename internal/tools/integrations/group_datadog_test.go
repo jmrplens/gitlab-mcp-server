@@ -536,9 +536,11 @@ func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
 		"Updated",               // i.UpdatedAt != "" branch
 	}
 	for _, want := range wantSubs {
-		if !strings.Contains(text, want) {
-			t.Errorf("markdown should contain %q, got: %s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown should contain %q, got: %s", want, text)
+			}
+		})
 	}
 }
 
@@ -599,9 +601,11 @@ func TestFormatSetGroupDatadogMarkdown_Full(t *testing.T) {
 		"Archive Trace Events",  // i.ArchiveTraceEvents != nil branch
 	}
 	for _, want := range wantSubs {
-		if !strings.Contains(text, want) {
-			t.Errorf("markdown should contain %q, got: %s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown should contain %q, got: %s", want, text)
+			}
+		})
 	}
 }
 
@@ -676,9 +680,11 @@ func TestActionSpecs_GroupDatadogPresent(t *testing.T) {
 		}
 	}
 	for name := range want {
-		if !seen[name] {
-			t.Errorf("ActionSpecs missing %q", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !seen[name] {
+				t.Errorf("ActionSpecs missing %q", name)
+			}
+		})
 	}
 }
 

@@ -250,9 +250,11 @@ func TestPackagePublishAndLink_ContextCancelled(t *testing.T) {
 func TestPackagePublishDirectory_Success(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.tar.gz", "b.tar.gz", "readme.md"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("content-"+name), 0o600); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("content-"+name), 0o600); err != nil {
+				t.Fatalf("write file: %v", err)
+			}
+		})
 	}
 
 	publishCount := 0
@@ -298,9 +300,11 @@ func TestPackagePublishDirectory_Success(t *testing.T) {
 func TestPackagePublishDirectory_WithPattern(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.tar.gz", "b.tar.gz", "readme.md", "notes.txt"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0o600); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0o600); err != nil {
+				t.Fatalf("write file: %v", err)
+			}
+		})
 	}
 
 	publishCount := 0
@@ -584,9 +588,11 @@ func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 func TestPackagePublishDirectory_CancelledDuringLoop(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.bin", "b.bin"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0o600); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0o600); err != nil {
+				t.Fatalf("write file: %v", err)
+			}
+		})
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -775,9 +781,11 @@ func TestPublishDirectory_ProgressSequenceOnlyIncreases(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]int{"a.bin": 200 * 1024, "b.bin": 320 * 1024}
 	for name, size := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(strings.Repeat("x", size)), 0o600); err != nil {
-			t.Fatalf("writing %s: %v", name, err)
-		}
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(strings.Repeat("x", size)), 0o600); err != nil {
+				t.Fatalf("writing %s: %v", name, err)
+			}
+		})
 	}
 
 	var wantTotal float64

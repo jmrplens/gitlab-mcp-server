@@ -134,9 +134,11 @@ func TestActionSpecs_SettingsAndMetadataUsageGuidance(t *testing.T) {
 		t.Fatalf("metadata_get RelatedActions = %v", metadataSpec.RelatedActions)
 	}
 	for _, want := range []string{"Returns:", "See also:"} {
-		if !strings.Contains(metadataSpec.IndividualTool.Description, want) {
-			t.Fatalf("metadata_get description = %q, want %q", metadataSpec.IndividualTool.Description, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(metadataSpec.IndividualTool.Description, want) {
+				t.Fatalf("metadata_get description = %q, want %q", metadataSpec.IndividualTool.Description, want)
+			}
+		})
 	}
 }
 

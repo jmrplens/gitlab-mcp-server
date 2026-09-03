@@ -156,23 +156,25 @@ func TestActionSpecs_RichMetadata(t *testing.T) {
 		"gitlab_wiki_upload_attachment",
 	}
 	for _, name := range wantTools {
-		spec, ok := byTool[name]
-		if !ok {
-			t.Fatalf("missing spec for %s", name)
-		}
-		if spec.Usage == "" || spec.Usage == "Use to execute wikis domain action." {
-			t.Errorf("%s: generic or empty Usage: %q", name, spec.Usage)
-		}
-		if len(spec.Aliases) == 0 || spec.Aliases[0] == name {
-			t.Errorf("%s: aliases not replaced with natural-language phrases: %v", name, spec.Aliases)
-		}
-		if len(spec.RelatedActions) == 0 {
-			t.Errorf("%s: empty RelatedActions", name)
-		}
-		desc := spec.IndividualTool.Description
-		if !contains(desc, "Returns:") || !contains(desc, "See also:") {
-			t.Errorf("%s: description missing Returns:/See also: form: %q", name, desc)
-		}
+		t.Run(name, func(t *testing.T) {
+			spec, ok := byTool[name]
+			if !ok {
+				t.Fatalf("missing spec for %s", name)
+			}
+			if spec.Usage == "" || spec.Usage == "Use to execute wikis domain action." {
+				t.Errorf("%s: generic or empty Usage: %q", name, spec.Usage)
+			}
+			if len(spec.Aliases) == 0 || spec.Aliases[0] == name {
+				t.Errorf("%s: aliases not replaced with natural-language phrases: %v", name, spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s: empty RelatedActions", name)
+			}
+			desc := spec.IndividualTool.Description
+			if !contains(desc, "Returns:") || !contains(desc, "See also:") {
+				t.Errorf("%s: description missing Returns:/See also: form: %q", name, desc)
+			}
+		})
 	}
 
 	// decorateWikiMeta must be a no-op for a tool with no metadata entry.

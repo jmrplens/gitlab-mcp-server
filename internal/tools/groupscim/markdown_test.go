@@ -168,9 +168,11 @@ func TestFormatOutputMarkdown_EmptyAndPopulated(t *testing.T) {
 	}
 	got := FormatOutputMarkdown(Output{ExternalUID: "uid-1", UserID: 7, Active: true})
 	for _, want := range []string{"## SCIM Identity", "`uid-1`", "**User ID**: 7", "**Active**: true"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, got)
+			}
+		})
 	}
 }
 
@@ -186,9 +188,11 @@ func TestFormatListMarkdown_EmptyAndRows(t *testing.T) {
 		{ExternalUID: "b", UserID: 2},
 	}})
 	for _, want := range []string{"## SCIM Identities (2)", "| `a` | 1 | true |", "| `b` | 2 | false |"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("FormatListMarkdown missing %q in:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("FormatListMarkdown missing %q in:\n%s", want, got)
+			}
+		})
 	}
 }
 
@@ -197,8 +201,10 @@ func TestFormatListMarkdown_EmptyAndRows(t *testing.T) {
 func TestFormatUpdateMarkdown_RendersConfirmation(t *testing.T) {
 	got := FormatUpdateMarkdown(UpdateOutput{Updated: true, Message: "ok"})
 	for _, want := range []string{"## SCIM Identity Updated", "**Updated**: true", "**Message**: ok"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("FormatUpdateMarkdown missing %q in:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("FormatUpdateMarkdown missing %q in:\n%s", want, got)
+			}
+		})
 	}
 }

@@ -81,9 +81,11 @@ func TestParseFlags_RecordsExplicitFlags(t *testing.T) {
 		t.Fatalf("parseFlags() = %+v, want parsed model/task/repeat/execute", opts)
 	}
 	for _, name := range []string{"model", "task", "repeat", "execute-tools", "fixture-smoke"} {
-		if !opts.explicitFlags[name] {
-			t.Fatalf("explicit flags = %#v, want %s", opts.explicitFlags, name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !opts.explicitFlags[name] {
+				t.Fatalf("explicit flags = %#v, want %s", opts.explicitFlags, name)
+			}
+		})
 	}
 }
 

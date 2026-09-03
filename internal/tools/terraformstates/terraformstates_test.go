@@ -224,9 +224,11 @@ func TestDeleteVersion_Error(t *testing.T) {
 func TestFormatStateMarkdown_Coverage(t *testing.T) {
 	md := FormatStateMarkdown(StateItem{Name: "prod-state", LatestSerial: 42, DownloadPath: "/dl/path"})
 	for _, want := range []string{"prod-state", "42", "/dl/path"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("missing %q in markdown", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in markdown", want)
+			}
+		})
 	}
 }
 

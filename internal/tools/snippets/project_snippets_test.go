@@ -493,9 +493,11 @@ func TestCreate_WithAllOptions(t *testing.T) {
 		t.Errorf(fmtIDEquals, out.ID)
 	}
 	for _, want := range []string{"title", "description", "visibility", "files"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -528,9 +530,11 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 		t.Errorf(fmtIDEquals, out.ID)
 	}
 	for _, want := range []string{"title", "description", "visibility", "files"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 

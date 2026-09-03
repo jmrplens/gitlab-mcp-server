@@ -888,9 +888,11 @@ func TestReset_NotFoundMentionsAccessTokenRequirement(t *testing.T) {
 		t.Fatal("expected error for 404 response")
 	}
 	for _, want := range []string{"bot user", "project/group access token", "PATs from human users"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 

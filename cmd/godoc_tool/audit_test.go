@@ -125,9 +125,12 @@ func (BadType) Run() {}
 		t.Fatalf("auditPackage() error = %v", err)
 	}
 	for _, category := range []string{categoryConstMissing, categoryConstForm, categoryVarMissing, categoryVarForm, categoryFuncMissing, categoryMethodForm} {
-		if !hasCategory(findings, category) {
-			t.Fatalf("missing category %q in %#v", category, findings)
-		}
+		t.Run(category, func(t *testing.T) {
+			t.Parallel()
+			if !hasCategory(findings, category) {
+				t.Fatalf("missing category %q in %#v", category, findings)
+			}
+		})
 	}
 }
 
@@ -204,9 +207,12 @@ func ExampleWidget() {
 		t.Fatalf("auditPackage(includeTests=true) error = %v", err)
 	}
 	for _, category := range []string{categoryTestMissing, categoryBenchmarkMissing, categoryFuzzMissing, categoryExampleOutput} {
-		if !hasCategory(withTests, category) {
-			t.Fatalf("missing category %q in %#v", category, withTests)
-		}
+		t.Run(category, func(t *testing.T) {
+			t.Parallel()
+			if !hasCategory(withTests, category) {
+				t.Fatalf("missing category %q in %#v", category, withTests)
+			}
+		})
 	}
 }
 

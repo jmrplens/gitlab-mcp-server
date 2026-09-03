@@ -765,9 +765,11 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"| Web Edit URL | [Edit](https://primary.example.com/admin/geo/sites/1/edit) |",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf("expected markdown to contain %q:\n%s", c, md)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf("expected markdown to contain %q:\n%s", c, md)
+			}
+		})
 	}
 }
 
@@ -823,9 +825,11 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 		"| 2 | secondary | https://secondary.example.com | false | false |",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf("expected markdown to contain %q:\n%s", c, md)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf("expected markdown to contain %q:\n%s", c, md)
+			}
+		})
 	}
 }
 
@@ -906,9 +910,11 @@ func TestFormatStatusMarkdown_AllFields(t *testing.T) {
 		"| Updated At |",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf("expected markdown to contain %q:\n%s", c, md)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf("expected markdown to contain %q:\n%s", c, md)
+			}
+		})
 	}
 }
 
@@ -960,9 +966,11 @@ func TestFormatListStatusMarkdown_WithItems(t *testing.T) {
 		"| 2 | false | Unhealthy | 120 | 30 | 16.4.0 |",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf("expected markdown to contain %q:\n%s", c, md)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf("expected markdown to contain %q:\n%s", c, md)
+			}
+		})
 	}
 }
 
@@ -1132,9 +1140,11 @@ func TestGetStatus_MirrorsFullStruct(t *testing.T) {
 		"cursor_last_event_id":                             {out.CursorLastEventID, 998},
 	}
 	for name, c := range intChecks {
-		if c.got != c.want {
-			t.Errorf("%s = %d, want %d", name, c.got, c.want)
-		}
+		t.Run(name, func(t *testing.T) {
+			if c.got != c.want {
+				t.Errorf("%s = %d, want %d", name, c.got, c.want)
+			}
+		})
 	}
 	strChecks := map[string]struct{ got, want string }{
 		"ci_secure_files_synced_in_percentage":   {out.CISecureFilesSyncedInPercentage, "85.71%"},
@@ -1142,9 +1152,11 @@ func TestGetStatus_MirrorsFullStruct(t *testing.T) {
 		"selective_sync_type":                    {out.SelectiveSyncType, "namespaces"},
 	}
 	for name, c := range strChecks {
-		if c.got != c.want {
-			t.Errorf("%s = %q, want %q", name, c.got, c.want)
-		}
+		t.Run(name, func(t *testing.T) {
+			if c.got != c.want {
+				t.Errorf("%s = %q, want %q", name, c.got, c.want)
+			}
+		})
 	}
 	if !out.ContainerRepositoriesReplicationEnabled {
 		t.Error("ContainerRepositoriesReplicationEnabled not mirrored")

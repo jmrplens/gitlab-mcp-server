@@ -618,9 +618,11 @@ func TestFormatOutputMarkdown_WithSnippet(t *testing.T) {
 		"[my-snippet](https://gitlab.example.com/snippets/55)",
 		"(ID: 55)",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("output missing %q\ngot:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("output missing %q\ngot:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -692,9 +694,11 @@ func TestFormatListMarkdown_WithMoves(t *testing.T) {
 		"| 2 | started | default | storage3 |",
 		"_Page 1, 2 moves shown._",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("output missing %q\ngot:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("output missing %q\ngot:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -830,8 +834,10 @@ func TestFormatScheduleAllMarkdown(t *testing.T) {
 		"All snippet repository storage moves have been scheduled",
 		"gitlab_retrieve_all_snippet_storage_moves",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("output missing %q\ngot:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("output missing %q\ngot:\n%s", want, md)
+			}
+		})
 	}
 }

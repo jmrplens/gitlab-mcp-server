@@ -769,9 +769,11 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"| Requested At | 16 Jun 2026 08:00 UTC |",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf("expected markdown to contain %q:\n%s", c, md)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf("expected markdown to contain %q:\n%s", c, md)
+			}
+		})
 	}
 }
 
@@ -822,9 +824,11 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 		"| 2 | bob | Bob | approved | 20 |",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf("expected markdown to contain %q:\n%s", c, md)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf("expected markdown to contain %q:\n%s", c, md)
+			}
+		})
 	}
 }
 

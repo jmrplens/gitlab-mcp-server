@@ -36,15 +36,17 @@ func TestStdout_CarriesNothingButJSONRPC(t *testing.T) {
 		request(2, "tools/list", ""),
 		request(3, "tools/call", `{"name":"gitlab_execute_action","arguments":{"action":"user.get_current"}}`),
 	} {
-		got := s.call(t, msg)
-		// readMessage already fails on anything that is not JSON. What is left
-		// to check is that it is JSON-RPC, and that it answers what was asked.
-		if got["jsonrpc"] != "2.0" {
-			t.Errorf("message %d is not JSON-RPC 2.0: %v", i+1, got)
-		}
-		if got["id"] == nil {
-			t.Errorf("message %d carries no id, so a client cannot match it to a request: %v", i+1, got)
-		}
+		t.Run(msg, func(t *testing.T) {
+			got := s.call(t, msg)
+			// readMessage already fails on anything that is not JSON. What is left
+			// to check is that it is JSON-RPC, and that it answers what was asked.
+			if got["jsonrpc"] != "2.0" {
+				t.Errorf("message %d is not JSON-RPC 2.0: %v", i+1, got)
+			}
+			if got["id"] == nil {
+				t.Errorf("message %d carries no id, so a client cannot match it to a request: %v", i+1, got)
+			}
+		})
 	}
 
 	if logs := s.stderrText(); logs == "" {
@@ -105,9 +107,11 @@ func TestStderr_DefaultLevelIsNotAllSessionChatter(t *testing.T) {
 		"client log level set",
 		"server connecting",
 	} {
-		if strings.Contains(logs, chatter) {
-			t.Errorf("%q is on the default log stream; it is per-session and carries nothing:\n%s", chatter, logs)
-		}
+		t.Run(chatter, func(t *testing.T) {
+			if strings.Contains(logs, chatter) {
+				t.Errorf("%q is on the default log stream; it is per-session and carries nothing:\n%s", chatter, logs)
+			}
+		})
 	}
 
 	// The other half of the claim: this is a demotion, not a silencing. The
@@ -175,9 +179,11 @@ func TestHandshake_AnswersTheLegacyInitialize(t *testing.T) {
 	// capability that is advertised and not served is worse than one that is
 	// missing. These three are registered on the default surface.
 	for _, want := range []string{"tools", "resources", "prompts"} {
-		if _, present := caps[want]; !present {
-			t.Errorf("the handshake does not declare %q, which this surface registers", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if _, present := caps[want]; !present {
+				t.Errorf("the handshake does not declare %q, which this surface registers", want)
+			}
+		})
 	}
 	if _, present := caps["logging"]; present {
 		t.Error("the handshake declares logging, which this server does not implement")

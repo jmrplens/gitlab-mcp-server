@@ -290,9 +290,11 @@ func TestFormatOutputMarkdown_OptionalBranches(t *testing.T) {
 		"admin",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q", want)
+			}
+		})
 	}
 }
 

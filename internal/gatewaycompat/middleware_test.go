@@ -154,9 +154,11 @@ func TestMiddleware_ToolsList_RewritesProseAndPreservesContract(t *testing.T) {
 		`"pattern":"^[a-z;]+$"`,               // pattern is contract
 		`"open;now"`,                          // enum value and default are data
 	} {
-		if !strings.Contains(schema, want) {
-			t.Errorf("input schema %s\nmissing %s", schema, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(schema, want) {
+				t.Errorf("input schema %s\nmissing %s", schema, want)
+			}
+		})
 	}
 
 	rawOut, err := json.Marshal(tool.OutputSchema)

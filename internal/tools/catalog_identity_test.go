@@ -210,18 +210,24 @@ func TestNewCallIdentifier_ReadsTheWireShape(t *testing.T) {
 func TestNewCallIdentifier_MalformedArgumentsResolveToNothing(t *testing.T) {
 	identifier := NewCallIdentifier(buildTestCatalog(t), config.ToolSurfaceDynamic)
 
-	for _, arguments := range []any{
-		json.RawMessage(`{"action":`),
-		json.RawMessage(`[]`),
-		json.RawMessage(`{"action":42}`),
-		json.RawMessage(``),
-		json.RawMessage(`null`),
-		42,
-		nil,
-	} {
-		if identity, ok := identifier.Identify("gitlab_execute_action", arguments); ok {
-			t.Errorf("arguments %v resolved to %+v", arguments, identity)
-		}
+	cases := []struct {
+		name      string
+		arguments any
+	}{
+		{name: "truncated_object", arguments: json.RawMessage(`{"action":`)},
+		{name: "array_not_object", arguments: json.RawMessage(`[]`)},
+		{name: "numeric_action", arguments: json.RawMessage(`{"action":42}`)},
+		{name: "empty_payload", arguments: json.RawMessage(``)},
+		{name: "json_null", arguments: json.RawMessage(`null`)},
+		{name: "not_json_at_all", arguments: 42},
+		{name: "nil_arguments", arguments: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if identity, ok := identifier.Identify("gitlab_execute_action", tc.arguments); ok {
+				t.Errorf("arguments %v resolved to %+v", tc.arguments, identity)
+			}
+		})
 	}
 }
 
@@ -327,10 +333,12 @@ func TestNewCallIdentifier_AliasNeverShadowsACanonicalID(t *testing.T) {
 // path.
 func TestNewCallIdentifier_NilCatalogIsUsable(t *testing.T) {
 	for _, surface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
-		identifier := NewCallIdentifier(nil, surface)
-		if identity, ok := identifier.Identify("gitlab_issue_list", nil); ok {
-			t.Errorf("a nil catalog resolved something on %s: %+v", surface, identity)
-		}
+		t.Run(surface, func(t *testing.T) {
+			identifier := NewCallIdentifier(nil, surface)
+			if identity, ok := identifier.Identify("gitlab_issue_list", nil); ok {
+				t.Errorf("a nil catalog resolved something on %s: %+v", surface, identity)
+			}
+		})
 	}
 }
 

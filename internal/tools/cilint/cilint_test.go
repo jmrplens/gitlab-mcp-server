@@ -457,9 +457,11 @@ func TestFormatOutputMarkdown_ValidAllSections(t *testing.T) {
 		"```yaml",
 		"stages:",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	if strings.Contains(md, "### Errors") {
@@ -486,9 +488,11 @@ func TestFormatOutputMarkdown_InvalidWithErrors(t *testing.T) {
 		"- syntax error on line 5",
 		"- unknown key: foo",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	if strings.Contains(md, mdHeadingWarnings) {

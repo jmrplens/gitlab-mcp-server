@@ -256,14 +256,16 @@ func TestClient_DesktopOriginBehaviour(t *testing.T) {
 	t.Run("fetch metadata that says it is not cross-site is honored", func(t *testing.T) {
 		srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
 		for _, meta := range []string{"same-origin", "none"} {
-			got := srv.do(t, mcpPOST(map[string]string{
-				"PRIVATE-TOKEN":  "glpat-whatever",
-				"Origin":         desktopOrigin,
-				"Sec-Fetch-Site": meta,
-			}))
-			if got.status == http.StatusForbidden {
-				t.Errorf("Sec-Fetch-Site: %s was refused as cross-site", meta)
-			}
+			t.Run(meta, func(t *testing.T) {
+				got := srv.do(t, mcpPOST(map[string]string{
+					"PRIVATE-TOKEN":  "glpat-whatever",
+					"Origin":         desktopOrigin,
+					"Sec-Fetch-Site": meta,
+				}))
+				if got.status == http.StatusForbidden {
+					t.Errorf("Sec-Fetch-Site: %s was refused as cross-site", meta)
+				}
+			})
 		}
 	})
 }

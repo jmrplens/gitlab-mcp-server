@@ -100,25 +100,31 @@ func TestCrossOrigin_ExactlyOneAllowOriginHeader(t *testing.T) {
 		"--trusted-origins="+trustedOrigin,
 	)
 
-	for _, r := range []request{
-		mcpPOST(map[string]string{
+	cases := []struct {
+		name string
+		req  request
+	}{
+		{"actual_request", mcpPOST(map[string]string{
 			"PRIVATE-TOKEN":  "glpat-whatever",
 			"Origin":         trustedOrigin,
 			"Sec-Fetch-Site": "cross-site",
-		}),
-		{
+		})},
+		{"preflight", request{
 			method: http.MethodOptions, path: "/mcp",
 			headers: map[string]string{
 				"Origin":                         trustedOrigin,
 				"Access-Control-Request-Method":  http.MethodPost,
 				"Access-Control-Request-Headers": "content-type",
 			},
-		},
-	} {
-		got := srv.do(t, r)
-		if n := len(got.header.Values("Access-Control-Allow-Origin")); n > 1 {
-			t.Errorf("%s: %d Access-Control-Allow-Origin headers, want at most 1 — a browser rejects the response outright", r.method, n)
-		}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := srv.do(t, tc.req)
+			if n := len(got.header.Values("Access-Control-Allow-Origin")); n > 1 {
+				t.Errorf("%s: %d Access-Control-Allow-Origin headers, want at most 1 — a browser rejects the response outright", tc.req.method, n)
+			}
+		})
 	}
 }
 
@@ -173,14 +179,18 @@ func TestCrossOrigin_PreflightIsAnswered(t *testing.T) {
 		"Access-Control-Allow-Origin": trustedOrigin,
 		"Access-Control-Max-Age":      "86400",
 	} {
-		if got := got.header.Get(header); got != want {
-			t.Errorf("%s = %q, want %q", header, got, want)
-		}
+		t.Run(header, func(t *testing.T) {
+			if got := got.header.Get(header); got != want {
+				t.Errorf("%s = %q, want %q", header, got, want)
+			}
+		})
 	}
 	for _, name := range []string{"Content-Type", "PRIVATE-TOKEN", "Mcp-Session-Id"} {
-		if allowed := got.header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, name) {
-			t.Errorf("Access-Control-Allow-Headers = %q, want it to name %s", allowed, name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if allowed := got.header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, name) {
+				t.Errorf("Access-Control-Allow-Headers = %q, want it to name %s", allowed, name)
+			}
+		})
 	}
 	if !strings.Contains(strings.Join(got.header.Values("Vary"), ","), "Origin") {
 		t.Error("a response that varies by Origin must say so, or a cache serves one origin's permission to another")
@@ -215,14 +225,16 @@ func TestCrossOrigin_SafeMethodsStayReachable(t *testing.T) {
 	srv := startServer(t, nil, "--gitlab-url=https://gitlab.example.com")
 
 	for _, path := range []string{"/health", "/.well-known/mcp/server-card.json"} {
-		got := srv.do(t, request{
-			method:  http.MethodGet,
-			path:    path,
-			headers: map[string]string{"Origin": "https://evil.example", "Sec-Fetch-Site": "cross-site"},
+		t.Run(path, func(t *testing.T) {
+			got := srv.do(t, request{
+				method:  http.MethodGet,
+				path:    path,
+				headers: map[string]string{"Origin": "https://evil.example", "Sec-Fetch-Site": "cross-site"},
+			})
+			if got.status == http.StatusForbidden {
+				t.Errorf("GET %s was refused as cross-origin; safe methods are exempt", path)
+			}
 		})
-		if got.status == http.StatusForbidden {
-			t.Errorf("GET %s was refused as cross-origin; safe methods are exempt", path)
-		}
 	}
 }
 

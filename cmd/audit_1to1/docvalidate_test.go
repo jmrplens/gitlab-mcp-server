@@ -33,9 +33,11 @@ func TestScanDocCitations(t *testing.T) {
 		}
 	}
 	for a, found := range want {
-		if !found {
-			t.Errorf("expected citation %q not found in %v", a, areas)
-		}
+		t.Run(a, func(t *testing.T) {
+			if !found {
+				t.Errorf("expected citation %q not found in %v", a, areas)
+			}
+		})
 	}
 }
 

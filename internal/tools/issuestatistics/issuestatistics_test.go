@@ -156,9 +156,11 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		{"table header status", "| Status | Count |"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c.want) {
-			t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-		}
+		t.Run(c.label, func(t *testing.T) {
+			if !strings.Contains(md, c.want) {
+				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
+			}
+		})
 	}
 }
 
@@ -175,9 +177,11 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 		{"closed zero", "| Closed | 0 |"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c.want) {
-			t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-		}
+		t.Run(c.label, func(t *testing.T) {
+			if !strings.Contains(md, c.want) {
+				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
+			}
+		})
 	}
 }
 

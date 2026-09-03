@@ -188,9 +188,11 @@ func TestResilientStdio_RecoversAndKeepsReading(t *testing.T) {
 		t.Fatalf("reading: %v", err)
 	}
 	for _, want := range []string{`"id":1`, `"id":2`, `"id":3`} {
-		if !strings.Contains(string(got), want) {
-			t.Errorf("message %s did not survive the bad lines around it:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(string(got), want) {
+				t.Errorf("message %s did not survive the bad lines around it:\n%s", want, got)
+			}
+		})
 	}
 	if strings.Contains(string(got), "not json") || strings.Contains(string(got), "hello") {
 		t.Errorf("a bad line was forwarded:\n%s", got)
@@ -252,9 +254,12 @@ func TestScalarID_ObjectsAndArraysAreNotEchoed(t *testing.T) {
 		`[1,2]`:    ``,
 		` {"a":1}`: ``,
 	} {
-		got := string(scalarID(json.RawMessage(raw)))
-		if got != want {
-			t.Errorf("scalarID(%s) = %q, want %q", raw, got, want)
-		}
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+			got := string(scalarID(json.RawMessage(raw)))
+			if got != want {
+				t.Errorf("scalarID(%s) = %q, want %q", raw, got, want)
+			}
+		})
 	}
 }

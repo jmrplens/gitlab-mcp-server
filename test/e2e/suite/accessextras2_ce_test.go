@@ -116,11 +116,13 @@ func TestIndividual_AccessRequests(t *testing.T) {
 				{"approvee", sessionApprove},
 				{"denyee", sessionDeny},
 			} {
-				out, err := callToolOn[accessrequests.Output](ctx, requester.session, "gitlab_access_request_request_project", accessrequests.RequestProjectInput{
-					ProjectID: proj.pidOf(),
+				t.Run(requester.name, func(t *testing.T) {
+					out, err := callToolOn[accessrequests.Output](ctx, requester.session, "gitlab_access_request_request_project", accessrequests.RequestProjectInput{
+						ProjectID: proj.pidOf(),
+					})
+					requireNoError(t, err, "request project access ("+requester.name+")")
+					requireTruef(t, out.ID > 0, "expected requester user ID in access request")
 				})
-				requireNoError(t, err, "request project access ("+requester.name+")")
-				requireTruef(t, out.ID > 0, "expected requester user ID in access request")
 			}
 			t.Log("Both users requested project access")
 		})
@@ -133,11 +135,13 @@ func TestIndividual_AccessRequests(t *testing.T) {
 				{"approvee", sessionApprove},
 				{"denyee", sessionDeny},
 			} {
-				out, err := callToolOn[accessrequests.Output](ctx, requester.session, "gitlab_access_request_request_group", accessrequests.RequestGroupInput{
-					GroupID: groupID,
+				t.Run(requester.name, func(t *testing.T) {
+					out, err := callToolOn[accessrequests.Output](ctx, requester.session, "gitlab_access_request_request_group", accessrequests.RequestGroupInput{
+						GroupID: groupID,
+					})
+					requireNoError(t, err, "request group access ("+requester.name+")")
+					requireTruef(t, out.ID > 0, "expected requester user ID in access request")
 				})
-				requireNoError(t, err, "request group access ("+requester.name+")")
-				requireTruef(t, out.ID > 0, "expected requester user ID in access request")
 			}
 			t.Log("Both users requested group access")
 		})

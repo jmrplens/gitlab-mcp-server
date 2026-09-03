@@ -220,9 +220,11 @@ func TestUpdate_BadRequestHint(t *testing.T) {
 	}
 	errText := err.Error()
 	for _, want := range []string{"csp_namespace_id", "top-level group", "lock"} {
-		if !strings.Contains(errText, want) {
-			t.Fatalf("error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errText, want) {
+				t.Fatalf("error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 

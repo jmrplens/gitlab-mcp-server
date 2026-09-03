@@ -886,9 +886,11 @@ func TestValidateGitLabURL_ValidPaths(t *testing.T) {
 		"http://gitlab.example.com/test", // http allowed for self-hosted
 	}
 	for _, u := range valid {
-		if err := validateGitLabURL(base, u); err != nil {
-			t.Errorf("validateGitLabURL(%q) = %v, want nil", u, err)
-		}
+		t.Run(u, func(t *testing.T) {
+			if err := validateGitLabURL(base, u); err != nil {
+				t.Errorf("validateGitLabURL(%q) = %v, want nil", u, err)
+			}
+		})
 	}
 }
 
@@ -903,9 +905,11 @@ func TestValidateGitLabURL_ExternalHost(t *testing.T) {
 		"javascript:alert(1)",
 	}
 	for _, u := range invalid {
-		if err := validateGitLabURL(base, u); err == nil {
-			t.Errorf("validateGitLabURL(%q) = nil, want error", u)
-		}
+		t.Run(u, func(t *testing.T) {
+			if err := validateGitLabURL(base, u); err == nil {
+				t.Errorf("validateGitLabURL(%q) = nil, want error", u)
+			}
+		})
 	}
 }
 

@@ -254,9 +254,11 @@ func TestFormatListTargetBranchRulesMarkdown_WithRules(t *testing.T) {
 	}
 	md := FormatListTargetBranchRulesMarkdown(out)
 	for _, want := range []string{"Target Branch Rules (2)", "release/*", "production", "hotfix/*", "target_branch_rule_create"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -273,9 +275,11 @@ func TestFormatListTargetBranchRulesMarkdown_Empty(t *testing.T) {
 func TestFormatTargetBranchRuleMarkdown(t *testing.T) {
 	md := FormatTargetBranchRuleMarkdown(TargetBranchRuleOutput{ID: 7, Name: "release/*", TargetBranch: "production", CreatedAt: "2026-02-01T09:30:00Z"})
 	for _, want := range []string{"Target Branch Rule: release/*", "production", "target_branch_rule_list"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	// A rule without CreatedAt should still render.
 	mdNoCreated := FormatTargetBranchRuleMarkdown(TargetBranchRuleOutput{ID: 8, Name: "x", TargetBranch: "main"})
@@ -298,26 +302,30 @@ func TestActionSpecs_TargetBranchRulesGated(t *testing.T) {
 
 	ce := ActionSpecs(client, false)
 	for _, tool := range tools {
-		if findProjectSpec(ce, tool) != nil {
-			t.Errorf("%s should be gated out of the CE catalog", tool)
-		}
+		t.Run(tool, func(t *testing.T) {
+			if findProjectSpec(ce, tool) != nil {
+				t.Errorf("%s should be gated out of the CE catalog", tool)
+			}
+		})
 	}
 
 	ee := ActionSpecs(client, true)
 	for _, tool := range tools {
-		spec := findProjectSpec(ee, tool)
-		if spec == nil {
-			t.Fatalf("%s missing from enterprise catalog", tool)
-		}
-		if spec.Edition != "premium" {
-			t.Errorf("%s Edition = %q, want premium", tool, spec.Edition)
-		}
-		if !strings.Contains(spec.IndividualTool.Description, "Returns:") || !strings.Contains(spec.IndividualTool.Description, "See also:") {
-			t.Errorf("%s missing Returns/See also description: %q", tool, spec.IndividualTool.Description)
-		}
-		if len(spec.RelatedActions) == 0 {
-			t.Errorf("%s has empty RelatedActions", tool)
-		}
+		t.Run(tool, func(t *testing.T) {
+			spec := findProjectSpec(ee, tool)
+			if spec == nil {
+				t.Fatalf("%s missing from enterprise catalog", tool)
+			}
+			if spec.Edition != "premium" {
+				t.Errorf("%s Edition = %q, want premium", tool, spec.Edition)
+			}
+			if !strings.Contains(spec.IndividualTool.Description, "Returns:") || !strings.Contains(spec.IndividualTool.Description, "See also:") {
+				t.Errorf("%s missing Returns/See also description: %q", tool, spec.IndividualTool.Description)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s has empty RelatedActions", tool)
+			}
+		})
 	}
 
 	if listSpec := findProjectSpec(ee, "gitlab_project_list_target_branch_rules"); listSpec == nil || !listSpec.ReadOnly {

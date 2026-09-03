@@ -156,6 +156,7 @@ func TestMeta_IssueWeightEvents(t *testing.T) {
 
 	// Two weight changes guarantee at least two weight events regardless of
 	// whether GitLab records an event for the initial weight assignment.
+	// sequential: ordered setup steps on one issue, the last of which is the weight asserted below; a failed step must abort the test, not a subtest
 	for _, weight := range []int64{3, 5} {
 		_, updErr := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "update",

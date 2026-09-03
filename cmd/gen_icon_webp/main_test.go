@@ -114,10 +114,12 @@ func TestExtractIcons_FindsSVGConstantsInDeclarationOrder(t *testing.T) {
 	if len(names) != len(want) {
 		t.Fatalf("extractIcons() names = %v, want %v", names, want)
 	}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Fatalf("extractIcons() names = %v, want %v", names, want)
-		}
+	for i, name := range want {
+		t.Run(name, func(t *testing.T) {
+			if names[i] != name {
+				t.Fatalf("extractIcons() names = %v, want %v", names, want)
+			}
+		})
 	}
 	if icons[0].svg != "<svg>branch</svg>" {
 		t.Errorf("icons[0].svg = %q, want %q", icons[0].svg, "<svg>branch</svg>")
@@ -218,13 +220,15 @@ func TestGenerateAll_WritesEveryVariant(t *testing.T) {
 	}
 
 	for _, name := range []string{"branch-light.webp", "branch-dark.webp", "mr-light.webp", "mr-dark.webp"} {
-		data, readErr := os.ReadFile(filepath.Join(dir, name))
-		if readErr != nil {
-			t.Fatalf("expected %s to exist: %v", name, readErr)
-		}
-		if len(data) == 0 {
-			t.Errorf("%s is empty", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			data, readErr := os.ReadFile(filepath.Join(dir, name))
+			if readErr != nil {
+				t.Fatalf("expected %s to exist: %v", name, readErr)
+			}
+			if len(data) == 0 {
+				t.Errorf("%s is empty", name)
+			}
+		})
 	}
 	branchLight, _ := os.ReadFile(filepath.Join(dir, "branch-light.webp"))
 	if string(branchLight) != "<svg>branch</svg>|"+colorLight {

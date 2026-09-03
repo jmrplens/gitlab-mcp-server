@@ -1328,9 +1328,11 @@ func TestFormatMarkdown_WithAllFields(t *testing.T) {
 		"**Created**: 1 Jan 2026 00:00 UTC",
 		"**Updated**: 15 Jan 2026 00:00 UTC",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtMarkdownMissing, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtMarkdownMissing, want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "Group ID") {
 		t.Errorf("should not contain legacy 'Group ID' label:\n%s", md)
@@ -1366,9 +1368,11 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 		"**Created**",
 		"**Updated**",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -1400,9 +1404,11 @@ func TestFormatListMarkdown_WithMilestones(t *testing.T) {
 		"active",
 		"closed",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtMarkdownMissing, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtMarkdownMissing, want, md)
+			}
+		})
 	}
 }
 
@@ -1446,9 +1452,11 @@ func TestFormatIssuesMarkdown_WithData(t *testing.T) {
 		"Fix bug",
 		"Add feature",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtMarkdownMissing, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtMarkdownMissing, want, md)
+			}
+		})
 	}
 }
 
@@ -1489,9 +1497,11 @@ func TestFormatMergeRequestsMarkdown_WithData(t *testing.T) {
 		"feat",
 		"main",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtMarkdownMissing, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtMarkdownMissing, want, md)
+			}
+		})
 	}
 }
 
@@ -1533,9 +1543,11 @@ func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 		"add",
 		"remove",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtMarkdownMissing, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtMarkdownMissing, want, md)
+			}
+		})
 	}
 }
 

@@ -159,9 +159,11 @@ func TestFormatStorageMoveDetailMarkdown(t *testing.T) {
 		"| **Group** | [team&#124;ops](https://gitlab.example.com/groups/team-ops) (ID: 42) |",
 		"Use action 'retrieve_all' to monitor progress",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -179,9 +181,11 @@ func TestFormatStorageMoveListMarkdown(t *testing.T) {
 			"No snippet storage moves found.",
 			HintPreserveLinks,
 		} {
-			if !strings.Contains(md, want) {
-				t.Errorf("empty markdown missing %q:\n%s", want, md)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(md, want) {
+					t.Errorf("empty markdown missing %q:\n%s", want, md)
+				}
+			})
 		}
 		if strings.Contains(md, "| ID | State |") {
 			t.Errorf("empty markdown should not include table:\n%s", md)
@@ -218,9 +222,11 @@ func TestFormatStorageMoveListMarkdown(t *testing.T) {
 			"| 2 | started |",
 			"_Page 2, 2 moves shown._",
 		} {
-			if !strings.Contains(md, want) {
-				t.Errorf("list markdown missing %q:\n%s", want, md)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(md, want) {
+					t.Errorf("list markdown missing %q:\n%s", want, md)
+				}
+			})
 		}
 	})
 }
@@ -332,9 +338,11 @@ func TestFormatStorageMoveCollectionMarkdown(t *testing.T) {
 			"| 1 | finished | default | storage2 | [alpha](https://example.com/p/alpha) | 2026-06-01 12:00:00 |",
 			"_Page 1, 2 moves shown._",
 		} {
-			if !strings.Contains(md, want) {
-				t.Errorf("missing %q in:\n%s", want, md)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(md, want) {
+					t.Errorf("missing %q in:\n%s", want, md)
+				}
+			})
 		}
 	})
 
@@ -351,9 +359,11 @@ func TestFormatStorageMoveCollectionMarkdown(t *testing.T) {
 			"## Project Storage Moves",
 			"No project storage moves found.",
 		} {
-			if !strings.Contains(md, want) {
-				t.Errorf("missing %q in:\n%s", want, md)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(md, want) {
+					t.Errorf("missing %q in:\n%s", want, md)
+				}
+			})
 		}
 	})
 }
@@ -394,9 +404,11 @@ func TestFormatCICDVariableMarkdown(t *testing.T) {
 		"| Value | [masked] |",
 		"Use action 'update' to change this variable",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "hidden-value") {
 		t.Errorf("masked variable value leaked in markdown:\n%s", md)
@@ -414,16 +426,20 @@ func TestCICDVariableMarkdownHelpers(t *testing.T) {
 
 	detail := FormatCICDVariableDetailMarkdown(variable, "Variable", true)
 	for _, want := range []string{"## Variable: TOKEN", "| Value | secret |", "Use action 'delete' to remove this variable"} {
-		if !strings.Contains(detail, want) {
-			t.Errorf("detail markdown missing %q:\n%s", want, detail)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(detail, want) {
+				t.Errorf("detail markdown missing %q:\n%s", want, detail)
+			}
+		})
 	}
 
 	list := FormatCICDVariableCollectionMarkdown(variables, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, func(v CICDVariableMarkdown) CICDVariableMarkdown { return v }, "Variables", "No variables found.\n", false, "Read a variable")
 	for _, want := range []string{"## Variables (1)", "| Key | Type | Protected | Masked |", "| TOKEN | file | " + BoolEmoji(true), "Read a variable"} {
-		if !strings.Contains(list, want) {
-			t.Errorf("list markdown missing %q:\n%s", want, list)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(list, want) {
+				t.Errorf("list markdown missing %q:\n%s", want, list)
+			}
+		})
 	}
 }
 
@@ -445,9 +461,11 @@ func TestFormatCICDVariableListMarkdown(t *testing.T) {
 		"| MY&#124;VAR | env_var | " + BoolEmoji(true) + " | " + BoolEmoji(false) + " | prod&#124;blue |",
 		"Use action 'get' with a key to see variable details",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	empty := FormatCICDVariableListMarkdown(nil, pagination, CICDVariableListMarkdownOptions{EmptyMessage: "No variables found.\n"})
@@ -477,9 +495,11 @@ func TestFormatDiscussionListMarkdown(t *testing.T) {
 		"Page 1 of 3 | 42 items total | 20 per page",
 		"Use `gitlab_get_commit_discussion` to view full discussion details",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	empty := FormatDiscussionListMarkdown(nil, DiscussionListMarkdownOptions{EmptyMessage: "No discussions found.\n"})
@@ -501,16 +521,20 @@ func TestDiscussionMarkdownHelpers(t *testing.T) {
 
 	restList := renderer.FormatRESTList(DiscussionOutputMarkdowns([]DiscussionOutput{restDiscussion}), PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1})
 	for _, want := range []string{"## REST Discussions (1)", "### Discussion rest-1", "Open a discussion"} {
-		if !strings.Contains(restList, want) {
-			t.Errorf("REST list markdown missing %q:\n%s", want, restList)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(restList, want) {
+				t.Errorf("REST list markdown missing %q:\n%s", want, restList)
+			}
+		})
 	}
 
 	rendererGraphQLList := renderer.FormatGraphQLList([]DiscussionMarkdown{restDiscussion.MarkdownDiscussion()}, GraphQLPaginationOutput{HasPreviousPage: true, StartCursor: "before"})
 	for _, want := range []string{"## REST Discussions (1)", "prev page cursor: `before`", "Open a discussion"} {
-		if !strings.Contains(rendererGraphQLList, want) {
-			t.Errorf("renderer GraphQL list markdown missing %q:\n%s", want, rendererGraphQLList)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(rendererGraphQLList, want) {
+				t.Errorf("renderer GraphQL list markdown missing %q:\n%s", want, rendererGraphQLList)
+			}
+		})
 	}
 
 	discussion := restDiscussion.MarkdownDiscussion()
@@ -523,9 +547,11 @@ func TestDiscussionMarkdownHelpers(t *testing.T) {
 
 	graphqlList := FormatGraphQLDiscussionListMarkdown([]DiscussionMarkdown{discussion}, GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor"}, func(v DiscussionMarkdown) DiscussionMarkdown { return v }, "GraphQL Discussions", "No discussions found.\n", "Fetch next page")
 	for _, want := range []string{"## GraphQL Discussions (1)", "next page cursor: `cursor`", "Fetch next page"} {
-		if !strings.Contains(graphqlList, want) {
-			t.Errorf("GraphQL list markdown missing %q:\n%s", want, graphqlList)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(graphqlList, want) {
+				t.Errorf("GraphQL list markdown missing %q:\n%s", want, graphqlList)
+			}
+		})
 	}
 
 	restWrapper := FormatRESTDiscussionListMarkdown([]DiscussionOutput{restDiscussion}, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, DiscussionOutput.MarkdownDiscussion, "Wrapped Discussions", "No discussions found.\n", "Wrapped hint")
@@ -545,9 +571,11 @@ func TestFormatDiscussionMarkdown(t *testing.T) {
 		"- **@alice** (17 May 2026 12:00 UTC): hello\nworld",
 		"Use action 'discussion_add_note' to reply to this discussion",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -569,9 +597,11 @@ func TestFormatDiscussionNoteMarkdown(t *testing.T) {
 		"- **Created**: 17 May 2026 12:00 UTC",
 		"Use action 'discussion_update_note' with note_id to edit this note",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -597,9 +627,11 @@ func TestFormatTemplateListMarkdown(t *testing.T) {
 		"Use `gitlab_get_ci_yaml_template` to view a specific template",
 		"Use the key to fetch full template content",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	empty := FormatTemplateListMarkdown(nil, pagination, TemplateListMarkdownOptions{Title: "CI YAML Templates", EmptyMessage: "No templates found.\n"})
@@ -617,16 +649,20 @@ func TestTemplateMarkdownHelpers(t *testing.T) {
 
 	list := renderer.FormatList(templates, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1})
 	for _, want := range []string{"## Templates", "| Go | Go template |", "Open a template"} {
-		if !strings.Contains(list, want) {
-			t.Errorf("template list markdown missing %q:\n%s", want, list)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(list, want) {
+				t.Errorf("template list markdown missing %q:\n%s", want, list)
+			}
+		})
 	}
 
 	content := renderer.FormatContent("Go", "stages:\n  - test")
 	for _, want := range []string{"## Template: Go", "```yaml", "Copy it"} {
-		if !strings.Contains(content, want) {
-			t.Errorf("template content markdown missing %q:\n%s", want, content)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Errorf("template content markdown missing %q:\n%s", want, content)
+			}
+		})
 	}
 
 	collection := FormatTemplateCollectionMarkdown(templates, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, func(v TemplateMarkdown) TemplateMarkdown { return v }, "Collection", "No templates found.\n", "Collection hint")
@@ -644,9 +680,11 @@ func TestFormatTemplateContentMarkdown(t *testing.T) {
 		"```dockerfile\nFROM golang:latest\n```",
 		"Copy this template to your Dockerfile and customize it",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	withFence := FormatTemplateContentMarkdown(
@@ -664,9 +702,11 @@ func TestFormatTemplateContentMarkdown(t *testing.T) {
 		"first hint",
 		"second hint",
 	} {
-		if !strings.Contains(withFence, want) {
-			t.Errorf("markdown with embedded fence missing %q:\n%s", want, withFence)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(withFence, want) {
+				t.Errorf("markdown with embedded fence missing %q:\n%s", want, withFence)
+			}
+		})
 	}
 
 	withLongFence := FormatTemplateContentMarkdown(
@@ -680,9 +720,11 @@ func TestFormatTemplateContentMarkdown(t *testing.T) {
 		"````\nembedded\n````",
 		"\n`````\n",
 	} {
-		if !strings.Contains(withLongFence, want) {
-			t.Errorf("markdown with four-backtick fence missing %q:\n%s", want, withLongFence)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(withLongFence, want) {
+				t.Errorf("markdown with four-backtick fence missing %q:\n%s", want, withLongFence)
+			}
+		})
 	}
 }
 
@@ -709,9 +751,11 @@ func TestFormatNoteMarkdown(t *testing.T) {
 		"note body",
 		"Use note update to edit this note",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -726,9 +770,11 @@ func TestNoteMarkdownHelpers(t *testing.T) {
 
 	detail := FormatNoteMarkdown(note, NoteMarkdownOptions{Title: "Issue Note", IncludeResolvable: true})
 	for _, want := range []string{"## Issue Note #8", "- **Resolvable**: unresolved", "plain body"} {
-		if !strings.Contains(detail, want) {
-			t.Errorf("note detail markdown missing %q:\n%s", want, detail)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(detail, want) {
+				t.Errorf("note detail markdown missing %q:\n%s", want, detail)
+			}
+		})
 	}
 
 	list := FormatNoteListMarkdown(notes, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, NoteListMarkdownOptions{Title: "Notes", EmptyMessage: "No notes found.\n"})
@@ -755,9 +801,11 @@ func TestFormatNoteListMarkdown(t *testing.T) {
 		"| 7 | alice&#124;dev | 17 May 2026 12:00 UTC | " + BoolEmoji(true) + " | " + BoolEmoji(true) + " |",
 		HintPreserveLinks,
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	empty := FormatNoteListMarkdown(nil, pagination, NoteListMarkdownOptions{Title: "Issue Notes", EmptyMessage: "No issue notes found.\n"})

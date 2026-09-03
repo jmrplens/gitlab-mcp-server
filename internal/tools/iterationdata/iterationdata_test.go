@@ -71,21 +71,24 @@ func TestFormatOutputMarkdown_WithHint(t *testing.T) {
 // TestStateName_AllStates verifies StateName maps all GitLab iteration states.
 func TestStateName_AllStates(t *testing.T) {
 	tests := []struct {
+		name     string
 		state    int64
 		expected string
 	}{
-		{1, "opened"},
-		{2, "upcoming"},
-		{3, "current"},
-		{4, "closed"},
-		{0, "unknown(0)"},
-		{99, "unknown(99)"},
+		{"opened", 1, "opened"},
+		{"upcoming", 2, "upcoming"},
+		{"current", 3, "current"},
+		{"closed", 4, "closed"},
+		{"zero_unknown", 0, "unknown(0)"},
+		{"out_of_range_unknown", 99, "unknown(99)"},
 	}
 	for _, tt := range tests {
-		got := StateName(tt.state)
-		if got != tt.expected {
-			t.Errorf("StateName(%d) = %q, want %q", tt.state, got, tt.expected)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got := StateName(tt.state)
+			if got != tt.expected {
+				t.Errorf("StateName(%d) = %q, want %q", tt.state, got, tt.expected)
+			}
+		})
 	}
 }
 

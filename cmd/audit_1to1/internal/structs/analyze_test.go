@@ -48,9 +48,11 @@ func TestNormalizeType_StripsPointerAndCase(t *testing.T) {
 		"*v2.AccessLevelV": "v2.accesslevelv",
 	}
 	for input, want := range cases {
-		if got := normalizeType(input); got != want {
-			t.Errorf("normalizeType(%q) = %q, want %q", input, got, want)
-		}
+		t.Run(input, func(t *testing.T) {
+			if got := normalizeType(input); got != want {
+				t.Errorf("normalizeType(%q) = %q, want %q", input, got, want)
+			}
+		})
 	}
 }
 
@@ -58,14 +60,18 @@ func TestNormalizeType_StripsPointerAndCase(t *testing.T) {
 // pointer/value scalar projections as compatible.
 func TestScalarLike_ClassifiesGoScalars(t *testing.T) {
 	for _, ok := range []string{"int", "int64", "int32", "float64", "float32", "bool", "string"} {
-		if !scalarLike(ok) {
-			t.Errorf("scalarLike(%q) = false, want true", ok)
-		}
+		t.Run(ok, func(t *testing.T) {
+			if !scalarLike(ok) {
+				t.Errorf("scalarLike(%q) = false, want true", ok)
+			}
+		})
 	}
 	for _, no := range []string{"v2.commit", "[]string", "map[string]int", ""} {
-		if scalarLike(no) {
-			t.Errorf("scalarLike(%q) = true, want false", no)
-		}
+		t.Run(no, func(t *testing.T) {
+			if scalarLike(no) {
+				t.Errorf("scalarLike(%q) = true, want false", no)
+			}
+		})
 	}
 }
 
@@ -74,29 +80,37 @@ func TestScalarLike_ClassifiesGoScalars(t *testing.T) {
 // int/string, and SDK time types projected onto string. Genuinely divergent
 // struct types are reported as incompatible.
 func TestTypesCompatible_AcceptsKnownProjections(t *testing.T) {
-	compatible := [][2]string{
-		{"string", "*string"},
-		{"int", "int64"},
-		{"int", "*v2.AccessLevelValue"},
-		{"string", "v2.VisibilityValue"},
-		{"string", "*v2.ISOTime"},
-		{"string", "time.Time"},
-		{"bool", "*bool"},
+	compatible := []struct {
+		name, mcpType, sdkType string
+	}{
+		{"string_to_pointer", "string", "*string"},
+		{"int_to_int64", "int", "int64"},
+		{"int_to_access_level_pointer", "int", "*v2.AccessLevelValue"},
+		{"string_to_visibility", "string", "v2.VisibilityValue"},
+		{"string_to_isotime_pointer", "string", "*v2.ISOTime"},
+		{"string_to_time", "string", "time.Time"},
+		{"bool_to_pointer", "bool", "*bool"},
 	}
-	for _, pair := range compatible {
-		if !typesCompatible(pair[0], pair[1]) {
-			t.Errorf("typesCompatible(%q, %q) = false, want true", pair[0], pair[1])
-		}
+	for _, tc := range compatible {
+		t.Run(tc.name, func(t *testing.T) {
+			if !typesCompatible(tc.mcpType, tc.sdkType) {
+				t.Errorf("typesCompatible(%q, %q) = false, want true", tc.mcpType, tc.sdkType)
+			}
+		})
 	}
-	incompatible := [][2]string{
-		{"string", "*v2.Commit"},
-		{"int", "[]string"},
-		{"v2.Foo", "v2.Bar"},
+	incompatible := []struct {
+		name, mcpType, sdkType string
+	}{
+		{"string_vs_struct_pointer", "string", "*v2.Commit"},
+		{"int_vs_string_slice", "int", "[]string"},
+		{"distinct_structs", "v2.Foo", "v2.Bar"},
 	}
-	for _, pair := range incompatible {
-		if typesCompatible(pair[0], pair[1]) {
-			t.Errorf("typesCompatible(%q, %q) = true, want false", pair[0], pair[1])
-		}
+	for _, tc := range incompatible {
+		t.Run(tc.name, func(t *testing.T) {
+			if typesCompatible(tc.mcpType, tc.sdkType) {
+				t.Errorf("typesCompatible(%q, %q) = true, want false", tc.mcpType, tc.sdkType)
+			}
+		})
 	}
 }
 
@@ -240,15 +254,19 @@ func TestExtraOutputFields_FlagsInventedScalars(t *testing.T) {
 	}
 	wantExtra := []string{"author_username", "milestone_title"}
 	for _, tag := range wantExtra {
-		if !gotTags[tag] {
-			t.Errorf("expected %q reported as extra output field, got %v", tag, extras)
-		}
+		t.Run(tag, func(t *testing.T) {
+			if !gotTags[tag] {
+				t.Errorf("expected %q reported as extra output field, got %v", tag, extras)
+			}
+		})
 	}
 	wantNotExtra := []string{"id", "iids", "pagination", "next_steps", "-"}
 	for _, tag := range wantNotExtra {
-		if gotTags[tag] {
-			t.Errorf("did not expect %q reported as extra output field, got %v", tag, extras)
-		}
+		t.Run(tag, func(t *testing.T) {
+			if gotTags[tag] {
+				t.Errorf("did not expect %q reported as extra output field, got %v", tag, extras)
+			}
+		})
 	}
 	if len(extras) != len(wantExtra) {
 		t.Errorf("extra count = %d (%v), want %d", len(extras), extras, len(wantExtra))
@@ -283,15 +301,19 @@ func TestNonResultStructName_ExcludesWrapperOptionsAndTime(t *testing.T) {
 		"Time",                           // time.Time value type
 	}
 	for _, name := range nonResult {
-		if !nonResultStructName(name) {
-			t.Errorf("nonResultStructName(%q) = false, want true", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !nonResultStructName(name) {
+				t.Errorf("nonResultStructName(%q) = false, want true", name)
+			}
+		})
 	}
 	result := []string{"Issue", "MergeRequest", "Branch", "PersonalAccessToken", "Response2", "OptionsList"}
 	for _, name := range result {
-		if nonResultStructName(name) {
-			t.Errorf("nonResultStructName(%q) = true, want false", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if nonResultStructName(name) {
+				t.Errorf("nonResultStructName(%q) = true, want false", name)
+			}
+		})
 	}
 }
 
@@ -388,16 +410,18 @@ func TestBuildReport_NoFalsePositiveExtras(t *testing.T) {
 
 	// The issue family must report zero extras after the family cleanup.
 	for _, name := range []string{"issues", "issuenotes", "issuediscussions"} {
-		pr := findPackage(t, rep, name)
-		if pr.ExtraOutputCount != 0 {
-			var tags []string
-			for _, g := range pr.Gaps {
-				for _, e := range g.ExtraFields {
-					tags = append(tags, e.Tag)
+		t.Run(name, func(t *testing.T) {
+			pr := findPackage(t, rep, name)
+			if pr.ExtraOutputCount != 0 {
+				var tags []string
+				for _, g := range pr.Gaps {
+					for _, e := range g.ExtraFields {
+						tags = append(tags, e.Tag)
+					}
 				}
+				t.Errorf("package %q has %d extra output fields, want 0 (tags: %v)", name, pr.ExtraOutputCount, tags)
 			}
-			t.Errorf("package %q has %d extra output fields, want 0 (tags: %v)", name, pr.ExtraOutputCount, tags)
-		}
+		})
 	}
 }
 
@@ -574,16 +598,18 @@ func TestDisjointPhantomInput_SkipsDisjointHelperOptions(t *testing.T) {
 func TestBuildReport_NoDiffPositionPhantomInput(t *testing.T) {
 	rep := cachedBuildReport(t, false)
 	for _, name := range []string{"mrdiscussions", "mrdraftnotes"} {
-		pr := findPackage(t, rep, name)
-		for _, g := range pr.Gaps {
-			if g.Kind != "input" || g.MCPType != "DiffPosition" {
-				continue
+		t.Run(name, func(t *testing.T) {
+			pr := findPackage(t, rep, name)
+			for _, g := range pr.Gaps {
+				if g.Kind != "input" || g.MCPType != "DiffPosition" {
+					continue
+				}
+				if g.SDKType != "v2.PositionOptions" {
+					t.Errorf("%s: DiffPosition paired against %q, want only v2.PositionOptions (phantom not suppressed): missing=%v",
+						name, g.SDKType, g.MissingFields)
+				}
 			}
-			if g.SDKType != "v2.PositionOptions" {
-				t.Errorf("%s: DiffPosition paired against %q, want only v2.PositionOptions (phantom not suppressed): missing=%v",
-					name, g.SDKType, g.MissingFields)
-			}
-		}
+		})
 	}
 }
 
@@ -708,9 +734,11 @@ func TestBuildReport_AuditedPairFloors(t *testing.T) {
 		"users":               5,
 	}
 	for name, floor := range outputFloors {
-		pr := findPackage(t, rep, name)
-		if pr.OutputPairs < floor {
-			t.Errorf("%s output_pairs = %d, want >= %d (lost audited pair; check the package-local converter wrappers for its toolutil-shared shapes)", name, pr.OutputPairs, floor)
-		}
+		t.Run(name, func(t *testing.T) {
+			pr := findPackage(t, rep, name)
+			if pr.OutputPairs < floor {
+				t.Errorf("%s output_pairs = %d, want >= %d (lost audited pair; check the package-local converter wrappers for its toolutil-shared shapes)", name, pr.OutputPairs, floor)
+			}
+		})
 	}
 }

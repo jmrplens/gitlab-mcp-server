@@ -322,9 +322,11 @@ func TestDynamicDiscoveryResult_FindIncludesSchema(t *testing.T) {
 		t.Fatalf("dynamicDiscoveryResult(find) error = %v", err)
 	}
 	for _, want := range []string{"project.get", "project_id", dynamicExecuteActionTool, "input_schema"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("find result = %s, want %q", content, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Fatalf("find result = %s, want %q", content, want)
+			}
+		})
 	}
 }
 
@@ -396,9 +398,11 @@ func TestDynamicDiscoveryResult_Find(t *testing.T) {
 		t.Fatalf("dynamicDiscoveryResult(find) error = %v", err)
 	}
 	for _, want := range []string{"project.get", "project_id", dynamicExecuteActionTool} {
-		if !strings.Contains(find, want) {
-			t.Fatalf("find result = %s, want %q", find, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(find, want) {
+				t.Fatalf("find result = %s, want %q", find, want)
+			}
+		})
 	}
 }
 
@@ -582,9 +586,11 @@ func TestSuccessfulSimulatedToolContent_IncludesDiscoveredProject(t *testing.T) 
 		},
 	}, 2, 3)
 	for _, want := range []string{"my-org/tools/gitlab-mcp-server", `"projects"`, `"environments"`} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("successfulSimulatedToolContent(prelude) = %s, want %q", content, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Fatalf("successfulSimulatedToolContent(prelude) = %s, want %q", content, want)
+			}
+		})
 	}
 }
 
@@ -673,9 +679,11 @@ func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
 	}
 	wantKinds := []string{"user_prompt", "assistant_message", "tool_use", "validation"}
 	for _, kind := range wantKinds {
-		if !traceHasKind(result.Trace, kind) {
-			t.Fatalf("trace events = %+v, want kind %s", result.Trace.Events, kind)
-		}
+		t.Run(kind, func(t *testing.T) {
+			if !traceHasKind(result.Trace, kind) {
+				t.Fatalf("trace events = %+v, want kind %s", result.Trace.Events, kind)
+			}
+		})
 	}
 	assistantEvent, ok := traceEventByKind(result.Trace, "assistant_message")
 	if !ok || assistantEvent.Provider == nil {

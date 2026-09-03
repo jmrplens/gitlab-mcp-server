@@ -480,9 +480,11 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 		{"body", "Full note body"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c.want) {
-			t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-		}
+		t.Run(c.label, func(t *testing.T) {
+			if !strings.Contains(md, c.want) {
+				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
+			}
+		})
 	}
 }
 
@@ -551,9 +553,11 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 		{"bob row", "| 2 | bob |"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c.want) {
-			t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-		}
+		t.Run(c.label, func(t *testing.T) {
+			if !strings.Contains(md, c.want) {
+				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
+			}
+		})
 	}
 }
 

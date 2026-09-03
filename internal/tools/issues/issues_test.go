@@ -1456,12 +1456,14 @@ func TestIssueInputSchemas_DoNotRequireOptionalMilestone(t *testing.T) {
 		"create": toolutil.RouteAction[CreateInput, Output]((*gitlabclient.Client)(nil), Create),
 		"update": toolutil.RouteAction[UpdateInput, Output]((*gitlabclient.Client)(nil), Update),
 	} {
-		schema := route.InputSchema
-		for _, field := range schemaRequiredFields(schema) {
-			if field == "milestone_id" {
-				t.Fatalf("%s schema required fields = %v, want milestone_id optional", name, schema["required"])
+		t.Run(name, func(t *testing.T) {
+			schema := route.InputSchema
+			for _, field := range schemaRequiredFields(schema) {
+				if field == "milestone_id" {
+					t.Fatalf("%s schema required fields = %v, want milestone_id optional", name, schema["required"])
+				}
 			}
-		}
+		})
 	}
 }
 
@@ -1543,9 +1545,11 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		"Details here", "https://gitlab.example.com/issue/10",
 		"Tasks", "3/5", "Comments", "7",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1575,9 +1579,11 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
 	for _, want := range []string{"Issue1", "Issue2", "alice", "bob", "#1", "#2"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1615,9 +1621,11 @@ func TestFormatListGroupMarkdown_Populated(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
 	for _, want := range []string{"GroupIssue", "carol", "#5", "feat", "Group Issues"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListGroupMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListGroupMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1655,9 +1663,11 @@ func TestFormatListAllMarkdown_Populated(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
 	for _, want := range []string{"AllIssue", "dave", "#100", "doc", "All Issues"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListAllMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListAllMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1694,9 +1704,11 @@ func TestFormatTodoMarkdown_Populated(t *testing.T) {
 		State: "pending", CreatedAt: testCreatedAtCov,
 	})
 	for _, want := range []string{"Todo #1", "marked", "Issue", "Bug fix", "pending", "1 Jan 2026", "https://gitlab.example.com/todo/1"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatTodoMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatTodoMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1717,9 +1729,11 @@ func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 		TotalTimeSpent:      3600,
 	})
 	for _, want := range []string{"Time Tracking", "3h", "1h", "10800", "3600"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatTimeStatsMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatTimeStatsMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1740,9 +1754,11 @@ func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 		},
 	})
 	for _, want := range []string{"Participants (2)", "alice", "bob", "Alice A", "Bob B"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatParticipantsMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatParticipantsMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1763,9 +1779,11 @@ func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}, "Related MRs")
 	for _, want := range []string{"Related MRs", "Fix MR", "merged", "@carol", "fix", "main", "!3"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatRelatedMRsMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatRelatedMRsMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -2155,9 +2173,11 @@ func TestFormatMarkdown_ObjectDerivedFields(t *testing.T) {
 		WebURL:    "https://example.com/7",
 	})
 	for _, want := range []string{"obj-author", "@obj-assignee", "@obj-closer"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -3219,9 +3239,11 @@ func TestListMRsClosing_KeysetOrderSort(t *testing.T) {
 		t.Fatalf("ListMRsClosing keyset: %v", err)
 	}
 	for _, want := range []string{"order_by=created_at", "sort=asc", "pagination=keyset", "page_token=42"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -3247,9 +3269,11 @@ func TestListMRsRelated_KeysetOrderSort(t *testing.T) {
 		t.Fatalf("ListMRsRelated keyset: %v", err)
 	}
 	for _, want := range []string{"order_by=updated_at", "sort=desc", "pagination=keyset", "page_token=7"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -3960,9 +3984,11 @@ func TestList_AdvancedFilters(t *testing.T) {
 				"page_token":             "tok123",
 			}
 			for k, want := range checks {
-				if got := q.Get(k); got != want {
-					t.Errorf("query %q = %q, want %q", k, got, want)
-				}
+				t.Run(k, func(t *testing.T) {
+					if got := q.Get(k); got != want {
+						t.Errorf("query %q = %q, want %q", k, got, want)
+					}
+				})
 			}
 			if got := q["iids[]"]; len(got) != 2 || got[0] != "10" || got[1] != "11" {
 				t.Errorf("iids[] = %v, want [10 11]", got)

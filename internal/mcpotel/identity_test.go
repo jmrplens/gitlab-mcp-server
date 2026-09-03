@@ -30,14 +30,16 @@ func TestMiddleware_IdentityReachesTheSpan(t *testing.T) {
 		&mcp.CallToolResult{}, nil)
 
 	for key, want := range map[attribute.Key]string{"user.id": "42", "user.name": "jane"} {
-		value, ok := attrOf(span, key)
-		if !ok {
-			t.Errorf("%s is absent from the span; the identity policy is wired to nothing", key)
-			continue
-		}
-		if value.AsString() != want {
-			t.Errorf("%s = %q, want %q", key, value.AsString(), want)
-		}
+		t.Run(string(key), func(t *testing.T) {
+			value, ok := attrOf(span, key)
+			if !ok {
+				t.Errorf("%s is absent from the span; the identity policy is wired to nothing", key)
+				return
+			}
+			if value.AsString() != want {
+				t.Errorf("%s = %q, want %q", key, value.AsString(), want)
+			}
+		})
 	}
 }
 
@@ -54,9 +56,11 @@ func TestMiddleware_IdentityIsAbsentByDefault(t *testing.T) {
 		&mcp.CallToolResult{}, nil)
 
 	for _, key := range []attribute.Key{"user.id", "user.name", "user.hash"} {
-		if _, ok := attrOf(span, key); ok {
-			t.Errorf("%s was recorded with no identity policy configured", key)
-		}
+		t.Run(string(key), func(t *testing.T) {
+			if _, ok := attrOf(span, key); ok {
+				t.Errorf("%s was recorded with no identity policy configured", key)
+			}
+		})
 	}
 }
 

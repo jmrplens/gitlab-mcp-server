@@ -214,9 +214,11 @@ func TestProtectedResourceHandler_OptionalLinksAreOmittedUnlessNamed(t *testing.
 	t.Run("neither is published by default", func(t *testing.T) {
 		document := read(t, ResourceLinks{})
 		for _, field := range []string{"resource_policy_uri", "resource_tos_uri"} {
-			if value, present := document[field]; present {
-				t.Errorf("%s = %v, want it omitted when no page was named", field, value)
-			}
+			t.Run(field, func(t *testing.T) {
+				if value, present := document[field]; present {
+					t.Errorf("%s = %v, want it omitted when no page was named", field, value)
+				}
+			})
 		}
 		// The one that does have a default is still there.
 		if document["resource_documentation"] != DefaultResourceDocumentation {

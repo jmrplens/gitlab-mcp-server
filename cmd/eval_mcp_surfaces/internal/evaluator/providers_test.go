@@ -83,9 +83,11 @@ func TestModelSpecStringAndReportLabel(t *testing.T) {
 // configuration errors instead of silently selecting a provider.
 func TestParseModelSpec_Errors(t *testing.T) {
 	for _, raw := range []string{"", "openai:", "unknown:model"} {
-		if _, err := parseModelSpec(raw); err == nil {
-			t.Fatalf("parseModelSpec(%q) error = nil, want error", raw)
-		}
+		t.Run(raw, func(t *testing.T) {
+			if _, err := parseModelSpec(raw); err == nil {
+				t.Fatalf("parseModelSpec(%q) error = nil, want error", raw)
+			}
+		})
 	}
 }
 
@@ -535,9 +537,11 @@ func TestOpenAITools_HardensExecuteSchema(t *testing.T) {
 	}
 	paramProperties := paramsSchema["properties"].(map[string]any)
 	for _, want := range []string{"project_id", "trigger_id", "schedule_id", "file_path", "ref"} {
-		if _, hasProperty := paramProperties[want]; !hasProperty {
-			t.Fatalf("params properties missing %s: %#v", want, paramProperties)
-		}
+		t.Run(want, func(t *testing.T) {
+			if _, hasProperty := paramProperties[want]; !hasProperty {
+				t.Fatalf("params properties missing %s: %#v", want, paramProperties)
+			}
+		})
 	}
 }
 
@@ -1335,9 +1339,11 @@ func TestGoogleEmptyResponseError_IncludesFinishAndBlockReasons(t *testing.T) {
 	err := googleEmptyResponseError(decoded, "no tool calls or output tokens")
 	message := err.Error()
 	for _, want := range []string{"no tool calls or output tokens", "finishReason=MALFORMED_FUNCTION_CALL", "finishMessage=malformed tool call", "blockReason=SAFETY", "blockReasonMessage=blocked"} {
-		if !strings.Contains(message, want) {
-			t.Fatalf("error = %q, want %q", message, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(message, want) {
+				t.Fatalf("error = %q, want %q", message, want)
+			}
+		})
 	}
 }
 

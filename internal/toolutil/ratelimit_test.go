@@ -22,10 +22,20 @@ import (
 // limiter (returns nil, treated as no-op by AttachRateLimit).
 func TestNewRateLimiter_Disabled(t *testing.T) {
 	t.Parallel()
-	for _, rps := range []float64{0, -1, -100} {
-		if l := NewRateLimiter(rps, 10); l != nil {
-			t.Errorf("NewRateLimiter(%g, 10) = %v, want nil", rps, l)
-		}
+	for _, tc := range []struct {
+		name string
+		rps  float64
+	}{
+		{"zero", 0},
+		{"negative", -1},
+		{"large_negative", -100},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if l := NewRateLimiter(tc.rps, 10); l != nil {
+				t.Errorf("NewRateLimiter(%g, 10) = %v, want nil", tc.rps, l)
+			}
+		})
 	}
 }
 

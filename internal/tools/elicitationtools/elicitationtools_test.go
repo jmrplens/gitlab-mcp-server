@@ -614,9 +614,11 @@ func TestBuildMRSummary_Full(t *testing.T) {
 		{"squash", "Squash commits"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(s, c.want) {
-			t.Errorf("buildMRSummary missing %s: want %q", c.name, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			if !strings.Contains(s, c.want) {
+				t.Errorf("buildMRSummary missing %s: want %q", c.name, c.want)
+			}
+		})
 	}
 }
 

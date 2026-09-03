@@ -382,9 +382,11 @@ func TestFormatListMarkdown_ContentValidation(t *testing.T) {
 		"| def4 |",
 		"Dev2",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 
 	// Pipe in title should be escaped

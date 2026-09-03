@@ -75,20 +75,23 @@ func TestBoundedLevenshtein_CoversThresholdBranches(t *testing.T) {
 // so future scoring changes do not silently accept out-of-range distances.
 func TestFuzzyDistanceScore_MapsDistanceToScore(t *testing.T) {
 	tests := []struct {
+		name     string
 		distance int
 		want     int
 	}{
-		{distance: 0, want: 40},
-		{distance: 1, want: 34},
-		{distance: 2, want: 28},
-		{distance: 3, want: 0},
+		{name: "exact_match", distance: 0, want: 40},
+		{name: "one_edit", distance: 1, want: 34},
+		{name: "two_edits", distance: 2, want: 28},
+		{name: "beyond_bound", distance: 3, want: 0},
 	}
 
 	for _, tt := range tests {
-		got := fuzzyDistanceScore(tt.distance)
-		if got != tt.want {
-			t.Fatalf("fuzzyDistanceScore(%d) = %d, want %d", tt.distance, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got := fuzzyDistanceScore(tt.distance)
+			if got != tt.want {
+				t.Fatalf("fuzzyDistanceScore(%d) = %d, want %d", tt.distance, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -97,19 +100,22 @@ func TestFuzzyDistanceScore_MapsDistanceToScore(t *testing.T) {
 // runes in non-English project or action terms.
 func TestFirstRuneString_HandlesUnicodeTokens(t *testing.T) {
 	tests := []struct {
+		name  string
 		value string
 		want  string
 	}{
-		{value: "merge", want: "m"},
-		{value: "ñandú", want: "ñ"},
-		{value: "", want: ""},
+		{name: "ascii_token", value: "merge", want: "m"},
+		{name: "multibyte_leading_rune", value: "ñandú", want: "ñ"},
+		{name: "empty_token", value: "", want: ""},
 	}
 
 	for _, tt := range tests {
-		got := firstRuneString(tt.value)
-		if got != tt.want {
-			t.Fatalf("firstRuneString(%q) = %q, want %q", tt.value, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got := firstRuneString(tt.value)
+			if got != tt.want {
+				t.Fatalf("firstRuneString(%q) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
 	}
 }
 
