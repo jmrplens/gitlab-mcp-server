@@ -231,6 +231,7 @@ func summaryTable(run *Run, l labels) string {
 	alignments := []docgen.Alignment{
 		docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
 		docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
+		docgen.AlignRight,
 	}
 	rows := make([][]string, 0, len(run.Scenarios))
 	for _, s := range run.Scenarios {
@@ -240,6 +241,7 @@ func summaryTable(run *Run, l labels) string {
 			mib(s.Memory.IdleMiB),
 			mib(s.Memory.OneClientMiB),
 			mib(s.Memory.AllClientsMiB),
+			mib(s.Memory.PerExtraClientMiB),
 			mib(s.Memory.PeakMiB),
 			strconv.Itoa(s.Goroutines),
 			fmt.Sprintf("%.0f%%", s.CPU.LoadPercent),

@@ -69,9 +69,15 @@ func (r *runner) runScenario(ctx context.Context, plan scenarioPlan) (Scenario, 
 	}
 	result.Startup.ProcessReadyMs = msOf(ready)
 
-	// On HTTP the process is up and holds no surface at all, which is the
-	// idle figure an operator sizes the empty container for. On stdio nothing
-	// exists yet, so idle is taken after the first handshake instead, below.
+	// Idle is an HTTP-only figure, and deliberately so. On HTTP the process is
+	// up and holds no surface at all until a credential asks for one, which is
+	// the empty container an operator sizes first. A stdio process has no such
+	// state: it starts building its catalog on a background goroutine the
+	// moment it is executed, so any resident set read before its first request
+	// is a snapshot of a build in progress. Measuring it anyway produced
+	// figures between 77 and 136 MiB for the same binary, which is a
+	// measurement of when the sample landed rather than of anything a reader
+	// could size for.
 	if plan.Transport == transportHTTP {
 		result.Memory.IdleMiB = mibOf(settledRSS(sampler))
 	}
@@ -138,15 +144,6 @@ func (r *runner) ramp(ctx context.Context, tgt target, s *sampler, plan scenario
 
 		if i == 0 && plan.Transport == transportStdio {
 			result.Startup.ProcessReadyMs = msOf(spawn)
-			// The process exists but has been asked for nothing, so the
-			// readiness gate has not built a surface for it yet. That is the
-			// same "up and empty" moment /health reports on HTTP.
-			//
-			// Sampled after it settles rather than immediately: exec returns
-			// before the runtime has finished starting, and reading there
-			// published a one-megabyte idle figure for a process that was
-			// about to be forty times that.
-			result.Memory.IdleMiB = mibOf(settledRSS(s))
 		}
 
 		listCtx, cancel := context.WithTimeout(ctx, callTimeout)

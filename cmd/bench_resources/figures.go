@@ -84,7 +84,8 @@ func englishLabels() labels {
 		LatencySubtitle: "solid bar p50, faint extension p99, log scale",
 		MeasuredOn:      "Measured on %s, build %s, %s. %d rounds per method, resident set sampled every %d ms.",
 		SummaryHead: []string{
-			"Scenario", "Clients", "Idle", "One client", "All clients", "Peak", "Goroutines", "CPU under load",
+			"Scenario", "Clients", "Idle", "One client", "All clients", "Per extra client",
+			"Peak", "Goroutines", "CPU, % of one core",
 		},
 		StartupHead: []string{
 			"Scenario", "Process ready", "First tools/list", "Warm tools/list (p50)", "tools/list payload",
@@ -132,7 +133,8 @@ func spanishLabels() labels {
 		LatencySubtitle: "barra solida p50, extension tenue p99, escala logaritmica",
 		MeasuredOn:      "Medido en %s, compilacion %s, %s. %d rondas por metodo, conjunto residente muestreado cada %d ms.",
 		SummaryHead: []string{
-			"Escenario", "Clientes", "En reposo", "Un cliente", "Todos los clientes", "Pico", "Goroutines", "CPU en carga",
+			"Escenario", "Clientes", "En reposo", "Un cliente", "Todos los clientes",
+			"Por cliente extra", "Pico", "Goroutines", "CPU, % de un nucleo",
 		},
 		StartupHead: []string{
 			"Escenario", "Proceso listo", "Primer tools/list", "tools/list en caliente (p50)", "Tamano de tools/list",
