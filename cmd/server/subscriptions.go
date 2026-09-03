@@ -863,6 +863,11 @@ type serverSettings struct {
 	// what the server-card build wants: it drives an in-memory session that is
 	// neither.
 	transport string
+	// identity carries the one caller identity stdio resolves at startup into
+	// request contexts, once it has been resolved. Nil everywhere else: HTTP
+	// resolves an identity per request from the credential that request
+	// carried.
+	identity *deferredIdentity
 }
 
 // withKeepAlive overrides the server keepalive interval for this server.
@@ -882,6 +887,15 @@ func withTransport(name string) serverOption {
 // withSessionTag makes this server mint session IDs carrying tag as a prefix.
 func withSessionTag(tag string) serverOption {
 	return func(s *serverSettings) { s.sessionTag = tag }
+}
+
+// withDeferredIdentity installs the overlay that puts the stdio caller's
+// identity into request contexts once startup has resolved it.
+//
+// Only stdio passes this, and only because stdio now answers requests before
+// it has asked GitLab who the token belongs to.
+func withDeferredIdentity(identity *deferredIdentity) serverOption {
+	return func(s *serverSettings) { s.identity = identity }
 }
 
 func newServerSettings(opts []serverOption) serverSettings {
