@@ -11,7 +11,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -733,6 +733,10 @@ audit-doc-tool-names:
 ## check-doc-tool-names: fail when the documentation names a tool that does not exist.
 check-doc-tool-names:
 	go run ./cmd/audit_doc_tool_names/ --check
+
+## check-install-buttons: decode the one-click install payloads and hold them to one configuration.
+check-install-buttons:
+	go run ./cmd/audit_install_buttons/
 
 ## check-server-json: validate server.json with the official MCP Registry publisher.
 check-server-json:

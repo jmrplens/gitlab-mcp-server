@@ -79,8 +79,11 @@ if [[ ! "$image" =~ ^ghcr\.io/jmrplens/gitlab-mcp-server:(latest|[0-9]+\.[0-9]+\
   exit 1
 fi
 
-if ! jq -e '.mcpServers.gitlab.args | index("--http=false") != null' "$MCP_JSON" > /dev/null; then
-  echo "ERROR: Docker stdio config must pass --http=false" >&2
+# The image's CMD infers the transport from file descriptor 0, and `-i` is what
+# puts a pipe there. Without it the container is handed /dev/null, infers HTTP,
+# and the client waits at initialize forever.
+if ! jq -e '.mcpServers.gitlab.args | index("-i") != null' "$MCP_JSON" > /dev/null; then
+  echo "ERROR: Docker stdio config must pass -i so the container gets a stdin to speak on" >&2
   exit 1
 fi
 

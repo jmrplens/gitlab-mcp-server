@@ -43,7 +43,7 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 | **HTTP OAuth**  | HTTP         | Automatic OAuth 2.1 flow via [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery | Multi-user, production, zero-config tokens |
 
 > **Tip**: In HTTP modes, what a `GITLAB-URL` header does depends on how many instances the deployment publishes. A deployment publishes at least one or it refuses to start, unless it was launched with `--allow-any-gitlab-url`, in which case the header chooses the instance per request. With exactly one, that instance is authoritative and the header is ignored and logged — this is the public endpoint's case, fixed to `https://gitlab.com`. With several, they form an allow-list and the header is required: a request without it is refused with `400` naming the published instances, and a value outside the list is refused rather than ignored, `403` in OAuth mode and `400` in legacy mode.
-> **Docker note**: The published Docker image starts in HTTP mode by default. If an IDE launches Docker as a stdio MCP process, pass `--http=false` after the image name and keep `docker run -i`; do not publish port 8080 in that mode.
+> **Docker note**: The published Docker image infers its transport from stdin. An IDE that launches Docker as a stdio MCP process needs `docker run -i` and no transport flag; without `-i` the container gets `/dev/null` instead of a pipe and starts an HTTP listener. Do not publish port 8080 in that mode.
 
 ---
 
@@ -156,8 +156,7 @@ Docker stdio variant:
         "GITLAB_TOKEN",
         "-e",
         "GITLAB_SKIP_TLS_VERIFY",
-        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
-        "--http=false"
+        "ghcr.io/jmrplens/gitlab-mcp-server:latest"
       ],
       "env": {
         "GITLAB_TOKEN": "${input:gitlab-token}",

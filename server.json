@@ -180,15 +180,6 @@
       "transport": {
         "type": "stdio"
       },
-      "packageArguments": [
-        {
-          "type": "positional",
-          "value": "--http=false",
-          "valueHint": "transport",
-          "description": "Overrides the image's default CMD, which starts an HTTP listener. An MCP client speaks stdio to the container, so the HTTP mode must be off.",
-          "isRequired": true
-        }
-      ],
       "environmentVariables": [
         {
           "name": "GITLAB_URL",

@@ -45,7 +45,7 @@ curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.1.
 chmod +x gitlab-mcp-server
 ```
 
-> **Do not run the released Linux binary on Alpine.** The Linux assets are position-independent executables that use the glibc dynamic loader (`/lib64/ld-linux-x86-64.so.2`), which musl does not provide, so `./gitlab-mcp-server` fails with a misleading `not found` even though the file is there and executable. Use a glibc base image (`debian:stable-slim`, `ubuntu`, `python:3.12-slim`), or run the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl inside the image — it starts in HTTP mode by default, so pass `--http=false` after the image name for a stdio job.
+> **Do not run the released Linux binary on Alpine.** The Linux assets are position-independent executables that use the glibc dynamic loader (`/lib64/ld-linux-x86-64.so.2`), which musl does not provide, so `./gitlab-mcp-server` fails with a misleading `not found` even though the file is there and executable. Use a glibc base image (`debian:stable-slim`, `ubuntu`, `python:3.12-slim`), or run the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl inside the image. It infers its transport from stdin, and a CI runner promises nothing about the shape of stdin, so say `--transport stdio` outright for a stdio job.
 
 ### 2. Create an Access Token
 
@@ -537,7 +537,7 @@ For multi-project workflows, use a **Group Access Token** instead of creating pe
 /bin/sh: ./gitlab-mcp-server: not found
 ```
 
-Two different causes produce this message. If the job runs on an Alpine (musl) image, the released binary cannot start at all — it needs the glibc dynamic loader; switch to a glibc base image or to `ghcr.io/jmrplens/gitlab-mcp-server` (add `--http=false` for stdio). Otherwise, check that the asset matches the runner's platform and that the execute bit is set:
+Two different causes produce this message. If the job runs on an Alpine (musl) image, the released binary cannot start at all — it needs the glibc dynamic loader; switch to a glibc base image or to `ghcr.io/jmrplens/gitlab-mcp-server` (add `--transport stdio` for stdio). Otherwise, check that the asset matches the runner's platform and that the execute bit is set:
 
 ```bash
 curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64" \

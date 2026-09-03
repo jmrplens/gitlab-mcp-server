@@ -144,12 +144,11 @@ type session struct {
 // change which tool surface is under test.
 func startSession(t *testing.T, env map[string]string) *session {
 	t.Helper()
-	return startSessionInDir(t, "", env)
+	return startSessionIn(t, "", env)
 }
 
 // startSessionInDir is startSession with the process's working directory
-// chosen by the caller. An empty dir keeps the Go default, which is this
-// package's own directory, so every existing caller is unaffected.
+// chosen by the caller.
 //
 // It exists because the working directory is untrusted input on stdio: an MCP
 // client sets it to whatever workspace it has open, so its contents arrive
@@ -158,10 +157,29 @@ func startSession(t *testing.T, env map[string]string) *session {
 // and can only be tested by choosing one.
 func startSessionInDir(t *testing.T, dir string, env map[string]string) *session {
 	t.Helper()
+	return startSessionIn(t, dir, env)
+}
+
+// startSessionWithArgs is startSession for a case that needs the binary to be
+// given flags.
+//
+// stdio configuration is environment-driven, so almost nothing here passes
+// arguments; --transport is the exception, because what it reads is a property
+// of the process that only exists once there is a process.
+func startSessionWithArgs(t *testing.T, env map[string]string, args ...string) *session {
+	t.Helper()
+	return startSessionIn(t, "", env, args...)
+}
+
+// startSessionIn is what the three wrappers above share. An empty dir keeps the
+// Go default, which is this package's own directory, so a caller that does not
+// care about the working directory is unaffected by one that does.
+func startSessionIn(t *testing.T, dir string, env map[string]string, args ...string) *session {
+	t.Helper()
 
 	bin := serverBinary(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin)
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
 
 	environ := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}

@@ -27,10 +27,10 @@ If you just want it running, pick one of these and skip the manual steps below. 
 
 Each registers a **Docker**-based server (auto-pulls the image on first run; needs [Docker](https://www.docker.com/)). VS Code prompts for your token; Cursor / LM Studio / Kiro add a `YOUR_GITLAB_TOKEN` placeholder you replace.
 
-[![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D)
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
-[![Add to LM Studio](https://files.lmstudio.ai/deeplink/mcp-install-dark.svg)](https://lmstudio.ai/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
-[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D)
+[![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0Il0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
+[![Add to LM Studio](https://files.lmstudio.ai/deeplink/mcp-install-dark.svg)](https://lmstudio.ai/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0Il0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D)
 
 ### Claude Code (`claude mcp add`)
 
@@ -38,7 +38,7 @@ Docker (no install — pulls the image on first run):
 
 ```bash
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
-  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
 ### npm / npx (any platform)
@@ -65,7 +65,7 @@ Point any MCP client at `npx` with no install at all:
 }
 ```
 
-Update with `npm update -g @jmrp.io/gitlab-mcp-server`: npm owns the binary, as every distribution channel does, and the server never replaces itself on disk. The Linux packages declare `libc: ["glibc"]` because the prebuilt binaries need the glibc dynamic loader, so npm skips them on musl systems such as Alpine; there, run the Docker image (`docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`) or build from source.
+Update with `npm update -g @jmrp.io/gitlab-mcp-server`: npm owns the binary, as every distribution channel does, and the server never replaces itself on disk. The Linux packages declare `libc: ["glibc"]` because the prebuilt binaries need the glibc dynamic loader, so npm skips them on musl systems such as Alpine; there, run the Docker image (`docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest`) or build from source.
 
 ### PyPI / uvx (any platform)
 
@@ -278,7 +278,7 @@ The repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifest
 /plugin install jmrplens/gitlab-mcp-server
 ```
 
-The bundled `mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest`, so [Docker](https://docs.docker.com/get-docker/) must be installed. It is configured for stdio MCP clients and passes `--http=false` after the image name to override the Docker image's HTTP default. Keep that override if you copy the Docker configuration into VS Code or another stdio client; otherwise the container will start an HTTP listener and the client will wait forever for a stdio `initialize` response.
+The bundled `mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest`, so [Docker](https://docs.docker.com/get-docker/) must be installed. It is configured for stdio MCP clients and needs no transport flag: the image reads the transport off stdin, and `docker run -i` is what puts a pipe there. Keep the `-i` if you copy the Docker configuration into VS Code or another stdio client; without it the container is handed `/dev/null`, reads that as nobody speaking to it, starts an HTTP listener, and the client waits forever for a stdio `initialize` response.
 
 The bundled config forwards these environment variables into the container, but
 the host has to put them in the plugin's environment first. Agent Plugins §9.1

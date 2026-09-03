@@ -15,7 +15,7 @@ Stdio transport (for desktop MCP clients such as Claude Desktop, Cursor, or VS C
   "mcpServers": {
     "gitlab": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "GITLAB_URL", "-e", "GITLAB_TOKEN", "jmrplens/gitlab-mcp-server:latest", "--http=false"],
+      "args": ["run", "-i", "--rm", "-e", "GITLAB_URL", "-e", "GITLAB_TOKEN", "jmrplens/gitlab-mcp-server:latest"],
       "env": {
         "GITLAB_URL": "https://gitlab.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxx"
