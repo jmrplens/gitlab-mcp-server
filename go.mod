@@ -1,6 +1,6 @@
 module github.com/jmrplens/gitlab-mcp-server/v2
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/go-logr/logr v1.4.4
