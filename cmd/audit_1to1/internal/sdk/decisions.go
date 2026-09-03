@@ -21,6 +21,21 @@ const (
 	unwrappedTracked = "UNWRAPPED_TRACKED"
 )
 
+// securityWrapperSwallowsErrors is the shared reason behind the eight security
+// attribute and category mutations. The wrappers select exactly the fields the
+// handlers select, so the field-level case for migrating is sound; what stops
+// it is one line they all lack. Each unmarshals into a struct embedding
+// GenericGraphQLErrors and then never looks at it, and GraphQL.Do only errors
+// on a non-2xx status, so a mutation GitLab refuses at the query level (an
+// authorization refusal, a schema mismatch on an older instance) arrives as
+// HTTP 200 with a null payload: destroy and bulk update return no error at all,
+// create returns an empty list, and update degrades to a bare ErrNotFound that
+// drops GitLab's message. The raw handlers read that array through
+// toolutil.GraphQLTopLevelError, which is what internal/tools/securityattributes
+// and internal/tools/securitycategories test under
+// TestHandlers_WrapTopLevelGraphQLErrors.
+const securityWrapperSwallowsErrors = "the wrapper selects the same fields but never reads the response's top-level GraphQL errors array, and GraphQL.Do only errors on a non-2xx status, so a mutation GitLab refuses with HTTP 200 is reported as success (destroy, bulk update), as an empty result (create), or as a bare ErrNotFound that drops GitLab's message (update); the raw handler surfaces it through toolutil.GraphQLTopLevelError. Recorded in docs/development/upstream-bugs.md (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"
+
 // certificateClusters is the shared reason behind the three cluster services.
 // GitLab removed the certificate-based Kubernetes integration outright, so the
 // group, instance and project wrappers over it are all superseded by the same
@@ -55,8 +70,8 @@ var declaredServices = map[string]declaration{
 	// COVERED_GRAPHQL — see graphqlDecisions for the per-operation decision.
 	"EpicIssues":             {coveredGraphQL, "internal/tools/epicissues drives the work-item hierarchy widget over GraphQL. The interface itself is documented upstream as 'Will be removed in v5 of the API, use Work Items API instead'"},
 	"ProjectVulnerabilities": {coveredGraphQL, "internal/tools/vulnerabilities queries and mutates vulnerabilities over GraphQL, which is what the interface's own upstream doc comment directs to: 'Deprecated: use GraphQL Query.vulnerabilities instead'"},
-	"SecurityAttributes":     {coveredGraphQL, "internal/tools/securityattributes issues the securityAttribute* mutations directly; the wrapper is itself a GraphQL wrapper over the same mutations, so this is a migration rather than a gap (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
-	"SecurityCategories":     {coveredGraphQL, "internal/tools/securitycategories issues the securityCategory* mutations directly; the wrapper is itself a GraphQL wrapper over the same mutations, so this is a migration rather than a gap (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
+	"SecurityAttributes":     {coveredGraphQL, "internal/tools/securityattributes issues the securityAttribute* mutations directly; the wrapper drives the same mutations but discards the response's top-level GraphQL errors, so adopting it would report a refused mutation as a success (see graphqlDecisions)"},
+	"SecurityCategories":     {coveredGraphQL, "internal/tools/securitycategories issues the securityCategory* mutations directly; the wrapper drives the same mutations but discards the response's top-level GraphQL errors, so adopting it would report a refused mutation as a success (see graphqlDecisions)"},
 
 	// SUPERSEDED_UPSTREAM
 	"GeoNodes":         {supersededUpstream, "upstream marks it 'Deprecated: will be removed in v5 of the API, use Geo Sites API instead'; internal/tools/geo calls GeoSites for all eight operations"},
@@ -124,17 +139,18 @@ var graphqlDecisions = map[string]decision{
 	"vulnerabilities.PipelineSecuritySummary":  {decisionKeep, "the pipeline security report summary is GraphQL-only; the wrapper exposes nothing pipeline-scoped"},
 	"vulnerabilities.runVulnerabilityMutation": {decisionKeep, "dismiss/confirm/resolve/revert are GraphQL mutations; the wrapper exposes only CreateVulnerability"},
 
-	// MIGRATE — the wrapper covers the same call, so ADR-0006's exemption is
-	// spent. Tracked in https://github.com/jmrplens/gitlab-mcp-server/issues/430.
-	"workitems.List": {decisionMigrate, "WorkItems.ListWorkItems issues the same namespace workItems query, accepts a superset of the handler's filters and returns the same cursor pagination through Response.PageInfo; internal/tools/epics already calls it (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
+	// KEEP — the security wrappers select the same fields but never read the
+	// top-level GraphQL errors array, which is where GitLab reports a rejected
+	// mutation with HTTP 200. Adopting them would turn a refusal into a
+	// success. Recorded in docs/development/upstream-bugs.md and examined in
+	// https://github.com/jmrplens/gitlab-mcp-server/issues/430.
+	"securityattributes.createSecurityAttributes":       {decisionKeep, securityWrapperSwallowsErrors},
+	"securityattributes.updateSecurityAttribute":        {decisionKeep, securityWrapperSwallowsErrors},
+	"securityattributes.destroySecurityAttribute":       {decisionKeep, securityWrapperSwallowsErrors},
+	"securityattributes.projectUpdateSecurityAttribute": {decisionKeep, securityWrapperSwallowsErrors},
+	"securityattributes.bulkUpdateSecurityAttributes":   {decisionKeep, securityWrapperSwallowsErrors},
 
-	"securityattributes.createSecurityAttributes":       {decisionMigrate, "SecurityAttributes.CreateSecurityAttributes wraps the same securityAttributeCreate mutation (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
-	"securityattributes.updateSecurityAttribute":        {decisionMigrate, "SecurityAttributes.UpdateSecurityAttribute wraps the same securityAttributeUpdate mutation (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
-	"securityattributes.destroySecurityAttribute":       {decisionMigrate, "SecurityAttributes.DestroySecurityAttribute wraps the same securityAttributeDestroy mutation (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
-	"securityattributes.projectUpdateSecurityAttribute": {decisionMigrate, "SecurityAttributes.ProjectUpdateSecurityAttribute wraps the same securityAttributeProjectUpdate mutation (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
-	"securityattributes.bulkUpdateSecurityAttributes":   {decisionMigrate, "SecurityAttributes.BulkUpdateSecurityAttributes wraps the same bulkUpdateSecurityAttributes mutation (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
-
-	"securitycategories.createSecurityCategory":  {decisionMigrate, "SecurityCategories.CreateSecurityCategory wraps the same securityCategoryCreate mutation (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
-	"securitycategories.updateSecurityCategory":  {decisionMigrate, "SecurityCategories.UpdateSecurityCategory wraps the same securityCategoryUpdate mutation (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
-	"securitycategories.destroySecurityCategory": {decisionMigrate, "SecurityCategories.DestroySecurityCategory wraps the same securityCategoryDestroy mutation (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"},
+	"securitycategories.createSecurityCategory":  {decisionKeep, securityWrapperSwallowsErrors},
+	"securitycategories.updateSecurityCategory":  {decisionKeep, securityWrapperSwallowsErrors},
+	"securitycategories.destroySecurityCategory": {decisionKeep, securityWrapperSwallowsErrors},
 }
