@@ -101,7 +101,7 @@ func makeDirs(t *testing.T, dirs ...string) {
 // genuinely outside every allowed destination.
 func confineDownloadRoots(t *testing.T, dir string) {
 	t.Helper()
-	t.Setenv("TMPDIR", dir)
+	testutil.IsolateTempDir(t, dir)
 	t.Chdir(dir)
 }
 

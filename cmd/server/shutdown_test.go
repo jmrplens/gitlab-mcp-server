@@ -136,9 +136,19 @@ func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 		graceful bool
 	}{
 		{name: "a peer that stops on SIGTERM", source: "/bin/sleep", args: []string{"300"}, graceful: true},
-		// dash, running a script that ignores SIGTERM: the process an operator
-		// is really trying to clear when a server is wedged.
-		{name: "a peer that ignores SIGTERM", source: "/bin/sh", args: []string{"-c", "trap '' TERM; sleep 300"}},
+		// A shell running a script that ignores SIGTERM: the process an
+		// operator is really trying to clear when a server is wedged.
+		//
+		// The trailing "exit 0" is load-bearing. Without it, sleep is the last
+		// command of the -c script, and a shell is then free to exec it in
+		// place rather than fork: an ignored signal disposition survives exec,
+		// so the optimization preserves the semantics and is perfectly correct.
+		// What it does not preserve is the process name, and this test finds
+		// its peers by name. On Linux /bin/sh is dash and forks; on macOS it is
+		// bash, which took the shortcut, so both peers reported themselves as
+		// "sleep" and the test saw none of them. Keeping a command after the
+		// sleep leaves the shell resident on every platform.
+		{name: "a peer that ignores SIGTERM", source: "/bin/sh", args: []string{"-c", "trap '' TERM; sleep 300; exit 0"}},
 	}
 
 	for _, tt := range tests {

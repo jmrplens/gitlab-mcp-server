@@ -134,7 +134,11 @@ func (r *RejectedTokens) Lookup(gitlabURL, token string) (RejectionKind, bool) {
 	if !ok {
 		return RejectionInvalid, false
 	}
-	if time.Now().After(entry.expiresAt) {
+	// expired, not time.Now().After: the three other deadline checks in this
+	// file already treat the instant of the deadline as reached, and this one
+	// disagreeing meant a refusal outlived its TTL by a clock tick, which on
+	// Windows is long enough to be observable.
+	if expired(entry.expiresAt) {
 		delete(r.entries, key)
 		return RejectionInvalid, false
 	}

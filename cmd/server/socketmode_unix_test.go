@@ -55,7 +55,7 @@ func TestBindUnixSocket_CreatesTheSocketWithTheRequestedMode(t *testing.T) {
 		t.Run(fmt.Sprintf("%#o", mode), func(t *testing.T) {
 			t.Parallel()
 
-			dir := t.TempDir()
+			dir := socketDir(t)
 			path := filepath.Join(dir, "m.sock")
 			listener, err := bindUnixSocket(t.Context(), path, mode)
 			if err != nil {
@@ -195,7 +195,7 @@ func TestBindUnixSocket_RefusesToClobberAnExistingPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			dir := t.TempDir()
+			dir := socketDir(t)
 			path := filepath.Join(dir, "s.sock")
 			verify := tt.occupy(t, path)
 
@@ -304,7 +304,7 @@ func TestBindUnixSocket_LeavesConcurrentFileCreationAlone(t *testing.T) {
 func TestBindUnixSocket_ListenerOwnsThePublishedPath(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := socketDir(t)
 	path := filepath.Join(dir, "owned.sock")
 	listener, err := bindUnixSocket(t.Context(), path, 0o660)
 	if err != nil {
@@ -335,7 +335,7 @@ func TestBindUnixSocket_ListenerOwnsThePublishedPath(t *testing.T) {
 func TestBindUnixSocket_CloseKeepsASuccessorsSocket(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := socketDir(t)
 	path := filepath.Join(dir, "handover.sock")
 	outgoing, err := bindUnixSocket(t.Context(), path, 0o660)
 	if err != nil {
@@ -378,7 +378,7 @@ func TestBindUnixSocket_UnwritableDirectoryIsRefused(t *testing.T) {
 		t.Skip("running as root: permission bits refuse nothing, so there is no refusal to assert")
 	}
 
-	dir := t.TempDir()
+	dir := socketDir(t)
 	closed := filepath.Join(dir, "closed")
 	if err := os.Mkdir(closed, 0o700); err != nil {
 		t.Fatalf("creating the directory: %v", err)
@@ -446,13 +446,9 @@ func TestBindUnixSocket_UnreachablePublishedPathIsRefused(t *testing.T) {
 func padDirTo(t *testing.T, length int) string {
 	t.Helper()
 
-	// Not t.TempDir(): its path carries the test's own name, which is longer
-	// than some of the budgets being measured here.
-	base, err := os.MkdirTemp("", "p") //nolint:usetesting // see above
-	if err != nil {
-		t.Fatalf("temp dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	// socketDir rather than t.TempDir for the reason given there: the test's
+	// own name is longer than some of the budgets being measured here.
+	base := socketDir(t)
 
 	needed := length - len(base) - 1
 	if needed < 1 {
@@ -663,7 +659,7 @@ func TestPublishStagedSocket_AChmodThatFails_LeavesNothingPublished(t *testing.T
 // confirmed rather than assumed.
 func TestPublishStagedSocket_AModeThatDidNotApply_IsRefused(t *testing.T) {
 	// Deliberately not parallel: see the note on the binding tests.
-	dir := t.TempDir()
+	dir := socketDir(t)
 	path := filepath.Join(dir, "wrong-mode.sock")
 
 	originalChmod := chmodStagedSocket

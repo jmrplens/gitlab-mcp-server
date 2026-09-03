@@ -543,7 +543,7 @@ func TestUpload_FilePathOutsideAllowedDirs_Rejected(t *testing.T) {
 	link := filepath.Join(allowed, "notes.txt")
 	symlinked := os.Symlink(secret, link) == nil
 
-	t.Setenv("TMPDIR", allowed)
+	testutil.IsolateTempDir(t, allowed)
 	t.Chdir(allowed)
 
 	tests := []struct {

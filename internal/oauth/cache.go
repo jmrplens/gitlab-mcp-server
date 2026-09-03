@@ -48,7 +48,7 @@ func (c *TokenCache) Get(gitlabURL, token string) (*auth.TokenInfo, bool) {
 		return nil, false
 	}
 
-	if time.Now().After(entry.expiresAt) {
+	if expired(entry.expiresAt) {
 		c.mu.Lock()
 		delete(c.entries, key)
 		c.mu.Unlock()
@@ -93,15 +93,27 @@ func (c *TokenCache) Len() int {
 
 // Cleanup removes all expired entries. Intended for periodic maintenance.
 func (c *TokenCache) Cleanup() {
-	now := time.Now()
-
 	c.mu.Lock()
 	for key, entry := range c.entries {
-		if now.After(entry.expiresAt) {
+		if expired(entry.expiresAt) {
 			delete(c.entries, key)
 		}
 	}
 	c.mu.Unlock()
+}
+
+// expired reports whether a deadline has been reached, counting the instant of
+// the deadline itself as reached.
+//
+// The obvious spelling, time.Now().After(deadline), keeps an entry alive for
+// one clock tick past its deadline, and a tick is not the same length
+// everywhere: Linux reads the clock with nanosecond resolution, while on
+// Windows two consecutive calls to time.Now often return the same instant, so
+// a deadline of "now" never passes there at all. The configured TTL range
+// (1m to 2h) makes that harmless in a running server and wrong in what the
+// code says, which is enough reason to say the other thing.
+func expired(deadline time.Time) bool {
+	return !time.Now().Before(deadline)
 }
 
 // RunCleanup sweeps expired entries every interval until ctx is done. It blocks,
