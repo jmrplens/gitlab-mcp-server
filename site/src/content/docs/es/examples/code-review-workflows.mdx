@@ -4,11 +4,11 @@ description: "Ejemplos de revisión de merge requests con GitLab MCP Server — 
 datePublished: "2026-04-23"
 faq:
   - q: "¿Cómo reviso un merge request de GitLab con un asistente de IA?"
-    a: "Una revisión completa son tres llamadas: `merge_request.list` con `reviewer_id` encuentra los MR que esperan por ti, `mr_review.changes_get` obtiene el diff para que el asistente lea el código real, y `mr_review.discussion_create` publica comentarios en hilo sobre líneas concretas. En la superficie dinámica predeterminada son los valores de `action` de `gitlab_execute_action`; con `TOOL_SURFACE=meta` son la acción `list` de la meta-herramienta `gitlab_merge_request` y las acciones `changes_get` y `discussion_create` de `gitlab_mr_review`. Revisar un MR de doce ficheros cuesta por tanto tres llamadas, no una por fichero."
+    a: "Una revisión completa son tres llamadas: `merge_request.list` con `reviewer_id` encuentra los MR que esperan por ti, `mr_review.changes_get` obtiene el diff para que el asistente lea el código real, y `mr_review.discussion_create` publica comentarios en hilo sobre líneas concretas. En la superficie dinámica predeterminada son los valores de `action` de `gitlab_execute_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` son la acción `list` de la meta-herramienta `gitlab_merge_request` y las acciones `changes_get` y `discussion_create` de `gitlab_mr_review`. Revisar un MR de doce ficheros cuesta por tanto tres llamadas, no una por fichero."
   - q: "¿Cuál es la diferencia entre una nota, una discusión y una nota borrador?"
     a: "Una nota (`mr_review.note_create`) es un comentario suelto que se publica de inmediato. Una discusión (`mr_review.discussion_create`) abre un hilo resoluble al que otros pueden responder y que cuenta para los hilos sin resolver que condicionan el merge. Una nota borrador (`mr_review.draft_note_create`) queda guardada en privado y es invisible para el autor hasta que publicas toda la revisión de golpe, que es lo que interesa al dejar muchos comentarios: el autor recibe una notificación en vez de veinte."
   - q: "¿Cómo encuentro hilos de revisión sin resolver en un merge request?"
-    a: "Ejecuta `mr_review.discussion_list` para el MR (la acción `discussion_list` de `gitlab_mr_review` cuando `TOOL_SURFACE=meta`) y filtra los hilos devueltos por `resolved: false`. Las notas creadas con `mr_review.note_create` no son resolubles y nunca aparecen como pendientes, así que aquí solo salen las discusiones. Esta es la comprobación previa al merge cuando el proyecto exige resolver todos los hilos."
+    a: "Ejecuta `mr_review.discussion_list` para el MR (la acción `discussion_list` de `gitlab_mr_review` cuando `GITLAB_MCP_TOOL_SURFACE=meta`) y filtra los hilos devueltos por `resolved: false`. Las notas creadas con `mr_review.note_create` no son resolubles y nunca aparecen como pendientes, así que aquí solo salen las discusiones. Esta es la comprobación previa al merge cuando el proyecto exige resolver todos los hilos."
   - q: "¿Puede un asistente de IA aprobar y fusionar un merge request?"
     a: "Sí, sujeto a los mismos permisos y salvaguardas que cualquier otra mutación. Aprobar es `merge_request.approve` y fusionar es `merge_request.merge` (las acciones `approve` y `merge` de `gitlab_merge_request` en la superficie meta). Ambas se clasifican como mutantes, así que no están disponibles con `GITLAB_READ_ONLY=true` y devuelven una previsualización con `GITLAB_SAFE_MODE=true`. GitLab sigue aplicando sus propias reglas de aprobación: un asistente no puede fusionar un MR que no cumpla las aprobaciones requeridas del proyecto."
 ---
@@ -34,7 +34,7 @@ import FAQ from "../../../../components/FAQ.astro";
   />
 </CardGrid>
 
-Estos flujos paso a paso cubren el ciclo completo de revisión de merge requests: encontrar los MRs que requieren tu atención, leer sus diffs, comprobar el estado de aprobación, dejar notas y discusiones en hilo y, finalmente, fusionar o rebasar. Cada ejemplo combina el prompt que escribes con la acción exacta del catálogo que el servidor ejecuta, escrita como `dominio.acción → parámetros`: en la superficie dinámica predeterminada es el `action` que pasas a `gitlab_execute_action`, y con `TOOL_SURFACE=meta` es el `action` de la meta-herramienta `gitlab_<dominio>`, para que puedas reutilizar la llamada directamente. Los diffs, notas, discusiones y notas borrador viven en el dominio `mr_review` (`gitlab_mr_review` en la superficie meta); el resto del ciclo de vida del MR, en `merge_request`.
+Estos flujos paso a paso cubren el ciclo completo de revisión de merge requests: encontrar los MRs que requieren tu atención, leer sus diffs, comprobar el estado de aprobación, dejar notas y discusiones en hilo y, finalmente, fusionar o rebasar. Cada ejemplo combina el prompt que escribes con la acción exacta del catálogo que el servidor ejecuta, escrita como `dominio.acción → parámetros`: en la superficie dinámica predeterminada es el `action` que pasas a `gitlab_execute_action`, y con `GITLAB_MCP_TOOL_SURFACE=meta` es el `action` de la meta-herramienta `gitlab_<dominio>`, para que puedas reutilizar la llamada directamente. Los diffs, notas, discusiones y notas borrador viven en el dominio `mr_review` (`gitlab_mr_review` en la superficie meta); el resto del ciclo de vida del MR, en `merge_request`.
 
 ## Flujo de revisión de MRs
 
@@ -243,7 +243,7 @@ gitlab_execute_action → action: "mr_review.changes_get", params: { project_id:
 gitlab_execute_action → action: "mr_review.discussion_create", params: { project_id: "my-group/backend", merge_request_iid: 42, body: "Discutamos la estrategia de migración de base de datos..." }
 ```
 
-Con `TOOL_SURFACE=meta` las mismas llamadas van a `gitlab_merge_request` con `action: list` y a `gitlab_mr_review` con `action: changes_get` y `action: discussion_create`, cada una con los parámetros anidados en `params`.
+Con `GITLAB_MCP_TOOL_SURFACE=meta` las mismas llamadas van a `gitlab_merge_request` con `action: list` y a `gitlab_mr_review` con `action: changes_get` y `action: discussion_create`, cada una con los parámetros anidados en `params`.
 
 ---
 

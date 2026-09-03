@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: CI/CD Catalog
 > **Individual tools**: 2
-> **Meta-tool**: `gitlab_ci_catalog` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_ci_catalog` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `ci_catalog.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [CI/CD Catalog GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#querycicatalogresources)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,9 +14,9 @@
 
 The CI/CD Catalog domain provides discovery and inspection of reusable CI/CD components published to the GitLab CI/CD Catalog. The Catalog is a GraphQL-only feature with no REST API equivalent. Resources in the catalog are GitLab projects that publish reusable CI/CD components — pipeline templates, jobs, and steps that can be included in `.gitlab-ci.yml` files.
 
-On the default dynamic surface, these operations are the `ci_catalog.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `ci_catalog.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, both individual tools below are consolidated into a single `gitlab_ci_catalog` meta-tool that dispatches by `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, both individual tools below are consolidated into a single `gitlab_ci_catalog` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

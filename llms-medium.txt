@@ -7,7 +7,7 @@ Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-f
 
 ## Dynamic Toolset
 
-Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
+Dynamic mode is the default when `GITLAB_MCP_TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `GITLAB_MCP_TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
 
 ### gitlab_find_action
 
@@ -39,7 +39,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Meta-Tools
 
-Enabled with `TOOL_SURFACE=meta`. Each groups related operations under a single tool with an `action` parameter.
+Enabled with `GITLAB_MCP_TOOL_SURFACE=meta`. Each groups related operations under a single tool with an `action` parameter.
 
 ### gitlab_access
 
@@ -433,7 +433,7 @@ Actions (8): confirm, dismiss, get, list, pipeline_security_summary, resolve, re
 
 ## Individual Tools
 
-Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
+Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership.
 - gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership.

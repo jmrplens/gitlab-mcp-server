@@ -4,13 +4,13 @@ description: "Issue management examples with GitLab MCP Server — triage, assig
 datePublished: "2026-04-23"
 faq:
   - q: "How do I triage GitLab issues with an AI assistant?"
-    a: "Ask your assistant to list the open issues you care about, then to assign, label, and link them. A typical triage loop is four calls: `issue.list` (filtered by `state: opened` and a label) to see the backlog, `issue.update` to set `assignee_ids`, `labels`, and `milestone_id`, `issue.link_create` to record dependencies, and `issue.update` again with `state_event: close` once resolved. On the default dynamic surface these are `gitlab_execute_action` actions, discoverable through `gitlab_find_action`; with `TOOL_SURFACE=meta` they are the `gitlab_issue` meta-tool's `list`, `update`, and `link_create` actions."
+    a: "Ask your assistant to list the open issues you care about, then to assign, label, and link them. A typical triage loop is four calls: `issue.list` (filtered by `state: opened` and a label) to see the backlog, `issue.update` to set `assignee_ids`, `labels`, and `milestone_id`, `issue.link_create` to record dependencies, and `issue.update` again with `state_event: close` once resolved. On the default dynamic surface these are `gitlab_execute_action` actions, discoverable through `gitlab_find_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` they are the `gitlab_issue` meta-tool's `list`, `update`, and `link_create` actions."
   - q: "What is the difference between relates_to, blocks, and is_blocked_by?"
     a: "They are the three `link_type` values accepted by `issue.link_create` (`gitlab_issue` with `action: link_create` on the meta surface). `relates_to` is a symmetric, non-blocking association — neither issue gates the other. `blocks` means the source issue must be resolved before the target can proceed. `is_blocked_by` is the inverse direction of the same relationship, so creating a `blocks` link from #300 to #400 is what makes #400 report `is_blocked_by` #300. Listing links with `issue.link_list` returns the relationship type alongside each linked issue."
   - q: "Can an AI assistant close a GitLab issue for me?"
     a: "Yes, but closing is a state change, so it follows the same safety rules as any other mutation. The call is `issue.update` with `state_event: close` (`gitlab_issue`, `action: update`, on the meta surface). If the deployment runs with `GITLAB_READ_ONLY=true` the action is not registered at all, and under `GITLAB_SAFE_MODE=true` the server returns a JSON preview of the change instead of applying it."
   - q: "How do I search issues across several GitLab projects at once?"
-    a: "Use `search.issues` rather than `issue.list` (the `gitlab_search` and `gitlab_issue` meta-tools when `TOOL_SURFACE=meta`), because issue listing is scoped to one project or group. Search accepts an instance, group, or project scope, so `search.issues` with a `group_id` searches every project in that group in one call. Results come back with the project path on each hit, so an assistant can follow up with `issue.get` on whichever project owns the issue."
+    a: "Use `search.issues` rather than `issue.list` (the `gitlab_search` and `gitlab_issue` meta-tools when `GITLAB_MCP_TOOL_SURFACE=meta`), because issue listing is scoped to one project or group. Search accepts an instance, group, or project scope, so `search.issues` with a `group_id` searches every project in that group in one call. Results come back with the project path on each hit, so an assistant can follow up with `issue.get` on whichever project owns the issue."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -34,7 +34,7 @@ import FAQ from "../../../components/FAQ.astro";
   />
 </CardGrid>
 
-These step-by-step workflows cover issue management end to end: triaging open issues, assigning and labeling them, linking related and blocking issues, tracking milestone progress, holding discussions, and searching across projects. Each example pairs the prompt you type with the exact catalog action the server runs, written as `domain.action → parameters`: on the default dynamic surface that is the `action` you pass to `gitlab_execute_action`, and with `TOOL_SURFACE=meta` it is the `action` of the `gitlab_<domain>` meta-tool, so you can reuse the call directly.
+These step-by-step workflows cover issue management end to end: triaging open issues, assigning and labeling them, linking related and blocking issues, tracking milestone progress, holding discussions, and searching across projects. Each example pairs the prompt you type with the exact catalog action the server runs, written as `domain.action → parameters`: on the default dynamic surface that is the `action` you pass to `gitlab_execute_action`, and with `GITLAB_MCP_TOOL_SURFACE=meta` it is the `action` of the `gitlab_<domain>` meta-tool, so you can reuse the call directly.
 
 ## Issue triage
 
@@ -247,7 +247,7 @@ gitlab_execute_action → action: "issue.update", params: { project_id: "my-grou
 gitlab_execute_action → action: "issue.link_create", params: { project_id: "my-group/backend", issue_iid: 300, target_issue_iid: 400, link_type: "blocks" }
 ```
 
-With `TOOL_SURFACE=meta` the same calls go to the `gitlab_issue` meta-tool with `action: list`, `action: update` and `action: link_create`, each with the parameters nested under `params`.
+With `GITLAB_MCP_TOOL_SURFACE=meta` the same calls go to the `gitlab_issue` meta-tool with `action: list`, `action: update` and `action: link_create`, each with the parameters nested under `params`.
 
 ---
 

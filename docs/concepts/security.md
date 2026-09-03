@@ -73,7 +73,7 @@ allows.
 
 The specification's alternative to RFC 8707 — "or otherwise verify that they
 are the intended recipient of the token" — is available opt-in.
-`--oauth-client-uid` (env `OAUTH_CLIENT_UID`, comma-separated) pins the GitLab
+`--oauth-client-uid` (env `GITLAB_MCP_OAUTH_CLIENT_UID`, comma-separated) pins the GitLab
 OAuth applications whose tokens the deployment admits, compared against
 `application.uid` from `/oauth/token/info`. It is off by default because
 turning it on refuses personal access tokens outright: a PAT belongs to no
@@ -373,16 +373,16 @@ rate-limit authority.
 Whether it is on out of the box depends on the transport. **HTTP mode enables it
 by default** (`--rate-limit-rps=10`), because that deployment is shared — every
 call it forwards is charged to its own egress address, so one looping client's
-volume lands on every other tenant. **Stdio leaves it off** (`RATE_LIMIT_RPS=0`):
+volume lands on every other tenant. **Stdio leaves it off** (`GITLAB_MCP_RATE_LIMIT_RPS=0`):
 a single-user local process has no co-tenant to protect, and a limiter there only
 costs latency. Setting `0` explicitly is the opt-out in either mode.
 
 ### Configuration
 
-| Setting         | Env var            | Flag (HTTP mode)     | Default (stdio) | Default (HTTP) |
-| --------------- | ------------------ | -------------------- | --------------- | -------------- |
-| Requests/second | `RATE_LIMIT_RPS`   | `--rate-limit-rps`   | `0` (disabled)  | `10`           |
-| Burst capacity  | `RATE_LIMIT_BURST` | `--rate-limit-burst` | `40`            | `40`           |
+| Setting         | Env var                       | Flag (HTTP mode)     | Default (stdio) | Default (HTTP) |
+| --------------- | ----------------------------- | -------------------- | --------------- | -------------- |
+| Requests/second | `GITLAB_MCP_RATE_LIMIT_RPS`   | `--rate-limit-rps`   | `0` (disabled)  | `10`           |
+| Burst capacity  | `GITLAB_MCP_RATE_LIMIT_BURST` | `--rate-limit-burst` | `40`            | `40`           |
 
 The defaults differ because the deployments differ. The MCP specification
 requires a server exposing tools to rate limit their invocation, and an HTTP
@@ -431,10 +431,10 @@ gated.
 The local limiter complements but does not replace:
 
 - GitLab's per-user rate limiter (primary defense).
-- HTTP-mode bounded server pool (`MAX_HTTP_CLIENTS`) which caps concurrency.
+- HTTP-mode bounded server pool (`GITLAB_MCP_MAX_HTTP_CLIENTS`) which caps concurrency.
 - Reverse-proxy/WAF policies in front of public deployments.
 
-Disable it by setting the value to `0` explicitly — `RATE_LIMIT_RPS=0` in stdio,
+Disable it by setting the value to `0` explicitly — `GITLAB_MCP_RATE_LIMIT_RPS=0` in stdio,
 `--rate-limit-rps=0` in HTTP mode. Omitting the flag no longer disables it in
 HTTP mode, where `10` is the default. No state is persisted between restarts.
 

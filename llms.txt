@@ -47,9 +47,9 @@ Configuration (environment variables, stdio mode):
 - GITLAB_URL: GitLab instance URL (default: `https://gitlab.com`; set for self-managed instances)
 - GITLAB_TOKEN: Personal Access Token (required)
 - GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)
-- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic
-- META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs
-- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)
+- GITLAB_MCP_TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic
+- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs
+- GITLAB_MCP_CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)
 - GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools
 
 Tool domains:
@@ -58,14 +58,14 @@ Access, Admin, Branch, CI Catalog, CI Variable, Custom Emoji, Discover Project, 
 
 Dynamic toolset (default mode):
 
-When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_action while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.
+When GITLAB_MCP_TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_action while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set GITLAB_MCP_TOOL_SURFACE=meta to use consolidated domain meta-tools instead.
 
 - gitlab_find_action: Search the local GitLab action catalog.
 - gitlab_execute_action: Execute one GitLab catalog action by canonical ID or alias.
 
 Meta-tool overview:
 
-When TOOL_SURFACE=meta, 32 domain meta-tools are registered instead of
+When GITLAB_MCP_TOOL_SURFACE=meta, 32 domain meta-tools are registered instead of
 up to 1071 individual tools. Enterprise/Premium entries register 49 meta-tools on self-managed GitLab,
 or 50 on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single
 tool with an "action" parameter. Key meta-tools:

@@ -4,17 +4,17 @@ description: Seis herramientas MCP de solo lectura para la API experimental Know
 datePublished: "2026-05-06"
 faq:
   - q: "¿Qué es Orbit en GitLab MCP Server?"
-    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el catálogo Enterprise/Premium está habilitado con Ultimate: sus seis acciones son las entradas orbit.* del catálogo en la superficie dinámica predeterminada, la meta-herramienta gitlab_orbit con TOOL_SURFACE=meta o seis herramientas gitlab_orbit_* con TOOL_SURFACE=individual."
+    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el catálogo Enterprise/Premium está habilitado con Ultimate: sus seis acciones son las entradas orbit.* del catálogo en la superficie dinámica predeterminada, la meta-herramienta gitlab_orbit con GITLAB_MCP_TOOL_SURFACE=meta o seis herramientas gitlab_orbit_* con GITLAB_MCP_TOOL_SURFACE=individual."
   - q: "¿Orbit está disponible en GitLab autoalojado?"
     a: "No. Orbit solo está disponible cuando GitLab MCP Server se conecta a `https://gitlab.com`. Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado, porque la API experimental Knowledge Graph subyacente está alojada en GitLab.com. No existe ningún flag que añada Orbit a una conexión autoalojada."
   - q: "¿Qué licencia y configuración requiere Orbit?"
-    a: "Orbit requiere GitLab Ultimate en una conexión a GitLab.com. Actívalo con `GITLAB_TIER=ultimate` en modo stdio o `--tier=ultimate` en modo HTTP. La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue funcionando en modo stdio como alternativa, pero está deprecada; el modo HTTP solo lee `--tier`. Cuando se cumplen estas condiciones, las seis acciones de Orbit están disponibles como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` en la superficie dinámica predeterminada, como la meta-herramienta `gitlab_orbit` con `TOOL_SURFACE=meta`, o como seis herramientas `gitlab_orbit_*` con `TOOL_SURFACE=individual`."
+    a: "Orbit requiere GitLab Ultimate en una conexión a GitLab.com. Actívalo con `GITLAB_TIER=ultimate` en modo stdio o `--tier=ultimate` en modo HTTP. La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue funcionando en modo stdio como alternativa, pero está deprecada; el modo HTTP solo lee `--tier`. Cuando se cumplen estas condiciones, las seis acciones de Orbit están disponibles como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` en la superficie dinámica predeterminada, como la meta-herramienta `gitlab_orbit` con `GITLAB_MCP_TOOL_SURFACE=meta`, o como seis herramientas `gitlab_orbit_*` con `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "¿Orbit es de solo lectura?"
     a: "Sí. Las seis herramientas Orbit son de solo lectura. `status`, `schema`, `tools`, `dsl` y `graph_status` solo inspeccionan salud, ontología, manifiesto, DSL y estado de indexación, y `query` ejecuta objetos de consulta de solo lectura sobre el Knowledge Graph contra el índice. Ninguna acción de Orbit modifica datos de GitLab, así que Orbit es seguro de exponer incluso en despliegues cautelosos."
   - q: "¿Cuáles son las cuatro variantes de query_type de Orbit?"
     a: "La acción `query` acepta un objeto JSON de consulta cuyo `query_type` selecciona una de cuatro variantes: **traversal** (recorrer nodos por entity, `node_ids`, `filters` o `id_range`), **aggregation** (agrupar y agregar sobre nodos), **neighbors** (expandir los vecinos de un nodo acotado) y **path_finding** (encontrar caminos entre dos o más nodos acotados, con `max_depth` de 1 a 3). Las cuatro comparten el único discriminador `query_type` y solo divergen en sus claves hermanas."
   - q: "¿Cómo conozco los parámetros exactos de una acción Orbit?"
-    a: 'En la superficie dinámica predeterminada, `gitlab_find_action` con una consulta como "orbit query" devuelve el schema exacto de `params` inline; el mismo schema se puede leer como el recurso `gitlab://tools/orbit.query` (`gitlab://tools/gitlab_orbit.query` con `TOOL_SURFACE=meta`). Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` y en cualquier modo de `META_PARAM_SCHEMA`. También puedes ejecutar la acción `tools` para obtener el manifiesto vivo de consultas servido por GitLab.com antes de construir una consulta.'
+    a: 'En la superficie dinámica predeterminada, `gitlab_find_action` con una consulta como "orbit query" devuelve el schema exacto de `params` inline; el mismo schema se puede leer como el recurso `gitlab://tools/orbit.query` (`gitlab://tools/gitlab_orbit.query` con `GITLAB_MCP_TOOL_SURFACE=meta`). Estos recursos siguen disponibles con `GITLAB_MCP_CAPABILITY_SURFACE=full` o `minimal` y en cualquier modo de `GITLAB_MCP_META_PARAM_SCHEMA`. También puedes ejecutar la acción `tools` para obtener el manifiesto vivo de consultas servido por GitLab.com antes de construir una consulta.'
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
@@ -27,7 +27,7 @@ Para la referencia generada completa, consulta [`docs/tools/orbit.md`](https://g
 
 ## ¿Cuándo está disponible Orbit?
 
-Orbit solo se registra en conexiones a GitLab.com Ultimate. Requiere el host `https://gitlab.com` **y** el catálogo Enterprise/Premium habilitado con Ultimate. En la superficie dinámica predeterminada sus seis acciones son las entradas `orbit.*` del catálogo, accesibles con `gitlab_find_action` y `gitlab_execute_action`; con `TOOL_SURFACE=meta` es la única herramienta `gitlab_orbit` con seis acciones; con `TOOL_SURFACE=individual` son seis herramientas `gitlab_orbit_*`. Todas las herramientas Orbit son de solo lectura.
+Orbit solo se registra en conexiones a GitLab.com Ultimate. Requiere el host `https://gitlab.com` **y** el catálogo Enterprise/Premium habilitado con Ultimate. En la superficie dinámica predeterminada sus seis acciones son las entradas `orbit.*` del catálogo, accesibles con `gitlab_find_action` y `gitlab_execute_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` es la única herramienta `gitlab_orbit` con seis acciones; con `GITLAB_MCP_TOOL_SURFACE=individual` son seis herramientas `gitlab_orbit_*`. Todas las herramientas Orbit son de solo lectura.
 
 | Requisito                            | Valor                                               |
 | ------------------------------------ | --------------------------------------------------- |
@@ -57,7 +57,7 @@ El nombre de la acción es lo que la meta-herramienta `gitlab_orbit` recibe en `
 
 El flujo típico de Orbit descubre primero el esquema vivo y luego ejecuta una consulta tipada —nunca al revés—, porque la ontología y el DSL que sirve GitLab.com pueden cambiar. Confirma que el servicio está activo con `status`, inspecciona el grafo con `schema`, obtén el manifiesto vivo de consultas con `tools`, opcionalmente recupera la gramática DSL con `dsl`, y luego envía un objeto de consulta a `query`.
 
-1. Ejecuta la acción `status` (`gitlab_execute_action` con `action: "orbit.status"` en la superficie predeterminada; `gitlab_orbit` con `action: "status"` cuando `TOOL_SURFACE=meta`) para confirmar que el servicio está disponible.
+1. Ejecuta la acción `status` (`gitlab_execute_action` con `action: "orbit.status"` en la superficie predeterminada; `gitlab_orbit` con `action: "status"` cuando `GITLAB_MCP_TOOL_SURFACE=meta`) para confirmar que el servicio está disponible.
 2. Ejecuta `schema` para inspeccionar dominios, nodos y relaciones del grafo.
 3. Ejecuta `tools` antes de `query` para obtener el schema vivo de consultas servido por GitLab.com.
 4. (Opcional) Ejecuta `dsl` para obtener el esquema DSL o gramática LLM de Orbit.
@@ -105,7 +105,7 @@ sequenceDiagram
     MCP-->>LLM: resultado + markdown
 ```
 
-Los ejemplos siguientes usan la superficie dinámica predeterminada; con `TOOL_SURFACE=meta` llama a `gitlab_orbit` en lugar de `gitlab_execute_action` y quita el prefijo `orbit.` de `action`.
+Los ejemplos siguientes usan la superficie dinámica predeterminada; con `GITLAB_MCP_TOOL_SURFACE=meta` llama a `gitlab_orbit` en lugar de `gitlab_execute_action` y quita el prefijo `orbit.` de `action`.
 
 ### Ejemplo: Comprobar estado de Orbit
 
@@ -240,7 +240,7 @@ Devuelve el estado de indexación del grafo para un namespace, proyecto o ruta. 
 
 ## ¿Cómo descubro los schemas de consulta?
 
-En cualquier superficie, los schemas de parámetros por acción están disponibles como recursos MCP, así que puedes conocer la forma exacta de `params` de cada acción Orbit sin expandir todos los schemas en `tools/list`; en la superficie dinámica `gitlab_find_action` devuelve el mismo schema inline. Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` en cualquier modo de `META_PARAM_SCHEMA`. La tabla lista los IDs de la superficie predeterminada; con `TOOL_SURFACE=meta` la entrada es `gitlab://tools/gitlab_orbit.<acción>`.
+En cualquier superficie, los schemas de parámetros por acción están disponibles como recursos MCP, así que puedes conocer la forma exacta de `params` de cada acción Orbit sin expandir todos los schemas en `tools/list`; en la superficie dinámica `gitlab_find_action` devuelve el mismo schema inline. Estos recursos siguen disponibles con `GITLAB_MCP_CAPABILITY_SURFACE=full` o `minimal` en cualquier modo de `GITLAB_MCP_META_PARAM_SCHEMA`. La tabla lista los IDs de la superficie predeterminada; con `GITLAB_MCP_TOOL_SURFACE=meta` la entrada es `gitlab://tools/gitlab_orbit.<acción>`.
 
 | Recurso                             | Propósito                                            |
 | ----------------------------------- | ---------------------------------------------------- |

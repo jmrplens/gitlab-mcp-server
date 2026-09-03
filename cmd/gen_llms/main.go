@@ -287,9 +287,9 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: `%s`; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
-	b.WriteString("- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic\n")
-	b.WriteString("- META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs\n")
-	b.WriteString("- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)\n")
+	b.WriteString("- GITLAB_MCP_TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic\n")
+	b.WriteString("- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs\n")
+	b.WriteString("- GITLAB_MCP_CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)\n")
 	b.WriteString("- GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n\n")
 
 	b.WriteString("Tool domains:\n\n")
@@ -297,7 +297,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString(".\n\n")
 
 	b.WriteString("Dynamic toolset (default mode):\n\n")
-	b.WriteString("When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_action while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.\n\n")
+	b.WriteString("When GITLAB_MCP_TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_action while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set GITLAB_MCP_TOOL_SURFACE=meta to use consolidated domain meta-tools instead.\n\n")
 	for _, t := range catalog.Dynamic {
 		desc := firstSentence(t.Description)
 		desc = truncateRunes(desc, 80)
@@ -306,7 +306,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("\n")
 
 	b.WriteString("Meta-tool overview:\n\n")
-	fmt.Fprintf(&b, "When TOOL_SURFACE=meta, %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
+	fmt.Fprintf(&b, "When GITLAB_MCP_TOOL_SURFACE=meta, %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
 	fmt.Fprintf(&b, "up to %d individual tools. Enterprise/Premium entries register %d meta-tools on self-managed GitLab,\n", len(catalog.Individual), len(catalog.MetaEnterprise))
 	fmt.Fprintf(&b, "or %d on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single\n", len(catalog.MetaGitLabComEnterprise))
 	b.WriteString("tool with an \"action\" parameter. Key meta-tools:\n\n")
@@ -588,7 +588,7 @@ func writeLLMSCompanions(version string, catalog llmsCatalog, resourceCount int,
 // takes the file from ~750K tokens to something a model can hold.
 func writeLLMSMediumMetaTools(b *strings.Builder, catalog llmsCatalog) {
 	b.WriteString("## Meta-Tools\n\n")
-	b.WriteString("Enabled with `TOOL_SURFACE=meta`. Each groups related operations under a single tool with an `action` parameter.\n\n")
+	b.WriteString("Enabled with `GITLAB_MCP_TOOL_SURFACE=meta`. Each groups related operations under a single tool with an `action` parameter.\n\n")
 	all := append([]*mcp.Tool{}, catalog.MetaBase...)
 	all = append(all, enterpriseOnlyMetaTools(catalog.MetaBase, catalog.MetaGitLabComEnterprise)...)
 	for _, tool := range all {
@@ -613,7 +613,7 @@ func writeLLMSMediumMetaTools(b *strings.Builder, catalog llmsCatalog) {
 // tool, which is enough to know an operation exists and what it is called.
 func writeLLMSMediumIndividualTools(b *strings.Builder, catalog llmsCatalog) {
 	b.WriteString("## Individual Tools\n\n")
-	fmt.Fprintf(b, "Enabled with `TOOL_SURFACE=individual`: %d tools, one per operation.\n\n", len(catalog.Individual))
+	fmt.Fprintf(b, "Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: %d tools, one per operation.\n\n", len(catalog.Individual))
 	for _, tool := range catalog.Individual {
 		desc := truncateRunes(firstSentence(tool.Description), 160)
 		fmt.Fprintf(b, llmsSummaryItemFormat, tool.Name, desc)
@@ -623,7 +623,7 @@ func writeLLMSMediumIndividualTools(b *strings.Builder, catalog llmsCatalog) {
 
 func writeLLMSFullMetaTools(b *strings.Builder, catalog llmsCatalog) {
 	b.WriteString("## Meta-Tools\n\n")
-	b.WriteString("Meta-tools are enabled with `TOOL_SURFACE=meta`. Each groups related\n")
+	b.WriteString("Meta-tools are enabled with `GITLAB_MCP_TOOL_SURFACE=meta`. Each groups related\n")
 	b.WriteString("operations under a single tool with an `action` parameter.\n\n")
 	for _, tool := range catalog.MetaBase {
 		writeLLMSFullMetaTool(b, tool, catalog.MetaRoutes)
@@ -673,7 +673,7 @@ func writeLLMSFullMetaTool(b *strings.Builder, tool *mcp.Tool, routesByTool map[
 
 func writeLLMSFullIndividualTools(b *strings.Builder, catalog llmsCatalog) {
 	b.WriteString("## Individual Tools\n\n")
-	fmt.Fprintf(b, "When `TOOL_SURFACE=individual`, up to %d individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers %d.\n", len(catalog.Individual), len(catalog.IndividualSelfManaged))
+	fmt.Fprintf(b, "When `GITLAB_MCP_TOOL_SURFACE=individual`, up to %d individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers %d.\n", len(catalog.Individual), len(catalog.IndividualSelfManaged))
 	b.WriteString("Grouped by domain:\n\n")
 	for _, domain := range sortedDomains(catalog.Individual) {
 		domainTools := groupByDomain(catalog.Individual)[domain]
@@ -725,7 +725,7 @@ func compactToolDescription(description string) string {
 
 func writeLLMSFullDynamicTools(b *strings.Builder, dynamicTools []*mcp.Tool) {
 	b.WriteString("## Dynamic Toolset\n\n")
-	b.WriteString("Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
+	b.WriteString("Dynamic mode is the default when `GITLAB_MCP_TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `GITLAB_MCP_TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
 	for _, tool := range dynamicTools {
 		fmt.Fprintf(b, toolutil.FmtMdH3, tool.Name)
 		if tool.Title != "" {

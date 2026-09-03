@@ -6,7 +6,7 @@ faq:
   - q: "What can I do with GitLab MCP Server?"
     a: 'GitLab MCP Server lets an AI assistant drive GitLab through natural language across eight common workflows: code review, CI/CD automation, issue management, release management, team management, code search, reports and analytics, and security review. Instead of switching to the GitLab web UI, you describe the outcome — for example, _"Summarize the changes in MR !42 and check for security issues"_ — and the assistant calls the matching GitLab tools, executes them, and returns the result. Every workflow maps to real GitLab REST and GraphQL operations exposed as MCP tools.'
   - q: "Can GitLab MCP Server review merge requests and leave comments?"
-    a: 'Yes. The code review workflow uses the `merge_request` and `mr_review` action domains (the `gitlab_merge_request` and `gitlab_mr_review` meta-tools when `TOOL_SURFACE=meta`; on the default dynamic surface the assistant reaches the same actions through `gitlab_find_action` and `gitlab_execute_action`) so an assistant can list MRs awaiting review, summarize diffs, run a security pass, post review comments, and approve. A typical conversation is: _"Show open MRs in my-app that need review"_, then _"Summarize the changes in MR !42"_, _"Check MR !42 for security issues"_, _"Leave a comment suggesting input validation"_, and _"Approve MR !42"_. Each step is a separate tool call against the GitLab API.'
+    a: 'Yes. The code review workflow uses the `merge_request` and `mr_review` action domains (the `gitlab_merge_request` and `gitlab_mr_review` meta-tools when `GITLAB_MCP_TOOL_SURFACE=meta`; on the default dynamic surface the assistant reaches the same actions through `gitlab_find_action` and `gitlab_execute_action`) so an assistant can list MRs awaiting review, summarize diffs, run a security pass, post review comments, and approve. A typical conversation is: _"Show open MRs in my-app that need review"_, then _"Summarize the changes in MR !42"_, _"Check MR !42 for security issues"_, _"Leave a comment suggesting input validation"_, and _"Approve MR !42"_. Each step is a separate tool call against the GitLab API.'
   - q: "How does GitLab MCP Server help debug CI/CD pipelines?"
     a: 'The CI/CD workflow uses the `pipeline`, `job`, and `ci_variable` domains (`gitlab_pipeline`, `gitlab_job`, and `gitlab_ci_variable` on the meta surface) to inspect and recover failing pipelines without leaving the editor. You can ask for the latest pipeline status, list the failed jobs in a specific pipeline, retrieve a job''s logs to find the error, check the project''s CI variables, and retry failed jobs. For example, _"Why did the last pipeline fail on branch feature/auth?"_ returns the failing stage and job so the assistant can explain the error and suggest a fix.'
   - q: "Can GitLab MCP Server generate reports and release notes?"
@@ -20,7 +20,7 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
 
 ## Workflows
 
-Each card names the catalog domains it uses. On the default dynamic surface the assistant finds and runs their actions through `gitlab_find_action` and `gitlab_execute_action`; with `TOOL_SURFACE=meta` each domain is a `gitlab_<domain>` meta-tool.
+Each card names the catalog domains it uses. On the default dynamic surface the assistant finds and runs their actions through `gitlab_find_action` and `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` each domain is a `gitlab_<domain>` meta-tool.
 
 <CardGrid>
  <Card title="🔀 Code Review" icon="pencil">

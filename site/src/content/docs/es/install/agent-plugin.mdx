@@ -46,7 +46,7 @@ Docker publicada, así que Docker tiene que estar instalado y en ejecución:
         "-e", "GITLAB_URL",
         "-e", "GITLAB_TOKEN",
         "-e", "GITLAB_SKIP_TLS_VERIFY",
-        "-e", "TOOL_SURFACE",
+        "-e", "GITLAB_MCP_TOOL_SURFACE",
         "ghcr.io/jmrplens/gitlab-mcp-server:latest"
       ]
     }
@@ -55,12 +55,12 @@ Docker publicada, así que Docker tiene que estar instalado y en ejecución:
 ```
 
 El archivo real reenvía una lista más larga con el mismo patrón `-e NOMBRE`:
-`GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`,
-`CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_TIER`,
+`GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`,
+`GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_TIER`,
 `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`,
-`EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`,
-`GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`,
-`CLIENT_COMPAT` y `LOG_LEVEL`. Un `-e NOMBRE` a secas copia la variable al
+`GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`,
+`GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`,
+`GITLAB_MCP_CLIENT_COMPAT` y `GITLAB_MCP_LOG_LEVEL`. Un `-e NOMBRE` a secas copia la variable al
 contenedor desde el entorno en el que corre el propio `docker`, y solo
 cuando está definida ahí, así que las que no definas no cuestan nada. Solo
 `GITLAB_TOKEN` es obligatoria; `GITLAB_URL` usa por defecto

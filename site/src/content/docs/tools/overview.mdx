@@ -154,7 +154,7 @@ Every mode is projected from one **canonical action catalog**. That gives all th
 | **Meta-tool**           | {stats.meta.base} base domain tools (more with Enterprise) | A fixed, discoverable, domain-level tool list | Medium              |
 | **Individual**          | {stats.tools.free}–{stats.tools.gitlab_com} tools          | Clients that need every operation pre-listed  | Highest             |
 
-Set the mode with the `TOOL_SURFACE` environment variable (`dynamic`, `meta`, or `individual`). Dynamic mode is used when `TOOL_SURFACE` is unset.
+Set the mode with the `GITLAB_MCP_TOOL_SURFACE` environment variable (`dynamic`, `meta`, or `individual`). Dynamic mode is used when `GITLAB_MCP_TOOL_SURFACE` is unset.
 
 ## Operating modes
 
@@ -167,7 +167,7 @@ Individual mode registers **one MCP tool per GitLab operation**: **{stats.tools.
 		one visible MCP tool per GitLab operation, each with its own typed input
 		and output schema — the whole catalog, flat.
 	</Fact>
-	<Fact kind="requires">`TOOL_SURFACE=individual` (or legacy `META_TOOLS=false`), and a client with the context budget to hold the full tool list.</Fact>
+	<Fact kind="requires">`GITLAB_MCP_TOOL_SURFACE=individual` (or legacy `GITLAB_MCP_META_TOOLS=false`), and a client with the context budget to hold the full tool list.</Fact>
 	<Fact kind="tier">
 		the tool count itself moves with the licence: Free/CE registers the base
 		catalog, Premium and Ultimate add their gated tools, and lower tiers
@@ -182,7 +182,7 @@ Individual mode registers **one MCP tool per GitLab operation**: **{stats.tools.
 
 ### How does meta-tool mode work?
 
-Meta-tool mode (`TOOL_SURFACE=meta`) consolidates related operations into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler, reducing the tool count to **{stats.meta.base} base meta-tools**, **{stats.meta.self_managed_enterprise} on self-managed Enterprise/Premium**, or **{stats.meta.gitlab_com} on GitLab.com Enterprise/Premium** when Orbit is available. This dramatically improves token efficiency over individual mode while keeping a fixed, browsable tool list.
+Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler, reducing the tool count to **{stats.meta.base} base meta-tools**, **{stats.meta.self_managed_enterprise} on self-managed Enterprise/Premium**, or **{stats.meta.gitlab_com} on GitLab.com Enterprise/Premium** when Orbit is available. This dramatically improves token efficiency over individual mode while keeping a fixed, browsable tool list.
 
 ```json
 {
@@ -205,7 +205,7 @@ Meta-tool mode (`TOOL_SURFACE=meta`) consolidates related operations into **doma
 		pipelines…), each routing an `action` parameter to the same handlers the
 		other surfaces use.
 	</Fact>
-	<Fact kind="requires">`TOOL_SURFACE=meta`. Per-action call shapes stay discoverable through `gitlab://tools` and `gitlab://tools/{id}` whatever `META_PARAM_SCHEMA` is set to.</Fact>
+	<Fact kind="requires">`GITLAB_MCP_TOOL_SURFACE=meta`. Per-action call shapes stay discoverable through `gitlab://tools` and `gitlab://tools/{id}` whatever `GITLAB_MCP_META_PARAM_SCHEMA` is set to.</Fact>
 	<Fact kind="tier">
 		Premium/Ultimate add dedicated enterprise meta-tools and inject
 		enterprise-only routes into `gitlab_project`, `gitlab_group` and
@@ -220,7 +220,7 @@ Meta-tool mode (`TOOL_SURFACE=meta`) consolidates related operations into **doma
 
 ### How does the dynamic toolset work?
 
-Dynamic mode (`TOOL_SURFACE=dynamic`) is the low-token default. It exposes only two public tools — `gitlab_find_action` and `gitlab_execute_action` (the singular `gitlab_execute_action` name is intentional) — while keeping every GitLab action reachable through the canonical catalog. The assistant first finds an action and its exact schema, then executes the canonical `domain.action` ID.
+Dynamic mode (`GITLAB_MCP_TOOL_SURFACE=dynamic`) is the low-token default. It exposes only two public tools — `gitlab_find_action` and `gitlab_execute_action` (the singular `gitlab_execute_action` name is intentional) — while keeping every GitLab action reachable through the canonical catalog. The assistant first finds an action and its exact schema, then executes the canonical `domain.action` ID.
 
 ```mermaid
 flowchart LR
@@ -236,7 +236,7 @@ Because all three modes share the canonical action catalog, **safety behavior st
 		the full canonical catalog: find returns exact schemas, execute runs the
 		canonical `domain.action`.
 	</Fact>
-	<Fact kind="requires">nothing: it is the default when `TOOL_SURFACE` is unset. `CAPABILITY_SURFACE=minimal` shrinks the shared resource/prompt footprint further.</Fact>
+	<Fact kind="requires">nothing: it is the default when `GITLAB_MCP_TOOL_SURFACE` is unset. `GITLAB_MCP_CAPABILITY_SURFACE=minimal` shrinks the shared resource/prompt footprint further.</Fact>
 	<Fact kind="tier">
 		invisible in `tools/list` (always two tools) but real in reach: find
 		only surfaces, and execute only accepts, the actions the resolved tier

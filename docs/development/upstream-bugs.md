@@ -504,7 +504,7 @@ reach it: the header check rejects a `_meta`-only version with `-32020`, and
   so the server was unusable from Codex rather than degraded.
 - **Workaround**: yes, and it is load-bearing. `internal/clientcompat` detects
   Codex from `clientInfo` and rounds annotation priorities to 0 or 1, which is
-  spec-legal and parseable by both. `CLIENT_COMPAT=off` disables it. Retire it
+  spec-legal and parseable by both. `GITLAB_MCP_CLIENT_COMPAT=off` disables it. Retire it
   only once the fixed Codex is widely deployed, not merely released: the
   affected build ships inside ChatGPT.app, so users do not choose their version.
 

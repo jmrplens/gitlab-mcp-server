@@ -29,7 +29,7 @@ The May 2026 MCP ecosystem now includes stronger patterns for very large API sur
 - Solo.io Agentgateway and Bifrost demonstrate gateway-side progressive disclosure and code-mode execution.
 - MCP protocol proposals and SEP discussions point toward lazy schema hydration and scope-filtered discovery.
 
-Local research on this repository shows that `META_PARAM_SCHEMA=compact` and `META_PARAM_SCHEMA=full` increase upfront
+Local research on this repository shows that `GITLAB_MCP_META_PARAM_SCHEMA=compact` and `GITLAB_MCP_META_PARAM_SCHEMA=full` increase upfront
 input schema cost by 6.5x and 12.2x respectively versus opaque mode. The next major reduction therefore requires a smaller
 directly exposed tool surface and model-controlled discovery, not a larger upfront schema.
 
@@ -91,14 +91,14 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ### Compact Or Full Meta Schemas By Default
 
-- **ALT-009**: **Description**: Use `META_PARAM_SCHEMA=compact` or `META_PARAM_SCHEMA=full` as the default.
+- **ALT-009**: **Description**: Use `GITLAB_MCP_META_PARAM_SCHEMA=compact` or `GITLAB_MCP_META_PARAM_SCHEMA=full` as the default.
 - **ALT-010**: **Rejection Reason**: Local audits show these modes increase upfront input schema size by 6.5x and 12.2x
   respectively.
 
 ## Implementation Notes
 
-- **IMP-001**: Add the dynamic toolset behind the explicit `TOOL_SURFACE=dynamic`
-  selector. Legacy `META_TOOLS=true|false` remains only as a compatibility fallback when `TOOL_SURFACE` is absent.
+- **IMP-001**: Add the dynamic toolset behind the explicit `GITLAB_MCP_TOOL_SURFACE=dynamic`
+  selector. Legacy `GITLAB_MCP_META_TOOLS=true|false` remains only as a compatibility fallback when `GITLAB_MCP_TOOL_SURFACE` is absent.
 - **IMP-002**: Build the dynamic action view from the canonical action catalog shared with meta-tools, then apply
   enterprise, GitLab.com, exclude-tools, token-scope, read-only, and safe-mode behavior without constructing a separate
   MCP server.

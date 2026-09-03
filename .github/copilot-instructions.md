@@ -89,7 +89,7 @@ gitlab-mcp-server/
 - Register runtime surfaces from the canonical action catalog only; ordinary GitLab actions must not add package-local `RegisterTools` functions or package-level meta registration paths
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
-- Dynamic mode (`TOOL_SURFACE=dynamic`) exposes `gitlab_find_action` and `gitlab_execute_action` over the canonical action catalog shared with meta-tools. It is the default tool surface; set `TOOL_SURFACE=meta` for consolidated domain meta-tools.
+- Dynamic mode (`GITLAB_MCP_TOOL_SURFACE=dynamic`) exposes `gitlab_find_action` and `gitlab_execute_action` over the canonical action catalog shared with meta-tools. It is the default tool surface; set `GITLAB_MCP_TOOL_SURFACE=meta` for consolidated domain meta-tools.
 - When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic find/execute, `gitlab://tools` resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
 - For the detailed developer architecture of individual tools, meta-tools, dynamic mode, and the canonical action core, see `docs/development/tool-surfaces-and-action-core.md`.
 
@@ -222,10 +222,10 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_URL`             | GitLab instance URL. In HTTP mode, optional via `--gitlab-url`; when set it fixes the GitLab instance, and when omitted clients must send `GITLAB-URL` per request | `https://gitlab.example.com` |
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
-| `META_TOOLS`             | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs | _(unset)_          |
-| `TOOL_SURFACE`           | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; overrides legacy `META_TOOLS` | `dynamic` (default when unset) |
-| `CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
-| `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
+| `GITLAB_MCP_META_TOOLS`             | Deprecated compatibility selector; prefer `GITLAB_MCP_TOOL_SURFACE` for new configs | _(unset)_          |
+| `GITLAB_MCP_TOOL_SURFACE`           | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; overrides legacy `GITLAB_MCP_META_TOOLS` | `dynamic` (default when unset) |
+| `GITLAB_MCP_CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
+| `GITLAB_MCP_META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `GITLAB_MCP_META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |
 | `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating tools and returns a JSON preview | `false` (default)  |
 | `GITLAB_ENTERPRISE`      | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset (`true` → `ultimate`, `false` → `free`); logs a deprecation warning | `false` (default) |
@@ -234,12 +234,12 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `EVAL_SURFACE_CASE_SET`   | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (CE only), `all` (CE+Enterprise) | `ce` (default)     |
 | `EVAL_SURFACE_FIXTURE_SMOKE` | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) | `false` (default) |
 | `--max-output-retries`   | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output | `2` (default)      |
-| `MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
+| `GITLAB_MCP_MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |
-| `RATE_LIMIT_RPS`         | Per-server tools/call rate limit in req/s (also `--rate-limit-rps` flag; `0` = disabled) | `0` (default)    |
-| `RATE_LIMIT_BURST`       | Token-bucket burst size when RPS > 0 (also `--rate-limit-burst` flag) | `40` (default)   |
-| `AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
-| `OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
+| `GITLAB_MCP_RATE_LIMIT_RPS`         | Per-server tools/call rate limit in req/s (also `--rate-limit-rps` flag; `0` = disabled) | `0` (default)    |
+| `GITLAB_MCP_RATE_LIMIT_BURST`       | Token-bucket burst size when RPS > 0 (also `--rate-limit-burst` flag) | `40` (default)   |
+| `GITLAB_MCP_AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
+| `GITLAB_MCP_OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
 
 **HTTP-only flags** (no environment variable equivalent):
 

@@ -24,13 +24,13 @@ The {stats.capabilities} capabilities are negotiated during the MCP initializati
 
 GitLab MCP Server provides five distinct features, summarized below. Progress and elicitation push information from the server to the client, completions pull suggestions from the server on demand, subscriptions notify the client when a watched resource changes, and icons are static metadata attached to every surface.
 
-| Capability                                                      | Direction                                 | What It Enables                                                                                             |
-| --------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| [Progress](/gitlab-mcp-server/capabilities/progress/)           | Server → Client                           | Real-time progress updates for long-running operations                                                      |
-| [Elicitation](/gitlab-mcp-server/capabilities/elicitation/)     | Server → Client                           | Interactive wizards — step-by-step forms for creating complex resources                                     |
-| [Completions](/gitlab-mcp-server/capabilities/completions/)     | Client → Server                           | Argument autocompletion for project names, branches, users, and more                                        |
-| [Subscriptions](/gitlab-mcp-server/capabilities/subscriptions/) | Client → Server (updates Server → Client) | Live change notifications for 26 GitLab resource kinds, honored by polling (`CAPABILITY_SURFACE=full` only) |
-| [Icons](/gitlab-mcp-server/capabilities/icons/) _(metadata)_    | Server → Client                           | Icons for every tool, resource, and prompt — SVG plus light/dark WebP fallbacks                             |
+| Capability                                                      | Direction                                 | What It Enables                                                                                                        |
+| --------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [Progress](/gitlab-mcp-server/capabilities/progress/)           | Server → Client                           | Real-time progress updates for long-running operations                                                                 |
+| [Elicitation](/gitlab-mcp-server/capabilities/elicitation/)     | Server → Client                           | Interactive wizards — step-by-step forms for creating complex resources                                                |
+| [Completions](/gitlab-mcp-server/capabilities/completions/)     | Client → Server                           | Argument autocompletion for project names, branches, users, and more                                                   |
+| [Subscriptions](/gitlab-mcp-server/capabilities/subscriptions/) | Client → Server (updates Server → Client) | Live change notifications for 26 GitLab resource kinds, honored by polling (`GITLAB_MCP_CAPABILITY_SURFACE=full` only) |
+| [Icons](/gitlab-mcp-server/capabilities/icons/) _(metadata)_    | Server → Client                           | Icons for every tool, resource, and prompt — SVG plus light/dark WebP fallbacks                                        |
 
 ## How are MCP capabilities negotiated?
 

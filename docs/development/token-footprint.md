@@ -12,55 +12,55 @@ Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) vi
 
 ## What each column means
 
-| Column                 | Description                                                                                                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Configuration**      | The `TOOL_SURFACE` / `CAPABILITY_SURFACE` combination. `dynamic` = find/execute (default); `meta` = domain-grouped dispatchers; `individual` = one tool per action.                       |
-| **Tier**               | The GitLab licensing tier: Free/CE, Premium, or Ultimate. Higher tiers expose more actions.                                                                                               |
-| **Visible tools**      | How many MCP tool definitions the client receives at startup.                                                                                                                             |
-| **Reachable actions**  | How many distinct GitLab API actions the client can drive (may exceed visible tools in meta/dynamic mode via action routing).                                                             |
-| **META_PARAM_SCHEMA**  | How meta-tool input schemas are generated: `opaque` (action enum + params:any, default), `compact` (property names + types only), `full` (full per-action schema with descriptions).      |
-| **Tool schema tokens** | Token cost of the visible tool definitions (InputSchema, annotations, description).                                                                                                       |
-| **Shared tokens**      | Token cost of MCP resources (`gitlab://tools`, templates, workflow guides) and prompt templates. `full` = all resources; `minimal` = only `gitlab://tools` for on-demand schema browsing. |
-| **Total tokens**       | Tool schema tokens + shared tokens. This is the approximate startup context-window cost.                                                                                                  |
+| Column                           | Description                                                                                                                                                                               |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Configuration**                | The `GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE` combination. `dynamic` = find/execute (default); `meta` = domain-grouped dispatchers; `individual` = one tool per action. |
+| **Tier**                         | The GitLab licensing tier: Free/CE, Premium, or Ultimate. Higher tiers expose more actions.                                                                                               |
+| **Visible tools**                | How many MCP tool definitions the client receives at startup.                                                                                                                             |
+| **Reachable actions**            | How many distinct GitLab API actions the client can drive (may exceed visible tools in meta/dynamic mode via action routing).                                                             |
+| **GITLAB_MCP_META_PARAM_SCHEMA** | How meta-tool input schemas are generated: `opaque` (action enum + params:any, default), `compact` (property names + types only), `full` (full per-action schema with descriptions).      |
+| **Tool schema tokens**           | Token cost of the visible tool definitions (InputSchema, annotations, description).                                                                                                       |
+| **Shared tokens**                | Token cost of MCP resources (`gitlab://tools`, templates, workflow guides) and prompt templates. `full` = all resources; `minimal` = only `gitlab://tools` for on-demand schema browsing. |
+| **Total tokens**                 | Tool schema tokens + shared tokens. This is the approximate startup context-window cost.                                                                                                  |
 
 ## Full matrix
 
 All measurements are against the current source tree. The catalog is built in-memory with a mock GitLab client; no network calls are made.
 
-| Configuration                | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
-| ---------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default) | Free/CE  |             2 |               851 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`        | Free/CE  |             2 |               851 | n/a                 |              1,501 |           170 |        1,671 |
-| `meta` / `full` (opaque)     | Free/CE  |            33 |               851 | `opaque`            |            124,764 |         8,832 |      133,596 |
-| `meta` / `minimal` (opaque)  | Free/CE  |            33 |               851 | `opaque`            |            124,764 |           170 |      124,934 |
-| `meta` / `full` (compact)    | Free/CE  |            33 |               851 | `compact`           |            190,359 |         8,832 |      199,191 |
-| `meta` / `minimal` (compact) | Free/CE  |            33 |               851 | `compact`           |            190,359 |           170 |      190,529 |
-| `meta` / `full` (full)       | Free/CE  |            33 |               851 | `full`              |            278,010 |         8,832 |      286,842 |
-| `meta` / `minimal` (full)    | Free/CE  |            33 |               851 | `full`              |            278,010 |           170 |      278,180 |
-| `individual` / `full`        | Free/CE  |           847 |               847 | n/a                 |            494,352 |         8,832 |      503,184 |
-| `dynamic` / `full` (default) | Premium  |             2 |             1,003 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`        | Premium  |             2 |             1,003 | n/a                 |              1,501 |           170 |        1,671 |
-| `meta` / `full` (opaque)     | Premium  |            39 |             1,003 | `opaque`            |            144,024 |         8,832 |      152,856 |
-| `meta` / `minimal` (opaque)  | Premium  |            39 |             1,003 | `opaque`            |            144,024 |           170 |      144,194 |
-| `meta` / `full` (compact)    | Premium  |            39 |             1,003 | `compact`           |            221,031 |         8,832 |      229,863 |
-| `meta` / `minimal` (compact) | Premium  |            39 |             1,003 | `compact`           |            221,031 |           170 |      221,201 |
-| `meta` / `full` (full)       | Premium  |            39 |             1,003 | `full`              |            322,886 |         8,832 |      331,718 |
-| `meta` / `minimal` (full)    | Premium  |            39 |             1,003 | `full`              |            322,886 |           170 |      323,056 |
-| `individual` / `full`        | Premium  |           999 |               999 | n/a                 |            592,761 |         8,832 |      601,593 |
-| `dynamic` / `full` (default) | Ultimate |             2 |             1,069 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`        | Ultimate |             2 |             1,069 | n/a                 |              1,501 |           170 |        1,671 |
-| `meta` / `full` (opaque)     | Ultimate |            50 |             1,069 | `opaque`            |            155,938 |         8,832 |      164,770 |
-| `meta` / `minimal` (opaque)  | Ultimate |            50 |             1,069 | `opaque`            |            155,938 |           170 |      156,108 |
-| `meta` / `full` (compact)    | Ultimate |            50 |             1,069 | `compact`           |            237,366 |         8,832 |      246,198 |
-| `meta` / `minimal` (compact) | Ultimate |            50 |             1,069 | `compact`           |            237,366 |           170 |      237,536 |
-| `meta` / `full` (full)       | Ultimate |            50 |             1,069 | `full`              |            344,046 |         8,832 |      352,878 |
-| `meta` / `minimal` (full)    | Ultimate |            50 |             1,069 | `full`              |            344,046 |           170 |      344,216 |
-| `individual` / `full`        | Ultimate |         1,065 |             1,065 | n/a                 |            621,775 |         8,832 |      630,607 |
+| Configuration                | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
+| ---------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
+| `dynamic` / `full` (default) | Free/CE  |             2 |               851 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`        | Free/CE  |             2 |               851 | n/a                            |              1,501 |           170 |        1,671 |
+| `meta` / `full` (opaque)     | Free/CE  |            33 |               851 | `opaque`                       |            124,764 |         8,832 |      133,596 |
+| `meta` / `minimal` (opaque)  | Free/CE  |            33 |               851 | `opaque`                       |            124,764 |           170 |      124,934 |
+| `meta` / `full` (compact)    | Free/CE  |            33 |               851 | `compact`                      |            190,359 |         8,832 |      199,191 |
+| `meta` / `minimal` (compact) | Free/CE  |            33 |               851 | `compact`                      |            190,359 |           170 |      190,529 |
+| `meta` / `full` (full)       | Free/CE  |            33 |               851 | `full`                         |            278,010 |         8,832 |      286,842 |
+| `meta` / `minimal` (full)    | Free/CE  |            33 |               851 | `full`                         |            278,010 |           170 |      278,180 |
+| `individual` / `full`        | Free/CE  |           847 |               847 | n/a                            |            494,352 |         8,832 |      503,184 |
+| `dynamic` / `full` (default) | Premium  |             2 |             1,003 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`        | Premium  |             2 |             1,003 | n/a                            |              1,501 |           170 |        1,671 |
+| `meta` / `full` (opaque)     | Premium  |            39 |             1,003 | `opaque`                       |            144,024 |         8,832 |      152,856 |
+| `meta` / `minimal` (opaque)  | Premium  |            39 |             1,003 | `opaque`                       |            144,024 |           170 |      144,194 |
+| `meta` / `full` (compact)    | Premium  |            39 |             1,003 | `compact`                      |            221,031 |         8,832 |      229,863 |
+| `meta` / `minimal` (compact) | Premium  |            39 |             1,003 | `compact`                      |            221,031 |           170 |      221,201 |
+| `meta` / `full` (full)       | Premium  |            39 |             1,003 | `full`                         |            322,886 |         8,832 |      331,718 |
+| `meta` / `minimal` (full)    | Premium  |            39 |             1,003 | `full`                         |            322,886 |           170 |      323,056 |
+| `individual` / `full`        | Premium  |           999 |               999 | n/a                            |            592,761 |         8,832 |      601,593 |
+| `dynamic` / `full` (default) | Ultimate |             2 |             1,069 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`        | Ultimate |             2 |             1,069 | n/a                            |              1,501 |           170 |        1,671 |
+| `meta` / `full` (opaque)     | Ultimate |            50 |             1,069 | `opaque`                       |            155,938 |         8,832 |      164,770 |
+| `meta` / `minimal` (opaque)  | Ultimate |            50 |             1,069 | `opaque`                       |            155,938 |           170 |      156,108 |
+| `meta` / `full` (compact)    | Ultimate |            50 |             1,069 | `compact`                      |            237,366 |         8,832 |      246,198 |
+| `meta` / `minimal` (compact) | Ultimate |            50 |             1,069 | `compact`                      |            237,366 |           170 |      237,536 |
+| `meta` / `full` (full)       | Ultimate |            50 |             1,069 | `full`                         |            344,046 |         8,832 |      352,878 |
+| `meta` / `minimal` (full)    | Ultimate |            50 |             1,069 | `full`                         |            344,046 |           170 |      344,216 |
+| `individual` / `full`        | Ultimate |         1,065 |             1,065 | n/a                            |            621,775 |         8,832 |      630,607 |
 
 ## Interpretation guide
 
 - **Dynamic mode** (default) exposes only 2 tools (`gitlab_find_action` + `gitlab_execute_action`) but reaches all catalog actions via routing. This is the lowest-token surface.
-- **Meta mode** exposes one dispatcher per domain (e.g. `gitlab_branch`, `gitlab_issue`). The `META_PARAM_SCHEMA` controls whether the action parameter's schema is generic (`opaque`) or detailed (`compact`/`full`). `full` doubles the token cost vs `opaque` but gives the LLM exact per-action input shapes.
+- **Meta mode** exposes one dispatcher per domain (e.g. `gitlab_branch`, `gitlab_issue`). The `GITLAB_MCP_META_PARAM_SCHEMA` controls whether the action parameter's schema is generic (`opaque`) or detailed (`compact`/`full`). `full` doubles the token cost vs `opaque` but gives the LLM exact per-action input shapes.
 - **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface. Suitable only for clients with large context windows.
 - **Tier scaling**: Free/CE has the fewest actions. Premium adds enterprise features. Ultimate includes everything. The token cost scales with the number of available actions.
 - **Shared tokens** are dominated by MCP resources (`gitlab://tools` template, workflow guides) and prompts. The `minimal` capability surface strips these to just `gitlab://tools`, cutting shared overhead by ~90%%.

@@ -678,7 +678,7 @@ func printMetaSchemaModes(client *gitlabclient.Client) {
 	// GITLAB_TOKEN and would silently fall back to "opaque" if they are
 	// missing, misreporting the active mode in environments where this
 	// tool is invoked without full GitLab credentials (e.g., audits).
-	active := strings.ToLower(strings.TrimSpace(os.Getenv("META_PARAM_SCHEMA")))
+	active := strings.ToLower(config.TrimmedGetenv("META_PARAM_SCHEMA"))
 	switch active {
 	case config.MetaParamSchemaCompact, config.MetaParamSchemaFull, config.MetaParamSchemaOpaque:
 		// recognized — keep as-is

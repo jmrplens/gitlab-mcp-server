@@ -8,11 +8,11 @@ faq:
   - q: "Is Orbit available on self-managed GitLab?"
     a: "No. Orbit is available **only** when GitLab MCP Server connects to `https://gitlab.com`. Self-managed GitLab instances do not register Orbit tools, even when the Enterprise/Premium catalog is enabled, because the underlying experimental Knowledge Graph API is hosted on GitLab.com. There is no flag that adds Orbit to a self-managed connection."
   - q: "What license and configuration does Orbit require?"
-    a: "Orbit requires GitLab Ultimate on a GitLab.com connection. Enable it with `GITLAB_TIER=ultimate` in stdio mode or `--tier=ultimate` in HTTP mode. The legacy `GITLAB_ENTERPRISE=true` environment variable still works in stdio mode as a fallback but is deprecated; HTTP mode reads `--tier` only. When these conditions are met, Orbit's six actions are reachable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` and `orbit.graph_status` on the default dynamic surface, as the `gitlab_orbit` meta-tool with `TOOL_SURFACE=meta`, or as six `gitlab_orbit_*` tools with `TOOL_SURFACE=individual`."
+    a: "Orbit requires GitLab Ultimate on a GitLab.com connection. Enable it with `GITLAB_TIER=ultimate` in stdio mode or `--tier=ultimate` in HTTP mode. The legacy `GITLAB_ENTERPRISE=true` environment variable still works in stdio mode as a fallback but is deprecated; HTTP mode reads `--tier` only. When these conditions are met, Orbit's six actions are reachable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` and `orbit.graph_status` on the default dynamic surface, as the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or as six `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "Is Orbit read-only?"
     a: "Yes. All six Orbit tools are read-only. `status`, `schema`, `tools`, `dsl`, and `graph_status` only inspect health, ontology, manifest, DSL, and indexing state, and `query` runs read-only Knowledge Graph query objects against the index. No Orbit action mutates GitLab data, so Orbit is safe to expose even in cautious deployments."
   - q: "How do I learn the exact parameters for an Orbit action?"
-    a: 'On the default dynamic surface, `gitlab_find_action` with a query such as "orbit query" returns the exact `params` schema inline; the same schema is readable as the `gitlab://tools/orbit.query` resource (`gitlab://tools/gitlab_orbit.query` with `TOOL_SURFACE=meta`). These resources stay available with `CAPABILITY_SURFACE=full` or `minimal` and in any `META_PARAM_SCHEMA` mode. You can also run the `tools` action to fetch the live query manifest served by GitLab.com before constructing a query.'
+    a: 'On the default dynamic surface, `gitlab_find_action` with a query such as "orbit query" returns the exact `params` schema inline; the same schema is readable as the `gitlab://tools/orbit.query` resource (`gitlab://tools/gitlab_orbit.query` with `GITLAB_MCP_TOOL_SURFACE=meta`). These resources stay available with `GITLAB_MCP_CAPABILITY_SURFACE=full` or `minimal` and in any `GITLAB_MCP_META_PARAM_SCHEMA` mode. You can also run the `tools` action to fetch the live query manifest served by GitLab.com before constructing a query.'
 ---
 
 import FAQ from "../../../components/FAQ.astro";
@@ -25,7 +25,7 @@ For the complete generated tool reference, see [`docs/tools/orbit.md`](https://g
 
 ## When is Orbit available?
 
-Orbit registers only on GitLab.com Ultimate connections. It requires the `https://gitlab.com` host **and** the Enterprise/Premium catalog enabled with Ultimate. On the default dynamic surface its six actions are the `orbit.*` catalog entries reached through `gitlab_find_action` and `gitlab_execute_action`; with `TOOL_SURFACE=meta` it is the single `gitlab_orbit` tool with six actions; with `TOOL_SURFACE=individual` it is six `gitlab_orbit_*` tools. Every Orbit tool is read-only.
+Orbit registers only on GitLab.com Ultimate connections. It requires the `https://gitlab.com` host **and** the Enterprise/Premium catalog enabled with Ultimate. On the default dynamic surface its six actions are the `orbit.*` catalog entries reached through `gitlab_find_action` and `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` it is the single `gitlab_orbit` tool with six actions; with `GITLAB_MCP_TOOL_SURFACE=individual` it is six `gitlab_orbit_*` tools. Every Orbit tool is read-only.
 
 | Requirement               | Value                                         |
 | ------------------------- | --------------------------------------------- |
@@ -55,7 +55,7 @@ The action name is what the `gitlab_orbit` meta-tool takes in `action`; the cano
 
 The typical Orbit flow discovers the live schema first, then runs a typed query — never the other way around, because the ontology and DSL served by GitLab.com can change. Confirm the service is up with `status`, inspect the graph with `schema`, fetch the live query manifest with `tools`, optionally retrieve the DSL grammar with `dsl`, then submit a query object to `query`.
 
-1. Run the `status` action (`gitlab_execute_action` with `action: "orbit.status"` on the default surface; `gitlab_orbit` with `action: "status"` when `TOOL_SURFACE=meta`) to confirm the service is available.
+1. Run the `status` action (`gitlab_execute_action` with `action: "orbit.status"` on the default surface; `gitlab_orbit` with `action: "status"` when `GITLAB_MCP_TOOL_SURFACE=meta`) to confirm the service is available.
 2. Run `schema` to inspect graph domains, nodes, and relationships.
 3. Run `tools` before `query` to obtain the live query schema served by GitLab.com.
 4. (Optional) Run `dsl` to retrieve the Orbit query DSL schema or LLM grammar.
@@ -103,7 +103,7 @@ sequenceDiagram
     MCP-->>LLM: result + markdown
 ```
 
-The examples below use the default dynamic surface; with `TOOL_SURFACE=meta` call `gitlab_orbit` instead of `gitlab_execute_action` and drop the `orbit.` prefix from `action`.
+The examples below use the default dynamic surface; with `GITLAB_MCP_TOOL_SURFACE=meta` call `gitlab_orbit` instead of `gitlab_execute_action` and drop the `orbit.` prefix from `action`.
 
 ### Example: Check Orbit status
 
@@ -238,7 +238,7 @@ Returns graph indexing status for a namespace, project, or full path. Use to che
 
 ## How do I discover query schemas?
 
-On every surface, action parameter schemas are available through MCP resources, so you can learn the exact `params` shape of each Orbit action without expanding every schema in `tools/list`; on the dynamic surface `gitlab_find_action` returns the same schema inline. These resources remain available with `CAPABILITY_SURFACE=full` or `minimal`, regardless of `META_PARAM_SCHEMA` mode. The table lists the default-surface IDs; with `TOOL_SURFACE=meta` the entry is `gitlab://tools/gitlab_orbit.<action>`.
+On every surface, action parameter schemas are available through MCP resources, so you can learn the exact `params` shape of each Orbit action without expanding every schema in `tools/list`; on the dynamic surface `gitlab_find_action` returns the same schema inline. These resources remain available with `GITLAB_MCP_CAPABILITY_SURFACE=full` or `minimal`, regardless of `GITLAB_MCP_META_PARAM_SCHEMA` mode. The table lists the default-surface IDs; with `GITLAB_MCP_TOOL_SURFACE=meta` the entry is `gitlab://tools/gitlab_orbit.<action>`.
 
 | Resource                            | Purpose                                 |
 | ----------------------------------- | --------------------------------------- |

@@ -10,9 +10,9 @@ faq:
   - q: "Are destructive actions still protected in dynamic mode?"
     a: "Yes. Dynamic mode reuses the same safety model as meta-tools because both share the canonical action catalog. Destructive actions still require explicit confirmation unless the deployment has intentionally disabled prompts with `YOLO_MODE` or `AUTOPILOT`. Without confirmation, the server returns an error result instead of performing the action; to run it intentionally, pass `confirm: true` at the top level of the `gitlab_execute_action` arguments. Dynamic execution also validates parameters before dispatch and rejects unknown fields with repair guidance. For safer deployments, use `GITLAB_READ_ONLY=true` or `GITLAB_SAFE_MODE=true`."
   - q: "How do I make dynamic mode use even less startup context?"
-    a: "To minimize startup context, combine dynamic mode with the minimal capability surface by adding `CAPABILITY_SURFACE=minimal` (or `--capability-surface=minimal` in HTTP mode). Minimal keeps the tool manifest resources `gitlab://tools` and `gitlab://tools/{id}` and omits optional resources, prompts, and workflow guides. Dynamic mode still has full schema discovery because `gitlab_find_action` returns exact action schemas inline. Leave `META_PARAM_SCHEMA` at its default `opaque`, since it only affects meta-tool dispatcher schemas and has no effect on dynamic deployments."
+    a: "To minimize startup context, combine dynamic mode with the minimal capability surface by adding `GITLAB_MCP_CAPABILITY_SURFACE=minimal` (or `--capability-surface=minimal` in HTTP mode). Minimal keeps the tool manifest resources `gitlab://tools` and `gitlab://tools/{id}` and omits optional resources, prompts, and workflow guides. Dynamic mode still has full schema discovery because `gitlab_find_action` returns exact action schemas inline. Leave `GITLAB_MCP_META_PARAM_SCHEMA` at its default `opaque`, since it only affects meta-tool dispatcher schemas and has no effect on dynamic deployments."
   - q: "What is the dynamic toolset in GitLab MCP Server?"
-    a: "The dynamic toolset is the default low-token mode of GitLab MCP Server. It keeps the complete GitLab action catalog available while exposing only two public tools to the AI client: gitlab_find_action finds the right GitLab action and returns its exact parameters, examples, and safety metadata, and gitlab_execute_action runs the selected action after validating the action ID and parameters. The model discovers only the schemas it needs for the current task, which keeps the initial MCP tool context very small. Dynamic mode is active when TOOL_SURFACE is unset; set TOOL_SURFACE=meta to use consolidated domain meta-tools instead."
+    a: "The dynamic toolset is the default low-token mode of GitLab MCP Server. It keeps the complete GitLab action catalog available while exposing only two public tools to the AI client: gitlab_find_action finds the right GitLab action and returns its exact parameters, examples, and safety metadata, and gitlab_execute_action runs the selected action after validating the action ID and parameters. The model discovers only the schemas it needs for the current task, which keeps the initial MCP tool context very small. Dynamic mode is active when GITLAB_MCP_TOOL_SURFACE is unset; set GITLAB_MCP_TOOL_SURFACE=meta to use consolidated domain meta-tools instead."
   - q: "How does gitlab_find_action rank results?"
     a: "gitlab_find_action is more than a substring search. It normalizes the query, removes common stopwords, expands synonyms such as mr to merge request and show to get, then scores exact canonical IDs first, followed by aliases, tags, domain and action names, required params, schema enum values, schema fields, and broader metadata. Fuzzy typo recovery runs only when lexical search returns no or low-confidence matches, allowing up to two edits for terms of at least three characters. Find returns up to 20 results (capped at 50), and treats a result as high-confidence when it scores at least 80 and leads the next result by at least 15 points."
 ---
@@ -36,7 +36,7 @@ The dynamic toolset is the **default low-token mode** for GitLab MCP Server. It 
 | `gitlab_find_action`    | Finds the right GitLab action and returns exact parameters, examples, and safety metadata |
 | `gitlab_execute_action` | Executes the selected action after validating the action ID and parameters                |
 
-Dynamic find/execute is the default tool surface. Meta-tools remain available with `TOOL_SURFACE=meta` for clients that prefer consolidated domain dispatchers.
+Dynamic find/execute is the default tool surface. Meta-tools remain available with `GITLAB_MCP_TOOL_SURFACE=meta` for clients that prefer consolidated domain dispatchers.
 
 ## Why does dynamic mode exist?
 
@@ -66,15 +66,15 @@ Dynamic mode costs {footprint.dynamic.tool_schema_tokens.toLocaleString("en-US")
 | `individual`        | Premium  |  {footprint.individual.premium.visible_tools.toLocaleString("en-US")} |  {footprint.individual.premium.tool_schema_tokens.toLocaleString("en-US")} |  {footprint.individual.premium.reduction_factor_vs_dynamic}× |
 | `individual`        | Ultimate | {footprint.individual.ultimate.visible_tools.toLocaleString("en-US")} | {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("en-US")} | {footprint.individual.ultimate.reduction_factor_vs_dynamic}× |
 
-**Methodology.** Counts use the <code>{footprint.tokenizer}</code> tokenizer (the GPT-4 / GPT-3.5 encoding) via [tiktoken-go](https://github.com/tiktoken-go/tokenizer), measured against the v{stats.version} source tree with the catalog built in memory and no network calls. "Tool schema tokens" covers the visible tool definitions only — input schemas, annotations, and descriptions — which is what a model pays for on every `tools/list`. The `icons` field is excluded: it holds base64 SVG data URIs for client user interfaces, and no client places one in a model's context. MCP resources and prompts add a further {footprint.shared.full.toLocaleString("en-US")} tokens under `CAPABILITY_SURFACE=full`, or {footprint.shared.minimal.toLocaleString("en-US")} under `minimal`, in every surface alike. These figures are regenerated by `make gen-footprint`; the full tier × surface × schema-mode matrix is in [the token footprint reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/token-footprint.md).
+**Methodology.** Counts use the <code>{footprint.tokenizer}</code> tokenizer (the GPT-4 / GPT-3.5 encoding) via [tiktoken-go](https://github.com/tiktoken-go/tokenizer), measured against the v{stats.version} source tree with the catalog built in memory and no network calls. "Tool schema tokens" covers the visible tool definitions only — input schemas, annotations, and descriptions — which is what a model pays for on every `tools/list`. The `icons` field is excluded: it holds base64 SVG data URIs for client user interfaces, and no client places one in a model's context. MCP resources and prompts add a further {footprint.shared.full.toLocaleString("en-US")} tokens under `GITLAB_MCP_CAPABILITY_SURFACE=full`, or {footprint.shared.minimal.toLocaleString("en-US")} under `minimal`, in every surface alike. These figures are regenerated by `make gen-footprint`; the full tier × surface × schema-mode matrix is in [the token footprint reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/token-footprint.md).
 
 ## How do I enable dynamic mode?
 
-Enable dynamic mode by setting `TOOL_SURFACE=dynamic` (stdio) or `--tool-surface=dynamic` (HTTP). Dynamic mode is also the surface used when `TOOL_SURFACE` is unset, so most deployments get it by default.
+Enable dynamic mode by setting `GITLAB_MCP_TOOL_SURFACE=dynamic` (stdio) or `--tool-surface=dynamic` (HTTP). Dynamic mode is also the surface used when `GITLAB_MCP_TOOL_SURFACE` is unset, so most deployments get it by default.
 
 ### Stdio clients
 
-Add `TOOL_SURFACE=dynamic` to your server environment:
+Add `GITLAB_MCP_TOOL_SURFACE=dynamic` to your server environment:
 
 ```json
 {
@@ -84,7 +84,7 @@ Add `TOOL_SURFACE=dynamic` to your server environment:
       "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx",
-        "TOOL_SURFACE": "dynamic"
+        "GITLAB_MCP_TOOL_SURFACE": "dynamic"
       }
     }
   }
@@ -108,7 +108,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps the tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional resources, prompts, and workflow guides. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
+`GITLAB_MCP_CAPABILITY_SURFACE=minimal` keeps the tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional resources, prompts, and workflow guides. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `GITLAB_MCP_META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
 
 ## How should the model use dynamic mode?
 
@@ -266,7 +266,7 @@ Dynamic mode and meta-tools share one catalog and one safety model; they differ 
 | How does the model choose?       | Pick a domain tool and action                             | Find an action with schema, then execute it   |
 | Where are schemas found?         | Tool schema or `gitlab://tools/{id}`                      | `gitlab_find_action` or `gitlab://tools/{id}` |
 | Best current use                 | Explicit compatibility mode                               | Default low-token action discovery            |
-| Rollback                         | Set `TOOL_SURFACE=meta`                                   | Default path                                  |
+| Rollback                         | Set `GITLAB_MCP_TOOL_SURFACE=meta`                        | Default path                                  |
 
 ## Troubleshooting
 
@@ -276,7 +276,7 @@ Dynamic mode and meta-tools share one catalog and one safety model; they differ 
 | Find returns broad results              | Include domain, resource, action, and filters, for example `merge request list open authored by me`                                                                                      |
 | Execute rejects an action               | Find again and use the canonical `domain.action` ID from the result                                                                                                                      |
 | Execute rejects parameters              | Find the action and retry with the exact field names and types                                                                                                                           |
-| Resources and prompts still use context | Add `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                                                                                                       |
+| Resources and prompts still use context | Add `GITLAB_MCP_CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                                                                                            |
 | Discovery metadata feels thin           | Run `go run ./cmd/audit_discovery_completeness/` to confirm each action has aliases, usage, parameter guidance, and related actions; fill gaps using the link-create-batch gold standard |
 
 <FAQ />

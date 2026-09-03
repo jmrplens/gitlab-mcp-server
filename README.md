@@ -43,7 +43,7 @@ You talk to your AI assistant; it does the GitLab work. No project IDs, API endp
 
 <!-- START TOKEN CLAIM -->
 
-**10,333 tokens of startup context by default, the same on every GitLab tier (1,671 with `CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
+**10,333 tokens of startup context by default, the same on every GitLab tier (1,671 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
 
 <!-- END TOKEN CLAIM -->
 
@@ -251,7 +251,7 @@ It is a personal service, run by one person and offered as-is: no SLA, no suppor
 
 ## Tool surfaces
 
-The server can present GitLab in three shapes, controlled by `TOOL_SURFACE`. The default needs no configuration.
+The server can present GitLab in three shapes, controlled by `GITLAB_MCP_TOOL_SURFACE`. The default needs no configuration.
 
 | Surface                       | Visible tools                                     | Best for                                                         |
 | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
@@ -259,24 +259,24 @@ The server can present GitLab in three shapes, controlled by `TOOL_SURFACE`. The
 | **Meta-tools** (`meta`)       | 32 base / 49 Ultimate / 50 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
 | **Individual** (`individual`) | ~847 Free/CE · ~999 Premium · 1065–1071 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
 
-Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `CAPABILITY_SURFACE=minimal`.
+Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `GITLAB_MCP_CAPABILITY_SURFACE=minimal`.
 
 ### Token Footprint
 
 <!-- START TOKEN FOOTPRINT -->
 
-Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
+Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `GITLAB_MCP_META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
 
-**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
+**Default configuration**: with `GITLAB_MCP_TOOL_SURFACE` unset or `GITLAB_MCP_TOOL_SURFACE=dynamic`, `GITLAB_MCP_CAPABILITY_SURFACE=full`, `GITLAB_MCP_META_TOOLS` unset, `GITLAB_MCP_META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `GITLAB_MCP_TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `GITLAB_MCP_TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
 
-| Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
-| ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              1,501 |           170 |        1,671 |
+| Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
+| --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
+| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               851 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               851 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,003 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,003 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,069 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,069 | n/a                            |              1,501 |           170 |        1,671 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -459,20 +459,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,021 |     215,458 |
-| Unit tests (`_test.go`)  |       593 |     353,662 |
+| Source (`.go`, non-test) |     1,022 |     215,652 |
+| Unit tests (`_test.go`)  |       594 |     354,122 |
 | End-to-end tests         |       215 |      58,596 |
-| **Total**                | **1,829** | **627,716** |
+| **Total**                | **1,831** | **628,370** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,113 |
-| . Exported (public)             |  2,752 |
-| . Unexported (private)          |  5,361 |
-| Unit test functions (`TestXxx`) | 12,736 |
-| Subtests (`t.Run(...)`)         |  4,649 |
+| Source functions                |  8,119 |
+| . Exported (public)             |  2,756 |
+| . Unexported (private)          |  5,363 |
+| Unit test functions (`TestXxx`) | 12,745 |
+| Subtests (`t.Run(...)`)         |  4,657 |
 | End-to-end test functions       |    552 |
 
 ### Ratios worth noting
@@ -482,14 +482,14 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.64× more tests than code |
 | Average source file length         |                 ~211 lines |
 | Average test file length           |                 ~596 lines |
-| Comment lines in source            |  31,046 (~14.4% of source) |
+| Comment lines in source            |  31,119 (~14.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,845 |
+| `if err != nil` checks             | 6,849 |
 | `defer` statements                 | 1,106 |
 | `struct` types defined             | 2,797 |
 | `//nolint` suppressions            |   259 |
@@ -507,15 +507,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                   |
 | ------------------- | -------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,065 lines      |
-| Longest test file   | `cmd/server/main_test.go`. 8,644 lines |
+| Longest source file | `cmd/server/main.go`. 4,095 lines      |
+| Longest test file   | `cmd/server/main_test.go`. 8,682 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,917 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,032 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,920 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,067 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

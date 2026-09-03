@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Security Findings
 > **Individual tools**: 1
-> **Meta-tool**: `gitlab_security_finding` (`TOOL_SURFACE=meta` catalog; the sibling groups are `gitlab_security_attribute`, `gitlab_security_category` and `gitlab_security_scan_profile`)
+> **Meta-tool**: `gitlab_security_finding` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog; the sibling groups are `gitlab_security_attribute`, `gitlab_security_category` and `gitlab_security_scan_profile`)
 > **Dynamic IDs**: `security_finding.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Pipeline Security Report Findings GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#pipelinesecurityreportfindings)
 > **Audience**: 👤 End users, AI assistant users
@@ -15,7 +15,7 @@
 
 The security findings domain provides access to per-pipeline security scan results via the GitLab GraphQL API. This replaces the deprecated REST `vulnerability_findings` endpoint with the GraphQL `Pipeline.securityReportFindings` query.
 
-On the default dynamic surface, these operations are the `security_finding.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `security_finding.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 Security findings differ from vulnerabilities: findings are raw scan results from a specific pipeline run, while vulnerabilities are deduplicated, tracked entities across pipeline runs. Use security findings to inspect what a specific pipeline scan detected; use vulnerabilities for ongoing triage and remediation.
 

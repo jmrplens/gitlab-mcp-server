@@ -69,7 +69,7 @@ faq:
   - q: "¿Cómo conecto a una instancia de GitLab autogestionada?"
     a: "Apunta `GITLAB_URL` a tu instancia, por ejemplo `GITLAB_URL=https://gitlab.example.com`. `GITLAB_URL` usa `https://gitlab.com` por defecto, así que solo la estableces para instancias autogestionadas Community o Enterprise Edition. Si la instancia usa un certificado autofirmado o de CA interna, establece también `GITLAB_SKIP_TLS_VERIFY=true` para omitir la verificación del certificado en una red de confianza."
   - q: "¿Qué modo de herramientas usa GitLab MCP Server por defecto?"
-    a: "Por defecto, GitLab MCP Server funciona en **modo dinámico**, que expone solo dos herramientas — `gitlab_find_action` y `gitlab_execute_action` — para mantener pequeño el contexto del cliente de IA sin dejar de alcanzar cualquier operación de GitLab. Establece `TOOL_SURFACE=meta` para meta-herramientas consolidadas por dominio, o `TOOL_SURFACE=individual` para una herramienta por operación."
+    a: "Por defecto, GitLab MCP Server funciona en **modo dinámico**, que expone solo dos herramientas — `gitlab_find_action` y `gitlab_execute_action` — para mantener pequeño el contexto del cliente de IA sin dejar de alcanzar cualquier operación de GitLab. Establece `GITLAB_MCP_TOOL_SURFACE=meta` para meta-herramientas consolidadas por dominio, o `GITLAB_MCP_TOOL_SURFACE=individual` para una herramienta por operación."
   - q: "¿Por qué mi cliente de IA no se conecta?"
     a: "Una conexión fallida suele significar que GitLab MCP Server no puede alcanzar GitLab o no puede autenticarse. Comprueba que `GITLAB_URL` es correcta y accesible desde tu máquina, que el token tiene el scope `api` (o `read_api` en modo solo lectura) y no ha caducado, y que los certificados autofirmados se gestionan estableciendo `GITLAB_SKIP_TLS_VERIFY=true`."
 ---
@@ -692,16 +692,16 @@ Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab
 }
 ```
 
-Establece `TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio. En lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update` (la forma de `TOOL_SURFACE=individual`), hay una única herramienta `gitlab_issue` con un parámetro `action`: la misma llamada va a `gitlab_issue` como `{ "action": "create", "params": { ... } }`. Las meta-herramientas solo aceptan `action` y `params` en el nivel superior, así que los parámetros van anidados en `params` en ambas superficies.
+Establece `GITLAB_MCP_TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio. En lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update` (la forma de `GITLAB_MCP_TOOL_SURFACE=individual`), hay una única herramienta `gitlab_issue` con un parámetro `action`: la misma llamada va a `gitlab_issue` como `{ "action": "create", "params": { ... } }`. Las meta-herramientas solo aceptan `action` y `params` en el nivel superior, así que los parámetros van anidados en `params` en ambas superficies.
 
-Esto es transparente para ti: tu cliente de IA se encarga del enrutamiento. Solo pregunta de forma natural, _"crea un issue para el bug del login"_, y en la superficie dinámica predeterminada el asistente localiza `issue.create` y la ejecuta; con `TOOL_SURFACE=meta` elige la meta-herramienta `gitlab_issue` y la acción `create`.
+Esto es transparente para ti: tu cliente de IA se encarga del enrutamiento. Solo pregunta de forma natural, _"crea un issue para el bug del login"_, y en la superficie dinámica predeterminada el asistente localiza `issue.create` y la ejecuta; con `GITLAB_MCP_TOOL_SURFACE=meta` elige la meta-herramienta `gitlab_issue` y la acción `create`.
 
 :::tip
-No necesitas configurar nada para obtener el catálogo de dos herramientas: la superficie dinámica es la predeterminada y `TOOL_SURFACE=dynamic` solo lo hace explícito. El servidor expone solo `gitlab_find_action` y `gitlab_execute_action`, respaldadas por el mismo catálogo canónico de acciones de GitLab. Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para ver cómo funcionan el descubrimiento y la ejecución.
+No necesitas configurar nada para obtener el catálogo de dos herramientas: la superficie dinámica es la predeterminada y `GITLAB_MCP_TOOL_SURFACE=dynamic` solo lo hace explícito. El servidor expone solo `gitlab_find_action` y `gitlab_execute_action`, respaldadas por el mismo catálogo canónico de acciones de GitLab. Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para ver cómo funcionan el descubrimiento y la ejecución.
 
 Las meta-herramientas reducen el número de herramientas visibles en más de un 95% respecto a las herramientas individuales, y el coste en tokens de los esquemas en torno a tres cuartas partes, sin perder funcionalidad. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
 
-Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y `gitlab://tools`, y omitir recursos opcionales, guías y prompts cuando necesites el contexto MCP inicial más pequeño. Dynamic conserva schemas inline mediante `gitlab_find_action`.
+Combina el modo dinámico con `GITLAB_MCP_CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y `gitlab://tools`, y omitir recursos opcionales, guías y prompts cuando necesites el contexto MCP inicial más pequeño. Dynamic conserva schemas inline mediante `gitlab_find_action`.
 :::
 
 <FAQ />
@@ -710,7 +710,7 @@ Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo wo
 
 - [Configuración](/gitlab-mcp-server/es/configuration/) — Ajusta las variables de entorno y funciones opcionales
 - [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) — Cómo la superficie find/execute predeterminada descubre y ejecuta cualquier operación
-- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Los despachadores consolidados por dominio de `TOOL_SURFACE=meta`
+- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Los despachadores consolidados por dominio de `GITLAB_MCP_TOOL_SURFACE=meta`
 - [Arquitectura](/gitlab-mcp-server/es/architecture/) — Comprende cómo funciona el servidor internamente
 - [Referencia de herramientas](/gitlab-mcp-server/es/tools/overview/) — Explora todas las herramientas disponibles por dominio
 

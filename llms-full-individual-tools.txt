@@ -4,7 +4,7 @@
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1071 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1065.
+When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1071 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1065.
 Grouped by domain:
 
 ### access (8 tools)

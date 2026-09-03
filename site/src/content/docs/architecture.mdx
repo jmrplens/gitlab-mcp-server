@@ -121,8 +121,8 @@ GitLab MCP Server defines every GitLab operation once and presents it through th
 Every ordinary GitLab operation is defined once in the canonical action catalog. The visible tool surfaces are projections of that catalog:
 
 - **Dynamic tools** (the default) find and execute the catalog entries by `domain.action` ID through two visible tools.
-- **Meta-tools** (`TOOL_SURFACE=meta`) group related actions behind domain tools such as `gitlab_issue`.
-- **Individual tools** (`TOOL_SURFACE=individual`) project one visible MCP tool per action for compatibility and testing.
+- **Meta-tools** (`GITLAB_MCP_TOOL_SURFACE=meta`) group related actions behind domain tools such as `gitlab_issue`.
+- **Individual tools** (`GITLAB_MCP_TOOL_SURFACE=individual`) project one visible MCP tool per action for compatibility and testing.
 
 Because all surfaces share the same catalog entry, schemas, read-only filtering, destructive-action confirmations, safe-mode previews, scope filtering, Markdown formatting, and JSON output stay consistent across modes.
 
@@ -141,7 +141,7 @@ Orbit is projected through the same catalog as every other domain: in meta mode 
 
 ### Dynamic toolset (default)
 
-By default (`TOOL_SURFACE` unset, or `TOOL_SURFACE=dynamic` to make it explicit), the server exposes only `gitlab_find_action` and `gitlab_execute_action`. The same canonical action catalog remains available and is shared with meta-tools, so dynamic mode changes discovery rather than GitLab behavior.
+By default (`GITLAB_MCP_TOOL_SURFACE` unset, or `GITLAB_MCP_TOOL_SURFACE=dynamic` to make it explicit), the server exposes only `gitlab_find_action` and `gitlab_execute_action`. The same canonical action catalog remains available and is shared with meta-tools, so dynamic mode changes discovery rather than GitLab behavior.
 
 ```mermaid
 flowchart TD
@@ -153,11 +153,11 @@ flowchart TD
     handler --> gitlab[GitLab API]
 ```
 
-Dynamic mode is the default low-token surface and is documented in [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/). Meta-tools remain available with `TOOL_SURFACE=meta`.
+Dynamic mode is the default low-token surface and is documented in [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/). Meta-tools remain available with `GITLAB_MCP_TOOL_SURFACE=meta`.
 
 ### Meta-tool mode
 
-With `TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add Enterprise/Premium tools for {stats.meta.self_managed_enterprise} total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for {stats.meta.gitlab_com} total. Each meta-tool groups related operations:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add Enterprise/Premium tools for {stats.meta.self_managed_enterprise} total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for {stats.meta.gitlab_com} total. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD
@@ -191,7 +191,7 @@ This reduces token usage and improves AI tool selection accuracy compared to exp
 
 ### Individual tool mode
 
-With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} on self-managed Enterprise/Premium, or {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
+With `GITLAB_MCP_TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} on self-managed Enterprise/Premium, or {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
 
 ## Optional components
 

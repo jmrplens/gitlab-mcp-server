@@ -24,7 +24,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#tool-surface",
             "name": "Superficie de herramientas",
-            "description": "El conjunto de herramientas MCP que un cliente ve realmente al arrancar. GitLab MCP Server tiene tres: dinámica (dos herramientas), meta-herramientas (una por dominio) e individual (una por operación). Las tres son proyecciones del mismo catálogo de acciones, así que difieren en empaquetado y coste de tokens, nunca en capacidad. Se elige con TOOL_SURFACE.",
+            "description": "El conjunto de herramientas MCP que un cliente ve realmente al arrancar. GitLab MCP Server tiene tres: dinámica (dos herramientas), meta-herramientas (una por dominio) e individual (una por operación). Las tres son proyecciones del mismo catálogo de acciones, así que difieren en empaquetado y coste de tokens, nunca en capacidad. Se elige con GITLAB_MCP_TOOL_SURFACE.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
@@ -87,7 +87,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#capability-surface",
             "name": "Superficie de capacidades",
-            "description": "Qué recursos y prompts MCP se registran, seleccionado con CAPABILITY_SURFACE. full los registra todos y anuncia las suscripciones a recursos; minimal registra solo el manifiesto gitlab://tools, retirando las suscripciones junto con los recursos a los que aplican, y recorta el contexto compartido de arranque en torno a un 98% sin perder el descubrimiento de esquemas por acción.",
+            "description": "Qué recursos y prompts MCP se registran, seleccionado con GITLAB_MCP_CAPABILITY_SURFACE. full los registra todos y anuncia las suscripciones a recursos; minimal registra solo el manifiesto gitlab://tools, retirando las suscripciones junto con los recursos a los que aplican, y recorta el contexto compartido de arranque en torno a un 98% sin perder el descubrimiento de esquemas por acción.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
@@ -137,13 +137,13 @@ Estos son los términos de esta documentación que son propios de GitLab MCP Ser
 
 ## Superficie de herramientas
 
-Una **superficie de herramientas** es el conjunto de herramientas MCP que un cliente ve realmente al arrancar. GitLab MCP Server tiene tres, seleccionables con `TOOL_SURFACE`:
+Una **superficie de herramientas** es el conjunto de herramientas MCP que un cliente ve realmente al arrancar. GitLab MCP Server tiene tres, seleccionables con `GITLAB_MCP_TOOL_SURFACE`:
 
-| Superficie                  | Herramientas visibles                                          | Se elige con                                  |
-| --------------------------- | -------------------------------------------------------------- | --------------------------------------------- |
-| Dinámica _(predeterminada)_ | {footprint.dynamic.visible_tools}                              | `TOOL_SURFACE=dynamic`, o dejarlo sin definir |
-| Meta-herramientas           | {stats.meta.base} herramientas de dominio (más con Enterprise) | `TOOL_SURFACE=meta`                           |
-| Individual                  | {stats.tools.free}–{stats.tools.gitlab_com}                    | `TOOL_SURFACE=individual`                     |
+| Superficie                  | Herramientas visibles                                          | Se elige con                                             |
+| --------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| Dinámica _(predeterminada)_ | {footprint.dynamic.visible_tools}                              | `GITLAB_MCP_TOOL_SURFACE=dynamic`, o dejarlo sin definir |
+| Meta-herramientas           | {stats.meta.base} herramientas de dominio (más con Enterprise) | `GITLAB_MCP_TOOL_SURFACE=meta`                           |
+| Individual                  | {stats.tools.free}–{stats.tools.gitlab_com}                    | `GITLAB_MCP_TOOL_SURFACE=individual`                     |
 
 Las tres son proyecciones del mismo [catálogo de acciones](#catálogo-canónico-de-acciones), así que difieren en empaquetado y coste de tokens, nunca en capacidad. Ver [visión general de herramientas](/gitlab-mcp-server/tools/overview/).
 
@@ -181,7 +181,7 @@ La **elicitación** es una capacidad MCP que permite al servidor pedir datos al 
 
 ## Superficie de capacidades
 
-La **superficie de capacidades** decide qué recursos y prompts MCP se registran, y se selecciona con `CAPABILITY_SURFACE`. `full` los registra todos y anuncia las [suscripciones a recursos](/gitlab-mcp-server/es/capabilities/subscriptions/); `minimal` registra solo el manifiesto `gitlab://tools` — retirando las suscripciones junto con los recursos a los que aplican — recortando el contexto compartido de arranque de {footprint.shared.full.toLocaleString("es-ES")} tokens a {footprint.shared.minimal.toLocaleString("es-ES")} sin perder el descubrimiento de esquemas por acción.
+La **superficie de capacidades** decide qué recursos y prompts MCP se registran, y se selecciona con `GITLAB_MCP_CAPABILITY_SURFACE`. `full` los registra todos y anuncia las [suscripciones a recursos](/gitlab-mcp-server/es/capabilities/subscriptions/); `minimal` registra solo el manifiesto `gitlab://tools` — retirando las suscripciones junto con los recursos a los que aplican — recortando el contexto compartido de arranque de {footprint.shared.full.toLocaleString("es-ES")} tokens a {footprint.shared.minimal.toLocaleString("es-ES")} sin perder el descubrimiento de esquemas por acción.
 
 ## Recurso de manifiesto de herramientas
 

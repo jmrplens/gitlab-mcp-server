@@ -14,7 +14,7 @@ faq:
   - q: "Which operating systems and architectures are supported?"
     a: "Pre-built binaries are available for Linux, macOS, and Windows on both amd64 and arm64 — six binaries in total. macOS ships separate Intel (amd64) and Apple Silicon (arm64) builds. Each platform ships as a single self-contained binary — no Go runtime, interpreter or library bundle to install. The Linux builds are position-independent executables that use the glibc dynamic loader, so they need a glibc userland; on musl distributions such as Alpine, use the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl."
   - q: "Does GitLab MCP Server work with OpenAI Codex?"
-    a: 'Yes. The server detects Codex sessions automatically and applies a compatibility profile: content annotation priorities are rounded to integer values, which the Codex builds bundled with ChatGPT.app require, while every other field is delivered unchanged. Configure the server in ~/.codex/config.toml with default_tools_approval_mode = "approve" so non-interactive runs can execute write tools, and keep the default dynamic tool surface. Set CLIENT_COMPAT=off to disable the per-client rewriting.'
+    a: 'Yes. The server detects Codex sessions automatically and applies a compatibility profile: content annotation priorities are rounded to integer values, which the Codex builds bundled with ChatGPT.app require, while every other field is delivered unchanged. Configure the server in ~/.codex/config.toml with default_tools_approval_mode = "approve" so non-interactive runs can execute write tools, and keep the default dynamic tool surface. Set GITLAB_MCP_CLIENT_COMPAT=off to disable the per-client rewriting.'
   - q: "Which MCP clients are compatible with GitLab MCP Server?"
     a: "Any client that supports the Model Context Protocol can use GitLab MCP Server. Tested stdio clients include VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code (CLI), Windsurf, JetBrains IDEs, Zed, and Kiro. Any Streamable HTTP client can connect through HTTP mode. The server also supports MCP resources ({{resources}}), prompts ({{prompts}}), completions ({{completions}} argument types), elicitation, progress notifications, and resource subscriptions (live change notifications for 26 resource kinds)."
 ---
@@ -25,22 +25,22 @@ import stats from "../../data/stats.json";
 
 ## GitLab edition compatibility
 
-GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks {stats.meta.self_managed_enterprise - stats.meta.base} additional enterprise-only domains, registered as extra meta-tools with `TOOL_SURFACE=meta`, extra `gitlab_*` tools with `TOOL_SURFACE=individual`, and extra catalog actions on the default dynamic surface: set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode, use `--tier=premium`/`--tier=ultimate` in HTTP mode, or rely on auto-detection from `GET /license` (fallback `free`). The deprecated `GITLAB_ENTERPRISE=true` environment variable is still honored when `GITLAB_TIER` is unset (it maps to `ultimate`) and logs a warning. There is no `--enterprise` flag in HTTP mode — passing one aborts startup; use `--tier`.
+GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks {stats.meta.self_managed_enterprise - stats.meta.base} additional enterprise-only domains, registered as extra meta-tools with `GITLAB_MCP_TOOL_SURFACE=meta`, extra `gitlab_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`, and extra catalog actions on the default dynamic surface: set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode, use `--tier=premium`/`--tier=ultimate` in HTTP mode, or rely on auto-detection from `GET /license` (fallback `free`). The deprecated `GITLAB_ENTERPRISE=true` environment variable is still honored when `GITLAB_TIER` is unset (it maps to `ultimate`) and logs a warning. There is no `--enterprise` flag in HTTP mode — passing one aborts startup; use `--tier`.
 
-| Feature                                                                    | Community (CE) | Enterprise (EE) |
-| -------------------------------------------------------------------------- | :------------: | :-------------: |
-| Projects, Issues, MRs, Pipelines, CI/CD                                    |       ✅        |        ✅        |
-| Wikis, Labels, Milestones, Releases                                        |       ✅        |        ✅        |
-| Users, Groups, Members, Search                                             |       ✅        |        ✅        |
-| Deployments, Environments, Packages                                        |       ✅        |        ✅        |
-| {stats.meta.base} base domains (meta-tools with `TOOL_SURFACE=meta`)       |       ✅        |        ✅        |
-| {stats.resources} resources, {stats.prompts} prompts                       |       ✅        |        ✅        |
-| Merge Trains                                                               |       ❌        |        ✅        |
-| DORA Metrics                                                               |       ❌        |        ✅        |
-| Vulnerability Management                                                   |       ❌        |        ✅        |
-| Audit Events                                                               |       ❌        |        ✅        |
-| Compliance Policies                                                        |       ❌        |        ✅        |
-| +{stats.meta.self_managed_enterprise - stats.meta.base} enterprise domains |       ❌        |        ✅        |
+| Feature                                                                         | Community (CE) | Enterprise (EE) |
+| ------------------------------------------------------------------------------- | :------------: | :-------------: |
+| Projects, Issues, MRs, Pipelines, CI/CD                                         |       ✅        |        ✅        |
+| Wikis, Labels, Milestones, Releases                                             |       ✅        |        ✅        |
+| Users, Groups, Members, Search                                                  |       ✅        |        ✅        |
+| Deployments, Environments, Packages                                             |       ✅        |        ✅        |
+| {stats.meta.base} base domains (meta-tools with `GITLAB_MCP_TOOL_SURFACE=meta`) |       ✅        |        ✅        |
+| {stats.resources} resources, {stats.prompts} prompts                            |       ✅        |        ✅        |
+| Merge Trains                                                                    |       ❌        |        ✅        |
+| DORA Metrics                                                                    |       ❌        |        ✅        |
+| Vulnerability Management                                                        |       ❌        |        ✅        |
+| Audit Events                                                                    |       ❌        |        ✅        |
+| Compliance Policies                                                             |       ❌        |        ✅        |
+| +{stats.meta.self_managed_enterprise - stats.meta.base} enterprise domains      |       ❌        |        ✅        |
 
 To enable enterprise features in stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. In HTTP mode, set `--tier=premium`/`--tier=ultimate` to force the Enterprise/Premium catalog, or omit it to let the server auto-detect CE/EE per token+URL entry when GitLab reports edition. The deprecated `GITLAB_ENTERPRISE=true` variable still works when `GITLAB_TIER` is unset; there is no `--enterprise` flag — use `--tier`.
 
@@ -78,7 +78,7 @@ Any client supporting the Model Context Protocol stdio transport can use this se
 
 ### Per-client compatibility profiles
 
-Most clients ignore MCP fields they do not understand, so the server ships its full surface to everyone. The one exception is handled automatically: the Codex builds bundled with ChatGPT.app reject results whose content annotations carry a fractional `priority` value, so when a session identifies itself as Codex the server rounds those priorities to the nearest spec-legal integer. Everything else — audience annotations, structured content, output schemas, icons — is delivered unchanged, and no other client is affected. Set `CLIENT_COMPAT=off` to disable the rewriting.
+Most clients ignore MCP fields they do not understand, so the server ships its full surface to everyone. The one exception is handled automatically: the Codex builds bundled with ChatGPT.app reject results whose content annotations carry a fractional `priority` value, so when a session identifies itself as Codex the server rounds those priorities to the nearest spec-legal integer. Everything else — audience annotations, structured content, output schemas, icons — is delivered unchanged, and no other client is affected. Set `GITLAB_MCP_CLIENT_COMPAT=off` to disable the rewriting.
 
 For Codex, add the server to `~/.codex/config.toml` with tool pre-approval — without it, Codex asks for confirmation on every non-read-only tool, and non-interactive `codex exec` runs cancel those calls:
 
@@ -93,7 +93,7 @@ GITLAB_URL = "https://gitlab.example.com"
 GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
 
-Keep the default `dynamic` tool surface for clients with tool-count limits (Cursor caps servers at 40 tools, Windsurf at 100, OpenAI-backed clients at 128 per request) and keep `META_PARAM_SCHEMA` at its `opaque` default for Codex, which silently trims tool schemas larger than ~5 KB.
+Keep the default `dynamic` tool surface for clients with tool-count limits (Cursor caps servers at 40 tools, Windsurf at 100, OpenAI-backed clients at 128 per request) and keep `GITLAB_MCP_META_PARAM_SCHEMA` at its `opaque` default for Codex, which silently trims tool schemas larger than ~5 KB.
 
 ### MCP gateway validators
 

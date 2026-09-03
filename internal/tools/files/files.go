@@ -602,7 +602,7 @@ func GetRaw(ctx context.Context, client *gitlabclient.Client, input RawInput) (R
 		return RawOutput{}, toolutil.WrapErr("fileGetRaw", err)
 	}
 	if int64(len(data)) > maxSize {
-		return RawOutput{}, fmt.Errorf("fileGetRaw: %s exceeds the configured file size limit (%d bytes); raise UPLOAD_MAX_FILE_SIZE to fetch it", input.FilePath, maxSize)
+		return RawOutput{}, fmt.Errorf("fileGetRaw: %s exceeds the configured file size limit (%d bytes); raise GITLAB_MCP_UPLOAD_MAX_FILE_SIZE to fetch it", input.FilePath, maxSize)
 	}
 
 	imageMIME := toolutil.ImageMIMEType(input.FilePath)

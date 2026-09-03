@@ -5,7 +5,7 @@ The dynamic toolset is the low-token operating mode for gitlab-mcp-server. It ex
 > **Diátaxis type**: Guide + Reference
 > **Audience**: Users, operators, and developers evaluating low-token MCP deployments
 > **Prerequisites**: Basic MCP tool-call concepts and a configured GitLab token
-> **Status**: Dynamic find/execute is the default tool surface. `TOOL_SURFACE=meta` remains available for clients that prefer consolidated domain meta-tools.
+> **Status**: Dynamic find/execute is the default tool surface. `GITLAB_MCP_TOOL_SURFACE=meta` remains available for clients that prefer consolidated domain meta-tools.
 > **ADR**: See [ADR-0011: Low-token dynamic toolset mode](../development/adr/adr-0011-low-token-dynamic-toolset.md).
 
 ## When To Use It
@@ -22,7 +22,7 @@ Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes
 
 ## Public Tools
 
-`TOOL_SURFACE=dynamic` (or leaving `TOOL_SURFACE` unset) exposes the current two-tool surface:
+`GITLAB_MCP_TOOL_SURFACE=dynamic` (or leaving `GITLAB_MCP_TOOL_SURFACE` unset) exposes the current two-tool surface:
 
 | Tool                    | Purpose                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -35,7 +35,7 @@ Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes
 
 ```env
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-TOOL_SURFACE=dynamic
+GITLAB_MCP_TOOL_SURFACE=dynamic
 ```
 
 For self-managed GitLab, add:
@@ -44,7 +44,7 @@ For self-managed GitLab, add:
 GITLAB_URL=https://gitlab.example.com
 ```
 
-`META_TOOLS=dynamic` is also accepted as a legacy/convenience selector, but new configurations should use `TOOL_SURFACE` or omit it for the default dynamic mode. `TOOL_SURFACE` overrides `META_TOOLS` when both are set.
+`GITLAB_MCP_META_TOOLS=dynamic` is also accepted as a legacy/convenience selector, but new configurations should use `GITLAB_MCP_TOOL_SURFACE` or omit it for the default dynamic mode. `GITLAB_MCP_TOOL_SURFACE` overrides `GITLAB_MCP_META_TOOLS` when both are set.
 
 ### HTTP Mode
 
@@ -63,7 +63,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps the surface-aware tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional GitLab data resources, prompts, and workflow guides. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
+`GITLAB_MCP_CAPABILITY_SURFACE=minimal` keeps the surface-aware tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional GitLab data resources, prompts, and workflow guides. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. `GITLAB_MCP_META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
 
 ## User Workflow
 
@@ -196,7 +196,7 @@ Dynamic mode also exposes read-only resources for clients that want a browseable
 | `gitlab://tools`      | Surface-aware manifest listing the visible dynamic tools and every canonical `domain.action` ID available in the current filtered dynamic catalog |
 | `gitlab://tools/{id}` | Accepted call shape and input schema for one canonical action ID, for example `gitlab://tools/project.get`                                        |
 
-These resources are available for every tool surface, including `CAPABILITY_SURFACE=minimal`; their payload adapts to the active surface selected at startup. They are optional: use `gitlab_find_action` for ranked discovery and inline schemas when the task is expressed in natural language; read `gitlab://tools` when you explicitly need to enumerate available actions.
+These resources are available for every tool surface, including `GITLAB_MCP_CAPABILITY_SURFACE=minimal`; their payload adapts to the active surface selected at startup. They are optional: use `gitlab_find_action` for ranked discovery and inline schemas when the task is expressed in natural language; read `gitlab://tools` when you explicitly need to enumerate available actions.
 
 ### Execute
 
@@ -339,15 +339,15 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 
 ## Dynamic vs Meta-Tools
 
-| Concern              | Meta-tools                                                                   | Dynamic toolset                                    |
-| -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
-| Initial tool count   | 32/48/49                                                                     | 2                                                  |
-| Model selection      | Choose a domain tool and action                                              | Find an action with schema, execute                |
-| Schema discovery     | `action` enum plus `gitlab://tools/{id}` or `META_PARAM_SCHEMA=compact/full` | `gitlab_find_action` returns action schemas inline |
-| Minimal capabilities | Keeps `gitlab://tools` and omits optional prompts and data resources         | Keeps action schema discovery through find         |
-| Compatibility        | Explicit consolidated-dispatcher mode                                        | Default low-token mode                             |
-| Failure mode         | Wrong domain/action choice                                                   | Skipped find or wrong action ID                    |
-| Rollback             | Switch to `TOOL_SURFACE=meta`                                                | Default path                                       |
+| Concern              | Meta-tools                                                                              | Dynamic toolset                                    |
+| -------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Initial tool count   | 32/48/49                                                                                | 2                                                  |
+| Model selection      | Choose a domain tool and action                                                         | Find an action with schema, execute                |
+| Schema discovery     | `action` enum plus `gitlab://tools/{id}` or `GITLAB_MCP_META_PARAM_SCHEMA=compact/full` | `gitlab_find_action` returns action schemas inline |
+| Minimal capabilities | Keeps `gitlab://tools` and omits optional prompts and data resources                    | Keeps action schema discovery through find         |
+| Compatibility        | Explicit consolidated-dispatcher mode                                                   | Default low-token mode                             |
+| Failure mode         | Wrong domain/action choice                                                              | Skipped find or wrong action ID                    |
+| Rollback             | Switch to `GITLAB_MCP_TOOL_SURFACE=meta`                                                | Default path                                       |
 
 Dynamic mode is the default for low-token clients, evaluations, and deployments that benefit from compact progressive discovery. Meta-tools remain available for clients that prefer explicit domain dispatchers.
 
@@ -367,7 +367,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 | `internal/tools/actioncompat`             | Historical action aliases, parameter aliases, and execute-time compatibility normalizers projected into catalog metadata |
 | `internal/toolutil/action_spec.go`        | Canonical per-action metadata model, including aliases, tags, usage hints, related actions, and parameter guidance       |
 | `internal/toolutil/metatool.go`           | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers                                       |
-| `cmd/server/main.go`                      | Selects `TOOL_SURFACE` and registers meta, individual, or dynamic surfaces                                               |
+| `cmd/server/main.go`                      | Selects `GITLAB_MCP_TOOL_SURFACE` and registers meta, individual, or dynamic surfaces                                    |
 | `cmd/eval_mcp_surfaces`                   | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks                                          |
 | `test/e2e/suite/dynamic_test.go`          | E2E coverage for the default dynamic two-tool surface                                                                    |
 
@@ -412,7 +412,7 @@ Use `dynamic` for production-like low-token configuration.
 | Execute says the action is unknown      | The model invented an action ID or the action was excluded | Find again and execute the canonical action ID from the result                                         |
 | Execute rejects parameters              | Params do not match the found schema                       | Call `gitlab_find_action` for that action and retry with the exact field names and types               |
 | Destructive action returns an error     | Confirmation is missing or policy blocks mutation          | Add top-level `confirm:true` only when intentional, or check `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` |
-| Resources and prompts still use context | Capability surface is still full                           | Set `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                     |
+| Resources and prompts still use context | Capability surface is still full                           | Set `GITLAB_MCP_CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                          |
 
 ## See Also
 

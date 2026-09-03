@@ -43,7 +43,7 @@ Typical MCP client configuration (stdio):
 
 ## Configuration
 
-Everything is configured through environment variables: `TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for the full reference.
+Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for the full reference.
 
 ## Platform support
 

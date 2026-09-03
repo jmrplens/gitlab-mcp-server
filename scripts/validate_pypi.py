@@ -243,7 +243,7 @@ def run_handshake(script, version, tmp, label):
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=stderr_file,
         env={**os.environ, "GITLAB_URL": "http://127.0.0.1:1",
-             "GITLAB_TOKEN": "glpat-validate-pypi", "LOG_LEVEL": "error",
+             "GITLAB_TOKEN": "glpat-validate-pypi", "GITLAB_MCP_LOG_LEVEL": "error",
              # The fake URL is unreachable by design; skipping scope
              # detection avoids its retry loop in the handshake path.
              "GITLAB_IGNORE_SCOPES": "true"},

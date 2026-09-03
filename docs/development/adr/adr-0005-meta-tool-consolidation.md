@@ -204,6 +204,6 @@ After consolidation:
 
 - `go build ./...` — clean
 - `go test ./internal/... -count=1` — all packages pass
-- `TOOL_SURFACE=meta` exposes the compact base meta catalog and Enterprise/GitLab.com gated catalog groups when enabled
-- `TOOL_SURFACE=individual` exposes the individual catalog projection: 1061 tools on self-managed Enterprise/Premium, or 1067 on GitLab.com Enterprise/Premium with Orbit
+- `GITLAB_MCP_TOOL_SURFACE=meta` exposes the compact base meta catalog and Enterprise/GitLab.com gated catalog groups when enabled
+- `GITLAB_MCP_TOOL_SURFACE=individual` exposes the individual catalog projection: 1061 tools on self-managed Enterprise/Premium, or 1067 on GitLab.com Enterprise/Premium with Orbit
 - E2E meta-tool workflow covers all consolidated routes

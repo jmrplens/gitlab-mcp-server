@@ -80,7 +80,7 @@ graph TD
     MAIN[cmd/server/main.go] -->|loads| CFG[config.Load]
     MAIN -->|creates| GL[gitlab.NewClient]
     MAIN -->|creates| SRV[mcp.NewServer]
-    MAIN -->|selects surface| SURFACE{TOOL_SURFACE}
+    MAIN -->|selects surface| SURFACE{GITLAB_MCP_TOOL_SURFACE}
     SPECS[CollectActionSpecs<br/>domain ActionSpecs] --> CATALOG[BuildActionCatalog]
     MAIN -->|builds| CATALOG
     CATALOG --> IND[individual projection<br/>tools.RegisterAll]
@@ -484,7 +484,7 @@ Install the Go extension and add to `.vscode/mcp.json`:
         "GITLAB_URL": "https://your-gitlab",
         "GITLAB_TOKEN": "glpat-your-token",
         "GITLAB_SKIP_TLS_VERIFY": "true",
-        "TOOL_SURFACE": "meta"
+        "GITLAB_MCP_TOOL_SURFACE": "meta"
       }
     }
   }

@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Security Scan Profiles
 > **Individual tools**: 3
-> **Meta-tool**: `gitlab_security_scan_profile` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_security_scan_profile` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `security_scan_profile.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Attach](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach) · [Detach](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach) · [Project scan profile statuses](https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses)
 > **Audience**: End users, AI assistant users
@@ -15,7 +15,7 @@
 
 Security scan profiles bundle a security scanning configuration — for example dependency scanning — that can be attached to, or detached from, projects and groups via the GitLab GraphQL API. Attaching a profile enables its scanning configuration on the targets; detaching removes it. The per-project status query reports which scan profiles are active, pending, failing, or not configured.
 
-On the default dynamic surface, these operations are the `security_scan_profile.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `security_scan_profile.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 This domain is distinct from vulnerabilities and security findings: scan profiles configure *how* scanning runs, while findings and vulnerabilities represent scanner output and triage state.
 

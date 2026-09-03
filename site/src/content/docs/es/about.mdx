@@ -10,7 +10,7 @@ faq:
   - q: "¿Bajo qué licencia se publica GitLab MCP Server?"
     a: "Bajo licencia MIT, con todo el código fuente en GitHub. No hay versión de pago, ni clave de licencia, ni servicio alojado al que haya que suscribirse. Las herramientas de GitLab Premium y Ultimate se registran solo cuando la instancia a la que te conectas tiene licencia para esas funciones: esa restricción viene de tu propia licencia de GitLab, no de este servidor."
   - q: "¿Cómo reporto un error o pido una funcionalidad?"
-    a: "Abre un issue en el repositorio de GitHub. Para vulnerabilidades de seguridad no abras un issue público: usa GitHub Security Advisories, como se describe en la página de seguridad. Los reportes más útiles incluyen la salida de `gitlab-mcp-server --version`, el transporte en uso (stdio o HTTP), la superficie de herramientas (`TOOL_SURFACE`) y la edición y versión de GitLab a la que te conectas."
+    a: "Abre un issue en el repositorio de GitHub. Para vulnerabilidades de seguridad no abras un issue público: usa GitHub Security Advisories, como se describe en la página de seguridad. Los reportes más útiles incluyen la salida de `gitlab-mcp-server --version`, el transporte en uso (stdio o HTTP), la superficie de herramientas (`GITLAB_MCP_TOOL_SURFACE`) y la edición y versión de GitLab a la que te conectas."
   - q: "¿Con qué frecuencia se publican versiones?"
     a: "Las versiones se publican a medida que el trabajo se completa, no en un calendario fijo, y el versionado sigue versionado semántico. Cada release publica binarios firmados multiplataforma para Linux, macOS y Windows en amd64 y arm64, una imagen de contenedor y una extensión para Claude Desktop. El servidor no se actualiza a sí mismo: las actualizaciones llegan por el canal con el que se instaló (npm, Homebrew, winget, la imagen de contenedor, la extensión para Claude Desktop) o descargando de nuevo desde la página de Releases."
 ---
@@ -53,7 +53,7 @@ Cada release publica binarios firmados para Linux, macOS y Windows en amd64 y ar
 
 ## Reportar problemas y contribuir
 
-Los errores y las peticiones de funcionalidad van a [GitHub Issues](https://github.com/jmrplens/gitlab-mcp-server/issues). Incluye la salida de `gitlab-mcp-server --version`, el transporte (stdio o HTTP), el `TOOL_SURFACE` en uso y la edición y versión de GitLab a la que te conectas: esos cuatro datos resuelven la mayoría de reportes de inmediato.
+Los errores y las peticiones de funcionalidad van a [GitHub Issues](https://github.com/jmrplens/gitlab-mcp-server/issues). Incluye la salida de `gitlab-mcp-server --version`, el transporte (stdio o HTTP), el `GITLAB_MCP_TOOL_SURFACE` en uso y la edición y versión de GitLab a la que te conectas: esos cuatro datos resuelven la mayoría de reportes de inmediato.
 
 **Las vulnerabilidades de seguridad son distintas: no abras un issue público.** Usa [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new), que mantiene el reporte privado hasta que haya corrección. La política completa está en [SECURITY.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/SECURITY.md).
 

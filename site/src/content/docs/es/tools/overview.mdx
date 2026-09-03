@@ -154,7 +154,7 @@ Cada modo se proyecta desde un único **catálogo canónico de acciones**. Eso d
 | **Meta-herramientas**    | {stats.meta.base} herramientas de dominio base (más con Enterprise) | Una lista fija y explorable a nivel de dominio           | Medio                    |
 | **Individual**           | {stats.tools.free}–{stats.tools.gitlab_com} herramientas            | Clientes que necesitan todas las operaciones de antemano | El más alto              |
 
-Define el modo con la variable de entorno `TOOL_SURFACE` (`dynamic`, `meta` o `individual`). El modo dinámico se usa cuando `TOOL_SURFACE` no está definido.
+Define el modo con la variable de entorno `GITLAB_MCP_TOOL_SURFACE` (`dynamic`, `meta` o `individual`). El modo dinámico se usa cuando `GITLAB_MCP_TOOL_SURFACE` no está definido.
 
 ## Modos de operación
 
@@ -167,7 +167,7 @@ El modo individual registra **una herramienta MCP por operación de GitLab**: **
 		una herramienta MCP visible por operación de GitLab, cada una con su
 		esquema tipado de entrada y salida — el catálogo completo, en plano.
 	</Fact>
-	<Fact kind="requires">`TOOL_SURFACE=individual` (o el legado `META_TOOLS=false`), y un cliente con presupuesto de contexto para sostener la lista completa.</Fact>
+	<Fact kind="requires">`GITLAB_MCP_TOOL_SURFACE=individual` (o el legado `GITLAB_MCP_META_TOOLS=false`), y un cliente con presupuesto de contexto para sostener la lista completa.</Fact>
 	<Fact kind="tier">
 		el propio número de herramientas se mueve con la licencia: Free/CE
 		registra el catálogo base, Premium y Ultimate añaden sus herramientas
@@ -184,7 +184,7 @@ El modo individual registra **una herramienta MCP por operación de GitLab**: **
 
 ### ¿Cómo funciona el modo meta-herramientas?
 
-El modo meta-herramientas (`TOOL_SURFACE=meta`) consolida operaciones relacionadas en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado, reduciendo el recuento a **{stats.meta.base} meta-herramientas base**, **{stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado**, o **{stats.meta.gitlab_com} en GitLab.com Enterprise/Premium** cuando Orbit está disponible. Esto mejora drásticamente la eficiencia de tokens frente al modo individual manteniendo una lista de herramientas fija y explorable.
+El modo meta-herramientas (`GITLAB_MCP_TOOL_SURFACE=meta`) consolida operaciones relacionadas en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado, reduciendo el recuento a **{stats.meta.base} meta-herramientas base**, **{stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado**, o **{stats.meta.gitlab_com} en GitLab.com Enterprise/Premium** cuando Orbit está disponible. Esto mejora drásticamente la eficiencia de tokens frente al modo individual manteniendo una lista de herramientas fija y explorable.
 
 ```json
 {
@@ -207,7 +207,7 @@ El modo meta-herramientas (`TOOL_SURFACE=meta`) consolida operaciones relacionad
 		requests, pipelines…), cada una enrutando un parámetro `action` a los
 		mismos handlers que usan las demás superficies.
 	</Fact>
-	<Fact kind="requires">`TOOL_SURFACE=meta`. Las formas de llamada por acción siguen siendo descubribles vía `gitlab://tools` y `gitlab://tools/{id}` sea cual sea el valor de `META_PARAM_SCHEMA`.</Fact>
+	<Fact kind="requires">`GITLAB_MCP_TOOL_SURFACE=meta`. Las formas de llamada por acción siguen siendo descubribles vía `gitlab://tools` y `gitlab://tools/{id}` sea cual sea el valor de `GITLAB_MCP_META_PARAM_SCHEMA`.</Fact>
 	<Fact kind="tier">
 		Premium/Ultimate añaden meta-herramientas enterprise dedicadas e
 		inyectan rutas solo-enterprise en `gitlab_project`, `gitlab_group` y
@@ -222,7 +222,7 @@ El modo meta-herramientas (`TOOL_SURFACE=meta`) consolida operaciones relacionad
 
 ### ¿Cómo funciona el conjunto dinámico de herramientas?
 
-El modo dinámico (`TOOL_SURFACE=dynamic`) es el predeterminado de bajo coste de tokens. Expone solo dos herramientas públicas —`gitlab_find_action` y `gitlab_execute_action` (el nombre en singular `gitlab_execute_action` es intencionado)— manteniendo cada acción de GitLab accesible a través del catálogo canónico. El asistente primero encuentra una acción y su esquema exacto, y luego ejecuta el ID canónico `domain.action`.
+El modo dinámico (`GITLAB_MCP_TOOL_SURFACE=dynamic`) es el predeterminado de bajo coste de tokens. Expone solo dos herramientas públicas —`gitlab_find_action` y `gitlab_execute_action` (el nombre en singular `gitlab_execute_action` es intencionado)— manteniendo cada acción de GitLab accesible a través del catálogo canónico. El asistente primero encuentra una acción y su esquema exacto, y luego ejecuta el ID canónico `domain.action`.
 
 ```mermaid
 flowchart LR
@@ -238,7 +238,7 @@ Como los tres modos comparten el catálogo canónico de acciones, **el comportam
 		alcanzan el catálogo canónico completo: find devuelve esquemas exactos y
 		execute ejecuta el `domain.action` canónico.
 	</Fact>
-	<Fact kind="requires">nada: es el modo por defecto cuando `TOOL_SURFACE` no está definido. `CAPABILITY_SURFACE=minimal` reduce aún más la huella compartida de recursos y prompts.</Fact>
+	<Fact kind="requires">nada: es el modo por defecto cuando `GITLAB_MCP_TOOL_SURFACE` no está definido. `GITLAB_MCP_CAPABILITY_SURFACE=minimal` reduce aún más la huella compartida de recursos y prompts.</Fact>
 	<Fact kind="tier">
 		invisible en `tools/list` (siempre dos herramientas) pero real en
 		alcance: find solo muestra, y execute solo acepta, las acciones que el

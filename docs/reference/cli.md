@@ -85,6 +85,14 @@ export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 gitlab-mcp-server
 ```
 
+Every flag on this page falls back to an environment variable when it is not
+passed, and the settings this project defines are named `GITLAB_MCP_<NAME>`
+from 2.8.0. The unprefixed spelling still works and is removed in v3; when
+both are set the prefixed one wins and a startup warning names the one being
+ignored. `GITLAB_URL`, `GITLAB_TOKEN`, the `GITLAB_`-prefixed switches and
+every `OTEL_*` variable keep their bare names. See
+[Environment Variables](env.md#variable-naming) for the full rule.
+
 Set `GITLAB_URL` only for self-managed instances; stdio mode defaults to `https://gitlab.com`.
 
 ```bash

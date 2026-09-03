@@ -6,7 +6,7 @@ faq:
   - q: "What can I ask an AI assistant to do with GitLab MCP Server?"
     a: "Anything the GitLab REST v4 and GraphQL APIs expose — {{tools.free}} operations on Community Edition and up to {{tools.gitlab_com}} on GitLab.com. In practice that means listing and creating projects and issues, reviewing merge requests, checking and retrying pipelines, cutting releases, managing labels and milestones, searching code across a group, and administering members. You phrase the request in natural language and the server resolves it to one canonical GitLab action."
   - q: "Do I need to know the tool names to use GitLab MCP Server?"
-    a: "No. In the default dynamic surface you describe what you want and the assistant calls `gitlab_find_action` to locate the matching action and its exact schema, then `gitlab_execute_action` to run it. Tool names such as `gitlab_issue` only become visible if you switch to `TOOL_SURFACE=meta` or `TOOL_SURFACE=individual`, which trade startup context for a browsable tool list."
+    a: "No. In the default dynamic surface you describe what you want and the assistant calls `gitlab_find_action` to locate the matching action and its exact schema, then `gitlab_execute_action` to run it. Tool names such as `gitlab_issue` only become visible if you switch to `GITLAB_MCP_TOOL_SURFACE=meta` or `GITLAB_MCP_TOOL_SURFACE=individual`, which trade startup context for a browsable tool list."
   - q: "How do I tell the assistant which GitLab project to use?"
     a: "Pass the project path in `project_id`, in `group/project` form — for example `my-group/backend`. Numeric project IDs work too. If you are working inside a checked-out repository, `gitlab_discover_project` maps the git remote URL to the right GitLab project so you do not have to state it at all."
   - q: "Will an AI assistant change my GitLab data without asking?"
@@ -39,7 +39,7 @@ import {
   />
 </CardGrid>
 
-This is a quick reference of natural language prompts you can use with any AI assistant connected to GitLab MCP Server, grouped by domain. Type the prompt in plain English and the server translates it into the right GitLab API operation automatically. The tabs below show which catalog action each prompt maps to: the `action` you would pass to `gitlab_execute_action` on the default dynamic surface, which is also the matching domain meta-tool's action when `TOOL_SURFACE=meta`. They cover project management, code review, CI/CD, releases, and search.
+This is a quick reference of natural language prompts you can use with any AI assistant connected to GitLab MCP Server, grouped by domain. Type the prompt in plain English and the server translates it into the right GitLab API operation automatically. The tabs below show which catalog action each prompt maps to: the `action` you would pass to `gitlab_execute_action` on the default dynamic surface, which is also the matching domain meta-tool's action when `GITLAB_MCP_TOOL_SURFACE=meta`. They cover project management, code review, CI/CD, releases, and search.
 
 <Tabs>
   <TabItem label="Project Management">
@@ -48,7 +48,7 @@ This is a quick reference of natural language prompts you can use with any AI as
 
 **Prompt**: "Show me my GitLab projects"
 
-The assistant runs `project.list` (`gitlab_project` with `action: list` when `TOOL_SURFACE=meta`), returning project names, descriptions, and URLs.
+The assistant runs `project.list` (`gitlab_project` with `action: list` when `GITLAB_MCP_TOOL_SURFACE=meta`), returning project names, descriptions, and URLs.
 
 ## Create an issue
 
@@ -133,7 +133,7 @@ gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_i
 ---
 
 :::tip
-These examples work with the default dynamic surface. If you explicitly set `TOOL_SURFACE=meta`, the assistant maps the same prompts to domain meta-tools with the appropriate `action` parameter.
+These examples work with the default dynamic surface. If you explicitly set `GITLAB_MCP_TOOL_SURFACE=meta`, the assistant maps the same prompts to domain meta-tools with the appropriate `action` parameter.
 :::
 
 <FAQ />

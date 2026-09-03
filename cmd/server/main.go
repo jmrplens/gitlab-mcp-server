@@ -415,7 +415,7 @@ func main() {
 	}
 
 	baseLogHandler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-		Level: parseLogLevel(os.Getenv("LOG_LEVEL")),
+		Level: parseLogLevel(config.Getenv("LOG_LEVEL")),
 	})
 	slog.SetDefault(slog.New(baseLogHandler))
 
@@ -550,57 +550,67 @@ FLAGS
   docs/guides/telemetry.md.
 
 ENVIRONMENT VARIABLES (stdio mode)
-  GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
-  GITLAB_TOKEN              Personal Access Token (glpat-...)
-  GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-  TOOL_SURFACE              Canonical tool surface: dynamic|meta|individual (default dynamic)
-  META_TOOLS                Deprecated legacy selector: true|false|dynamic; ignored when TOOL_SURFACE is set
-  CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
-  META_PARAM_SCHEMA         Meta-tool input schema: opaque|compact|full (default opaque)
-  GITLAB_TIER               Force licensing tier: free|ce|premium|ultimate; omit to detect from license
-  GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
-  GITLAB_SAFE_MODE          Intercept mutating tools and return a preview (default false)
-  EMBEDDED_RESOURCES        Embed canonical MCP resource links in get_* results (default true)
-  EXCLUDE_TOOLS             Comma-separated tool names to exclude (default empty)
-  GITLAB_IGNORE_SCOPES      Skip PAT scope detection: true/false (default false)
-  UPLOAD_MAX_FILE_SIZE      Maximum upload/file size for upload tools (default 2GB)
-  RATE_LIMIT_RPS            Per-server tools/call rate limit (default 0, disabled)
-  RATE_LIMIT_BURST          Token-bucket burst size when RATE_LIMIT_RPS > 0 (default 40)
-  GITLAB_MCP_STDIO_MAX_LINE_BYTES
-                            Longest stdio message accepted, in bytes (default 4 MiB). Raise it only for a
-                            client that inlines large base64 payloads; a longer line is refused, not buffered
-  GITLAB_MCP_MAX_LISTEN_STREAMS
-                            Concurrent subscriptions/listen streams one credential may hold open
-                            (default 64; 0 disables the per-credential ceiling). Both transports
-  YOLO_MODE                 Skip destructive action confirmation prompts (default false)
+  Settings this project defines are read as GITLAB_MCP_<NAME>. The unprefixed
+  spelling of a renamed variable still works and is removed in v3; when both
+  are set the prefixed one wins and a warning names the one being ignored.
+  GITLAB_URL and GITLAB_TOKEN keep their bare names, and so does every OTEL_*
+  variable, which the OpenTelemetry exporters read themselves.
+
+  GITLAB_URL                        GitLab instance URL (default: %s; set for self-managed instances)
+  GITLAB_TOKEN                      Personal Access Token (glpat-...)
+  GITLAB_SKIP_TLS_VERIFY            Skip TLS verification: true/false (default false)
+  GITLAB_MCP_TOOL_SURFACE           Canonical tool surface: dynamic|meta|individual (default dynamic)
+  GITLAB_MCP_META_TOOLS             Deprecated legacy selector: true|false|dynamic; ignored when
+                                    GITLAB_MCP_TOOL_SURFACE is set
+  GITLAB_MCP_CAPABILITY_SURFACE     Resource/prompt surface: full|minimal (default full)
+  GITLAB_MCP_META_PARAM_SCHEMA      Meta-tool input schema: opaque|compact|full (default opaque)
+  GITLAB_TIER                       Force licensing tier: free|ce|premium|ultimate; omit to detect from license
+  GITLAB_READ_ONLY                  Expose only read-only tools: true/false (default false)
+  GITLAB_SAFE_MODE                  Intercept mutating tools and return a preview (default false)
+  EMBEDDED_RESOURCES                Embed canonical MCP resource links in get_* results (default true)
+  GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names to exclude (default empty)
+  GITLAB_IGNORE_SCOPES              Skip PAT scope detection: true/false (default false)
+  GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Maximum upload/file size for upload tools (default 2GB)
+  GITLAB_MCP_RATE_LIMIT_RPS         Per-server tools/call rate limit (default 0, disabled)
+  GITLAB_MCP_RATE_LIMIT_BURST       Token-bucket burst size when the rate limit is on (default 40)
+  GITLAB_MCP_STDIO_MAX_LINE_BYTES   Longest stdio message accepted, in bytes (default 4 MiB). Raise it
+                                    only for a client that inlines large base64 payloads; a longer line
+                                    is refused, not buffered
+  GITLAB_MCP_MAX_LISTEN_STREAMS     Concurrent subscriptions/listen streams one credential may hold open
+                                    (default 64; 0 disables the per-credential ceiling). Both transports
+  YOLO_MODE                         Skip destructive action confirmation prompts (default false)
   GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS
-                            Rewrite listed descriptions and titles for strict gateway validators:
-                            comma-separated old=new pairs, backslash escapes \, \= \\ (default empty)
-  GITLAB_MCP_TELEMETRY      Export OpenTelemetry traces, metrics and logs over OTLP (default false)
-  GITLAB_MCP_TELEMETRY_IDENTITY
-                            What telemetry records about the caller: none|pseudonymous|full (default none)
+                                    Rewrite listed descriptions and titles for strict gateway validators:
+                                    comma-separated old=new pairs, backslash escapes \, \= \\ (default empty)
+  GITLAB_MCP_TELEMETRY              Export OpenTelemetry traces, metrics and logs over OTLP (default false)
+  GITLAB_MCP_TELEMETRY_IDENTITY     What telemetry records about the caller: none|pseudonymous|full
+                                    (default none)
   GITLAB_MCP_TELEMETRY_IDENTITY_KEY
-                            Secret the pseudonymous policy derives its keys from; environment only, no flag
+                                    Secret the pseudonymous policy derives its keys from; environment
+                                    only, no flag
   GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION
-                            How long a generated pseudonymisation key lives, e.g. 24h (default: process lifetime)
-  GITLAB_MCP_TELEMETRY_TOOL_NAME
-                            Whether gen_ai.tool.name is a metric dimension: auto|on|off (default auto)
-  LOG_LEVEL                 Logging: debug/info/warn/error (default info)
+                                    How long a generated pseudonymisation key lives, e.g. 24h
+                                    (default: process lifetime)
+  GITLAB_MCP_TELEMETRY_TOOL_NAME    Whether gen_ai.tool.name is a metric dimension: auto|on|off
+                                    (default auto)
+  GITLAB_MCP_LOG_LEVEL              Logging: debug/info/warn/error (default info)
 
 ENVIRONMENT VARIABLES (HTTP mode)
   Every flag above also reads its value from the environment when the flag is
   not passed. Precedence: an explicitly passed flag, then the environment,
   then the built-in default. The variables below have no stdio equivalent:
 
-  AUTH_MODE                 Authentication mode: legacy|oauth (default legacy)
-  PUBLIC_URL                Externally reachable https origin; required with AUTH_MODE=oauth
-  TRUSTED_ORIGINS           Origins allowed to make cross-origin browser requests
-  OAUTH_CACHE_TTL           OAuth token cache TTL (default 15m, min 1m, max 2h)
-  OAUTH_CLIENT_UID          Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
-  MAX_HTTP_CLIENTS          Maximum unique (token, GitLab URL) pool entries; not sessions (default 100)
-  SESSION_TIMEOUT           Idle MCP session timeout; --stateless=false only (default 30m)
-  POOL_IDLE_TIMEOUT         Reclaim an unused pooled server after this long (default 1h, 0 disables)
-  SESSION_REVALIDATE_INTERVAL  Token re-validation interval (default 15m, 0 disables)
+  GITLAB_MCP_AUTH_MODE              Authentication mode: legacy|oauth (default legacy)
+  GITLAB_MCP_PUBLIC_URL             Externally reachable https origin; required with oauth auth mode
+  GITLAB_MCP_TRUSTED_ORIGINS        Origins allowed to make cross-origin browser requests
+  GITLAB_MCP_OAUTH_CACHE_TTL        OAuth token cache TTL (default 15m, min 1m, max 2h)
+  GITLAB_MCP_OAUTH_CLIENT_UID       Comma-separated GitLab OAuth application uids whose tokens are
+                                    admitted (default: any)
+  GITLAB_MCP_MAX_HTTP_CLIENTS       Maximum unique (token, GitLab URL) pool entries; not sessions
+                                    (default 100)
+  SESSION_TIMEOUT                   Idle MCP session timeout; --stateless=false only (default 30m)
+  GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
+  SESSION_REVALIDATE_INTERVAL       Token re-validation interval (default 15m, 0 disables)
 
 JSON CONFIGURATION EXAMPLES
 
@@ -614,7 +624,7 @@ JSON CONFIGURATION EXAMPLES
           "GITLAB_URL": "https://gitlab.example.com",
           "GITLAB_TOKEN": "glpat-your-token",
           "GITLAB_SKIP_TLS_VERIFY": "true",
-		  "TOOL_SURFACE": "dynamic"
+		  "GITLAB_MCP_TOOL_SURFACE": "dynamic"
         }
       }
     }
@@ -668,8 +678,8 @@ func run(hcfg *httpConfig) error {
 // properly, and telemetry sized for the wrong surface is a worse failure than a
 // duplicate error message is a cost.
 func resolveToolSurfaceForTelemetry(hcfg *httpConfig) string {
-	surfaceInput := os.Getenv("TOOL_SURFACE")
-	metaInput := os.Getenv("META_TOOLS")
+	surfaceInput := config.Getenv("TOOL_SURFACE")
+	metaInput := config.Getenv("META_TOOLS")
 	if hcfg != nil {
 		// The flag wins and the environment fills in behind it, which is the
 		// same precedence the HTTP env overlay applies later. Reading the
@@ -820,6 +830,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
+	logDeprecatedEnvNames()
 	return serveHTTP(ctx, cfg, hcfg.addr, hcfg.httpIdleTimeout)
 }
 
@@ -1153,7 +1164,7 @@ func runStdio(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
-	logLegacyMetaToolsDeprecation(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+	logLegacyMetaToolsDeprecation(config.Getenv("TOOL_SURFACE"), config.Getenv("META_TOOLS"))
 	logLegacyEnterpriseEnvDeprecation(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
@@ -1215,6 +1226,7 @@ func runStdio(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating MCP server: %w", err)
 	}
+	logDeprecatedEnvNames()
 	return serveStdio(ctx, server)
 }
 
@@ -2782,10 +2794,28 @@ func logLegacyMetaToolsDeprecation(toolSurfaceValue, metaToolsValue string) {
 		return
 	}
 	slog.Warn(
-		"META_TOOLS is deprecated; use TOOL_SURFACE instead", //#nosec G706 -- replacement is derived from supported TOOL_SURFACE constants and logged as structured data.
+		"META_TOOLS is deprecated; use GITLAB_MCP_TOOL_SURFACE instead", //#nosec G706 -- replacement is derived from supported TOOL_SURFACE constants and logged as structured data.
 		"legacy_selector", "META_TOOLS",
-		"replacement", "TOOL_SURFACE="+replacement,
+		"replacement", "GITLAB_MCP_TOOL_SURFACE="+replacement,
 	)
+}
+
+// logDeprecatedEnvNames warns once per unprefixed variable this process
+// actually read, naming its GITLAB_MCP_ replacement.
+//
+// Called from each mode rather than from a shared entry point, and as late as
+// startup allows: the record fills up as configuration is read, and the last
+// of those reads happens while the MCP server itself is being built. Warning
+// any earlier would report a subset and call it the whole list.
+//
+// The message carries the whole warning and no structured attribute repeats
+// it: each line already names the variable, its replacement and the deadline,
+// and a hint saying the same thing in different words is what teaches an
+// operator to stop reading these.
+func logDeprecatedEnvNames() {
+	for _, warning := range config.DeprecatedEnvWarnings() {
+		slog.Warn(warning) //#nosec G706 -- the text is built by config from its own compile-time name list
+	}
 }
 
 // logLegacyEnterpriseEnvDeprecation warns when the deprecated GITLAB_ENTERPRISE
@@ -4048,7 +4078,7 @@ func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
 func uploadMaxFileSize() int64 {
 	size, err := config.UploadMaxFileSizeFromEnv()
 	if err != nil {
-		slog.Warn("UPLOAD_MAX_FILE_SIZE could not be parsed; using the default",
+		slog.Warn("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE could not be parsed; using the default",
 			"error", err, "default", config.DefaultMaxFileSize)
 		return config.DefaultMaxFileSize
 	}
@@ -4057,7 +4087,7 @@ func uploadMaxFileSize() int64 {
 	// deployment starts with a limit above the documented one and nothing says
 	// so until a request the size of a small disk arrives.
 	if size > config.MaxFileSize {
-		slog.Warn("UPLOAD_MAX_FILE_SIZE exceeds the maximum; using the maximum",
+		slog.Warn("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds the maximum; using the maximum",
 			"requested", size, "maximum", config.MaxFileSize)
 		return config.MaxFileSize
 	}

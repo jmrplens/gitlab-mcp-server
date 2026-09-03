@@ -147,15 +147,15 @@ The `main()` function supports two runtime modes:
 
 Loads settings from environment variables, falling back to `~/.gitlab-mcp-server.env` and to the file `GITLAB_MCP_ENV_FILE` names (via `godotenv`); a `.env` in the working directory is deliberately not among them. Used by **stdio mode** to validate that `GITLAB_TOKEN` is present and to default `GITLAB_URL` to `https://gitlab.com` when omitted. HTTP mode uses CLI flags instead (see Transport Selection).
 
-| Variable                 | Required | Default              | Description                                                                              |
-| ------------------------ | -------- | -------------------- | ---------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | No       | `https://gitlab.com` | GitLab instance base URL                                                                 |
-| `GITLAB_TOKEN`           | Stdio    | —                    | Personal Access Token with `api` scope                                                   |
-| `GITLAB_SKIP_TLS_VERIFY` | No       | `false`              | Skip TLS certificate verification                                                        |
-| `TOOL_SURFACE`           | No       | `dynamic`            | Canonical tool catalog selector (`dynamic`, `meta`, `individual`)                        |
-| `META_TOOLS`             | No       | —                    | Deprecated compatibility selector mapped to `TOOL_SURFACE` when `TOOL_SURFACE` is absent |
-| `YOLO_MODE`              | No       | `false`              | Skip destructive action confirmations                                                    |
-| `UPLOAD_MAX_FILE_SIZE`   | No       | `2GB`                | Maximum allowed upload file size                                                         |
+| Variable                          | Required | Default              | Description                                                                                                    |
+| --------------------------------- | -------- | -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`                      | No       | `https://gitlab.com` | GitLab instance base URL                                                                                       |
+| `GITLAB_TOKEN`                    | Stdio    | —                    | Personal Access Token with `api` scope                                                                         |
+| `GITLAB_SKIP_TLS_VERIFY`          | No       | `false`              | Skip TLS certificate verification                                                                              |
+| `GITLAB_MCP_TOOL_SURFACE`         | No       | `dynamic`            | Canonical tool catalog selector (`dynamic`, `meta`, `individual`)                                              |
+| `GITLAB_MCP_META_TOOLS`           | No       | —                    | Deprecated compatibility selector mapped to `GITLAB_MCP_TOOL_SURFACE` when `GITLAB_MCP_TOOL_SURFACE` is absent |
+| `YOLO_MODE`                       | No       | `false`              | Skip destructive action confirmations                                                                          |
+| `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No       | `2GB`                | Maximum allowed upload file size                                                                               |
 
 ### GitLab Client (`internal/gitlab`)
 

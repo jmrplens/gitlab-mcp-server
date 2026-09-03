@@ -47,11 +47,11 @@ server := mcp.NewServer(
 ```
 
 Setting the subscribe handlers is what turns `Resources.Subscribe` on — the
-SDK derives it. They are left nil on `CAPABILITY_SURFACE=minimal`, which
+SDK derives it. They are left nil on `GITLAB_MCP_CAPABILITY_SURFACE=minimal`, which
 registers no GitLab resources to subscribe to.
 
-`CAPABILITY_SURFACE=full` also advertises `Prompts` with `ListChanged: true`
-and registers the full prompt/resource catalog. `CAPABILITY_SURFACE=minimal`
+`GITLAB_MCP_CAPABILITY_SURFACE=full` also advertises `Prompts` with `ListChanged: true`
+and registers the full prompt/resource catalog. `GITLAB_MCP_CAPABILITY_SURFACE=minimal`
 omits the prompt capability while leaving tool execution, completions, and
 progress handling available. Minimal also registers `gitlab://tools` and `gitlab://tools/{id}`
 for exact action call shapes across every tool surface.

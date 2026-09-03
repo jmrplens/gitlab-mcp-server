@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Environments, Deployments, Protected Environments, Freeze Periods
 > **Individual tools**: 24
-> **Meta-tools**: `gitlab_environment` (`TOOL_SURFACE=meta` catalog). Protected environment actions use `protected_*` prefix, freeze period actions use `freeze_*` prefix, deployment actions use `deployment_*` prefix.
+> **Meta-tools**: `gitlab_environment` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog). Protected environment actions use `protected_*` prefix, freeze period actions use `freeze_*` prefix, deployment actions use `deployment_*` prefix.
 > **Dynamic IDs**: `environment.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Environments API](https://docs.gitlab.com/ee/api/environments.html) · [Deployments API](https://docs.gitlab.com/ee/api/deployments.html) · [Protected Environments API](https://docs.gitlab.com/ee/api/protected_environments.html) · [Freeze Periods API](https://docs.gitlab.com/ee/api/freeze_periods.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,9 +14,9 @@
 
 The environments and deployments domain covers the full lifecycle of GitLab environments, deployments, protected environment configurations, deploy freeze periods, and deployment merge request associations.
 
-On the default dynamic surface, these operations are the `environment.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `environment.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, the 23 individual tools below are consolidated into one meta-tool (`gitlab_environment`) that dispatches by `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the 23 individual tools below are consolidated into one meta-tool (`gitlab_environment`) that dispatches by `action` parameter.
 
 ### Common Questions
 

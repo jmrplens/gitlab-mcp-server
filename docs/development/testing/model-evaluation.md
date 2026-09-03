@@ -83,7 +83,7 @@ Use schema evaluation when changing:
 - Parameter aliases
 - Provider adapters
 - Token-reduction strategies
-- `META_PARAM_SCHEMA` behavior
+- `GITLAB_MCP_META_PARAM_SCHEMA` behavior
 
 The project currently keeps meta-tool params in opaque mode. Provider-specific
 compatibility, such as Google Gemini validated function calling, is handled by
@@ -169,6 +169,13 @@ is an alias resolved by Google to the latest Gemini Flash model available to the
 API key; use ListModels before pinning a different Google model ID. Set
 `EVAL_SURFACE_OUT_ROOT` to change the artifact root, or `EVAL_SURFACE_KEEP_DOCKER=1`
 to leave the Docker GitLab instance running for inspection after the run.
+
+`EVAL_SURFACE_*` keeps its bare name. The rename to `GITLAB_MCP_<NAME>` exists
+because a stdio server shares a shell with every other tool its user runs, and
+these variables never do: they belong to `cmd/eval_mcp_surfaces`, are set by the
+`make` targets in this repository, and are read by no server. Prefixing them
+would cost every developer's muscle memory and protect against a collision that
+cannot happen.
 
 The Docker fixture base must contain all resources needed by successful tasks.
 If a task is not intentionally testing an error, missing GitLab state is treated

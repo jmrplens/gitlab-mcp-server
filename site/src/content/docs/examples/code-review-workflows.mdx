@@ -4,11 +4,11 @@ description: "Merge request review examples with GitLab MCP Server: list MRs, re
 datePublished: "2026-04-23"
 faq:
   - q: "How do I review a GitLab merge request with an AI assistant?"
-    a: "A full review is three calls: `merge_request.list` with `reviewer_id` finds the MRs waiting on you, `mr_review.changes_get` fetches the diff so the assistant can read the actual code, and `mr_review.discussion_create` posts threaded feedback on specific lines. On the default dynamic surface these are the `action` values for `gitlab_execute_action`; with `TOOL_SURFACE=meta` they are the `list` action of the `gitlab_merge_request` meta-tool and the `changes_get` and `discussion_create` actions of `gitlab_mr_review`. Reviewing a twelve-file MR therefore costs three tool calls, not one per file."
+    a: "A full review is three calls: `merge_request.list` with `reviewer_id` finds the MRs waiting on you, `mr_review.changes_get` fetches the diff so the assistant can read the actual code, and `mr_review.discussion_create` posts threaded feedback on specific lines. On the default dynamic surface these are the `action` values for `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` they are the `list` action of the `gitlab_merge_request` meta-tool and the `changes_get` and `discussion_create` actions of `gitlab_mr_review`. Reviewing a twelve-file MR therefore costs three tool calls, not one per file."
   - q: "What is the difference between a note, a discussion, and a draft note?"
     a: "A note (`mr_review.note_create`) is a single standalone comment that posts immediately. A discussion (`mr_review.discussion_create`) opens a resolvable thread that others can reply to and that shows up in the unresolved-threads count gating merge. A draft note (`mr_review.draft_note_create`) is staged privately and stays invisible to the author until you publish the whole review at once — which is what you want when leaving many comments, so the MR author gets one notification instead of twenty."
   - q: "How do I find unresolved review threads on a merge request?"
-    a: "Run `mr_review.discussion_list` for the MR (the `discussion_list` action of `gitlab_mr_review` when `TOOL_SURFACE=meta`), then filter the returned threads for `resolved: false`. Notes created with `mr_review.note_create` are not resolvable and never appear as outstanding items, so only discussions show up here. This is the check to run before merging when the project requires all threads resolved."
+    a: "Run `mr_review.discussion_list` for the MR (the `discussion_list` action of `gitlab_mr_review` when `GITLAB_MCP_TOOL_SURFACE=meta`), then filter the returned threads for `resolved: false`. Notes created with `mr_review.note_create` are not resolvable and never appear as outstanding items, so only discussions show up here. This is the check to run before merging when the project requires all threads resolved."
   - q: "Can an AI assistant approve and merge a merge request?"
     a: "Yes, subject to the same permissions and safeguards as any other mutation. Approval is `merge_request.approve` and merging is `merge_request.merge` (the `approve` and `merge` actions of `gitlab_merge_request` on the meta surface). Both are classified as mutating, so they are unavailable under `GITLAB_READ_ONLY=true` and return a preview instead of executing under `GITLAB_SAFE_MODE=true`. GitLab still enforces its own approval rules — an assistant cannot merge an MR that has not met the project's required approvals."
 ---
@@ -34,7 +34,7 @@ import FAQ from "../../../components/FAQ.astro";
   />
 </CardGrid>
 
-These step-by-step workflows cover the full merge request review cycle: finding MRs that need your attention, reading their diffs, checking approval state, leaving notes and threaded discussions, and finally merging or rebasing. Each example pairs the prompt you type with the exact catalog action the server runs, written as `domain.action → parameters`: on the default dynamic surface that is the `action` you pass to `gitlab_execute_action`, and with `TOOL_SURFACE=meta` it is the `action` of the `gitlab_<domain>` meta-tool, so you can reuse the call directly. Diffs, notes, discussions and draft notes live in the `mr_review` domain (`gitlab_mr_review` on the meta surface), the rest of the MR lifecycle in `merge_request`.
+These step-by-step workflows cover the full merge request review cycle: finding MRs that need your attention, reading their diffs, checking approval state, leaving notes and threaded discussions, and finally merging or rebasing. Each example pairs the prompt you type with the exact catalog action the server runs, written as `domain.action → parameters`: on the default dynamic surface that is the `action` you pass to `gitlab_execute_action`, and with `GITLAB_MCP_TOOL_SURFACE=meta` it is the `action` of the `gitlab_<domain>` meta-tool, so you can reuse the call directly. Diffs, notes, discussions and draft notes live in the `mr_review` domain (`gitlab_mr_review` on the meta surface), the rest of the MR lifecycle in `merge_request`.
 
 ## MR review workflow
 
@@ -243,7 +243,7 @@ gitlab_execute_action → action: "mr_review.changes_get", params: { project_id:
 gitlab_execute_action → action: "mr_review.discussion_create", params: { project_id: "my-group/backend", merge_request_iid: 42, body: "Let's discuss the database migration strategy..." }
 ```
 
-With `TOOL_SURFACE=meta` the same calls go to `gitlab_merge_request` with `action: list` and to `gitlab_mr_review` with `action: changes_get` and `action: discussion_create`, each with the parameters nested under `params`.
+With `GITLAB_MCP_TOOL_SURFACE=meta` the same calls go to `gitlab_merge_request` with `action: list` and to `gitlab_mr_review` with `action: changes_get` and `action: discussion_create`, each with the parameters nested under `params`.
 
 ---
 

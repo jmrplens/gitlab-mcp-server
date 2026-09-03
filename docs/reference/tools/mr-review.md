@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: MR Review
 > **Individual tools**: 23
-> **Meta-tool**: `gitlab_mr_review` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_mr_review` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `mr_review.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [MR Notes API](https://docs.gitlab.com/ee/api/notes.html#merge-requests), [MR Discussions API](https://docs.gitlab.com/ee/api/discussions.html#merge-requests), [MR Draft Notes API](https://docs.gitlab.com/ee/api/draft_notes.html), [Merge Requests Changes API](https://docs.gitlab.com/ee/api/merge_requests.html#get-single-merge-request-changes)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,9 +14,9 @@
 
 The MR review domain covers all comment and review operations on GitLab merge requests: top-level notes (comments), threaded discussions (including inline diff comments), and draft notes (pending review comments that remain private until published).
 
-On the default dynamic surface, these operations are the `mr_review.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `mr_review.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, all 23 individual tools below are consolidated into a single `gitlab_mr_review` meta-tool that dispatches by `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, all 23 individual tools below are consolidated into a single `gitlab_mr_review` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

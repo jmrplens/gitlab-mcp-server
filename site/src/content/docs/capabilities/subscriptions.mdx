@@ -19,7 +19,7 @@ Resource subscriptions let a client say **"tell me when this changes"** instead 
 
 The server honors subscriptions by **polling**: a watcher re-reads the subscribed URI through the very handler `resources/read` dispatches to, compares a SHA-256 of the content, and notifies only on a real change. "The content changed" therefore means exactly "what you would read changed" — never a guess. The decision and its bounds are recorded in [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md).
 
-Subscriptions are advertised on `CAPABILITY_SURFACE=full` (the default). The `minimal` surface does not register the GitLab data resources a subscription applies to, so it does not advertise the capability either.
+Subscriptions are advertised on `GITLAB_MCP_CAPABILITY_SURFACE=full` (the default). The `minimal` surface does not register the GitLab data resources a subscription applies to, so it does not advertise the capability either.
 
 ## What can be watched?
 

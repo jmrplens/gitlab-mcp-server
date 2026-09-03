@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Orbit Knowledge Graph
 > **Individual tools**: 6
-> **Meta-tool**: `gitlab_orbit` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_orbit` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `orbit.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Orbit API](https://docs.gitlab.com/api/orbit/)
 > **Availability**: GitLab.com only; Enterprise/Premium catalog; experimental `knowledge_graph` feature
@@ -17,9 +17,9 @@ The Orbit domain exposes GitLab's experimental Knowledge Graph API for GitLab.co
 
 The upstream Orbit API is moving quickly. This MCP surface follows the latest GitLab client and CLI coverage, including `graph_status`; GitLab's public API reference may lag behind that endpoint. For schema formatting, the live API currently uses the `format` query parameter, while this server also accepts `response_format` as an input alias for compatibility with public documentation wording.
 
-On the default dynamic surface, these operations are the `orbit.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `orbit.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, all six individual tools below are consolidated into the `gitlab_orbit` meta-tool with an `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, all six individual tools below are consolidated into the `gitlab_orbit` meta-tool with an `action` parameter.
 
 | Canonical ID         | Meta-tool action | Individual tool             | Purpose                                                           |
 | -------------------- | ---------------- | --------------------------- | ----------------------------------------------------------------- |

@@ -10,11 +10,11 @@ GitLab business logic.
 
 ## Tool Surfaces
 
-| Surface          | Selector                                              |                             Visible MCP tools | Source of action metadata                                              |
-| ---------------- | ----------------------------------------------------- | --------------------------------------------: | ---------------------------------------------------------------------- |
-| Individual tools | `TOOL_SURFACE=individual` (`META_TOOLS=false` legacy) |                 One tool per GitLab operation | Canonical action catalog projected by `RegisterIndividualCatalogTools` |
-| Dynamic          | default, `TOOL_SURFACE=dynamic`                       | `gitlab_find_action`, `gitlab_execute_action` | Canonical action catalog                                               |
-| Meta-tools       | `TOOL_SURFACE=meta`                                   | Domain dispatchers with `action` and `params` | Canonical action catalog                                               |
+| Surface          | Selector                                                                    |                             Visible MCP tools | Source of action metadata                                              |
+| ---------------- | --------------------------------------------------------------------------- | --------------------------------------------: | ---------------------------------------------------------------------- |
+| Individual tools | `GITLAB_MCP_TOOL_SURFACE=individual` (`GITLAB_MCP_META_TOOLS=false` legacy) |                 One tool per GitLab operation | Canonical action catalog projected by `RegisterIndividualCatalogTools` |
+| Dynamic          | default, `GITLAB_MCP_TOOL_SURFACE=dynamic`                                  | `gitlab_find_action`, `gitlab_execute_action` | Canonical action catalog                                               |
+| Meta-tools       | `GITLAB_MCP_TOOL_SURFACE=meta`                                              | Domain dispatchers with `action` and `params` | Canonical action catalog                                               |
 
 Individual tools, meta-tools, and dynamic tools are now catalog-backed surfaces
 over the same action core. Domain packages still own typed handlers,

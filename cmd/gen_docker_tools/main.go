@@ -17,7 +17,7 @@
 //
 //	go run ./cmd/gen_docker_tools/ > tools.json
 //
-// By default it emits the base meta-tools (META_TOOLS=true, no enterprise).
+// By default it emits the base meta-tools (GITLAB_MCP_META_TOOLS=true, no enterprise).
 // Pass --enterprise to include enterprise meta-tools, or --individual to emit
 // the full 1000-tool surface.
 package main

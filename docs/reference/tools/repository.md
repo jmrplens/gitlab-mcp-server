@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Repository (tree, compare, files, commits, submodules, discussions, markdown)
 > **Individual tools**: 41
-> **Meta-tool**: `gitlab_repository` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_repository` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `repository.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Repositories API](https://docs.gitlab.com/ee/api/repositories.html), [Repository Files API](https://docs.gitlab.com/ee/api/repository_files.html), [Commits API](https://docs.gitlab.com/ee/api/commits.html), [Commit Discussions API](https://docs.gitlab.com/ee/api/discussions.html#commits), [Repository Submodules API](https://docs.gitlab.com/ee/api/repository_submodules.html), [Markdown API](https://docs.gitlab.com/ee/api/markdown.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -16,9 +16,9 @@ The repository domain covers operations on GitLab repository content: browsing t
 
 This domain spans six sub-packages: `repository`, `files`, `commits`, `commitdiscussions`, `repositorysubmodules`, and `markdown`.
 
-On the default dynamic surface, these operations are the `repository.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `repository.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, all 40 individual tools below are consolidated into a single `gitlab_repository` meta-tool that dispatches by `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, all 40 individual tools below are consolidated into a single `gitlab_repository` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

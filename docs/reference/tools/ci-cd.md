@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: CI/CD (Pipelines, Jobs, Variables, Schedules, Triggers, Resource Groups)
 > **Individual tools**: 65
-> **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable` (`TOOL_SURFACE=meta` catalog). Pipeline schedule actions are accessed via `gitlab_pipeline` with `schedule_*` action prefix; trigger actions via `trigger_*` prefix; resource group actions via `resource_group_*` prefix. The `gitlab_ci_variable` meta-tool also covers group and instance variables (action prefixes `group_variable_*` / `instance_variable_*`). CI lint tools (`gitlab_ci_lint`, `gitlab_ci_lint_project`) live under the `gitlab_template` meta-tool — see [templates.md](templates.md).
+> **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog). Pipeline schedule actions are accessed via `gitlab_pipeline` with `schedule_*` action prefix; trigger actions via `trigger_*` prefix; resource group actions via `resource_group_*` prefix. The `gitlab_ci_variable` meta-tool also covers group and instance variables (action prefixes `group_variable_*` / `instance_variable_*`). CI lint tools (`gitlab_ci_lint`, `gitlab_ci_lint_project`) live under the `gitlab_template` meta-tool — see [templates.md](templates.md).
 > **Dynamic IDs**: `ci_variable.*`, `job.*`, `pipeline.*`, `template.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Pipelines API](https://docs.gitlab.com/ee/api/pipelines.html) · [Jobs API](https://docs.gitlab.com/ee/api/jobs.html) · [CI Variables API](https://docs.gitlab.com/ee/api/project_level_variables.html) · [Pipeline Schedules API](https://docs.gitlab.com/ee/api/pipeline_schedules.html) · [Pipeline Triggers API](https://docs.gitlab.com/ee/api/pipeline_triggers.html) · [Instance Variables API](https://docs.gitlab.com/ee/api/instance_level_ci_variables.html) · [Group Variables API](https://docs.gitlab.com/ee/api/group_level_variables.html) · [Resource Groups API](https://docs.gitlab.com/ee/api/resource_groups.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -16,9 +16,9 @@
 
 The CI/CD domain covers GitLab's continuous integration and delivery capabilities: pipelines, jobs, CI/CD variables (project, group, and instance level), pipeline schedules, pipeline triggers, and CI resource groups.
 
-On the default dynamic surface, these operations are the `ci_variable.*`, `job.*`, `pipeline.*`, `template.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `ci_variable.*`, `job.*`, `pipeline.*`, `template.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, the 65 individual tools below are consolidated into three meta-tools that dispatch by `action` parameter. CI lint tools live under the `gitlab_template` meta-tool — see [templates.md](templates.md).
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the 65 individual tools below are consolidated into three meta-tools that dispatch by `action` parameter. CI lint tools live under the `gitlab_template` meta-tool — see [templates.md](templates.md).
 
 ### Common Questions
 

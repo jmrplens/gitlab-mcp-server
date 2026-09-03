@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Projects
 > **Individual tools**: 91
-> **Meta-tool**: `gitlab_project` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_project` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `project.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Projects API](https://docs.gitlab.com/ee/api/projects.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -14,9 +14,9 @@
 
 The projects domain covers the full lifecycle of GitLab projects (repositories): creation, retrieval, listing, updating, deletion, forking, starring, archiving, transferring, webhook management, user/group listings, project members, project service accounts, push rule configuration, Pages settings and custom domains, integrations, approvals, pull mirroring, target branch rules, fork relations, avatars, housekeeping, repository storage, and uploads (Markdown attachments + avatars).
 
-On the default dynamic surface, these operations are the `project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+On the default dynamic surface, these operations are the `project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `TOOL_SURFACE=meta`, project actions are consolidated into a single `gitlab_project` meta-tool that dispatches by `action` parameter.
+With `GITLAB_MCP_TOOL_SURFACE=meta`, project actions are consolidated into a single `gitlab_project` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

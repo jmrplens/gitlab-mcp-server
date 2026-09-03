@@ -685,9 +685,9 @@ Without `client_id`, `codex mcp login` falls back to Dynamic Client Registration
 
 Codex-specific notes:
 
-- The server detects Codex from its `clientInfo` (`codex-mcp-client`) and automatically rounds the float `priority` in content annotations to 0 or 1 — the Codex builds bundled with ChatGPT.app reject non-integer priorities and mark every affected call as `Unexpected response type`. All other fields (audience, `structuredContent`, `outputSchema`, icons) are delivered unchanged. Set `CLIENT_COMPAT=off` to disable this. See [Client Compatibility](client-compatibility.md).
+- The server detects Codex from its `clientInfo` (`codex-mcp-client`) and automatically rounds the float `priority` in content annotations to 0 or 1 — the Codex builds bundled with ChatGPT.app reject non-integer priorities and mark every affected call as `Unexpected response type`. All other fields (audience, `structuredContent`, `outputSchema`, icons) are delivered unchanged. Set `GITLAB_MCP_CLIENT_COMPAT=off` to disable this. See [Client Compatibility](client-compatibility.md).
 - When a result carries `structuredContent`, Codex forwards only that JSON to its model and discards the markdown content blocks ([openai/codex#10334](https://github.com/openai/codex/issues/10334)).
-- Keep `META_PARAM_SCHEMA` at its `opaque` default: Codex silently strips descriptions from any tool input schema larger than ~5 KB.
+- Keep `GITLAB_MCP_META_PARAM_SCHEMA` at its `opaque` default: Codex silently strips descriptions from any tool input schema larger than ~5 KB.
 - In its default protocol mode Codex reads only the first page of `tools/list`; the server sizes its page above the largest catalog so every surface fits in one page.
 
 ---

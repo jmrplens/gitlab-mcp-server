@@ -15,10 +15,11 @@ package clientcompat
 import (
 	"context"
 	"math"
-	"os"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // Profile identifies the response compatibility profile negotiated for a
@@ -37,14 +38,16 @@ const (
 	ProfileCodex
 )
 
-// envDisable is the environment kill-switch: CLIENT_COMPAT=off disables the
-// middleware entirely (both stdio and HTTP modes read the process env).
+// envDisable is the environment kill-switch: GITLAB_MCP_CLIENT_COMPAT=off
+// disables the middleware entirely (both stdio and HTTP modes read the process
+// env). Read through [config.Getenv], so the deprecated CLIENT_COMPAT spelling
+// keeps working until v3.
 const envDisable = "CLIENT_COMPAT"
 
 // Enabled reports whether the compatibility middleware should be installed.
 // Any value other than "off" (default empty included) enables it.
 func Enabled() bool {
-	return !strings.EqualFold(os.Getenv(envDisable), "off")
+	return !strings.EqualFold(config.Getenv(envDisable), "off")
 }
 
 // profileFromClientInfo maps the initialize clientInfo to a Profile. Codex

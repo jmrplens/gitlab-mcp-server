@@ -200,7 +200,7 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
 ## Common traps
 
 - **Tool surface default is `dynamic` (2 tools).** Most users expect
-  meta-tools; remind them to set `TOOL_SURFACE=meta` (stdio) or
+  meta-tools; remind them to set `GITLAB_MCP_TOOL_SURFACE=meta` (stdio) or
   `--tool-surface=meta` (HTTP) when they want the 33/49/50-tool catalog.
 - **`.tmp-kg-fixtures/` and `.tmp-token-audit/`** are working dirs for
   the fixture and token-audit scripts. Safe to ignore.

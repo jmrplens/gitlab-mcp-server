@@ -121,8 +121,8 @@ GitLab MCP Server define cada operación de GitLab una sola vez y la presenta a 
 Cada operación ordinaria de GitLab se define una sola vez en el catálogo de acciones canónico. Las superficies visibles de herramientas son proyecciones de ese catálogo:
 
 - **Herramientas dinámicas** (predeterminadas) buscan y ejecutan las entradas del catálogo por ID `domain.action` a través de dos herramientas visibles.
-- **Meta-herramientas** (`TOOL_SURFACE=meta`) agrupan acciones relacionadas detrás de herramientas de dominio como `gitlab_issue`.
-- **Herramientas individuales** (`TOOL_SURFACE=individual`) proyectan una herramienta MCP visible por acción para compatibilidad y pruebas.
+- **Meta-herramientas** (`GITLAB_MCP_TOOL_SURFACE=meta`) agrupan acciones relacionadas detrás de herramientas de dominio como `gitlab_issue`.
+- **Herramientas individuales** (`GITLAB_MCP_TOOL_SURFACE=individual`) proyectan una herramienta MCP visible por acción para compatibilidad y pruebas.
 
 Como todas las superficies comparten la misma entrada del catálogo, los schemas, el filtrado de solo lectura, las confirmaciones de acciones destructivas, las previsualizaciones de safe mode, el filtrado por scopes, el formato Markdown y la salida JSON se mantienen consistentes entre modos.
 
@@ -141,7 +141,7 @@ Orbit se proyecta a través del mismo catálogo que cualquier otro dominio: en m
 
 ### Conjunto de herramientas dinámico (predeterminado)
 
-Por defecto (con `TOOL_SURFACE` sin definir, o con `TOOL_SURFACE=dynamic` para hacerlo explícito), el servidor expone solo `gitlab_find_action` y `gitlab_execute_action`. El mismo catálogo de acciones canónico sigue disponible y se comparte con las meta-herramientas, así que el modo dinámico cambia el descubrimiento, no el comportamiento de GitLab.
+Por defecto (con `GITLAB_MCP_TOOL_SURFACE` sin definir, o con `GITLAB_MCP_TOOL_SURFACE=dynamic` para hacerlo explícito), el servidor expone solo `gitlab_find_action` y `gitlab_execute_action`. El mismo catálogo de acciones canónico sigue disponible y se comparte con las meta-herramientas, así que el modo dinámico cambia el descubrimiento, no el comportamiento de GitLab.
 
 ```mermaid
 flowchart TD
@@ -153,11 +153,11 @@ flowchart TD
     handler --> gitlab[API de GitLab]
 ```
 
-El modo dinámico es la superficie predeterminada de bajo consumo de tokens y está documentado en [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/). Las meta-herramientas siguen disponibles con `TOOL_SURFACE=meta`.
+El modo dinámico es la superficie predeterminada de bajo consumo de tokens y está documentado en [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/). Las meta-herramientas siguen disponibles con `GITLAB_MCP_TOOL_SURFACE=meta`.
 
 ### Modo meta-herramientas
 
-Con `TOOL_SURFACE=meta`, el servidor expone una base de **{stats.meta.base} meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden herramientas Enterprise/Premium para un total de {stats.meta.self_managed_enterprise}, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de {stats.meta.gitlab_com}. Cada meta-herramienta agrupa operaciones relacionadas:
+Con `GITLAB_MCP_TOOL_SURFACE=meta`, el servidor expone una base de **{stats.meta.base} meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden herramientas Enterprise/Premium para un total de {stats.meta.self_managed_enterprise}, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de {stats.meta.gitlab_com}. Cada meta-herramienta agrupa operaciones relacionadas:
 
 ```mermaid
 graph TD
@@ -191,7 +191,7 @@ Esto reduce el uso de tokens y mejora la precisión de selección de herramienta
 
 ### Modo de herramientas individuales
 
-Con `TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} en Enterprise/Premium autoalojado, o {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
+Con `GITLAB_MCP_TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} en Enterprise/Premium autoalojado, o {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
 
 ## Componentes opcionales
 

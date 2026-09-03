@@ -379,12 +379,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	toolSurface, metaTools, err := ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+	toolSurface, metaTools, err := ParseToolSurface(Getenv("TOOL_SURFACE"), Getenv("META_TOOLS"))
 	if err != nil {
 		return nil, err
 	}
 
-	capabilitySurface, err := parseCapabilitySurface(os.Getenv("CAPABILITY_SURFACE"), DefaultCapabilitySurface)
+	capabilitySurface, err := parseCapabilitySurface(Getenv("CAPABILITY_SURFACE"), DefaultCapabilitySurface)
 	if err != nil {
 		return nil, fmt.Errorf("invalid CAPABILITY_SURFACE value: %w", err)
 	}
@@ -398,16 +398,16 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	rateLimitRPS, err := parseFloatNonNegative(os.Getenv("RATE_LIMIT_RPS"), 0)
+	rateLimitRPS, err := parseFloatNonNegative(Getenv("RATE_LIMIT_RPS"), 0)
 	if err != nil {
 		return nil, fmt.Errorf("invalid RATE_LIMIT_RPS value: %w", err)
 	}
-	rateLimitBurst, err := parseIntNonNegative(os.Getenv("RATE_LIMIT_BURST"), DefaultRateLimitBurst)
+	rateLimitBurst, err := parseIntNonNegative(Getenv("RATE_LIMIT_BURST"), DefaultRateLimitBurst)
 	if err != nil {
 		return nil, fmt.Errorf("invalid RATE_LIMIT_BURST value: %w", err)
 	}
 
-	metaParamSchema, err := parseMetaParamSchema(os.Getenv("META_PARAM_SCHEMA"), DefaultMetaParamSchema)
+	metaParamSchema, err := parseMetaParamSchema(Getenv("META_PARAM_SCHEMA"), DefaultMetaParamSchema)
 	if err != nil {
 		return nil, fmt.Errorf("invalid META_PARAM_SCHEMA value: %w", err)
 	}
@@ -433,7 +433,7 @@ func Load() (*Config, error) {
 		PublicURL:          auth.publicURL,
 		OAuthCacheTTL:      auth.oauthCacheTTL,
 		OAuthClientUIDs:    auth.oauthClientUIDs,
-		ExcludeTools:       ParseCSV(os.Getenv("EXCLUDE_TOOLS")),
+		ExcludeTools:       ParseCSV(Getenv("EXCLUDE_TOOLS")),
 		IgnoreScopes:       bools.ignoreScopes,
 		RateLimitRPS:       rateLimitRPS,
 		RateLimitBurst:     rateLimitBurst,
@@ -549,7 +549,7 @@ func ParseTierFlag(value string) (tier edition.Tier, explicit bool, err error) {
 }
 
 func parseEnvBool(name string, defaultValue bool) (bool, error) {
-	value, err := parseBool(os.Getenv(name), defaultValue)
+	value, err := parseBool(Getenv(name), defaultValue)
 	if err != nil {
 		return false, fmt.Errorf("invalid %s value: %w", name, err)
 	}
@@ -562,7 +562,7 @@ func loadLimitEnv() (limitEnv, error) {
 	if values.maxFileSize, err = UploadMaxFileSizeFromEnv(); err != nil {
 		return limitEnv{}, fmt.Errorf("invalid UPLOAD_MAX_FILE_SIZE value: %w", err)
 	}
-	if values.maxHTTPClients, err = parseInt(os.Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients); err != nil {
+	if values.maxHTTPClients, err = parseInt(Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients); err != nil {
 		return limitEnv{}, fmt.Errorf("invalid MAX_HTTP_CLIENTS value: %w", err)
 	}
 	if values.sessionTimeout, err = parseBoundedDurationEnv("SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout); err != nil {
@@ -584,14 +584,14 @@ func loadLimitEnv() (limitEnv, error) {
 // [parseDuration] rejects "0" outright, so routing these through
 // [parseBoundedDurationEnv] made a documented setting fail at startup.
 func parseDisableableDurationEnv(name string, defaultValue, maxValue time.Duration) (time.Duration, error) {
-	if strings.TrimSpace(os.Getenv(name)) == "0" {
+	if TrimmedGetenv(name) == "0" {
 		return 0, nil
 	}
 	return parseBoundedDurationEnv(name, defaultValue, maxValue)
 }
 
 func parseBoundedDurationEnv(name string, defaultValue, maxValue time.Duration) (time.Duration, error) {
-	value, err := parseDuration(os.Getenv(name), defaultValue)
+	value, err := parseDuration(Getenv(name), defaultValue)
 	if err != nil {
 		return 0, fmt.Errorf("invalid %s value: %w", name, err)
 	}
@@ -602,19 +602,19 @@ func parseBoundedDurationEnv(name string, defaultValue, maxValue time.Duration) 
 }
 
 func loadAuthEnv() (authEnv, error) {
-	mode := os.Getenv("AUTH_MODE")
+	mode := Getenv("AUTH_MODE")
 	if mode == "" {
 		mode = "legacy"
 	}
-	oauthCacheTTL, err := parseDuration(os.Getenv("OAUTH_CACHE_TTL"), DefaultOAuthCacheTTL)
+	oauthCacheTTL, err := parseDuration(Getenv("OAUTH_CACHE_TTL"), DefaultOAuthCacheTTL)
 	if err != nil {
 		return authEnv{}, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
 	}
 	return authEnv{
 		mode:            mode,
 		oauthCacheTTL:   oauthCacheTTL,
-		publicURL:       strings.TrimSpace(os.Getenv("PUBLIC_URL")),
-		oauthClientUIDs: ParseCSV(os.Getenv("OAUTH_CLIENT_UID")),
+		publicURL:       TrimmedGetenv("PUBLIC_URL"),
+		oauthClientUIDs: ParseCSV(Getenv("OAUTH_CLIENT_UID")),
 	}, nil
 }
 
@@ -1089,5 +1089,5 @@ func validatePublicURL(raw string) error {
 // variable. Without one function both paths call, the limit applied depended on
 // the transport: raised on stdio, ignored on HTTP.
 func UploadMaxFileSizeFromEnv() (int64, error) {
-	return parseSize(os.Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize)
+	return parseSize(Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize)
 }

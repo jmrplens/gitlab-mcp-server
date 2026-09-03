@@ -19,7 +19,7 @@ Las suscripciones a recursos permiten a un cliente decir **«avísame cuando est
 
 El servidor atiende las suscripciones mediante **sondeo**: un vigilante relee la URI suscrita a través del mismo handler al que despacha `resources/read`, compara un SHA-256 del contenido y notifica solo ante un cambio real. «El contenido cambió» significa por tanto exactamente «lo que tú leerías cambió» — nunca una suposición. La decisión y sus límites están registrados en [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md).
 
-Las suscripciones se anuncian con `CAPABILITY_SURFACE=full` (el valor por defecto). La superficie `minimal` no registra los recursos de datos de GitLab a los que aplica una suscripción, así que tampoco anuncia la capacidad.
+Las suscripciones se anuncian con `GITLAB_MCP_CAPABILITY_SURFACE=full` (el valor por defecto). La superficie `minimal` no registra los recursos de datos de GitLab a los que aplica una suscripción, así que tampoco anuncia la capacidad.
 
 ## ¿Qué se puede vigilar?
 

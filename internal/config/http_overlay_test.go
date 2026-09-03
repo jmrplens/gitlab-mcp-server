@@ -388,3 +388,80 @@ func assertDur(t *testing.T, field string, got *time.Duration, want time.Duratio
 		t.Errorf("%s = %v, want %v", field, *got, want)
 	}
 }
+
+// TestLoadHTTPEnvOverlay_PrefixedNamesArePresent verifies that HTTP mode's
+// environment layer sees a prefixed variable at all.
+//
+// Every read in this file sits behind [envPresent], so the gate decides
+// whether a value is read rather than the reader does. A gate looking only at
+// the deprecated spelling would leave a migrated HTTP deployment falling back
+// to flag defaults for every setting, with nothing reporting that its
+// environment had been skipped.
+func TestLoadHTTPEnvOverlay_PrefixedNamesArePresent(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		env   string
+		value string
+		field string
+	}{
+		{name: "tool surface", env: "TOOL_SURFACE", value: ToolSurfaceIndividual, field: "ToolSurface"},
+		{name: "capability surface", env: "CAPABILITY_SURFACE", value: CapabilitySurfaceMinimal, field: "CapabilitySurface"},
+		{name: "trusted origins", env: "TRUSTED_ORIGINS", value: "https://claude.ai", field: "TrustedOrigins"},
+		{name: "auth mode", env: "AUTH_MODE", value: "oauth", field: "AuthMode"},
+		{name: "public url", env: "PUBLIC_URL", value: "https://mcp.example.com", field: "PublicURL"},
+		{name: "pool idle timeout", env: "POOL_IDLE_TIMEOUT", value: "2h0m0s", field: "PoolIdleTimeout"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(EnvPrefix+tc.env, tc.value)
+
+			overlay, err := LoadHTTPEnvOverlay()
+			if err != nil {
+				t.Fatalf("LoadHTTPEnvOverlay() with %s set: %v", EnvPrefix+tc.env, err)
+			}
+			if got := overlaySetting(overlay, tc.field); got != tc.value {
+				t.Errorf("%s = %s, want %q", EnvPrefix+tc.env, got, tc.value)
+			}
+		})
+	}
+}
+
+// overlaySetting renders one overlay field by name, keeping the case table
+// data rather than a closure per case. An absent field reads as a marker so it
+// cannot be mistaken for a value that was read and found empty.
+func overlaySetting(o *HTTPEnvOverlay, field string) string {
+	const unset = "<unset>"
+	switch field {
+	case "ToolSurface":
+		if o.ToolSurface == nil {
+			return unset
+		}
+		return *o.ToolSurface
+	case "CapabilitySurface":
+		if o.CapabilitySurface == nil {
+			return unset
+		}
+		return *o.CapabilitySurface
+	case "TrustedOrigins":
+		if o.TrustedOrigins == nil {
+			return unset
+		}
+		return *o.TrustedOrigins
+	case "AuthMode":
+		if o.AuthMode == nil {
+			return unset
+		}
+		return *o.AuthMode
+	case "PublicURL":
+		if o.PublicURL == nil {
+			return unset
+		}
+		return *o.PublicURL
+	case "PoolIdleTimeout":
+		if o.PoolIdleTimeout == nil {
+			return unset
+		}
+		return o.PoolIdleTimeout.String()
+	default:
+		return "<unknown field " + field + ">"
+	}
+}

@@ -294,7 +294,7 @@ The shared `listTools` applies `LockdownInputSchemas`, so the audit reflects exa
 
 ### audit_tokens
 
-Measures the LLM context-window overhead of every registered tool/resource/prompt definition across the individual, meta, and dynamic surfaces using the cl100k_base tokenizer (via `github.com/tiktoken-go/tokenizer`, with a bytes/4 fallback). With `--compare-schemas`, it runs a sizing spike comparing `META_PARAM_SCHEMA` modes. With `-footprint`, it measures every tier × surface × schema-mode combination and regenerates the README token-footprint section plus the standalone reference doc; add `-check` to verify those are current without writing (CI gate).
+Measures the LLM context-window overhead of every registered tool/resource/prompt definition across the individual, meta, and dynamic surfaces using the cl100k_base tokenizer (via `github.com/tiktoken-go/tokenizer`, with a bytes/4 fallback). With `--compare-schemas`, it runs a sizing spike comparing `GITLAB_MCP_META_PARAM_SCHEMA` modes. With `-footprint`, it measures every tier × surface × schema-mode combination and regenerates the README token-footprint section plus the standalone reference doc; add `-check` to verify those are current without writing (CI gate).
 
 #### Usage
 
@@ -302,7 +302,7 @@ Measures the LLM context-window overhead of every registered tool/resource/promp
 # Default token audit
 go run ./cmd/audit_tokens/
 
-# Compare META_PARAM_SCHEMA modes
+# Compare GITLAB_MCP_META_PARAM_SCHEMA modes
 go run ./cmd/audit_tokens/ -compare-schemas
 
 # Regenerate the README token-footprint section + docs/development/token-footprint.md
@@ -316,9 +316,9 @@ go run ./cmd/audit_tokens/ -footprint -check
 
 | Flag               | Type   | Default | Description                                                                                                                                                  |
 | ------------------ | ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-footprint`       | `bool` | `false` | Measure all tiers × surfaces × `META_PARAM_SCHEMA` modes and write the README token-footprint section + `docs/development/token-footprint.md`                |
+| `-footprint`       | `bool` | `false` | Measure all tiers × surfaces × `GITLAB_MCP_META_PARAM_SCHEMA` modes and write the README token-footprint section + `docs/development/token-footprint.md`     |
 | `-check`           | `bool` | `false` | With `-footprint`, verify the README token-footprint section and `docs/development/token-footprint.md` are current without writing (exits non-zero on drift) |
-| `-compare-schemas` | `bool` | `false` | Compare `META_PARAM_SCHEMA` modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit                                   |
+| `-compare-schemas` | `bool` | `false` | Compare `GITLAB_MCP_META_PARAM_SCHEMA` modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit                        |
 | `-json`            | `bool` | `false` | Emit a JSON summary instead of the Markdown report                                                                                                           |
 | `-top-tools`       | `int`  | `30`    | Number of individual tools to list by token cost                                                                                                             |
 | `-top-domains`     | `int`  | `20`    | Number of domains to list by token cost                                                                                                                      |
@@ -617,7 +617,7 @@ Rewrites the manifest Go file in place, or (with `-check`) verifies it is curren
 
 Regenerates the `tools`, `prompts`, and `resources` arrays in `lhm.plugin.json`, the manifest published to the LobeHub Marketplace. LobeHub derives the listing's capability badges from those arrays — its scanner cannot introspect a server distributed as a Go binary or a Docker image — so a manifest without them advertises zero tools no matter what the server registers.
 
-The declared tool surface is the default one, `dynamic`, pinned explicitly rather than read from `TOOL_SURFACE`; the round-trip runs against an in-process stub client rather than `GITLAB_URL`/`GITLAB_TOKEN`. Both keep the committed file independent of the machine that generated it. Output schemas and tool icons are dropped: neither is part of the shape LobeHub documents, and the base64 icon data URIs alone would triple the file. Every other field is preserved, `version` included — the release stamp owns that one.
+The declared tool surface is the default one, `dynamic`, pinned explicitly rather than read from `GITLAB_MCP_TOOL_SURFACE`; the round-trip runs against an in-process stub client rather than `GITLAB_URL`/`GITLAB_TOKEN`. Both keep the committed file independent of the machine that generated it. Output schemas and tool icons are dropped: neither is part of the shape LobeHub documents, and the base64 icon data URIs alone would triple the file. Every other field is preserved, `version` included — the release stamp owns that one.
 
 #### Usage
 

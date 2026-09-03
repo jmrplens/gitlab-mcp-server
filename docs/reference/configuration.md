@@ -11,6 +11,35 @@ gitlab-mcp-server is configured through environment variables. It also reads `~/
 
 ---
 
+## Variable naming
+
+Settings this project defines are read as `GITLAB_MCP_<NAME>` from 2.8.0.
+
+A stdio MCP server runs in whatever shell its client was started from, next to
+every other tool that person uses. Names as generic as `LOG_LEVEL`, `AUTH_MODE`
+or `RATE_LIMIT_RPS` may already be owned by something else there, and the
+collision is silent: the server reads a value nobody gave it and behaves in a
+way nobody configured.
+
+The unprefixed spelling still works and is removed in v3. When both are set the
+prefixed one wins, and a warning at startup names the one being ignored.
+
+Some names stay bare on purpose:
+
+| Names                                                                                                                        | Why they were not renamed                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`, `GITLAB_TOKEN`                                                                                                 | GitLab's own convention. Every existing configuration sets them, and they are the two most likely to be written into a client configuration from memory |
+| `GITLAB_SKIP_TLS_VERIFY`, `GITLAB_TIER`, `GITLAB_ENTERPRISE`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES` | Already namespaced by `GITLAB_`. A second prefix would churn every existing configuration and protect against nothing                                   |
+| `OTEL_*`                                                                                                                     | Owned by the OpenTelemetry specification. The exporters read those names themselves and would never see a prefixed spelling                             |
+| `YOLO_MODE`, `AUTOPILOT`                                                                                                     | Conventions other agent tooling sets. Honoring the name another tool already uses is the entire point of reading them                                   |
+| `EMBEDDED_RESOURCES`, `SESSION_TIMEOUT`, `SESSION_REVALIDATE_INTERVAL`                                                       | Not part of the 2.8.0 rename                                                                                                                            |
+| `EVAL_SURFACE_*`                                                                                                             | The surface evaluator's own variables, set by `make` targets in this repository. They never appear beside another tool's variables in a user's shell    |
+
+The tables below always give the name to set, so read the name rather than
+deriving it.
+
+---
+
 ## Personal Setup
 
 These are the settings every user needs to get started.
@@ -23,24 +52,24 @@ These are the settings every user needs to get started.
 
 ### Common Options
 
-| Variable                 | Default              | Description                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------ | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances                                                                                                                                                                                                                                                                                                                                       |
-| `GITLAB_SKIP_TLS_VERIFY` | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                                                                                                                                                                             |
-| `TOOL_SURFACE`           | `dynamic`            | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                                                                                                                                                                                                                                                                                                 |
-| `META_TOOLS`             | *(legacy)*           | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, and `dynamic` -> `dynamic`. Ignored when `TOOL_SURFACE` is set                                                                                                                                                                                                                 |
-| `CAPABILITY_SURFACE`     | `full`               | Resource and prompt catalog selector: `full` preserves all resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest; `minimal` keeps the `gitlab://tools` manifest only                                                                                                                                                                                                 |
-| `META_PARAM_SCHEMA`      | `opaque`             | Meta-tool input-schema strategy: `opaque` (compact envelope), `compact`, or `full`. Applies to meta-tool `tools/list` schemas only. See [Environment Variables](env.md)                                                                                                                                                                                                                             |
-| `GITLAB_TIER`            | *(detected)*         | Licensing tier: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim with no license check. When unset, detected from the instance license (`GET /license` → plan), fallback `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate                              |
-| `GITLAB_ENTERPRISE`      | *(unset)*            | **Deprecated** — use `GITLAB_TIER`. Honored only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Emits a deprecation warning                                                                                                                                                                                                                                                    |
-| `GITLAB_READ_ONLY`       | `false`              | Read-only mode: removes every mutating operation at startup while read operations keep working. Filtering is per action, so a meta-tool or `gitlab_execute_action` that serves both reads and writes keeps serving its reads                                                                                                                                                                        |
-| `GITLAB_SAFE_MODE`       | `false`              | Safe mode: intercepts mutating operations and returns a JSON preview instead of executing. Interception is per action, so read operations keep working on every surface and the preview names the canonical action (e.g. `issue.create`). If `GITLAB_READ_ONLY=true`, it takes precedence                                                                                                           |
-| `EMBEDDED_RESOURCES`     | `true`               | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results. Set `false` to disable for clients that don't tolerate duplicate content blocks                                                                                                                                                                                                  |
-| `EXCLUDE_TOOLS`          | *(empty)*            | Comma-separated list of tool names to exclude from registration                                                                                                                                                                                                                                                                                                                                     |
-| `GITLAB_IGNORE_SCOPES`   | `false`              | Skip PAT scope detection and register all tools regardless of token permissions                                                                                                                                                                                                                                                                                                                     |
-| `UPLOAD_MAX_FILE_SIZE`   | `2GB`                | Maximum file size for upload and file tools. Supports human-friendly suffixes (`KB`, `MB`, `GB`, case-insensitive). Upper bound: 1 TB                                                                                                                                                                                                                                                               |
-| `CLIENT_COMPAT`          | `auto`               | Per-client response compatibility: OpenAI Codex sessions get the float `priority` in annotations rounded to 0 or 1 (their bundled parser rejects non-integer values); everything else is delivered unchanged. Set `off` to disable. Read from the process environment in both stdio and HTTP modes — there is no CLI flag equivalent. See [Client Compatibility](../guides/client-compatibility.md) |
-| `LOG_LEVEL`              | `info`               | Logging verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                                                                                                                                                                                 |
+| Variable                          | Default              | Description                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`                      | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances                                                                                                                                                                                                                                                                                                                                       |
+| `GITLAB_SKIP_TLS_VERIFY`          | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                                                                                                                                                                             |
+| `GITLAB_MCP_TOOL_SURFACE`         | `dynamic`            | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                                                                                                                                                                                                                                                                                                 |
+| `GITLAB_MCP_META_TOOLS`           | *(legacy)*           | Deprecated compatibility selector. Accepted values map to `GITLAB_MCP_TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, and `dynamic` -> `dynamic`. Ignored when `GITLAB_MCP_TOOL_SURFACE` is set                                                                                                                                                                                           |
+| `GITLAB_MCP_CAPABILITY_SURFACE`   | `full`               | Resource and prompt catalog selector: `full` preserves all resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest; `minimal` keeps the `gitlab://tools` manifest only                                                                                                                                                                                                 |
+| `GITLAB_MCP_META_PARAM_SCHEMA`    | `opaque`             | Meta-tool input-schema strategy: `opaque` (compact envelope), `compact`, or `full`. Applies to meta-tool `tools/list` schemas only. See [Environment Variables](env.md)                                                                                                                                                                                                                             |
+| `GITLAB_TIER`                     | *(detected)*         | Licensing tier: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim with no license check. When unset, detected from the instance license (`GET /license` → plan), fallback `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate                              |
+| `GITLAB_ENTERPRISE`               | *(unset)*            | **Deprecated** — use `GITLAB_TIER`. Honored only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Emits a deprecation warning                                                                                                                                                                                                                                                    |
+| `GITLAB_READ_ONLY`                | `false`              | Read-only mode: removes every mutating operation at startup while read operations keep working. Filtering is per action, so a meta-tool or `gitlab_execute_action` that serves both reads and writes keeps serving its reads                                                                                                                                                                        |
+| `GITLAB_SAFE_MODE`                | `false`              | Safe mode: intercepts mutating operations and returns a JSON preview instead of executing. Interception is per action, so read operations keep working on every surface and the preview names the canonical action (e.g. `issue.create`). If `GITLAB_READ_ONLY=true`, it takes precedence                                                                                                           |
+| `EMBEDDED_RESOURCES`              | `true`               | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results. Set `false` to disable for clients that don't tolerate duplicate content blocks                                                                                                                                                                                                  |
+| `GITLAB_MCP_EXCLUDE_TOOLS`        | *(empty)*            | Comma-separated list of tool names to exclude from registration                                                                                                                                                                                                                                                                                                                                     |
+| `GITLAB_IGNORE_SCOPES`            | `false`              | Skip PAT scope detection and register all tools regardless of token permissions                                                                                                                                                                                                                                                                                                                     |
+| `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | `2GB`                | Maximum file size for upload and file tools. Supports human-friendly suffixes (`KB`, `MB`, `GB`, case-insensitive). Upper bound: 1 TB                                                                                                                                                                                                                                                               |
+| `GITLAB_MCP_CLIENT_COMPAT`        | `auto`               | Per-client response compatibility: OpenAI Codex sessions get the float `priority` in annotations rounded to 0 or 1 (their bundled parser rejects non-integer values); everything else is delivered unchanged. Set `off` to disable. Read from the process environment in both stdio and HTTP modes — there is no CLI flag equivalent. See [Client Compatibility](../guides/client-compatibility.md) |
+| `GITLAB_MCP_LOG_LEVEL`            | `info`               | Logging verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                                                                                                                                                                                 |
 
 ### Dotenv File Example
 
@@ -49,12 +78,12 @@ Write this to `~/.gitlab-mcp-server.env`, or to any path you then name in `GITLA
 ```env
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 GITLAB_SKIP_TLS_VERIFY=false
-TOOL_SURFACE=dynamic
+GITLAB_MCP_TOOL_SURFACE=dynamic
 GITLAB_READ_ONLY=false
 GITLAB_SAFE_MODE=false
 EMBEDDED_RESOURCES=true
-UPLOAD_MAX_FILE_SIZE=2GB
-LOG_LEVEL=info
+GITLAB_MCP_UPLOAD_MAX_FILE_SIZE=2GB
+GITLAB_MCP_LOG_LEVEL=info
 ```
 
 For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
@@ -114,7 +143,7 @@ VS Code [input variables](https://code.visualstudio.com/docs/copilot/reference/m
       "command": "/usr/local/bin/gitlab-mcp-server",
       "env": {
         "GITLAB_TOKEN": "${input:gitlab-token}",
-        "TOOL_SURFACE": "meta"
+        "GITLAB_MCP_TOOL_SURFACE": "meta"
       }
     }
   }
@@ -142,7 +171,7 @@ Where `~/.gitlab-mcp-server.env` (or any path you choose) contains:
 ```env
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 GITLAB_SKIP_TLS_VERIFY=true
-TOOL_SURFACE=meta
+GITLAB_MCP_TOOL_SURFACE=meta
 ```
 
 Add `GITLAB_URL=https://gitlab.example.com` for self-managed GitLab.
@@ -187,32 +216,32 @@ These settings are for operators deploying the server for a team or managing adv
 
 This table summarizes the most common operational variables. For the complete source-of-truth list, see [Environment Variable Reference](env.md); for HTTP flags, see [CLI Reference](cli.md).
 
-| Variable              | Default   | Description                                                                                                                                                   |
-| --------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_MCP_ENV_FILE` | *(empty)* | Absolute path of one dotenv file to load besides `~/.gitlab-mcp-server.env`. Read from the process environment only, so a loaded file cannot nominate another |
-| `YOLO_MODE`           | `false`   | Skip destructive action confirmation prompts                                                                                                                  |
-| `AUTOPILOT`           | `false`   | Same as `YOLO_MODE` — skip confirmation prompts                                                                                                               |
-| `AUTH_MODE`           | `legacy`  | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification)                                                       |
-| `OAUTH_CACHE_TTL`     | `15m`     | TTL for verified OAuth token identity cache (min 1m, max 2h)                                                                                                  |
-| `OAUTH_CLIENT_UID`    | *(empty)* | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts                                     |
-| `RATE_LIMIT_RPS`      | `0`       | Per-server tools/call rate limit in requests/second (`0` disables it). Stdio only; HTTP mode defaults to `10` via `--rate-limit-rps`                          |
-| `RATE_LIMIT_BURST`    | `40`      | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                                                                             |
+| Variable                      | Default   | Description                                                                                                                                                   |
+| ----------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_MCP_ENV_FILE`         | *(empty)* | Absolute path of one dotenv file to load besides `~/.gitlab-mcp-server.env`. Read from the process environment only, so a loaded file cannot nominate another |
+| `YOLO_MODE`                   | `false`   | Skip destructive action confirmation prompts                                                                                                                  |
+| `AUTOPILOT`                   | `false`   | Same as `YOLO_MODE` — skip confirmation prompts                                                                                                               |
+| `GITLAB_MCP_AUTH_MODE`        | `legacy`  | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification)                                                       |
+| `GITLAB_MCP_OAUTH_CACHE_TTL`  | `15m`     | TTL for verified OAuth token identity cache (min 1m, max 2h)                                                                                                  |
+| `GITLAB_MCP_OAUTH_CLIENT_UID` | *(empty)* | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts                                     |
+| `GITLAB_MCP_RATE_LIMIT_RPS`   | `0`       | Per-server tools/call rate limit in requests/second (`0` disables it). Stdio only; HTTP mode defaults to `10` via `--rate-limit-rps`                          |
+| `GITLAB_MCP_RATE_LIMIT_BURST` | `40`      | Token-bucket burst size when `GITLAB_MCP_RATE_LIMIT_RPS` > 0                                                                                                  |
 
 ### Tool Modes
 
-| Mode                          | Variable                  | Tools Exposed                                                                 | Best For                                                                      |
-| ----------------------------- | ------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_action`                                 | Most users — lowest startup context while retaining full catalog reachability |
-| **Meta-tools**                | `TOOL_SURFACE=meta`       | 32 base / 49 self-managed enterprise / 50 GitLab.com Enterprise               | Clients that prefer consolidated domain dispatchers with `action` parameters  |
-| **Individual tools**          | `TOOL_SURFACE=individual` | 847 CE / 1065 self-managed enterprise / 1071 GitLab.com Enterprise with Orbit | Clients that need granular tool selection                                     |
+| Mode                          | Variable                             | Tools Exposed                                                                 | Best For                                                                      |
+| ----------------------------- | ------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Dynamic toolset** (default) | `GITLAB_MCP_TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_action`                                 | Most users — lowest startup context while retaining full catalog reachability |
+| **Meta-tools**                | `GITLAB_MCP_TOOL_SURFACE=meta`       | 32 base / 49 self-managed enterprise / 50 GitLab.com Enterprise               | Clients that prefer consolidated domain dispatchers with `action` parameters  |
+| **Individual tools**          | `GITLAB_MCP_TOOL_SURFACE=individual` | 847 CE / 1065 self-managed enterprise / 1071 GitLab.com Enterprise with Orbit | Clients that need granular tool selection                                     |
 
-Use the default dynamic surface for normal low-token deployments. Set `TOOL_SURFACE=meta` only when a client or workflow prefers domain meta-tools. `META_TOOLS` remains accepted for compatibility only and should appear only in migration guidance.
+Use the default dynamic surface for normal low-token deployments. Set `GITLAB_MCP_TOOL_SURFACE=meta` only when a client or workflow prefers domain meta-tools. `GITLAB_MCP_META_TOOLS` remains accepted for compatibility only and should appear only in migration guidance.
 
 See [Meta-Tools](../concepts/meta-tools.md) for the complete domain-action mapping and [Dynamic Toolset](../concepts/dynamic-tools.md) for the low-token find/execute workflow.
 
 ### Meta Parameter Schema
 
-`META_PARAM_SCHEMA` controls only the visible `inputSchema` of meta-tool dispatchers in `tools/list`. It does not change handler validation, execution, dynamic find output, or the `gitlab://tools` manifest contents.
+`GITLAB_MCP_META_PARAM_SCHEMA` controls only the visible `inputSchema` of meta-tool dispatchers in `tools/list`. It does not change handler validation, execution, dynamic find output, or the `gitlab://tools` manifest contents.
 
 | Tool surface | Visible tool schema impact                                                                                                           | Tool manifest availability                                    | Dynamic describe behavior                                        | Token impact                                                   | Recommended use                                      |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
@@ -224,7 +253,7 @@ The evaluated modes remain `opaque`, `compact`, and `full`. The setting name rem
 
 ### Capability Surface
 
-`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode: it keeps `gitlab://tools` for surface-aware action discovery, and omits static GitLab data resources, workflow guide resources, and prompt templates. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. Because the minimal handshake declares no `prompts` capability, `prompts/list` and `prompts/get` answer JSON-RPC `-32601` (method not found) rather than a hollow empty page — the wire surface stays in step with the declared capabilities. `logging/setLevel` answers `-32601` on every surface for the same reason: the server logs to stderr and never declares the `logging` capability.
+`GITLAB_MCP_CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `GITLAB_MCP_CAPABILITY_SURFACE=minimal` is a non-default low-token mode: it keeps `gitlab://tools` for surface-aware action discovery, and omits static GitLab data resources, workflow guide resources, and prompt templates. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. Because the minimal handshake declares no `prompts` capability, `prompts/list` and `prompts/get` answer JSON-RPC `-32601` (method not found) rather than a hollow empty page — the wire surface stays in step with the declared capabilities. `logging/setLevel` answers `-32601` on every surface for the same reason: the server logs to stderr and never declares the `logging` capability.
 
 Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead low by advertising only the unified tool manifest. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing low-token workflows. Reconsider an intermediate mode only if future audits show a concrete client that needs more resources but cannot tolerate prompts or static resources.
 

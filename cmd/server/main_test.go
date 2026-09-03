@@ -8642,3 +8642,41 @@ func TestApplyLocalFilesystemPolicy_FollowsTheParsedFlag_NotTheArgumentScan(t *t
 		})
 	}
 }
+
+// TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger verifies that the
+// environment-variable migration's only operator-facing output reaches the log.
+//
+// Which names warn, and in what words, is covered where that logic lives in
+// internal/config. What cannot be seen from there is the half this file owns:
+// the warning is emitted after slog.SetDefault has installed the handler the
+// rest of startup uses, so a call placed earlier would either be formatted
+// differently from every other line or be lost entirely.
+//
+// The warning is what makes the rename a migration rather than a permanent
+// shim: an old name that keeps working and says nothing is one nobody moves off
+// before v3 removes it under them.
+func TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger(t *testing.T) {
+	// The prefixed name is cleared rather than assumed absent: another test in
+	// this package passes -log-level, and that flag writes the prefixed
+	// spelling into the process environment.
+	os.Unsetenv(config.EnvPrefix + "LOG_LEVEL")
+	t.Setenv("LOG_LEVEL", "warn")
+	if got := config.Getenv("LOG_LEVEL"); got != "warn" {
+		t.Fatalf("config.Getenv(%q) = %q, want the deprecated name to be read", "LOG_LEVEL", got)
+	}
+
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+	logDeprecatedEnvNames()
+
+	for _, want := range []string{"LOG_LEVEL", config.EnvPrefix + "LOG_LEVEL", "v3"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(logged.String(), want) {
+				t.Errorf("the startup warning does not mention %q: %s", want, logged.String())
+			}
+		})
+	}
+}
