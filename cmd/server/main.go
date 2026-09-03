@@ -1722,6 +1722,12 @@ func newServerShell(
 		server.AddReceivingMiddleware(settings.identity.middleware())
 	}
 
+	// Near the end so the context it installs is the one every middleware
+	// below it and the handler itself run under: a call whose HTTP carrier
+	// goes away has to stop where the work is, which is the GitLab request
+	// inside the handler, not only where the result is assembled.
+	server.AddReceivingMiddleware(mcpCarriers.bind)
+
 	// Added last so it wraps every middleware above it as well as the handler.
 	server.AddReceivingMiddleware(recoverPanics)
 
@@ -2646,7 +2652,10 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 // deployment already tells the server its public path, so it does not need a
 // second flag to say the same thing.
 func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handler) {
-	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, handler))
+	// Innermost, so a token is minted only for a POST that reaches the SDK
+	// and not for one this chain is about to refuse. See [requestCarriers].
+	carried := mcpCarriers.middleware(handler)
+	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, carried))
 	for _, pattern := range mcpEndpointPatterns(cfg) {
 		mux.Handle(pattern, guarded)
 	}
@@ -2940,8 +2949,9 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 		MaxRequestBodyBytes: cfg.MaxRequestBodyBytes,
 		// Always propagate client aborts into handler contexts so in-flight
 		// GitLab API calls are cancelled when the POST is abandoned. The SDK
-		// applies this to new-protocol (2026-07-28) requests only, so legacy
-		// clients are unaffected.
+		// applies this to new-protocol (2026-07-28) requests only, and only
+		// in stateless mode; [requestCarriers] covers everything else, which
+		// is every client that has no notifications/cancelled to send.
 		PropagateRequestCancellation: true,
 	}
 }

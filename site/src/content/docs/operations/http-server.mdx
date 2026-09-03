@@ -269,7 +269,7 @@ The freshness window depends on how the licensing tier was resolved. A detected 
 
 ### Request cancellation
 
-Client aborts are always propagated into handler contexts, so an abandoned POST cancels its in-flight GitLab API calls. The SDK applies this to protocol `2026-07-28` requests only.
+Client aborts are always propagated into handler contexts, so an abandoned POST cancels its in-flight GitLab API calls, client-go's retries included. That holds on every protocol version and in both stateless and stateful mode: a POST is the whole lifetime of the calls it carries, since no event store is configured and a response whose POST has ended has nowhere left to be written. The SDK's own propagation covers protocol `2026-07-28` only, and an older client has no `notifications/cancelled` to send, so the server binds each call to the POST that carried it instead.
 
 ### Gateway routing annotation
 

@@ -102,8 +102,26 @@ func TestList_Success(t *testing.T) {
 	if first.CreatedAt != "2026-01-01T00:00:00Z" {
 		t.Errorf("CreatedAt = %q, want RFC 3339", first.CreatedAt)
 	}
+	if first.UpdatedAt != "2026-01-02T00:00:00Z" {
+		t.Errorf("UpdatedAt = %q, want RFC 3339", first.UpdatedAt)
+	}
+	// The fixture sends closedAt as null, which is what an open item carries.
+	// Asserting it is empty is what keeps a future formatter from rendering a
+	// zero time as a real date.
+	if first.ClosedAt != "" {
+		t.Errorf("ClosedAt = %q, want empty for a null timestamp", first.ClosedAt)
+	}
+	// Every field of pageInfo, not only the two the handler needed first: the
+	// fixture supplies four, and a field nothing asserts is a field a
+	// regression can quietly drop.
 	if !out.Pagination.HasNextPage || out.Pagination.EndCursor != "cursor-2" {
 		t.Errorf("Pagination = %+v, want the connection's pageInfo", out.Pagination)
+	}
+	if out.Pagination.HasPreviousPage {
+		t.Errorf("HasPreviousPage = true, want false from the fixture's pageInfo")
+	}
+	if out.Pagination.StartCursor != "cursor-1" {
+		t.Errorf("StartCursor = %q, want cursor-1", out.Pagination.StartCursor)
 	}
 }
 

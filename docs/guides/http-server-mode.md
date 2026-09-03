@@ -188,8 +188,14 @@ disagreeing views of the same thing.
 #### Request cancellation
 
 Client aborts are always propagated into handler contexts, so an abandoned POST
-cancels its in-flight GitLab API calls. The SDK applies this to protocol
-`2026-07-28` requests only; legacy-protocol clients are unaffected.
+cancels its in-flight GitLab API calls, client-go's retries included. That holds
+on every protocol version and in both stateless and stateful mode, because a
+POST is the whole lifetime of the calls it carries: no event store is
+configured, so a response whose POST has ended has nowhere left to be written.
+
+The SDK's own propagation covers protocol `2026-07-28` requests only, and a
+client older than that has no `notifications/cancelled` to send, so the server
+binds each call to the POST that carried it instead.
 
 #### Gateway routing annotation
 
@@ -807,7 +813,7 @@ sequenceDiagram
 ## Cancelling a request
 
 A client cancels an in-flight call by sending `notifications/cancelled` with the
-request id. Three things are worth knowing, because none of them is obvious from
+request id. Four things are worth knowing, because none of them is obvious from
 the protocol text alone.
 
 **The cancellation reaches GitLab.** The upstream request is aborted rather than
@@ -828,10 +834,12 @@ code sees it. What is logged is that the call was cancelled and how long it ran,
 at `INFO` — cancellation is the protocol working, so it does not belong in an
 error dashboard.
 
-On `--stateless=false`, a client that simply disconnects mid-call is a different
-case from one that cancels: the request continues to completion, since nothing
-on the connection says otherwise. Send `notifications/cancelled` before
-disconnecting if the work should stop.
+**Disconnecting also stops the work.** A client that drops the POST instead of
+cancelling gets the same outcome, on `--stateless=false` as well as on the
+default transport and whatever protocol version it negotiated: the call is
+bound to the request that carried it, so the upstream work and its retries end
+with that request. `notifications/cancelled` remains the way to stop a call
+while keeping the connection, which is the only thing dropping it cannot do.
 
 ## Shared Configuration
 
