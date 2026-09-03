@@ -6,7 +6,8 @@ This is the home for developer-facing material. Start with the
 [Development Guide](development.md) for environment setup, building, testing, and
 the workflow for adding a new tool. The remaining pages go deep on the runtime
 architecture, the static-analysis and godoc gates, the dynamic search ranker,
-token accounting, and the live-test fixtures. Architectural Decision Records and
+token accounting, the live-test fixtures, and the release-pipeline settings
+that live on GitHub rather than in this repository. Architectural Decision Records and
 the full testing reference live in subfolders here.
 
 > **Diátaxis type**: How-to & Reference · **Audience**: 🛠️ Contributors & maintainers
@@ -25,6 +26,7 @@ the full testing reference live in subfolders here.
 | [Testing](testing/README.md)                                              | Unit, E2E, and AI model-evaluation documentation                           |
 | [Architecture Decision Records](adr/README.md)                            | The recorded architectural decisions (ADRs)                                |
 | [Upstream Bugs and Gaps](upstream-bugs.md)                                | Defects found in dependencies, and what we contributed back                |
+| [Repository Settings](repository-settings.md)                             | Release-pipeline settings that live on GitHub rather than in the tree      |
 
 **Looking for something else?**
 [Concepts](../concepts/README.md) for design rationale ·
