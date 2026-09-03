@@ -72,12 +72,13 @@ func listenUnix(ctx context.Context, path string, socketMode os.FileMode) (net.L
 	if socketMode == 0 {
 		socketMode = config.DefaultSocketMode
 	}
-	// Created WITH the mode rather than chmod'ed into it afterwards: a chmod
-	// takes a path, and a path can change meaning between the bind and the
-	// chmod, so on a directory an untrusted local account can write that
-	// account could swap the socket for a symlink in between and have the
-	// mode land on whatever it points at (CWE-367). See socketmode_unix.go
-	// for why the descriptor-based alternative does not work.
+	// The socket carries its mode before it reaches this path at all: it is
+	// assembled in a private directory and published with link(2). A chmod on
+	// the operator's own path would be racing anybody who can write to that
+	// directory, since they could swap the socket for a symlink in between and
+	// have the mode land on whatever it points at (CWE-367). See
+	// socketmode_unix.go for the alternatives that do not work, the umask this
+	// replaced among them.
 	listener, err := bindUnixSocket(ctx, path, socketMode)
 	if err != nil {
 		return nil, err
