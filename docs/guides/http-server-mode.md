@@ -969,6 +969,7 @@ that forwards its prefix rather than stripping it.
 
 ## Further Reading
 
+- [Remote Deployment](remote-deployment.md) — running it as a service, in Docker, behind a proxy, and across several instances
 - [Configuration](../reference/configuration.md) — full configuration reference
 - [Architecture](../concepts/architecture.md) — system architecture with diagrams
 - [Resource Consumption](../concepts/resource-consumption.md) — memory and CPU analysis at scale

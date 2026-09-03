@@ -752,6 +752,11 @@ export default defineConfig({
 							translations: { es: "Servidor HTTP" },
 						},
 						{
+							slug: "operations/remote-deployment",
+							label: "Remote Deployment",
+							translations: { es: "Despliegue remoto" },
+						},
+						{
 							slug: "operations/error-handling",
 							label: "Error Handling",
 							translations: { es: "Errores y formato" },
