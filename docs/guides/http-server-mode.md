@@ -413,6 +413,42 @@ gitlab-mcp-server --http \
 > clients at `https://mcp.example.com/mcp` → `--public-url=https://mcp.example.com/mcp`
 > → metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/mcp`.
 
+#### Where the metadata lives: host root or sub-path
+
+RFC 9728 §3 derives the metadata URL by inserting `/.well-known/oauth-protected-resource`
+**between the host and the path** of the resource identifier. The well-known
+segment therefore always sits at the root of the host, and the resource's own
+path moves behind it. That produces two deployment shapes:
+
+| Deployment                     | `--public-url`                   | Metadata URL                                                          |
+| ------------------------------ | -------------------------------- | --------------------------------------------------------------------- |
+| One server owning the hostname | `https://mcp.example.com`        | `https://mcp.example.com/.well-known/oauth-protected-resource`        |
+| A server under a path prefix   | `https://mcp.example.com/gitlab` | `https://mcp.example.com/.well-known/oauth-protected-resource/gitlab` |
+
+The second row is the one that surprises people: the metadata for a server at
+`/gitlab` is **not** at `/gitlab/.well-known/...`. A reverse proxy therefore has
+to route `/.well-known/oauth-protected-resource/gitlab` to this server without
+rewriting it, and a proxy configured to forward only `/gitlab/*` will strand
+discovery while every MCP call keeps working, which is a confusing way to fail.
+
+Two rules follow, and they matter most on a host serving several MCP servers:
+
+- **Route the exact derived path, not a prefix.** A proxy `location` that sends
+  everything under `/.well-known/oauth-protected-resource/` to one server makes
+  that server answer for its neighbours too. A client asking about a different
+  server on the same host then receives this deployment's configuration,
+  describing a server it did not ask about. RFC 9728 §3.3 requires a conforming
+  client to discard a document whose `resource` value is not the identifier it
+  derived the URL from, so the answer is useless at best and misleading to a lax
+  client at worst.
+- **The path-less form belongs to the host root.** `/.well-known/oauth-protected-resource`
+  with no suffix is the document for a resource that _is_ the origin. If this
+  server lives under a path, that document is not its own, and it should neither
+  serve nor be routed it.
+
+A single server that owns its hostname has neither problem: the derived form is
+the path-less form, and there is no neighbour to speak for.
+
 **How it works:**
 
 ```mermaid
@@ -446,10 +482,18 @@ sequenceDiagram
 
 **Protected Resource Metadata ([RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728)):**
 
-In OAuth mode, the server exposes `/.well-known/oauth-protected-resource` with metadata for MCP clients that implement OAuth discovery:
+In OAuth mode, the server publishes the protected-resource document at the URL
+derived from `--public-url`, for MCP clients that implement OAuth discovery. The
+path below is the one a deployment that owns its hostname produces; a deployment
+under a path prefix serves it with that prefix appended, as the table above
+shows:
 
 ```bash
+# --public-url=https://mcp.example.com
 curl http://localhost:8080/.well-known/oauth-protected-resource
+
+# --public-url=https://mcp.example.com/gitlab
+curl http://localhost:8080/.well-known/oauth-protected-resource/gitlab
 ```
 
 ```json

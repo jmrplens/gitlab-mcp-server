@@ -153,6 +153,25 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --pub
 `--public-url` declares the externally reachable origin and **is the RFC 9728 resource identifier**; the server refuses to start in OAuth mode without a valid one. The metadata URL is derived from it by inserting the well-known segment between host and path, so `--public-url=https://mcp.example.com/gitlab` publishes metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/gitlab` — a path at the **root of the host**, which a reverse proxy must route without rewriting.
 :::
 
+### Where the metadata lives: host root or sub-path
+
+The well-known segment always sits at the root of the host, and the resource's own path moves behind it. That gives two deployment shapes:
+
+| Deployment                     | `--public-url`                   | Metadata URL                                                          |
+| ------------------------------ | -------------------------------- | --------------------------------------------------------------------- |
+| One server owning the hostname | `https://mcp.example.com`        | `https://mcp.example.com/.well-known/oauth-protected-resource`        |
+| A server under a path prefix   | `https://mcp.example.com/gitlab` | `https://mcp.example.com/.well-known/oauth-protected-resource/gitlab` |
+
+The second row is the one that surprises people: the metadata for a server at `/gitlab` is **not** at `/gitlab/.well-known/...`. A proxy forwarding only `/gitlab/*` strands discovery while every MCP call keeps working, which is a confusing way to fail.
+
+:::danger[Several MCP servers on one hostname]
+Route the **exact** derived path, never a prefix. A `location` that sends everything under `/.well-known/oauth-protected-resource/` to one server makes it answer for its neighbours: a client asking about a different server on the same host receives this deployment's configuration, describing a server it never asked about. RFC 9728 section 3.3 makes a conforming client discard such a document, so it is useless at best and misleading to a lax client at worst.
+
+The path-less form, `/.well-known/oauth-protected-resource` with no suffix, is the document for a resource that **is** the origin. A server living under a path should neither serve nor be routed it.
+:::
+
+A single server that owns its hostname has neither problem: the derived form is the path-less form, and there is no neighbour to speak for.
+
 :::note[Pre-registered client ID required]
 GitLab restricts dynamically-registered OAuth clients to the `mcp` scope, which grants no REST or GraphQL access — every action here would fail. Create a GitLab OAuth Application with the `api` scope and configure its Application ID in each client.
 :::
