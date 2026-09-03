@@ -294,4 +294,4 @@ Issue templates auto-assign labels on submission, and pull requests are labeled 
 | `invalid`          | `#e4e669` | Manual — out of scope                                  |
 | `wontfix`          | `#ffffff` | Manual — accepted but won't implement                  |
 
-The path labeler never removes a label (`sync-labels: false`), so anything applied by hand survives a later push. It also cannot create one: a label named in `.github/labeler.yml` that does not exist is skipped in silence. Manage labels with `gh label list` / `gh label create`.
+The path labeler never removes a label (`sync-labels: false`), so anything applied by hand survives a later push. It also cannot create one, because the workflow grants only `pull-requests: write`. A label named in `.github/labeler.yml` that does not exist in the repository is therefore not skipped: the action sends the whole set in a single request, so that one name costs the pull request every label it should have had, and the job says so rather than passing quietly. Create the label first, with `gh label list` / `gh label create`.

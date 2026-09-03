@@ -1,6 +1,13 @@
 # Path-based labels applied to pull requests by .github/workflows/labeler.yml.
-# Label names must already exist in the repository; the action does not create
-# them, it skips the ones it cannot find and says nothing.
+# Every key must name a label that already exists in the repository, and the
+# consequence of getting that wrong is larger than it looks: the action sends
+# the whole label set in one PUT, so a single name the repository does not have
+# loses the entire call and the pull request gets none of its labels. It is not
+# a per-label skip, and it is not silent either. The workflow grants only
+# pull-requests: write, under which that call comes back 403; issues: write
+# would let the action create the missing label instead, which is deliberately
+# not granted, because a label created that way is default grey with no
+# description and this repository manages its labels by hand (see CONTRIBUTING).
 #
 # Five labels, chosen against the real change history rather than against the
 # tree, because a rule that fires on nearly every pull request carries no
