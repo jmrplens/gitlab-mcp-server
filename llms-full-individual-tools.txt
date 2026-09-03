@@ -1,10 +1,10 @@
 # gitlab-mcp-server. Individual Tools Reference
 
-> Version 2.7.5 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.5 | up to 1078 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Individual Tools
 
-When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1071 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1065.
+When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1078 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1072.
 Grouped by domain:
 
 ### access (8 tools)
@@ -15643,4 +15643,94 @@ Upload an attachment to the project wiki repository. Returns: the attachment fil
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+### work (7 tools)
+
+#### gitlab_work_item_saved_view_create
+
+Create a work item saved view under a namespace. Returns: the created view with id, global id, name, private flag, subscription state, sort order, filters, and display settings. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_list, gitlab_work_item_saved_view_update, gitlab_work_item_saved_view_get.
+
+**Parameters:**
+
+- `description` (string): Description of the saved view
+- `display_settings` (object): Display settings for the consuming UI. GitLab validates this object and rejects unknown keys. The accepted ones are camelCase: viewMode (list, board, or table), hiddenMetadataKeys, collapsedGroups, visibleGroups, groupOrder. Omit to store an empty object
+- `filters` (object): Filters the view applies. Omit for a view with no filters
+- `is_private` (boolean): Keep the view private to the creating user. Defaults to true when omitted
+- `name` (string) (required): Name of the saved view
+- `namespace_path` (string) (required): Full path of the group or project to create the saved view under
+- `sort` (string) (required): Sort order the view applies, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+#### gitlab_work_item_saved_view_delete
+
+Delete a work item saved view permanently by numeric ID. Returns: a success confirmation naming the view. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list.
+
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `saved_view_id` (integer) (required): Numeric ID of the saved view to delete
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+#### gitlab_work_item_saved_view_get
+
+Get a single work item saved view by namespace path and numeric ID. Returns: id, global id, name, description, private flag, subscription state, sort order, filters, and display settings. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_list, gitlab_work_item_saved_view_update, gitlab_work_item_saved_view_delete.
+
+**Parameters:**
+
+- `namespace_path` (string) (required): Full path of the group or project the saved view belongs to (e.g. my-group or my-group/my-project)
+- `saved_view_id` (integer) (required): Numeric ID of the saved view
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_work_item_saved_view_list
+
+List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with gitlab_work_item_saved_view_get. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items.
+
+**Parameters:**
+
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `first` (integer): Number of items to return (default 20, max 100)
+- `last` (integer): Number of items from the end (backward pagination)
+- `namespace_path` (string) (required): Full path of the group or project whose saved views to list
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_work_item_saved_view_subscribe
+
+Subscribe the authenticated user to a work item saved view. Returns: the view with the updated subscription state. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_unsubscribe, gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list.
+
+**Parameters:**
+
+- `saved_view_id` (integer) (required): Numeric ID of the saved view to subscribe to
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_work_item_saved_view_unsubscribe
+
+Unsubscribe the authenticated user from a work item saved view. Returns: the view with the updated subscription state. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_subscribe, gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list.
+
+**Parameters:**
+
+- `saved_view_id` (integer) (required): Numeric ID of the saved view to unsubscribe from
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_work_item_saved_view_update
+
+Update a work item saved view by numeric ID. Returns: the updated view with id, global id, name, private flag, subscription state, sort order, filters, and display settings. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list, gitlab_work_item_saved_view_delete.
+
+**Parameters:**
+
+- `description` (string): New description for the saved view
+- `display_settings` (object): Replacement display settings, with the camelCase keys GitLab accepts: viewMode (list, board, or table), hiddenMetadataKeys, collapsedGroups, visibleGroups, groupOrder. Omit to leave the existing settings unchanged
+- `filters` (object): Replacement filters. Omit to leave the existing filters unchanged
+- `is_private` (boolean): Whether the view is private to the user who created it
+- `name` (string): New name for the saved view
+- `saved_view_id` (integer) (required): Numeric ID of the saved view to update
+- `sort` (string): New sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

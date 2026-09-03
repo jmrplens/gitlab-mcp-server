@@ -621,16 +621,17 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 
 const (
 	// expectedBaseDynamicCatalogActions identifies the expected base (Free tier)
-	// dynamic catalog actions. 851 = 865 −11 group webhooks −3 MR dependencies
+	// dynamic catalog actions. 858 = 872 −11 group webhooks −3 MR dependencies
 	// gated to Premium (group_webhooks.md and merge request dependencies are
 	// Premium/Ultimate). See cmd/audit_edition_tier.
-	expectedBaseDynamicCatalogActions = 851
+	expectedBaseDynamicCatalogActions = 858
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	// 1069 = 1066 + 3 security scan profile actions (attach/detach/list_project_statuses, Ultimate, client-go v2.45.0).
-	expectedEnterpriseDynamicCatalogActions = 1069
+	// 1076 = 1069 + 7 work item saved view actions (get/list/create/update/
+	// delete/subscribe/unsubscribe, Free, client-go v2.62.0).
+	expectedEnterpriseDynamicCatalogActions = 1076
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	// 1075 = 1072 + 3 security scan profile actions (Ultimate, client-go v2.45.0).
-	expectedGitLabComEnterpriseCatalogActions = 1075
+	// 1082 = 1075 + 7 work item saved view actions (Free, client-go v2.62.0).
+	expectedGitLabComEnterpriseCatalogActions = 1082
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

@@ -257,7 +257,7 @@ The server can present GitLab in three shapes, controlled by `GITLAB_MCP_TOOL_SU
 | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | **Dynamic** (default)         | 2 (`gitlab_find_action`, `gitlab_execute_action`) | Lowest token cost; reaches the full catalog via find/execute.    |
 | **Meta-tools** (`meta`)       | 32 base / 49 Ultimate / 50 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
-| **Individual** (`individual`) | ~847 Free/CE · ~999 Premium · 1065–1071 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
+| **Individual** (`individual`) | ~854 Free/CE · ~1006 Premium · 1072–1078 Ultimate | One MCP tool per GitLab operation; needs a large context window. |
 
 Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `GITLAB_MCP_CAPABILITY_SURFACE=minimal`.
 
@@ -271,12 +271,12 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               851 | n/a                            |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               851 | n/a                            |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,003 | n/a                            |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,003 | n/a                            |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,069 | n/a                            |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,069 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               858 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               858 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,010 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,010 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,076 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,076 | n/a                            |              1,501 |           170 |        1,671 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -286,7 +286,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 
 | MCP Capability    | Support                                                                                                                             |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Tools**         | Up to 1071 individual / 32–50 meta                                                                                                  |
+| **Tools**         | Up to 1078 individual / 32–50 meta                                                                                                  |
 | **Resources**     | 45 (static + templates)                                                                                                             |
 | **Prompts**       | 37 templates                                                                                                                        |
 | **Completions**   | 17 argument types: projects, groups, users, branches, tags, MRs, issues, pipelines, jobs, labels, milestones, SHAs                  |
@@ -459,47 +459,47 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,029 |     218,156 |
-| Unit tests (`_test.go`)  |       602 |     357,078 |
-| End-to-end tests         |       217 |      59,138 |
-| **Total**                | **1,848** | **634,372** |
+| Source (`.go`, non-test) |     1,034 |     219,156 |
+| Unit tests (`_test.go`)  |       606 |     358,625 |
+| End-to-end tests         |       218 |      59,303 |
+| **Total**                | **1,858** | **637,084** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,211 |
-| . Exported (public)             |  2,762 |
-| . Unexported (private)          |  5,449 |
-| Unit test functions (`TestXxx`) | 12,813 |
-| Subtests (`t.Run(...)`)         |  4,680 |
-| End-to-end test functions       |    557 |
+| Source functions                |  8,249 |
+| . Exported (public)             |  2,773 |
+| . Unexported (private)          |  5,476 |
+| Unit test functions (`TestXxx`) | 12,862 |
+| Subtests (`t.Run(...)`)         |  4,723 |
+| End-to-end test functions       |    558 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.64× more tests than code |
-| Average source file length         |                 ~212 lines |
-| Average test file length           |                 ~593 lines |
-| Comment lines in source            |  31,922 (~14.6% of source) |
+| Average source file length         |                 ~211 lines |
+| Average test file length           |                 ~591 lines |
+| Comment lines in source            |  32,089 (~14.6% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,882 |
-| `defer` statements                 | 1,118 |
-| `struct` types defined             | 2,818 |
-| `//nolint` suppressions            |   265 |
+| `if err != nil` checks             | 6,915 |
+| `defer` statements                 | 1,119 |
+| `struct` types defined             | 2,835 |
+| `//nolint` suppressions            |   267 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   245 |
+| Go packages                    |   246 |
 | Direct dependencies (`go.mod`) |    30 |
 | Indirect dependencies          |    31 |
 
@@ -514,8 +514,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,966 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,104 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,984 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,164 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

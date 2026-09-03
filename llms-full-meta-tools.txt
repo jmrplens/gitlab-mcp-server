@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Meta-Tools Reference
 
-> Version 2.7.5 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.5 | up to 1078 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -4343,6 +4343,13 @@ Action guidance:
 - work_item_delete: Permanently delete a work item by namespace full_path plus work_item_iid. Deletion is irreversible. Only the author or a Maintainer/Owner can delete, and some work item types are protected.
 - work_item_get: Get one exact work item by namespace full_path plus work_item_iid. Use this after list/search results or when the prompt already names a concrete work item number. Prefer work_item.get over work_item.list when the target is already known.
 - work_item_list: List work items in one project or group namespace. Use filters such as state, search, types, author_username, label_name, confidential, sort, include_ancestors/descendants, and cursor pagination when the prompt asks for matching work items in a known namespace.
+- work_item_saved_view_create: Create a work item saved view under a group or project namespace. Provide namespace_path, name, and sort. Add filters to store the query the view represents, description for context, is_private=false to share it, and display_settings only when the consuming UI needs them. An omitted display_settings is stored as an empty object.
+- work_item_saved_view_delete: Permanently delete a work item saved view by its numeric saved_view_id. Deletion is irreversible and removes the view for everyone it was shared with, so confirm the ID with work_item_saved_view.list first.
+- work_item_saved_view_get: Get one work item saved view by namespace_path plus its numeric saved_view_id. This is the only action that returns the view's filters, so use it whenever the prompt asks what a view actually matches.
+- work_item_saved_view_list: List the work item saved views under one group or project namespace, with cursor pagination. Use this to discover a view's numeric ID before getting, updating, subscribing to, or deleting it. Filters are omitted from every entry, so read them with work_item_saved_view.get.
+- work_item_saved_view_subscribe: Subscribe the authenticated user to a work item saved view by its numeric saved_view_id, so the view appears among the user's followed views.
+- work_item_saved_view_unsubscribe: Unsubscribe the authenticated user from a work item saved view by its numeric saved_view_id. The view itself is untouched, and only this user stops following it.
+- work_item_saved_view_update: Update a work item saved view by its numeric saved_view_id. Every field is optional and an omitted one is left unchanged. Supplying filters replaces the stored filter set wholesale, so read the current one with work_item_saved_view.get first when the intent is to add a condition rather than replace the query.
 - work_item_type_list: List available work item types (system-defined and custom) for a project or group namespace. Supports filtering by name and availability, with cursor-based pagination. Returns: type definitions with id, name, and enabled status. Experimental: the Work Items API may introduce breaking changes between minor versions.
 - work_item_update: Update an existing work item's fields, status, labels, or hierarchy. Provide full_path plus work_item_iid. Set state_event to CLOSE or REOPEN to change state, and supply only the widget-supported fields you want to change. assignee_ids and crm_contact_ids replace the whole list: send an empty array to remove every entry, and omit the field to leave it untouched. Clearing entries that exist requires confirm=true (or an approved elicitation prompt).
 Parameter guidance:
@@ -5033,6 +5040,62 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ```json
 {"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"work_items":{"items":{"additionalProperties":false,"properties":{"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"children":{"description":"Child work items in the hierarchy (each with namespace path and IID)","items":{"additionalProperties":false,"properties":{"iid":{"description":"Internal ID (IID) of the child work item","type":"integer"},"path":{"description":"Namespace full path of the child work item","type":"string"}},"required":["iid"],"type":"object"},"type":["null","array"]},"closed_at":{"type":"string"},"confidential":{"type":"boolean"},"created_at":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"linked_items":{"items":{"additionalProperties":false,"properties":{"iid":{"type":"integer"},"link_type":{"type":"string"},"path":{"type":"string"}},"required":["iid","link_type"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"status":{"type":"string"},"title":{"type":"string"},"type":{"type":"string"},"updated_at":{"type":"string"},"web_url":{"type":"string"}},"required":["id","iid","type","state","title"],"type":"object"},"type":["null","array"]}},"required":["work_items"],"type":"object"}
+```
+
+</details>
+
+<details><summary>work_item_saved_view_create</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"saved_view":{"additionalProperties":false,"properties":{"description":{"description":"Description of the saved view","type":"string"},"display_settings":{"description":"Display settings the consuming UI renders the view with"},"filters":{"description":"Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"},"gid":{"description":"GraphQL global ID of the saved view","type":"string"},"id":{"description":"Numeric ID of the saved view","type":"integer"},"is_private":{"description":"Whether the view is private to the user who created it","type":"boolean"},"name":{"description":"Name of the saved view","type":"string"},"sort":{"description":"Sort order the view applies","type":"string"},"subscribed":{"description":"Whether the authenticated user is subscribed to the view","type":"boolean"}},"required":["id","name","is_private","subscribed"],"type":"object"},"status":{"type":"string"}},"required":["status","message","saved_view"],"type":"object"}
+```
+
+</details>
+
+<details><summary>work_item_saved_view_delete</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>work_item_saved_view_get</summary>
+
+```json
+{"additionalProperties":false,"properties":{"namespace_path":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"saved_view":{"additionalProperties":false,"properties":{"description":{"description":"Description of the saved view","type":"string"},"display_settings":{"description":"Display settings the consuming UI renders the view with"},"filters":{"description":"Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"},"gid":{"description":"GraphQL global ID of the saved view","type":"string"},"id":{"description":"Numeric ID of the saved view","type":"integer"},"is_private":{"description":"Whether the view is private to the user who created it","type":"boolean"},"name":{"description":"Name of the saved view","type":"string"},"sort":{"description":"Sort order the view applies","type":"string"},"subscribed":{"description":"Whether the authenticated user is subscribed to the view","type":"boolean"}},"required":["id","name","is_private","subscribed"],"type":"object"}},"required":["namespace_path","saved_view"],"type":"object"}
+```
+
+</details>
+
+<details><summary>work_item_saved_view_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"namespace_path":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"},"saved_views":{"items":{"additionalProperties":false,"properties":{"description":{"description":"Description of the saved view","type":"string"},"display_settings":{"description":"Display settings the consuming UI renders the view with"},"filters":{"description":"Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"},"gid":{"description":"GraphQL global ID of the saved view","type":"string"},"id":{"description":"Numeric ID of the saved view","type":"integer"},"is_private":{"description":"Whether the view is private to the user who created it","type":"boolean"},"name":{"description":"Name of the saved view","type":"string"},"sort":{"description":"Sort order the view applies","type":"string"},"subscribed":{"description":"Whether the authenticated user is subscribed to the view","type":"boolean"}},"required":["id","name","is_private","subscribed"],"type":"object"},"type":["null","array"]}},"required":["namespace_path","saved_views","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>work_item_saved_view_subscribe</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"saved_view":{"additionalProperties":false,"properties":{"description":{"description":"Description of the saved view","type":"string"},"display_settings":{"description":"Display settings the consuming UI renders the view with"},"filters":{"description":"Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"},"gid":{"description":"GraphQL global ID of the saved view","type":"string"},"id":{"description":"Numeric ID of the saved view","type":"integer"},"is_private":{"description":"Whether the view is private to the user who created it","type":"boolean"},"name":{"description":"Name of the saved view","type":"string"},"sort":{"description":"Sort order the view applies","type":"string"},"subscribed":{"description":"Whether the authenticated user is subscribed to the view","type":"boolean"}},"required":["id","name","is_private","subscribed"],"type":"object"},"status":{"type":"string"}},"required":["status","message","saved_view"],"type":"object"}
+```
+
+</details>
+
+<details><summary>work_item_saved_view_unsubscribe</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"saved_view":{"additionalProperties":false,"properties":{"description":{"description":"Description of the saved view","type":"string"},"display_settings":{"description":"Display settings the consuming UI renders the view with"},"filters":{"description":"Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"},"gid":{"description":"GraphQL global ID of the saved view","type":"string"},"id":{"description":"Numeric ID of the saved view","type":"integer"},"is_private":{"description":"Whether the view is private to the user who created it","type":"boolean"},"name":{"description":"Name of the saved view","type":"string"},"sort":{"description":"Sort order the view applies","type":"string"},"subscribed":{"description":"Whether the authenticated user is subscribed to the view","type":"boolean"}},"required":["id","name","is_private","subscribed"],"type":"object"},"status":{"type":"string"}},"required":["status","message","saved_view"],"type":"object"}
+```
+
+</details>
+
+<details><summary>work_item_saved_view_update</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"saved_view":{"additionalProperties":false,"properties":{"description":{"description":"Description of the saved view","type":"string"},"display_settings":{"description":"Display settings the consuming UI renders the view with"},"filters":{"description":"Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"},"gid":{"description":"GraphQL global ID of the saved view","type":"string"},"id":{"description":"Numeric ID of the saved view","type":"integer"},"is_private":{"description":"Whether the view is private to the user who created it","type":"boolean"},"name":{"description":"Name of the saved view","type":"string"},"sort":{"description":"Sort order the view applies","type":"string"},"subscribed":{"description":"Whether the authenticated user is subscribed to the view","type":"boolean"}},"required":["id","name","is_private","subscribed"],"type":"object"},"status":{"type":"string"}},"required":["status","message","saved_view"],"type":"object"}
 ```
 
 </details>

@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Issues
-> **Individual tools**: 49
+> **Individual tools**: 56
 > **Meta-tool**: `gitlab_issue` (`GITLAB_MCP_TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `issue.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Issues API](https://docs.gitlab.com/ee/api/issues.html)
@@ -12,11 +12,11 @@
 
 ## Overview
 
-The issues domain covers the full lifecycle of GitLab issues: creation, retrieval, listing, updating, deletion, reordering, moving between projects, subscriptions, to-do creation, time tracking, participants, related merge requests, notes (comments), issue links, discussion threads, issue statistics, and work items.
+The issues domain covers the full lifecycle of GitLab issues: creation, retrieval, listing, updating, deletion, reordering, moving between projects, subscriptions, to-do creation, time tracking, participants, related merge requests, notes (comments), issue links, discussion threads, issue statistics, work items, and work item saved views.
 
 On the default dynamic surface, these operations are the `issue.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `GITLAB_MCP_TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, the whole domain is one `gitlab_issue` meta-tool that dispatches by `action` parameter — notes, links, work items, award emoji, resource events, discussions and statistics included. There is no separate discussion or statistics meta-tool; those are actions on `gitlab_issue` (`discussion_list`, `statistics_get`).
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the whole domain is one `gitlab_issue` meta-tool that dispatches by `action` parameter — notes, links, work items, work item saved views, award emoji, resource events, discussions and statistics included. There is no separate discussion or statistics meta-tool; those are actions on `gitlab_issue` (`discussion_list`, `statistics_get`).
 
 ### Common Questions
 
@@ -437,6 +437,67 @@ List available work item types (system-defined and custom) for a project or grou
 
 ---
 
+## Work Item Saved Views (Experimental)
+
+A saved view stores a named, reusable work item filter under a group or project namespace: the filter itself, the sort order, and the display settings the consuming UI renders it with. Available on Free, Premium and Ultimate. The GraphQL surface is marked experimental by GitLab and may introduce breaking changes between minor versions.
+
+`sort` is a `WorkItemSort` enum value (`CREATED_ASC`, `CREATED_DESC`, `TITLE_ASC`, `TITLE_DESC`, `UPDATED_ASC`, `UPDATED_DESC`, `PRIORITY_ASC`, `WEIGHT_DESC` and the rest of the enum). `display_settings` is an opaque JSON object GitLab validates against its own schema, so its keys are camelCase: `viewMode` (`list`, `board` or `table`), `hiddenMetadataKeys`, `collapsedGroups`, `visibleGroups`, `groupOrder`.
+
+`filters` mirrors GitLab's `WorkItemSavedViewFilterInput` one for one, including the nested `not`, `or`, `hierarchy_filters`, `status` and `custom_field` sub-objects. The eight time filters (`created_after`, `created_before`, `closed_after`, `closed_before`, `due_after`, `due_before`, `updated_after`, `updated_before`) take ISO 8601 timestamps.
+
+### `gitlab_work_item_saved_view_get`
+
+Get a single saved view by namespace path and numeric ID. This is the only action that returns the view's `filters`: GitLab resolves that field at most once per GraphQL request, so the list query does not ask for it. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_work_item_saved_view_list`
+
+List the saved views under a group or project namespace, with cursor pagination (`first`/`after` forward, `last`/`before` backward). `filters` is omitted from every entry. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_work_item_saved_view_create`
+
+Create a saved view under a namespace. Requires `namespace_path`, `name` and `sort`. Optional `description`, `is_private` (defaults to true), `filters` and `display_settings`; an omitted `display_settings` is stored as an empty object. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_work_item_saved_view_update`
+
+Update a saved view by numeric ID. Every field is optional and an omitted one is left unchanged. Supplying `filters` or `display_settings` replaces the stored value wholesale, so read the current one with `gitlab_work_item_saved_view_get` first when the intent is to add a condition rather than replace the query. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_work_item_saved_view_delete`
+
+Permanently delete a saved view by numeric ID. This action cannot be undone and removes the view for everyone it was shared with. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
+
+| Annotation | **Delete** |
+| ---------- | ---------- |
+
+> **Destructive**: Protected by confirmation prompt.
+
+### `gitlab_work_item_saved_view_subscribe`
+
+Subscribe the authenticated user to a saved view, so it appears among their followed views. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_work_item_saved_view_unsubscribe`
+
+Unsubscribe the authenticated user from a saved view. The view itself is untouched. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+---
+
 ## Tool Summary
 
 | # | Tool Name | Category | Annotation |
@@ -490,6 +551,13 @@ List available work item types (system-defined and custom) for a project or grou
 | 47 | `gitlab_update_work_item` | Work Items | Update |
 | 48 | `gitlab_delete_work_item` | Work Items | Delete |
 | 49 | `gitlab_list_work_item_types` | Work Items | Read |
+| 50 | `gitlab_work_item_saved_view_get` | Work Item Saved Views | Read |
+| 51 | `gitlab_work_item_saved_view_list` | Work Item Saved Views | Read |
+| 52 | `gitlab_work_item_saved_view_create` | Work Item Saved Views | Create |
+| 53 | `gitlab_work_item_saved_view_update` | Work Item Saved Views | Update |
+| 54 | `gitlab_work_item_saved_view_delete` | Work Item Saved Views | Delete |
+| 55 | `gitlab_work_item_saved_view_subscribe` | Work Item Saved Views | Update |
+| 56 | `gitlab_work_item_saved_view_unsubscribe` | Work Item Saved Views | Update |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -500,6 +568,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_issue_link_delete` — removes the link between two issues
 - `gitlab_delete_issue_discussion_note` — deletes a note from a discussion thread
 - `gitlab_delete_work_item` — permanently deletes a work item
+- `gitlab_work_item_saved_view_delete` deletes a work item saved view permanently
 
 ---
 
@@ -511,3 +580,4 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Discussions API](https://docs.gitlab.com/ee/api/discussions.html#issues)
 - [GitLab Issue Statistics API](https://docs.gitlab.com/ee/api/issues_statistics.html)
 - [GitLab Work Items API](https://docs.gitlab.com/api/graphql/reference/#workitem)
+- [GitLab Work Item Saved Views](https://docs.gitlab.com/user/work_items/saved_views/)

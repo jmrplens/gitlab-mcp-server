@@ -3,7 +3,7 @@
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.
 
 gitlab-mcp-server v2.7.5 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
-It provides up to 1071 individual MCP tools across 96 GitLab API domains, 32 base meta-tools, 49 self-managed enterprise meta-tools, 50 GitLab.com Enterprise meta-tools,
+It provides up to 1078 individual MCP tools across 97 GitLab API domains, 32 base meta-tools, 49 self-managed enterprise meta-tools, 50 GitLab.com Enterprise meta-tools,
 a default 2-tool dynamic find/execute surface, 45 resources, 37 prompts, and 4 MCP capabilities (completions, progress, elicitation, resource subscriptions). Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 Quick start:
@@ -76,7 +76,7 @@ When GITLAB_MCP_TOOL_SURFACE is unset or set to dynamic, the server exposes only
 Meta-tool overview:
 
 When GITLAB_MCP_TOOL_SURFACE=meta, 32 domain meta-tools are registered instead of
-up to 1071 individual tools. Enterprise/Premium entries register 49 meta-tools on self-managed GitLab,
+up to 1078 individual tools. Enterprise/Premium entries register 49 meta-tools on self-managed GitLab,
 or 50 on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single
 tool with an "action" parameter. Key meta-tools:
 
@@ -229,11 +229,11 @@ Prompts:
 
 ## Optional
 
-- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): 150 KB, ~38k tokens. Every tool and action with its description, without the per-action JSON schemas. The largest of these that still loads into a context window
-- [Meta-tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt): 2.0 MB, ~532k tokens. Full schemas for the dynamic and meta-tool surfaces only
-- [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): 864 KB, ~221k tokens. Full schemas for the one-tool-per-operation surface only
+- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): 151 KB, ~39k tokens. Every tool and action with its description, without the per-action JSON schemas. The largest of these that still loads into a context window
+- [Meta-tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt): 2.0 MB, ~534k tokens. Full schemas for the dynamic and meta-tool surfaces only
+- [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): 870 KB, ~223k tokens. Full schemas for the one-tool-per-operation surface only
 - [Resources and prompts reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-resources-prompts.txt): 29 KB, ~7k tokens. MCP resource and prompt definitions only
-- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 2.9 MB, ~760k tokens. The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead
+- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 2.9 MB, ~764k tokens. The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead
 - [Architecture](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md): Internal architecture and catalog-first runtime overview
 - [Output format](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/output-format.md): Markdown and structured output conventions
 - [Troubleshooting](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md): Common setup and runtime issues

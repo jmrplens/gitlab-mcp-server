@@ -69,6 +69,8 @@ github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 gitlab.com/gitlab-org/api/client-go/v2 v2.60.0 h1:9DUAwJwDxEkcjrbMvJcgVmE/V+nVocfqFOwtX7FH/EE=
 gitlab.com/gitlab-org/api/client-go/v2 v2.60.0/go.mod h1:8MV7TChxjlqD7Yp/XUMCF6Pjwz1JVKfQf6uYG2EW/cQ=
+gitlab.com/gitlab-org/api/client-go/v2 v2.62.0 h1:FOSaRwz5feHGhJDo4Yk+TLqF4e6cO3Qm4R929hQqUII=
+gitlab.com/gitlab-org/api/client-go/v2 v2.62.0/go.mod h1:LEVRH0wDbXtvsM7WAGlOgR10HCHCol1rZyjWoSeicuY=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/contrib/bridges/otelslog v0.20.1 h1:5sHc4ToTFjfSZCtGAAM6jPunICAmJX73htv372T4ipc=

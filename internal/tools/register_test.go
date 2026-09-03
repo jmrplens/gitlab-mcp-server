@@ -322,9 +322,9 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 1065 = 1062 + 3 security scan profile actions (attach/detach/
-		// list_project_statuses, Ultimate, client-go v2.45.0).
-		const expectedTools = 1065
+		// 1072 = 1065 + 7 work item saved view actions (get/list/create/
+		// update/delete/subscribe/unsubscribe, Free, client-go v2.62.0).
+		const expectedTools = 1072
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -340,10 +340,11 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 847 = 861 −11 group webhooks −3 MR dependencies gated to Premium
+		// 854 = 868 −11 group webhooks −3 MR dependencies gated to Premium
 		// (group_webhooks.md and merge request dependencies are
-		// Premium/Ultimate). See cmd/audit_edition_tier.
-		const expectedTools = 847
+		// Premium/Ultimate). See cmd/audit_edition_tier. The base moved from
+		// 861 with the 7 work item saved view actions, which are Free.
+		const expectedTools = 854
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
