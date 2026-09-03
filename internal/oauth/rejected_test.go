@@ -238,11 +238,18 @@ func TestRejectedTokens_Lookup_HonorsDisabledAndExpiry(t *testing.T) {
 	tests := []struct {
 		name    string
 		cache   *RejectedTokens
+		ttl     time.Duration
 		wantLen int
 	}{
 		{name: "capacity of zero disables it", cache: NewRejectedTokens(0, time.Hour)},
 		{name: "a zero TTL disables it", cache: NewRejectedTokens(8, 0)},
-		{name: "an entry past its TTL is forgotten", cache: NewRejectedTokens(8, time.Nanosecond)},
+		{
+			name:  "an entry past its TTL is forgotten",
+			cache: NewRejectedTokens(8, time.Nanosecond),
+			// Set only where the case needs the entry to actually expire,
+			// which is a wait and not an assumption. See below.
+			ttl: time.Nanosecond,
+		},
 	}
 
 	for _, tt := range tests {
@@ -250,6 +257,24 @@ func TestRejectedTokens_Lookup_HonorsDisabledAndExpiry(t *testing.T) {
 			t.Parallel()
 
 			tt.cache.RecordKind(instance, "token", RejectionUnaccepted)
+
+			if tt.ttl > 0 {
+				// Wait for the clock to pass the entry's deadline instead of
+				// assuming a nanosecond is observable. Lookup asks whether
+				// time.Now() is strictly after expiresAt, so with a TTL this
+				// short the case is really a question about clock resolution:
+				// Linux answers yes, and Windows routinely returns the same
+				// instant from two consecutive reads, so the entry was still
+				// live and this failed there.
+				//
+				// Do not "simplify" this away. The deadline is read after
+				// RecordKind, so it is at or past the entry's own, and a wait
+				// this short is what makes the expiry real rather than lucky.
+				deadline := time.Now().Add(tt.ttl)
+				for !time.Now().After(deadline) {
+					time.Sleep(time.Millisecond)
+				}
+			}
 
 			kind, refused := tt.cache.Lookup(instance, "token")
 
