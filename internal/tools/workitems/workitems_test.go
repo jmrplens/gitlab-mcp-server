@@ -107,12 +107,12 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WidgetFields verifies that listed work items carry the assignees,
+// TestList_WidgetFields_ArePopulatedFromTheDefaultFieldSet verifies that listed work items carry the assignees,
 // labels and linked items the SDK's default field set requests. The
 // hand-written query this handler replaced selected none of them, so every
 // listed item came back with those three fields empty even when GitLab held
 // values for them.
-func TestList_WidgetFields(t *testing.T) {
+func TestList_WidgetFields_ArePopulatedFromTheDefaultFieldSet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item 1","author":{"username":"dev1"},"features":{"assignees":{"assignees":{"nodes":[{"id":"gid://gitlab/User/3","username":"bob"},{"id":"gid://gitlab/User/4","username":"carol"}]}},"labels":{"labels":{"nodes":[{"id":"gid://gitlab/ProjectLabel/7","title":"bug"}]}},"linkedItems":{"linkedItems":{"nodes":[{"workItem":{"iid":"7","namespace":{"fullPath":"my-group/other"}},"linkType":"blocks"}]}}}}]}}}}`)
 	})
@@ -506,10 +506,10 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithNextPage verifies that the next-page cursor is
+// TestFormatListMarkdown_WithNextPage_EmitsTheCursorLine verifies that the next-page cursor is
 // rendered when the connection reports a further page, so a caller can pass it
 // back through the after input.
-func TestFormatListMarkdown_WithNextPage(t *testing.T) {
+func TestFormatListMarkdown_WithNextPage_EmitsTheCursorLine(t *testing.T) {
 	out := ListOutput{
 		WorkItems: []WorkItemItem{{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "A", Author: testAuthorDev}},
 		Pagination: toolutil.GraphQLPaginationOutput{
