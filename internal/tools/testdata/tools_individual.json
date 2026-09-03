@@ -206865,5 +206865,1936 @@
       "openWorldHint": true,
       "readOnlyHint": false
     }
+  },
+  {
+    "name": "gitlab_work_item_saved_view_create",
+    "description": "Create a work item saved view under a namespace. Returns: the created view with id, global id, name, private flag, subscription state, sort order, filters, and display settings. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_list, gitlab_work_item_saved_view_update, gitlab_work_item_saved_view_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "Description of the saved view",
+          "type": "string"
+        },
+        "display_settings": {
+          "additionalProperties": true,
+          "description": "Display settings for the consuming UI. GitLab validates this object and rejects unknown keys. The accepted ones are camelCase: viewMode (list, board, or table), hiddenMetadataKeys, collapsedGroups, visibleGroups, groupOrder. Omit to store an empty object",
+          "properties": {},
+          "type": "object"
+        },
+        "filters": {
+          "additionalProperties": false,
+          "description": "Filters the view applies. Omit for a view with no filters",
+          "properties": {
+            "assignee_usernames": {
+              "description": "Usernames of the assignees to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "assignee_wildcard_id": {
+              "description": "Assignee wildcard filter: ANY or NONE",
+              "type": "string"
+            },
+            "author_username": {
+              "description": "Username of the work item author",
+              "type": "string"
+            },
+            "closed_after": {
+              "description": "Match work items closed after this timestamp (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+              "type": "string"
+            },
+            "closed_before": {
+              "description": "Match work items closed before this timestamp (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+              "type": "string"
+            },
+            "confidential": {
+              "description": "Match only confidential (true) or only non-confidential (false) work items",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "created_after": {
+              "description": "Match work items created after this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "created_before": {
+              "description": "Match work items created before this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "crm_contact_id": {
+              "description": "CRM contact global ID whose work items to match",
+              "type": "string"
+            },
+            "crm_organization_id": {
+              "description": "CRM organization global ID whose work items to match",
+              "type": "string"
+            },
+            "custom_field": {
+              "description": "Custom field filters, each matching one custom field by ID or name",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "custom_field_id": {
+                    "description": "Custom field global ID",
+                    "type": "string"
+                  },
+                  "custom_field_name": {
+                    "description": "Custom field name",
+                    "type": "string"
+                  },
+                  "selected_option_ids": {
+                    "description": "Selected option global IDs to match",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "selected_option_values": {
+                    "description": "Selected option values to match",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "due_after": {
+              "description": "Match work items due after this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "due_before": {
+              "description": "Match work items due before this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "exclude_group_work_items": {
+              "description": "Exclude work items owned by the group itself",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "exclude_projects": {
+              "description": "Exclude work items owned by projects under the namespace",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "full_path": {
+              "description": "Full path of the project or group whose work items to match",
+              "type": "string"
+            },
+            "health_status_filter": {
+              "description": "Health status to match: onTrack, needsAttention, atRisk, ANY, or NONE",
+              "type": "string"
+            },
+            "hierarchy_filters": {
+              "additionalProperties": false,
+              "description": "Filter by position in the work item hierarchy",
+              "properties": {
+                "include_descendant_work_items": {
+                  "description": "Include work items below the matched parents",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "parent_ids": {
+                  "description": "Parent work item global IDs",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "parent_wildcard_id": {
+                  "description": "Parent wildcard filter: NONE or ANY",
+                  "type": "string"
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "iid": {
+              "description": "Internal ID (IID) of a single work item to match",
+              "type": "string"
+            },
+            "in": {
+              "description": "Fields the search term is matched against, e.g. TITLE or DESCRIPTION",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "include_descendant_work_items": {
+              "description": "Include work items below the matched ones in the hierarchy",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "include_descendants": {
+              "description": "Include work items from descendant namespaces",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "iteration_cadence_id": {
+              "description": "Iteration cadence global IDs to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "iteration_id": {
+              "description": "Iteration global IDs to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "iteration_wildcard_id": {
+              "description": "Iteration wildcard filter: NONE, ANY, CURRENT",
+              "type": "string"
+            },
+            "label_name": {
+              "description": "Label names to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "milestone_title": {
+              "description": "Milestone titles to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "milestone_wildcard_id": {
+              "description": "Milestone wildcard filter: NONE, ANY, STARTED, UPCOMING",
+              "type": "string"
+            },
+            "my_reaction_emoji": {
+              "description": "Emoji the authenticated user reacted with",
+              "type": "string"
+            },
+            "not": {
+              "additionalProperties": false,
+              "description": "Values that exclude a work item from the view",
+              "properties": {
+                "assignee_usernames": {
+                  "description": "Assignee usernames to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "author_username": {
+                  "description": "Author usernames to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "custom_field": {
+                  "description": "Custom field values to exclude",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "custom_field_id": {
+                        "description": "Custom field global ID",
+                        "type": "string"
+                      },
+                      "custom_field_name": {
+                        "description": "Custom field name",
+                        "type": "string"
+                      },
+                      "selected_option_ids": {
+                        "description": "Selected option global IDs to match",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
+                      },
+                      "selected_option_values": {
+                        "description": "Selected option values to match",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "health_status_filter": {
+                  "description": "Health statuses to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "iteration_id": {
+                  "description": "Iteration global IDs to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "iteration_wildcard_id": {
+                  "description": "Iteration wildcard filter to exclude",
+                  "type": "string"
+                },
+                "label_name": {
+                  "description": "Label names to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "milestone_title": {
+                  "description": "Milestone titles to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "milestone_wildcard_id": {
+                  "description": "Milestone wildcard filter to exclude",
+                  "type": "string"
+                },
+                "my_reaction_emoji": {
+                  "description": "Emoji reaction to exclude",
+                  "type": "string"
+                },
+                "parent_ids": {
+                  "description": "Parent work item global IDs to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "release_tag": {
+                  "description": "Release tags to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "types": {
+                  "description": "Work item type names to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "weight": {
+                  "description": "Weight to exclude",
+                  "type": "string"
+                },
+                "work_item_type_ids": {
+                  "description": "Work item type global IDs to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "or": {
+              "additionalProperties": false,
+              "description": "Values where matching any one of them includes the work item",
+              "properties": {
+                "assignee_usernames": {
+                  "description": "Assignee usernames where matching any one includes the work item",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "author_usernames": {
+                  "description": "Author usernames where matching any one includes the work item",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "custom_field": {
+                  "description": "Custom field values where matching any one includes the work item",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "custom_field_id": {
+                        "description": "Custom field global ID",
+                        "type": "string"
+                      },
+                      "custom_field_name": {
+                        "description": "Custom field name",
+                        "type": "string"
+                      },
+                      "selected_option_ids": {
+                        "description": "Selected option global IDs to match",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
+                      },
+                      "selected_option_values": {
+                        "description": "Selected option values to match",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "label_names": {
+                  "description": "Label names where matching any one includes the work item",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "release_tag": {
+              "description": "Release tags to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "release_tag_wildcard_id": {
+              "description": "Release tag wildcard filter: NONE or ANY",
+              "type": "string"
+            },
+            "search": {
+              "description": "Free-text search term",
+              "type": "string"
+            },
+            "state": {
+              "description": "Work item state: opened, closed, or all",
+              "type": "string"
+            },
+            "status": {
+              "additionalProperties": false,
+              "description": "Filter by the work item status widget value",
+              "properties": {
+                "id": {
+                  "description": "Status global ID",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Status name, e.g. To do or In progress",
+                  "type": "string"
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "subscribed": {
+              "description": "Subscription state of the authenticated user: EXPLICITLY_SUBSCRIBED, EXPLICITLY_UNSUBSCRIBED",
+              "type": "string"
+            },
+            "types": {
+              "description": "Work item type names to match, e.g. ISSUE, TASK, EPIC",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "updated_after": {
+              "description": "Match work items updated after this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "updated_before": {
+              "description": "Match work items updated before this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "weight": {
+              "description": "Weight to match",
+              "type": "string"
+            },
+            "weight_wildcard_id": {
+              "description": "Weight wildcard filter: NONE or ANY",
+              "type": "string"
+            },
+            "work_item_type_ids": {
+              "description": "Work item type global IDs to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "is_private": {
+          "description": "Keep the view private to the creating user. Defaults to true when omitted",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "name": {
+          "description": "Name of the saved view",
+          "type": "string"
+        },
+        "namespace_path": {
+          "description": "Full path of the group or project to create the saved view under",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order the view applies, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC",
+          "enum": [
+            "BLOCKING_ISSUES_ASC",
+            "BLOCKING_ISSUES_DESC",
+            "CLOSED_AT_ASC",
+            "CLOSED_AT_DESC",
+            "CREATED_ASC",
+            "CREATED_DESC",
+            "DUE_DATE_ASC",
+            "DUE_DATE_DESC",
+            "ESCALATION_STATUS_ASC",
+            "ESCALATION_STATUS_DESC",
+            "HEALTH_STATUS_ASC",
+            "HEALTH_STATUS_DESC",
+            "LABEL_PRIORITY_ASC",
+            "LABEL_PRIORITY_DESC",
+            "MILESTONE_DUE_ASC",
+            "MILESTONE_DUE_DESC",
+            "POPULARITY_ASC",
+            "POPULARITY_DESC",
+            "PRIORITY_ASC",
+            "PRIORITY_DESC",
+            "RELATIVE_POSITION_ASC",
+            "SEVERITY_ASC",
+            "SEVERITY_DESC",
+            "START_DATE_ASC",
+            "START_DATE_DESC",
+            "STATUS_ASC",
+            "STATUS_DESC",
+            "TITLE_ASC",
+            "TITLE_DESC",
+            "UPDATED_ASC",
+            "UPDATED_DESC",
+            "WEIGHT_ASC",
+            "WEIGHT_DESC"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace_path",
+        "name",
+        "sort"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "saved_view": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "description": "Description of the saved view",
+              "type": "string"
+            },
+            "display_settings": {
+              "description": "Display settings the consuming UI renders the view with"
+            },
+            "filters": {
+              "description": "Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"
+            },
+            "gid": {
+              "description": "GraphQL global ID of the saved view",
+              "type": "string"
+            },
+            "id": {
+              "description": "Numeric ID of the saved view",
+              "type": "integer"
+            },
+            "is_private": {
+              "description": "Whether the view is private to the user who created it",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Name of the saved view",
+              "type": "string"
+            },
+            "sort": {
+              "description": "Sort order the view applies",
+              "type": "string"
+            },
+            "subscribed": {
+              "description": "Whether the authenticated user is subscribed to the view",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "is_private",
+            "subscribed"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "saved_view"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_work_item_saved_view_delete",
+    "description": "Delete a work item saved view permanently by numeric ID. Returns: a success confirmation naming the view. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "saved_view_id": {
+          "description": "Numeric ID of the saved view to delete",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "saved_view_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_work_item_saved_view_get",
+    "description": "Get a single work item saved view by namespace path and numeric ID. Returns: id, global id, name, description, private flag, subscription state, sort order, filters, and display settings. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_list, gitlab_work_item_saved_view_update, gitlab_work_item_saved_view_delete.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "namespace_path": {
+          "description": "Full path of the group or project the saved view belongs to (e.g. my-group or my-group/my-project)",
+          "type": "string"
+        },
+        "saved_view_id": {
+          "description": "Numeric ID of the saved view",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "namespace_path",
+        "saved_view_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "namespace_path": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "saved_view": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "description": "Description of the saved view",
+              "type": "string"
+            },
+            "display_settings": {
+              "description": "Display settings the consuming UI renders the view with"
+            },
+            "filters": {
+              "description": "Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"
+            },
+            "gid": {
+              "description": "GraphQL global ID of the saved view",
+              "type": "string"
+            },
+            "id": {
+              "description": "Numeric ID of the saved view",
+              "type": "integer"
+            },
+            "is_private": {
+              "description": "Whether the view is private to the user who created it",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Name of the saved view",
+              "type": "string"
+            },
+            "sort": {
+              "description": "Sort order the view applies",
+              "type": "string"
+            },
+            "subscribed": {
+              "description": "Whether the authenticated user is subscribed to the view",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "is_private",
+            "subscribed"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "namespace_path",
+        "saved_view"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_work_item_saved_view_list",
+    "description": "List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with gitlab_work_item_saved_view_get. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
+          "type": "string"
+        },
+        "before": {
+          "description": "Cursor for backward pagination (from previous response start_cursor)",
+          "type": "string"
+        },
+        "first": {
+          "description": "Number of items to return (default 20, max 100)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "last": {
+          "description": "Number of items from the end (backward pagination)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "namespace_path": {
+          "description": "Full path of the group or project whose saved views to list",
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "namespace_path": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            },
+            "has_previous_page": {
+              "type": "boolean"
+            },
+            "start_cursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "type": "object"
+        },
+        "saved_views": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "description": "Description of the saved view",
+                "type": "string"
+              },
+              "display_settings": {
+                "description": "Display settings the consuming UI renders the view with"
+              },
+              "filters": {
+                "description": "Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"
+              },
+              "gid": {
+                "description": "GraphQL global ID of the saved view",
+                "type": "string"
+              },
+              "id": {
+                "description": "Numeric ID of the saved view",
+                "type": "integer"
+              },
+              "is_private": {
+                "description": "Whether the view is private to the user who created it",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Name of the saved view",
+                "type": "string"
+              },
+              "sort": {
+                "description": "Sort order the view applies",
+                "type": "string"
+              },
+              "subscribed": {
+                "description": "Whether the authenticated user is subscribed to the view",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "is_private",
+              "subscribed"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "namespace_path",
+        "saved_views",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_work_item_saved_view_subscribe",
+    "description": "Subscribe the authenticated user to a work item saved view. Returns: the view with the updated subscription state. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_unsubscribe, gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "saved_view_id": {
+          "description": "Numeric ID of the saved view to subscribe to",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "saved_view_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "saved_view": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "description": "Description of the saved view",
+              "type": "string"
+            },
+            "display_settings": {
+              "description": "Display settings the consuming UI renders the view with"
+            },
+            "filters": {
+              "description": "Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"
+            },
+            "gid": {
+              "description": "GraphQL global ID of the saved view",
+              "type": "string"
+            },
+            "id": {
+              "description": "Numeric ID of the saved view",
+              "type": "integer"
+            },
+            "is_private": {
+              "description": "Whether the view is private to the user who created it",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Name of the saved view",
+              "type": "string"
+            },
+            "sort": {
+              "description": "Sort order the view applies",
+              "type": "string"
+            },
+            "subscribed": {
+              "description": "Whether the authenticated user is subscribed to the view",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "is_private",
+            "subscribed"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "saved_view"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_work_item_saved_view_unsubscribe",
+    "description": "Unsubscribe the authenticated user from a work item saved view. Returns: the view with the updated subscription state. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_subscribe, gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "saved_view_id": {
+          "description": "Numeric ID of the saved view to unsubscribe from",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "saved_view_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "saved_view": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "description": "Description of the saved view",
+              "type": "string"
+            },
+            "display_settings": {
+              "description": "Display settings the consuming UI renders the view with"
+            },
+            "filters": {
+              "description": "Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"
+            },
+            "gid": {
+              "description": "GraphQL global ID of the saved view",
+              "type": "string"
+            },
+            "id": {
+              "description": "Numeric ID of the saved view",
+              "type": "integer"
+            },
+            "is_private": {
+              "description": "Whether the view is private to the user who created it",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Name of the saved view",
+              "type": "string"
+            },
+            "sort": {
+              "description": "Sort order the view applies",
+              "type": "string"
+            },
+            "subscribed": {
+              "description": "Whether the authenticated user is subscribed to the view",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "is_private",
+            "subscribed"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "saved_view"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_work_item_saved_view_update",
+    "description": "Update a work item saved view by numeric ID. Returns: the updated view with id, global id, name, private flag, subscription state, sort order, filters, and display settings. Experimental: the Work Item Saved Views API is a work in progress and may introduce breaking changes even between minor versions. See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list, gitlab_work_item_saved_view_delete.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "New description for the saved view",
+          "type": "string"
+        },
+        "display_settings": {
+          "additionalProperties": true,
+          "description": "Replacement display settings, with the camelCase keys GitLab accepts: viewMode (list, board, or table), hiddenMetadataKeys, collapsedGroups, visibleGroups, groupOrder. Omit to leave the existing settings unchanged",
+          "properties": {},
+          "type": "object"
+        },
+        "filters": {
+          "additionalProperties": false,
+          "description": "Replacement filters. Omit to leave the existing filters unchanged",
+          "properties": {
+            "assignee_usernames": {
+              "description": "Usernames of the assignees to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "assignee_wildcard_id": {
+              "description": "Assignee wildcard filter: ANY or NONE",
+              "type": "string"
+            },
+            "author_username": {
+              "description": "Username of the work item author",
+              "type": "string"
+            },
+            "closed_after": {
+              "description": "Match work items closed after this timestamp (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+              "type": "string"
+            },
+            "closed_before": {
+              "description": "Match work items closed before this timestamp (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+              "type": "string"
+            },
+            "confidential": {
+              "description": "Match only confidential (true) or only non-confidential (false) work items",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "created_after": {
+              "description": "Match work items created after this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "created_before": {
+              "description": "Match work items created before this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "crm_contact_id": {
+              "description": "CRM contact global ID whose work items to match",
+              "type": "string"
+            },
+            "crm_organization_id": {
+              "description": "CRM organization global ID whose work items to match",
+              "type": "string"
+            },
+            "custom_field": {
+              "description": "Custom field filters, each matching one custom field by ID or name",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "custom_field_id": {
+                    "description": "Custom field global ID",
+                    "type": "string"
+                  },
+                  "custom_field_name": {
+                    "description": "Custom field name",
+                    "type": "string"
+                  },
+                  "selected_option_ids": {
+                    "description": "Selected option global IDs to match",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "selected_option_values": {
+                    "description": "Selected option values to match",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "due_after": {
+              "description": "Match work items due after this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "due_before": {
+              "description": "Match work items due before this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "exclude_group_work_items": {
+              "description": "Exclude work items owned by the group itself",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "exclude_projects": {
+              "description": "Exclude work items owned by projects under the namespace",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "full_path": {
+              "description": "Full path of the project or group whose work items to match",
+              "type": "string"
+            },
+            "health_status_filter": {
+              "description": "Health status to match: onTrack, needsAttention, atRisk, ANY, or NONE",
+              "type": "string"
+            },
+            "hierarchy_filters": {
+              "additionalProperties": false,
+              "description": "Filter by position in the work item hierarchy",
+              "properties": {
+                "include_descendant_work_items": {
+                  "description": "Include work items below the matched parents",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "parent_ids": {
+                  "description": "Parent work item global IDs",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "parent_wildcard_id": {
+                  "description": "Parent wildcard filter: NONE or ANY",
+                  "type": "string"
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "iid": {
+              "description": "Internal ID (IID) of a single work item to match",
+              "type": "string"
+            },
+            "in": {
+              "description": "Fields the search term is matched against, e.g. TITLE or DESCRIPTION",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "include_descendant_work_items": {
+              "description": "Include work items below the matched ones in the hierarchy",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "include_descendants": {
+              "description": "Include work items from descendant namespaces",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "iteration_cadence_id": {
+              "description": "Iteration cadence global IDs to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "iteration_id": {
+              "description": "Iteration global IDs to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "iteration_wildcard_id": {
+              "description": "Iteration wildcard filter: NONE, ANY, CURRENT",
+              "type": "string"
+            },
+            "label_name": {
+              "description": "Label names to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "milestone_title": {
+              "description": "Milestone titles to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "milestone_wildcard_id": {
+              "description": "Milestone wildcard filter: NONE, ANY, STARTED, UPCOMING",
+              "type": "string"
+            },
+            "my_reaction_emoji": {
+              "description": "Emoji the authenticated user reacted with",
+              "type": "string"
+            },
+            "not": {
+              "additionalProperties": false,
+              "description": "Values that exclude a work item from the view",
+              "properties": {
+                "assignee_usernames": {
+                  "description": "Assignee usernames to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "author_username": {
+                  "description": "Author usernames to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "custom_field": {
+                  "description": "Custom field values to exclude",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "custom_field_id": {
+                        "description": "Custom field global ID",
+                        "type": "string"
+                      },
+                      "custom_field_name": {
+                        "description": "Custom field name",
+                        "type": "string"
+                      },
+                      "selected_option_ids": {
+                        "description": "Selected option global IDs to match",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
+                      },
+                      "selected_option_values": {
+                        "description": "Selected option values to match",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "health_status_filter": {
+                  "description": "Health statuses to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "iteration_id": {
+                  "description": "Iteration global IDs to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "iteration_wildcard_id": {
+                  "description": "Iteration wildcard filter to exclude",
+                  "type": "string"
+                },
+                "label_name": {
+                  "description": "Label names to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "milestone_title": {
+                  "description": "Milestone titles to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "milestone_wildcard_id": {
+                  "description": "Milestone wildcard filter to exclude",
+                  "type": "string"
+                },
+                "my_reaction_emoji": {
+                  "description": "Emoji reaction to exclude",
+                  "type": "string"
+                },
+                "parent_ids": {
+                  "description": "Parent work item global IDs to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "release_tag": {
+                  "description": "Release tags to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "types": {
+                  "description": "Work item type names to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "weight": {
+                  "description": "Weight to exclude",
+                  "type": "string"
+                },
+                "work_item_type_ids": {
+                  "description": "Work item type global IDs to exclude",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "or": {
+              "additionalProperties": false,
+              "description": "Values where matching any one of them includes the work item",
+              "properties": {
+                "assignee_usernames": {
+                  "description": "Assignee usernames where matching any one includes the work item",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "author_usernames": {
+                  "description": "Author usernames where matching any one includes the work item",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "custom_field": {
+                  "description": "Custom field values where matching any one includes the work item",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "custom_field_id": {
+                        "description": "Custom field global ID",
+                        "type": "string"
+                      },
+                      "custom_field_name": {
+                        "description": "Custom field name",
+                        "type": "string"
+                      },
+                      "selected_option_ids": {
+                        "description": "Selected option global IDs to match",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
+                      },
+                      "selected_option_values": {
+                        "description": "Selected option values to match",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "label_names": {
+                  "description": "Label names where matching any one includes the work item",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "release_tag": {
+              "description": "Release tags to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "release_tag_wildcard_id": {
+              "description": "Release tag wildcard filter: NONE or ANY",
+              "type": "string"
+            },
+            "search": {
+              "description": "Free-text search term",
+              "type": "string"
+            },
+            "state": {
+              "description": "Work item state: opened, closed, or all",
+              "type": "string"
+            },
+            "status": {
+              "additionalProperties": false,
+              "description": "Filter by the work item status widget value",
+              "properties": {
+                "id": {
+                  "description": "Status global ID",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Status name, e.g. To do or In progress",
+                  "type": "string"
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "subscribed": {
+              "description": "Subscription state of the authenticated user: EXPLICITLY_SUBSCRIBED, EXPLICITLY_UNSUBSCRIBED",
+              "type": "string"
+            },
+            "types": {
+              "description": "Work item type names to match, e.g. ISSUE, TASK, EPIC",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "updated_after": {
+              "description": "Match work items updated after this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "updated_before": {
+              "description": "Match work items updated before this timestamp (ISO 8601)",
+              "type": "string"
+            },
+            "weight": {
+              "description": "Weight to match",
+              "type": "string"
+            },
+            "weight_wildcard_id": {
+              "description": "Weight wildcard filter: NONE or ANY",
+              "type": "string"
+            },
+            "work_item_type_ids": {
+              "description": "Work item type global IDs to match",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "is_private": {
+          "description": "Whether the view is private to the user who created it",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "name": {
+          "description": "New name for the saved view",
+          "type": "string"
+        },
+        "saved_view_id": {
+          "description": "Numeric ID of the saved view to update",
+          "type": "integer"
+        },
+        "sort": {
+          "description": "New sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC",
+          "enum": [
+            "BLOCKING_ISSUES_ASC",
+            "BLOCKING_ISSUES_DESC",
+            "CLOSED_AT_ASC",
+            "CLOSED_AT_DESC",
+            "CREATED_ASC",
+            "CREATED_DESC",
+            "DUE_DATE_ASC",
+            "DUE_DATE_DESC",
+            "ESCALATION_STATUS_ASC",
+            "ESCALATION_STATUS_DESC",
+            "HEALTH_STATUS_ASC",
+            "HEALTH_STATUS_DESC",
+            "LABEL_PRIORITY_ASC",
+            "LABEL_PRIORITY_DESC",
+            "MILESTONE_DUE_ASC",
+            "MILESTONE_DUE_DESC",
+            "POPULARITY_ASC",
+            "POPULARITY_DESC",
+            "PRIORITY_ASC",
+            "PRIORITY_DESC",
+            "RELATIVE_POSITION_ASC",
+            "SEVERITY_ASC",
+            "SEVERITY_DESC",
+            "START_DATE_ASC",
+            "START_DATE_DESC",
+            "STATUS_ASC",
+            "STATUS_DESC",
+            "TITLE_ASC",
+            "TITLE_DESC",
+            "UPDATED_ASC",
+            "UPDATED_DESC",
+            "WEIGHT_ASC",
+            "WEIGHT_DESC"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "saved_view_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "saved_view": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "description": "Description of the saved view",
+              "type": "string"
+            },
+            "display_settings": {
+              "description": "Display settings the consuming UI renders the view with"
+            },
+            "filters": {
+              "description": "Filters the view applies. Always absent on list results: GitLab resolves this field at most once per GraphQL request, so only get returns it"
+            },
+            "gid": {
+              "description": "GraphQL global ID of the saved view",
+              "type": "string"
+            },
+            "id": {
+              "description": "Numeric ID of the saved view",
+              "type": "integer"
+            },
+            "is_private": {
+              "description": "Whether the view is private to the user who created it",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Name of the saved view",
+              "type": "string"
+            },
+            "sort": {
+              "description": "Sort order the view applies",
+              "type": "string"
+            },
+            "subscribed": {
+              "description": "Whether the authenticated user is subscribed to the view",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "is_private",
+            "subscribed"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "saved_view"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
   }
 ]

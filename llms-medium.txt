@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Medium Reference
 
-> Version 2.7.5 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.5 | up to 1078 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 Every tool and action with its description, without the per-action JSON schemas.
 Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.
@@ -149,7 +149,7 @@ Create a GitLab release through step-by-step prompts, with explicit confirmation
 
 Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
 
-Actions (64): create, create_todo, delete, discussion_add_note, discussion_create, discussion_delete_note, discussion_get, discussion_list, discussion_update_note, emoji_issue_create, emoji_issue_delete, emoji_issue_get, emoji_issue_list, emoji_issue_note_create, emoji_issue_note_delete, emoji_issue_note_get, emoji_issue_note_list, event_issue_iteration_get, event_issue_iteration_list, event_issue_label_get, event_issue_label_list, event_issue_milestone_get, event_issue_milestone_list, event_issue_state_get, event_issue_state_list, event_issue_weight_list, get, get_by_id, iteration_list_group, iteration_list_project, link_create, link_delete, link_get, link_list, list, list_all, list_group, move, mrs_closing, mrs_related, note_create, note_delete, note_get, note_list, note_update, participants, reorder, spent_time_add, spent_time_reset, statistics_get, statistics_get_group, statistics_get_project, subscribe, time_estimate_reset, time_estimate_set, time_stats_get, unsubscribe, update, work_item_create, work_item_delete, work_item_get, work_item_list, work_item_type_list, work_item_update
+Actions (71): create, create_todo, delete, discussion_add_note, discussion_create, discussion_delete_note, discussion_get, discussion_list, discussion_update_note, emoji_issue_create, emoji_issue_delete, emoji_issue_get, emoji_issue_list, emoji_issue_note_create, emoji_issue_note_delete, emoji_issue_note_get, emoji_issue_note_list, event_issue_iteration_get, event_issue_iteration_list, event_issue_label_get, event_issue_label_list, event_issue_milestone_get, event_issue_milestone_list, event_issue_state_get, event_issue_state_list, event_issue_weight_list, get, get_by_id, iteration_list_group, iteration_list_project, link_create, link_delete, link_get, link_list, list, list_all, list_group, move, mrs_closing, mrs_related, note_create, note_delete, note_get, note_list, note_update, participants, reorder, spent_time_add, spent_time_reset, statistics_get, statistics_get_group, statistics_get_project, subscribe, time_estimate_reset, time_estimate_set, time_stats_get, unsubscribe, update, work_item_create, work_item_delete, work_item_get, work_item_list, work_item_saved_view_create, work_item_saved_view_delete, work_item_saved_view_get, work_item_saved_view_list, work_item_saved_view_subscribe, work_item_saved_view_unsubscribe, work_item_saved_view_update, work_item_type_list, work_item_update
 
 ### gitlab_job
 
@@ -433,7 +433,7 @@ Actions (8): confirm, dismiss, get, list, pipeline_security_summary, resolve, re
 
 ## Individual Tools
 
-Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1071 tools, one per operation.
+Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1078 tools, one per operation.
 
 - gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership.
 - gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership.
@@ -1506,6 +1506,13 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1071 tools, one per operation
 - gitlab_wiki_list: List a project's wiki pages.
 - gitlab_wiki_update: Update an existing wiki page by slug.
 - gitlab_wiki_upload_attachment: Upload an attachment to the project wiki repository.
+- gitlab_work_item_saved_view_create: Create a work item saved view under a namespace.
+- gitlab_work_item_saved_view_delete: Delete a work item saved view permanently by numeric ID.
+- gitlab_work_item_saved_view_get: Get a single work item saved view by namespace path and numeric ID.
+- gitlab_work_item_saved_view_list: List work item saved views for a group or project namespace with cursor pagination.
+- gitlab_work_item_saved_view_subscribe: Subscribe the authenticated user to a work item saved view.
+- gitlab_work_item_saved_view_unsubscribe: Unsubscribe the authenticated user from a work item saved view.
+- gitlab_work_item_saved_view_update: Update a work item saved view by numeric ID.
 
 ## Resources
 

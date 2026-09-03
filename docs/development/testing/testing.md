@@ -18,14 +18,14 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,324 |
-| Unit test functions                                   | 12,769 |
-| E2E test functions                                    |    555 |
-| cmd test functions                                    |  1,947 |
-| Test files (internal/)                                |    490 |
-| Test files (cmd/)                                     |    106 |
-| Test files (test/e2e/)                                |    214 |
-| Tool sub-packages tested                              |    173 |
+| Total test functions                                  | 13,356 |
+| Unit test functions                                   | 12,800 |
+| E2E test functions                                    |    556 |
+| cmd test functions                                    |  1,929 |
+| Test files (internal/)                                |    494 |
+| Test files (cmd/)                                     |    105 |
+| Test files (test/e2e/)                                |    215 |
+| Tool sub-packages tested                              |    174 |
 | Core packages tested                                  |     21 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  97.9% |
 | Overall coverage (`go test ./internal/...`)           |  98.3% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,155 | 83.7% |
-| `TestFunc` (no underscore)             |    959 |  7.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,210 |  9.1% |
+| `TestFunc_Scenario` (2-part)           | 11,183 | 83.7% |
+| `TestFunc` (no underscore)             |    965 |  7.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,208 |  9.0% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,159 |        130 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            301 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (173) |          8,362 |        347 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            555 |        214 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          1,947 |        106 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,324** |    **810** |                                                                                                 |
+| Tool sub-packages (174) |          8,411 |        351 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            556 |        215 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          1,929 |        105 | server entry point and developer command utilities                                              |
+| **Total**               |     **13,356** |    **814** |                                                                                                 |
 
 ### Core Packages
 
@@ -112,7 +112,7 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 173 tested sub-packages (click to expand)</summary>
+<summary>All 174 tested sub-packages (click to expand)</summary>
 
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
@@ -289,7 +289,8 @@
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        93 |          3 |   100.0% |         6 |
-| **Total**               | **8,362** |    **347** |          | **1,167** |
+| workitemsavedviews      |        49 |          4 |   100.0% |         7 |
+| **Total**               | **8,411** |    **351** |          | **1,174** |
 
 </details>
 
@@ -340,7 +341,7 @@
 | cmd/internal/auditshared                       |   100.0% |
 | cmd/internal/docgen                            |    99.6% |
 | cmd/internal/mcpsurface                        |   100.0% |
-| cmd/server                                     |    95.8% |
+| cmd/server                                     |    95.9% |
 
 ### Core Packages
 
@@ -546,6 +547,7 @@
 | waitpoll                |    99.2% |
 | wikis                   |   100.0% |
 | workitems               |   100.0% |
+| workitemsavedviews      |   100.0% |
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 

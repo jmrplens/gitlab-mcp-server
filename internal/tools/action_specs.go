@@ -146,6 +146,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/vulnerabilities"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/workitems"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/workitemsavedviews"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -371,17 +372,19 @@ func buildGroupSCIMActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpec
 
 // buildIssueActionSpecs contributes the gitlab_issue catalog group by
 // merging issue, issue note, issue link, issue discussion, issue
-// statistics, work item, issue award emoji, and issue resource event
-// specs. Project and group iteration specs (Premium, self-tagged) are always
-// included; the central tier filter gates them by the instance tier.
+// statistics, work item, work item saved view, issue award emoji, and issue
+// resource event specs. Project and group iteration specs (Premium,
+// self-tagged) are always included; the central tier filter gates them by the
+// instance tier.
 func buildIssueActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 63)
+	specs := make([]toolutil.ActionSpec, 0, 70)
 	specs = append(specs, issues.ActionSpecs(client)...)
 	specs = append(specs, issuenotes.ActionSpecs(client)...)
 	specs = append(specs, issuelinks.ActionSpecs(client)...)
 	specs = append(specs, issuediscussions.ActionSpecs(client)...)
 	specs = append(specs, issuestatistics.ActionSpecs(client)...)
 	specs = append(specs, workitems.ActionSpecs(client)...)
+	specs = append(specs, workitemsavedviews.ActionSpecs(client)...)
 	specs = append(specs, awardemoji.IssueActionSpecs(client)...)
 	specs = append(specs, resourceevents.IssueActionSpecs(client)...)
 	specs = append(specs, projectiterations.IssueActionSpecs(client)...)

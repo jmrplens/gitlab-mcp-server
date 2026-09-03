@@ -338,6 +338,12 @@ var acceptedExtraOutputs = map[string]string{
 	// the documented feature-flag `gates` array; the SDK struct field carries no json
 	// tag so the REST-tag diff flags the snake_case output key as extra.
 	"features.FeatureItem.gates": "documented feature-flag gates array, sourced from gl.Feature.Gates (SDK field is json-untagged)",
+
+	// SDK-sourced value the SDK exposes as a method rather than a field:
+	// gl.WorkItemSavedView.GID() renders the GraphQL global ID the saved view
+	// mutations address the view by, so the model needs it even though the
+	// field diff has nothing to pair it with.
+	"workitemsavedviews.Item.gid": "GraphQL global ID from gl.WorkItemSavedView.GID(); the SDK exposes it as a method, so there is no field to pair with",
 }
 
 // isAcceptedExtraOutput reports whether an extra MCP output field/type is an

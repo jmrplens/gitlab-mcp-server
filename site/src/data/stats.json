@@ -1,10 +1,10 @@
 {
   "version": "2.7.5",
   "tools": {
-    "free": 847,
-    "premium": 999,
-    "ultimate_self_managed": 1065,
-    "gitlab_com": 1071
+    "free": 854,
+    "premium": 1006,
+    "ultimate_self_managed": 1072,
+    "gitlab_com": 1078
   },
   "meta": {
     "base": 32,
@@ -13,9 +13,9 @@
   },
   "dynamic": 2,
   "catalog_actions": {
-    "free": 851,
-    "self_managed_enterprise": 1069,
-    "gitlab_com": 1075
+    "free": 858,
+    "self_managed_enterprise": 1076,
+    "gitlab_com": 1082
   },
   "catalog_groups": {
     "free": 28,
@@ -26,5 +26,5 @@
   "prompts": 37,
   "completions": 17,
   "capabilities": 4,
-  "tool_packages": 175
+  "tool_packages": 176
 }

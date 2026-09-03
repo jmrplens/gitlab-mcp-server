@@ -30,7 +30,7 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | By instance tier: ~847 Free/CE; ~999 Premium; ~1065 Ultimate (self-managed) / ~1071 on GitLab.com Ultimate with Orbit |
+| MCP Tools (individual)    | By instance tier: ~854 Free/CE; ~1006 Premium; ~1072 Ultimate (self-managed) / ~1078 on GitLab.com Ultimate with Orbit |
 | Catalog groups            | By instance tier: 28 Free/CE; 34 Premium; 45 Ultimate                                                       |
 | Meta-mode tools           | 32 base (Free/CE) / 49 self-managed Ultimate / 50 GitLab.com Ultimate (Orbit)                              |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
@@ -39,9 +39,9 @@
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 4 (progress, elicitation, completions, resource subscriptions)                     |
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
-| Source files (tools)      | 753 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 359 test files under `internal/tools/`                                                                       |
-| Go packages               | 233 total; 175 under `internal/tools/...`                                                                    |
+| Source files (tools)      | 760 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 364 test files under `internal/tools/`                                                                       |
+| Go packages               | 241 total; 176 under `internal/tools/...`                                                                    |
 
 ### Orbit live tests
 
@@ -90,7 +90,7 @@ gitlab-mcp-server/
 │   ├── subscriptions/          # resources/subscribe: polled watchers, cadence, leases (ADR-0015)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 175 internal/tools packages
+│   ├── tools/                   # Tool orchestration layer + 176 internal/tools packages
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/             # Low-token dynamic find/execute surface over catalog routes
@@ -201,7 +201,7 @@ Every documentation example must name a tool the surface it shows actually regis
 
 ### Error handling in tool handlers
 
-Four error wrapping functions in `internal/toolutil/errors.go`, used across the 175 packages under `internal/tools/`:
+Four error wrapping functions in `internal/toolutil/errors.go`, used across the 176 packages under `internal/tools/`:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
@@ -410,7 +410,7 @@ driven by `make` targets, never beside another tool's variables in a shell).
 | `GITLAB_MCP_TELEMETRY_IDENTITY` | No | How much telemetry records about who made a call: `none` (default, records nobody), `pseudonymous` (a per-process HMAC digest that correlates one caller's calls without naming them), or `full` (`user.id` and `user.name`). Identity never reaches a metric under any policy. Flag `--telemetry-identity` |
 | `GITLAB_MCP_TELEMETRY_IDENTITY_KEY` | No | Secret the `pseudonymous` policy derives its pseudonymisation keys from (HKDF-SHA256, one key for callers and one for resource URIs). Empty (default) generates one per process, so a digest identifies a caller within one process and nowhere else. Set it when several replicas must agree, or when a distinct-user count has to survive a restart; it then never rotates here, because a key the operator supplied is theirs to rotate. Setting it makes the pseudonym a person pseudonym in EDPB terms, and the key is Article 4(5) "additional information": keep it away from wherever the telemetry lands, since GitLab user ids are small enough to enumerate against a known key. No flag on purpose: process arguments are readable through `/proc` by any local principal |
 | `GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION` | No | How long a **generated** pseudonymisation key lives, e.g. `24h`. Empty or `0` (default) keeps it for the life of the process; maximum 30 days. Ignored when `GITLAB_MCP_TELEMETRY_IDENTITY_KEY` is set, with a warning at startup. Off by default because replicas start at different moments and would rotate out of phase, churning a distinct-user count nobody asked to churn. Flag `--telemetry-identity-rotation` |
-| `GITLAB_MCP_TELEMETRY_TOOL_NAME` | No | Whether `gen_ai.tool.name` is a metric dimension: `auto` (default), `on` or `off`. Auto keeps it on the dynamic and meta surfaces and drops it on individual, where ~1071 tools would exhaust the SDK's 2000-series cardinality limit and collapse the long tail into one `otel.metric.overflow` bucket, first-come-wins under cumulative temporality. Implemented as a metric View, because filtering runs before the limit is counted. Flag `--telemetry-tool-name` |
+| `GITLAB_MCP_TELEMETRY_TOOL_NAME` | No | Whether `gen_ai.tool.name` is a metric dimension: `auto` (default), `on` or `off`. Auto keeps it on the dynamic and meta surfaces and drops it on individual, where ~1078 tools would exhaust the SDK's 2000-series cardinality limit and collapse the long tail into one `otel.metric.overflow` bucket, first-come-wins under cumulative temporality. Implemented as a metric View, because filtering runs before the limit is counted. Flag `--telemetry-tool-name` |
 | `GITLAB_MCP_LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
 | `EVAL_SURFACE_ENTERPRISE` | No      | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus. Used by `make eval-surfaces-docker-enterprise*` targets |
 | `EVAL_SURFACE_CASE_SET`   | No      | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (Community Edition only), `all` (CE+Enterprise). Used by `make eval-surfaces-docker-enterprise-all` |
@@ -619,7 +619,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages; tools by tier: ~847 Free/CE, ~999 Premium, ~1065 Ultimate self-managed, ~1071 GitLab.com Ultimate) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages; tools by tier: ~854 Free/CE, ~1006 Premium, ~1072 Ultimate self-managed, ~1078 GitLab.com Ultimate) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
@@ -630,7 +630,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package family is split into 175 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
+The `internal/tools/` package family is split into 176 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks

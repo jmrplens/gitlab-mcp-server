@@ -11,7 +11,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/shirou/gopsutil/v4 v4.26.7
 	github.com/tiktoken-go/tokenizer v0.8.1
-	gitlab.com/gitlab-org/api/client-go/v2 v2.60.0
+	gitlab.com/gitlab-org/api/client-go/v2 v2.62.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.1
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.22.0

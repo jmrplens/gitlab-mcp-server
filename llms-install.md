@@ -7,7 +7,7 @@ is deterministic — no build from source is required.
 ## What this server is
 
 A single-binary MCP server (Go) exposing the GitLab REST API v4 and GraphQL
-as MCP tools: ~847 tools on Free/CE, ~999 on Premium, up to ~1071 on Ultimate,
+as MCP tools: ~854 tools on Free/CE, ~1006 on Premium, up to ~1078 on Ultimate,
 with three selectable tool surfaces, 45 MCP resources, and 37 prompts. It
 talks to GitLab.com or any self-managed GitLab instance over stdio.
 
