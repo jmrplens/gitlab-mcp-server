@@ -187,6 +187,18 @@ type Config struct {
 	// MaxRequestBodyBytes caps the size of incoming streamable HTTP request
 	// bodies. 0 uses the SDK default (4 MiB); negatives are rejected at
 	// validation (HTTP mode only).
+	//
+	// The default stays at the SDK's 4 MiB rather than being cut to 256 KiB or
+	// 1 MiB, which a hardening review proposed against the cost of parsing a
+	// deeply nested body. That defense now lives where the shape of the attack
+	// is, in the inbound JSON depth cap: a smaller byte budget only narrows the
+	// window, since a quarter of a megabyte still spells a hundred thousand
+	// levels of nesting, and a wide-but-shallow body of the full size
+	// unmarshals in tens of milliseconds either way. Cutting it would break the
+	// documented inline-upload path, where content_base64 is the only way a
+	// remote caller can send a file at all, for every deployment that never
+	// configured the flag. An operator who wants a smaller ceiling still has
+	// the flag.
 	MaxRequestBodyBytes int64
 
 	// TLSCertFile and TLSKeyFile enable TLS on the listener itself, for a

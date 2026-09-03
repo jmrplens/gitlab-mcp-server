@@ -46,6 +46,20 @@ func NormalizeText(s string) string {
 // have to be un-rendered by something to be read, and the sequences that matter
 // carry no information a reader loses by not seeing them: what survives of
 // ESC[2J is "[2J", which says plainly that the content tried something.
+//
+// This covers the text channel and not structuredContent, and that is a
+// decision rather than an oversight. structuredContent is marshaled by the SDK
+// from the typed value each handler returns, so there is no funnel in this
+// package to apply it at: closing it means either a sweep over every output
+// struct in the 175 handler packages, or a result middleware in the server that
+// walks each value reflectively on the way out. The second is the tempting one
+// and it is the wrong trade. encoding/json already escapes every byte in these
+// ranges, so what reaches a client is the six characters of a \u001b sequence,
+// which no terminal acts on: a viewer would have to parse the JSON and print a
+// string field raw to be affected, and such a client is showing the text
+// channel too, which is sanitized here. Paying a reflective walk of every
+// result for that is not worth it. If the shape of the risk changes, the place
+// to add it is one middleware at the server boundary, not this function.
 func StripControlBytes(s string) string {
 	if strings.IndexFunc(s, isRenderControl) < 0 {
 		return s
