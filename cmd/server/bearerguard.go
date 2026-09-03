@@ -242,7 +242,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			header: newHeader(headerWWWAuthenticate, oauthChallenge(
 				g.minimumScope, g.metadataURL,
 				"error", "insufficient_scope",
-				"error_description", "the token lacks the "+g.minimumScope+" scope",
+				"error_description", g.missingScopeDescription(),
 			)),
 		}
 	}
@@ -290,7 +290,7 @@ func (g *bearerGuard) classify(err error, ip, source, instance, token string) *g
 			header: newHeader(headerWWWAuthenticate, oauthChallenge(
 				g.minimumScope, g.metadataURL,
 				"error", "insufficient_scope",
-				"error_description", "the token lacks the "+g.minimumScope+" scope",
+				"error_description", g.missingScopeDescription(),
 			)),
 		}
 	}
@@ -425,6 +425,18 @@ func (g *bearerGuard) blockedByBudget(key, source string) bool {
 // GitLab answers that with invalid_scope. The protected-resource document
 // says the same thing in scopes_supported, but a client is not obliged to
 // fetch it before it authorizes.
+func (g *bearerGuard) challenge(params ...string) string {
+	return oauthChallenge(g.advertisedScope, g.metadataURL, params...)
+}
+
+// missingScopeDescription is the RFC 6750 error_description carried by both
+// refusal paths. The local scope check and GitLab's own verdict are one
+// condition noticed a layer apart, so they say the same sentence rather than
+// two that drift.
+func (g *bearerGuard) missingScopeDescription() string {
+	return "the token lacks the " + g.minimumScope + " scope"
+}
+
 // describeScopeShortfall explains why a genuine token is not enough, naming
 // what it does carry.
 //
@@ -453,10 +465,6 @@ func describeScopeShortfall(granted []string, minimum, advertised string) string
 			"which is what a dynamically registered client receives by default."
 	}
 	return message
-}
-
-func (g *bearerGuard) challenge(params ...string) string {
-	return oauthChallenge(g.advertisedScope, g.metadataURL, params...)
 }
 
 // oauthChallenge builds an OAuth-mode WWW-Authenticate value. It is a package
