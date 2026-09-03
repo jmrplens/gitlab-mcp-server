@@ -19,7 +19,7 @@
 
 | Attribute     | Value                                               |
 | ------------- | --------------------------------------------------- |
-| Language      | Go 1.27.0                                           |
+| Language      | Go 1.27.1                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0 |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.59.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |

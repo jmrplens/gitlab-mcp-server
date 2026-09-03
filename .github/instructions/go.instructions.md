@@ -408,7 +408,7 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 
 ## Go 1.27 Project Modern Features
 
-This project declares `1.27.0`; prefer these modern patterns when they simplify code without reducing clarity:
+This project declares `1.27.1`; prefer these modern patterns when they simplify code without reducing clarity:
 
 ### Promoted Fields in Composite Literals (Go 1.27+)
 
