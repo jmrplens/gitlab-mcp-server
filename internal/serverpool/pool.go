@@ -168,6 +168,7 @@ type ServerPool struct {
 	//
 	// It runs while the pool's write lock is held, so it must be cheap and
 	// must not call back into the pool.
+	onInsert           func(*mcp.Server)
 	onEvict            func(*mcp.Server)
 	revalidateInterval time.Duration
 	idleTimeout        time.Duration
@@ -206,6 +207,19 @@ type Option func(*ServerPool)
 // re-enter the pool.
 func WithOnEvict(fn func(*mcp.Server)) Option {
 	return func(p *ServerPool) { p.onEvict = fn }
+}
+
+// WithOnInsert registers a callback invoked with each server the pool has just
+// cached, once it is reachable by key.
+//
+// It exists for work that must not start before the entry can be found again.
+// A server whose catalog is registered in the background is the case: if that
+// registration fails, the failure has to remove the entry, and a factory that
+// started it would be racing its own insertion. The callback runs under the
+// pool's write lock, so like [WithOnEvict] it must not block and must not
+// re-enter the pool; starting a goroutine is what it is for.
+func WithOnInsert(fn func(*mcp.Server)) Option {
+	return func(p *ServerPool) { p.onInsert = fn }
 }
 
 // WithMaxSize sets the maximum number of unique token entries in the pool.
@@ -541,6 +555,12 @@ func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Serve
 	entry.lastValidated = now
 	entry.lastUsed = now
 	p.entries[key] = entry
+
+	// After the entry is reachable by key, so a callback that starts work
+	// which may later have to evict this server can find it.
+	if p.onInsert != nil {
+		p.onInsert(entry.server)
+	}
 
 	slog.Info(
 		"server pool: created new entry",
@@ -1012,20 +1032,30 @@ func (p *ServerPool) EvictServer(srv *mcp.Server) bool {
 	if srv == nil {
 		return false
 	}
+	// Held across the search AND the removal. Releasing between the two would
+	// let a replacement entry be built for the same key and then delete that
+	// replacement instead: its session tag would go with it, and its own
+	// stateful requests would start being refused as if they belonged to
+	// somebody else.
 	p.mu.Lock()
-	key := ""
-	for candidate, entry := range p.entries {
-		if entry != nil && entry.server == srv {
-			key = candidate
-			break
+	defer p.mu.Unlock()
+	for key, entry := range p.entries {
+		if entry == nil || entry.server != srv {
+			continue
 		}
+		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
+		p.lru.Remove(entry.element)
+		p.dropEntry(key)
+		p.metrics.Evictions.Add(1)
+		slog.Info(
+			"server pool: evicted entry whose build did not finish",
+			"pool_size", len(p.entries),
+			"gitlab_url", gitlabURL,
+			"enterprise", enterprise,
+		)
+		return true
 	}
-	p.mu.Unlock()
-	if key == "" {
-		return false
-	}
-	p.evictByKey(key)
-	return true
+	return false
 }
 
 // poolEntryConfigLogValues extracts safe configuration values for eviction
