@@ -32,11 +32,13 @@ jobs:
     steps:
       - name: Remove the label
         env:
+          # GH_REPO rather than --repo: this job checks nothing out, so gh has
+          # no repository to infer from the working directory.
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
           REASON: ${{ github.event.action }}
         run: |
           set -euo pipefail
           echo "issue $ISSUE was $REASON, so it has been triaged"
-          gh issue edit "$ISSUE" --repo "$REPO" --remove-label "needs-triage"
+          gh issue edit "$ISSUE" --remove-label "needs-triage"
