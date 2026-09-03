@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,9 +27,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
+	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
 // pipelineBackend is a mock GitLab whose pipeline status can be changed
@@ -704,7 +707,8 @@ func TestResourceReader_ReadsThroughTheRegisteredHandler(t *testing.T) {
 		t.Fatal("ReadResource returned no contents")
 	}
 
-	reader := resourceReader{index: subscriptionHandlerIndex(t, gitlab.URL)}
+	reader := &resourceReader{}
+	reader.setIndex(subscriptionHandlerIndex(t, gitlab.URL))
 	watched, err := reader.Read(ctx, uri)
 	if err != nil {
 		t.Fatalf("resourceReader.Read: %v", err)
@@ -721,7 +725,8 @@ func TestResourceReader_ReadsThroughTheRegisteredHandler(t *testing.T) {
 // the subscribable set.
 func TestResourceReader_RejectsUnsubscribableURI(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	reader := resourceReader{index: subscriptionHandlerIndex(t, gitlab.URL)}
+	reader := &resourceReader{}
+	reader.setIndex(subscriptionHandlerIndex(t, gitlab.URL))
 
 	if _, err := reader.Read(context.Background(), "gitlab://project/42/issues"); err == nil {
 		t.Error("resourceReader.Read(collection) error = nil, want a refusal")
@@ -1911,4 +1916,144 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(time.Millisecond)
 	}
 	t.Error("condition never held within the budget")
+}
+
+// TestExcludedActions_NarrowResourcesAndSubscriptions_NotOnlyTools verifies
+// that --exclude-tools reaches every request path to the same GitLab object.
+//
+// The tool surface is not the only one. A resource template returns the same
+// data through the same credential, and a subscription polls it on a schedule,
+// so an operator who removes an action and finds it still readable through
+// resources/read has been given a guard that does not guard. The mechanism for
+// this lived in internal/resources, fully tested, and cmd/server never passed
+// it anything, which is the state this test exists to prevent returning to.
+//
+// It names the action and the URI rather than counting handlers. A count proves
+// only that something was removed, and would pass just as well if the excluded
+// action stayed reachable while an unrelated resource disappeared.
+func TestExcludedActions_NarrowResourcesAndSubscriptions_NotOnlyTools(t *testing.T) {
+	// The catalog resolves the operator's spelling, so ask it rather than
+	// hardcoding an action ID that a rename would silently invalidate.
+	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
+		Tier:       edition.Free,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		t.Fatalf("building the catalog: %v", err)
+	}
+
+	// project.get backs gitlab://project/{project_id}, which is the pairing
+	// this whole mechanism exists for: the same object, two request paths.
+	const (
+		excludedTool = "gitlab_project"
+		excludedID   = "project.get"
+		excludedURI  = "gitlab://project/{project_id}"
+	)
+
+	excluded := catalog.ExcludedActionIDs([]string{excludedTool})
+	if !slices.Contains(excluded, excludedID) {
+		t.Fatalf("excluding %q did not remove %q, so this test is not measuring what it claims: %v",
+			excludedTool, excludedID, excluded)
+	}
+
+	full := resources.NewHandlerIndex(nil)
+	narrowed := resources.NewHandlerIndex(nil, resources.RegisterOptions{ExcludedActions: excluded})
+
+	if _, ok := full[excludedURI]; !ok {
+		t.Fatalf("%s is not registered at all, so its absence below would prove nothing", excludedURI)
+	}
+	if _, ok := narrowed[excludedURI]; ok {
+		t.Errorf("%s is still registered after excluding %q, so resources/read still serves what the operator removed",
+			excludedURI, excludedTool)
+	}
+
+	// A resource backed by no excluded action must survive, or the narrowing
+	// is removing more than it was asked to.
+	const keptURI = "gitlab://user/current"
+	if _, ok := narrowed[keptURI]; !ok {
+		t.Errorf("%s was removed too; excluding %q must not take unrelated resources with it", keptURI, excludedTool)
+	}
+
+	// The subscription path reads through this index, so it has to refuse the
+	// excluded URI as well: a client that knows the URI never calls
+	// resources/list and would otherwise still be served.
+	reader := &resourceReader{}
+	reader.setIndex(narrowed)
+	if _, readErr := reader.Read(t.Context(), "gitlab://project/42"); readErr == nil {
+		t.Error("the subscription reader served an excluded resource, so a subscription would poll GitLab for it")
+	}
+}
+
+// TestExcludeTools_RemovesTheResourceFromTheServerItself covers the wiring
+// rather than the mechanism.
+//
+// internal/resources has always been able to narrow itself, with its own tests.
+// What was missing was cmd/server passing it anything, so an operator's
+// exclusion reached the tool surface and stopped there. A test that calls
+// NewHandlerIndex directly cannot see that: it passes whether or not the server
+// is wired up, which is exactly how the gap survived being tested.
+//
+// So this builds the real server through createServer with ExcludeTools set,
+// and asks it over a session, the way a client would.
+func TestExcludeTools_RemovesTheResourceFromTheServerItself(t *testing.T) {
+	const (
+		excludedTool = "gitlab_project"
+		excludedURI  = "gitlab://project/{project_id}"
+		keptURI      = "gitlab://user/current"
+	)
+
+	// Two servers built the same way apart from the exclusion, so any
+	// difference between their listings is the exclusion and nothing else.
+	base := &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+	}
+	excludedCfg := *base
+	excludedCfg.ExcludeTools = []string{excludedTool}
+
+	client := sharedCreateServerClient(t)
+	fullURIs := resourceTemplateURIs(t, mustCreateServer(t, client, base))
+	narrowedURIs := resourceTemplateURIs(t, mustCreateServer(t, client, &excludedCfg))
+
+	if !fullURIs[excludedURI] {
+		t.Fatalf("%s is not served without the exclusion, so its absence below would prove nothing", excludedURI)
+	}
+	if narrowedURIs[excludedURI] {
+		t.Errorf("%s is still served after excluding %q: the exclusion reached the tools and not the resources",
+			excludedURI, excludedTool)
+	}
+	if !narrowedURIs[keptURI] {
+		t.Errorf("%s was removed too; excluding %q must not take unrelated resources with it", keptURI, excludedTool)
+	}
+}
+
+// resourceTemplateURIs lists the resource template URIs a server serves.
+//
+// Templates rather than resources: the ones this exclusion removes are
+// parameterised (gitlab://project/{project_id}), so they appear in
+// resources/templates/list rather than resources/list.
+func resourceTemplateURIs(t *testing.T, server *mcp.Server) map[string]bool {
+	t.Helper()
+
+	session := newInMemorySession(t, server)
+	uris := map[string]bool{}
+
+	templates, err := session.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates: %v", err)
+	}
+	for _, tmpl := range templates.ResourceTemplates {
+		uris[tmpl.URITemplate] = true
+	}
+
+	listed, err := session.ListResources(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResources: %v", err)
+	}
+	for _, r := range listed.Resources {
+		uris[r.URI] = true
+	}
+	return uris
 }

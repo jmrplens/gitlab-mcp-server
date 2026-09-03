@@ -1155,6 +1155,12 @@ func legacyMetaToolsFlagValue(hcfg *httpConfig) string {
 type serverSurfaceRegistration struct {
 	metaSchemaRoutes map[string]toolutil.ActionMap
 	surfaceCatalog   *actioncatalog.Catalog
+	// excludedActions are the canonical action IDs --exclude-tools removed,
+	// resolved against the unfiltered catalog. Carried out of here because the
+	// resource and subscription surfaces must apply the same narrowing, and
+	// surfaceCatalog cannot answer the question: on the individual surface it
+	// is already the filtered catalog, so asking it would return nothing.
+	excludedActions []string
 }
 
 // runStdio loads configuration from environment variables (GITLAB_TOKEN
@@ -1768,7 +1774,8 @@ func (sh *serverShell) register(ctx context.Context) error {
 		}
 	}
 
-	registerConfiguredCapabilities(server, client, sh.capabilitySurface)
+	registerConfiguredCapabilities(server, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
+	publishSubscriptionIndex(sh.subs, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
 
 	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
 		slog.Warn("failed to build tool manifest resource", "error", listErr)
@@ -1859,12 +1866,42 @@ func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoute
 	}
 }
 
-func registerConfiguredCapabilities(server *mcp.Server, client *gitlabclient.Client, capabilitySurface string) {
+// registerConfiguredCapabilities registers the resource and prompt surfaces,
+// narrowed by the same exclusions the tool surface applied.
+//
+// The narrowing is the point rather than a detail. A resource template returns
+// the same GitLab object through the same credential as the tool it mirrors, so
+// an operator who removes an action with --exclude-tools and finds it still
+// readable through resources/read has been given a guard that does not guard.
+// A subscription would go on polling for it too, which is why
+// [newSubscriptionRuntime] takes the same list.
+func registerConfiguredCapabilities(
+	server *mcp.Server,
+	client *gitlabclient.Client,
+	capabilitySurface string,
+	excludedActions []string,
+) {
 	if capabilitySurface == config.CapabilitySurfaceFull {
-		resources.Register(server, client)
+		resources.Register(server, client, resources.RegisterOptions{ExcludedActions: excludedActions})
 		resources.RegisterWorkflowGuides(server)
 		prompts.Register(server, client)
 	}
+}
+
+// publishSubscriptionIndex hands the subscription runtime the same narrowed
+// view of the resources that resources/read was given.
+//
+// Without it an excluded resource stays subscribable: resources/list would not
+// offer it, but a client that knows the URI could subscribe anyway and the
+// server would poll GitLab for it on a schedule. The index is published here
+// rather than built with the runtime because the runtime is created by the
+// shell, before the catalog exists. Nothing can read it too early: the
+// readiness gate holds resources/subscribe until registration has finished.
+func publishSubscriptionIndex(subs *subscriptionRuntime, client *gitlabclient.Client, capabilitySurface string, excludedActions []string) {
+	if subs == nil || subs.reader == nil || capabilitySurface != config.CapabilitySurfaceFull {
+		return
+	}
+	subs.reader.setIndex(resources.NewHandlerIndex(client, resources.RegisterOptions{ExcludedActions: excludedActions}))
 }
 
 func registerConfiguredToolSurface(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, toolSurface string) (serverSurfaceRegistration, error) {
@@ -1885,8 +1922,13 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog,
 			dynamictools.WithWithheldActions(withheld.byTokenScope, withheld.byOperator))
-		return serverSurfaceRegistration{metaSchemaRoutes: actionCatalog.ActionMaps(), surfaceCatalog: actionCatalog}, nil
+		return serverSurfaceRegistration{
+			metaSchemaRoutes: actionCatalog.ActionMaps(),
+			surfaceCatalog:   actionCatalog,
+			excludedActions:  withheld.excludedByName,
+		}, nil
 	case config.ToolSurfaceMeta:
+		var metaWithheld withheldActions
 		filteredCatalog := prebuiltCatalog
 		if filteredCatalog == nil {
 			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
@@ -1895,20 +1937,27 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 				actionCatalog = actioncatalog.NewCatalog()
 			}
 			var filterErr error
-			filteredCatalog, _, filterErr = filterActionCatalog(actionCatalog, cfg)
+			filteredCatalog, metaWithheld, filterErr = filterActionCatalog(actionCatalog, cfg)
 			if filterErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
 			}
 		}
 		gitlabtools.RegisterMetaCatalog(server, filteredCatalog)
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
-		return serverSurfaceRegistration{metaSchemaRoutes: filteredCatalog.ActionMaps(), surfaceCatalog: filteredCatalog}, nil
+		return serverSurfaceRegistration{
+			metaSchemaRoutes: filteredCatalog.ActionMaps(),
+			surfaceCatalog:   filteredCatalog,
+			excludedActions:  metaWithheld.excludedByName,
+		}, nil
 	default:
 		// The catalog is carried out rather than discarded. On this surface a
 		// tool name is declared per ActionSpec rather than derived, so nothing
 		// downstream can map one back to its action without it, and telemetry
 		// recorded no action here at all until this returned something.
 		individualCatalog := prebuiltCatalog
+		// Resolved before the exclusion is applied, since afterwards the
+		// catalog can no longer map the operator's entries to anything.
+		var individualExcluded []string
 		if individualCatalog == nil {
 			built, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
 			if catalogErr != nil {
@@ -1922,7 +1971,13 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			// removed nothing and warned about nothing.
 			// removeExcludedTools still runs afterwards, for the standalone
 			// tools registered outside the catalog.
+			individualExcluded = built.ExcludedActionIDs(cfg.ExcludeTools)
 			individualCatalog = excludeFromCatalog(built, cfg.ExcludeTools)
+		} else {
+			// A caller-supplied catalog is whatever it was given, so this is
+			// the best available answer; the only caller that supplies one is
+			// a test.
+			individualExcluded = individualCatalog.ExcludedActionIDs(cfg.ExcludeTools)
 		}
 		gitlabtools.RegisterIndividualCatalogTools(server, individualCatalog, gitlabtools.IndividualCatalogRegisterOptions{
 			IncludeStandaloneUtilities: true,
@@ -1932,7 +1987,10 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			SchemaCacheKey: "individual|" + cfg.Tier.String(),
 		})
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
-		return serverSurfaceRegistration{surfaceCatalog: individualCatalog}, nil
+		return serverSurfaceRegistration{
+			surfaceCatalog:  individualCatalog,
+			excludedActions: individualExcluded,
+		}, nil
 	}
 }
 
@@ -4093,6 +4151,14 @@ func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerCo
 type withheldActions struct {
 	byTokenScope []string
 	byOperator   []string
+	// excludedByName are the actions --exclude-tools removed. They are kept
+	// apart from the two above and never reach WithWithheldActions: a withheld
+	// action is one the model is told about so it can act on the reason, and
+	// naming an excluded tool would both leak the configuration and contradict
+	// the exclusion. They are recorded because the tool surface is not the only
+	// request path to the same GitLab object, and resources/read has to be
+	// narrowed by the same decision.
+	excludedByName []string
 }
 
 func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (*actioncatalog.Catalog, withheldActions, error) {
@@ -4101,6 +4167,11 @@ func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 	// exclusion is that they do not exist for this deployment, so naming them
 	// in an error would both leak the configuration and contradict it.
 	filtered := excludeFromCatalog(catalog, cfg.ExcludeTools)
+	// Resolved against the catalog before any filtering, which is the only
+	// place the operator's entries can be resolved at all: --exclude-tools
+	// accepts a group name, a tool name or an action ID, and a catalog that
+	// already dropped them can no longer map any of the three.
+	withheld.excludedByName = catalog.ExcludedActionIDs(cfg.ExcludeTools)
 	scoped, err := gitlabtools.FilterScopeFilteredCatalog(filtered, cfg.TokenScopes)
 	if err != nil {
 		return nil, withheldActions{}, err
