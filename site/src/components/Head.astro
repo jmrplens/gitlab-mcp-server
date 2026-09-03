@@ -237,7 +237,23 @@ if (!isHome && !isNotFound) {
 {webPage && <script type="application/ld+json" is:inline set:html={JSON.stringify(webPage)} />}
 {faq && <script type="application/ld+json" is:inline set:html={JSON.stringify(faq)} />}
 {breadcrumb && <script type="application/ld+json" is:inline set:html={JSON.stringify(breadcrumb)} />}
-<link rel="alternate" type="text/plain" href={`${BASE}/llms.txt`} title="llms.txt" />
-<link rel="alternate" type="text/plain" href={`${BASE}/llms-full.txt`} title="llms-full.txt" />
+<link
+	rel="alternate"
+	type="text/plain"
+	href={lang === "es" ? `${BASE}/es/llms.txt` : `${BASE}/llms.txt`}
+	title="llms.txt"
+/>
+<link
+	rel="alternate"
+	type="text/plain"
+	href={`${BASE}/llms-server.txt`}
+	title="llms-server.txt"
+/>
+<link
+	rel="alternate"
+	type="text/plain"
+	href={`${BASE}/llms-full.txt`}
+	title="llms-full.txt"
+/>
 <meta name="twitter:title" content={title} />
 {description && <meta name="twitter:description" content={description} />}

@@ -270,9 +270,13 @@ func TestRun_WritesLLMSTxt(t *testing.T) {
 		"2 read-only resources (26 resource kinds are subscribable",
 		"- gitlab://server/info: Server info\n- gitlab://projects/{id}: Project\n\n",
 		"1 prompts:\n\n- review_mr: Review one merge request diff.\n\n",
-		"## Documentation\n\n- [Getting started](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md): Installation and first-run guide\n",
-		"## Optional\n\n- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): ",
-		"- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): ",
+		"## Documentation\n\n- [Documentation site index](https://jmrp.io/docs/gitlab-mcp-server/llms.txt): ",
+		"- [Spanish documentation index](https://jmrp.io/docs/gitlab-mcp-server/es/llms.txt): ",
+		"- [Getting started](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md): Installation and first-run guide\n",
+		// The companion sizes are measured, not hard-coded: llms.txt is rendered
+		// after them precisely so it can quote what they actually came out as.
+		"## Optional\n\n- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): 3 KB, ~1k tokens. Every tool and action",
+		"- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 3 KB, ~1k tokens. The three splits above concatenated.",
 	})
 }
 
@@ -1317,6 +1321,56 @@ func TestCompactToolDescription_KeepsFirstParagraphWithinLimit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := compactToolDescription(tt.description); got != tt.want {
 				t.Errorf("compactToolDescription() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDescribeSize_ReportsBothScales verifies the size note llms.txt quotes for
+// each companion: kilobytes below a megabyte and megabytes above it, a token
+// estimate in thousands that switches to millions once llms-full.txt's scale is
+// reached, and an honest placeholder when a size is missing rather than a
+// confident "0 KB" for a file that was simply not measured.
+func TestDescribeSize_ReportsBothScales(t *testing.T) {
+	tests := []struct {
+		name  string
+		bytes int
+		want  string
+	}{
+		{name: "missing size", bytes: 0, want: "size unknown"},
+		{name: "negative size", bytes: -1, want: "size unknown"},
+		{name: "kilobytes round to nearest", bytes: 18286, want: "18 KB, ~5k tokens"},
+		{name: "just under a megabyte", bytes: 884613, want: "864 KB, ~221k tokens"},
+		{name: "megabytes carry one decimal", bytes: 2126670, want: "2.0 MB, ~532k tokens"},
+		{name: "past a million tokens", bytes: 8_000_000, want: "7.6 MB, ~2.0M tokens"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := describeSize(tt.bytes); got != tt.want {
+				t.Errorf("describeSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReferenceSizes_MeasuresEveryRenderedFile verifies the map llms.txt reads
+// its size notes from carries one entry per rendered companion, keyed by the
+// file name the Optional section links.
+func TestReferenceSizes_MeasuresEveryRenderedFile(t *testing.T) {
+	sizes := referenceSizes([]generatedFile{
+		{name: llmsFullFileName, content: "12345"},
+		{name: llmsMediumFileName, content: ""},
+	})
+
+	want := map[string]int{llmsFullFileName: 5, llmsMediumFileName: 0}
+	if len(sizes) != len(want) {
+		t.Fatalf("referenceSizes() = %v, want %d entries", sizes, len(want))
+	}
+	for name, size := range want {
+		t.Run(name, func(t *testing.T) {
+			if sizes[name] != size {
+				t.Errorf("referenceSizes()[%q] = %d, want %d", name, sizes[name], size)
 			}
 		})
 	}

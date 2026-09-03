@@ -230,9 +230,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: site/pnpm-lock.yaml
       # The build-independent half of `pnpm run lint`: type check, palette
-      # contrast, chip parity, i18n parity, eslint, prettier. The
-      # dist-dependent gates (html-validate, htmlhint, pa11y) stay in the
-      # Pages workflow, which is the one that builds the site.
+      # contrast, chip parity, i18n parity, llms index coverage, eslint,
+      # prettier. The dist-dependent gates (html-validate, htmlhint, pa11y)
+      # stay in the Pages workflow, which is the one that builds the site.
       - name: Install site dependencies
         run: pnpm install --frozen-lockfile
         working-directory: site
@@ -243,6 +243,11 @@ jobs:
           pnpm run chips:check
           pnpm run facts:check
           pnpm run i18n:check
+          # The site's own /llms.txt is generated from the content collection
+          # against a section table that has to be edited by hand. A page added
+          # to the collection and not listed there would simply be missing from
+          # the index, which nothing else would notice.
+          pnpm run llms:check
           # The Person entity is fetched from its canonical source at build
           # time, with this snapshot as the offline fallback. A stale snapshot
           # is invisible while the fetch works and ships a Person missing
