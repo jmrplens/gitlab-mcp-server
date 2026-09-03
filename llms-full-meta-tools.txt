@@ -6552,7 +6552,7 @@ When to use: publish / download / list / delete generic packages, browse npm/mav
 NOT for: release asset links, which are managed by gitlab_release link_*. Secure files (use gitlab_admin secure_file_*). ML model registry artifacts (use gitlab_model_registry). Upload general project attachments (use gitlab_project upload).
 
 Behavior:
-- Idempotent reads: list / file_list / registry_list_project / registry_list_group / registry_get / registry_tag_list / registry_tag_get / registry_rule_list / protection_rule_list / download.
+- Idempotent reads: list / file_list / registry_list_project / registry_list_group / registry_get / registry_tag_list / registry_tag_get / registry_rule_list / protection_rule_list. download is idempotent but writes a local file, so it is not a read.
 - publish / publish_directory / publish_and_link create a NEW package version (NON-idempotent: re-publishing the same (package_name, package_version, file_name) returns 400/409 or creates a duplicate file depending on package_type). registry_rule_update / protection_rule_update are idempotent. *_create are non-idempotent on duplicate keys.
 - Side effects: publish_and_link also creates a release link visible to release subscribers. Download streams files to the required output_path on disk. protection_rule_create / registry_rule_create take effect immediately and may block subsequent publish/delete calls.
 - Destructive: delete (entire package), file_delete (single file), registry_delete (entire image repo), registry_tag_delete / registry_tag_delete_bulk (image tags, name_regex_delete may match many tags) and *_rule_delete are irreversible. Protection rules can return 403 ('forbidden by protection rule') instead of executing the delete.
