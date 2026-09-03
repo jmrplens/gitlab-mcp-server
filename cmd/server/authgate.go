@@ -318,6 +318,14 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, server)
 		ctx = g.withIdentity(ctx, r)
+		// Every request that reaches the MCP handler is subject to the
+		// readiness gate, and only requests that reach it. A pooled entry
+		// registers its catalog in the background, so a request arriving in
+		// that window must wait for it rather than be answered from an empty
+		// one; the same server also talks MCP to itself while registering,
+		// over in-memory clients that never pass through here, and those must
+		// not wait for the step they are part of.
+		ctx = withReadinessGate(ctx)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

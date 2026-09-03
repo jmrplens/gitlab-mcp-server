@@ -41,8 +41,13 @@ import (
 // readinessGate holds back every method that needs the tool catalog until
 // registration reports it is there.
 type readinessGate struct {
-	// ready is closed once, by markReady, when the catalog is registered.
+	// ready is closed once, by markReady or markFailed, when registration has
+	// finished one way or the other.
 	ready chan struct{}
+	// failure holds the error when registration ended without a catalog. It is
+	// written before ready is closed, so a reader that has observed the close
+	// observes the error too.
+	failure atomic.Pointer[error]
 	// lifetime is the server's own context. A waiter released by it is
 	// released because the server is going away, not because it is ready.
 	lifetime <-chan struct{}
@@ -73,8 +78,36 @@ func (g *readinessGate) markReady() {
 	g.openOnce.Do(func() { close(g.ready) })
 }
 
-// isReady reports whether the catalog is in place.
+// markFailed releases every waiter with an error instead of a catalog.
+//
+// Under stdio the process is leaving when registration fails, so nobody waits
+// long enough to care. Under HTTP the server is one pooled entry among many and
+// the process stays up, so a failure has to reach the requests parked behind
+// it: holding them until their own deadline would report a timeout for
+// something that already has a cause, and opening the gate as if all were well
+// would answer an empty catalog, which is the one outcome this gate exists to
+// prevent.
+func (g *readinessGate) markFailed(cause error) {
+	g.openOnce.Do(func() {
+		g.failure.Store(&cause)
+		close(g.ready)
+	})
+}
+
+// failed reports the registration error, if registration failed.
+func (g *readinessGate) failed() error {
+	if p := g.failure.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
+
+// isReady reports whether the catalog is in place. A gate that failed is not
+// ready, so the middleware routes the request into await, which reports why.
 func (g *readinessGate) isReady() bool {
+	if g.failed() != nil {
+		return false
+	}
 	select {
 	case <-g.ready:
 		return true
@@ -176,6 +209,9 @@ func (g *readinessGate) await(ctx context.Context, method string) error {
 	started := time.Now()
 	select {
 	case <-g.ready:
+		if cause := g.failed(); cause != nil {
+			return g.abandoned(ctx, method, started, cause)
+		}
 		// At DEBUG so an operator debugging a slow start can see which methods
 		// waited and for how long, without the everyday startup paying for it.
 		slog.DebugContext(ctx, "method waited for the tool catalog",

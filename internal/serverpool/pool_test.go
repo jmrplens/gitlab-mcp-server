@@ -2257,3 +2257,66 @@ func TestEvictStaleCredential_LeavesFreshEntriesAlone(t *testing.T) {
 		})
 	}
 }
+
+// TestEvictServer_DropsTheEntryHoldingThatServer verifies the escape hatch a
+// background build failure needs.
+//
+// Under HTTP the catalog is registered on a goroutine, so the entry is already
+// cached by the time a registration can fail. Without this the poisoned entry
+// would serve every later request for that credential until an idle timeout or
+// a revalidation happened to replace it, which is an hour by default; dropping
+// it makes the next request rebuild, exactly as a synchronous failure does.
+func TestEvictServer_DropsTheEntryHoldingThatServer(t *testing.T) {
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, testFactory())
+
+	srv, err := pool.GetOrCreate("glpat-evict-me", stubGitLabBase)
+	if err != nil {
+		t.Fatalf("GetOrCreate() unexpected error: %v", err)
+	}
+	if pool.Size() != 1 {
+		t.Fatalf("pool.Size() = %d before eviction, want 1", pool.Size())
+	}
+
+	if !pool.EvictServer(srv) {
+		t.Fatal("EvictServer() reported it found nothing, but the entry was just created")
+	}
+	if pool.Size() != 0 {
+		t.Errorf("pool.Size() = %d after eviction, want 0", pool.Size())
+	}
+
+	// The credential still works: eviction drops a build, not a token.
+	rebuilt, err := pool.GetOrCreate("glpat-evict-me", stubGitLabBase)
+	if err != nil {
+		t.Fatalf("GetOrCreate() after eviction: %v", err)
+	}
+	if rebuilt == srv {
+		t.Error("GetOrCreate() returned the evicted server rather than rebuilding")
+	}
+}
+
+// TestEvictServer_AServerThePoolDoesNotHold_IsReportedRatherThanGuessedAt
+// verifies that the linear scan says so instead of evicting something else.
+func TestEvictServer_AServerThePoolDoesNotHold_IsReportedRatherThanGuessedAt(t *testing.T) {
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, testFactory())
+
+	if _, err := pool.GetOrCreate("glpat-keep-me", stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate() unexpected error: %v", err)
+	}
+
+	stranger, err := New(testConfig(stubGitLabBase), testFactory()).GetOrCreate("glpat-other-pool", stubGitLabBase)
+	if err != nil {
+		t.Fatalf("building a server in another pool: %v", err)
+	}
+
+	if pool.EvictServer(stranger) {
+		t.Error("EvictServer() claimed to evict a server this pool never held")
+	}
+	if pool.EvictServer(nil) {
+		t.Error("EvictServer(nil) claimed to evict something")
+	}
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d, want the untouched entry to survive", pool.Size())
+	}
+}

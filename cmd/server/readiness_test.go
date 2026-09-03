@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,6 +20,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -363,5 +367,133 @@ func TestDeferredIdentity_Middleware_OverlaysTheCallerOnceStartupResolvesIt(t *t
 				t.Errorf("Username = %q, want %q", seen.Username, tt.wantUsername)
 			}
 		})
+	}
+}
+
+// TestPoolEntryCost_SplitsShellFromRegistration measures the two halves of
+// building one pooled server, because which half dominates decides what an
+// HTTP-mode readiness gate could actually buy.
+//
+// The shell is everything a server needs before it has spoken to GitLab:
+// options, capabilities, middleware. Registration is the tool catalog, which
+// is the part a client currently waits through on the first request of every
+// new credential.
+//
+// It is a test rather than a Benchmark so it runs in the ordinary suite and
+// reports its numbers, and it asserts nothing about them. Elapsed time is not a
+// correctness invariant: a warm registration or a busy host can reorder the two
+// halves without anything being wrong, so an assertion here would fail the
+// ordinary suite for a machine rather than for a defect. What the split is
+// evidence FOR is proven where it can be: test/e2e/http/readiness_test.go
+// drives a real client and holds the handshake to a wall-clock ceiling.
+func TestPoolEntryCost_SplitsShellFromRegistration(t *testing.T) {
+	mock := newMockGitLabServer(t)
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL:   mock.URL,
+		GitLabToken: testToken,
+	})
+	if err != nil {
+		t.Fatalf("creating the client: %v", err)
+	}
+
+	surfaces := []struct {
+		name    string
+		surface string
+	}{
+		{name: "dynamic", surface: config.ToolSurfaceDynamic},
+		{name: "individual", surface: config.ToolSurfaceIndividual},
+	}
+
+	for _, s := range surfaces {
+		t.Run(s.name, func(t *testing.T) {
+			cfg := &config.ServerConfig{ToolSurface: s.surface, Tier: edition.Free}
+
+			shellStart := time.Now()
+			shell, shellErr := newServerShell(t.Context(), client, cfg)
+			shellCost := time.Since(shellStart)
+			if shellErr != nil {
+				t.Fatalf("newServerShell() error = %v", shellErr)
+			}
+
+			registerStart := time.Now()
+			if registerErr := shell.register(t.Context()); registerErr != nil {
+				t.Fatalf("register() error = %v", registerErr)
+			}
+			registerCost := time.Since(registerStart)
+
+			t.Logf("%s surface: shell %v, registration %v (%.0f%% of the build is registration)",
+				s.name, shellCost.Round(time.Millisecond), registerCost.Round(time.Millisecond),
+				100*float64(registerCost)/float64(shellCost+registerCost))
+		})
+	}
+}
+
+// TestReadinessGate_MarkFailed_ReleasesWaitersWithAnErrorRatherThanAnEmptyCatalog
+// covers the outcome that only exists on HTTP.
+//
+// Under stdio a failed registration means the process is leaving, so nobody
+// waits long enough to care. Under HTTP the server is one pooled entry among
+// many and the process stays up, which leaves two wrong answers available:
+// holding the parked requests until their own deadline reports a timeout for
+// something that already has a cause, and opening the gate as though all were
+// well answers an empty catalog, which is the single outcome this gate exists
+// to prevent.
+func TestReadinessGate_MarkFailed_ReleasesWaitersWithAnErrorRatherThanAnEmptyCatalog(t *testing.T) {
+	gate := newReadinessGate(t.Context())
+
+	released := make(chan error, 1)
+	go func() { released <- gate.await(t.Context(), "tools/list") }()
+
+	gate.markFailed(errors.New("the catalog could not be built"))
+
+	select {
+	case err := <-released:
+		if err == nil {
+			t.Fatal("await() returned no error after a failed registration, so the caller would be served an empty catalog")
+		}
+		// Not merely non-nil: a deadline expiring would also be non-nil, and
+		// would mean the waiter was held until its own timeout rather than
+		// told. The gate answers a refusal that says to retry, so that is what
+		// this asserts.
+		var rpcErr *jsonrpc.Error
+		if !errors.As(err, &rpcErr) {
+			t.Fatalf("await() returned %T, want the gate's own refusal", err)
+		}
+		if rpcErr.Code != codeServerBusy {
+			t.Errorf("await() answered code %d, want %d (server busy)", rpcErr.Code, codeServerBusy)
+		}
+		if !strings.Contains(rpcErr.Message, "retry") {
+			t.Errorf("the refusal %q does not tell the caller to retry", rpcErr.Message)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("await() never returned after markFailed; a failure has to reach the requests parked on the gate")
+	}
+
+	if gate.isReady() {
+		t.Error("isReady() is true after a failed registration; the middleware would let requests through to a catalog that is not there")
+	}
+	if gate.failed() == nil {
+		t.Error("failed() reports no cause after markFailed")
+	}
+}
+
+// TestReadinessGate_MarkFailedThenMarkReady_KeepsTheFailure verifies that the
+// two outcomes cannot overwrite each other.
+//
+// Both are called from the same background goroutine on mutually exclusive
+// paths, so this is a guard rather than a live case; it is here because if that
+// ever stops being true, the failure mode is a server reporting itself ready
+// with no tools, which is the hardest possible thing to diagnose from a client.
+func TestReadinessGate_MarkFailedThenMarkReady_KeepsTheFailure(t *testing.T) {
+	gate := newReadinessGate(t.Context())
+
+	gate.markFailed(errors.New("registration failed"))
+	gate.markReady()
+
+	if gate.failed() == nil {
+		t.Error("markReady() erased a recorded failure")
+	}
+	if gate.isReady() {
+		t.Error("isReady() is true for a gate whose registration failed")
 	}
 }

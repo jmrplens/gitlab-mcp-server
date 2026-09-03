@@ -1326,6 +1326,40 @@ func prepareStdioCatalog(
 // HTTP pool). See mcp.ServerOptions.SchemaCache.
 var sharedSchemaCache = mcp.NewSchemaCache()
 
+// startPooledRegistration builds the tool catalog for a freshly inserted pool
+// entry, on a goroutine, behind that server's readiness gate.
+//
+// It runs from the pool's post-insert hook rather than from the factory because
+// of what happens when it fails. The entry is cached by then, so the failure
+// has to be published twice: to the requests parked on the gate, and to the
+// pool through evict, or the next request for that credential takes the fast
+// path and is handed a server with no tools. A factory that started this would
+// be racing its own insertion, and a fast failure would find nothing to evict.
+//
+// A server with no shell recorded is not an error: the map is consumed by the
+// first hook that sees it, so a second call for the same server has nothing
+// left to do.
+func startPooledRegistration(ctx context.Context, pending *sync.Map, srv *mcp.Server, evict func()) {
+	loaded, ok := pending.LoadAndDelete(srv)
+	if !ok {
+		return
+	}
+	shell, ok := loaded.(*serverShell)
+	if !ok {
+		return
+	}
+	go func() {
+		if registerErr := shell.register(ctx); registerErr != nil {
+			shell.gate.markFailed(registerErr)
+			slog.ErrorContext(ctx, "the tool catalog could not be built for a pooled credential",
+				"error", registerErr)
+			evict()
+			return
+		}
+		shell.gate.markReady()
+	}()
+}
+
 // createServer builds a fully configured [*mcp.Server] with all tools,
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
@@ -2183,7 +2217,16 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// records which tag belongs to which server so the gate can refuse a
 	// session presented with a different credential.
 	var sessionTags sync.Map
-	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
+	// Carries each shell from the factory to the post-insert hook, which is
+	// where its registration starts. Entries are removed as they are consumed,
+	// so a build that never reaches insertion leaves nothing behind.
+	var pendingRegistration sync.Map
+	// Declared before the factory so the factory's background registration can
+	// evict the entry it belongs to. The factory only reads it from a goroutine
+	// it starts while serving a request, which is necessarily after New has
+	// returned and assigned it.
+	var pool *serverpool.ServerPool
+	pool = serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		tag := rand.Text()
 		// No server-initiated keepalive on any HTTP entry, stateful included.
 		// The SDK's keepalive is a JSON-RPC ping request, and it closes the
@@ -2193,13 +2236,33 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// mark for being idle. Liveness on this transport is the SSE
 		// keep-alive comment (see sseAwareWriter), which puts bytes on the
 		// wire without asking the client for anything.
-		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0), withTransport(mcpotel.TransportTCP))
+		// The shell rather than the whole server, and registration on a
+		// goroutine behind the readiness gate. Building the catalog is the
+		// entire cost of a pool entry, measured at 1.8s on the dynamic surface
+		// and 3.0s on individual against a shell too fast to time, and it is
+		// paid on the FIRST REQUEST OF EVERY CREDENTIAL rather than once per
+		// process the way stdio pays it. A shared deployment pays it per user,
+		// and again whenever an entry is reclaimed by the size bound or by
+		// --pool-idle-timeout. Answering the handshake from the shell moves all
+		// of it off the path a client is waiting on.
+		shell, err := newServerShell(ctx, client, serverCfg,
+			withSessionTag(tag), withKeepAlive(0), withTransport(mcpotel.TransportTCP))
 		if err != nil {
 			return nil, err
 		}
+		srv := shell.server
 		sessionTags.Store(srv, tag)
+		// Recorded, not started. Registration begins from the pool's
+		// post-insert hook below, because a failure has to be able to evict
+		// this entry and the pool inserts it only after this factory returns:
+		// starting here would race the insertion, and a fast failure would
+		// find nothing to evict and leave the poisoned entry cached.
+		pendingRegistration.Store(srv, shell)
 		return srv, nil
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
+		serverpool.WithOnInsert(func(srv *mcp.Server) {
+			startPooledRegistration(ctx, &pendingRegistration, srv, func() { pool.EvictServer(srv) })
+		}),
 		// The tag map must not outlive the pool entries it describes. Without
 		// this it grew past --max-http-clients on credential churn, and every
 		// stale key kept a whole server — its GitLab client and its registered
