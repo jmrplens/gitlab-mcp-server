@@ -1,0 +1,34 @@
+name: Labeler
+
+# pull_request_target so that pull requests from forks also get labeled: the
+# default GITHUB_TOKEN is read-only for fork pull requests under `pull_request`.
+# The action only reads the changed file list and never checks out or runs the
+# pull request's code, so the elevated token is not exposed to it.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+# Keyed on the pull request number, not github.ref: under pull_request_target
+# that ref is the base branch, so every open pull request would share one group
+# and each new one would cancel the last.
+concurrency:
+  group: labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Label by changed paths
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7
+        with:
+          # Keep labels added by hand. Only ever add, never remove.
+          sync-labels: false
+          # Stated rather than inherited: half the map's globs are dotted paths
+          # (.github/, .goreleaser.yml, .golangci.yml), and a default is a
+          # property of the action, not of this repository.
+          dot: true

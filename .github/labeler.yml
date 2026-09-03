@@ -1,0 +1,131 @@
+# Path-based labels applied to pull requests by .github/workflows/labeler.yml.
+# Every key must name a label that already exists in the repository, and the
+# consequence of getting that wrong is larger than it looks: the action sends
+# the whole label set in one PUT, so a single name the repository does not have
+# loses the entire call and the pull request gets none of its labels. It is not
+# a per-label skip, and it is not silent either. The workflow grants only
+# pull-requests: write, under which that call comes back 403; issues: write
+# would let the action create the missing label instead, which is deliberately
+# not granted, because a label created that way is default grey with no
+# description and this repository manages its labels by hand (see CONTRIBUTING).
+#
+# Five labels, chosen against the real change history rather than against the
+# tree, because a rule that fires on nearly every pull request carries no
+# information. Every candidate was measured over 43 merged and open pull
+# requests first: "touches docs/" was true of 42 of them and "touches
+# internal/tools/" of 28, so neither became a label, and no rule that survived
+# fires on more than half. GitLab API surface work is the norm here, so an
+# unlabeled pull request is the ordinary case rather than a gap in the map.
+
+# --- Kind of change -----------------------------------------------------------
+
+# Documentation *only*, hence any-glob-to-all-files against one braced pattern:
+# every changed file has to be prose. The "any file is a doc" form was true of
+# 42 of those 43 pull requests, because everything here ships with its
+# documentation; the only informative version of this label is the one that
+# says no code moved. site/src/content is the published bilingual mirror of
+# docs/ and belongs on the same side of that line.
+documentation:
+  - changed-files:
+      - any-glob-to-all-files:
+          - "{docs/**,site/src/content/**,README.md,CONTRIBUTING.md,CODE_OF_CONDUCT.md,AGENTS.md,CLAUDE.md,llms*.txt,llms-install.md,.github/copilot-instructions.md,.github/dockerhub-description.md,.github/pull_request_template.md,.github/{agents,instructions,skills,ISSUE_TEMPLATE}/**}"
+
+# Anything where a mistake is a vulnerability rather than a bug: credential
+# handling and admission (oauth, serverpool, the HTTP auth gate), the GitLab
+# client's TLS, redirect, response-limit and scope handling, the local-path
+# allow-lists a tool input is checked against, and the supply-chain controls.
+#
+# Deliberately over-eager. Whole packages are listed, tests included, so a
+# coverage pass over internal/serverpool/ picks the label up without meriting
+# it. That is the cheap direction to be wrong in: an extra label costs a glance,
+# a missed one costs a security change reviewed as though it were not.
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - SECURITY.md
+          - PRIVACY.md
+          - .gitguardian.yaml
+          - .github/workflows/codeql.yml
+          - .github/scripts/**
+          - .github/dependabot.yml
+          - cmd/audit_supply_chain/**
+          - cmd/server/authgate*.go
+          - cmd/server/bearerguard*.go
+          - internal/oauth/**
+          - internal/serverpool/**
+          - internal/gitlab/**
+          - internal/capguard/**
+          - internal/toolutil/fileutils*.go
+          - internal/toolutil/filesource*.go
+          - scripts/govulncheck.sh
+          - scripts/install.sh
+          - scripts/install.ps1
+
+# The pipeline itself, whose failure mode is that nobody finds out until it
+# runs. The Makefile is excluded on purpose: it is the entry point for every
+# gate in the repository and changes with almost any tooling work, which made
+# this label fire on two thirds of pull requests instead of two fifths.
+# cmd/audit_*/ is excluded for the same reason: those are Go programs with Go
+# tests, reviewed as code, and only the workflow that calls them is pipeline.
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/labeler.yml
+          - .github/dependabot.yml
+          - .github/scripts/**
+          - .golangci.yml
+          - .markdownlint-cli2.jsonc
+          - .markdownlint-cli2.yaml
+          - .coderabbit.yaml
+          - sonar-project.properties
+
+# What users install, across six channels. This label marks the pull requests
+# whose mistakes cannot be taken back: a published npm version and a PyPI file
+# name are permanent, an OCI tag and a release asset are what an installer
+# resolves, and server.json is what the MCP Registry hands to clients.
+distribution:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .goreleaser.yml
+          - .github/workflows/release.yml
+          - Dockerfile
+          - .dockerignore
+          - docker-compose.yml
+          - docker-compose.build.yml
+          - VERSION
+          - server.json
+          - plugin.json
+          - .plugin/**
+          - lhm.plugin.json
+          - mcp.json
+          - glama.json
+          - mcpb/**
+          - npm/**
+          - pypi/**
+          - scripts/build-mcpb.sh
+          - scripts/build-npm.mjs
+          - scripts/build_pypi.py
+          - scripts/publish-*
+          - scripts/validate-npm.mjs
+          - scripts/validate_pypi.py
+          - scripts/validate-server-json-packages.sh
+          - scripts/check-openplugin.sh
+          - scripts/update-homebrew-tap.sh
+          - scripts/update-server-json-sha.sh
+          - scripts/fetch-release-assets.sh
+          - scripts/smoke-test-image.sh
+          - scripts/verify_published_packages*.py
+          - scripts/install.sh
+          - scripts/install.ps1
+
+# The same label .github/dependabot.yml asks for, so a client-go bump made by
+# hand and one opened by Dependabot land in the same filter. npm/ and pypi/ are
+# not here: those manifests are stamped by the release, not resolved.
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - go.mod
+          - go.sum
+          - site/package.json
+          - site/pnpm-lock.yaml
