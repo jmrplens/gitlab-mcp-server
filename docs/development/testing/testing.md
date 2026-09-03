@@ -18,14 +18,14 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,500 |
-| Unit test functions                                   | 12,936 |
+| Total test functions                                  | 13,520 |
+| Unit test functions                                   | 12,956 |
 | E2E test functions                                    |    564 |
 | cmd test functions                                    |  2,040 |
-| Test files (internal/)                                |    495 |
+| Test files (internal/)                                |    498 |
 | Test files (cmd/)                                     |    117 |
 | Test files (test/e2e/)                                |    220 |
-| Tool sub-packages tested                              |    174 |
+| Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     21 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  97.8% |
 | Overall coverage (`go test ./internal/...`)           |  98.3% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,231 | 83.2% |
-| `TestFunc` (no underscore)             |    965 |  7.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,304 |  9.7% |
+| `TestFunc_Scenario` (2-part)           | 11,248 | 83.2% |
+| `TestFunc` (no underscore)             |    968 |  7.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,304 |  9.6% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,182 |        131 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            301 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (174) |          8,413 |        351 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,433 |        354 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            564 |        220 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,040 |        117 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,500** |    **832** |                                                                                                 |
+| **Total**               |     **13,520** |    **835** |                                                                                                 |
 
 ### Core Packages
 
@@ -112,7 +112,7 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 174 tested sub-packages (click to expand)</summary>
+<summary>All 175 tested sub-packages (click to expand)</summary>
 
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
@@ -148,6 +148,7 @@
 | customemoji             |        26 |          2 |   100.0% |         3 |
 | dbmigrations            |         7 |          1 |   100.0% |         1 |
 | dependencies            |        15 |          2 |   100.0% |         4 |
+| dependencyfirewall      |        20 |          3 |      n/a |         1 |
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
 | deploykeys              |        71 |          2 |   100.0% |         9 |
 | deploymentmergerequests |        25 |          1 |   100.0% |         1 |
@@ -290,7 +291,7 @@
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        95 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        49 |          4 |   100.0% |         7 |
-| **Total**               | **8,413** |    **351** |          | **1,174** |
+| **Total**               | **8,433** |    **354** |          | **1,175** |
 
 </details>
 
@@ -408,6 +409,7 @@
 | customemoji             |   100.0% |
 | dbmigrations            |   100.0% |
 | dependencies            |   100.0% |
+| dependencyfirewall      |      n/a |
 | dependencyproxy         |   100.0% |
 | deploykeys              |   100.0% |
 | deploymentmergerequests |   100.0% |

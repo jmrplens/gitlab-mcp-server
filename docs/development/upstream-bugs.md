@@ -85,6 +85,7 @@ readable without opening the tracker:
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | No | No | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
+| 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -267,6 +268,33 @@ migration looked mechanical until the error paths were compared.
 
 **Effort**: small. Three lines per method plus a test each, and no signature
 changes: every one of them already returns an `error`.
+
+### The Dependency Firewall wrapper is missing an attribute and an endpoint
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none. `internal/tools/dependencyfirewall` sends what the
+  options struct can carry and documents the omission.
+
+**What**: two gaps against
+[the Dependency Firewall API](https://docs.gitlab.com/api/dependency_firewall/).
+`EvaluatePackageOptions` carries `Ecosystem`, `Name` and `Version`, but not the
+documented optional `operation` attribute (`download` or `upload`, defaulting to
+`download`), and nothing on the options struct can carry a body field the type
+does not declare. Separately, `SecurityDependencyFirewallService` wraps only
+`POST /projects/:id/dependency_firewall/evaluate`, while the same page documents
+`GET /projects/:id/dependency_firewall/enablement`, which reports whether the
+firewall is on for a project.
+
+**Found from**: exposing the evaluate endpoint as an MCP action
+(`project.dependency_firewall_evaluate`), where 1:1 fidelity means every option
+field becomes an input field and there was one fewer than the API documents.
+
+**Effort**: small for the attribute (one field plus a test). The enablement
+endpoint is a new method with its own result type, and would let a tool answer
+"is the firewall even on here" without inferring it from a 404.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

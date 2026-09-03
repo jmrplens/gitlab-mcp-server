@@ -1,10 +1,10 @@
 # gitlab-mcp-server. Individual Tools Reference
 
-> Version 2.7.5 | up to 1078 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.5 | up to 1079 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Individual Tools
 
-When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1078 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1072.
+When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1079 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1073.
 Grouped by domain:
 
 ### access (8 tools)
@@ -11032,7 +11032,7 @@ Preview how a project badge's link_url and image_url resolve after placeholder i
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### project (90 tools)
+### project (91 tools)
 
 #### gitlab_project_access_token_create
 
@@ -11534,6 +11534,19 @@ Delete a target branch rule. Returns: a success confirmation naming the rule. Se
 - `rule_id` (integer) (required): Target branch rule ID to delete (from the list action)
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+#### gitlab_project_dependency_firewall_evaluate
+
+Evaluate one package coordinate against a project's Dependency Firewall policies (Premium, experimental). Returns: the outcome (allowed, warned or blocked) and the policy that produced a warned or blocked verdict. See also: gitlab_project_get, gitlab_list_project_dependencies.
+
+**Parameters:**
+
+- `ecosystem` (string) (required): Package ecosystem: cargo, composer, conan, gem, golang, maven, npm, nuget, pub, pypi, or swift
+- `name` (string) (required): Package name, maximum 255 characters. For maven use the groupId:artifactId form (com.example:trivial-lib). For pypi, names are normalized per PEP 503 before evaluation
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `version` (string) (required): Package version, maximum 255 characters
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_download_avatar
 

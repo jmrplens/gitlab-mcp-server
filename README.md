@@ -106,15 +106,9 @@ Each button registers the **Docker**-based server (auto-pulls the image on first
 Docker (no install — pulls the image on first run):
 
 ```bash
-export GITLAB_TOKEN=glpat-xxxx
-claude mcp add gitlab --transport stdio \
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
-
-The registration command carries no token: `-e GITLAB_TOKEN` with no value forwards the
-variable from the environment Claude Code hands `docker`, so export it where you launch
-the client. A container never reads `~/.gitlab-mcp-server.env`, which is where every
-other channel below puts it.
 
 Or install the native binary first, then register it:
 
@@ -137,19 +131,13 @@ winget install --id jmrplens.gitlab-mcp-server -e
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 
-echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
-claude mcp add gitlab -- gitlab-mcp-server
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 ```
 
 Clients that launch servers with `npx` need no install at all — point them at
 `npx -y @jmrp.io/gitlab-mcp-server`.
 
-The server reads `~/.gitlab-mcp-server.env` for values its environment does not already
-carry, one `KEY=value` per line, which is why no registration command above names the
-token. Self-managed GitLab? Add `GITLAB_URL=https://gitlab.example.com` to that same file
-(and, for a self-signed certificate, mount the CA and set `SSL_CERT_FILE=/path/to/ca-bundle.crt`;
-`GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, and OAuth mode refuses it for a
-non-loopback instance).
+Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and, for a self-signed certificate, mount the CA and set `--env SSL_CERT_FILE=/path/to/ca-bundle.crt`; `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, and OAuth mode refuses it for a non-loopback instance).
 
 ### Run it once to check the install
 
@@ -269,7 +257,7 @@ The server can present GitLab in three shapes, controlled by `GITLAB_MCP_TOOL_SU
 | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | **Dynamic** (default)         | 2 (`gitlab_find_action`, `gitlab_execute_action`) | Lowest token cost; reaches the full catalog via find/execute.    |
 | **Meta-tools** (`meta`)       | 32 base / 49 Ultimate / 50 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
-| **Individual** (`individual`) | ~854 Free/CE · ~1006 Premium · 1072–1078 Ultimate | One MCP tool per GitLab operation; needs a large context window. |
+| **Individual** (`individual`) | ~854 Free/CE · ~1007 Premium · 1073–1079 Ultimate | One MCP tool per GitLab operation; needs a large context window. |
 
 Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `GITLAB_MCP_CAPABILITY_SURFACE=minimal`.
 
@@ -285,10 +273,10 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
 | `dynamic` / `full` (default)                                                | Free/CE  |             2 |               858 | n/a                            |              1,501 |         8,832 |       10,333 |
 | `dynamic` / `minimal`                                                       | Free/CE  |             2 |               858 | n/a                            |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,010 | n/a                            |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,010 | n/a                            |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,076 | n/a                            |              1,501 |         8,832 |       10,333 |
-| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,076 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,011 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,011 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,077 | n/a                            |              1,501 |         8,832 |       10,333 |
+| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,077 | n/a                            |              1,501 |           170 |        1,671 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -298,7 +286,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 
 | MCP Capability    | Support                                                                                                                             |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Tools**         | Up to 1078 individual / 32–50 meta                                                                                                  |
+| **Tools**         | Up to 1079 individual / 32–50 meta                                                                                                  |
 | **Resources**     | 45 (static + templates)                                                                                                             |
 | **Prompts**       | 37 templates                                                                                                                        |
 | **Completions**   | 17 argument types: projects, groups, users, branches, tags, MRs, issues, pipelines, jobs, labels, milestones, SHAs                  |
@@ -471,20 +459,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,041 |     220,889 |
-| Unit tests (`_test.go`)  |       612 |     361,792 |
+| Source (`.go`, non-test) |     1,045 |     221,292 |
+| Unit tests (`_test.go`)  |       615 |     362,453 |
 | End-to-end tests         |       222 |      60,221 |
-| **Total**                | **1,875** | **642,902** |
+| **Total**                | **1,882** | **643,966** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,303 |
-| . Exported (public)             |  2,787 |
-| . Unexported (private)          |  5,516 |
-| Unit test functions (`TestXxx`) | 12,936 |
-| Subtests (`t.Run(...)`)         |  4,768 |
+| Source functions                |  8,313 |
+| . Exported (public)             |  2,790 |
+| . Unexported (private)          |  5,523 |
+| Unit test functions (`TestXxx`) | 12,956 |
+| Subtests (`t.Run(...)`)         |  4,775 |
 | End-to-end test functions       |    564 |
 
 ### Ratios worth noting
@@ -492,18 +480,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.64× more tests than code |
-| Average source file length         |                 ~212 lines |
-| Average test file length           |                 ~591 lines |
-| Comment lines in source            |  32,954 (~14.9% of source) |
+| Average source file length         |                 ~211 lines |
+| Average test file length           |                 ~589 lines |
+| Comment lines in source            |  33,082 (~14.9% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,959 |
+| `if err != nil` checks             | 6,968 |
 | `defer` statements                 | 1,132 |
-| `struct` types defined             | 2,835 |
+| `struct` types defined             | 2,838 |
 | `//nolint` suppressions            |   270 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -511,7 +499,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   248 |
+| Go packages                    |   249 |
 | Direct dependencies (`go.mod`) |    30 |
 | Indirect dependencies          |    31 |
 
@@ -526,8 +514,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,016 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,204 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,023 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,249 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

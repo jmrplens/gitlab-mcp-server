@@ -626,12 +626,14 @@ const (
 	// Premium/Ultimate). See cmd/audit_edition_tier.
 	expectedBaseDynamicCatalogActions = 858
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	// 1076 = 1069 + 7 work item saved view actions (get/list/create/update/
-	// delete/subscribe/unsubscribe, Free, client-go v2.62.0).
-	expectedEnterpriseDynamicCatalogActions = 1076
+	// 1077 = 1069 + 7 work item saved view actions (get/list/create/update/
+	// delete/subscribe/unsubscribe, Free, client-go v2.62.0)
+	// + 1 Dependency Firewall package evaluation (Premium).
+	expectedEnterpriseDynamicCatalogActions = 1077
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	// 1082 = 1075 + 7 work item saved view actions (Free, client-go v2.62.0).
-	expectedGitLabComEnterpriseCatalogActions = 1082
+	// 1083 = 1075 + 7 work item saved view actions (Free, client-go v2.62.0)
+	// + 1 Dependency Firewall package evaluation (Premium).
+	expectedGitLabComEnterpriseCatalogActions = 1083
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

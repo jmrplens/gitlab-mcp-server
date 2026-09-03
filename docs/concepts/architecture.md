@@ -67,10 +67,10 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>176 internal/tools packages<br/>(168 with action_specs.go)]
+        SPECS[domain ActionSpecs<br/>177 internal/tools packages<br/>(169 with action_specs.go)]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1072 self-managed / 1078 GitLab.com Premium/Ultimate tools]
+        IND[individual projection<br/>1073 self-managed / 1079 GitLab.com Premium/Ultimate tools]
         META[meta projection<br/>32 base / 49 self-managed enterprise / 50 GitLab.com Premium/Ultimate tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
         ELIC[elicitation support<br/>4 interactive actions]
@@ -168,7 +168,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package family — contains 1072 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1078 total in that catalog, organized across 176 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
+The largest package family — contains 1073 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1079 total in that catalog, organized across 177 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](../development/tool-surfaces-and-action-core.md).
 

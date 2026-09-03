@@ -124,6 +124,7 @@ func init() {
 		"auditevents":          "audit_events",
 		"compliancepolicy":     "compliance_policy_settings",
 		"dependencies":         "dependencies",
+		"dependencyfirewall":   "dependency_firewall",
 		"enterpriseusers":      "group_enterprise_users",
 		"epicissues":           "epic_issues",
 		"epics":                "epics",

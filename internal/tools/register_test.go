@@ -322,9 +322,10 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 1072 = 1065 + 7 work item saved view actions (get/list/create/
-		// update/delete/subscribe/unsubscribe, Free, client-go v2.62.0).
-		const expectedTools = 1072
+		// 1073 = 1065 + 7 work item saved view actions (get/list/create/
+		// update/delete/subscribe/unsubscribe, Free, client-go v2.62.0)
+		// + 1 Dependency Firewall package evaluation (Premium).
+		const expectedTools = 1073
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {

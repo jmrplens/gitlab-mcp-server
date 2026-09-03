@@ -80,7 +80,8 @@ var declaredServices = map[string]declaration{
 	"ProjectClusters":  {supersededUpstream, certificateClusters},
 
 	// UNWRAPPED_TRACKED
-	"SecurityDependencyFirewall": {unwrappedTracked, "EvaluatePackage is genuinely unexposed; tracked in https://github.com/jmrplens/gitlab-mcp-server/issues/429"},
+	// (none: SecurityDependencyFirewall was the last one, and
+	// internal/tools/dependencyfirewall now calls EvaluatePackage.)
 }
 
 // GraphQL operation decisions.

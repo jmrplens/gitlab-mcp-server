@@ -152864,6 +152864,85 @@
     }
   },
   {
+    "name": "gitlab_project_dependency_firewall_evaluate",
+    "description": "Evaluate one package coordinate against a project's Dependency Firewall policies (Premium, experimental). Returns: the outcome (allowed, warned or blocked) and the policy that produced a warned or blocked verdict. See also: gitlab_project_get, gitlab_list_project_dependencies.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "ecosystem": {
+          "description": "Package ecosystem: cargo, composer, conan, gem, golang, maven, npm, nuget, pub, pypi, or swift",
+          "enum": [
+            "cargo",
+            "composer",
+            "conan",
+            "gem",
+            "golang",
+            "maven",
+            "npm",
+            "nuget",
+            "pub",
+            "pypi",
+            "swift"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "description": "Package name, maximum 255 characters. For maven use the groupId:artifactId form (com.example:trivial-lib). For pypi, names are normalized per PEP 503 before evaluation",
+          "type": "string"
+        },
+        "project_id": {
+          "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "version": {
+          "description": "Package version, maximum 255 characters",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "ecosystem",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "reason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "outcome",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_project_download_avatar",
     "description": "Download a project's avatar. Returns: the avatar image content. See also: gitlab_project_upload_avatar, gitlab_project_get.",
     "inputSchema": {
