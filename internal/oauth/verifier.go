@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -520,7 +521,8 @@ type introspection struct {
 // date. Parsing the latter as RFC 3339 fails and silently degrades to "no
 // expiry", which is exactly the bug this exists to prevent.
 func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token string) introspection {
-	if payload := fetchIntrospection(ctx, client, gitlabURL+"/api/v4/personal_access_tokens/self", token); payload != nil {
+	var refused atomic.Bool
+	if payload := fetchIntrospection(ctx, client, gitlabURL+"/api/v4/personal_access_tokens/self", token, &refused); payload != nil {
 		if scopes := stringSlice(payload["scopes"]); scopes != nil {
 			return introspection{
 				scopes:   expandImpliedScopes(scopes),
@@ -529,7 +531,7 @@ func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token 
 			}
 		}
 	}
-	if payload := fetchIntrospection(ctx, client, gitlabURL+"/oauth/token/info", token); payload != nil {
+	if payload := fetchIntrospection(ctx, client, gitlabURL+"/oauth/token/info", token, &refused); payload != nil {
 		if scopes := stringSlice(payload["scope"]); scopes != nil {
 			return introspection{
 				scopes:         expandImpliedScopes(scopes),
@@ -539,6 +541,19 @@ func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token 
 			}
 		}
 	}
+	if refused.Load() {
+		// Both endpoints saw the credential and declined to describe it, so
+		// this is an answer about the token rather than a gap in what we could
+		// ask. Assuming api here is what let a token that cannot read its own
+		// scopes through the door, to fail on every tool call afterwards with
+		// an error from GitLab instead of one refusal here that says what to
+		// reauthorize.
+		slog.DebugContext(ctx, "the instance refused to describe this token's scopes; treating it as carrying none")
+		return introspection{answered: true}
+	}
+	// Nothing answered at all: an older instance, an unreachable endpoint, a
+	// timeout. The question could not be put, so refusing every such token
+	// would lock out deployments that work.
 	slog.DebugContext(ctx, "token scope introspection unavailable; assuming api scope")
 	return introspection{scopes: expandImpliedScopes([]string{"api"})}
 }
@@ -619,6 +634,19 @@ func expiryFromSeconds(raw any) time.Time {
 // stringSlice reads a JSON array of strings, returning nil when the field is
 // absent, not an array, or carries no strings.
 func stringSlice(raw any) []string {
+	// A space-separated string first, because that is what the specifications
+	// say: RFC 6749 defines scope as a space-delimited list and RFC 7662
+	// repeats it for introspection. GitLab's /oauth/token/info answers with a
+	// JSON array instead, which is why the array case exists, but reading only
+	// the array means a conforming authorization server is silently understood
+	// as "no scopes" and falls through to the assumption below.
+	if text, ok := raw.(string); ok {
+		out := strings.Fields(text)
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	}
 	items, ok := raw.([]any)
 	if !ok {
 		return nil
@@ -650,7 +678,10 @@ func expandImpliedScopes(scopes []string) []string {
 // fetchScopes reads one introspection endpoint and returns the named
 // string-array field, or nil when the endpoint does not answer for this
 // token kind.
-func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, token string) map[string]any {
+// refused reports that the endpoint answered about this credential rather than
+// being unavailable, which is what separates "cannot ask" from "asked and was
+// told no".
+func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, token string, refused *atomic.Bool) map[string]any {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return nil
@@ -662,6 +693,12 @@ func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, toke
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		// A 401 or 403 is an answer, not a failure to ask: the instance saw
+		// this credential and declined to describe it. Recorded so the caller
+		// can tell that apart from an endpoint that could not be reached.
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			refused.Store(true)
+		}
 		return nil
 	}
 	var payload map[string]any

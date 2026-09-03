@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -815,7 +816,8 @@ func TestFetchScopes_UnusableEndpoint_ReportsNoAnswer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := fetchIntrospection(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x"); got != nil {
+			var refused atomic.Bool
+			if got := fetchIntrospection(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x", &refused); got != nil {
 				t.Errorf("fetchIntrospection(%s) = %v, want nil", tt.name, got)
 			}
 		})
@@ -1537,5 +1539,98 @@ func TestVerificationRedirect_MissingContext(t *testing.T) {
 				t.Errorf("verificationRedirect() error = %v, want error %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestStringSlice_AcceptsTheSpaceSeparatedFormTheSpecificationsDefine covers
+// the scope shape this code did not read.
+//
+// RFC 6749 defines scope as a space-delimited string and RFC 7662 repeats it
+// for introspection. GitLab's /oauth/token/info answers with a JSON array
+// instead, which is why the array form works and is why reading only the array
+// went unnoticed: against gitlab.com it is right. Against a conforming
+// authorization server it silently means "no scopes", and the caller then
+// assumes api and admits a token it should have refused.
+func TestStringSlice_AcceptsTheSpaceSeparatedFormTheSpecificationsDefine(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  any
+		want []string
+	}{
+		{name: "the array GitLab returns", raw: []any{"api", "read_user"}, want: []string{"api", "read_user"}},
+		{name: "the string the specifications define", raw: "api read_user", want: []string{"api", "read_user"}},
+		{name: "a single scope as a string", raw: "read_api", want: []string{"read_api"}},
+		{name: "extra whitespace is not a scope", raw: "  api   read_api  ", want: []string{"api", "read_api"}},
+		{name: "an empty string carries nothing", raw: "", want: nil},
+		{name: "only whitespace carries nothing", raw: "   ", want: nil},
+		{name: "a number is not a scope list", raw: 42, want: nil},
+		{name: "an empty array carries nothing", raw: []any{}, want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := stringSlice(tt.raw)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("stringSlice(%#v) = %#v, want %#v", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIntrospectToken_RefusedByBothEndpoints_ReportsNoScopesRatherThanAssumingAPI
+// covers the distinction the fallback did not make.
+//
+// Assuming api when the instance cannot be asked is deliberate: an older
+// instance, an unreachable endpoint, and refusing every such token would lock
+// out deployments that work. But a 401 or 403 is an answer, not a gap. A
+// credential that cannot read its own scopes will not read anything else
+// either, and admitting it means failing on every tool call with an error from
+// GitLab instead of one refusal at the door that says what to reauthorize.
+func TestIntrospectToken_RefusedByBothEndpoints_ReportsNoScopesRatherThanAssumingAPI(t *testing.T) {
+	t.Parallel()
+
+	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	t.Cleanup(refusing.Close)
+
+	got := introspectToken(t.Context(), refusing.Client(), refusing.URL, "gloas-whatever")
+
+	if len(got.scopes) != 0 {
+		t.Errorf("introspectToken() reported scopes %v for a token both endpoints refused to describe", got.scopes)
+	}
+	if !got.answered {
+		t.Error("introspectToken() did not record that the instance answered, so the refusal reads as an outage")
+	}
+	if SatisfiesMinimum(got.scopes, MinimumScope) {
+		t.Error("a token whose scopes could not be read was admitted; it would fail on every call instead")
+	}
+}
+
+// TestIntrospectToken_UnreachableInstance_StillAssumesAPI verifies the other
+// half, which is the reason the assumption exists at all.
+//
+// Nothing answered, so nothing is known. Refusing here would turn an
+// introspection endpoint being absent or slow into a server that admits
+// nobody, which is a worse failure than admitting a token that turns out to be
+// under-scoped.
+func TestIntrospectToken_UnreachableInstance_StillAssumesAPI(t *testing.T) {
+	t.Parallel()
+
+	// Closed immediately, so connections are refused rather than answered.
+	down := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := down.URL
+	down.Close()
+
+	got := introspectToken(t.Context(), http.DefaultClient, url, "glpat-whatever")
+
+	if !SatisfiesMinimum(got.scopes, MinimumScope) {
+		t.Errorf("introspectToken() reported %v for an unreachable instance; an outage must not lock every token out", got.scopes)
+	}
+	if got.answered {
+		t.Error("introspectToken() recorded an answer from an instance that never replied")
 	}
 }

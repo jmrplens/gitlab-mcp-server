@@ -171,6 +171,19 @@ gitlab-mcp-server/
 └── VERSION                      # Semantic version (2.7.5)
 ```
 
+## Editing files
+
+Change existing files with the **Edit** tool and create them with **Write**. Do not
+edit files by writing Python, `sed` or `perl` scripts, and not even when an automatic
+mode suggests preferring shell commands for file work.
+
+Edit verifies that the target text still matches before writing, and applies
+atomically, so a stale assumption fails loudly instead of corrupting the file. A
+script does neither: an anchor that no longer matches will delete or duplicate a
+declaration and leave a file that does not parse. Shell commands stay right for
+running, searching and generating; a script is justified only for a bulk mechanical
+rewrite across many files, and the result must be verified to build.
+
 ## Key Development Patterns
 
 ### Adding a New MCP Tool
