@@ -832,7 +832,9 @@ func TestNewSubscriptionRuntime_MinimalSurface_IsNil(t *testing.T) {
 // the registry used to be absent and those streams became unreachable. The
 // visible symptom was in shutdown: the process ignored its signal for the full
 // HTTP drain budget and then died with "http server shutdown: context deadline
-// exceeded" and exit 1. The wire half of this is pinned in
+// exceeded" and exit 1. Since [shutdownHTTPServer] that budget ends in a forced
+// close instead, so the delay and the streams left without a completion result
+// are what the bug would show today. The wire half of this is pinned in
 // test/e2e/http/shutdown_test.go, which drives the real binary with that flag
 // and a real signal; this half pins the wiring that makes it possible.
 //

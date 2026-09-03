@@ -88,9 +88,11 @@ func TestRepositoryRoot_AbsError(t *testing.T) {
 // regardless of privilege, exercising the same RepositoryRoot error path
 // without depending on permission enforcement.
 //
-// It depends instead on the platform reporting the removal at all, which
-// Windows and macOS do not, so the test checks that premise and skips rather
-// than asserting an error the operating system was never going to produce.
+// It depends instead on the platform letting the removal happen and then
+// reporting it, and there are two different ways for that to fail. Both are
+// checked as premises rather than predicted from the platform name, and both
+// skip rather than asserting an error the operating system was never going to
+// produce.
 func TestRepositoryRoot_AbsError_RemovedCwd(t *testing.T) {
 	tmp := t.TempDir()
 	nested := filepath.Join(tmp, "gone")
@@ -99,17 +101,22 @@ func TestRepositoryRoot_AbsError_RemovedCwd(t *testing.T) {
 	}
 	t.Chdir(nested)
 
+	// First premise: the removal itself. Windows refuses it, because a
+	// directory that is a process's working directory is a directory in use,
+	// and says so ("The process cannot access the file because it is being
+	// used by another process"). A platform that will not remove the working
+	// directory cannot be made to fail filepath.Abs this way at all, so the
+	// removal failing is a reason to skip and not a reason to fail: a t.Fatalf
+	// here reported the operating system's design as a defect in this package.
 	if err := os.RemoveAll(nested); err != nil {
-		t.Fatalf("remove nested: %v", err)
+		t.Skipf("this platform will not remove the working directory, so filepath.Abs cannot be made to fail here: %v", err)
 	}
 
-	// The premise is checked rather than predicted from the platform. Removing
-	// the working directory fails getcwd(3) on Linux and does not on Windows,
-	// which this test already knew, nor on macOS, which it did not: Darwin
-	// answers from the path it remembers, so RepositoryRoot walks for a go.mod
-	// and returns the not-found error instead. Where getcwd still succeeds
-	// there is no filepath.Abs failure to cover, and asking the platform is
-	// both shorter and truer than listing the ones that behave this way.
+	// Second premise, for the platforms that do remove it. Removal fails
+	// getcwd(3) on Linux and does not on macOS, where Darwin answers from the
+	// path it remembers, so RepositoryRoot walks for a go.mod and returns the
+	// not-found error instead. Where getcwd still answers there is no
+	// filepath.Abs failure to cover.
 	if _, err := os.Getwd(); err == nil {
 		t.Skip("this platform's getcwd still answers after the working directory is removed, so filepath.Abs cannot fail here")
 	}

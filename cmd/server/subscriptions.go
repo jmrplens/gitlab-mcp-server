@@ -782,10 +782,13 @@ func (b *sessionBridge) subscribeUnlessStateless(ctx context.Context, req *mcp.S
 //
 // So wiring the registry beside the runtime left --capability-surface=minimal
 // with open streams nobody could reach: SIGTERM was answered by the full
-// httpShutdownTimeout of waiting, then "http server shutdown: context deadline
-// exceeded" and exit 1, with the streams never getting their completion result
-// either. The per-server and per-process ceilings on open streams reduce how
-// many can pile up and do not change that outcome for the ones that do.
+// [httpShutdownTimeout] of waiting, then "http server shutdown: context
+// deadline exceeded" and exit 1, with the streams never getting their
+// completion result either. Since [shutdownHTTPServer] the same bug would end
+// in a forced close rather than that error, so what gives it away is the delay
+// and the missing completion results, which is what the tests assert on. The
+// per-server and per-process ceilings on open streams reduce how many can pile
+// up and do not change that outcome for the ones that do.
 func (r *subscriptionRuntime) streamRegistry() *listenStreams {
 	if r == nil {
 		return newListenStreams()

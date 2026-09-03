@@ -1149,24 +1149,11 @@ func initializeTestServer(t *testing.T, cfg *config.ServerConfig) map[string]any
 // TestPrintHelp_ContainsExpectedSections verifies that printHelp outputs
 // all expected sections: version, author, flags, env vars, and JSON examples.
 func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
-	// Capture stdout.
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
+	stdout := captureStdout(t)
 
 	printHelp()
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-	output := string(out)
+	output := stdout()
 
 	checks := []struct {
 		name, want string
@@ -1225,26 +1212,14 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 // stating there too, because -http is in every existing deployment and the
 // answer to "what happens if I keep it" is the first question this flag raises.
 func TestPrintHelp_Transport_NamesEverySelectorAndThePrecedence(t *testing.T) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
+	stdout := captureStdout(t)
 
 	printHelp()
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
 	// The entry is its own line plus its indented continuation lines: the
 	// description is long enough to wrap, and a value named on a wrapped line
 	// is still documented.
-	entry := helpEntry(string(out), "-transport string")
+	entry := helpEntry(stdout(), "-transport string")
 	if entry == "" {
 		t.Fatal("the help does not document -transport at all")
 	}
@@ -1298,26 +1273,13 @@ func helpEntry(help, flagName string) string {
 // stateful session that a rebuild answers 404, that a flag they set achieved
 // it.
 func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(t *testing.T) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
+	stdout := captureStdout(t)
 
 	printHelp()
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-
 	// The entry is its own line plus any indented continuation lines, since a
 	// flag long enough to need this correction is long enough to wrap.
-	line := helpEntry(string(out), "-revalidate-interval")
+	line := helpEntry(stdout(), "-revalidate-interval")
 	if line == "" {
 		t.Fatal("the help does not document -revalidate-interval at all")
 	}
@@ -1330,17 +1292,12 @@ func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(
 }
 
 // TestPrintHelp_NoPanic verifies that printHelp can be called without panicking.
+//
+// This one had no reader at all, only a write end nothing ever emptied, which
+// is the shape from [captureStdout]'s comment at its most direct: discarding
+// output still means writing it. The capture is what makes the discard work.
 func TestPrintHelp_NoPanic(t *testing.T) {
-	oldStdout := os.Stdout
-	_, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
-	defer func() {
-		_ = w.Close()
-		os.Stdout = oldStdout
-	}()
+	captureStdout(t)
 
 	// Should not panic.
 	printHelp()
@@ -1373,31 +1330,20 @@ func TestStaticConfigurationExamplesPreferToolSurface(t *testing.T) {
 func TestMain_HelpParsesTierFlag(t *testing.T) {
 	oldArgs := os.Args
 	oldCommandLine := flag.CommandLine
-	oldStdout := os.Stdout
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
 	os.Args = []string{"gitlab-mcp-server", "-h", "-tier", "ultimate"}
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(io.Discard)
-	os.Stdout = w
 	t.Cleanup(func() {
 		os.Args = oldArgs
 		flag.CommandLine = oldCommandLine
-		os.Stdout = oldStdout
 	})
+	stdout := captureStdout(t)
 
 	main()
 
-	_ = w.Close()
-	out, readErr := io.ReadAll(r)
-	if readErr != nil {
-		t.Fatalf("ReadAll: %v", readErr)
-	}
-	if !strings.Contains(string(out), "gitlab-mcp-server") {
-		t.Fatalf("help output missing project name: %s", string(out))
+	if out := stdout(); !strings.Contains(out, "gitlab-mcp-server") {
+		t.Fatalf("help output missing project name: %s", out)
 	}
 }
 
@@ -3015,24 +2961,13 @@ func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oldStdout := os.Stdout
-			r, w, err := os.Pipe()
-			if err != nil {
-				t.Fatalf("os.Pipe: %v", err)
-			}
-			os.Stdout = w
-			t.Cleanup(func() { os.Stdout = oldStdout })
+			stdout := captureStdout(t)
 
 			if searchErr := doToolSearch(tt.query, tt.toolSurface, edition.Free); searchErr != nil {
 				t.Fatalf("doToolSearch() error: %v", searchErr)
 			}
-			_ = w.Close()
-			out, readErr := io.ReadAll(r)
-			if readErr != nil {
-				t.Fatalf("ReadAll: %v", readErr)
-			}
-			if !strings.Contains(string(out), "Found") {
-				t.Fatalf("tool search output missing matches: %s", string(out))
+			if out := stdout(); !strings.Contains(out, "Found") {
+				t.Fatalf("tool search output missing matches: %s", out)
 			}
 		})
 	}
@@ -7907,6 +7842,21 @@ func TestMain_StdioMode_StartsAndStopsWithTheClient(t *testing.T) {
 
 // captureStdout redirects os.Stdout for the duration of the test and returns a
 // function that stops the capture and yields what was written.
+//
+// The pipe is drained by a goroutine started before the capture begins, and
+// that is load-bearing rather than tidy. A pipe holds only what its buffer
+// holds, and a writer that fills it blocks until somebody reads, so a capture
+// that reads only after the writer has finished works exactly until the output
+// outgrows the buffer. Linux gives 64 KiB and hides the problem for anything a
+// test is likely to print. Windows gives a few kilobytes, and [printHelp]
+// writes about 12 KB, so there the writer parked in os.(*File).Write and never
+// came back: that is what timed this package out at thirty minutes on the first
+// Windows CI run, with eighteen parallel tests stuck behind a serial phase that
+// had no way to end.
+//
+// Every capture of stdout in this package goes through here for that reason. A
+// site that opens its own pipe and reads afterwards is the same bug again, and
+// it is invisible until the output grows or the platform changes.
 func captureStdout(t *testing.T) func() string {
 	t.Helper()
 
@@ -7914,6 +7864,17 @@ func captureStdout(t *testing.T) func() string {
 	if err != nil {
 		t.Fatalf("os.Pipe: %v", err)
 	}
+
+	type capture struct {
+		out []byte
+		err error
+	}
+	drained := make(chan capture, 1)
+	go func() {
+		out, readErr := io.ReadAll(reader)
+		drained <- capture{out: out, err: readErr}
+	}()
+
 	original := os.Stdout
 	os.Stdout = writer
 
@@ -7922,18 +7883,60 @@ func captureStdout(t *testing.T) func() string {
 	stop := func() string {
 		once.Do(func() {
 			os.Stdout = original
+			// Closing the writer is what ends the drain: ReadAll returns on
+			// EOF, which arrives only once the last write end is gone.
 			_ = writer.Close()
-			out, readErr := io.ReadAll(reader)
-			if readErr != nil {
-				t.Errorf("reading captured stdout: %v", readErr)
+			result := <-drained
+			if result.err != nil {
+				t.Errorf("reading captured stdout: %v", result.err)
 			}
-			captured = string(out)
+			captured = string(result.out)
 			_ = reader.Close()
 		})
 		return captured
 	}
 	t.Cleanup(func() { stop() })
 	return stop
+}
+
+// TestCaptureStdout_OutputLargerThanThePipeBuffer_DoesNotBlock pins the drain
+// that [captureStdout] depends on.
+//
+// The reason this test exists rather than trusting the comment is that the bug
+// it guards is invisible on the platform most of us develop on. A capture that
+// reads only after the writer finishes works for any output up to the pipe
+// buffer, which is 64 KiB on Linux and a few kilobytes on Windows, so the same
+// code passes here and hangs there. Writing past the larger of the two makes
+// the failure reachable everywhere.
+//
+// Note what failure looks like: without the concurrent drain this test does not
+// report anything, it blocks until the package timeout takes the whole run
+// down. That is exactly the symptom it is here to prevent, so a run of this
+// package that stops making progress should be read as this assertion firing.
+//
+// One size, and deliberately not a table of them. A second case below the
+// buffer would pass whether the drain is there or not, since working below the
+// buffer is precisely what the broken shape does, so it could never fail for
+// the reason this test exists. It would also have to name a size below the
+// smallest buffer anyone runs, and buffer capacity is not a portable constant:
+// Linux defaults to 64 KiB and is tunable per pipe and system-wide, macOS
+// starts smaller and grows, and Windows treats the size as a hint. Needing only
+// an upper bound is what keeps this test true everywhere, so the one number
+// here is the whole scenario rather than a row waiting for siblings.
+func TestCaptureStdout_OutputLargerThanThePipeBuffer_DoesNotBlock(t *testing.T) {
+	// Comfortably past Linux's 64 KiB, which is the largest buffer in play.
+	const size = 256 << 10
+
+	stdout := captureStdout(t)
+	_, writeErr := os.Stdout.Write(bytes.Repeat([]byte("x"), size))
+	captured := stdout()
+
+	if writeErr != nil {
+		t.Fatalf("writing past the pipe buffer: %v", writeErr)
+	}
+	if len(captured) != size {
+		t.Errorf("captured %d bytes, want %d", len(captured), size)
+	}
 }
 
 // TestBuildServerCard_AnUnusableInstanceURL_IsReportedNotServed covers the one
@@ -8679,4 +8682,337 @@ func TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure
+// pins that a connection which has not gone idle when the process context is
+// cancelled costs a forced close, not a failed shutdown.
+//
+// The failure this replaces is the one that made "the five second bound is too
+// tight under CI load" look like a load problem. A tool call waiting on GitLab
+// keeps its connection out of the idle state [http.Server.Shutdown] waits for,
+// so the drain budget runs out however large it is, and until now that was
+// returned as "http server shutdown: context deadline exceeded" and exit 1: a
+// failed unit to a supervisor and a broken build to CI, for one straggler
+// connection that process exit was about to drop anyway.
+//
+// The GitLab stand-in never answers the project list, which is what holds the
+// handler. The pool entry is warmed first on purpose: entry construction is
+// bounded by the serve context, so a request still building one would abort at
+// cancellation instead of holding the drain, and the test would prove nothing.
+//
+// The serve context states a drain budget of its own, which is also what keeps
+// the test to a few seconds rather than the full fifteen. It has to be armed
+// after the warm-up rather than declared up front, because that warm-up builds
+// a catalog and costs seconds on a plain run and an order of magnitude more
+// under the race detector: a deadline picked before it would expire during
+// setup on exactly the slow runners this has to survive.
+func TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure(t *testing.T) {
+	var enteredOnce, releaseOnce sync.Once
+	entered := make(chan struct{})
+	release := make(chan struct{})
+
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/version":
+			w.Header().Set(hdrContentType, mimeJSON)
+			_, _ = w.Write([]byte(`{"version":"16.0.0","revision":"test"}`))
+		case strings.HasPrefix(r.URL.Path, "/api/v4/projects"):
+			enteredOnce.Do(func() { close(entered) })
+			<-release
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	// Registered after the server's own close so it runs before it: Close
+	// waits for outstanding requests, and the handler above is one.
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+
+	inner, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx := &armedDeadlineContext{Context: inner}
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, statelessTestConfig(gitlab.URL, true), addr, listener, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	warm := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	warm.Body.Close()
+
+	callDone := make(chan struct{})
+	go func() {
+		defer close(callDone)
+		body := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"gitlab_execute_action",` +
+			`"arguments":{"action":"project.list","params":{}}}}`
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodPost,
+			"http://"+addr, strings.NewReader(body))
+		if reqErr != nil {
+			t.Errorf("build the tool call that shutdown must find in flight: %v", reqErr)
+			return
+		}
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		req.Header.Set("PRIVATE-TOKEN", testToken)
+		if resp, doErr := testHTTPClient.Do(req); doErr == nil {
+			resp.Body.Close()
+		}
+	}()
+	// Releasing here rather than leaving it to the cleanup registered above:
+	// this one runs first, and on the happy path the forced close ends the
+	// request for it. On a failure path between here and the shutdown there is
+	// no forced close, so waiting first would wait on a handler nothing has
+	// released, and the request would sit there for the client's full timeout.
+	// A failing test must not also hang.
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(release) })
+		<-callDone
+	})
+
+	select {
+	case <-entered:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("the tool call never reached the GitLab stand-in, so no request was in flight at shutdown")
+	}
+
+	const budget = 2 * time.Second
+	ctx.arm(time.Now().Add(budget))
+	start := time.Now()
+	cancel()
+	select {
+	case serveErr := <-errCh:
+		if serveErr != nil {
+			t.Fatalf("serveHTTPOn() = %v after %s, want a clean stop: a connection that has not gone idle is not a process failure",
+				serveErr, time.Since(start))
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatalf("serveHTTPOn() did not return within %s of cancellation", testHTTPLivenessTimeout)
+	}
+	// The stated budget is what bounded the drain, not httpShutdownTimeout:
+	// with the constant in charge this is the full fifteen seconds.
+	if elapsed := time.Since(start); elapsed >= httpShutdownTimeout {
+		t.Errorf("the drain took %s with a stated budget of %s, want the caller's budget to bound it",
+			elapsed, budget)
+	}
+}
+
+// armedDeadlineContext is a context that gains a deadline when the test arms
+// it, and never fires [context.Context.Done] because of it.
+//
+// It exists for the one shape in which a caller-stated drain budget is
+// meaningful: a deadline still in the future when cancellation ends the
+// serving. A plain [context.WithTimeout] cannot express it in a test whose
+// setup cost varies by an order of magnitude, since the deadline would have to
+// be picked before the setup it must outlast.
+type armedDeadlineContext struct {
+	context.Context
+
+	mu       sync.Mutex
+	deadline time.Time
+}
+
+// arm sets the deadline the context reports from now on.
+func (c *armedDeadlineContext) arm(at time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.deadline = at
+}
+
+// Deadline reports the armed deadline, and none until arm is called.
+func (c *armedDeadlineContext) Deadline() (time.Time, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.deadline, !c.deadline.IsZero()
+}
+
+// TestShutdownHTTPServer_CallersDeadline_BoundsTheDrain pins that the drain
+// budget comes from the caller's deadline when the caller stated a tighter one,
+// which is the rule [telemetry.Provider.Shutdown] follows.
+//
+// Both cases hold a request in flight, so the budget is genuinely spent rather
+// than short-circuited by an idle server, and both must end without an error.
+// The elapsed time is what says whose budget was used, so the ceiling is the
+// caller's own budget plus a tolerance rather than a round number: an upper
+// bound loose enough to admit some fixed budget of the implementation's own
+// would stay green with the very bug this test exists to catch.
+func TestShutdownHTTPServer_CallersDeadline_BoundsTheDrain(t *testing.T) {
+	// drainTolerance is how much longer than the caller's budget the drain may
+	// take. Shutdown selects on the deadline, so it returns as that passes and
+	// what remains is goroutine scheduling plus the forced close, measured in
+	// milliseconds. Two seconds is loose enough for a loaded runner under the
+	// race detector and still tight enough to fail any implementation that
+	// substituted a budget of its own, the smallest this project has shipped
+	// being five seconds.
+	const drainTolerance = 2 * time.Second
+
+	cases := []struct {
+		name      string
+		remaining time.Duration
+		atLeast   time.Duration
+	}{
+		{
+			name:      "tighter than the default",
+			remaining: time.Second,
+			// Proves the drain happened at all rather than being skipped.
+			atLeast: 500 * time.Millisecond,
+		},
+		{
+			name:      "already passed",
+			remaining: -time.Second,
+			atLeast:   0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			httpServer := blockedHTTPServer(t)
+
+			// The serve context is always done by the time the drain starts,
+			// which is exactly what makes a past deadline reachable here.
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(tc.remaining))
+			cancel()
+
+			start := time.Now()
+			if err := shutdownHTTPServer(ctx, httpServer); err != nil {
+				t.Fatalf("shutdownHTTPServer() = %v, want a clean stop", err)
+			}
+			elapsed := time.Since(start)
+			atMost := max(tc.remaining, 0) + drainTolerance
+			if elapsed < tc.atLeast || elapsed > atMost {
+				t.Errorf("drain took %s, want between %s and %s: the budget did not come from the caller",
+					elapsed, tc.atLeast, atMost)
+			}
+		})
+	}
+}
+
+// TestShutdownHTTPServer_NothingInFlight_ReturnsWithoutSpendingTheBudget pins
+// that a clean drain costs nothing, which is why the size of the default budget
+// is not a service-level objective: an idle server stops in milliseconds on any
+// runner, quick or slow.
+func TestShutdownHTTPServer_NothingInFlight_ReturnsWithoutSpendingTheBudget(t *testing.T) {
+	httpServer := newHTTPServer("", http.NotFoundHandler(), defaultHTTPIdleTimeout)
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	go func() { _ = httpServer.Serve(listener) }()
+
+	start := time.Now()
+	if shutdownErr := shutdownHTTPServer(t.Context(), httpServer); shutdownErr != nil {
+		t.Fatalf("shutdownHTTPServer() = %v, want a clean stop", shutdownErr)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("draining an idle server took %s, want a prompt return", elapsed)
+	}
+}
+
+// TestHTTPShutdownBudget_TakesTheSmallerOfTheDefaultAndTheCallersDeadline
+// verifies the arithmetic on its own, with no server to drain.
+//
+// The non-positive case is the one worth pinning: a deadline in the past is
+// honored literally rather than clamped back up to the default, because the
+// drain escalates to a forced close instead of reporting a failure, so a caller
+// with no time left gets exactly that.
+func TestHTTPShutdownBudget_TakesTheSmallerOfTheDefaultAndTheCallersDeadline(t *testing.T) {
+	cases := []struct {
+		name      string
+		ctx       context.Context
+		wantExact time.Duration
+		wantRange [2]time.Duration
+	}{
+		{name: "no deadline", ctx: context.Background(), wantExact: httpShutdownTimeout},
+		{
+			name:      "deadline beyond the default",
+			ctx:       cancelledDeadlineContext(t, httpShutdownTimeout+time.Minute),
+			wantExact: httpShutdownTimeout,
+		},
+		{
+			name:      "deadline inside the default",
+			ctx:       cancelledDeadlineContext(t, 2*time.Second),
+			wantRange: [2]time.Duration{time.Second, 2 * time.Second},
+		},
+		{
+			name:      "deadline already passed",
+			ctx:       cancelledDeadlineContext(t, -time.Second),
+			wantRange: [2]time.Duration{-time.Hour, 0},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := httpShutdownBudget(tc.ctx)
+			if tc.wantExact != 0 {
+				if got != tc.wantExact {
+					t.Errorf("httpShutdownBudget() = %s, want %s", got, tc.wantExact)
+				}
+				return
+			}
+			if got < tc.wantRange[0] || got > tc.wantRange[1] {
+				t.Errorf("httpShutdownBudget() = %s, want between %s and %s", got, tc.wantRange[0], tc.wantRange[1])
+			}
+		})
+	}
+}
+
+// cancelledDeadlineContext returns a context whose deadline is the given
+// distance from now, already cancelled so it matches the state the drain sees:
+// the serve context is done before the budget is ever computed.
+func cancelledDeadlineContext(t *testing.T, in time.Duration) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(in))
+	cancel()
+	return ctx
+}
+
+// blockedHTTPServer starts an [http.Server] on a loopback listener with a
+// handler that never returns, and comes back only once a request is provably in
+// flight, so draining it is guaranteed to spend the whole budget.
+func blockedHTTPServer(t *testing.T) *http.Server {
+	t.Helper()
+
+	var enteredOnce sync.Once
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	httpServer := newHTTPServer("", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		enteredOnce.Do(func() { close(entered) })
+		<-release
+	}), defaultHTTPIdleTimeout)
+
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	go func() { _ = httpServer.Serve(listener) }()
+
+	callDone := make(chan struct{})
+	// Registered before the release so it runs after it: the handler cannot
+	// return, and so the request cannot finish, until release is closed.
+	t.Cleanup(func() { <-callDone })
+	t.Cleanup(func() { close(release) })
+
+	go func() {
+		defer close(callDone)
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet,
+			"http://"+listener.Addr().String(), nil)
+		if reqErr != nil {
+			t.Errorf("build the request that must be in flight during the drain: %v", reqErr)
+			return
+		}
+		if resp, doErr := testHTTPClient.Do(req); doErr == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("the blocking handler never ran, so nothing was in flight to drain")
+	}
+	return httpServer
 }

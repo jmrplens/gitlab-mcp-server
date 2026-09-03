@@ -39,6 +39,19 @@ var attemptNameFixtureOutputs = []string{
 	"group_label_name_v2",
 }
 
+// fixtureOutputCache is what makes "prepared once per scope" true for the live
+// fixtures.
+//
+// An evaluation run has many cases sharing a fixture, and preparing one means
+// creating real resources on a real GitLab: a bootstrap project, a branch, a
+// seeded file. The key [fixtureIdempotencyKey] computes carries the scope, so
+// a bootstrap fixture is built once for the process, a run-scoped one once per
+// run suffix, an attempt-scoped one once per model and attempt. Without this,
+// every case declaring a shared fixture would reissue those creations.
+//
+// One process points at one instance for its whole run, so the key is the
+// fixture's identity within that run and nothing about the client belongs in
+// it.
 type fixtureOutputCache struct {
 	mu     sync.Mutex
 	values map[string]FixtureOutput
@@ -48,6 +61,11 @@ func newFixtureOutputCache() *fixtureOutputCache {
 	return &fixtureOutputCache{values: map[string]FixtureOutput{}}
 }
 
+// ensure returns the outputs remembered for key, creating them the first time.
+//
+// An empty key means the caller computed no identity to remember the fixture
+// by, and create runs every time. Copies go in and out, so a caller that
+// mutates what it received cannot reach into what the next one is handed.
 func (cache *fixtureOutputCache) ensure(key string, create func() (FixtureOutput, error)) (FixtureOutput, error) {
 	if key == "" {
 		return create()

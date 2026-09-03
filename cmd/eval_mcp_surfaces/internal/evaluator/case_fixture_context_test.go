@@ -28,22 +28,30 @@ const (
 //
 // The test boots an httptest server that records every method+path it sees
 // and dispatches to handlers that simulate the group/project/branch/file
-// endpoints. It then calls the fixture's Ensure hook with a deterministic
-// idempotency key, asserting that the returned outputs match the expected
-// branch name and MR title, and that the recorded calls include the branch
-// POST and the repository file POST. This protects the live fixture from
-// regressions that would lose attempt scoping or skip file seeding.
+// endpoints. It then calls the fixture's Ensure hook, asserting that the
+// returned outputs match the expected branch name and MR title, and that the
+// recorded calls include the branch POST and the repository file POST. This
+// protects the live fixture from regressions that would lose attempt scoping
+// or skip file seeding.
+//
+// It states no idempotency key, which is how [fixtureOutputCache.ensure] is
+// told there is no identity to remember this fixture by, so the creation runs
+// every time. What is under test here is the work the fixture does, and every
+// assertion below is about the calls that work makes; going through the memo
+// instead put the subject and the code path out of line, and the test passed
+// once and then failed under -count=2 with "calls = " because the second run
+// was answered from the memo and made no calls at all. The memo has tests of
+// its own in case_fixtures_project_test.go.
 func TestMergeRequestSourceFixture_EnsuresAttemptBranchAndFile(t *testing.T) {
 	var calls []string
 	server := newMergeRequestSourceFixtureServer(t, &calls)
 	defer server.Close()
 
 	output, err := MergeRequestSourceFixture.Ensure(t.Context(), FixtureContext{
-		Client:         newFixtureTestClient(t, server.URL),
-		ModelName:      "openai:gpt-5.4-mini",
-		RunIndex:       1,
-		RunSuffix:      "abc123",
-		IdempotencyKey: "test:merge-request-source",
+		Client:    newFixtureTestClient(t, server.URL),
+		ModelName: "openai:gpt-5.4-mini",
+		RunIndex:  1,
+		RunSuffix: "abc123",
 	})
 	if err != nil {
 		t.Fatalf("MergeRequestSourceFixture.Ensure() error = %v\ncalls=%s", err, strings.Join(calls, ","))

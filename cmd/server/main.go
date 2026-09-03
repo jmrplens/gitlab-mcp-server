@@ -2013,15 +2013,101 @@ func excludeFromCatalog(catalog *actioncatalog.Catalog, excludeTools []string) *
 	return filtered
 }
 
-// httpShutdownTimeout bounds graceful HTTP shutdown after the process context
-// is cancelled.
-// 15 seconds rather than 5: under CI load or an instrumented build, five
-// seconds of drain was routinely not enough and shutdown returned a
-// context-deadline error for perfectly healthy in-flight requests. A
-// larger budget never slows a clean shutdown — Shutdown returns as soon as
-// the connections drain — it only stops a loaded one from being reported
-// as a failure.
+// httpShutdownTimeout is the default budget for draining in-flight requests
+// after the process context is cancelled.
+//
+// It is a liveness backstop, not a service-level objective, and mistaking it
+// for one is what sent this number up and down twice. [http.Server.Shutdown]
+// returns the moment every connection is idle, so a clean drain costs
+// milliseconds on the quickest Linux runner and on the slowest Windows one
+// alike: no value here is "safe under load", because load is not what makes
+// the drain block. What blocks it is a request still executing, a stream still
+// open, or a peer holding a connection it never finishes.
+//
+// So the value is bracketed rather than picked:
+//
+//   - It has to outlast the work a request can legitimately be doing when the
+//     signal lands. The expensive one is a pool entry's first request, which
+//     builds a catalog: milliseconds on the dynamic surface, a second or two
+//     on the individual one, tens of seconds under the race detector, which is
+//     why the transport tests pin the dynamic surface.
+//   - It has to stay above the grace period test/e2e/http gives the real
+//     binary to exit after SIGTERM (10 seconds). Below that, a drain hung on a
+//     stream nothing can close becomes indistinguishable from a prompt exit,
+//     and the regression test guarding that bug stops testing anything.
+//   - There is nothing to buy above the supervisor's own grace, which ends the
+//     process whatever this says: docker stop waits 10 seconds, Kubernetes 30,
+//     systemd 90. Past that we are killed mid-drain and the orderly exit which
+//     follows, [telemetryShutdownTimeout] included, never runs at all.
+//
+// Fifteen seconds sits inside that bracket. What stops its exact value from
+// mattering is [shutdownHTTPServer]: an exhausted budget is no longer reported
+// as a process failure, so a drain that runs long costs a warning and a forced
+// close instead of exit 1 and a red build.
 const httpShutdownTimeout = 15 * time.Second
+
+// shutdownHTTPServer drains httpServer's in-flight requests, and closes
+// whatever has not finished when the budget runs out.
+//
+// The budget is [httpShutdownTimeout] or what the caller's deadline leaves,
+// whichever is smaller, which is the rule [telemetry.Provider.Shutdown]
+// follows and for the same reason: an internal bound that silently overrides a
+// tighter one the caller stated makes the caller's bound dead code. The
+// caller's cancellation is detached, since the drain runs precisely because
+// the serve context is done.
+//
+// Where this differs from the telemetry provider is that the context is
+// already done when the budget is computed, so a deadline in the past leaves
+// no budget at all. That is honored literally rather than clamped: a caller
+// whose time is up gets the forced close and nothing else. Which is only a
+// sane answer because the forced close exists.
+//
+// An exhausted budget is not an error, and that single line is the whole
+// history of this flake. One connection that had not gone idle turned an
+// ordinary stop into "http server shutdown: context deadline exceeded" and
+// exit 1, which is a failed unit to a supervisor and a broken build to CI. It
+// was answered twice by raising the number and once by widening a test's outer
+// wait, none of which touched the classification. The connections that did not
+// drain are about to be dropped by process exit anyway, so this drops them
+// itself and logs what it did. Anything else Shutdown reports is still an
+// error.
+func shutdownHTTPServer(ctx context.Context, httpServer *http.Server) error {
+	budget := httpShutdownBudget(ctx)
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
+	defer cancel()
+
+	err := httpServer.Shutdown(shutdownCtx)
+	switch {
+	case err == nil:
+		return nil
+	case !errors.Is(err, context.DeadlineExceeded):
+		return fmt.Errorf("http server shutdown: %w", err)
+	}
+
+	slog.WarnContext(ctx,
+		"HTTP drain budget exhausted, closing the connections that did not finish",
+		"budget", budget)
+	// Shutdown has already closed the listeners, so Close finds them closed
+	// and says so. That is expected here and says nothing about the
+	// connections, which are what this call is for.
+	if closeErr := httpServer.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+		return fmt.Errorf("http server close after drain budget: %w", closeErr)
+	}
+	return nil
+}
+
+// httpShutdownBudget returns how long the drain may take: the default, or what
+// the caller's deadline leaves, whichever is smaller.
+//
+// A non-positive result is a caller with no time left and means the drain is
+// skipped, not that it is given a default; see [shutdownHTTPServer].
+func httpShutdownBudget(ctx context.Context) time.Duration {
+	budget := httpShutdownTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		budget = min(budget, time.Until(deadline))
+	}
+	return budget
+}
 
 // effectiveIdleTimeout maps a user-supplied value to the duration passed to
 // [http.Server.IdleTimeout]. When the caller passes 0 (meaning "disable idle
@@ -2483,12 +2569,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	select {
 	case <-ctx.Done():
 		slog.InfoContext(ctx, "HTTP server shutdown requested")
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpShutdownTimeout)
-		defer cancel()
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("http server shutdown: %w", err)
-		}
-		return nil
+		return shutdownHTTPServer(ctx, httpServer)
 	case err := <-serverErr:
 		return fmt.Errorf("mcp server error (http): %w", err)
 	}
