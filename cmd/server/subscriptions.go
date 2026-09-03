@@ -29,20 +29,43 @@ import (
 // to mean "what resources/read returns changed", or a watcher would be
 // comparing one thing and the subscriber reading another.
 type resourceReader struct {
-	index resources.HandlerIndex
+	// index is published by registration rather than passed in, because the
+	// subscription runtime is built by the shell and the exclusions come from
+	// the catalog, which does not exist yet at that point. Reading it before it
+	// is set cannot happen: the readiness gate holds resources/subscribe until
+	// registration has finished. The nil case is still answered rather than
+	// dereferenced, since a wrong answer here would be a panic in a handler.
+	index atomic.Pointer[resources.HandlerIndex]
 }
 
-func (r resourceReader) Read(ctx context.Context, uri string) ([]byte, error) {
+// setIndex publishes the handler index registration built, narrowed by the same
+// exclusions the tool surface applied.
+func (r *resourceReader) setIndex(index resources.HandlerIndex) {
+	r.index.Store(&index)
+}
+
+func (r *resourceReader) Read(ctx context.Context, uri string) ([]byte, error) {
 	kind, ok := subscriptions.Classify(uri)
 	if !ok {
 		return nil, subscriptions.ErrNotSubscribable
 	}
-	content, err := r.index.Read(ctx, kind.Template(), uri)
+	index := r.index.Load()
+	if index == nil {
+		// Not reachable through newSubscriptionRuntime, which seeds one, but
+		// answered rather than dereferenced: a nil here would be a panic
+		// inside a handler.
+		return nil, subscriptions.TranslateReadError(errCatalogNotReady)
+	}
+	content, err := index.Read(ctx, kind.Template(), uri)
 	if err != nil {
 		return nil, subscriptions.TranslateReadError(err)
 	}
 	return content, nil
 }
+
+// errCatalogNotReady is what a read gets if it somehow arrives before
+// registration published the index.
+var errCatalogNotReady = errors.New("the resource catalog is not ready yet; retry")
 
 // serverNotifier forwards a change to every session subscribed to a URI.
 //
@@ -632,6 +655,10 @@ type subscriptionRuntime struct {
 	manager  *subscriptions.Manager[*mcp.ServerSession]
 	notifier *serverNotifier
 	streams  *listenStreams
+	// reader holds the handler index registration publishes into. Kept so the
+	// runtime, built before the catalog exists, can be handed the narrowed
+	// index once there is one.
+	reader *resourceReader
 	// stateless records that this server runs on a sessionless HTTP
 	// transport, where the legacy subscribe path cannot be honored — see
 	// [subscriptionRuntime.handlers].
@@ -661,9 +688,16 @@ func newSubscriptionRuntime(
 	if redactor := telemetryResources(); redactor != nil {
 		opts.ResourceAttributes = redactor.ResourceAttributes
 	}
+	// Seeded with the unnarrowed index so the runtime behaves exactly as it did
+	// before registration exists to narrow it. Registration replaces it with the
+	// view that honors --exclude-tools; until then nothing can reach it anyway,
+	// because the readiness gate holds resources/subscribe.
+	reader := &resourceReader{}
+	reader.setIndex(resources.NewHandlerIndex(client))
 	return &subscriptionRuntime{
+		reader: reader,
 		manager: subscriptions.New[*mcp.ServerSession](
-			resourceReader{index: resources.NewHandlerIndex(client)},
+			reader,
 			notifier,
 			opts,
 		),
