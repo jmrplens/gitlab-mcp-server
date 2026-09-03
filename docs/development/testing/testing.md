@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,343 |
-| Unit test functions                                   | 12,788 |
+| Total test functions                                  | 13,324 |
+| Unit test functions                                   | 12,769 |
 | E2E test functions                                    |    555 |
-| cmd test functions                                    |  1,966 |
+| cmd test functions                                    |  1,947 |
 | Test files (internal/)                                |    490 |
-| Test files (cmd/)                                     |    111 |
+| Test files (cmd/)                                     |    106 |
 | Test files (test/e2e/)                                |    214 |
 | Tool sub-packages tested                              |    173 |
 | Core packages tested                                  |     21 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  97.8% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  97.9% |
 | Overall coverage (`go test ./internal/...`)           |  98.3% |
-| Average package coverage                              |  98.4% |
+| Average package coverage                              |  98.5% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,154 | 83.6% |
+| `TestFunc_Scenario` (2-part)           | 11,155 | 83.7% |
 | `TestFunc` (no underscore)             |    959 |  7.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,230 |  9.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,210 |  9.1% |
 
 ## Test Distribution
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            301 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (173) |          8,362 |        347 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            555 |        214 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          1,966 |        111 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,343** |    **815** |                                                                                                 |
+| cmd packages            |          1,947 |        106 | server entry point and developer command utilities                                              |
+| **Total**               |     **13,324** |    **810** |                                                                                                 |
 
 ### Core Packages
 
@@ -315,7 +315,6 @@
 | cmd/audit_gateway_chars                        |    88.2% |
 | cmd/audit_install_buttons                      |    84.2% |
 | cmd/audit_metrics                              |    97.8% |
-| cmd/audit_readonly_graphql                     |    90.2% |
 | cmd/audit_string_dupes                         |    92.1% |
 | cmd/audit_supply_chain                         |    98.0% |
 | cmd/audit_surface_quality                      |    93.0% |
