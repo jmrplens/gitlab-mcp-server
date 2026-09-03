@@ -20,6 +20,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -227,11 +228,9 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		slog.InfoContext(r.Context(), "request rejected: token cannot read the API",
 			"minimum", g.minimumScope, "granted", strings.Join(info.Scopes, " "))
 		return &gateFailure{
-			status: http.StatusForbidden,
-			code:   errCodeForbidden,
-			message: "This token carries no GitLab API scope: " + g.minimumScope + " is the least this server can work with. " +
-				"Reauthorize the application requesting it, granting " + g.advertisedScope + " for the full tool surface or " +
-				g.minimumScope + " for a read-only one.",
+			status:  http.StatusForbidden,
+			code:    errCodeForbidden,
+			message: describeScopeShortfall(info.Scopes, g.minimumScope, g.advertisedScope),
 			// The scope named here is the MINIMUM that satisfies this
 			// request, not the deployment's recommended one. RFC 6750
 			// section 3.1 defines the attribute as "the scope necessary to
@@ -426,6 +425,36 @@ func (g *bearerGuard) blockedByBudget(key, source string) bool {
 // GitLab answers that with invalid_scope. The protected-resource document
 // says the same thing in scopes_supported, but a client is not obliged to
 // fetch it before it authorizes.
+// describeScopeShortfall explains why a genuine token is not enough, naming
+// what it does carry.
+//
+// What the token holds matters to the reader more than what it lacks. GitLab
+// issues an "mcp" scope for its own MCP server, and a client registering
+// dynamically against gitlab.com receives exactly that, from a consent screen
+// reading "Grants read-write access to MCP server". Somebody who authorized
+// that has every reason to believe they granted the right thing, and a message
+// naming only api and read_api leaves them to work out what went wrong.
+func describeScopeShortfall(granted []string, minimum, advertised string) string {
+	held := "no GitLab API scope"
+	switch {
+	case len(granted) == 1:
+		held = "the " + granted[0] + " scope"
+	case len(granted) > 1:
+		held = "the " + strings.Join(granted, ", ") + " scopes"
+	}
+
+	message := "This token carries " + held + ", and " + minimum +
+		" is the least this server can work with. " +
+		"Reauthorize the application requesting it, granting " + advertised +
+		" for the full tool surface or " + minimum + " for a read-only one."
+
+	if slices.Contains(granted, "mcp") || slices.Contains(granted, "mcp_orbit") {
+		message += " GitLab's mcp scope is for its own MCP server and does not grant the REST API this server calls, " +
+			"which is what a dynamically registered client receives by default."
+	}
+	return message
+}
+
 func (g *bearerGuard) challenge(params ...string) string {
 	return oauthChallenge(g.advertisedScope, g.metadataURL, params...)
 }
