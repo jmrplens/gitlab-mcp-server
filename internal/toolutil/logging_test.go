@@ -6,6 +6,7 @@ package toolutil
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -13,6 +14,8 @@ import (
 	"go/token"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,6 +25,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 	"go.opentelemetry.io/otel/log/global"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -522,4 +526,72 @@ func readTelemetryGuide(t *testing.T) string {
 		t.Fatalf("reading the telemetry guide: %v", err)
 	}
 	return string(content)
+}
+
+// TestLogToolCallAll_FailureLineCarriesNoUpstreamBodyOrTerminalEscapes pins the
+// "tool call failed" line directly rather than by inference.
+//
+// The line logs the wrapped error value, so it inherits whatever sanitize left
+// on the way through the wrapping helpers, and until now the only proof of that
+// was TestWrapErrWithMessage_DoesNotReflectUpstreamResponseBody asserting on the
+// error's own text one layer down. That is the property this line depends on,
+// not a property this line has: a change that rendered the cause a second way
+// here, or logged the unwrapped error alongside it, would restore the
+// reflection with that test still green.
+//
+// Both halves matter and they fail differently. The upstream body is whatever
+// answered between this server and GitLab, so on a pinned deployment it is a
+// proxy or WAF page carrying internal hostnames. The escape sequence stops
+// being text the moment the record reaches a terminal, which stderr on stdio
+// always is.
+//
+// The assertion reads the decoded JSON field rather than the raw buffer: slog's
+// JSON handler escapes a control byte to a six-character sequence on its own,
+// so searching the buffer would pass whether or not anything had been stripped.
+func TestLogToolCallAll_FailureLineCarriesNoUpstreamBodyOrTerminalEscapes(t *testing.T) {
+	const (
+		sentinel = "internal-host-secret-4c1d"
+		tail     = "tail-marker-8ae2"
+		escape   = "\x1b[2J\x1b]0;window-title\a"
+	)
+	body := "<html><body>" + escape + sentinel + strings.Repeat(" filler", 60) + tail + "</body></html>"
+	upstream := &gl.ErrorResponse{
+		StatusCode: http.StatusBadGateway,
+		Response: &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Request:    &http.Request{Method: http.MethodGet, URL: &url.URL{Scheme: "https", Host: "gitlab.example.com", Path: "/api/v4/projects/1"}},
+		},
+		Body:    []byte(body),
+		Message: "failed to parse unknown error format: " + body,
+	}
+
+	buf := captureSlog(t)
+	LogToolCallAll(context.Background(), nil, "gitlab_project_update", time.Now(),
+		nil, WrapErrWithMessage("projectUpdate", upstream))
+
+	var record map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &record); err != nil {
+		t.Fatalf("decoding the log record: %v (raw: %s)", err, buf.String())
+	}
+	if got, want := record["msg"], "tool call failed"; got != want {
+		t.Fatalf("msg = %v, want %q", got, want)
+	}
+	logged, ok := record["error"].(string)
+	if !ok {
+		t.Fatalf("error field = %#v, want a string", record["error"])
+	}
+	unwanted := []struct{ name, value string }{
+		{"upstream body sentinel", sentinel},
+		{"upstream body tail", tail},
+		{"upstream markup", "<html>"},
+		{"escape byte", "\x1b"},
+		{"bell byte", "\a"},
+	}
+	for _, u := range unwanted {
+		t.Run(u.name, func(t *testing.T) {
+			if strings.Contains(logged, u.value) {
+				t.Errorf("%s reached the failure log line: %q", u.name, logged)
+			}
+		})
+	}
 }
