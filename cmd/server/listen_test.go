@@ -18,6 +18,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
+// socketDir returns a temporary directory short enough to hold a unix socket
+// path, and removes it when the test ends.
+//
+// Not [testing.T.TempDir], which embeds the test's own name: a unix address
+// holds at most 103 bytes of path, and on macOS the temporary directory alone
+// is already 52 of them, so a name like
+// TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault puts the socket 30
+// bytes over the limit before the file name is appended. The server is right to
+// refuse such a path and says so precisely; the tests were the ones asking for
+// something no client could reach.
+func socketDir(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "s") //nolint:usetesting // see above
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 // TestIsUnixSocketAddr_DistinguishesPathsFromHostPort verifies the rule that
 // decides which kind of listener gets bound.
 //
@@ -60,7 +81,7 @@ func TestIsUnixSocketAddr_DistinguishesPathsFromHostPort(t *testing.T) {
 func TestListenHTTP_UnixSocket_ServesAndAppliesTheMode(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "mcp.sock")
+	path := filepath.Join(socketDir(t), "mcp.sock")
 	listener, err := listenHTTP(t.Context(), path, config.DefaultSocketMode)
 	if err != nil {
 		t.Fatalf("listenHTTP() error = %v", err)
@@ -120,7 +141,7 @@ func TestClearStaleSocket_AbsentPathIsFine(t *testing.T) {
 func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "dead.sock")
+	path := filepath.Join(socketDir(t), "dead.sock")
 	listener := listenUnixForTest(t, path)
 	// A normal Close unlinks the file, so unlinking is disabled to leave
 	// behind exactly what an unclean exit leaves behind.
@@ -146,7 +167,7 @@ func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
 func TestClearStaleSocket_LiveSocketIsRefused(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "live.sock")
+	path := filepath.Join(socketDir(t), "live.sock")
 	listener := listenUnixForTest(t, path)
 	defer listener.Close()
 	go func() {
@@ -182,7 +203,7 @@ func TestClearStaleSocket_LiveSocketIsRefused(t *testing.T) {
 func TestClearStaleSocket_UnansweredProbeIsRefused(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "unanswered.sock")
+	path := filepath.Join(socketDir(t), "unanswered.sock")
 	listener := listenUnixForTest(t, path)
 	defer listener.Close()
 
@@ -427,7 +448,7 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 func TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "default-mode.sock")
+	path := filepath.Join(socketDir(t), "default-mode.sock")
 	listener, err := listenHTTP(t.Context(), path, 0)
 	if err != nil {
 		t.Fatalf("listenHTTP: %v", err)

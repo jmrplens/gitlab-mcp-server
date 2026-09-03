@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // TestOpenAndValidateFile_RegularFile verifies that a regular file is accepted.
@@ -149,7 +150,7 @@ func TestCanonicalImportArchivePath_RejectsWrongExtension(t *testing.T) {
 func TestCanonicalImportArchivePath_RejectsSymlinkEscape(t *testing.T) {
 	allowed := t.TempDir()
 	outside := t.TempDir()
-	t.Setenv("TMPDIR", allowed)
+	testutil.IsolateTempDir(t, allowed)
 	t.Chdir(allowed)
 
 	target := filepath.Join(outside, "project-export.tar.gz")
@@ -175,7 +176,7 @@ func TestCanonicalImportArchivePath_RejectsSymlinkEscape(t *testing.T) {
 func TestCanonicalImportArchivePath_AllowsConfiguredDirectory(t *testing.T) {
 	cwd := t.TempDir()
 	configured := t.TempDir()
-	t.Setenv("TMPDIR", t.TempDir())
+	testutil.IsolateTempDir(t, t.TempDir())
 	t.Setenv(ImportArchiveAllowlistEnv, configured)
 	t.Chdir(cwd)
 
@@ -648,7 +649,7 @@ func makeDirs(t *testing.T, dirs ...string) {
 // writable location outside the sandbox.
 func confineLocalPathRoots(t *testing.T, dir string) {
 	t.Helper()
-	t.Setenv("TMPDIR", dir)
+	testutil.IsolateTempDir(t, dir)
 	t.Chdir(dir)
 }
 
@@ -920,7 +921,7 @@ func TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the filesystem root is spelled per volume on Windows")
 	}
-	t.Setenv("TMPDIR", t.TempDir())
+	testutil.IsolateTempDir(t, t.TempDir())
 	t.Chdir("/")
 
 	for _, dir := range allowedLocalDirs(UploadDirAllowlistEnv) {
@@ -953,7 +954,7 @@ func useHomeDir(t *testing.T, dir string) {
 // GITLAB_TOKEN the containment exists to protect.
 func TestAllowedLocalDirs_SkipsHomeWorkingDirectory(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("TMPDIR", t.TempDir())
+	testutil.IsolateTempDir(t, t.TempDir())
 	useHomeDir(t, home)
 	t.Chdir(home)
 
@@ -977,7 +978,7 @@ func TestAllowedLocalDirs_SkipsHomeWorkingDirectory(t *testing.T) {
 // the cause or the one-variable remedy.
 func TestAllowedLocalDirs_SaysWhyTheHomeRootWasDropped(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("TMPDIR", t.TempDir())
+	testutil.IsolateTempDir(t, t.TempDir())
 	useHomeDir(t, home)
 	t.Chdir(home)
 
@@ -1020,7 +1021,7 @@ func TestAllowedLocalDirs_SaysWhyTheHomeRootWasDropped(t *testing.T) {
 // they can override.
 func TestAllowedLocalDirs_HomeIsReachableWhenTheOperatorNamesIt(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("TMPDIR", t.TempDir())
+	testutil.IsolateTempDir(t, t.TempDir())
 	useHomeDir(t, home)
 	t.Chdir(home)
 	t.Setenv(UploadDirAllowlistEnv, home)
@@ -1047,7 +1048,7 @@ func TestAllowedLocalDirs_KeepsAnOrdinaryWorkingDirectory(t *testing.T) {
 	if err := os.Mkdir(workspace, 0o750); err != nil {
 		t.Fatalf("creating the workspace: %v", err)
 	}
-	t.Setenv("TMPDIR", t.TempDir())
+	testutil.IsolateTempDir(t, t.TempDir())
 	useHomeDir(t, home)
 	t.Chdir(workspace)
 
