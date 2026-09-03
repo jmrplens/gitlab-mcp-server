@@ -20,7 +20,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_edit_system_hook — update an existing system hook.
 		systemHookUpdateSpec("system_hook_edit", toolutil.RouteAction(client, Edit), "gitlab_edit_system_hook"),
 		// gitlab_test_system_hook — fire a sample event against the hook URL.
-		systemHookTestSpec(client),
+		// A create rather than a read: firing a test event makes GitLab POST a
+		// sample payload to the hook's URL. See the same registration in
+		// internal/tools/adminspecs, which is the copy the catalog actually
+		// builds from.
+		systemHookCreateSpec("system_hook_test", toolutil.RouteAction(client, Test), "gitlab_test_system_hook"),
 		// gitlab_set_system_hook_url_variable — set a URL template variable on a system hook.
 		systemHookUpdateSpec("system_hook_set_url_variable", toolutil.RouteAction(client, setURLVariableOutput), "gitlab_set_system_hook_url_variable"),
 		// gitlab_delete_system_hook_url_variable — delete a URL template variable from a system hook.
@@ -71,18 +75,6 @@ func systemHookCreateSpec(name string, route toolutil.ActionRoute, individualToo
 // systemHookUpdateSpec builds the canonical update spec for a system hook tool.
 func systemHookUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, systemHookOptions(individualTool))
-}
-
-// systemHookTestSpec builds the canonical spec for the system hook test event tool.
-// The annotations are overridden to read-only and idempotent because the test event
-// does not modify state on the GitLab instance.
-func systemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	individualReadOnly := true
-	individualIdempotent := true
-	options := systemHookOptions("gitlab_test_system_hook")
-	options.IndividualTool.AnnotationOverrides.ReadOnly = &individualReadOnly
-	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewCreateActionSpec("system_hook_test", toolutil.RouteAction(client, Test), options)
 }
 
 // systemHookDeleteSpec builds the canonical destructive delete spec for a system hook tool.

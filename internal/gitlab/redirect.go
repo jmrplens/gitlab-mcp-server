@@ -2,6 +2,7 @@ package gitlab
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -61,9 +62,15 @@ func credentialSafeRedirect(baseURL string) func(*http.Request, []*http.Request)
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)
 		}
 		if !withinCredentialScope(baseHost, baseHTTPS, req.URL) {
+			dropped := make([]string, 0, len(credentialHeaders))
 			for _, name := range credentialHeaders {
+				if req.Header.Get(name) == "" {
+					continue
+				}
 				req.Header.Del(name)
+				dropped = append(dropped, name)
 			}
+			logCredentialDrop(req, baseHost, baseHTTPS, dropped)
 		}
 		return nil
 	}
@@ -114,4 +121,44 @@ func isDomainOrSubdomain(sub, parent string) bool {
 		return false
 	}
 	return strings.HasSuffix(sub, parent)
+}
+
+// logCredentialDrop records that a redirect left the configured instance
+// carrying none of this server's credentials.
+//
+// Prevention is [credentialSafeRedirect]; this is only about being able to
+// explain it afterwards. Without the line the policy is completely silent, and
+// an operator looking at a 401 from object storage cannot tell a credential
+// this server deliberately withheld from a credential that was never valid in
+// the first place. Those two call for opposite responses: the first means the
+// presigned URL is the credential and something is wrong with it, the second
+// means the token needs replacing.
+//
+// INFO rather than DEBUG. The event is bounded by the tool-call rate, which is
+// already one INFO line per call in this server, so a redirect line cannot be
+// what makes the log noisy; and the question it answers is asked by someone who
+// does not yet know to raise the level, which is exactly the case DEBUG does
+// not serve.
+//
+// The destination is recorded as a host and a scheme, never as a URL. The whole
+// reason this redirect is followed rather than refused is that GitLab answers
+// artifact, trace and package reads with a 302 to object storage, and those
+// URLs authenticate through query parameters: logging one would write a working
+// credential to stderr in the course of reporting that a credential was
+// withheld. Header names are recorded, values are not.
+func logCredentialDrop(req *http.Request, baseHost string, baseHTTPS bool, dropped []string) {
+	if len(dropped) == 0 {
+		return
+	}
+	reason := "host outside the configured instance"
+	if baseHTTPS && !strings.EqualFold(req.URL.Scheme, "https") {
+		reason = "redirect downgrades https to http"
+	}
+	slog.InfoContext(req.Context(), "dropped credential headers on redirect",
+		"reason", reason,
+		"instance_host", baseHost,
+		"redirect_host", req.URL.Hostname(),
+		"redirect_scheme", req.URL.Scheme,
+		"headers", strings.Join(dropped, ", "),
+	)
 }

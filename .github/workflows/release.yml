@@ -481,11 +481,17 @@ jobs:
       - name: Validate npm packages
         run: make validate-npm-local NPM_BINARIES=dist
 
+      # --no-assemble publishes the tree the previous step validated instead of
+      # building an equivalent one. Both builds verify every binary against the
+      # same cosign-signed checksums.txt, so the old arrangement was not unsafe,
+      # but it did mean the bytes on the registry were never the bytes the
+      # validator opened. The script refuses a missing or wrong-version tree, so
+      # the flag cannot turn a skipped build into a stale publish.
       - name: Publish to npm
         run: |
           set -euo pipefail
           npm install -g npm@11.5.1
-          bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}"
+          bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}" --no-assemble
 
   pypi:
     name: Publish to PyPI

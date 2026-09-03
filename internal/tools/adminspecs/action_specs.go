@@ -120,7 +120,14 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("system_hook_get", toolutil.RouteAction(client, systemhooks.Get), "gitlab_get_system_hook"),
 		adminCreateSpec("system_hook_add", toolutil.RouteAction(client, systemhooks.Add), "gitlab_add_system_hook"),
 		adminSystemHookEditSpec(client),
-		adminSystemHookTestSpec(client),
+		// Classified as a create, not a read, and deliberately without an
+		// annotation override. Firing a test event makes GitLab POST a sample
+		// payload to the hook's URL, which is an observable side effect on a
+		// third-party endpoint even though nothing on the instance changes.
+		// The override that used to claim read-only here was inert anyway:
+		// IndividualToolAnnotationOverrides.NarrowingOnly drops any claim that
+		// widens the base classification, so it never reached a served tool.
+		adminCreateSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), "gitlab_test_system_hook"),
 		adminSystemHookSetURLVariableSpec(client),
 		adminSystemHookDeleteURLVariableSpec(client),
 		adminDeleteSpec("system_hook_delete", toolutil.DestructiveVoidAction(client, systemhooks.Delete), "gitlab_delete_system_hook"),
@@ -218,15 +225,6 @@ func adminDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRout
 	options := adminOptions(individualTool)
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return toolutil.NewDeleteActionSpec(name, route, options)
-}
-
-func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	individualReadOnly := true
-	individualIdempotent := true
-	options := adminOptions("gitlab_test_system_hook")
-	options.IndividualTool.AnnotationOverrides.ReadOnly = &individualReadOnly
-	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewCreateActionSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), options)
 }
 
 func adminSystemHookEditSpec(client *gitlabclient.Client) toolutil.ActionSpec {

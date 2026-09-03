@@ -10,9 +10,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -925,6 +927,167 @@ func TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory(t *testing.T) {
 		if dir == "/" {
 			t.Fatal(`allowedLocalDirs() included "/", want the filesystem root skipped`)
 		}
+	}
+}
+
+// useHomeDir points userHomeDir at dir for the duration of the test.
+//
+// The function is replaced rather than $HOME set, because os.UserHomeDir reads
+// a different variable per platform and this test is about the policy, not
+// about which variable a platform consults.
+func useHomeDir(t *testing.T, dir string) {
+	t.Helper()
+	original := userHomeDir
+	userHomeDir = func() (string, error) { return dir, nil }
+	t.Cleanup(func() { userHomeDir = original })
+}
+
+// TestAllowedLocalDirs_SkipsHomeWorkingDirectory verifies that a server whose
+// working directory is the user's home directory does not thereby allow-list
+// the whole home directory.
+//
+// It is the same argument as the filesystem-root case one level down, and it is
+// not hypothetical: the home directory holds ~/.ssh, ~/.aws, the browser
+// profiles, and this server's own ~/.gitlab-mcp-server.env. Implicitly
+// allow-listing it would mean a file_path naming that last file uploads the
+// GITLAB_TOKEN the containment exists to protect.
+func TestAllowedLocalDirs_SkipsHomeWorkingDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("TMPDIR", t.TempDir())
+	useHomeDir(t, home)
+	t.Chdir(home)
+
+	canonicalHome, err := canonicalDirPath(home)
+	if err != nil {
+		t.Fatalf("canonicalDirPath(%q) error = %v", home, err)
+	}
+	for _, dir := range allowedLocalDirs(UploadDirAllowlistEnv) {
+		if dir == canonicalHome {
+			t.Fatalf("allowedLocalDirs() included the home directory %q, want it skipped", canonicalHome)
+		}
+	}
+}
+
+// TestAllowedLocalDirs_SaysWhyTheHomeRootWasDropped verifies the operator is
+// told, and told what to do about it.
+//
+// The warning is the half that makes the safe default acceptable. Without it a
+// user whose workspace is their home directory sees a working setup start
+// failing with "outside the allowed directories" and has nothing pointing at
+// the cause or the one-variable remedy.
+func TestAllowedLocalDirs_SaysWhyTheHomeRootWasDropped(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("TMPDIR", t.TempDir())
+	useHomeDir(t, home)
+	t.Chdir(home)
+
+	var buf bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	warnedBefore := homeDirWarned.Swap(false)
+	t.Cleanup(func() {
+		slog.SetDefault(originalLogger)
+		homeDirWarned.Store(warnedBefore)
+	})
+
+	allowedLocalDirs(UploadDirAllowlistEnv)
+	allowedLocalDirs(DownloadDirAllowlistEnv)
+
+	logged := buf.String()
+	for _, want := range []string{
+		"working directory is the home directory",
+		UploadDirAllowlistEnv,
+		DownloadDirAllowlistEnv,
+		ImportArchiveAllowlistEnv,
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(logged, want) {
+				t.Errorf("warning = %q, want it to mention %q", logged, want)
+			}
+		})
+	}
+	if lines := strings.Count(strings.TrimSpace(logged), "\n") + 1; lines != 1 {
+		t.Errorf("warning lines = %d, want exactly 1 for two allowlist lookups: %s", lines, logged)
+	}
+}
+
+// TestAllowedLocalDirs_HomeIsReachableWhenTheOperatorNamesIt verifies the home
+// directory is skipped as an *implicit* root and not forbidden.
+//
+// An operator whose workspace really is their home directory has a one-variable
+// remedy, which is what makes the safe default acceptable: without this, the
+// change would be a policy decision taken on their behalf rather than a default
+// they can override.
+func TestAllowedLocalDirs_HomeIsReachableWhenTheOperatorNamesIt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("TMPDIR", t.TempDir())
+	useHomeDir(t, home)
+	t.Chdir(home)
+	t.Setenv(UploadDirAllowlistEnv, home)
+
+	canonicalHome, err := canonicalDirPath(home)
+	if err != nil {
+		t.Fatalf("canonicalDirPath(%q) error = %v", home, err)
+	}
+	if !slices.Contains(allowedLocalDirs(UploadDirAllowlistEnv), canonicalHome) {
+		t.Errorf("allowedLocalDirs() = %v, want it to contain the explicitly allowed home %q",
+			allowedLocalDirs(UploadDirAllowlistEnv), canonicalHome)
+	}
+}
+
+// TestAllowedLocalDirs_KeepsAnOrdinaryWorkingDirectory verifies the ordinary
+// case is untouched: a workspace that is neither the filesystem root nor the
+// home directory stays an implicit root.
+//
+// It is the guard against passing the two tests above by dropping the working
+// directory altogether, which would silently break every stdio deployment.
+func TestAllowedLocalDirs_KeepsAnOrdinaryWorkingDirectory(t *testing.T) {
+	home := t.TempDir()
+	workspace := filepath.Join(home, "workspace")
+	if err := os.Mkdir(workspace, 0o750); err != nil {
+		t.Fatalf("creating the workspace: %v", err)
+	}
+	t.Setenv("TMPDIR", t.TempDir())
+	useHomeDir(t, home)
+	t.Chdir(workspace)
+
+	canonicalWorkspace, err := canonicalDirPath(workspace)
+	if err != nil {
+		t.Fatalf("canonicalDirPath(%q) error = %v", workspace, err)
+	}
+	if !slices.Contains(allowedLocalDirs(UploadDirAllowlistEnv), canonicalWorkspace) {
+		t.Errorf("allowedLocalDirs() = %v, want it to contain the working directory %q",
+			allowedLocalDirs(UploadDirAllowlistEnv), canonicalWorkspace)
+	}
+}
+
+// TestSkipHomeAsImplicitRoot_KeepsTheWorkingDirectoryWhenHomeIsUnknown verifies
+// the failure direction.
+//
+// A platform where the home directory cannot be resolved must keep the working
+// directory as a root: that is the behavior every deployment already has, and
+// narrowing the allow-list on a lookup failure would break file_path for
+// reasons no operator could see.
+func TestSkipHomeAsImplicitRoot_KeepsTheWorkingDirectoryWhenHomeIsUnknown(t *testing.T) {
+	tests := []struct {
+		name string
+		home func() (string, error)
+	}{
+		{name: "lookup fails", home: func() (string, error) { return "", errors.New("no home directory") }},
+		{name: "lookup returns nothing", home: func() (string, error) { return "", nil }},
+		{name: "home does not exist", home: func() (string, error) { return filepath.Join(t.TempDir(), "absent"), nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			original := userHomeDir
+			userHomeDir = tt.home
+			t.Cleanup(func() { userHomeDir = original })
+
+			workspace := t.TempDir()
+			if skipHomeAsImplicitRoot(workspace) {
+				t.Error("skipHomeAsImplicitRoot() = true, want the working directory kept")
+			}
+		})
 	}
 }
 

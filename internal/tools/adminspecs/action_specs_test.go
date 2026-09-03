@@ -79,7 +79,12 @@ func TestActionSpecs_SelectedActionSemantics(t *testing.T) {
 		{name: "system_hook_edit", idempotent: true, individualTool: "gitlab_edit_system_hook"},
 		{name: "system_hook_set_url_variable", idempotent: true, individualTool: "gitlab_set_system_hook_url_variable"},
 		{name: "system_hook_delete_url_variable", destructive: true, idempotent: true, individualTool: "gitlab_delete_system_hook_url_variable"},
-		{name: "system_hook_test", individualTool: "gitlab_test_system_hook", individualReadOnly: new(true), individualIdempotent: new(true)},
+		// No annotation override: the base classification is a create, and a
+		// read-only/idempotent override would widen it, which
+		// IndividualToolAnnotationOverrides.NarrowingOnly discards. Firing a
+		// test event POSTs a sample payload to the hook URL, so the create
+		// classification is the honest one and the override was never served.
+		{name: "system_hook_test", individualTool: "gitlab_test_system_hook"},
 	}
 
 	for _, tt := range tests {

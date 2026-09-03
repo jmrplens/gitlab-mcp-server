@@ -30,6 +30,22 @@ import (
 //	ai_features      — GitLab Duo API access
 //	k8s_proxy        — Kubernetes API calls via agent
 //	sudo             — Impersonate users
+//
+// The keys are meta-tool group names, which is why the filter reaches only two
+// of the three surfaces. [FilterScopeFilteredCatalog] matches them against
+// Group.ToolName and so covers the dynamic and meta surfaces, where a group is
+// what a caller sees. The individual surface registers one tool per action and
+// nothing there is ever named gitlab_admin, so [RemoveScopeFilteredTools],
+// which matches registered tool names, removes nothing: every admin individual
+// tool stays listed for a token with no admin_mode.
+//
+// It fails toward GitLab's own 403 rather than toward access, so the tools are
+// listed and then refused by the instance, which is why this is a listing
+// defect and not an authorization one. Closing it is the same shape as the
+// exclusion fix already applied on that surface: filter the catalog before
+// registration instead of the registered names afterwards, by passing the
+// scoped catalog into the individual registration path. That call lives in
+// cmd/server, not here.
 var MetaToolScopes = map[string][]string{
 	// Admin-only tools — every action in these tools requires admin_mode.
 	// Meta-tools that mix read and write actions (e.g., gitlab_runner) are
