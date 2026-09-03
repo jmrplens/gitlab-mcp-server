@@ -1,0 +1,44 @@
+name: Triage
+
+# Retires needs-triage once an issue has been triaged.
+#
+# Every issue template applies needs-triage on open, and nothing has ever
+# removed it: the only two issues that arrived through a template still carry it
+# while closed. A label that is applied automatically and retired by nobody
+# stops meaning anything, and the list it is supposed to produce, "what have I
+# not looked at yet", silently becomes the list of everything.
+#
+# Two events say the looking has happened. A milestone means the issue has been
+# placed in a release, which is this project's triage decision. Closing means it
+# needs no decision at all.
+on:
+  issues:
+    types: [milestoned, closed]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: triage-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  retire:
+    name: Retire needs-triage
+    runs-on: ubuntu-latest
+    # Cheap guard so the job does not start for the majority of events, which
+    # are about issues that never carried the label.
+    if: contains(github.event.issue.labels.*.name, 'needs-triage')
+    steps:
+      - name: Remove the label
+        env:
+          # GH_REPO rather than --repo: this job checks nothing out, so gh has
+          # no repository to infer from the working directory.
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REASON: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          echo "issue $ISSUE was $REASON, so it has been triaged"
+          gh issue edit "$ISSUE" --remove-label "needs-triage"

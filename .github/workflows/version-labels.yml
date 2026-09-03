@@ -1,0 +1,161 @@
+name: Version labels
+
+# Keeps a milestone and its version label saying the same thing, in both
+# directions, so neither view of "which release is this for" can drift from the
+# other. The convention is one character wide: milestone "2.8.0" pairs with
+# label "v2.8.0".
+#
+# This cannot loop. GitHub does not start a workflow run from an event caused by
+# the repository's own GITHUB_TOKEN, so the label this job adds does not trigger
+# the label half, and the milestone it sets does not trigger the milestone half.
+# That guarantee is the reason this is safe to write in both directions at once,
+# and it is why nothing here needs a "skip if I did it" marker. Giving this
+# workflow a personal access token instead would remove the guarantee and the
+# two halves would feed each other.
+on:
+  issues:
+    types: [milestoned, demilestoned, labeled, unlabeled]
+
+# Only what it edits. No contents access: this job reads the API and writes
+# labels and milestones, and never touches the tree.
+permissions:
+  issues: write
+
+# One run at a time per issue. Two rapid edits to the same issue would
+# otherwise race and could leave the pair disagreeing, which is the single
+# thing this workflow exists to prevent.
+#
+# A concurrency group holds one pending run, so a burst of edits can discard the
+# intermediate ones. That is why the step below reads the issue's CURRENT state
+# rather than acting on the event payload: a discarded event must not be able to
+# leave a stale decision behind.
+concurrency:
+  group: version-labels-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Keep milestone and label in step
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply the pairing
+        env:
+          # GH_REPO rather than --repo on each call: this job checks nothing
+          # out, so gh has no repository to infer from the working directory
+          # and every write would fail during resolution.
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          ACTION: ${{ github.event.action }}
+          # The milestone the event carries. On demilestoned the issue no longer
+          # holds it, so the payload is the only place it exists.
+          EVENT_MILESTONE: ${{ github.event.milestone.title }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          set -euo pipefail
+
+          # Every milestone title, which is also the set of version labels this
+          # workflow may touch. Anything else on the issue belongs to somebody
+          # else and is left alone. Paginated because a repository may hold more
+          # than one page of them, and a milestone missing from this list would
+          # be silently treated as "not a version".
+          gh api --paginate "repos/$GH_REPO/milestones?state=all&per_page=100" \
+            --jq '.[].title' > /tmp/milestones.txt
+
+          known_milestone() {
+            grep -qxF "$1" /tmp/milestones.txt
+          }
+
+          # The issue as it is NOW, not as the event described it. Events are
+          # delivered per change and the concurrency group drops intermediate
+          # pending runs, so acting on a snapshot can apply a decision that has
+          # already been undone.
+          gh issue view "$ISSUE" --json milestone,labels > /tmp/issue.json
+          CURRENT_MILESTONE="$(jq -r '.milestone.title // ""' /tmp/issue.json)"
+          has_label() {
+            jq -e --arg l "$1" 'any(.labels[]; .name == $l)' /tmp/issue.json >/dev/null
+          }
+
+          case "$ACTION" in
+            milestoned)
+              # Confirm the milestone is still there. A milestoned event whose
+              # milestone has since been removed must not re-apply its label.
+              if [ -z "$CURRENT_MILESTONE" ]; then
+                echo "the milestone was removed again before this ran, nothing to do"
+                exit 0
+              fi
+              want="v$CURRENT_MILESTONE"
+              echo "milestone $CURRENT_MILESTONE set, pairing label $want"
+              # Create the label rather than letting the API invent it. A label
+              # added by addLabels arrives default grey with no description,
+              # which is indistinguishable from a typo in the milestone title.
+              gh label create "$want" --color "1D76DB" \
+                --description "Targeted at the $CURRENT_MILESTONE release" 2>/dev/null || true
+              has_label "$want" || gh issue edit "$ISSUE" --add-label "$want"
+              # An issue belongs to one release. Drop the label of every other
+              # milestone so a retarget does not leave both showing.
+              while read -r other; do
+                [ -n "$other" ] || continue
+                [ "$other" = "$CURRENT_MILESTONE" ] && continue
+                if has_label "v$other"; then
+                  gh issue edit "$ISSUE" --remove-label "v$other"
+                fi
+              done < /tmp/milestones.txt
+              ;;
+
+            demilestoned)
+              # Only if it is still absent: a rapid remove-then-set would
+              # otherwise strip the label of the milestone now in place.
+              if [ -n "$CURRENT_MILESTONE" ]; then
+                echo "a milestone is set again ($CURRENT_MILESTONE), leaving its label alone"
+                exit 0
+              fi
+              echo "milestone $EVENT_MILESTONE removed, dropping label v$EVENT_MILESTONE"
+              if has_label "v$EVENT_MILESTONE"; then
+                gh issue edit "$ISSUE" --remove-label "v$EVENT_MILESTONE"
+              fi
+              ;;
+
+            labeled)
+              # Only labels that name a milestone: "v2.8.0" pairs with "2.8.0",
+              # while "vulnerability" pairs with nothing and is ignored.
+              candidate="${LABEL#v}"
+              if [ "$candidate" = "$LABEL" ] || ! known_milestone "$candidate"; then
+                echo "label $LABEL names no milestone, nothing to do"
+                exit 0
+              fi
+              # The label may have been removed again since the event.
+              if ! has_label "$LABEL"; then
+                echo "label $LABEL is no longer on the issue, nothing to do"
+                exit 0
+              fi
+              if [ "$CURRENT_MILESTONE" = "$candidate" ]; then
+                echo "already on milestone $candidate"
+                exit 0
+              fi
+              echo "label $LABEL present, setting milestone $candidate"
+              gh issue edit "$ISSUE" --milestone "$candidate"
+              ;;
+
+            unlabeled)
+              candidate="${LABEL#v}"
+              if [ "$candidate" = "$LABEL" ] || ! known_milestone "$candidate"; then
+                echo "label $LABEL names no milestone, nothing to do"
+                exit 0
+              fi
+              # The label may have been added back since the event.
+              if has_label "$LABEL"; then
+                echo "label $LABEL is on the issue again, leaving the milestone"
+                exit 0
+              fi
+              # Only clear the milestone the removed label was pairing with.
+              # Removing a stale label from an issue that has since been
+              # retargeted must not unset the milestone it now belongs to.
+              if [ "$CURRENT_MILESTONE" != "$candidate" ]; then
+                echo "issue is on milestone ${CURRENT_MILESTONE:-none}, not $candidate; leaving it"
+                exit 0
+              fi
+              echo "label $LABEL removed, clearing milestone $candidate"
+              gh issue edit "$ISSUE" --remove-milestone
+              ;;
+          esac
