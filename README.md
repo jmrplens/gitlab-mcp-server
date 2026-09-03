@@ -460,9 +460,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |     1,023 |     216,430 |
-| Unit tests (`_test.go`)  |       596 |     355,017 |
+| Unit tests (`_test.go`)  |       596 |     355,119 |
 | End-to-end tests         |       216 |      58,984 |
-| **Total**                | **1,835** | **630,431** |
+| **Total**                | **1,835** | **630,533** |
 
 ### Functions
 
@@ -471,7 +471,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  8,143 |
 | . Exported (public)             |  2,759 |
 | . Unexported (private)          |  5,384 |
-| Unit test functions (`TestXxx`) | 12,759 |
+| Unit test functions (`TestXxx`) | 12,764 |
 | Subtests (`t.Run(...)`)         |  4,666 |
 | End-to-end test functions       |    555 |
 
@@ -489,7 +489,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,868 |
+| `if err != nil` checks             | 6,869 |
 | `defer` statements                 | 1,117 |
 | `struct` types defined             | 2,803 |
 | `//nolint` suppressions            |   261 |
