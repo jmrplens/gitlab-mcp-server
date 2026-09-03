@@ -6,27 +6,71 @@
 # not on the registry yet.
 #
 # Usage:
-#   scripts/publish-npm.sh <binaries-dir> <version> [--dry-run]
+#   scripts/publish-npm.sh <binaries-dir> <version> [--dry-run] [--no-assemble]
 #
 # <binaries-dir> holds the release assets under their published names. Auth is
 # whatever `npm` already has: an NPM_TOKEN in CI (with an .npmrc that reads it)
 # or an interactive `npm login` locally. In CI with id-token permission, npm
 # attaches build provenance automatically; --dry-run packs and validates
 # without publishing anything.
+#
+# --no-assemble publishes the tree that is already in npm/packages instead of
+# building it again. It exists because the release workflow validates the
+# packages and then called this script, which rebuilt them: the bytes that went
+# to the registry were therefore never the bytes the validator examined, only
+# bytes an equally-configured run of the same generator had produced. Both runs
+# verify each binary against the same cosign-signed checksums.txt, so the gap
+# was narrow, but "we validated something else" is not a property worth keeping
+# in a release path. With the flag the validated directory is what ships, and
+# assert_assembled refuses a tree that is missing or built for another version
+# rather than letting the flag turn a skipped build into a stale publish.
 set -euo pipefail
 
-BINARIES_DIR="${1:?Usage: $0 <binaries-dir> <version> [--dry-run]}"
-VERSION="${2:?Usage: $0 <binaries-dir> <version> [--dry-run]}"
+BINARIES_DIR="${1:?Usage: $0 <binaries-dir> <version> [--dry-run] [--no-assemble]}"
+VERSION="${2:?Usage: $0 <binaries-dir> <version> [--dry-run] [--no-assemble]}"
+shift 2
 DRY_RUN=""
-if [ "${3:-}" = "--dry-run" ]; then
-  DRY_RUN="--dry-run"
-fi
+ASSEMBLE=1
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN="--dry-run" ;;
+    --no-assemble) ASSEMBLE=0 ;;
+    *) echo "unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/npm/packages"
 
-echo "Assembling npm distribution for v$VERSION"
-node "$ROOT/scripts/build-npm.mjs" --binaries "$BINARIES_DIR" --version "$VERSION" --out "$OUT"
+PLATFORM_KEYS=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64)
+
+# assert_assembled checks that every package --no-assemble is about to publish
+# exists and carries the version being released.
+assert_assembled() {
+  local dir name assembled
+  for dir in "${PLATFORM_KEYS[@]/#/$OUT/}" "$ROOT/npm/gitlab-mcp-server"; do
+    if [ ! -f "$dir/package.json" ]; then
+      echo "ERROR: --no-assemble was passed but $dir/package.json is missing." >&2
+      echo "       Run 'make validate-npm-local NPM_BINARIES=<dir>' first, or drop the flag." >&2
+      exit 1
+    fi
+    name="$(node -p "require('$dir/package.json').name")"
+    assembled="$(node -p "require('$dir/package.json').version")"
+    if [ "$assembled" != "$VERSION" ]; then
+      echo "ERROR: $name in $dir is assembled at $assembled, not $VERSION." >&2
+      echo "       The tree predates this release; re-run the validation step or drop --no-assemble." >&2
+      exit 1
+    fi
+  done
+}
+
+if [ "$ASSEMBLE" -eq 1 ]; then
+  echo "Assembling npm distribution for v$VERSION"
+  node "$ROOT/scripts/build-npm.mjs" --binaries "$BINARIES_DIR" --version "$VERSION" --out "$OUT"
+else
+  echo "Publishing the npm distribution already assembled in $OUT"
+  assert_assembled
+fi
 
 publish() {
   dir="$1"
@@ -51,7 +95,7 @@ publish() {
   npm publish "$dir" --access public $DRY_RUN
 }
 
-for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+for key in "${PLATFORM_KEYS[@]}"; do
   publish "$OUT/$key"
 done
 
