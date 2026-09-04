@@ -20,6 +20,7 @@ dist/
 # Local CLI binaries from cmd/* (built by `go build ./cmd/<name>`)
 /audit_metrics
 /audit_output
+/bench_resources
 /audit_test_names
 /audit_tokens
 /audit_tools
