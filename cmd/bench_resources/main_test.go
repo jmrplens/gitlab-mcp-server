@@ -4,9 +4,14 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -246,5 +251,214 @@ func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
 				t.Errorf("validate() = %v, want it to name %s", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// standinPath is the stand-in server under testdata/standin, built once by
+// TestMain for every test that measures a process. Empty on Windows, where
+// those tests skip: the harness samples /proc or ps and asks for a goroutine
+// count with SIGQUIT, and Windows has neither.
+var standinPath string
+
+// TestMain builds the stand-in before the tests and removes it after them.
+//
+// Built here rather than per test because a t.TempDir goes with the test that
+// made it, and built at all because the process-spawning half of this command
+// cannot be exercised against anything in-process: the readiness poll, the
+// pipe wiring, the resident-set sampling and the traceback signal all need a
+// child. Linking the real server for that would cost a minute per run to
+// learn nothing about the harness.
+func TestMain(m *testing.M) {
+	os.Exit(runWithStandin(m))
+}
+
+// runWithStandin builds the stand-in, runs the tests and cleans up after them.
+func runWithStandin(m *testing.M) int {
+	if runtime.GOOS != "windows" {
+		dir, err := os.MkdirTemp("", "bench-standin")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "create a build directory for the stand-in: %v\n", err)
+			return 1
+		}
+		defer func() { _ = os.RemoveAll(dir) }()
+		path := filepath.Join(dir, "standin")
+		build := exec.CommandContext(context.Background(), "go", "build", "-o", path, "./testdata/standin")
+		if out, buildErr := build.CombinedOutput(); buildErr != nil {
+			fmt.Fprintf(os.Stderr, "build testdata/standin: %v\n%s", buildErr, out)
+			return 1
+		}
+		standinPath = path
+	}
+	return m.Run()
+}
+
+// standinBinary returns the stand-in server, skipping where nothing can be
+// measured.
+func standinBinary(t *testing.T) string {
+	t.Helper()
+	if standinPath == "" {
+		t.Skip("the harness samples /proc or ps and signals SIGQUIT, neither of which Windows has")
+	}
+	return standinPath
+}
+
+// quickOptions are the flags of a smoke run against the stand-in: one round, a
+// fast sampler, and a record path of its own so the guard against overwriting
+// the published record lets it through.
+func quickOptions(t *testing.T, root string) options {
+	t.Helper()
+	return options{
+		binary:         standinBinary(t),
+		record:         filepath.Join(root, "record.json"),
+		recordSet:      true,
+		rounds:         1,
+		sampleInterval: 20 * time.Millisecond,
+		quick:          true,
+	}
+}
+
+// TestMeasure_QuickMatrix_ProducesOneScenarioPerPlan runs the smoke matrix
+// against the stand-in and checks the record carries what every downstream
+// artifact reads: a scenario per plan, the build the server reported, and the
+// settings the matrix imposed rather than the ones the flags asked for.
+func TestMeasure_QuickMatrix_ProducesOneScenarioPerPlan(t *testing.T) {
+	root := t.TempDir()
+	opts := quickOptions(t, root)
+	opts.rounds = 7 // the smoke matrix pins one round, and the record must say so
+
+	run, err := measure(opts, root)
+	if err != nil {
+		t.Fatalf("measure: %v", err)
+	}
+	if got, want := len(run.Scenarios), len(quickMatrix()); got != want {
+		t.Fatalf("recorded %d scenarios, want %d", got, want)
+	}
+	if run.Server.Version != "standin" || run.Server.Commit == "" {
+		t.Errorf("server info = %+v, want the build /health reported", run.Server)
+	}
+	if run.Settings.Rounds != 1 || !run.Settings.Quick || run.Settings.SampleIntervalMs != 20 {
+		t.Errorf("settings = %+v, want the smoke matrix's one round, quick, 20 ms", run.Settings)
+	}
+	if run.Schema != resultSchema || run.GeneratedAt == "" || run.Host.OS == "" {
+		t.Errorf("record header incomplete: schema %d, generated %q, host %+v", run.Schema, run.GeneratedAt, run.Host)
+	}
+	for _, scenario := range run.Scenarios {
+		t.Run(scenario.ID, func(t *testing.T) {
+			if len(scenario.Latency) != 3 {
+				t.Errorf("%d latency rows, want one per method", len(scenario.Latency))
+			}
+			if scenario.Goroutines == 0 {
+				t.Errorf("no goroutine count: notes %v", scenario.Notes)
+			}
+		})
+	}
+}
+
+// TestExecute_MeasureRenderCheck_AgreeWithEachOther drives the command the
+// way make does: a measurement that writes the record and every artifact, then
+// -render over the same record, then -check, which must find nothing stale in
+// what the two previous calls wrote.
+func TestExecute_MeasureRenderCheck_AgreeWithEachOther(t *testing.T) {
+	root, tree := renderTree(t)
+	opts := quickOptions(t, root)
+	// execute resolves relative paths against the real module root, so the
+	// temporary tree's paths go in absolute.
+	opts.docCharts = filepath.Join(root, filepath.FromSlash(tree.docCharts))
+	opts.siteCharts = filepath.Join(root, filepath.FromSlash(tree.siteCharts))
+	opts.docPage = filepath.Join(root, filepath.FromSlash(tree.docPage))
+	opts.sitePageEN = filepath.Join(root, filepath.FromSlash(tree.sitePageEN))
+	opts.sitePageES = filepath.Join(root, filepath.FromSlash(tree.sitePageES))
+
+	if err := execute(opts); err != nil {
+		t.Fatalf("execute (measure): %v", err)
+	}
+	run, err := readRun(opts.record)
+	if err != nil {
+		t.Fatalf("the measurement left no readable record: %v", err)
+	}
+	assertChartsWritten(t, root, tree, run)
+
+	redraw := opts
+	redraw.render = true
+	if renderErr := execute(redraw); renderErr != nil {
+		t.Errorf("execute (render): %v", renderErr)
+	}
+	check := opts
+	check.check = true
+	if checkErr := execute(check); checkErr != nil {
+		t.Errorf("execute (check) over what execute just wrote: %v", checkErr)
+	}
+}
+
+// TestExecute_RefusesWhatItCannotRun covers the two ways the command stops
+// before measuring or drawing: flags that would measure nothing, and a record
+// that is not there to redraw from.
+func TestExecute_RefusesWhatItCannotRun(t *testing.T) {
+	t.Run("invalid flags", func(t *testing.T) {
+		err := execute(options{rounds: 0, sampleInterval: time.Millisecond})
+		if err == nil || !strings.Contains(err.Error(), "-rounds") {
+			t.Errorf("execute = %v, want the -rounds refusal", err)
+		}
+	})
+	t.Run("absent record", func(t *testing.T) {
+		absent := filepath.Join(t.TempDir(), "absent.json")
+		err := execute(options{render: true, record: absent})
+		if err == nil || !strings.Contains(err.Error(), absent) {
+			t.Errorf("execute = %v, want it to name %s", err, absent)
+		}
+	})
+}
+
+// writeModuleFile creates one file of the throwaway module below.
+func writeModuleFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatalf("create %s: %v", filepath.Dir(path), err)
+	}
+	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// TestBuildServer_CompilesCmdServerUnderTheRoot points buildServer at a
+// throwaway module with a trivial cmd/server, which exercises the real build
+// path in a second rather than the minute the actual server takes to link.
+func TestBuildServer_CompilesCmdServerUnderTheRoot(t *testing.T) {
+	root := t.TempDir()
+	writeModuleFile(t, filepath.Join(root, "go.mod"), "module standin.example/server\n\ngo 1.22\n")
+	writeModuleFile(t, filepath.Join(root, "cmd", "server", "main.go"), "package main\n\nfunc main() {}\n")
+
+	built, err := buildServer(root)
+	if err != nil {
+		t.Fatalf("buildServer: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(built)) })
+	info, statErr := os.Stat(built)
+	if statErr != nil {
+		t.Fatalf("the built binary is not there: %v", statErr)
+	}
+	if info.Size() == 0 {
+		t.Error("the built binary is empty")
+	}
+}
+
+// TestBuildServer_NothingToBuild_ReportsTheCompilerOutput checks a root with
+// no module in it fails with the compiler's own words attached, since that is
+// what somebody running the benchmark from the wrong directory needs to see.
+func TestBuildServer_NothingToBuild_ReportsTheCompilerOutput(t *testing.T) {
+	_, err := buildServer(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "build ./cmd/server") {
+		t.Errorf("buildServer = %v, want the build failure", err)
+	}
+}
+
+// TestRel_PathThatCannotBeMadeRelative_IsReturnedWhole covers the fallback
+// for a path filepath.Rel refuses, which happens when only one of the two is
+// absolute.
+func TestRel_PathThatCannotBeMadeRelative_IsReturnedWhole(t *testing.T) {
+	absolute := filepath.Join(t.TempDir(), "record.json")
+	if got := rel("relative-root", absolute); got != absolute {
+		t.Errorf("rel = %q, want the path untouched %q", got, absolute)
 	}
 }

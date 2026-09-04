@@ -365,3 +365,174 @@ func TestDecodeHealth_ReadsTheBuildTheServerReports(t *testing.T) {
 		})
 	}
 }
+
+// standinRunner is a runner over the stand-in: the two stand-in services, a
+// fast sampler and a quiet reporter.
+func standinRunner(t *testing.T) *runner {
+	t.Helper()
+	binary := standinBinary(t)
+	stub := startStubGitLab()
+	t.Cleanup(stub.close)
+	sink := startOTLPSink()
+	t.Cleanup(sink.close)
+	return &runner{
+		binary:         binary,
+		stub:           stub,
+		otlp:           sink,
+		sampleInterval: 20 * time.Millisecond,
+		progress:       progressFunc(false),
+	}
+}
+
+// httpPlan is an HTTP scenario small enough for a test and large enough to
+// have a ramp: two credentials, two requests in flight, the rounds given.
+func httpPlan(rounds int) scenarioPlan {
+	return scenarioPlan{
+		ID: "http-dynamic-telemetry", Transport: transportHTTP, Surface: surfaceDynamic,
+		Telemetry: true, Clients: 2, Parallel: 2, Rounds: rounds,
+	}
+}
+
+// TestRunScenario_HTTP_FillsEveryPublishedFigure measures the stand-in over
+// HTTP with telemetry on and checks every figure the tables and charts read
+// is there: the startup milestones, the idle and per-client resident sets, a
+// ramp point per credential, one distribution per method with every call
+// counted, and the goroutine count that ends the process.
+func TestRunScenario_HTTP_FillsEveryPublishedFigure(t *testing.T) {
+	r := standinRunner(t)
+	plan := httpPlan(2)
+
+	scenario, err := r.runScenario(t.Context(), plan)
+	if err != nil {
+		t.Fatalf("runScenario: %v", err)
+	}
+
+	if scenario.ID != plan.ID || scenario.Clients != 2 || scenario.Parallel != 2 || scenario.Rounds != 2 || !scenario.Telemetry {
+		t.Errorf("scenario header %+v does not describe the plan %+v", scenario, plan)
+	}
+	assertStartupMeasured(t, scenario)
+	assertMemoryMeasured(t, scenario)
+	assertLatencyPerMethod(t, scenario, plan.Clients*plan.Parallel*plan.Rounds)
+	if scenario.Goroutines < 1 {
+		t.Errorf("goroutines = %d, want the traceback counted", scenario.Goroutines)
+	}
+	if len(scenario.Notes) != 0 {
+		t.Errorf("notes %v on a scenario where everything answered", scenario.Notes)
+	}
+	if r.serverInfo.Version != "standin" {
+		t.Errorf("the runner kept server info %+v, want what /health reported", r.serverInfo)
+	}
+}
+
+// assertStartupMeasured checks the three startup milestones and the size of
+// the cold listing were all taken.
+func assertStartupMeasured(t *testing.T, scenario Scenario) {
+	t.Helper()
+	if s := scenario.Startup; s.ProcessReadyMs <= 0 || s.FirstListMs <= 0 || s.WarmListMs <= 0 {
+		t.Errorf("startup milestones %+v, want all three measured", s)
+	}
+	if scenario.ListBytes == 0 {
+		t.Error("the cold tools/list response was not sized")
+	}
+}
+
+// assertMemoryMeasured checks every resident-set figure came from the kernel
+// and the ramp has a point per credential.
+func assertMemoryMeasured(t *testing.T, scenario Scenario) {
+	t.Helper()
+	if m := scenario.Memory; m.IdleMiB <= 0 || m.OneClientMiB <= 0 || m.AllClientsMiB <= 0 || m.PeakMiB <= 0 {
+		t.Errorf("memory figures %+v, want every one read from the kernel", m)
+	}
+	if len(scenario.Ramp) != 2 || scenario.Ramp[1].Client != 2 || scenario.Ramp[1].ColdListMs <= 0 {
+		t.Errorf("ramp %+v, want one point per credential", scenario.Ramp)
+	}
+}
+
+// assertLatencyPerMethod checks each measured method has a distribution over
+// every call the plan issued.
+func assertLatencyPerMethod(t *testing.T, scenario Scenario, wantCount int) {
+	t.Helper()
+	for _, method := range []string{methodResourcesList, methodToolsCall, methodToolsList} {
+		t.Run(method, func(t *testing.T) {
+			latency, ok := scenario.latency(method)
+			if !ok {
+				t.Fatalf("no distribution for %s", method)
+			}
+			if latency.Count != wantCount {
+				t.Errorf("%d samples, want %d (clients x parallel x rounds)", latency.Count, wantCount)
+			}
+			if latency.P50 <= 0 || latency.Max < latency.P50 {
+				t.Errorf("percentiles %+v are not a distribution", latency)
+			}
+		})
+	}
+}
+
+// TestRunScenario_Stdio_TimesTheSpawnAndPublishesNoIdleFigure measures the
+// stand-in over stdio, where the record's shape differs on purpose: readiness
+// is the exec of the first client's process, and there is no idle figure
+// because a stdio process has no idle state to size for.
+func TestRunScenario_Stdio_TimesTheSpawnAndPublishesNoIdleFigure(t *testing.T) {
+	r := standinRunner(t)
+	plan := scenarioPlan{
+		ID: "stdio-dynamic", Transport: transportStdio, Surface: surfaceDynamic, Clients: 2, Parallel: 1, Rounds: 1,
+	}
+
+	scenario, err := r.runScenario(t.Context(), plan)
+	if err != nil {
+		t.Fatalf("runScenario: %v", err)
+	}
+	if scenario.Startup.ProcessReadyMs <= 0 {
+		t.Errorf("ProcessReadyMs = %v, want the first client's exec timed", scenario.Startup.ProcessReadyMs)
+	}
+	if scenario.Memory.IdleMiB != 0 {
+		t.Errorf("IdleMiB = %v on stdio, want none", scenario.Memory.IdleMiB)
+	}
+	if scenario.Memory.AllClientsMiB <= 0 || len(scenario.Ramp) != 2 {
+		t.Errorf("memory %+v ramp %+v, want two processes measured", scenario.Memory, scenario.Ramp)
+	}
+	if scenario.Goroutines < 1 {
+		t.Errorf("goroutines = %d, want the first process's traceback counted", scenario.Goroutines)
+	}
+	if r.serverInfo.Version != "" {
+		t.Errorf("stdio reported server info %+v, want none", r.serverInfo)
+	}
+}
+
+// TestRunScenario_ColdListRefused_FailsTheScenario makes the stand-in refuse
+// tools/list, which is the first thing the ramp asks: a scenario whose
+// surface cannot be listed has nothing to publish and must say so rather than
+// record zeros.
+func TestRunScenario_ColdListRefused_FailsTheScenario(t *testing.T) {
+	t.Setenv("STANDIN_FAIL", methodToolsList)
+	r := standinRunner(t)
+
+	_, err := r.runScenario(t.Context(), httpPlan(1))
+	if err == nil || !strings.Contains(err.Error(), "cold tools/list for client 0") {
+		t.Errorf("runScenario = %v, want the cold tools/list failure", err)
+	}
+}
+
+// TestRunScenario_FailedCalls_AreNotedRatherThanFatal makes the stand-in
+// refuse tools/call: the load phase records how many calls failed and why,
+// keeps the other methods' distributions, and the scenario still completes.
+func TestRunScenario_FailedCalls_AreNotedRatherThanFatal(t *testing.T) {
+	t.Setenv("STANDIN_FAIL", methodToolsCall)
+	r := standinRunner(t)
+	plan := httpPlan(1)
+
+	scenario, err := r.runScenario(t.Context(), plan)
+	if err != nil {
+		t.Fatalf("runScenario: %v", err)
+	}
+	wantNote := strconv.Itoa(plan.Clients*plan.Parallel) + " tools/call calls failed"
+	if len(scenario.Notes) != 1 || !strings.Contains(scenario.Notes[0], wantNote) {
+		t.Errorf("notes %v, want one saying %q", scenario.Notes, wantNote)
+	}
+	if calls, ok := scenario.latency(methodToolsCall); !ok || calls.Count != 0 {
+		t.Errorf("tools/call distribution %+v, want an empty one kept in place", calls)
+	}
+	if list, ok := scenario.latency(methodToolsList); !ok || list.Count != plan.Clients*plan.Parallel {
+		t.Errorf("tools/list distribution %+v, want unaffected", list)
+	}
+}

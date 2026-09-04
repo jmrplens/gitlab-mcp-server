@@ -6,6 +6,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -208,5 +209,29 @@ func sampleRun() *Run {
 			scenario("http-meta", transportHTTP, surfaceMeta, 4),
 			scenario("http-individual", transportHTTP, surfaceIndividual, 4),
 		},
+	}
+}
+
+// TestWriteRun_ReportsWhereItCouldNotWrite covers the two filesystem
+// refusals: a parent that cannot be created because a file is in the way, and
+// a path that is a directory.
+func TestWriteRun_ReportsWhereItCouldNotWrite(t *testing.T) {
+	root := t.TempDir()
+	blocker := filepath.Join(root, "file")
+	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write the blocking file: %v", err)
+	}
+	cases := []struct{ name, path, wantErr string }{
+		{name: "parent is a file", path: filepath.Join(blocker, "record.json"), wantErr: "create"},
+		{name: "path is a directory", path: root, wantErr: "write"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := writeRun(tc.path, sampleRun())
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("writeRun(%s) = %v, want %q", tc.path, err, tc.wantErr)
+			}
+		})
 	}
 }
