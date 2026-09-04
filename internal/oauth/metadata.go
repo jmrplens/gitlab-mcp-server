@@ -64,7 +64,8 @@ type ResourceLinks struct {
 // carrying a client identifier, and §5.3 leaves establishing one "out of
 // scope".
 //
-// The handler is registered at /.well-known/oauth-protected-resource.
+// The handler is registered at the single path [MetadataPathFor] derives from
+// the resource identifier.
 func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes []string, links ResourceLinks) http.Handler {
 	documentationURL := links.Documentation
 	if documentationURL == "" {
@@ -95,6 +96,12 @@ func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes
 	return auth.ProtectedResourceMetadataHandler(metadata)
 }
 
+// MetadataPath is the RFC 9728 §3 well-known URI suffix for protected-resource
+// metadata. On its own it is the metadata path of the resource that *is* the
+// origin; a resource with a path of its own derives a longer one through
+// [MetadataPathFor].
+const MetadataPath = "/.well-known/oauth-protected-resource"
+
 // MetadataURLFor derives the RFC 9728 §3 protected-resource metadata URL
 // from a resource identifier: the well-known path segment is inserted
 // between the host component and the resource's path, so
@@ -106,9 +113,48 @@ func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes
 func MetadataURLFor(resourceID string) string {
 	u, err := url.Parse(resourceID)
 	if err != nil || u.Host == "" {
-		return strings.TrimSuffix(resourceID, "/") + "/.well-known/oauth-protected-resource"
+		return strings.TrimSuffix(resourceID, "/") + MetadataPath
 	}
-	path := u.Path
-	u.Path = "/.well-known/oauth-protected-resource" + path
+	u.Path = metadataPath(u)
 	return u.String()
+}
+
+// MetadataPathFor returns the one path on which a deployment publishing
+// resourceID serves its protected-resource document: the path component of
+// [MetadataURLFor], so what a server mounts and what its challenge advertises
+// cannot drift apart.
+//
+// It exists as its own function, rather than inline at the mount, because a
+// host can run several MCP servers and each of them has to get this right.
+// This one used to mount the document twice, the second time under a
+// "/{rest...}" wildcard, so every suffix returned the same body: asked about
+// the neighbor at /libgen, it answered with a document naming *this*
+// deployment's resource and demanding OAuth against this deployment's GitLab.
+// RFC 9728 §3.3 tells a client to discard a document whose resource value is
+// not the identifier it derived the URL from, so the extra paths bought a
+// conforming client nothing and told a lax one something false.
+//
+// The path-less form is served only when the resource identifier has no path,
+// and that is a decision rather than an omission. /.well-known/oauth-protected-resource
+// is by construction the metadata of the resource at the host root: a server
+// mounted at /gitlab answering it is claiming an identity that is not its own,
+// which is the wildcard's harm in a different spelling. Where --public-url has
+// no path the bare form *is* the derived form, so this is one rule and not two
+// cases, and a server that owns its hostname loses nothing.
+//
+// A trailing slash is trimmed because the derived path is mounted as an exact
+// http.ServeMux pattern, and a pattern ending in "/" is a subtree match in Go:
+// keeping the slash would quietly restore the wildcard this replaced.
+func MetadataPathFor(resourceID string) string {
+	u, err := url.Parse(resourceID)
+	if err != nil || u.Host == "" {
+		return MetadataPath
+	}
+	return metadataPath(u)
+}
+
+// metadataPath inserts the well-known segment between the host and the
+// resource's own path, for an identifier already known to parse.
+func metadataPath(u *url.URL) string {
+	return MetadataPath + strings.TrimSuffix(u.Path, "/")
 }

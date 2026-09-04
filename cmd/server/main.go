@@ -3062,16 +3062,21 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		Policy:         cfg.ResourcePolicyURI,
 		TermsOfService: cfg.ResourceTermsURI,
 	})
-	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
-	// path-inserted form a client computes from a resource identifier that
-	// carries a path. Mounted without a method restriction so the SDK
-	// handler answers the CORS preflight itself (OPTIONS → 204 with
-	// Access-Control-Allow-Origin: *); a "GET "-restricted pattern would
-	// send the preflight to the catch-all gate and 401 it, locking out
-	// browser-based clients that fetch PRM cross-origin (claude.ai).
-	discovery := metadataDocument(prm)
-	mux.Handle("/.well-known/oauth-protected-resource", discovery)
-	mux.Handle("/.well-known/oauth-protected-resource/{rest...}", discovery)
+	// One path, the one RFC 9728 §3 derives from this deployment's resource
+	// identifier and the one the challenge above advertises, so the document
+	// answers where a client looks for it and nowhere else. What was here
+	// before also mounted a "/{rest...}" wildcard, which made a host running
+	// several MCP servers answer for its neighbors: see oauth.MetadataPathFor
+	// for why the path-less form is not mounted alongside it. An exact pattern
+	// is exact in Go only while it does not end in a slash, which is why the
+	// derivation trims one.
+	//
+	// Mounted without a method restriction so the SDK handler answers the CORS
+	// preflight itself (OPTIONS → 204 with Access-Control-Allow-Origin: *); a
+	// "GET "-restricted pattern would send the preflight to the catch-all gate
+	// and 401 it, locking out browser-based clients that fetch PRM
+	// cross-origin (claude.ai).
+	mux.Handle(oauth.MetadataPathFor(resourceID), metadataDocument(prm))
 	// Bearer only: oauth mode advertises the RFC 6750 scheme, so the legacy
 	// PRIVATE-TOKEN header alias is not silently rewritten into it here —
 	// what the challenge advertises is exactly what is accepted.
