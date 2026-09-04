@@ -160,8 +160,20 @@ jobs:
   docs-audit:
     name: Docs dependency audit
     runs-on: ubuntu-latest
+    # The whole job is one call to somebody else's registry, and that call has
+    # already stalled here: pnpm retried twice over two minutes and gave up.
+    # Without a bound, a registry that accepts the connection and never answers
+    # holds a runner for the six-hour default.
+    timeout-minutes: 15
     steps:
+      # This job runs third-party code: `pnpm install` may execute a
+      # dependency's lifecycle scripts. Without this the checkout token stays
+      # in .git/config while they run, so a compromised dependency in the
+      # documentation site's tree could read it. Nothing here talks to git
+      # after the checkout.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           package_json_file: site/package.json
@@ -266,8 +278,14 @@ jobs:
   site-lint:
     name: Site static lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
+      # Same reasoning as docs-audit: this is the other job that installs the
+      # documentation site's dependencies, so it is the other one that runs
+      # code this repository did not write.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11
