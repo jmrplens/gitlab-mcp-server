@@ -14,6 +14,7 @@ package suite
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -167,16 +168,18 @@ func listSavedViews(ctx context.Context, t *testing.T, namespacePath string) (wo
 }
 
 // skipIfTheExperimentBroke skips the test when GitLab answered a saved view
-// mutation with a 500.
+// mutation with a 500 carrying its "Internal server error" GraphQL message.
 //
 // The list probe has already proved the schema is there, so a 500 on the
 // mutation is GitLab's implementation of an experiment breaking on this
 // version, which gitlab-ce:latest did in September 2026. The request is the
 // one client-go documents, so there is nothing here to fix, and failing the
-// suite on it would teach nobody anything.
+// suite on it would teach nobody anything. Both the status and the message
+// are required: the message alone could match some other refusal, and a
+// non-500 failure with the same words must still fail the test.
 func skipIfTheExperimentBroke(t *testing.T, err error) {
 	t.Helper()
-	if err != nil && strings.Contains(err.Error(), "Internal server error") {
+	if isHTTPStatus(err, http.StatusInternalServerError) && strings.Contains(err.Error(), "Internal server error") {
 		t.Skipf("work item saved view mutation answered 500 on this GitLab version (the feature is an experiment): %v", err)
 	}
 }

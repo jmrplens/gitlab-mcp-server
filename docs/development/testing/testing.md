@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,647 |
-| Unit test functions                                   | 13,081 |
+| Total test functions                                  | 13,648 |
+| Unit test functions                                   | 13,082 |
 | E2E test functions                                    |    566 |
 | cmd test functions                                    |  2,149 |
 | Test files (internal/)                                |    501 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,315 | 82.9% |
+| `TestFunc_Scenario` (2-part)           | 11,316 | 82.9% |
 | `TestFunc` (no underscore)             |    968 |  7.1% |
 | `TestFunc_Scenario_Expected` (3+ part) |  1,364 | 10.0% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,187 |        132 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            305 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (176) |          8,440 |        355 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (176) |          8,441 |        355 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            566 |        221 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,149 |        133 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,647** |    **855** |                                                                                                 |
+| **Total**               |     **13,648** |    **855** |                                                                                                 |
 
 ### Core Packages
 
@@ -157,7 +157,7 @@
 | dockerfiletemplates     |        15 |          1 |   100.0% |         2 |
 | dorametrics             |        11 |          2 |   100.0% |         2 |
 | dynamic                 |       162 |          8 |    99.8% |         2 |
-| dynamiccatalog          |         2 |          1 |    70.0% |         0 |
+| dynamiccatalog          |         3 |          1 |    78.6% |         0 |
 | elicitationtools        |        65 |          2 |    98.7% |         4 |
 | enterpriseusers         |        35 |          3 |   100.0% |         4 |
 | environments            |        56 |          2 |   100.0% |         6 |
@@ -292,7 +292,7 @@
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        95 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        49 |          4 |   100.0% |         7 |
-| **Total**               | **8,440** |    **355** |          | **1,175** |
+| **Total**               | **8,441** |    **355** |          | **1,175** |
 
 </details>
 
@@ -420,7 +420,7 @@
 | dockerfiletemplates     |   100.0% |
 | dorametrics             |   100.0% |
 | dynamic                 |    99.8% |
-| dynamiccatalog          |    70.0% |
+| dynamiccatalog          |    78.6% |
 | elicitationtools        |    98.7% |
 | enterpriseusers         |   100.0% |
 | environments            |   100.0% |
@@ -560,9 +560,9 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 
 - **cmd/gen_action_catalog_manifest** (66.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/bench_resources** (68.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **dynamiccatalog** (70.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_1to1** (71.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (77.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **dynamiccatalog** (78.6%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **progress** (83.8%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_install_buttons** (84.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_edition_tier** (86.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

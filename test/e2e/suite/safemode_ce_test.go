@@ -36,12 +36,15 @@ func TestSafeMode(t *testing.T) {
 		// The preview is an error result on purpose: the tool did not run,
 		// and a result that read as success had models reporting the write
 		// as done. So it is read from the result's text rather than through
-		// callToolOn, which treats IsError as the failure it usually is.
-		text := modeCallText(ctx, t, sess.safeMode, "gitlab_issue_create", map[string]any{
+		// callToolOn, which treats IsError as the failure it usually is, and
+		// the flag itself is asserted: a preview served as a success would
+		// carry the same text and be the very defect this guards against.
+		text, isError := modeCall(ctx, t, sess.safeMode, "gitlab_issue_create", map[string]any{
 			"project_id":  proj.pidOf(),
 			"title":       "Safe mode test issue",
 			"description": "This issue should NOT be created",
 		})
+		requireTruef(t, isError, "the safe-mode preview was returned as a successful result: %s", text)
 		preview, isPreview := modeSafePreview(text)
 		requireTruef(t, isPreview, "gitlab_issue_create in safe mode did not return a preview: %s", text)
 		requireTruef(t, preview.Status == "blocked", "expected status 'blocked', got %q", preview.Status)
