@@ -85,7 +85,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--max-request-body-bytes` | `0`               | Tamaño máximo del cuerpo de las peticiones HTTP streamable en bytes; `0` usa el valor por defecto del SDK (4 MiB); los valores negativos se rechazan al arrancar. Los cuerpos que lo superan se rechazan con `413`                                                                                                                          |
 
 :::note
-Lo que significa `GITLAB-URL` depende de cuántas instancias publique el despliegue. **Ninguna**: elige el cliente, con `https://gitlab.com` como último recurso. **Una**: es autoritativa, la cabecera se ignora y se registra en `ignored_options`. **Varias**: la cabecera elige entre las publicadas, y un valor que nombre cualquier otra cosa se **rechaza** —`403` en modo OAuth, `400` en legacy—, nunca se responde en silencio con la instancia de otro. En modo OAuth todas las instancias publicadas deben ser `https`, porque el token bearer se reenvía a la que haya elegido la petición.
+Lo que significa `GITLAB-URL` depende de cuántas instancias publique el despliegue. **Ninguna**: solo es posible con `--allow-any-gitlab-url`, y entonces elige el cliente, con una petición que no nombre ninguna instancia rechazada en lugar de dirigida a `https://gitlab.com`. **Una**: es autoritativa, la cabecera se ignora y se registra en `ignored_options`. **Varias**: la cabecera es **obligatoria** y elige entre las publicadas. Una petición que no la envíe se rechaza con `400`, porque responderla pondría el token de quien llama en la red hacia una instancia que nunca nombró; el rechazo nombra las instancias publicadas en modo OAuth y te dice que preguntes a quien administra en modo legacy, de forma que ningún token no vacío pueda enumerarlas. Un valor fuera de la lista se **rechaza** igualmente —`403` en modo OAuth, `400` en legacy—, nunca se responde en silencio con la instancia de otro. En modo OAuth todas las instancias publicadas deben ser `https`, porque el token bearer se reenvía a la que haya elegido la petición.
 :::
 
 ### Opciones de superficie de herramientas y capacidades
@@ -118,7 +118,7 @@ Cuando el servidor arranca con `--allow-any-gitlab-url` y no publica ninguna ins
 GITLAB-URL: https://gitlab.ejemplo.com
 ```
 
-Si el despliegue fija exactamente una instancia, esta cabecera se ignora y se registra. Si publica varias, la cabecera elige una de ellas y cualquier otro valor se rechaza. Si no fija ninguna y la cabecera se omite, la petición se rechaza.
+Si el despliegue fija exactamente una instancia, esta cabecera se ignora y se registra. Si publica varias, la cabecera elige una de ellas y cualquier otro valor se rechaza. Si no fija ninguna y la cabecera se omite, la petición se rechaza con `400` en lugar de resolverse a `https://gitlab.com`.
 
 ### Cabecera private-token (recomendada)
 
