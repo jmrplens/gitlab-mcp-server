@@ -459,10 +459,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,062 |     225,723 |
-| Unit tests (`_test.go`)  |       630 |     365,771 |
+| Source (`.go`, non-test) |     1,062 |     225,754 |
+| Unit tests (`_test.go`)  |       632 |     366,798 |
 | End-to-end tests         |       223 |      60,624 |
-| **Total**                | **1,915** | **652,118** |
+| **Total**                | **1,917** | **653,176** |
 
 ### Functions
 
@@ -471,8 +471,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  8,469 |
 | . Exported (public)             |  2,795 |
 | . Unexported (private)          |  5,674 |
-| Unit test functions (`TestXxx`) | 13,053 |
-| Subtests (`t.Run(...)`)         |  4,831 |
+| Unit test functions (`TestXxx`) | 13,078 |
+| Subtests (`t.Run(...)`)         |  4,858 |
 | End-to-end test functions       |    566 |
 
 ### Ratios worth noting
@@ -482,17 +482,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.62× more tests than code |
 | Average source file length         |                 ~212 lines |
 | Average test file length           |                 ~580 lines |
-| Comment lines in source            |  34,187 (~15.1% of source) |
+| Comment lines in source            |  34,198 (~15.1% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 7,052 |
-| `defer` statements                 | 1,179 |
+| `if err != nil` checks             | 7,065 |
+| `defer` statements                 | 1,187 |
 | `struct` types defined             | 2,878 |
-| `//nolint` suppressions            |   273 |
+| `//nolint` suppressions            |   276 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project

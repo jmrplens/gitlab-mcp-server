@@ -207,11 +207,11 @@ func TestSampler_TracksAndPeaks(t *testing.T) {
 		t.Fatal("the sampler read a resident set of zero for a running process")
 	}
 
-	if peak := s.peakRSS(); peak == 0 {
+	if s.peakRSS() == 0 {
 		t.Error("peakRSS is zero after a successful sample")
 	}
 	s.resetPeak()
-	if peak := s.peakRSS(); peak == 0 {
+	if s.peakRSS() == 0 {
 		t.Error("peakRSS is zero after a reset that takes its own sample")
 	}
 }
@@ -223,5 +223,72 @@ func TestSampler_NoProcesses_ReportsFailure(t *testing.T) {
 	s := newSampler(t.Context(), 10*time.Millisecond, func() []int { return nil })
 	if _, err := s.current(); err == nil {
 		t.Error("the sampler reported a measurement with no processes to sample")
+	}
+}
+
+// TestSampler_StartStop_RecordsAPeakAndStopsCleanly verifies the polling loop
+// runs, folds what it reads into the peak, and can be stopped twice.
+//
+// Stopping twice is not hypothetical: a scenario stops sampling before it kills
+// the process for a goroutine dump, while the deferred stop that guarantees the
+// poller dies on an early return is still armed. A stop that closed its channel
+// unconditionally would panic on the second call, at the end of a run that had
+// already done all its work.
+func TestSampler_StartStop_RecordsAPeakAndStopsCleanly(t *testing.T) {
+	self := os.Getpid()
+	s := newSampler(t.Context(), 5*time.Millisecond, func() []int { return []int{self} })
+
+	if _, err := s.current(); err != nil {
+		t.Skipf("this platform does not report process statistics: %v", err)
+	}
+
+	s.start()
+	// Long enough for several ticks, short enough not to slow the suite.
+	time.Sleep(60 * time.Millisecond)
+	s.stop()
+
+	if peak := s.peakRSS(); peak == 0 {
+		t.Error("the poller recorded no peak for a process that is running")
+	}
+
+	// The second stop must return rather than panic on a closed channel.
+	s.stop()
+}
+
+// TestSampleRSS_NoProcesses_ReportsZero verifies a reading the platform will
+// not give is reported as zero rather than as an error the caller has to
+// handle, which is what lets a scenario publish latency without memory.
+func TestSampleRSS_NoProcesses_ReportsZero(t *testing.T) {
+	s := newSampler(t.Context(), 10*time.Millisecond, func() []int { return nil })
+	if got := sampleRSS(s); got != 0 {
+		t.Errorf("sampleRSS = %d, want 0 when there is nothing to sample", got)
+	}
+}
+
+// TestSettledRSS_StableProcess_ReturnsAReading verifies the settle loop
+// returns once two consecutive samples agree.
+//
+// The figure it produces is the one-client memory published for every
+// scenario, and it is taken right after a process starts, so reading too early
+// would publish a process that has not finished building its catalog.
+func TestSettledRSS_StableProcess_ReturnsAReading(t *testing.T) {
+	self := os.Getpid()
+	s := newSampler(t.Context(), 5*time.Millisecond, func() []int { return []int{self} })
+	if _, err := s.current(); err != nil {
+		t.Skipf("this platform does not report process statistics: %v", err)
+	}
+
+	started := time.Now()
+	got := settledRSS(s)
+	elapsed := time.Since(started)
+
+	if got == 0 {
+		t.Error("settledRSS returned zero for a running process")
+	}
+	// This test's own process is not growing, so two samples agree almost at
+	// once. Reaching the three-second ceiling would mean the settle condition
+	// never holds, which would add three seconds to every scenario.
+	if elapsed > 2*time.Second {
+		t.Errorf("settling took %v on a stable process, which is nearly the ceiling", elapsed)
 	}
 }

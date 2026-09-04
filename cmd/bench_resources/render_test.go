@@ -250,6 +250,181 @@ func readFileForTest(t *testing.T, path string) string {
 	return string(data)
 }
 
+// renderTree builds a stand-in module root holding the one input renderAll
+// reads, the stylesheet, and the three pages it rewrites, each with its
+// markers and nothing between them.
+func renderTree(t *testing.T) (root string, opts options) {
+	t.Helper()
+	root = t.TempDir()
+
+	realRoot, err := projectRootForTest()
+	if err != nil {
+		t.Skipf("cannot locate the module root: %v", err)
+	}
+	styles := filepath.Join(root, "site", "src", "styles")
+	if mkErr := os.MkdirAll(styles, 0o750); mkErr != nil {
+		t.Fatalf("create the stylesheet directory: %v", mkErr)
+	}
+	// The palette is read from the site's own stylesheet rather than restated,
+	// so the test uses the real one: a copy here would be the second copy the
+	// arrangement exists to avoid.
+	theme, err := os.ReadFile(filepath.Join(realRoot, themeCSS))
+	if err != nil {
+		t.Fatalf("read the real stylesheet: %v", err)
+	}
+	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+	if writeErr := os.WriteFile(filepath.Join(styles, "theme.css"), theme, 0o600); writeErr != nil {
+		t.Fatalf("write the stylesheet: %v", writeErr)
+	}
+
+	opts = options{
+		docCharts:  "docs/charts",
+		siteCharts: "site/charts",
+		docPage:    "docs/page.md",
+		sitePageEN: "site/en.mdx",
+		sitePageES: "site/es.mdx",
+	}
+	pages := map[string][2]string{
+		opts.docPage:    {docStartMark, docEndMark},
+		opts.sitePageEN: {siteStartMark, siteEndMark},
+		opts.sitePageES: {siteStartMark, siteEndMark},
+	}
+	for page, marks := range pages {
+		full := filepath.Join(root, filepath.FromSlash(page))
+		if mkErr := os.MkdirAll(filepath.Dir(full), 0o750); mkErr != nil {
+			t.Fatalf("create the directory for %s: %v", page, mkErr)
+		}
+		body := "before\n\n" + marks[0] + "\n\n" + marks[1] + "\n\nafter\n"
+		if writeErr := os.WriteFile(full, []byte(body), 0o600); writeErr != nil {
+			t.Fatalf("write %s: %v", page, writeErr)
+		}
+	}
+	return root, opts
+}
+
+// assertChartsWritten checks that every figure exists in both schemes, in the
+// documentation directory and in each language's site directory.
+func assertChartsWritten(t *testing.T, root string, opts options, run *Run) {
+	t.Helper()
+	dirs := []string{
+		filepath.Join(root, filepath.FromSlash(opts.docCharts)),
+		filepath.Join(root, filepath.FromSlash(opts.siteCharts), englishLabels().Code),
+		filepath.Join(root, filepath.FromSlash(opts.siteCharts), spanishLabels().Code),
+	}
+	for _, fig := range buildFigures(run, englishLabels()) {
+		for _, scheme := range []string{schemeLight, schemeDark} {
+			for _, dir := range dirs {
+				path := filepath.Join(dir, fig.Name+"."+scheme+".svg")
+				if _, err := os.Stat(path); err != nil {
+					t.Errorf("missing chart %s: %v", path, err)
+				}
+			}
+		}
+	}
+}
+
+// TestRenderAll_WritesEveryArtifactAndThenAgreesWithItself verifies one call
+// produces the whole published set, and that a second call in -check mode over
+// what the first wrote reports nothing stale.
+//
+// That pairing is the real assertion. Writing and checking are separate code
+// paths over the same content, so a renderer whose output did not match its own
+// check would pass CI on the machine that regenerated it and fail on every
+// other, which is the failure mode a generated artifact has.
+func TestRenderAll_WritesEveryArtifactAndThenAgreesWithItself(t *testing.T) {
+	root, opts := renderTree(t)
+	run := sampleRun()
+
+	if err := renderAll(opts, root, run); err != nil {
+		t.Fatalf("renderAll: %v", err)
+	}
+
+	t.Run("charts for the documentation and both languages", func(t *testing.T) {
+		assertChartsWritten(t, root, opts, run)
+	})
+
+	t.Run("each page keeps what is outside its markers", func(t *testing.T) {
+		for _, page := range []string{opts.docPage, opts.sitePageEN, opts.sitePageES} {
+			t.Run(page, func(t *testing.T) {
+				body := readFileForTest(t, filepath.Join(root, filepath.FromSlash(page)))
+				if !strings.HasPrefix(body, "before") || !strings.HasSuffix(body, "after\n") {
+					t.Errorf("%s lost the text around its generated block", page)
+				}
+			})
+		}
+	})
+
+	t.Run("the Spanish page is Spanish", func(t *testing.T) {
+		body := readFileForTest(t, filepath.Join(root, filepath.FromSlash(opts.sitePageES)))
+		for _, detail := range recordedCallDetails {
+			if strings.Contains(body, "| "+detail+" ") {
+				t.Errorf("the Spanish table carries the English description %q", detail)
+			}
+		}
+		if !strings.Contains(body, spanishLabels().CallDetail[detailWholeSurface]) {
+			t.Error("the Spanish table does not carry its own wording")
+		}
+	})
+
+	t.Run("checking what was just written finds nothing stale", func(t *testing.T) {
+		checking := opts
+		checking.check = true
+		if err := renderAll(checking, root, run); err != nil {
+			t.Errorf("renderAll -check over its own output: %v", err)
+		}
+	})
+}
+
+// TestRenderAll_MissingStylesheet_NamesWhatItCouldNotRead verifies the failure
+// says which input was missing, since renderAll reads several and an
+// unqualified "no such file" would not say which.
+func TestRenderAll_MissingStylesheet_NamesWhatItCouldNotRead(t *testing.T) {
+	root, opts := renderTree(t)
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(themeCSS))); err != nil {
+		t.Fatalf("removing the stylesheet: %v", err)
+	}
+
+	err := renderAll(opts, root, sampleRun())
+	if err == nil {
+		t.Fatal("renderAll succeeded without a stylesheet to read the palette from")
+	}
+	if !strings.Contains(err.Error(), themeCSS) {
+		t.Errorf("error = %v, want it to name %s", err, themeCSS)
+	}
+}
+
+// TestRelAll_ShortensEveryPathAgainstTheRoot verifies the list of rewritten
+// files a run prints is relative to the module root, which is what makes the
+// report readable and machine-independent.
+func TestRelAll_ShortensEveryPathAgainstTheRoot(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "home", "someone", "gitlab-mcp-server")
+	paths := []string{
+		filepath.Join(root, "docs", "reference", "resource-benchmark.md"),
+		filepath.Join(root, "site", "src", "data", "resource-benchmark.json"),
+	}
+
+	got := relAll(root, paths)
+	if len(got) != len(paths) {
+		t.Fatalf("relAll returned %d paths, want %d", len(got), len(paths))
+	}
+	for i, path := range got {
+		t.Run(path, func(t *testing.T) {
+			if filepath.IsAbs(path) {
+				t.Errorf("relAll left %q absolute", path)
+			}
+			if want := rel(root, paths[i]); path != want {
+				t.Errorf("relAll = %q, want %q", path, want)
+			}
+		})
+	}
+
+	t.Run("nothing to shorten", func(t *testing.T) {
+		if empty := relAll(root, nil); len(empty) != 0 {
+			t.Errorf("relAll of no paths = %v, want empty", empty)
+		}
+	})
+}
+
 // TestWriteFile_UnreadablePath_IsAnErrorNotAChange verifies a read failure
 // that is not "the file is absent" is reported as itself.
 //

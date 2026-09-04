@@ -275,6 +275,8 @@ func buildServer(root string) (string, error) {
 // amount of output for a target that takes minutes.
 func progressFunc(verbose bool) func(string, ...any) {
 	if !verbose {
+		// Empty on purpose: the quiet reporter drops the message rather than
+		// the caller having to test for a nil function at every call site.
 		return func(string, ...any) {}
 	}
 	return func(format string, args ...any) {

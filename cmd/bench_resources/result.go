@@ -149,6 +149,15 @@ const (
 // page can render all of them.
 var recordedCallDetails = []string{detailSmallestListing, detailWholeSurface}
 
+// The MCP methods this benchmark times. Named because three places have to
+// agree on them: run.go issues the calls, the record stores the method beside
+// each distribution, and figures.go orders the chart's series by them.
+const (
+	methodResourcesList = "resources/list"
+	methodToolsCall     = "tools/call"
+	methodToolsList     = "tools/list"
+)
+
 type MethodLatency struct {
 	Method string  `json:"method"`
 	Detail string  `json:"detail,omitempty"`

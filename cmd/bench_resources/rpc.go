@@ -39,6 +39,15 @@ import (
 // than on a connection ceremony that no longer exists.
 const protocolVersion = "2026-07-28"
 
+// Header name and media types shared by the client here and the stand-in
+// servers in stubs.go, which have to agree for a request to be understood.
+const (
+	headerContentType = "Content-Type"
+	mediaJSON         = "application/json"
+	mediaEventStream  = "text/event-stream"
+	mediaProtobuf     = "application/x-protobuf"
+)
+
 // rpcClient is one client's connection to the server.
 type rpcClient interface {
 	// call issues one request and returns the raw response payload, whose
@@ -140,13 +149,13 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 	if err != nil {
 		return nil, fmt.Errorf("build %s request: %w", method, err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set(headerContentType, mediaJSON)
+	req.Header.Set("Accept", mediaJSON+", "+mediaEventStream)
 	req.Header.Set("MCP-Protocol-Version", protocolVersion)
 	// Protocol 2026-07-28 makes Mcp-Method required: without it the transport
 	// refuses the POST before any handler runs.
 	req.Header.Set("Mcp-Method", method)
-	if name, ok := params["name"].(string); ok && method == "tools/call" {
+	if name, ok := params["name"].(string); ok && method == methodToolsCall {
 		req.Header.Set("Mcp-Name", name)
 	}
 	req.Header.Set("PRIVATE-TOKEN", c.token)
@@ -165,7 +174,7 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 		return nil, fmt.Errorf("%s: HTTP %d: %s", method, resp.StatusCode, firstLine(payload))
 	}
 	message := payload
-	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+	if strings.HasPrefix(resp.Header.Get(headerContentType), mediaEventStream) {
 		message, err = eventStreamPayload(payload)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", method, err)

@@ -149,7 +149,7 @@ func (r *runner) ramp(ctx context.Context, tgt target, s *sampler, plan scenario
 
 		listCtx, cancel := context.WithTimeout(ctx, callTimeout)
 		coldStarted := time.Now()
-		list, listErr := conn.rpc.call(listCtx, "tools/list", nil)
+		list, listErr := conn.rpc.call(listCtx, methodToolsList, nil)
 		cold := time.Since(coldStarted)
 		cancel()
 		if listErr != nil {
@@ -198,18 +198,18 @@ func (r *runner) load(ctx context.Context, conns []*clientConn, plan scenarioPla
 			// transport round-trip that protocol 2026-07-28 still offers:
 			// that revision removed both ping and initialize, so there is no
 			// method whose cost is purely the wire.
-			name:   "resources/list",
+			name:   methodResourcesList,
 			detail: detailSmallestListing,
 			invoke: func(ctx context.Context, c *clientConn) error {
-				_, err := c.rpc.call(ctx, "resources/list", nil)
+				_, err := c.rpc.call(ctx, methodResourcesList, nil)
 				return err
 			},
 		},
 		{
-			name:   "tools/call",
+			name:   methodToolsCall,
 			detail: call.Detail,
 			invoke: func(ctx context.Context, c *clientConn) error {
-				_, err := c.rpc.call(ctx, "tools/call", map[string]any{
+				_, err := c.rpc.call(ctx, methodToolsCall, map[string]any{
 					"name":      call.Name,
 					"arguments": call.Args,
 				})
@@ -217,10 +217,10 @@ func (r *runner) load(ctx context.Context, conns []*clientConn, plan scenarioPla
 			},
 		},
 		{
-			name:   "tools/list",
+			name:   methodToolsList,
 			detail: detailWholeSurface,
 			invoke: func(ctx context.Context, c *clientConn) error {
-				_, err := c.rpc.call(ctx, "tools/list", nil)
+				_, err := c.rpc.call(ctx, methodToolsList, nil)
 				return err
 			},
 		},
@@ -245,7 +245,7 @@ func (r *runner) load(ctx context.Context, conns []*clientConn, plan scenarioPla
 		}
 		latency := percentiles(method.name, method.detail, samples)
 		result.Latency = append(result.Latency, latency)
-		if method.name == "tools/list" {
+		if method.name == methodToolsList {
 			result.Startup.WarmListMs = latency.P50
 		}
 	}

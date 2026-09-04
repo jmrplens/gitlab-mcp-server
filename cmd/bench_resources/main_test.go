@@ -4,10 +4,113 @@
 package main
 
 import (
+	"flag"
+	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+// withArgs runs parseFlags against a command line, on a flag set of its own so
+// the test binary's own flags are untouched.
+func withArgs(t *testing.T, args ...string) options {
+	t.Helper()
+	previousArgs, previousFlags := os.Args, flag.CommandLine
+	t.Cleanup(func() { os.Args, flag.CommandLine = previousArgs, previousFlags })
+
+	flag.CommandLine = flag.NewFlagSet("bench_resources", flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+	os.Args = append([]string{"bench_resources"}, args...)
+	return parseFlags()
+}
+
+// TestParseFlags_RecordsWhetherTheOutputPathWasChosen verifies -json is
+// remembered as given rather than merely as a value.
+//
+// It is what lets the guard tell a partial run writing somewhere of its own
+// from a partial run about to overwrite the published record: the two are
+// indistinguishable by path, because passing the default path explicitly is a
+// deliberate act and defaulting into it is not.
+func TestParseFlags_RecordsWhetherTheOutputPathWasChosen(t *testing.T) {
+	t.Run("not given", func(t *testing.T) {
+		opts := withArgs(t)
+		if opts.recordSet {
+			t.Error("recordSet is true with no -json on the command line")
+		}
+		if opts.record != defaultRecord {
+			t.Errorf("record = %q, want the default %q", opts.record, defaultRecord)
+		}
+	})
+
+	t.Run("given a different path", func(t *testing.T) {
+		opts := withArgs(t, "-json=/tmp/somewhere-else.json")
+		if !opts.recordSet {
+			t.Error("recordSet is false although -json was given")
+		}
+		if opts.record != "/tmp/somewhere-else.json" {
+			t.Errorf("record = %q, want the path given", opts.record)
+		}
+	})
+
+	t.Run("given the default path explicitly", func(t *testing.T) {
+		// The distinction the guard rests on: same value, different intent.
+		opts := withArgs(t, "-json="+defaultRecord)
+		if !opts.recordSet {
+			t.Error("recordSet is false although -json was given explicitly")
+		}
+	})
+}
+
+// TestParseFlags_Defaults_AreTheOnesTheDocumentationClaims verifies the values
+// a plain run measures with, since the published page states them.
+func TestParseFlags_Defaults_AreTheOnesTheDocumentationClaims(t *testing.T) {
+	opts := withArgs(t)
+	if opts.rounds != 3 {
+		t.Errorf("rounds = %d, want 3", opts.rounds)
+	}
+	if opts.sampleInterval != 100*time.Millisecond {
+		t.Errorf("sample interval = %v, want 100ms", opts.sampleInterval)
+	}
+	for name, got := range map[string]bool{
+		"render": opts.render, "check": opts.check, "quick": opts.quick, "v": opts.verbose,
+	} {
+		t.Run("-"+name+" is off", func(t *testing.T) {
+			if got {
+				t.Errorf("-%s defaults to on", name)
+			}
+		})
+	}
+}
+
+// TestParseFlags_MeasurementFlags_AreRead verifies the flags a run is steered
+// with reach the options struct, since a silently ignored one would produce a
+// record that does not match what was asked for.
+func TestParseFlags_MeasurementFlags_AreRead(t *testing.T) {
+	opts := withArgs(t,
+		"-rounds=7",
+		"-sample-interval=250ms",
+		"-scenarios=http-dynamic,stdio-meta",
+		"-quick",
+		"-v",
+		"-binary=/somewhere/gitlab-mcp-server",
+	)
+	if opts.rounds != 7 {
+		t.Errorf("rounds = %d, want 7", opts.rounds)
+	}
+	if opts.sampleInterval != 250*time.Millisecond {
+		t.Errorf("sample interval = %v, want 250ms", opts.sampleInterval)
+	}
+	if opts.scenarios != "http-dynamic,stdio-meta" {
+		t.Errorf("scenarios = %q, want the two given", opts.scenarios)
+	}
+	if !opts.quick || !opts.verbose {
+		t.Errorf("-quick/-v = %v/%v, want both on", opts.quick, opts.verbose)
+	}
+	if opts.binary != "/somewhere/gitlab-mcp-server" {
+		t.Errorf("binary = %q, want the path given", opts.binary)
+	}
+}
 
 // TestMatrixFor_FullRun_UsesThePublishedMatrix verifies a plain run measures
 // everything the page publishes, at the requested number of rounds.

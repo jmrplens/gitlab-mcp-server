@@ -128,10 +128,10 @@ func englishLabels() labels {
 		},
 		SurfaceNote: "Resident set in MiB, times in milliseconds.",
 		FigureAlt: map[string]string{
-			"memory":      "Grouped bars comparing resident memory across the dynamic, meta and individual surfaces on both transports.",
-			"memory-ramp": "Lines showing resident memory growing as each new credential builds its own catalog in the HTTP pool.",
-			"startup":     "Grouped bars on a log scale comparing process readiness, the first cold tools/list and a warm one.",
-			"latency":     "Grouped bars on a log scale comparing resources/list, tools/call and tools/list latency across transports and surfaces.",
+			figureMemory:     "Grouped bars comparing resident memory across the dynamic, meta and individual surfaces on both transports.",
+			figureMemoryRamp: "Lines showing resident memory growing as each new credential builds its own catalog in the HTTP pool.",
+			figureStartup:    "Grouped bars on a log scale comparing process readiness, the first cold tools/list and a warm one.",
+			figureLatency:    "Grouped bars on a log scale comparing resources/list, tools/call and tools/list latency across transports and surfaces.",
 		},
 		TableCaption: map[string]string{
 			"summary": "Memory, goroutines and processor time per scenario",
@@ -184,10 +184,10 @@ func spanishLabels() labels {
 		},
 		SurfaceNote: "Conjunto residente en MiB, tiempos en milisegundos.",
 		FigureAlt: map[string]string{
-			"memory":      "Barras agrupadas que comparan la memoria residente de las superficies dynamic, meta e individual en ambos transportes.",
-			"memory-ramp": "Líneas que muestran cómo crece la memoria residente cuando cada credencial nueva construye su catálogo en el pool HTTP.",
-			"startup":     "Barras agrupadas en escala logarítmica que comparan el arranque del proceso, el primer tools/list en frío y uno en caliente.",
-			"latency":     "Barras agrupadas en escala logarítmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie.",
+			figureMemory:     "Barras agrupadas que comparan la memoria residente de las superficies dynamic, meta e individual en ambos transportes.",
+			figureMemoryRamp: "Líneas que muestran cómo crece la memoria residente cuando cada credencial nueva construye su catálogo en el pool HTTP.",
+			figureStartup:    "Barras agrupadas en escala logarítmica que comparan el arranque del proceso, el primer tools/list en frío y uno en caliente.",
+			figureLatency:    "Barras agrupadas en escala logarítmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie.",
 		},
 		TableCaption: map[string]string{
 			"summary": "Memoria, goroutines y tiempo de procesador por escenario",
@@ -200,6 +200,17 @@ func spanishLabels() labels {
 // surfaceOrder is the order surfaces appear in every figure and table: least
 // registered first, which is also the order the documentation introduces them.
 var surfaceOrder = []string{surfaceDynamic, surfaceMeta, surfaceIndividual}
+
+// The figure names, which are the SVG file names the pages embed and the keys
+// of each language's alt-text table. Named because those three uses have to
+// agree: a renamed figure that missed one of them would either lose its
+// description or point a page at a file nobody writes.
+const (
+	figureMemory     = "memory"
+	figureMemoryRamp = "memory-ramp"
+	figureStartup    = "startup"
+	figureLatency    = "latency"
+)
 
 // buildFigures assembles every figure for one language, in a fixed order.
 // A figure the record holds no measurements for is left out rather than
@@ -215,10 +226,10 @@ func buildFigures(run *Run, l labels) []figure {
 			out = append(out, figure{Name: name, Render: render})
 		}
 	}
-	add("memory", len(memory.Series), func(p palette) string { return renderBars(p, memory) })
-	add("memory-ramp", len(ramp.Series), func(p palette) string { return renderLines(p, ramp) })
-	add("startup", len(startup.Series), func(p palette) string { return renderBars(p, startup) })
-	add("latency", len(latency.Series), func(p palette) string { return renderBars(p, latency) })
+	add(figureMemory, len(memory.Series), func(p palette) string { return renderBars(p, memory) })
+	add(figureMemoryRamp, len(ramp.Series), func(p palette) string { return renderLines(p, ramp) })
+	add(figureStartup, len(startup.Series), func(p palette) string { return renderBars(p, startup) })
+	add(figureLatency, len(latency.Series), func(p palette) string { return renderBars(p, latency) })
 	return out
 }
 
@@ -357,7 +368,7 @@ func startupSpec(run *Run, l labels) barSpec {
 // latencySpec compares the transports on the cheapest method and the surfaces
 // on the most expensive one, in the same picture.
 func latencySpec(run *Run, l labels) barSpec {
-	methods := []string{"resources/list", "tools/call", "tools/list"}
+	methods := []string{methodResourcesList, methodToolsCall, methodToolsList}
 	wanted := []struct {
 		transport string
 		surface   string

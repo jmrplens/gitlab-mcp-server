@@ -31,12 +31,12 @@ func startStubGitLab() *stubGitLab {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		stub.calls.Add(1)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(headerContentType, mediaJSON)
 		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"benchmark"}`))
 	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		stub.calls.Add(1)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(headerContentType, mediaJSON)
 		_, _ = w.Write([]byte(`{"id":1,"username":"benchmark","name":"benchmark"}`))
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -70,7 +70,7 @@ func startOTLPSink() *otlpSink {
 	sink.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sink.requests.Add(1)
 		sink.bytes.Add(drain(r))
-		w.Header().Set("Content-Type", "application/x-protobuf")
+		w.Header().Set(headerContentType, mediaProtobuf)
 		w.WriteHeader(http.StatusOK)
 	}))
 	sink.url = sink.server.URL
