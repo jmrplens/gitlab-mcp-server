@@ -79,8 +79,23 @@ publish() {
   # happens — a later step can fail and get retried) does not die on npm's 409
   # for the packages that already went out. `npm view` prints the version when
   # it exists and errors (nothing on stdout) when it does not.
-  if [ -z "$DRY_RUN" ] && [ "$(npm view "$name@$VERSION" version 2>/dev/null || true)" = "$VERSION" ]; then
+  published=""
+  if [ "$(npm view "$name@$VERSION" version 2>/dev/null || true)" = "$VERSION" ]; then
+    published=1
+  fi
+  if [ -n "$published" ] && [ -z "$DRY_RUN" ]; then
     echo "Skipping $name@$VERSION — already published."
+    return 0
+  fi
+  if [ -n "$published" ]; then
+    # npm publish --dry-run checks the registry before it packs, and refuses
+    # a version the registry already holds ("cannot publish over the
+    # previously published versions"), which is what a release rehearsal of
+    # the current version runs into. Pack instead: the tarball is built and
+    # listed exactly as publish would build it, and nothing is compared with
+    # the registry, since the comparison already has its answer.
+    echo "Packing $name@$VERSION without publishing — already on the registry…"
+    npm pack --dry-run "$dir"
     return 0
   fi
   echo "Publishing $name@$VERSION…"
