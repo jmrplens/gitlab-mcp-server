@@ -1192,10 +1192,16 @@ func TestStartRevalidation_TriggersRevalidation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool.StartRevalidation(ctx)
 
-	// Wait for at least one tick to complete.
-	time.Sleep(150 * time.Millisecond)
+	// Wait for the first tick to complete, rather than for a span the sweep
+	// is expected to fit in.
+	deadline := time.Now().Add(5 * time.Second)
+	for pool.Stats().RevalidationsSucceeded < 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("no revalidation completed within 5s")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	cancel()
-	time.Sleep(100 * time.Millisecond)
 
 	s := pool.Stats()
 	if s.RevalidationsSucceeded < 1 {
@@ -2108,12 +2114,15 @@ func TestStartRevalidation_PanickingEvictionCallback_DoesNotKillTheProcess(t *te
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	// The panic unwinds after the entry leaves the map, so a moment here is
-	// what separates "recovered" from "about to crash the binary".
-	time.Sleep(50 * time.Millisecond)
-
-	if pool.Stats().RevalidationsFailed == 0 {
-		t.Error("the failed revalidation was not counted")
+	// The panic unwinds after the entry leaves the map and the failure is
+	// counted after that, so waiting for the count is what separates
+	// "recovered" from "about to crash the binary".
+	deadline = time.Now().Add(5 * time.Second)
+	for pool.Stats().RevalidationsFailed == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the failed revalidation was not counted")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
