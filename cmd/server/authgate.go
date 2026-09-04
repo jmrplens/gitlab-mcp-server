@@ -648,9 +648,13 @@ var errMissingGitLabURL = errors.New("no GitLab instance was selected")
 // requireExplicitInstance refuses to choose an instance on the caller's
 // behalf when the deployment publishes more than one.
 //
-// The resolver's older answer was the first published instance, on the
-// reasoning that a client which does not care keeps working. That holds for a
-// client which does not care, and not for one that cares and failed to say so:
+// The resolver refuses the same request (serverpool.UnnamedInstanceError), so
+// this is not the only place the decision is made; it is the place it is made
+// before the credential is judged, and the place that knows which wording the
+// auth mode allows, since the published set is public in oauth mode and not in
+// legacy mode. The resolver's older answer was the first published instance,
+// on the reasoning that a client which does not care keeps working. That holds
+// for a client which does not care, and not for one that cares and failed to say so:
 // a proxy stripped the header, a client library cannot set custom headers, or
 // the configuration was copied wrong. The credential is then transmitted in
 // full to an instance its holder never named. In oauth mode this is worse

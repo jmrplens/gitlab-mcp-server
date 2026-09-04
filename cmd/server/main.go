@@ -3050,10 +3050,10 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		if r == nil {
 			return cfg.GitLabURL, nil
 		}
-		// Ahead of the resolver, because the resolver's answer for an absent
-		// header on a multi-instance deployment is the first published
-		// instance — and this is the code path that then POSTs the bearer to
-		// it. See requireExplicitInstance.
+		// Ahead of the resolver for the message, not for the decision: the
+		// resolver refuses an absent header on a multi-instance deployment
+		// too, and this gate turns the same refusal into the wording each
+		// auth mode may use. See requireExplicitInstance.
 		if err := requireExplicitInstance(r, cfg.InstanceURLs()); err != nil {
 			return "", err
 		}
