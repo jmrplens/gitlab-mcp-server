@@ -489,7 +489,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "gitlab-mcp-server", "--probe"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -357,9 +357,10 @@ En modo HTTP (`--http`), los ajustes se resuelven en tres capas, de mayor a meno
 
 **Flags generales** (modos stdio y HTTP):
 
-| Flag         | Predeterminado | Descripción                                        |
-| ------------ | -------------- | -------------------------------------------------- |
-| `--shutdown` | `false`        | Terminar todas las instancias en ejecución y salir |
+| Flag         | Predeterminado | Descripción                                                                                                                                                                                                                           |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--shutdown` | `false`        | Terminar todas las instancias en ejecución y salir                                                                                                                                                                                    |
+| `--probe`    | `false`        | Preguntar por `/health` a la instancia en ejecución y salir con 0 si responde; el `HEALTHCHECK` de la imagen. Lee el listener de los propios flags de la instancia, o sondea la URL, `unix:<ruta>` o `host:puerto` dados tras el flag |
 
 Ejemplo:
 

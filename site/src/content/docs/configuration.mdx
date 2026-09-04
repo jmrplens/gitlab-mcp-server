@@ -358,9 +358,10 @@ In HTTP mode (`--http`), settings resolve in three layers, highest first: a CLI 
 
 **General flags** (both stdio and HTTP modes):
 
-| Flag         | Default | Description                              |
-| ------------ | ------- | ---------------------------------------- |
-| `--shutdown` | `false` | Terminate all running instances and exit |
+| Flag         | Default | Description                                                                                                                                                                                                       |
+| ------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--shutdown` | `false` | Terminate all running instances and exit                                                                                                                                                                          |
+| `--probe`    | `false` | Ask the running instance's `/health` and exit 0 when it answers; the image's `HEALTHCHECK`. Reads the listener off the instance's own flags, or probes the URL, `unix:<path>` or `host:port` given after the flag |
 
 Example:
 

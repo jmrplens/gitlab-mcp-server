@@ -22,12 +22,13 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 
 ### General
 
-| Flag           | Type   | Default   | Description                                                          |
-| -------------- | ------ | --------- | -------------------------------------------------------------------- |
-| `-h`           | bool   | `false`   | Show full help with flags, environment variables, and JSON examples  |
-| `-version`     | bool   | `false`   | Print version and commit hash, then exit                             |
-| `-shutdown`    | bool   | `false`   | Terminate all running instances and exit (used by external updaters) |
-| `-tool-search` | string | _(empty)_ | Search registered tools by name or description, then exit            |
+| Flag           | Type   | Default   | Description                                                                                                                                                                                                  |
+| -------------- | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-h`           | bool   | `false`   | Show full help with flags, environment variables, and JSON examples                                                                                                                                          |
+| `-version`     | bool   | `false`   | Print version and commit hash, then exit                                                                                                                                                                     |
+| `-shutdown`    | bool   | `false`   | Terminate all running instances and exit (used by external updaters)                                                                                                                                         |
+| `-probe`       | bool   | `false`   | Ask the running instance's `/health` and exit 0 when it answers; the image's `HEALTHCHECK`. An optional target after the flag (URL, `unix:<path>`, `host:port`) is probed instead of the discovered listener |
+| `-tool-search` | string | _(empty)_ | Search registered tools by name or description, then exit                                                                                                                                                    |
 
 ### HTTP Transport Mode
 
@@ -166,6 +167,33 @@ Output (stderr):
 - `shutdown: all instances terminated` — on success
 - `shutdown: force-killed M instance(s)` — if force-kill was needed
 
+### Probe Mode
+
+The `--probe` flag is the container image's `HEALTHCHECK`. It asks the running instance's `/health` and exits 0 when it answers 200, without being told where that instance listens.
+
+```bash
+# What the image runs: find the server in this container and probe its listener
+gitlab-mcp-server --probe
+
+# Probe a known listener instead: a URL, a unix socket, or host:port
+gitlab-mcp-server --probe --tls-cert=/etc/ssl/mcp.crt https://127.0.0.1:8443
+gitlab-mcp-server --probe unix:/run/gitlab-mcp/server.sock
+gitlab-mcp-server --probe 127.0.0.1:9090
+```
+
+Behavior without a target:
+
+1. Finds the other instances of this binary, with the same lookup `--shutdown` uses, and skips probes, shutdowns and other utility invocations
+2. Reads `--http-addr`, `--tls-cert`, `--transport` and `--http` off each instance's command line, lowest pid first
+3. Settles `--transport auto` the way the server did, by reading the instance's file descriptor 0 from procfs: `/dev/null` means HTTP, anything else means stdio. Where procfs is unavailable, HTTP is assumed and the connection decides
+4. An instance serving stdio has nothing to probe and is reported healthy while it runs
+5. An HTTP instance is probed where it listens: an unspecified host such as `:8080` or `0.0.0.0:8080` is reached on loopback, a path is dialed as a unix socket, and `--tls-cert` means HTTPS. A TLS listener is verified by pinning: it must present the very certificate its `--tls-cert` names, which the probe reads from the same file, so a self-signed certificate on a loopback address is probeable without trusting whatever answers there. A given `https://` target takes its pin from the probe's own `--tls-cert`, placed before the target, and gets the standard verification without one
+6. The first instance that answers 200 makes the probe healthy
+
+Each attempt is bounded to three seconds, inside the image's five-second `HEALTHCHECK` timeout.
+
+Exit codes: `0` healthy, `1` nothing answered (or no instance is running), `2` a given target that does not parse.
+
 ---
 
 ## Examples
@@ -203,6 +231,9 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic 
 
 # Terminate all running instances (used by external updaters)
 gitlab-mcp-server --shutdown
+
+# Container health check: probe the running instance where it listens
+gitlab-mcp-server --probe
 ```
 
 See [Dynamic Tools](../concepts/dynamic-tools.md) for how `dynamic` relates.
@@ -211,10 +242,11 @@ See [Dynamic Tools](../concepts/dynamic-tools.md) for how `dynamic` relates.
 
 ## Exit Codes
 
-| Code | Meaning                                                                         |
-| ---- | ------------------------------------------------------------------------------- |
-| `0`  | Normal exit (signal-based shutdown, `-version`, `-h`, or `--shutdown`)          |
-| `1`  | Configuration error, connection failure, runtime error, or `--shutdown` failure |
+| Code | Meaning                                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------- |
+| `0`  | Normal exit (signal-based shutdown, `-version`, `-h`, `--shutdown`, or a `--probe` that was answered)         |
+| `1`  | Configuration error, connection failure, runtime error, `--shutdown` failure, or a `--probe` nothing answered |
+| `2`  | `--probe` given a target that is not a URL, a socket path or `host:port`                                      |
 
 ---
 

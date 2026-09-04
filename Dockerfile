@@ -57,8 +57,14 @@ USER appuser
 
 EXPOSE 8080
 
+# --probe reads the listener off the running server's own flags, so the check
+# follows --http-addr to another port or a unix socket and speaks TLS when
+# --tls-cert is set. A wget of http://localhost:8080/health was right for the
+# default command only and marked every other listener unhealthy while it
+# served. An instance running stdio (a client's `docker run -i`) has nothing to
+# probe and is reported healthy while it runs.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-	CMD ["wget", "-q", "--spider", "-O", "/dev/null", "http://localhost:8080/health"]
+	CMD ["gitlab-mcp-server", "--probe"]
 
 ARG VERSION=""
 ARG COMMIT=""

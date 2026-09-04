@@ -302,7 +302,7 @@ services:
       resources:
         limits: { memory: 512M, cpus: "2.0" }
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "gitlab-mcp-server", "--probe"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -338,11 +338,22 @@ argumentos: `--http-addr`, `--http-socket-mode`, `--tls-cert`, `--tls-key`,
 `--trusted-proxy-header`, `--trusted-proxies`, `--stateless`, `--json-response`,
 `--http-idle-timeout`, `--max-request-body-bytes` y `--allow-any-gitlab-url`.
 
-El `HEALTHCHECK` de la propia imagen está fijado a
-`http://localhost:8080/health`. Mueve el listener a otro puerto, a un socket
-unix o detrás de `--tls-cert`, y el contenedor queda marcado como no saludable
-mientras sirve perfectamente. Vuelve a declarar la comprobación acorde a lo que
-hayas cambiado.
+El `HEALTHCHECK` de la propia imagen, desde la 2.8.0, es `gitlab-mcp-server
+--probe`: el binario localiza el proceso del servidor dentro del contenedor,
+lee `--http-addr`,
+`--tls-cert` y el transporte de su propia línea de comandos, y pregunta por
+`/health` allí donde realmente se sirve. Mueve el listener a otro puerto, a un
+socket unix o detrás de `--tls-cert`, y la comprobación lo sigue sin que nadie
+se lo diga. Un contenedor que un cliente ejecuta por stdio (`docker run -i`) no
+tiene listener; la sonda lo da por saludable mientras el proceso corra.
+`--probe <url>`, `--probe unix:<ruta>` o `--probe host:puerto` se salta el
+descubrimiento, para una comprobación lanzada desde fuera del contenedor.
+
+El bloque de Compose de arriba vuelve a declarar la comprobación, que es lo que
+necesita una imagen hasta la 2.7.5: esas llevan `wget` contra
+`http://localhost:8080/health`, así que cualquier otro listener queda marcado
+como no saludable mientras sirve. Fijada a la 2.8.0 o posterior, el bloque
+`healthcheck:` puede quitarse y usarse el de la propia imagen.
 
 ### Secretos
 
