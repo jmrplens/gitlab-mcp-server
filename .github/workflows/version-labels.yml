@@ -18,8 +18,17 @@ on:
 
 # Only what it edits. No contents access: this job reads the API and writes
 # labels and milestones, and never touches the tree.
+#
+# pull-requests as well as issues, because a pull request is an issue to the
+# `issues` event: milestoning one fires this workflow with the pull request's
+# number, and the label write then needs the pull request scope. Without it
+# every pull request opened with a milestone failed this run with "Resource
+# not accessible by integration", seven times in one day, and the label was
+# never applied. The pairing holds for pull requests on purpose: every pull
+# request carries the release milestone, so it should carry the label too.
 permissions:
   issues: write
+  pull-requests: write
 
 # One run at a time per issue. Two rapid edits to the same issue would
 # otherwise race and could leave the pair disagreeing, which is the single

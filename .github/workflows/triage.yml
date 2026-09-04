@@ -15,8 +15,14 @@ on:
   issues:
     types: [milestoned, closed]
 
+# pull-requests as well as issues: a pull request is an issue to the `issues`
+# event, so milestoning or closing one fires this workflow with its number,
+# and removing a label from it needs the pull request scope. The guard below
+# keeps the job from starting for anything that never carried the label, so
+# this only matters for a pull request labelled by hand, and then it matters.
 permissions:
   issues: write
+  pull-requests: write
 
 concurrency:
   group: triage-${{ github.event.issue.number }}
