@@ -77,10 +77,7 @@ func TestTelemetry_EnabledWithAnUnreachableCollectorKeepsStdoutClean(t *testing.
 	// The failures must be visible, on stderr. A telemetry stack that fails
 	// silently is worse than one that fails loudly: an operator would see an
 	// empty dashboard and no reason for it.
-	stderr := session.stderrText()
-	if !strings.Contains(stderr, "telemetry") {
-		t.Errorf("stderr never mentions telemetry, so an operator has no way to know it was enabled\nstderr: %s", stderr)
-	}
+	session.waitForStderr(t, "telemetry", 5*time.Second)
 }
 
 // TestTelemetry_DisabledByDefault asserts that a server nobody asked to
@@ -104,7 +101,11 @@ func TestTelemetry_DisabledByDefault(t *testing.T) {
 	session.send(t, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
 	session.call(t, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
 
-	if stderr := session.stderrText(); strings.Contains(stderr, "telemetry enabled") {
+	// Anchored on a line the server writes after its telemetry decision, so
+	// the absence asserted below is an absence in what was logged rather than
+	// in what the harness had copied so far.
+	stderr := session.waitForStderr(t, "starting MCP server", 5*time.Second)
+	if strings.Contains(stderr, "telemetry enabled") {
 		t.Errorf("telemetry started without being asked for\nstderr: %s", stderr)
 	}
 	session.terminate(t, 10*time.Second)
@@ -131,12 +132,13 @@ func TestTelemetry_SDKDisabledVetoesTheSwitch(t *testing.T) {
 	session := startSession(t, env)
 	session.call(t, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"stdio-e2e","version":"0"}}}`)
 
-	stderr := session.stderrText()
+	// The veto is logged before the server serves anything, so it is on its
+	// way by the time initialize is answered; waited for rather than read,
+	// because the harness copies stderr on a goroutine of its own and the
+	// buffer can trail the pipe by the very line this asserts on.
+	stderr := session.waitForStderr(t, "OTEL_SDK_DISABLED", 5*time.Second)
 	if strings.Contains(stderr, "telemetry enabled") {
 		t.Errorf("OTEL_SDK_DISABLED=true did not veto an explicitly requested start\nstderr: %s", stderr)
-	}
-	if !strings.Contains(stderr, "OTEL_SDK_DISABLED") {
-		t.Errorf("the veto fired without saying so; an operator would see telemetry missing and no reason\nstderr: %s", stderr)
 	}
 	session.terminate(t, 10*time.Second)
 }

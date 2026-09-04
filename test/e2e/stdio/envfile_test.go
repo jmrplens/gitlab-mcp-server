@@ -31,6 +31,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const (
@@ -241,13 +242,15 @@ func TestWorkingDirEnvFile_IgnoredFileIsAnnouncedByAbsolutePath(t *testing.T) {
 		"HOME":      envFileHome(t, genuine.URL),
 		"LOG_LEVEL": "info",
 	})
-	// One completed exchange, so the startup logging has certainly been written
-	// by the time stderr is read.
+	// One completed exchange, so the startup logging has certainly been
+	// written by the time stderr is read; not necessarily copied into the
+	// harness's buffer, though, which is on a goroutine of its own, so the
+	// line the assertions are about is waited for.
 	if got := s.call(t, request(1, "tools/list", "")); got["error"] != nil {
 		t.Fatalf("tools/list failed: %v", got["error"])
 	}
 
-	logs := s.stderrText()
+	logs := s.waitForStderr(t, "ignoring the .env file in the working directory", 5*time.Second)
 	// The path this test computes and the path the server prints are resolved
 	// separately, and on macOS one of them goes through /private. Comparing the
 	// resolved form keeps the assertion about the path and not about symlinks.
