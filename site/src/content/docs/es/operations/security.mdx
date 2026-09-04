@@ -192,7 +192,7 @@ El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
 ### Recomendaciones para modo HTTP
 
 - Termina TLS en un proxy inverso, o en el propio servidor con `--tls-cert`/`--tls-key`; si el proxy comparte máquina, `--http-addr=/run/…/server.sock` elimina el salto en lugar de cifrarlo
-- Configura `--trusted-proxy-header` con la cabecera que tu proxy establece (ej. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) para que el rate limiter integrado vea las IPs reales de los clientes. **Habilita esto solo cuando el servidor sea accesible únicamente a través de un proxy de confianza** que sobrescriba (o elimine las copias entrantes de) la cabecera configurada; de lo contrario los clientes pueden falsificarla y evadir el rate limiting por IP. Para `X-Forwarded-For`, el servidor usa la entrada más a la derecha — el último salto añadido por el proxy de confianza — para no confiar en valores suministrados por el cliente.
+- Configura `--trusted-proxy-header` con la cabecera que tu proxy establece (ej. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) junto con `--trusted-proxies`, las direcciones o rangos CIDR desde los que conecta el proxy, para que el rate limiter integrado vea las IPs reales de los clientes. **La cabecera solo se cree en una conexión que venga de una dirección de la lista**; desde cualquier otro origen se ignora y se carga al propio origen, así que un cliente que llegue al listener directamente no puede elegir la dirección a la que se cargan sus fallos. Una opción sin la otra impide el arranque. Para `X-Forwarded-For`, el servidor lee desde la derecha, saltando los saltos que están a su vez en la lista, y carga al primero que no lo esté; un salto que no sea una dirección carga al origen de la conexión.
 - Habilita la limitación de peticiones en el proxy
 - Restringe el acceso a redes de confianza
 - Monitoriza las métricas de sesiones para detectar patrones inusuales
@@ -333,7 +333,7 @@ Un reporte útil incluye la versión afectada (`gitlab-mcp-server --version`), e
 ### Modo HTTP
 
 - ☐ Termina TLS — proxy inverso, `--tls-cert`/`--tls-key`, o un socket unix hacia un proxy del mismo host
-- ☐ Configura `--trusted-proxy-header` para un rate limiting preciso
+- ☐ Configura `--trusted-proxy-header` y `--trusted-proxies` para un rate limiting preciso
 - ☐ Configura apropiadamente `--session-timeout` y `--max-http-clients`
 - ☐ Habilita la limitación de peticiones
 - ☐ Restringe el acceso de red a clientes de confianza

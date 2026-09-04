@@ -216,6 +216,7 @@ func TestProxy_RealClientAddressReachesTheLimiter(t *testing.T) {
 	startServerOnPort(t, upstream, nil,
 		"--gitlab-url="+gitlab.url,
 		"--trusted-proxy-header=X-Real-IP",
+		"--trusted-proxies=127.0.0.1,::1",
 	)
 	base := startProxy(t, upstream)
 	plain := &server{baseURL: base + "/plain"}

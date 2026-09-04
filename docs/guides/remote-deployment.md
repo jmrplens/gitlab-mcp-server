@@ -53,7 +53,8 @@ ExecStart=/usr/local/bin/gitlab-mcp-server \
     --gitlab-url=https://gitlab.example.com \
     --auth-mode=oauth \
     --public-url=https://mcp.example.com \
-    --trusted-proxy-header=X-Real-IP
+    --trusted-proxy-header=X-Real-IP \
+    --trusted-proxies=127.0.0.1
 Restart=on-failure
 RestartSec=2s
 StandardInput=null
@@ -308,6 +309,7 @@ services:
       - "--auth-mode=oauth"
       - "--public-url=https://mcp.example.com"
       - "--trusted-proxy-header=X-Real-IP"
+      - "--trusted-proxies=172.16.0.0/12"
     read_only: true
     tmpfs:
       - /tmp:rw,size=64m,mode=1777
@@ -333,9 +335,15 @@ spelled out again. Naming an instance is not optional: HTTP mode exits with
 that names no instance would send whatever token a caller supplied to whatever
 host that caller put in `GITLAB-URL`.
 
+`--trusted-proxies` names where the proxy connects from, and inside Compose that
+address is assigned when the project network comes up. The example trusts
+Docker's default address pools, `172.16.0.0/12`, which also cover the bridge
+gateway a proxy running on the host itself arrives from; narrow it to the
+proxy's own network once you know it.
+
 Several flags have **no environment-variable equivalent** and must be arguments
 here: `--http-addr`, `--http-socket-mode`, `--tls-cert`, `--tls-key`,
-`--trusted-proxy-header`, `--stateless`, `--json-response`,
+`--trusted-proxy-header`, `--trusted-proxies`, `--stateless`, `--json-response`,
 `--http-idle-timeout`, `--max-request-body-bytes` and `--allow-any-gitlab-url`.
 Most of the rest can come from the environment, `--rate-limit-rps` and
 `--rate-limit-burst` included, where an explicitly passed flag still wins.
@@ -393,7 +401,7 @@ startup and belongs on a single-user local deployment only. The full table is in
 | Forward `Authorization`         | OAuth mode reads the bearer token from it; stripping it turns every request into a `401`                                                                                                      |
 | Forward `PRIVATE-TOKEN`         | Legacy mode's header                                                                                                                                                                          |
 | Forward `GITLAB-URL`            | Selects the instance when several are published                                                                                                                                               |
-| Real client address             | `--trusted-proxy-header` names the header the proxy sets, so the authentication-failure limiter counts callers rather than the proxy                                                          |
+| Real client address             | `--trusted-proxy-header` names the header the proxy sets and `--trusted-proxies` the addresses it connects from, so the authentication-failure limiter counts callers rather than the proxy   |
 | Route `/.well-known/` unchanged | In OAuth mode the RFC 9728 metadata lives at the **host root**, not under the path prefix                                                                                                     |
 | Add no CORS headers             | The server answers preflight itself. Two `Access-Control-Allow-Origin` headers is a CORS failure, not a merge                                                                                 |
 
@@ -471,20 +479,22 @@ server {
 }
 ```
 
-Pair it with `--trusted-proxy-header=X-Real-IP`. Either header works, and the
-choice matters more than it looks. The server reads the **rightmost** entry of
-the value, which is the hop the nearest trusted proxy appended, so a value a
-client invented on the left is never mistaken for its address. With a single
-nginx in front, the rightmost entry of `$proxy_add_x_forwarded_for` is the
-client; add a second proxy in front of that one and the rightmost entry becomes
-the intermediate proxy instead. `X-Real-IP` set from `$remote_addr` at the hop
-nearest the server has no such ambiguity, and it is the header the project's own
-end-to-end proxy test uses.
+Pair it with `--trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1`.
+The list is what makes the header worth reading: it is believed only on a
+connection from one of those addresses, and a request from anywhere else is
+charged to its own peer address whatever header it carries. Without the list a
+caller who reaches the listener directly would write the header themselves and
+choose the address their failures are charged to, which is why the server
+refuses to start with one flag and not the other.
 
-There is no allow-list of proxy addresses behind this. Setting the flag trusts
-the header unconditionally, so enable it only where the server cannot be reached
-except through that proxy. Otherwise a caller sends the header itself and walks
-around the limiter.
+Either header works. With `X-Forwarded-For` the server walks the value from the
+right, skipping every hop that is itself in the list, and charges the first hop
+that is not: with one nginx in front that is the client, and with a second proxy
+in front of nginx it is still the client, provided both proxies are listed. A
+value the client invented on the left is never reached, and a hop that is not
+an address charges the peer instead. `X-Real-IP` set from `$remote_addr` at the
+hop nearest the server carries one address and needs no walk, and it is the
+header the project's own end-to-end proxy test uses.
 
 nginx passes client request headers upstream by default, so `Authorization`,
 `PRIVATE-TOKEN` and `GITLAB-URL` arrive with no `proxy_set_header` line. The one
@@ -511,9 +521,10 @@ disables response buffering explicitly: Caddy already flushes immediately for
 `text/event-stream`, and `-1` means the behaviour no longer depends on the
 upstream getting its content type right.
 
-Caddy sets `X-Forwarded-For` by default, so `--trusted-proxy-header=X-Forwarded-For`
-pairs with this. A single site block covers the whole host, so the well-known
-path is already routed.
+Caddy sets `X-Forwarded-For` by default, so
+`--trusted-proxy-header=X-Forwarded-For --trusted-proxies=127.0.0.1` pairs with
+this. A single site block covers the whole host, so the well-known path is
+already routed.
 
 ### Traefik
 
@@ -578,7 +589,7 @@ Leave authentication to the MCP server, so nothing here should sit behind
 `Require valid-user`; Apache forwards `Authorization` upstream when it is not
 consuming it itself. `mod_remoteip` with `RemoteIPHeader X-Forwarded-For` fixes
 the address in Apache's own logs, and the MCP server still needs
-`--trusted-proxy-header` for its own limiter.
+`--trusted-proxy-header` and `--trusted-proxies` for its own limiter.
 
 Modules required: `proxy`, `proxy_http`, `ssl`, `headers`, and `remoteip` if you
 use it.
@@ -607,7 +618,8 @@ Leave `disableChunkedEncoding` false. Setting it removes chunked transfer
 encoding to the origin, which is what an SSE body needs.
 
 Cloudflare sets `CF-Connecting-IP`, so name that one:
-`--trusted-proxy-header=CF-Connecting-IP`. Prefer it over `X-Forwarded-For`
+`--trusted-proxy-header=CF-Connecting-IP --trusted-proxies=127.0.0.1`, since
+`cloudflared` connects from the same host. Prefer it over `X-Forwarded-For`
 here, because Cloudflare rewrites `CF-Connecting-IP` on every request and a
 client cannot forge it through the edge.
 

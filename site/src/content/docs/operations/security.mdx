@@ -192,7 +192,7 @@ The server maintains a **bounded LRU pool** of client sessions:
 ### HTTP mode recommendations
 
 - Terminate TLS on a reverse proxy, or on the server itself with `--tls-cert`/`--tls-key`; when the proxy shares the machine, `--http-addr=/run/…/server.sock` removes the hop rather than encrypting it
-- Configure `--trusted-proxy-header` to match the header your proxy sets (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) so the built-in rate limiter sees real client IPs. **Only enable this when the server is reachable exclusively through a trusted proxy** that overwrites (or strips incoming copies of) the configured header; otherwise clients can spoof it and bypass per-IP rate limiting. For `X-Forwarded-For`, the server uses the rightmost entry — the last hop appended by the trusted proxy — to avoid trusting client-supplied values.
+- Configure `--trusted-proxy-header` to match the header your proxy sets (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) together with `--trusted-proxies`, the addresses or CIDR ranges the proxy connects from, so the built-in rate limiter sees real client IPs. **The header is believed only on a connection from a listed address**; from any other peer it is ignored and the peer itself is charged, so a client that reaches the listener directly cannot choose the address its failures count against. One flag without the other refuses startup. For `X-Forwarded-For`, the server reads from the right, skipping hops that are themselves listed, and charges the first that is not; a hop that is not an address charges the peer.
 - Enable rate limiting at the proxy level
 - Restrict access to trusted networks
 - Monitor session metrics for unusual patterns
@@ -333,7 +333,7 @@ A useful report includes the affected version (`gitlab-mcp-server --version`), t
 ### HTTP mode
 
 - ☐ Terminate TLS — reverse proxy, `--tls-cert`/`--tls-key`, or a unix socket to a same-host proxy
-- ☐ Configure `--trusted-proxy-header` for accurate rate limiting
+- ☐ Configure `--trusted-proxy-header` and `--trusted-proxies` for accurate rate limiting
 - ☐ Configure appropriate `--session-timeout` and `--max-http-clients`
 - ☐ Enable rate limiting
 - ☐ Restrict network access to trusted clients

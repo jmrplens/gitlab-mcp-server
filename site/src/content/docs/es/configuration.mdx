@@ -343,7 +343,8 @@ En modo HTTP (`--http`), los ajustes se resuelven en tres capas, de mayor a meno
 | `--revalidate-interval`    | `15m`             | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                                                                                                                                        |
 | `--rate-limit-rps`         | `10`              | Límite de tasa por servidor para `tools/call` en req/s (`0` lo desactiva); activo por defecto porque un despliegue HTTP es compartido                                                                                                        |
 | `--rate-limit-burst`       | `40`              | Tamaño del token bucket cuando `--rate-limit-rps > 0`                                                                                                                                                                                        |
-| `--trusted-proxy-header`   | —                 | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                                    |
+| `--trusted-proxies`        | —                 | Direcciones o rangos CIDR de los proxies inversos cuya `--trusted-proxy-header` se cree (ej. `127.0.0.1,10.0.0.0/8`); desde cualquier otro origen la cabecera se ignora. Obligatoria junto a `--trusted-proxy-header`                        |
+| `--trusted-proxy-header`   | —                 | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `CF-Connecting-IP`, `X-Forwarded-For`); solo se cree desde `--trusted-proxies`                                                                            |
 
 **Flags del evaluador de superficies** (solo para `cmd/eval_mcp_surfaces`):
 

@@ -344,7 +344,8 @@ In HTTP mode (`--http`), settings resolve in three layers, highest first: a CLI 
 | `--revalidate-interval`    | `15m`           | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                    |
 | `--rate-limit-rps`         | `10`            | Per-server `tools/call` rate limit in req/s (`0` disables it); on by default because an HTTP deployment is shared                                                                                                  |
 | `--rate-limit-burst`       | `40`            | Token-bucket burst size when `--rate-limit-rps > 0`                                                                                                                                                                |
-| `--trusted-proxy-header`   | —               | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                      |
+| `--trusted-proxies`        | —               | Addresses or CIDR ranges of the reverse proxies whose `--trusted-proxy-header` is believed (e.g. `127.0.0.1,10.0.0.0/8`); from any other peer the header is ignored. Required with `--trusted-proxy-header`        |
+| `--trusted-proxy-header`   | —               | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`); believed only from `--trusted-proxies`                                                              |
 
 **Surface evaluator flags** (used by `cmd/eval_mcp_surfaces` only):
 

@@ -78,7 +78,8 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--revalidate-interval`    | `15m`          | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                                                                             |
 | `--rate-limit-rps`         | `10`           | Per-server `tools/call` rate limit in req/s (`0` disables it); on by default because an HTTP deployment is shared                                                                                                                                                                           |
 | `--rate-limit-burst`       | `40`           | Token-bucket burst size when `--rate-limit-rps > 0`                                                                                                                                                                                                                                         |
-| `--trusted-proxy-header`   | —              | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                                                                                               |
+| `--trusted-proxies`        | —              | Addresses or CIDR ranges of the reverse proxies whose `--trusted-proxy-header` is believed (e.g. `127.0.0.1,10.0.0.0/8`); from any other peer the header is ignored. Required with `--trusted-proxy-header`                                                                                 |
+| `--trusted-proxy-header`   | —              | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`); believed only from `--trusted-proxies`                                                                                                                                       |
 | `--stateless`              | `true`         | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. Use `--stateless=false` for legacy stateful sessions                                                                                     |
 | `--json-response`          | `false`        | Return `application/json` response bodies instead of `text/event-stream` (SSE)                                                                                                                                                                                                              |
 | `--max-request-body-bytes` | `0`            | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB); negative values are rejected at startup. Oversized bodies are rejected with `413`                                                                                                                     |
@@ -101,7 +102,7 @@ What `GITLAB-URL` means depends on how many instances the deployment publishes. 
 
 ### Configuration precedence
 
-HTTP clients control only their GitLab token and, in multi-instance mode, the `GITLAB-URL` selector. Server policy options such as `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, and `--trusted-proxy-header` are fixed by the MCP server process and cannot be changed per user, session, or JSON-RPC request.
+HTTP clients control only their GitLab token and, in multi-instance mode, the `GITLAB-URL` selector. Server policy options such as `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, `--trusted-proxy-header` and `--trusted-proxies` are fixed by the MCP server process and cannot be changed per user, session, or JSON-RPC request.
 
 If a client sends config-like headers such as `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, `POOL-IDLE-TIMEOUT`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values. Deprecated `META-TOOLS` headers are also identified in `deprecated_options`.
 
@@ -359,7 +360,7 @@ When a request would deplete the bucket, the server returns a `CallToolResult` w
 - **Large multi-tenant deployment**: combine with infra-level rate limiting (Cloudflare, Caddy, nginx). The MCP-level limiter is a safety net, not a replacement for edge enforcement
 
 :::caution
-Because the limiter scopes by token+URL, a client that rotates tokens frequently can bypass it. Use infrastructure-level rate limiting on top for hard quotas. The `--trusted-proxy-header` flag is required for accurate per-IP enforcement at the proxy layer.
+Because the limiter scopes by token+URL, a client that rotates tokens frequently can bypass it. Use infrastructure-level rate limiting on top for hard quotas. The `--trusted-proxy-header` and `--trusted-proxies` flags are required for accurate per-IP enforcement behind a proxy.
 :::
 
 ## Client configuration

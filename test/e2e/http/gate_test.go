@@ -374,6 +374,7 @@ func TestGate_FailureBudgetIsPerAddress(t *testing.T) {
 	srv := startServer(t, nil,
 		"--gitlab-url="+gitlab.url,
 		"--trusted-proxy-header=X-Real-IP",
+		"--trusted-proxies=127.0.0.1,::1",
 	)
 
 	// Spend the first address's budget.
@@ -426,6 +427,36 @@ func gateAttemptsUntilBlocked(t *testing.T, srv *server, limit int, claimedFor f
 	return 0
 }
 
+// TestGate_ProxyHeaderFromAnUntrustedPeer_IsIgnored pins what --trusted-proxies
+// is for. The header names the caller only when the connection came from a
+// proxy the operator listed; from anybody else it is text the caller wrote,
+// and believing it would let a caller who reaches the listener directly choose
+// the address their failures are charged to. Here the listed range is one the
+// test client is not in, so every claimed address is ignored and the claims
+// share the peer's own ten-a-minute budget: a rotating header is cut off as
+// fast as a fixed one, long before the coarse transport budget the next test
+// pins would fire.
+func TestGate_ProxyHeaderFromAnUntrustedPeer_IsIgnored(t *testing.T) {
+	// Never reached: every request here is refused for having no credential.
+	const unreachable = "--gitlab-url=https://gitlab.example.com"
+	srv := startServer(t, nil, unreachable, "--trusted-proxy-header=X-Real-IP", "--trusted-proxies=192.0.2.0/24")
+
+	attempts := gateAttemptsUntilBlocked(t, srv, 60, func(i int) string {
+		return "198.51.100." + strconv.Itoa(i%256)
+	})
+
+	if attempts == 0 {
+		t.Fatal("a rotating claimed address from an untrusted peer was never cut off: the header was believed")
+	}
+	// The per-client budget is ten a minute. Anything past twenty means the
+	// claimed addresses were counted separately, which is the header being
+	// believed from a peer that is not a trusted proxy.
+	if attempts > 20 {
+		t.Errorf("a rotating claimed address from an untrusted peer bought %d attempts, which is not the peer's own budget", attempts)
+	}
+	t.Logf("a rotating claimed address from an untrusted peer was cut off after %d requests", attempts)
+}
+
 // TestGate_RotatingProxyHeader_IsBoundedByTheTransportSource pins the second
 // budget, the one charged to the address the connection actually came from.
 //
@@ -455,7 +486,7 @@ func TestGate_RotatingProxyHeader_IsBoundedByTheTransportSource(t *testing.T) {
 	const unreachable = "--gitlab-url=https://gitlab.example.com"
 
 	t.Run("a fixed claimed address spends its own small allowance", func(t *testing.T) {
-		srv := startServer(t, nil, unreachable, "--trusted-proxy-header=X-Real-IP")
+		srv := startServer(t, nil, unreachable, "--trusted-proxy-header=X-Real-IP", "--trusted-proxies=127.0.0.1,::1")
 
 		attempts := gateAttemptsUntilBlocked(t, srv, 40, func(int) string { return "203.0.113.10" })
 
@@ -472,7 +503,7 @@ func TestGate_RotatingProxyHeader_IsBoundedByTheTransportSource(t *testing.T) {
 	})
 
 	t.Run("rotating the claimed address does not mint a fresh allowance", func(t *testing.T) {
-		srv := startServer(t, nil, unreachable, "--trusted-proxy-header=X-Real-IP")
+		srv := startServer(t, nil, unreachable, "--trusted-proxy-header=X-Real-IP", "--trusted-proxies=127.0.0.1,::1")
 
 		// Comfortably past the coarse budget, so a walk that ends without a
 		// 429 means rotation is unbounded rather than that the walk was short.

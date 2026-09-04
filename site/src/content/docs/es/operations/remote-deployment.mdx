@@ -69,7 +69,8 @@ ExecStart=/usr/local/bin/gitlab-mcp-server \
     --gitlab-url=https://gitlab.example.com \
     --auth-mode=oauth \
     --public-url=https://mcp.example.com \
-    --trusted-proxy-header=X-Real-IP
+    --trusted-proxy-header=X-Real-IP \
+    --trusted-proxies=127.0.0.1
 Restart=on-failure
 RestartSec=2s
 StandardInput=null
@@ -290,6 +291,7 @@ services:
       - "--auth-mode=oauth"
       - "--public-url=https://mcp.example.com"
       - "--trusted-proxy-header=X-Real-IP"
+      - "--trusted-proxies=172.16.0.0/12"
     read_only: true
     tmpfs:
       - /tmp:rw,size=64m,mode=1777
@@ -314,9 +316,15 @@ required in HTTP mode` cuando no se da ninguna, porque un despliegue que no
 nombra ninguna instancia enviaría el token que aporte quien llama al host que
 esa misma persona ponga en `GITLAB-URL`.
 
+`--trusted-proxies` nombra desde dónde conecta el proxy, y dentro de Compose esa
+dirección se asigna cuando se levanta la red del proyecto. El ejemplo confía en
+los rangos de direcciones por defecto de Docker, `172.16.0.0/12`, que cubren
+también la puerta de enlace del bridge desde la que llega un proxy que corra en
+la propia máquina; acótalo a la red del proxy en cuanto la conozcas.
+
 Varias opciones **no tienen equivalente en variable de entorno** y deben ir como
 argumentos: `--http-addr`, `--http-socket-mode`, `--tls-cert`, `--tls-key`,
-`--trusted-proxy-header`, `--stateless`, `--json-response`,
+`--trusted-proxy-header`, `--trusted-proxies`, `--stateless`, `--json-response`,
 `--http-idle-timeout`, `--max-request-body-bytes` y `--allow-any-gitlab-url`.
 
 El `HEALTHCHECK` de la propia imagen está fijado a
@@ -359,7 +367,7 @@ nombrar otro, y debe ser una ruta absoluta. Se lleva bien con `read_only: true`.
 | Reenviar `Authorization`            | El modo OAuth lee de ahí el token bearer; quitarla convierte cada petición en un `401`                                                                                                                                    |
 | Reenviar `PRIVATE-TOKEN`            | La cabecera del modo legacy                                                                                                                                                                                               |
 | Reenviar `GITLAB-URL`               | Selecciona la instancia cuando se publican varias                                                                                                                                                                         |
-| Dirección real del cliente          | `--trusted-proxy-header` nombra la cabecera que pone el proxy, para que el limitador de fallos de autenticación cuente clientes y no al proxy                                                                             |
+| Dirección real del cliente          | `--trusted-proxy-header` nombra la cabecera que pone el proxy y `--trusted-proxies` las direcciones desde las que conecta, para que el limitador de fallos de autenticación cuente clientes y no al proxy                 |
 | Enrutar `/.well-known/` sin cambios | En modo OAuth los metadatos RFC 9728 viven en la **raíz del host**, no bajo el prefijo de ruta                                                                                                                            |
 | No añadir cabeceras CORS            | El servidor responde el preflight por sí mismo. Dos cabeceras `Access-Control-Allow-Origin` son un fallo de CORS, no una fusión                                                                                           |
 
@@ -431,17 +439,22 @@ server {
 }
 ```
 
-Acompáñalo de `--trusted-proxy-header=X-Real-IP`. El servidor lee la entrada
-**más a la derecha** del valor, que es el salto que añadió el proxy de confianza
-más cercano, así que un valor que un cliente se inventara por la izquierda nunca
-se confunde con su dirección. Con un único nginx delante, la entrada más a la
-derecha de `$proxy_add_x_forwarded_for` es el cliente; añade un segundo proxy por
-delante de ese y pasa a ser el proxy intermedio. `X-Real-IP` puesta desde
-`$remote_addr` en el salto más cercano al servidor no tiene esa ambigüedad.
+Acompáñalo de `--trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1`.
+La lista es lo que hace que merezca la pena leer la cabecera: solo se cree en
+una conexión que venga de una de esas direcciones, y una petición desde
+cualquier otro sitio se carga a su propia dirección de origen, lleve la cabecera
+que lleve. Sin la lista, quien llegara al listener directamente escribiría la
+cabecera por su cuenta y elegiría la dirección a la que se cargan sus fallos,
+que es por lo que el servidor se niega a arrancar con una opción y no la otra.
 
-No hay ninguna lista blanca de direcciones de proxy detrás de esta opción:
-activarla confía en la cabecera sin condiciones, así que hazlo solo donde al
-servidor no se pueda llegar salvo a través de ese proxy.
+Cualquiera de las dos cabeceras sirve. Con `X-Forwarded-For` el servidor recorre
+el valor desde la derecha, saltando cada salto que esté a su vez en la lista, y
+carga el primero que no lo esté: con un nginx delante ese es el cliente, y con
+un segundo proxy delante de nginx sigue siendo el cliente, siempre que los dos
+proxies estén en la lista. Un valor que el cliente se inventara por la izquierda
+nunca se alcanza, y un salto que no sea una dirección carga al origen de la
+conexión. `X-Real-IP` puesta desde `$remote_addr` en el salto más cercano al
+servidor lleva una sola dirección y no necesita recorrido.
 
 nginx pasa las cabeceras de petición del cliente al upstream por defecto, así
 que `Authorization`, `PRIVATE-TOKEN` y `GITLAB-URL` llegan sin ninguna línea
@@ -470,8 +483,9 @@ el comportamiento deje de depender de que el upstream acierte con su tipo de
 contenido.
 
 Caddy pone `X-Forwarded-For` por defecto, así que
-`--trusted-proxy-header=X-Forwarded-For` encaja aquí. Un único bloque de sitio
-cubre todo el host, de modo que la ruta well-known ya queda enrutada.
+`--trusted-proxy-header=X-Forwarded-For --trusted-proxies=127.0.0.1` encaja
+aquí. Un único bloque de sitio cubre todo el host, de modo que la ruta
+well-known ya queda enrutada.
 
 </TabItem>
 <TabItem label="Traefik">
@@ -535,7 +549,8 @@ timeout de lectura de esta ruta, distinto del `Timeout` global del servidor.
 Deja la autenticación al servidor MCP, así que nada de esto debería estar tras
 `Require valid-user`. `mod_remoteip` con `RemoteIPHeader X-Forwarded-For`
 corrige la dirección en los propios registros de Apache, y el servidor MCP sigue
-necesitando `--trusted-proxy-header` para su propio limitador.
+necesitando `--trusted-proxy-header` y `--trusted-proxies` para su propio
+limitador.
 
 Módulos necesarios: `proxy`, `proxy_http`, `ssl`, `headers`, y `remoteip` si lo
 usas.
@@ -566,8 +581,9 @@ Deja `disableChunkedEncoding` en false. Activarlo elimina la transferencia
 troceada hacia el origen, que es lo que necesita un cuerpo SSE.
 
 Cloudflare pone `CF-Connecting-IP`, así que nombra esa:
-`--trusted-proxy-header=CF-Connecting-IP`. Prefiérela a `X-Forwarded-For` aquí,
-porque Cloudflare la reescribe en cada petición y un cliente no puede
+`--trusted-proxy-header=CF-Connecting-IP --trusted-proxies=127.0.0.1`, ya que
+`cloudflared` conecta desde la misma máquina. Prefiérela a `X-Forwarded-For`
+aquí, porque Cloudflare la reescribe en cada petición y un cliente no puede
 falsificarla a través del borde.
 
 Dos comportamientos de Cloudflare que conviene comprobar antes de culpar al

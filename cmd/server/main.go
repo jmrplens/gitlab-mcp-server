@@ -196,6 +196,7 @@ type httpConfig struct {
 	oauthCacheTTL         time.Duration
 	oauthClientUID        string
 	trustedProxyHeader    string
+	trustedProxies        string
 	trustedOrigins        string
 	rateLimitRPS          float64
 	rateLimitBurst        int
@@ -299,7 +300,8 @@ func main() {
 	flag.StringVar(&hcfg.resourceTermsURI, "resource-tos-uri", "", "https URL published as RFC 9728 resource_tos_uri; point it at your own terms of service. Empty publishes no terms link")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.oauthClientUID, "oauth-client-uid", "", "Comma-separated GitLab OAuth application uids whose tokens this deployment admits. Empty (default) admits any credential the instance accepts; setting it also refuses personal access tokens, which belong to no application")
-	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
+	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP); believed only from the peers named in --trusted-proxies, which it requires")
+	flag.StringVar(&hcfg.trustedProxies, "trusted-proxies", "", "Comma-separated addresses or CIDR ranges of the reverse proxies whose --trusted-proxy-header is believed (e.g. 127.0.0.1,10.0.0.0/8); required with --trusted-proxy-header")
 	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-server tools/call rate limit in requests/second (0 disables it)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
@@ -534,7 +536,8 @@ FLAGS
   -rate-limit-rps float     Per-server tools/call rate limit (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
-  -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
+  -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP); requires -trusted-proxies
+  -trusted-proxies str      Addresses or CIDR ranges of the proxies that header is believed from (e.g. 127.0.0.1,10.0.0.0/8)
 
  Telemetry
   -telemetry                Export OpenTelemetry traces, metrics and logs over OTLP (default false)
@@ -977,6 +980,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		OAuthCacheTTL:         hcfg.oauthCacheTTL,
 		OAuthClientUIDs:       config.ParseCSV(hcfg.oauthClientUID),
 		TrustedProxyHeader:    hcfg.trustedProxyHeader,
+		TrustedProxies:        commaSeparated(hcfg.trustedProxies),
 		TrustedOrigins:        buildTrustedOrigins(hcfg.trustedOrigins, hcfg.publicURL),
 		RateLimitRPS:          hcfg.rateLimitRPS,
 		RateLimitBurst:        hcfg.rateLimitBurst,
@@ -1018,6 +1022,28 @@ func validateHTTPRuntimeConfig(cfg *config.Config) error {
 	}
 	if cfg.MaxRequestBodyBytes < 0 {
 		return fmt.Errorf("--max-request-body-bytes must be >= 0, got %d", cfg.MaxRequestBodyBytes)
+	}
+	return validateTrustedProxyConfig(cfg)
+}
+
+// validateTrustedProxyConfig holds the two proxy flags to each other.
+//
+// A header without a list of who may set it is a header anybody may set, and
+// with it the address a caller's failures are charged to: that is the whole
+// key of the per-address budget, handed to the caller. A list without a header
+// names proxies whose word is never asked for. Both are refused at startup
+// rather than left to mean something the operator did not write, and a list
+// entry that is not an address or a range is refused for the same reason.
+func validateTrustedProxyConfig(cfg *config.Config) error {
+	header := strings.TrimSpace(cfg.TrustedProxyHeader)
+	if header != "" && len(cfg.TrustedProxies) == 0 {
+		return errors.New("--trusted-proxy-header names a header nobody is trusted to set: pass --trusted-proxies with the addresses or CIDR ranges of the proxies that reach this listener, or drop the header")
+	}
+	if header == "" && len(cfg.TrustedProxies) > 0 {
+		return errors.New("--trusted-proxies names proxies whose header is never read: pass --trusted-proxy-header with the header they set, or drop the list")
+	}
+	if _, err := parseTrustedProxies(cfg.TrustedProxies); err != nil {
+		return fmt.Errorf("--trusted-proxies: %w", err)
 	}
 	return nil
 }
@@ -2343,6 +2369,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		"stateless", cfg.Stateless,
 		"json_response", cfg.JSONResponse,
 		"trusted_proxy_header", cfg.TrustedProxyHeader,
+		"trusted_proxies", cfg.TrustedProxies,
 		"version", version,
 		"commit", commit,
 	)
@@ -2983,6 +3010,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
+		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		sessionTags:        sessionTags,
 		// The same challenge the guard in front emits, minus its error
 		// parameters: a gate rejection is a pool failure, not a verdict on
@@ -3037,6 +3065,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
+		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		metadataURL:        resourceMetadataURL,
 		// The door asks only for what every action needs. Whether a
 		// particular action may write is settled per action, against the
@@ -3117,6 +3146,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		limiter:            authLimiter,
 		sourceBudget:       sourceBudget,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
+		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		sessionTags:        sessionTags,
 		challenge:          legacyAuthChallenge,
 		stateless:          cfg.Stateless,
@@ -3257,38 +3287,6 @@ func transportFailureBudget(trustedProxyHeader string) *transportBudget {
 		return nil
 	}
 	return newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
-}
-
-// clientIP extracts the real client IP from the request. When a trusted
-// proxy header is configured (e.g. CF-Connecting-IP, X-Real-IP, X-Forwarded-For),
-// its value is used instead of RemoteAddr.
-//
-// The value is caller-controlled whenever the server is reachable other than
-// through the proxy, which is why every failure is charged to
-// [transportSource] as well — see [transportFailureLimit].
-//
-// For multi-value headers like X-Forwarded-For — where well-behaved proxies
-// *append* to an existing header — the rightmost value is returned because
-// the leftmost entry is client-supplied and therefore spoofable. Operators
-// who configure this flag must ensure the trusted proxy is the only ingress
-// path to the server; otherwise any client can set the header directly and
-// bypass per-IP rate limiting.
-func clientIP(r *http.Request, trustedHeader string) string {
-	if trustedHeader != "" {
-		if val := r.Header.Get(trustedHeader); val != "" {
-			// For comma-separated values (X-Forwarded-For style), take the
-			// rightmost non-empty IP — it is the most recent proxy-appended
-			// hop and cannot be spoofed by an untrusted upstream client.
-			parts := strings.Split(val, ",")
-			for _, part := range slices.Backward(parts) {
-				if ip := strings.TrimSpace(part); ip != "" {
-					return ip
-				}
-			}
-		}
-	}
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return host
 }
 
 // applyLocalFilesystemPolicy settles whether tool handlers may name paths on

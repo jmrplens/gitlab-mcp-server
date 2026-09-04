@@ -681,6 +681,7 @@ func newProxiedGuard(verify auth.TokenVerifier) *bearerGuard {
 	g.limiter = serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
 	g.trustedProxyHeader = "X-Forwarded-For"
+	g.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
 	return g
 }
 
@@ -746,7 +747,10 @@ func TestBearerGuard_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
 
 	blocked := false
 	for i := range transportFailureLimit + 1 {
-		failure := g.check(proxiedRequest(t, "198.51.100."+strconv.Itoa(i%250+1)+":"+strconv.Itoa(i), ""))
+		// Two octets vary: the key is the address alone, a port on the hop is
+		// stripped, and one octet gives fewer distinct keys than the coarse
+		// budget holds.
+		failure := g.check(proxiedRequest(t, "198.51."+strconv.Itoa(i/250)+"."+strconv.Itoa(i%250+1), ""))
 		if failure != nil && failure.status == http.StatusTooManyRequests {
 			blocked = true
 			break

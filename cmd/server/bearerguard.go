@@ -74,8 +74,10 @@ type bearerGuard struct {
 	// guard is the layer that spends it first.
 	sourceBudget *transportBudget
 	// trustedProxyHeader names the header carrying the real client IP, so
-	// the limiter counts per caller rather than per reverse proxy.
+	// the limiter counts per caller rather than per reverse proxy, and
+	// trustedProxies are the peers it is believed from.
 	trustedProxyHeader string
+	trustedProxies     trustedProxies
 	// metadataURL is the RFC 9728 protected-resource metadata URL every
 	// challenge points at.
 	metadataURL string
@@ -131,7 +133,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		return nil
 	}
 
-	ip := clientIP(r, g.trustedProxyHeader)
+	ip := clientIP(r, g.trustedProxyHeader, g.trustedProxies)
 	source := transportSource(r)
 
 	// Ordered before everything else on purpose: a blocked caller must cost
