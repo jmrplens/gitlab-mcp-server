@@ -4,6 +4,8 @@
 package auditshared
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,6 +65,7 @@ func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testi
 		missing bool
 		want    []string
 		wantErr string
+		wantIs  error
 	}{
 		{
 			name: "sorted names from top-level sources only",
@@ -98,7 +101,10 @@ func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testi
 		{
 			name:    "missing directory",
 			missing: true,
-			wantErr: "no such file or directory",
+			// Asserted with errors.Is rather than by text: the text is the
+			// operating system's, and Windows spells a missing path
+			// differently from Linux.
+			wantIs: fs.ErrNotExist,
 		},
 	}
 	for _, tt := range tests {
@@ -109,6 +115,12 @@ func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testi
 			}
 
 			got, err := DiscoverActionSpecGroupBuilders(dir)
+			if tt.wantIs != nil {
+				if !errors.Is(err, tt.wantIs) {
+					t.Fatalf("DiscoverActionSpecGroupBuilders() error = %v, want %v", err, tt.wantIs)
+				}
+				return
+			}
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("DiscoverActionSpecGroupBuilders() error = %v, want containing %q", err, tt.wantErr)

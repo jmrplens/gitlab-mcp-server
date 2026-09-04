@@ -14,6 +14,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -1035,10 +1036,14 @@ func TestDiscoverDomainSources_UnusableTree_ReturnsError(t *testing.T) {
 		files   map[string]string
 		inspect string
 		wantErr string
+		// wantIs is asserted with errors.Is where the text is the operating
+		// system's rather than this tool's: Windows spells a missing path
+		// differently from Linux, and the error wraps fs.ErrNotExist on both.
+		wantIs error
 	}{
 		{name: "tools directory missing", files: map[string]string{}, wantErr: "read tools directory"},
 		{name: "domain file does not parse", files: map[string]string{"internal/tools/alpha/alpha.go": "package alpha\n\nfunc {\n"}, wantErr: "parse "},
-		{name: "domain directory missing", files: map[string]string{}, inspect: "absent", wantErr: "no such file or directory"},
+		{name: "domain directory missing", files: map[string]string{}, inspect: "absent", wantIs: fs.ErrNotExist},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1048,6 +1053,12 @@ func TestDiscoverDomainSources_UnusableTree_ReturnsError(t *testing.T) {
 				_, err = inspectDomainSource(filepath.Join(root, tt.inspect), tt.inspect)
 			} else {
 				_, err = discoverDomainSources(root)
+			}
+			if tt.wantIs != nil {
+				if !errors.Is(err, tt.wantIs) {
+					t.Fatalf("error = %v, want %v", err, tt.wantIs)
+				}
+				return
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("error = %v, want containing %q", err, tt.wantErr)

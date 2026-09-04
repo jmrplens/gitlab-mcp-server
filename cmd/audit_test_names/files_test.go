@@ -242,8 +242,12 @@ func TestRunFileCheck_ReportsVerdict(t *testing.T) {
 			name: "missing directory",
 			dirs: func(root string) []string { return []string{filepath.Join(root, "absent")} },
 			wantStdout: func(root string) string {
-				path := filepath.ToSlash(filepath.Join(root, "absent"))
-				return fmt.Sprintf("%-70s %s\n", path, "unreadable: open "+filepath.Join(root, "absent")+": no such file or directory") +
+				absent := filepath.Join(root, "absent")
+				// The reason carries the operating system's own text for a
+				// missing directory, so it is taken from the same read the
+				// check makes rather than spelled the Linux way.
+				_, readErr := os.ReadDir(absent)
+				return fmt.Sprintf("%-70s %s\n", filepath.ToSlash(absent), "unreadable: "+readErr.Error()) +
 					"test-file naming: 1 file(s) violate the convention\n"
 			},
 		},

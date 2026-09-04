@@ -5,10 +5,33 @@
 package evaluator
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
+
+// exitingCommand is a command that exits with status: the POSIX true and
+// false on unix, cmd.exe's exit built-in on Windows, where neither exists.
+func exitingCommand(status int) (string, []string) {
+	if runtime.GOOS == "windows" {
+		return "cmd", []string{"/c", "exit", map[bool]string{true: "1", false: "0"}[status != 0]}
+	}
+	if status != 0 {
+		return "false", nil
+	}
+	return "true", nil
+}
+
+// sleepingCommand is a command that outlives any short timeout without
+// spawning a child of its own: a grandchild holding the output pipe would
+// keep the wait going after the process under test had been killed.
+func sleepingCommand() (string, []string) {
+	if runtime.GOOS == "windows" {
+		return "powershell", []string{"-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 5"}
+	}
+	return "sleep", []string{"5"}
+}
 
 // TestShouldAutoStartDockerRuntime_RequiresDockerPresetAndGitLabBackend
 // verifies that shouldAutoStartDockerRuntime only returns true when all three
@@ -183,8 +206,12 @@ func TestDockerEnterpriseRuntime_DetectsEditionPresetAndEnvironment(t *testing.T
 
 // TestRunDockerRuntimeCommand_ReportsFailureAndTimeout verifies a failing
 // command is reported under its step name and a command that outlives its
-// timeout is reported as timed out. Both use plain shell utilities.
+// timeout is reported as timed out. The commands are the platform's own
+// plain utilities, since none of true, false or sleep exists on Windows.
 func TestRunDockerRuntimeCommand_ReportsFailureAndTimeout(t *testing.T) {
+	failing, failingArgs := exitingCommand(1)
+	succeeding, succeedingArgs := exitingCommand(0)
+	sleeping, sleepingArgs := sleepingCommand()
 	cases := []struct {
 		name    string
 		timeout time.Duration
@@ -192,9 +219,9 @@ func TestRunDockerRuntimeCommand_ReportsFailureAndTimeout(t *testing.T) {
 		args    []string
 		want    string
 	}{
-		{name: "exit status", timeout: 5 * time.Second, command: "false", want: "step-name: exit status 1"},
-		{name: "timeout", timeout: 20 * time.Millisecond, command: "sleep", args: []string{"5"}, want: "step-name timed out after"},
-		{name: "success", timeout: 5 * time.Second, command: "true"},
+		{name: "exit status", timeout: 5 * time.Second, command: failing, args: failingArgs, want: "step-name: exit status 1"},
+		{name: "timeout", timeout: 20 * time.Millisecond, command: sleeping, args: sleepingArgs, want: "step-name timed out after"},
+		{name: "success", timeout: 5 * time.Second, command: succeeding, args: succeedingArgs},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

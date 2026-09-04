@@ -770,16 +770,15 @@ jobs:
         run: go build ./...
       - name: Vet every package
         run: go vet ./...
-      # The shipped code, not the whole tree. Everything under cmd/ other than
-      # the server is maintainer tooling: the auditors and generators run on
-      # Linux, from a Makefile target, on this repository's own checkout, and
-      # never on a user's machine. Their tests assume "/" and Linux error text
-      # in dozens of places, and making that portable is real work whose
-      # benefit would be a green tick rather than a working program. Tracked
-      # separately in https://github.com/jmrplens/gitlab-mcp-server/issues/439.
-      #
-      # go build and go vet above still cover every package on every platform,
-      # so a compile break in the tooling is caught here regardless.
+      # The whole tree, tooling included. Everything under cmd/ other than
+      # the server is maintainer tooling that runs on Linux from a Makefile
+      # target, and its tests used to assume "/" and Linux error text, so the
+      # leg ran the shipped code alone. The fifteen tests that failed on a
+      # real Windows were made portable (issue 439): reported paths are
+      # spelled with slashes on every platform, not-found is asserted with
+      # errors.Is rather than by its text, and the one case a platform cannot
+      # produce is skipped there and says why. Running them here is what keeps
+      # that true.
       #
       # The bound is raised from the 10 minute default because cmd/server
       # exceeded it on Windows, where the suite runs roughly three times slower
@@ -796,7 +795,7 @@ jobs:
         run: go install gotest.tools/gotestsum
       - name: Unit suite
         shell: bash
-        run: bash .github/scripts/go-test-crash-aware.sh test-results/unit-suite -count=1 -timeout=30m ./cmd/server/... ./internal/...
+        run: bash .github/scripts/go-test-crash-aware.sh test-results/unit-suite -count=1 -timeout=30m ./cmd/... ./internal/...
       # The two transport modules need neither GitLab nor a credential, and
       # they are why this is not a build-only check: they start the real binary
       # and drive it the way a client does, over pipes and sockets, which is
@@ -814,7 +813,7 @@ jobs:
       # Windows does not implement, so every case that asserts on shutdown
       # would fail for a reason that has nothing to do with the code under
       # test. Giving the harnesses a Windows-native termination path is tracked
-      # in https://github.com/jmrplens/gitlab-mcp-server/issues/439. macOS runs
+      # in https://github.com/jmrplens/gitlab-mcp-server/issues/490. macOS runs
       # them today because SIGTERM and unix sockets both behave there.
       - name: HTTP transport end-to-end
         if: matrix.os == 'macos-latest'

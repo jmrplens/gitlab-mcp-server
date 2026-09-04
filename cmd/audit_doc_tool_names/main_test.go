@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -187,6 +188,21 @@ func TestScanFile_UnreadableFile_ReturnsError(t *testing.T) {
 	}
 }
 
+// rootBelowAFile returns a root path that sits below a regular file, so
+// stat fails for a reason other than absence.
+//
+// Not on Windows: a path below a regular file is reported as not found
+// there, which scanRoot rightly treats as an absent root, so the stat failure
+// this case exercises cannot be produced by this construction.
+func rootBelowAFile(t *testing.T, root string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("a path below a regular file reports not-found on Windows")
+	}
+	file := writeDoc(t, root, "README.md", "x")
+	return filepath.Join(file, "child")
+}
+
 // TestScanRoot_Roots_ScansFilesAndTrees verifies one docRoots entry may be
 // a single file or a tree: a missing root is skipped, a tree yields every
 // .md and .mdx file below it while other extensions and node_modules are
@@ -228,12 +244,8 @@ func TestScanRoot_Roots_ScansFilesAndTrees(t *testing.T) {
 			wantNames:   []string{"gitlab_list_issues", "gitlab_get_issue"},
 		},
 		{
-			name: "root_below_a_file_fails_stat",
-			setup: func(t *testing.T, root string) string {
-				t.Helper()
-				file := writeDoc(t, root, "README.md", "x")
-				return filepath.Join(file, "child")
-			},
+			name:    "root_below_a_file_fails_stat",
+			setup:   rootBelowAFile,
 			wantErr: true,
 		},
 		{

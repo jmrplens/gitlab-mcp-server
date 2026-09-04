@@ -268,9 +268,15 @@ func buildDocEntries(repoRoot string, docPaths []string) (docEntries map[string]
 	absByRel = make(map[string]string, len(docPaths))
 	relByBase = make(map[string]string, len(docPaths))
 	for _, p := range docPaths {
+		// The key is the repository's spelling of the path, with slashes: it
+		// is compared with the README mapping and reported as-is, and on
+		// Windows filepath.Rel returns backslashes that would match nothing.
+		// A path that cannot be made relative is kept exactly as given.
 		rel, relErr := filepath.Rel(repoRoot, p)
 		if relErr != nil {
 			rel = p
+		} else {
+			rel = filepath.ToSlash(rel)
 		}
 		docEntries[rel] = &fileFinding{DocPath: rel}
 		absByRel[rel] = p

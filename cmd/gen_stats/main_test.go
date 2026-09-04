@@ -107,6 +107,12 @@ require github.com/g/h v1.0.0 // indirect
 // TestCollectStats_NonZeroCounts verifies collectStats returns non-zero
 // counts when run against the real repository root.
 func TestCollectStats_NonZeroCounts(t *testing.T) {
+	// The counts come from the git index, so a copy of the tree without its
+	// .git, a source archive or a mirror synced without it, has nothing to
+	// count, and that is not what this test is about.
+	if out, err := exec.CommandContext(t.Context(), "git", "rev-parse", "--is-inside-work-tree").Output(); err != nil || strings.TrimSpace(string(out)) != "true" {
+		t.Skip("not inside a git work tree; the counts come from the index")
+	}
 	stats, err := collectStats(".")
 	if err != nil {
 		t.Fatalf("collectStats: %v", err)

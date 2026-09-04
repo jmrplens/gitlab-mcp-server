@@ -151,7 +151,7 @@ func TestRun_Write_UnwritableTree_ReturnsError(t *testing.T) {
 					t.Fatalf("write blocker: %v", err)
 				}
 			},
-			wantErr: []string{"create ", filepath.Dir(first), "not a directory"},
+			wantErr: []string{"create ", filepath.Dir(first), notADirectoryText()},
 		},
 		{
 			name: "asset path is a directory",
@@ -213,6 +213,16 @@ func chdirIntoRootlessDir(t *testing.T) {
 		}
 	}
 	t.Chdir(dir)
+}
+
+// notADirectoryText is the operating system's wording for a directory being
+// created below a regular file: ENOTDIR on unix, and on Windows the
+// path-not-found error that stands in for it.
+func notADirectoryText() string {
+	if runtime.GOOS == "windows" {
+		return "cannot find the path specified"
+	}
+	return "not a directory"
 }
 
 // chdirIntoRemovedDir makes a directory the working directory and then
