@@ -24,7 +24,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.59.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 2.7.5                                               |
+| Version       | 2.8.0                                               |
 
 ### Scale
 
@@ -169,7 +169,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (2.7.5)
+└── VERSION                      # Semantic version (2.8.0)
 ```
 
 ## Editing files
