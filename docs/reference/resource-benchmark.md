@@ -23,13 +23,13 @@ memory limit.
 
 Five axes, chosen because they are the ones that move the numbers:
 
-| Axis              | Values                                        | Why it matters                                                                                                          |
-| ----------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Transport         | stdio, HTTP                                    | stdio gives every client its own process; HTTP serves everyone from one and pools a catalog per credential              |
-| Tool surface      | `dynamic`, `meta`, `individual`                | the dynamic surface registers two tools and the individual one roughly a thousand                                        |
-| Concurrent clients | 4 processes on stdio, 8 credentials on HTTP   | on HTTP the pool holds one entry per token, so this is the axis a shared deployment grows along                          |
-| Parallel requests | 2 to 4 in flight per client                    | separates the cost of having clients from the cost of them all calling at once                                          |
-| Telemetry         | off, on                                        | exporting is work the server would not otherwise do                                                                     |
+| Axis               | Values                                      | Why it matters                                                                                             |
+| ------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Transport          | stdio, HTTP                                 | stdio gives every client its own process; HTTP serves everyone from one and pools a catalog per credential |
+| Tool surface       | `dynamic`, `meta`, `individual`             | the dynamic surface registers two tools and the individual one roughly a thousand                          |
+| Concurrent clients | 4 processes on stdio, 8 credentials on HTTP | on HTTP the pool holds one entry per token, so this is the axis a shared deployment grows along            |
+| Parallel requests  | 2 to 4 in flight per client                 | separates the cost of having clients from the cost of them all calling at once                             |
+| Telemetry          | off, on                                     | exporting is work the server would not otherwise do                                                        |
 
 Four metrics, taken from the operating system and from the wire rather than
 from inside the program:
@@ -98,7 +98,146 @@ A few details that change what the numbers mean:
 
 <!-- START BENCHMARK -->
 
+Measured on AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx, 8 logical CPUs, 61 GiB RAM, linux/amd64, kernel 6.1.0-52-amd64, go1.27.1, build 2.7.6-0.20260903234347-3ee720d09ea7 (3ee720d0), 2026-09-03T23:43:59Z. 3 rounds per method, resident set sampled every 100 ms.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="benchmarks/memory.dark.svg">
+  <img alt="Grouped bars comparing resident memory across the dynamic, meta and individual surfaces on both transports." src="benchmarks/memory.light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="benchmarks/memory-ramp.dark.svg">
+  <img alt="Lines showing resident memory growing as each new credential builds its own catalog in the HTTP pool." src="benchmarks/memory-ramp.light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="benchmarks/startup.dark.svg">
+  <img alt="Grouped bars on a log scale comparing process readiness, the first cold tools/list and a warm one." src="benchmarks/startup.light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="benchmarks/latency.dark.svg">
+  <img alt="Grouped bars on a log scale comparing resources/list, tools/call and tools/list latency across transports and surfaces." src="benchmarks/latency.light.svg">
+</picture>
+
+### Memory, goroutines and processor time per scenario
+
+| Scenario                  | Clients | Idle | One client | All clients | Per extra client | Peak | Goroutines | CPU, % of one core |
+| ------------------------- | ------: | ---: | ---------: | ----------: | ---------------: | ---: | ---------: | -----------------: |
+| stdio, dynamic            |       4 |  n/a |        211 |         863 |              217 |  929 |         26 |               508% |
+| stdio, meta               |       4 |  n/a |        193 |         783 |              196 |  814 |         28 |               431% |
+| stdio, individual         |       4 |  n/a |        331 |        1218 |              296 | 1218 |         28 |               561% |
+| stdio, dynamic, telemetry |       4 |  n/a |        248 |         928 |              227 |  973 |         35 |               427% |
+| http, dynamic             |       8 |   40 |        219 |         717 |               71 |  863 |         66 |               447% |
+| http, meta                |       8 |   39 |        197 |         445 |               35 |  599 |         68 |               417% |
+| http, individual          |       8 |   39 |        334 |         589 |               36 | 1164 |         52 |               434% |
+| http, dynamic, telemetry  |       8 |   43 |        242 |         719 |               68 |  840 |         75 |               464% |
+
+### What a client waits for, per scenario
+
+| Scenario                  | Process ready | First tools/list | Warm tools/list (p50) | tools/list payload |
+| ------------------------- | ------------: | ---------------: | --------------------: | -----------------: |
+| stdio, dynamic            |          0.27 |             1729 |                   4.6 |              12 KB |
+| stdio, meta               |          0.36 |             1771 |                   105 |             584 KB |
+| stdio, individual         |           5.4 |             4301 |                   907 |             3.1 MB |
+| stdio, dynamic, telemetry |          0.30 |             1807 |                   7.0 |              12 KB |
+| http, dynamic             |            52 |             1950 |                    14 |              12 KB |
+| http, meta                |           102 |             2025 |                   222 |             584 KB |
+| http, individual          |            52 |             4625 |                  2391 |             3.1 MB |
+| http, dynamic, telemetry  |           103 |             2139 |                    24 |              12 KB |
+
+### Latency percentiles per method
+
+| Scenario                  | Method           | Call                   |  p50 |  p90 |  p99 |  Max |
+| ------------------------- | ---------------- | ---------------------- | ---: | ---: | ---: | ---: |
+| stdio, dynamic            | `resources/list` | smallest listing       |  1.6 |  2.2 |  2.5 |  2.5 |
+| stdio, dynamic            | `tools/call`     | gitlab_find_action     |   70 |   93 |   96 |   96 |
+| stdio, dynamic            | `tools/list`     | whole surface          |  4.6 |  5.4 |   11 |   11 |
+| stdio, meta               | `resources/list` | smallest listing       |  3.1 |  9.1 |   14 |   14 |
+| stdio, meta               | `tools/call`     | gitlab_server (status) |  4.4 |  7.8 |  9.8 |  9.8 |
+| stdio, meta               | `tools/list`     | whole surface          |  105 |  137 |  142 |  142 |
+| stdio, individual         | `resources/list` | smallest listing       |  1.1 |  1.7 |  1.9 |  1.9 |
+| stdio, individual         | `tools/call`     | gitlab_server_status   |  2.1 |  2.7 |  3.0 |  3.0 |
+| stdio, individual         | `tools/list`     | whole surface          |  907 |  998 | 1030 | 1030 |
+| stdio, dynamic, telemetry | `resources/list` | smallest listing       |  2.0 |  2.5 |  2.7 |  2.7 |
+| stdio, dynamic, telemetry | `tools/call`     | gitlab_find_action     |   77 |  126 |  133 |  133 |
+| stdio, dynamic, telemetry | `tools/list`     | whole surface          |  7.0 |   13 |   30 |   30 |
+| http, dynamic             | `resources/list` | smallest listing       |  9.8 |   15 |   16 |   16 |
+| http, dynamic             | `tools/call`     | gitlab_find_action     |  174 |  356 |  375 |  375 |
+| http, dynamic             | `tools/list`     | whole surface          |   14 |   15 |   17 |   17 |
+| http, meta                | `resources/list` | smallest listing       |  5.4 |  8.3 |   10 |   10 |
+| http, meta                | `tools/call`     | gitlab_server (status) |   14 |   18 |   19 |   19 |
+| http, meta                | `tools/list`     | whole surface          |  222 |  330 |  361 |  361 |
+| http, individual          | `resources/list` | smallest listing       |  3.4 |  5.7 |  6.7 |  6.7 |
+| http, individual          | `tools/call`     | gitlab_server_status   |  7.7 |  9.9 |   11 |   11 |
+| http, individual          | `tools/list`     | whole surface          | 2391 | 2879 | 2897 | 2897 |
+| http, dynamic, telemetry  | `resources/list` | smallest listing       |  6.1 |  9.1 |   11 |   11 |
+| http, dynamic, telemetry  | `tools/call`     | gitlab_find_action     |  159 |  330 |  340 |  340 |
+| http, dynamic, telemetry  | `tools/list`     | whole surface          |   24 |   39 |   49 |   49 |
+
 <!-- END BENCHMARK -->
+
+## Reading the numbers
+
+Four things the measurements say, in the order an operator meets them.
+
+**An HTTP process is cheap until a credential arrives, and then it is not.**
+Idle it holds about 40 MiB and no tool catalog at all. The first request from
+each distinct token builds one, and the resident set grows with every live
+credential: 35 MiB each on `meta`, 36 MiB on `individual` and 71 MiB on
+`dynamic`. Eight credentials landed between 445 and 719 MiB, peaking between
+599 MiB and 1.16 GiB while all eight were calling at once. Sizing follows
+directly: budget roughly 100 MiB per credential expected to be live at once on
+top of 128 MiB for the process, and read `--max-http-clients` as a memory
+setting rather than a concurrency one. Its default of 100 entries describes a
+pool no small instance can hold.
+
+**stdio has no idle state, and one process per client.** The process starts
+building its catalog on a background goroutine as soon as it is executed, so
+between 190 and 330 MiB per client is the figure, with the surface deciding
+where in that range. Four processes reached 783 MiB to 1.2 GiB together, which
+is what running four stdio clients on one host costs.
+
+**The wait is registration, and it lands on the first tool call.** The process
+itself is ready in a few milliseconds on stdio and in 50 to 100 ms on HTTP,
+where `/health` answers while the pool is still empty. The first `tools/list`
+of a credential then takes about 2 seconds on `dynamic` and `meta` and 4 to 5
+seconds on `individual`. Warm, the same call is 5 to 24 ms, 100 to 220 ms and
+0.9 to 2.4 seconds respectively. Two consequences: a client that gives up
+before its first call answers has not hit a hung server, and an HTTP
+deployment pays that wait again every time the pool reclaims an entry.
+
+**The tool surface changes responses far more than memory.** A `tools/list` is
+12 KB on `dynamic`, 584 KB on `meta` and 3.1 MB on `individual`, and the warm
+response times follow. Memory per credential goes the other way from what the
+tool counts suggest: `dynamic` costs the most, because it builds a search
+index the other two do not, while `individual` shares its tool schemas across
+pooled entries and so costs the least per additional credential despite
+registering about a thousand tools.
+
+### Where this contradicts what was published before
+
+The sizing section of the
+[HTTP server mode page](https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/)
+was written before registration moved behind the readiness gate, and two of
+its numbers no longer describe this build. Both are corrected there; they are
+recorded here because a number that moved is worth saying out loud rather than
+quietly replacing.
+
+- **"The server idles near 181 MB."** It does not: an HTTP process idles near
+  40 MiB, because it now holds no catalog until a credential asks for one. The
+  181 MB figure matches a process that had already built one, which is what an
+  idle process used to be.
+- **"512 MB is the floor."** True for a single-user deployment and optimistic
+  for a shared one. Eight concurrent credentials exceeded it on every surface
+  measured, peaking at over a gigabyte. The floor is not wrong so much as it
+  is not a floor: memory follows the number of live credentials, and any fixed
+  figure has a client count hidden inside it.
+
+The earlier claim that the surface "barely affects memory" survives with a
+caveat: the per-credential difference is real, and at 71 MiB against 35 MiB it
+is a factor of two, but it stays small beside the difference the surface makes
+to the response sizes.
 
 ## What this does not measure
 

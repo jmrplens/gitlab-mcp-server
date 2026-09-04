@@ -26,8 +26,11 @@ import (
 const (
 	docStartMark  = "<!-- START BENCHMARK -->"
 	docEndMark    = "<!-- END BENCHMARK -->"
-	siteStartMark = "{/* START BENCHMARK */}"
-	siteEndMark   = "{/* END BENCHMARK */}"
+	// The MDX comment carries no spaces inside its delimiters on purpose:
+	// markdownlint reads "/* " as an emphasis marker followed by a space and
+	// fails the page on MD037.
+	siteStartMark = "{/*START BENCHMARK*/}"
+	siteEndMark   = "{/*END BENCHMARK*/}"
 )
 
 // themeCSS is where the chart palette is read from.
@@ -171,7 +174,7 @@ func docBlock(run *Run, l labels) string {
 		b.WriteString("</picture>\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(tableBlocks(run, l, "####"))
+	b.WriteString(tableBlocks(run, l, "###"))
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
@@ -197,7 +200,7 @@ func measuredOn(run *Run, l labels) string {
 		build = "unknown"
 	}
 	return fmt.Sprintf(l.MeasuredOn,
-		run.Host.describe(), build, run.GeneratedAt, run.Settings.Rounds, run.Settings.SampleIntervalMs)
+		run.Host.describe(l), build, run.GeneratedAt, run.Settings.Rounds, run.Settings.SampleIntervalMs)
 }
 
 // shortCommit trims a commit to the width the rest of the documentation uses.

@@ -27,9 +27,11 @@ func TestPublishedMatrix_CoversEveryAxis(t *testing.T) {
 		}
 	}
 	for _, transport := range []string{transportStdio, transportHTTP} {
-		if !transports[transport] {
-			t.Errorf("the matrix never measures %s", transport)
-		}
+		t.Run(transport, func(t *testing.T) {
+			if !transports[transport] {
+				t.Errorf("the matrix never measures %s", transport)
+			}
+		})
 	}
 	for _, surface := range surfaceOrder {
 		if !surfaces[surface] {
@@ -164,9 +166,11 @@ func TestScenarioPlan_Describe_SaysEveryKnob(t *testing.T) {
 	}
 	got := plan.describe()
 	for _, want := range []string{"http", "individual", "8 clients", "2 parallel", "telemetry on"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("describe() = %q, missing %q", got, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("describe() = %q, missing %q", got, want)
+			}
+		})
 	}
 	off := scenarioPlan{Transport: transportStdio, Surface: surfaceDynamic, Clients: 1, Parallel: 1}
 	if !strings.Contains(off.describe(), "telemetry off") {

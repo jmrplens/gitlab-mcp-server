@@ -59,23 +59,43 @@ func TestHostInfo_Describe_NamesEverythingAReaderNeeds(t *testing.T) {
 		OS: "linux", Arch: "amd64", CPUModel: "AMD Ryzen 5 3550H",
 		CPUs: 8, MemTotalGiB: 61, Kernel: "6.1.0-52-amd64", GoVersion: "go1.27.1",
 	}
-	got := host.describe()
+	got := host.describe(englishLabels())
 	for _, want := range []string{"AMD Ryzen 5 3550H", "8 logical CPUs", "61 GiB RAM", "linux/amd64", "kernel 6.1.0", "go1.27.1"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("describe() = %q, missing %q", got, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("describe() = %q, missing %q", got, want)
+			}
+		})
 	}
 }
 
 // TestHostInfo_Describe_OmitsWhatItDoesNotKnow verifies a machine that would
 // not answer produces a shorter sentence rather than one full of zeroes.
 func TestHostInfo_Describe_OmitsWhatItDoesNotKnow(t *testing.T) {
-	got := HostInfo{OS: "darwin", Arch: "arm64", CPUModel: "unknown", Kernel: "unknown", GoVersion: "go1.27.1"}.describe()
+	got := HostInfo{OS: "darwin", Arch: "arm64", CPUModel: "unknown", Kernel: "unknown", GoVersion: "go1.27.1"}.
+		describe(englishLabels())
 	if strings.Contains(got, "0 GiB") || strings.Contains(got, "0 logical") {
 		t.Errorf("describe() = %q, want the unknown facts left out", got)
 	}
 	if strings.Contains(got, "kernel unknown") {
 		t.Errorf("describe() = %q, want no kernel rather than an unknown one", got)
+	}
+}
+
+// TestHostInfo_Describe_FollowsTheLanguage verifies the sentence is written in
+// the language of the page it is going on, so the Spanish page does not carry
+// an English fragment inside a translated sentence.
+func TestHostInfo_Describe_FollowsTheLanguage(t *testing.T) {
+	host := HostInfo{
+		OS: "linux", Arch: "amd64", CPUModel: "Test CPU",
+		CPUs: 8, MemTotalGiB: 61, Kernel: "6.1.0", GoVersion: "go1.27.1",
+	}
+	spanish := host.describe(spanishLabels())
+	if strings.Contains(spanish, "logical CPUs") || strings.Contains(spanish, "GiB RAM") {
+		t.Errorf("the Spanish description carries English words: %q", spanish)
+	}
+	if !strings.Contains(spanish, spanishLabels().HostCPUs) {
+		t.Errorf("the Spanish description does not use its own wording: %q", spanish)
 	}
 }
 

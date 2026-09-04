@@ -15,13 +15,12 @@ faq:
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 import FAQ from "../../../../components/FAQ.astro";
-import stats from "../../../../data/stats.json";
 
 :::tip[De un vistazo]
 
 - **El modo HTTP atiende a muchos clientes desde un solo proceso**, mientras que stdio arranca un proceso por cliente.
 - **Cada petición lleva su propio token de GitLab.** Las sesiones se aíslan en un pool LRU acotado, indexado por un hash de token + URL de GitLab, así que los clientes nunca comparten estado.
-- **512 MB es el suelo, no el objetivo.** El servidor reposa cerca de 181 MB antes de que se conecte ningún cliente; dimensiona por encima según los pares token+URL concurrentes que esperes, no según el volumen de peticiones.
+- **Dimensiona por credenciales concurrentes, no por peticiones.** El proceso reposa cerca de 40 MiB sin ningún catálogo, y cada par token+URL activo añade el suyo: presupuesta unos 100 MiB por credencial simultánea.
 
 :::
 
@@ -555,21 +554,25 @@ Usa un token con el alcance mínimo que necesites. Un endpoint alojado ve todas 
 
 ## ¿Cuánta memoria necesita?
 
-Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamaño del binario. Medido sobre la build v{stats.version} (darwin/arm64, en reposo justo tras arrancar):
+Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamaño del binario, y hazlo **por credencial concurrente**. Estas cifras vienen del [consumo de recursos](/gitlab-mcp-server/es/operations/resource-benchmark/), que mide el binario real en ambos transportes e indica la máquina en la que se ejecutó:
 
-| Modo                          | Conjunto residente | Notas                                                      |
-| ----------------------------- | -----------------: | ---------------------------------------------------------- |
-| stdio, cualquier superficie   |          ~29–30 MB | Prácticamente idéntico en `dynamic`, `meta` e `individual` |
-| HTTP, en reposo, sin sesiones |            ~181 MB | Antes de que se conecte ningún cliente                     |
-| Binario en disco              |             ~55 MB | Binario estático único, sin dependencias de runtime        |
+| Modo                                  | Conjunto residente | Notas                                                              |
+| ------------------------------------- | -----------------: | ------------------------------------------------------------------ |
+| HTTP, en reposo, sin credenciales     |            ~40 MiB | El proceso no tiene ningún catálogo hasta que un token lo pide     |
+| HTTP, por credencial activa adicional |          35–71 MiB | Un catálogo por cada par token+URL distinto, en el pool            |
+| HTTP, ocho credenciales activas       |        445–719 MiB | Picos de 599 MiB a 1,16 GiB mientras las ocho llamaban             |
+| stdio, un proceso por cliente         |        190–330 MiB | Empieza a construir su catálogo enseguida, así que no tiene reposo |
+| Binario en disco                      |             ~55 MB | Binario estático único, sin dependencias de runtime                |
 
-De aquí se derivan dos cosas.
+De aquí se derivan tres cosas.
 
-**El modo HTTP necesita al menos 512 MB.** Una instancia de 256 MB no basta: el servidor reposa en torno a 181 MB antes de que se conecte nadie, y cada sesión del pool añade su propio catálogo y cliente encima. No es un límite teórico: una VM de 256 MB ejecutando la v2.4.0 fue terminada por OOM durante el arranque. El margen por encima de ese suelo lo marca la concurrencia: el pool mantiene hasta `--max-http-clients` entradas, cada una con su propia instancia del servidor MCP, así que el pico de memoria sigue a los pares token+URL distintos y no al volumen de peticiones. Dimensiona tu instancia según la concurrencia esperada, con margen por encima del suelo de 512 MB.
+**La memoria sigue a las credenciales activas, no a las peticiones.** El pool mantiene una instancia del servidor MCP por cada par token+URL distinto, cada una con su propio catálogo, así que el pico de un despliegue sigue a cuánta gente lo usa a la vez. Un presupuesto práctico es de unos 100 MiB por credencial que esperes tener activa a la vez, más 128 MiB para el propio proceso. Con 512 MB vas holgado con unas pocas credenciales, y no es una cifra a la que aspirar con más: ocho credenciales concurrentes la superaron en todas las superficies medidas.
 
-**La superficie de herramientas casi no afecta a la memoria, solo al contexto.** Las tres superficies construyen el mismo catálogo canónico de acciones, así que elegir `dynamic` en vez de `individual` ahorra ventana de contexto del modelo, no RAM del servidor. Elige la superficie por coste de tokens y el tamaño de instancia por concurrencia.
+**`--max-http-clients` es un ajuste de memoria.** Su valor por defecto de 100 entradas describe un pool mucho mayor de lo que cabe en una instancia pequeña, y `--session-timeout` (30m por defecto) junto con `--pool-idle-timeout` (1h por defecto) deciden cuánto tiempo conserva su memoria una entrada sin usar. Bájalos si vas justo de memoria y súbelos solo junto con más RAM.
 
-La concurrencia la acotan `--max-http-clients` (100 por defecto) y `--session-timeout` (30m por defecto), que juntos fijan cuántas entradas puede haber en el pool a la vez. Baja ambos si vas justo de memoria y súbelos solo junto con más RAM. Las cifras absolutas varían según plataforma y versión del runtime de Go: tómalas como punto de partida y mide tu propio despliegue.
+**La superficie de herramientas cambia las respuestas más que la memoria.** Las tres construyen el mismo catálogo canónico de acciones, y por credencial la diferencia es de un factor de dos (`dynamic` es la que más cuesta, porque además construye un índice de búsqueda). Lo que la superficie decide de verdad es el tamaño de un `tools/list`: 12 KB, 584 KB y 3,1 MB para `dynamic`, `meta` e `individual`. Elige la superficie por coste de tokens y tiempo de respuesta, y el tamaño de instancia por concurrencia.
+
+Las cifras absolutas varían según plataforma y versión del runtime de Go: tómalas como punto de partida y ejecuta `make bench-resources` para medir las tuyas.
 
 ## Verificación de salud
 

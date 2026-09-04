@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "generated_at": "2026-09-03T23:40:33Z",
+  "generated_at": "2026-09-03T23:43:59Z",
   "server": {
-    "version": "2.7.6-0.20260903234019-c046e212d558",
-    "commit": "c046e212d5585bc20b64aba4e626a366df8be72d"
+    "version": "2.7.6-0.20260903234347-3ee720d09ea7",
+    "commit": "3ee720d09ea717862843658b30a4e51150369982"
   },
   "host": {
     "os": "linux",
@@ -30,44 +30,44 @@
       "rounds": 3,
       "list_bytes": 12119,
       "startup": {
-        "process_ready_ms": 0.29,
-        "first_list_ms": 1380.561,
-        "warm_list_ms": 7.276
+        "process_ready_ms": 0.27,
+        "first_list_ms": 1729.472,
+        "warm_list_ms": 4.565
       },
       "memory": {
-        "idle_mib": 91.012,
-        "one_client_mib": 250.828,
-        "all_clients_mib": 943.906,
-        "peak_mib": 995.668,
-        "per_extra_client_mib": 231.026
+        "idle_mib": 0,
+        "one_client_mib": 210.723,
+        "all_clients_mib": 862.793,
+        "peak_mib": 929.117,
+        "per_extra_client_mib": 217.357
       },
       "cpu": {
-        "startup_seconds": 14.15,
-        "load_seconds": 1.65,
-        "load_percent": 343.359,
-        "total_seconds": 15.8
+        "startup_seconds": 13.14,
+        "load_seconds": 1.5,
+        "load_percent": 507.863,
+        "total_seconds": 14.64
       },
       "goroutines": 26,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 1380.561,
-          "rss_mib": 250.828
+          "cold_list_ms": 1729.472,
+          "rss_mib": 210.723
         },
         {
           "client": 2,
-          "cold_list_ms": 2158.602,
-          "rss_mib": 494.863
+          "cold_list_ms": 1731.456,
+          "rss_mib": 458.469
         },
         {
           "client": 3,
-          "cold_list_ms": 2137.678,
-          "rss_mib": 728.512
+          "cold_list_ms": 1812.896,
+          "rss_mib": 670.043
         },
         {
           "client": 4,
-          "cold_list_ms": 2235.804,
-          "rss_mib": 943.906
+          "cold_list_ms": 1778.517,
+          "rss_mib": 862.793
         }
       ],
       "latency": [
@@ -75,28 +75,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 48,
-          "p50_ms": 2.955,
-          "p90_ms": 4.85,
-          "p99_ms": 5.764,
-          "max_ms": 5.764
+          "p50_ms": 1.576,
+          "p90_ms": 2.168,
+          "p99_ms": 2.481,
+          "max_ms": 2.481
         },
         {
           "method": "tools/call",
           "detail": "gitlab_find_action",
           "count": 48,
-          "p50_ms": 112.104,
-          "p90_ms": 144.8,
-          "p99_ms": 150.695,
-          "max_ms": 150.695
+          "p50_ms": 70.36,
+          "p90_ms": 92.928,
+          "p99_ms": 96.195,
+          "max_ms": 96.195
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 48,
-          "p50_ms": 7.276,
-          "p90_ms": 8.388,
-          "p99_ms": 10.405,
-          "max_ms": 10.405
+          "p50_ms": 4.565,
+          "p90_ms": 5.43,
+          "p99_ms": 11.476,
+          "max_ms": 11.476
         }
       ]
     },
@@ -110,44 +110,44 @@
       "rounds": 3,
       "list_bytes": 598262,
       "startup": {
-        "process_ready_ms": 0.31,
-        "first_list_ms": 1303.796,
-        "warm_list_ms": 147.708
+        "process_ready_ms": 0.357,
+        "first_list_ms": 1771.369,
+        "warm_list_ms": 104.768
       },
       "memory": {
-        "idle_mib": 136.227,
-        "one_client_mib": 189.262,
-        "all_clients_mib": 781.684,
-        "peak_mib": 859.242,
-        "per_extra_client_mib": 197.474
+        "idle_mib": 0,
+        "one_client_mib": 193.371,
+        "all_clients_mib": 782.691,
+        "peak_mib": 813.926,
+        "per_extra_client_mib": 196.44
       },
       "cpu": {
-        "startup_seconds": 13.94,
-        "load_seconds": 2.04,
-        "load_percent": 344.337,
-        "total_seconds": 15.98
+        "startup_seconds": 12.68,
+        "load_seconds": 1.89,
+        "load_percent": 430.875,
+        "total_seconds": 14.57
       },
       "goroutines": 28,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 1303.796,
-          "rss_mib": 189.262
+          "cold_list_ms": 1771.369,
+          "rss_mib": 193.371
         },
         {
           "client": 2,
-          "cold_list_ms": 2206.195,
-          "rss_mib": 393.066
+          "cold_list_ms": 1890.582,
+          "rss_mib": 386.805
         },
         {
           "client": 3,
-          "cold_list_ms": 2107.295,
-          "rss_mib": 586.547
+          "cold_list_ms": 1809.06,
+          "rss_mib": 582.473
         },
         {
           "client": 4,
-          "cold_list_ms": 2239.642,
-          "rss_mib": 781.684
+          "cold_list_ms": 1819.397,
+          "rss_mib": 782.691
         }
       ],
       "latency": [
@@ -155,28 +155,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 48,
-          "p50_ms": 2.826,
-          "p90_ms": 3.87,
-          "p99_ms": 4.301,
-          "max_ms": 4.301
+          "p50_ms": 3.142,
+          "p90_ms": 9.118,
+          "p99_ms": 13.517,
+          "max_ms": 13.517
         },
         {
           "method": "tools/call",
           "detail": "gitlab_server (status)",
           "count": 48,
-          "p50_ms": 5.662,
-          "p90_ms": 9.271,
-          "p99_ms": 10.085,
-          "max_ms": 10.085
+          "p50_ms": 4.365,
+          "p90_ms": 7.843,
+          "p99_ms": 9.845,
+          "max_ms": 9.845
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 48,
-          "p50_ms": 147.708,
-          "p90_ms": 183.215,
-          "p99_ms": 209.737,
-          "max_ms": 209.737
+          "p50_ms": 104.768,
+          "p90_ms": 136.771,
+          "p99_ms": 141.765,
+          "max_ms": 141.765
         }
       ]
     },
@@ -190,44 +190,44 @@
       "rounds": 3,
       "list_bytes": 3227298,
       "startup": {
-        "process_ready_ms": 0.332,
-        "first_list_ms": 4898.142,
-        "warm_list_ms": 1111.049
+        "process_ready_ms": 5.401,
+        "first_list_ms": 4301.358,
+        "warm_list_ms": 907.429
       },
       "memory": {
-        "idle_mib": 77.445,
-        "one_client_mib": 328.465,
-        "all_clients_mib": 1193.52,
-        "peak_mib": 1193.52,
-        "per_extra_client_mib": 288.352
+        "idle_mib": 0,
+        "one_client_mib": 330.828,
+        "all_clients_mib": 1218.465,
+        "peak_mib": 1218.465,
+        "per_extra_client_mib": 295.879
       },
       "cpu": {
-        "startup_seconds": 28.12,
-        "load_seconds": 17.19,
-        "load_percent": 468.479,
-        "total_seconds": 45.31
+        "startup_seconds": 26.02,
+        "load_seconds": 16.67,
+        "load_percent": 560.54,
+        "total_seconds": 42.69
       },
       "goroutines": 28,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 4898.142,
-          "rss_mib": 328.465
+          "cold_list_ms": 4301.358,
+          "rss_mib": 330.828
         },
         {
           "client": 2,
-          "cold_list_ms": 4820.441,
-          "rss_mib": 618.766
+          "cold_list_ms": 4177.225,
+          "rss_mib": 640.773
         },
         {
           "client": 3,
-          "cold_list_ms": 4561.34,
-          "rss_mib": 898.93
+          "cold_list_ms": 4288.435,
+          "rss_mib": 950.984
         },
         {
           "client": 4,
-          "cold_list_ms": 4866.929,
-          "rss_mib": 1193.52
+          "cold_list_ms": 4240.742,
+          "rss_mib": 1218.465
         }
       ],
       "latency": [
@@ -235,28 +235,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 24,
-          "p50_ms": 1.252,
-          "p90_ms": 1.927,
-          "p99_ms": 2.216,
-          "max_ms": 2.216
+          "p50_ms": 1.114,
+          "p90_ms": 1.692,
+          "p99_ms": 1.85,
+          "max_ms": 1.85
         },
         {
           "method": "tools/call",
           "detail": "gitlab_server_status",
           "count": 24,
-          "p50_ms": 2.486,
-          "p90_ms": 2.936,
-          "p99_ms": 3.264,
-          "max_ms": 3.264
+          "p50_ms": 2.119,
+          "p90_ms": 2.719,
+          "p99_ms": 2.981,
+          "max_ms": 2.981
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 24,
-          "p50_ms": 1111.049,
-          "p90_ms": 1304.309,
-          "p99_ms": 1328.311,
-          "max_ms": 1328.311
+          "p50_ms": 907.429,
+          "p90_ms": 997.812,
+          "p99_ms": 1029.666,
+          "max_ms": 1029.666
         }
       ]
     },
@@ -270,44 +270,44 @@
       "rounds": 3,
       "list_bytes": 12119,
       "startup": {
-        "process_ready_ms": 0.321,
-        "first_list_ms": 1093.821,
-        "warm_list_ms": 5.673
+        "process_ready_ms": 0.298,
+        "first_list_ms": 1807.444,
+        "warm_list_ms": 6.956
       },
       "memory": {
-        "idle_mib": 135.184,
-        "one_client_mib": 225.867,
-        "all_clients_mib": 877.816,
-        "peak_mib": 943.805,
-        "per_extra_client_mib": 217.316
+        "idle_mib": 0,
+        "one_client_mib": 248.328,
+        "all_clients_mib": 927.914,
+        "peak_mib": 973.203,
+        "per_extra_client_mib": 226.529
       },
       "cpu": {
-        "startup_seconds": 13.31,
-        "load_seconds": 1.81,
-        "load_percent": 535.759,
-        "total_seconds": 15.12
+        "startup_seconds": 13.85,
+        "load_seconds": 1.58,
+        "load_percent": 427.393,
+        "total_seconds": 15.43
       },
       "goroutines": 35,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 1093.821,
-          "rss_mib": 225.867
+          "cold_list_ms": 1807.444,
+          "rss_mib": 248.328
         },
         {
           "client": 2,
-          "cold_list_ms": 1921.208,
-          "rss_mib": 440.754
+          "cold_list_ms": 2010.65,
+          "rss_mib": 477.926
         },
         {
           "client": 3,
-          "cold_list_ms": 1885.763,
-          "rss_mib": 663.496
+          "cold_list_ms": 1825.059,
+          "rss_mib": 726.891
         },
         {
           "client": 4,
-          "cold_list_ms": 1903.562,
-          "rss_mib": 877.816
+          "cold_list_ms": 1898.132,
+          "rss_mib": 927.914
         }
       ],
       "latency": [
@@ -315,28 +315,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 48,
-          "p50_ms": 2.155,
-          "p90_ms": 6.63,
-          "p99_ms": 12.611,
-          "max_ms": 12.611
+          "p50_ms": 1.977,
+          "p90_ms": 2.524,
+          "p99_ms": 2.699,
+          "max_ms": 2.699
         },
         {
           "method": "tools/call",
           "detail": "gitlab_find_action",
           "count": 48,
-          "p50_ms": 76.337,
-          "p90_ms": 90.62,
-          "p99_ms": 99.202,
-          "max_ms": 99.202
+          "p50_ms": 77.236,
+          "p90_ms": 125.686,
+          "p99_ms": 133.174,
+          "max_ms": 133.174
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 48,
-          "p50_ms": 5.673,
-          "p90_ms": 14.006,
-          "p99_ms": 17.411,
-          "max_ms": 17.411
+          "p50_ms": 6.956,
+          "p90_ms": 12.577,
+          "p99_ms": 29.757,
+          "max_ms": 29.757
         }
       ]
     },
@@ -350,64 +350,64 @@
       "rounds": 3,
       "list_bytes": 12142,
       "startup": {
-        "process_ready_ms": 52.417,
-        "first_list_ms": 1878.582,
-        "warm_list_ms": 11.759
+        "process_ready_ms": 51.645,
+        "first_list_ms": 1949.775,
+        "warm_list_ms": 13.84
       },
       "memory": {
-        "idle_mib": 39.016,
-        "one_client_mib": 212.789,
-        "all_clients_mib": 726.336,
-        "peak_mib": 846.152,
-        "per_extra_client_mib": 73.364
+        "idle_mib": 39.93,
+        "one_client_mib": 219.328,
+        "all_clients_mib": 717.277,
+        "peak_mib": 862.512,
+        "per_extra_client_mib": 71.136
       },
       "cpu": {
-        "startup_seconds": 19.91,
-        "load_seconds": 3.46,
-        "load_percent": 534.742,
-        "total_seconds": 23.37
+        "startup_seconds": 20.78,
+        "load_seconds": 3.73,
+        "load_percent": 446.795,
+        "total_seconds": 24.51
       },
       "goroutines": 66,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 1878.582,
-          "rss_mib": 212.789
+          "cold_list_ms": 1949.775,
+          "rss_mib": 219.328
         },
         {
           "client": 2,
-          "cold_list_ms": 1218.883,
-          "rss_mib": 306.422
+          "cold_list_ms": 1371.238,
+          "rss_mib": 294.762
         },
         {
           "client": 3,
-          "cold_list_ms": 1128.361,
-          "rss_mib": 331.977
+          "cold_list_ms": 1341.243,
+          "rss_mib": 357.848
         },
         {
           "client": 4,
-          "cold_list_ms": 1105.332,
-          "rss_mib": 414.242
+          "cold_list_ms": 1338.367,
+          "rss_mib": 397.84
         },
         {
           "client": 5,
-          "cold_list_ms": 1241.638,
-          "rss_mib": 514.254
+          "cold_list_ms": 1415.837,
+          "rss_mib": 487.387
         },
         {
           "client": 6,
-          "cold_list_ms": 1113.534,
-          "rss_mib": 591.668
+          "cold_list_ms": 1267.558,
+          "rss_mib": 575.758
         },
         {
           "client": 7,
-          "cold_list_ms": 1092.249,
-          "rss_mib": 663.496
+          "cold_list_ms": 1169.558,
+          "rss_mib": 650.098
         },
         {
           "client": 8,
-          "cold_list_ms": 1132.315,
-          "rss_mib": 726.336
+          "cold_list_ms": 1281.44,
+          "rss_mib": 717.277
         }
       ],
       "latency": [
@@ -415,28 +415,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 96,
-          "p50_ms": 5.874,
-          "p90_ms": 8.05,
-          "p99_ms": 11.462,
-          "max_ms": 11.462
+          "p50_ms": 9.771,
+          "p90_ms": 15.033,
+          "p99_ms": 15.692,
+          "max_ms": 15.692
         },
         {
           "method": "tools/call",
           "detail": "gitlab_find_action",
           "count": 96,
-          "p50_ms": 136.659,
-          "p90_ms": 201.839,
-          "p99_ms": 219.376,
-          "max_ms": 219.376
+          "p50_ms": 173.566,
+          "p90_ms": 355.687,
+          "p99_ms": 374.643,
+          "max_ms": 374.643
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 96,
-          "p50_ms": 11.759,
-          "p90_ms": 13.992,
-          "p99_ms": 14.863,
-          "max_ms": 14.863
+          "p50_ms": 13.84,
+          "p90_ms": 15.305,
+          "p99_ms": 16.554,
+          "max_ms": 16.554
         }
       ]
     },
@@ -450,64 +450,64 @@
       "rounds": 3,
       "list_bytes": 598285,
       "startup": {
-        "process_ready_ms": 52.14,
-        "first_list_ms": 1845.684,
-        "warm_list_ms": 179.176
+        "process_ready_ms": 102.31,
+        "first_list_ms": 2025.375,
+        "warm_list_ms": 222.182
       },
       "memory": {
-        "idle_mib": 40.133,
-        "one_client_mib": 196.531,
-        "all_clients_mib": 428.047,
-        "peak_mib": 594.633,
-        "per_extra_client_mib": 33.074
+        "idle_mib": 39.047,
+        "one_client_mib": 196.953,
+        "all_clients_mib": 445.348,
+        "peak_mib": 598.578,
+        "per_extra_client_mib": 35.485
       },
       "cpu": {
-        "startup_seconds": 18.25,
-        "load_seconds": 3.73,
-        "load_percent": 419.406,
-        "total_seconds": 21.98
+        "startup_seconds": 19.24,
+        "load_seconds": 3.98,
+        "load_percent": 416.584,
+        "total_seconds": 23.22
       },
       "goroutines": 68,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 1845.684,
-          "rss_mib": 196.531
+          "cold_list_ms": 2025.375,
+          "rss_mib": 196.953
         },
         {
           "client": 2,
-          "cold_list_ms": 1147.736,
-          "rss_mib": 225.297
+          "cold_list_ms": 1301.802,
+          "rss_mib": 237.688
         },
         {
           "client": 3,
-          "cold_list_ms": 1077.036,
-          "rss_mib": 275.02
+          "cold_list_ms": 1310.372,
+          "rss_mib": 260.293
         },
         {
           "client": 4,
-          "cold_list_ms": 1043.452,
-          "rss_mib": 292.02
+          "cold_list_ms": 1351.014,
+          "rss_mib": 309.438
         },
         {
           "client": 5,
-          "cold_list_ms": 1051.996,
-          "rss_mib": 333.637
+          "cold_list_ms": 1479.237,
+          "rss_mib": 351.242
         },
         {
           "client": 6,
-          "cold_list_ms": 987.808,
-          "rss_mib": 373.512
+          "cold_list_ms": 1266.045,
+          "rss_mib": 372.867
         },
         {
           "client": 7,
-          "cold_list_ms": 975.91,
-          "rss_mib": 402.277
+          "cold_list_ms": 1150.676,
+          "rss_mib": 416.914
         },
         {
           "client": 8,
-          "cold_list_ms": 1070.508,
-          "rss_mib": 428.047
+          "cold_list_ms": 1255.803,
+          "rss_mib": 445.348
         }
       ],
       "latency": [
@@ -515,28 +515,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 96,
-          "p50_ms": 6.492,
-          "p90_ms": 8.725,
-          "p99_ms": 9.4,
-          "max_ms": 9.4
+          "p50_ms": 5.434,
+          "p90_ms": 8.278,
+          "p99_ms": 10.167,
+          "max_ms": 10.167
         },
         {
           "method": "tools/call",
           "detail": "gitlab_server (status)",
           "count": 96,
-          "p50_ms": 21.38,
-          "p90_ms": 44.631,
-          "p99_ms": 48.505,
-          "max_ms": 48.505
+          "p50_ms": 14.037,
+          "p90_ms": 17.842,
+          "p99_ms": 18.783,
+          "max_ms": 18.783
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 96,
-          "p50_ms": 179.176,
-          "p90_ms": 264.616,
-          "p99_ms": 287.807,
-          "max_ms": 287.807
+          "p50_ms": 222.182,
+          "p90_ms": 329.798,
+          "p99_ms": 360.598,
+          "max_ms": 360.598
         }
       ]
     },
@@ -550,64 +550,64 @@
       "rounds": 3,
       "list_bytes": 3227321,
       "startup": {
-        "process_ready_ms": 52.077,
-        "first_list_ms": 4209.884,
-        "warm_list_ms": 1962.459
+        "process_ready_ms": 51.823,
+        "first_list_ms": 4624.681,
+        "warm_list_ms": 2391.349
       },
       "memory": {
-        "idle_mib": 40.258,
-        "one_client_mib": 282.133,
-        "all_clients_mib": 642.285,
-        "peak_mib": 1182.633,
-        "per_extra_client_mib": 51.45
+        "idle_mib": 39.207,
+        "one_client_mib": 334.305,
+        "all_clients_mib": 589.031,
+        "peak_mib": 1164.188,
+        "per_extra_client_mib": 36.389
       },
       "cpu": {
-        "startup_seconds": 34.9,
-        "load_seconds": 34.13,
-        "load_percent": 509.076,
-        "total_seconds": 69.03
+        "startup_seconds": 38.07,
+        "load_seconds": 33.75,
+        "load_percent": 434.498,
+        "total_seconds": 71.82
       },
       "goroutines": 52,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 4209.884,
-          "rss_mib": 282.133
+          "cold_list_ms": 4624.681,
+          "rss_mib": 334.305
         },
         {
           "client": 2,
-          "cold_list_ms": 2285.917,
-          "rss_mib": 331.063
+          "cold_list_ms": 2574.389,
+          "rss_mib": 331.238
         },
         {
           "client": 3,
-          "cold_list_ms": 2201.84,
-          "rss_mib": 409.68
+          "cold_list_ms": 2434.699,
+          "rss_mib": 373.898
         },
         {
           "client": 4,
-          "cold_list_ms": 2187.697,
-          "rss_mib": 445.367
+          "cold_list_ms": 2480.073,
+          "rss_mib": 432.57
         },
         {
           "client": 5,
-          "cold_list_ms": 2377.537,
-          "rss_mib": 469.574
+          "cold_list_ms": 2396.068,
+          "rss_mib": 491.738
         },
         {
           "client": 6,
-          "cold_list_ms": 2357.391,
-          "rss_mib": 546.73
+          "cold_list_ms": 2893.852,
+          "rss_mib": 548.301
         },
         {
           "client": 7,
-          "cold_list_ms": 2356.903,
-          "rss_mib": 591.316
+          "cold_list_ms": 2849.002,
+          "rss_mib": 592.398
         },
         {
           "client": 8,
-          "cold_list_ms": 2484.658,
-          "rss_mib": 642.285
+          "cold_list_ms": 2974.567,
+          "rss_mib": 589.031
         }
       ],
       "latency": [
@@ -615,28 +615,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 48,
-          "p50_ms": 3.412,
-          "p90_ms": 5.167,
-          "p99_ms": 6.116,
-          "max_ms": 6.116
+          "p50_ms": 3.418,
+          "p90_ms": 5.732,
+          "p99_ms": 6.717,
+          "max_ms": 6.717
         },
         {
           "method": "tools/call",
           "detail": "gitlab_server_status",
           "count": 48,
-          "p50_ms": 12.311,
-          "p90_ms": 22.18,
-          "p99_ms": 33.049,
-          "max_ms": 33.049
+          "p50_ms": 7.738,
+          "p90_ms": 9.887,
+          "p99_ms": 11.048,
+          "max_ms": 11.048
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 48,
-          "p50_ms": 1962.459,
-          "p90_ms": 2387.682,
-          "p99_ms": 2409.762,
-          "max_ms": 2409.762
+          "p50_ms": 2391.349,
+          "p90_ms": 2878.513,
+          "p99_ms": 2897.386,
+          "max_ms": 2897.386
         }
       ]
     },
@@ -650,64 +650,64 @@
       "rounds": 3,
       "list_bytes": 12142,
       "startup": {
-        "process_ready_ms": 51.894,
-        "first_list_ms": 1978.397,
-        "warm_list_ms": 11.457
+        "process_ready_ms": 102.642,
+        "first_list_ms": 2138.534,
+        "warm_list_ms": 24.021
       },
       "memory": {
-        "idle_mib": 40.547,
-        "one_client_mib": 224.688,
-        "all_clients_mib": 749.566,
-        "peak_mib": 844.148,
-        "per_extra_client_mib": 74.983
+        "idle_mib": 42.719,
+        "one_client_mib": 241.781,
+        "all_clients_mib": 718.652,
+        "peak_mib": 840.059,
+        "per_extra_client_mib": 68.124
       },
       "cpu": {
-        "startup_seconds": 20.72,
-        "load_seconds": 3.59,
-        "load_percent": 559.644,
-        "total_seconds": 24.31
+        "startup_seconds": 20.23,
+        "load_seconds": 4.19,
+        "load_percent": 463.564,
+        "total_seconds": 24.42
       },
       "goroutines": 75,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 1978.397,
-          "rss_mib": 224.688
+          "cold_list_ms": 2138.534,
+          "rss_mib": 241.781
         },
         {
           "client": 2,
-          "cold_list_ms": 1444.868,
-          "rss_mib": 279.195
+          "cold_list_ms": 1222.982,
+          "rss_mib": 270.492
         },
         {
           "client": 3,
-          "cold_list_ms": 1264.133,
-          "rss_mib": 341.914
+          "cold_list_ms": 1253.349,
+          "rss_mib": 354.59
         },
         {
           "client": 4,
-          "cold_list_ms": 1276.842,
-          "rss_mib": 420.656
+          "cold_list_ms": 1249.524,
+          "rss_mib": 421.41
         },
         {
           "client": 5,
-          "cold_list_ms": 1235.658,
-          "rss_mib": 485.137
+          "cold_list_ms": 1313.541,
+          "rss_mib": 507.242
         },
         {
           "client": 6,
-          "cold_list_ms": 1299.002,
-          "rss_mib": 573.434
+          "cold_list_ms": 1274.795,
+          "rss_mib": 566.332
         },
         {
           "client": 7,
-          "cold_list_ms": 1009.853,
-          "rss_mib": 647.879
+          "cold_list_ms": 1301.966,
+          "rss_mib": 658.074
         },
         {
           "client": 8,
-          "cold_list_ms": 1181.944,
-          "rss_mib": 749.566
+          "cold_list_ms": 1244.194,
+          "rss_mib": 718.652
         }
       ],
       "latency": [
@@ -715,28 +715,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 96,
-          "p50_ms": 5.104,
-          "p90_ms": 6.185,
-          "p99_ms": 6.998,
-          "max_ms": 6.998
+          "p50_ms": 6.118,
+          "p90_ms": 9.141,
+          "p99_ms": 11.188,
+          "max_ms": 11.188
         },
         {
           "method": "tools/call",
           "detail": "gitlab_find_action",
           "count": 96,
-          "p50_ms": 102.1,
-          "p90_ms": 213.884,
-          "p99_ms": 263.282,
-          "max_ms": 263.282
+          "p50_ms": 158.726,
+          "p90_ms": 330.339,
+          "p99_ms": 340.365,
+          "max_ms": 340.365
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 96,
-          "p50_ms": 11.457,
-          "p90_ms": 16.068,
-          "p99_ms": 16.859,
-          "max_ms": 16.859
+          "p50_ms": 24.021,
+          "p90_ms": 38.749,
+          "p99_ms": 49.275,
+          "max_ms": 49.275
         }
       ]
     }

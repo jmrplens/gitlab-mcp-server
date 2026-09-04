@@ -156,9 +156,11 @@ func TestLoadPalettes_RealStylesheet_StillParses(t *testing.T) {
 		t.Fatalf("the committed stylesheet no longer yields a chart palette: %v", err)
 	}
 	for _, scheme := range []string{schemeLight, schemeDark} {
-		p := palettes[scheme]
-		if !strings.HasPrefix(p.Page, "#") || !strings.HasPrefix(p.Series[0], "#") {
-			t.Errorf("%s palette did not resolve to colors: %+v", scheme, p)
-		}
+		t.Run(scheme, func(t *testing.T) {
+			p := palettes[scheme]
+			if !strings.HasPrefix(p.Page, "#") || !strings.HasPrefix(p.Series[0], "#") {
+				t.Errorf("%s palette did not resolve to colors: %+v", scheme, p)
+			}
+		})
 	}
 }

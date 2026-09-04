@@ -122,9 +122,11 @@ func TestHTTPRPC_SendsTheProtocolHeaders(t *testing.T) {
 		"Content-Type":         "application/json",
 	}
 	for header, value := range want {
-		if got.Get(header) != value {
-			t.Errorf("%s = %q, want %q", header, got.Get(header), value)
-		}
+		t.Run(header, func(t *testing.T) {
+			if got.Get(header) != value {
+				t.Errorf("%s = %q, want %q", header, got.Get(header), value)
+			}
+		})
 	}
 }
 

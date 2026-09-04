@@ -103,9 +103,11 @@ func TestDocBlock_CarriesProvenanceFiguresAndTables(t *testing.T) {
 		"| stdio, dynamic",
 		"`tools/list`",
 	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the generated block does not contain %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("the generated block does not contain %q", want)
+			}
+		})
 	}
 	if strings.Contains(got, "\n\n\n") {
 		t.Error("the generated block has a run of blank lines, which markdownlint refuses")
@@ -157,9 +159,11 @@ func TestWriteSection_RewritesBetweenMarkersAndChecks(t *testing.T) {
 	}
 	got := readFileForTest(t, path)
 	for _, want := range []string{"prose before", "prose after", "new content"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the rewritten page lost %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("the rewritten page lost %q", want)
+			}
+		})
 	}
 	if strings.Contains(got, "old") {
 		t.Error("the rewritten page kept the previous generated content")

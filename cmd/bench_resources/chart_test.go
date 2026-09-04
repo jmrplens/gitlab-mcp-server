@@ -70,9 +70,11 @@ func TestRenderBars_PublishedFigure_HasTheRequiredParts(t *testing.T) {
 		`stroke-dasharray`, // the threshold rule
 		"</svg>",
 	} {
-		if !strings.Contains(svg, want) {
-			t.Errorf("the figure does not contain %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(svg, want) {
+				t.Errorf("the figure does not contain %q", want)
+			}
+		})
 	}
 }
 
@@ -90,9 +92,11 @@ func TestRenderBars_LogScale_KeepsSmallValuesVisible(t *testing.T) {
 		Format: msLabel,
 	})
 	for _, want := range []string{">1.0<", ">10<", ">100<", ">1000<"} {
-		if !strings.Contains(svg, want) {
-			t.Errorf("the log axis has no %s grid label", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(svg, want) {
+				t.Errorf("the log axis has no %s grid label", want)
+			}
+		})
 	}
 }
 
@@ -112,9 +116,11 @@ func TestRenderLines_PublishedFigure_HasTheRequiredParts(t *testing.T) {
 		t.Errorf("the figure has %d paths, want one per series", strings.Count(svg, "<path"))
 	}
 	for _, want := range []string{"credentials", "MiB", "dynamic", "individual", "512 MiB", "<circle"} {
-		if !strings.Contains(svg, want) {
-			t.Errorf("the figure does not contain %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(svg, want) {
+				t.Errorf("the figure does not contain %q", want)
+			}
+		})
 	}
 }
 

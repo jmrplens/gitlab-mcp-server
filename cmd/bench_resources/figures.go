@@ -50,7 +50,14 @@ type labels struct {
 	LatencyTitle    string
 	LatencySubtitle string
 
-	MeasuredOn   string
+	MeasuredOn string
+	// HostCPUs, HostRAM and HostKernel are the words the machine's own
+	// description is written with. The sentence naming the host is prose, so
+	// it is translated like the rest of it rather than left in English inside
+	// a Spanish page.
+	HostCPUs     string
+	HostRAM      string
+	HostKernel   string
 	SummaryHead  []string
 	StartupHead  []string
 	LatencyHead  []string
@@ -61,6 +68,8 @@ type labels struct {
 
 // englishLabels is the wording of the English page and of the Markdown
 // documentation.
+//
+//nolint:dupl // one bundle per language, identical in shape by definition
 func englishLabels() labels {
 	return labels{
 		Code:            "en",
@@ -83,6 +92,9 @@ func englishLabels() labels {
 		LatencyTitle:    "Request latency by method",
 		LatencySubtitle: "solid bar p50, faint extension p99, log scale",
 		MeasuredOn:      "Measured on %s, build %s, %s. %d rounds per method, resident set sampled every %d ms.",
+		HostCPUs:        "logical CPUs",
+		HostRAM:         "GiB RAM",
+		HostKernel:      "kernel",
 		SummaryHead: []string{
 			"Scenario", "Clients", "Idle", "One client", "All clients", "Per extra client",
 			"Peak", "Goroutines", "CPU, % of one core",
@@ -108,49 +120,52 @@ func englishLabels() labels {
 
 // spanishLabels is the wording of the Spanish page.
 //
-//nolint:misspell // the strings below are Spanish prose, checked against a US English dictionary
+//nolint:misspell,dupl // Spanish prose against a US English dictionary; one bundle per language, identical in shape by definition
 func spanishLabels() labels {
 	//#nosec G101 -- user-facing wording, not a credential
 	return labels{
 		Code:            "es",
 		MemoryTitle:     "Memoria residente por superficie de herramientas",
-		MemorySubtitle:  "stdio mantiene un catalogo por proceso; HTTP mantiene uno por credencial en el pool",
+		MemorySubtitle:  "stdio mantiene un catálogo por proceso; HTTP mantiene uno por credencial en el pool",
 		MemoryY:         "Conjunto residente (MiB)",
 		MemoryStdioOne:  "stdio, un proceso",
 		MemoryHTTPOne:   "HTTP, una credencial",
 		MemoryHTTPAll:   "HTTP, %d credenciales",
 		MemoryThreshold: "512 MiB",
-		RampTitle:       "Memoria residente segun llegan credenciales",
-		RampSubtitle:    "Modo HTTP: cada token distinto construye su propio catalogo en el pool",
+		RampTitle:       "Memoria residente según llegan credenciales",
+		RampSubtitle:    "Modo HTTP: cada token distinto construye su propio catálogo en el pool",
 		RampX:           "credenciales activas (entradas del pool)",
 		StartupTitle:    "Lo que espera un cliente",
-		StartupSubtitle: "Modo HTTP, escala logaritmica: el catalogo se construye en el primer tools/list, no al arrancar",
-		StartupY:        "milisegundos (escala logaritmica)",
+		StartupSubtitle: "Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar",
+		StartupY:        "milisegundos (escala logarítmica)",
 		StartupReady:    "proceso listo",
-		StartupCold:     "primer tools/list (en frio)",
+		StartupCold:     "primer tools/list (en frío)",
 		StartupWarm:     "tools/list ya en caliente (p50)",
-		LatencyTitle:    "Latencia de peticion por metodo",
-		LatencySubtitle: "barra solida p50, extension tenue p99, escala logaritmica",
-		MeasuredOn:      "Medido en %s, compilacion %s, %s. %d rondas por metodo, conjunto residente muestreado cada %d ms.",
+		LatencyTitle:    "Latencia de petición por método",
+		LatencySubtitle: "barra sólida p50, extensión tenue p99, escala logarítmica",
+		MeasuredOn:      "Medido en %s, compilación %s, %s. %d rondas por método, conjunto residente muestreado cada %d ms.",
+		HostCPUs:        "CPU lógicas",
+		HostRAM:         "GiB de RAM",
+		HostKernel:      "núcleo",
 		SummaryHead: []string{
 			"Escenario", "Clientes", "En reposo", "Un cliente", "Todos los clientes",
-			"Por cliente extra", "Pico", "Goroutines", "CPU, % de un nucleo",
+			"Por cliente extra", "Pico", "Goroutines", "CPU, % de un núcleo",
 		},
 		StartupHead: []string{
-			"Escenario", "Proceso listo", "Primer tools/list", "tools/list en caliente (p50)", "Tamano de tools/list",
+			"Escenario", "Proceso listo", "Primer tools/list", "tools/list en caliente (p50)", "Tamaño de tools/list",
 		},
-		LatencyHead: []string{"Escenario", "Metodo", "Llamada", "p50", "p90", "p99", "Max"},
+		LatencyHead: []string{"Escenario", "Método", "Llamada", "p50", "p90", "p99", "Máx"},
 		SurfaceNote: "Conjunto residente en MiB, tiempos en milisegundos.",
 		FigureAlt: map[string]string{
 			"memory":      "Barras agrupadas que comparan la memoria residente de las superficies dynamic, meta e individual en ambos transportes.",
-			"memory-ramp": "Lineas que muestran como crece la memoria residente cuando cada credencial nueva construye su catalogo en el pool HTTP.",
-			"startup":     "Barras agrupadas en escala logaritmica que comparan el arranque del proceso, el primer tools/list en frio y uno en caliente.",
-			"latency":     "Barras agrupadas en escala logaritmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie.",
+			"memory-ramp": "Líneas que muestran cómo crece la memoria residente cuando cada credencial nueva construye su catálogo en el pool HTTP.",
+			"startup":     "Barras agrupadas en escala logarítmica que comparan el arranque del proceso, el primer tools/list en frío y uno en caliente.",
+			"latency":     "Barras agrupadas en escala logarítmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie.",
 		},
 		TableCaption: map[string]string{
 			"summary": "Memoria, goroutines y tiempo de procesador por escenario",
 			"startup": "Lo que espera un cliente, por escenario",
-			"latency": "Percentiles de latencia por metodo",
+			"latency": "Percentiles de latencia por método",
 		},
 	}
 }

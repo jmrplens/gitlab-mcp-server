@@ -133,18 +133,20 @@ func readFileString(path string) string {
 	return string(data)
 }
 
-// describe renders the host as one sentence for the documentation page.
-func (h HostInfo) describe() string {
+// describe renders the host as one sentence, in the language of the page it is
+// going on: the sentence is prose, and a Spanish page carrying "8 logical
+// CPUs" would be half translated.
+func (h HostInfo) describe(l labels) string {
 	parts := []string{h.CPUModel}
 	if h.CPUs > 0 {
-		parts = append(parts, strconv.Itoa(h.CPUs)+" logical CPUs")
+		parts = append(parts, strconv.Itoa(h.CPUs)+" "+l.HostCPUs)
 	}
 	if h.MemTotalGiB > 0 {
-		parts = append(parts, strconv.FormatFloat(h.MemTotalGiB, 'f', 0, 64)+" GiB RAM")
+		parts = append(parts, strconv.FormatFloat(h.MemTotalGiB, 'f', 0, 64)+" "+l.HostRAM)
 	}
 	parts = append(parts, h.OS+"/"+h.Arch)
 	if h.Kernel != "" && h.Kernel != "unknown" {
-		parts = append(parts, "kernel "+h.Kernel)
+		parts = append(parts, l.HostKernel+" "+h.Kernel)
 	}
 	parts = append(parts, h.GoVersion)
 	return strings.Join(parts, ", ")
