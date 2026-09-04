@@ -144,7 +144,7 @@ flowchart TD
     buildMeta --> registerMeta[internal/tools.RegisterMetaCatalog]
     registerMeta --> metaTools[Visible domain meta-tools]
 
-    selector -->|dynamic| buildDynamic[cmd/server.buildDynamicActionCatalog]
+    selector -->|dynamic| buildDynamic[dynamiccatalog.Build]
     buildDynamic --> collectDynamicSpecs[internal/tools.CollectActionSpecs]
     collectDynamicSpecs --> generatedManifest
     buildDynamic --> standalone[dynamic.AddStandaloneCatalog]

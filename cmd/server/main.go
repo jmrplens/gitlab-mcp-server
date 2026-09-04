@@ -74,6 +74,7 @@ import (
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamiccatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -1924,23 +1925,23 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:
 		actionCatalog := prebuiltCatalog
-		var withheld withheldActions
+		var withheld gitlabtools.WithheldActions
 		if actionCatalog == nil {
 			var catalogErr error
-			actionCatalog, withheld, catalogErr = buildDynamicActionCatalog(client, cfg)
+			actionCatalog, withheld, catalogErr = dynamiccatalog.Build(client, cfg)
 			if catalogErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
 			}
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog,
-			dynamictools.WithWithheldActions(withheld.byTokenScope, withheld.byOperator))
+			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator))
 		return serverSurfaceRegistration{
 			metaSchemaRoutes: actionCatalog.ActionMaps(),
 			surfaceCatalog:   actionCatalog,
-			excludedActions:  withheld.excludedByName,
+			excludedActions:  withheld.ExcludedByName,
 		}, nil
 	case config.ToolSurfaceMeta:
-		var metaWithheld withheldActions
+		var metaWithheld gitlabtools.WithheldActions
 		filteredCatalog := prebuiltCatalog
 		if filteredCatalog == nil {
 			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
@@ -1949,7 +1950,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 				actionCatalog = actioncatalog.NewCatalog()
 			}
 			var filterErr error
-			filteredCatalog, metaWithheld, filterErr = filterActionCatalog(actionCatalog, cfg)
+			filteredCatalog, metaWithheld, filterErr = gitlabtools.FilterActionCatalog(actionCatalog, cfg)
 			if filterErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
 			}
@@ -1959,7 +1960,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		return serverSurfaceRegistration{
 			metaSchemaRoutes: filteredCatalog.ActionMaps(),
 			surfaceCatalog:   filteredCatalog,
-			excludedActions:  metaWithheld.excludedByName,
+			excludedActions:  metaWithheld.ExcludedByName,
 		}, nil
 	default:
 		// The catalog is carried out rather than discarded. On this surface a
@@ -1984,7 +1985,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			// removeExcludedTools still runs afterwards, for the standalone
 			// tools registered outside the catalog.
 			individualExcluded = built.ExcludedActionIDs(cfg.ExcludeTools)
-			individualCatalog = excludeFromCatalog(built, cfg.ExcludeTools)
+			individualCatalog = gitlabtools.ExcludeFromCatalog(built, cfg.ExcludeTools)
 		} else {
 			// A caller-supplied catalog is whatever it was given, so this is
 			// the best available answer; the only caller that supplies one is
@@ -2004,25 +2005,6 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			excludedActions: individualExcluded,
 		}, nil
 	}
-}
-
-// excludeFromCatalog removes the groups and actions an operator excluded, and
-// reports how many actions that was.
-//
-// The count is the point. Removal already worked on the dynamic and meta
-// surfaces, but the only line an operator saw came from removeExcludedTools,
-// which counts registered tool names: on the dynamic surface there are two of
-// them and neither is ever an exclusion target, so a working exclusion logged
-// "excluded=0" and was indistinguishable from one that matched nothing.
-func excludeFromCatalog(catalog *actioncatalog.Catalog, excludeTools []string) *actioncatalog.Catalog {
-	if len(excludeTools) == 0 {
-		return catalog
-	}
-	filtered := catalog.FilterExcludedTools(excludeTools)
-	if removed := catalog.CountActions() - filtered.CountActions(); removed > 0 {
-		slog.Info("excluded catalog actions by configuration", "excluded", removed, "patterns", excludeTools)
-	}
-	return filtered
 }
 
 // httpShutdownTimeout is the default budget for draining in-flight requests
@@ -4220,119 +4202,6 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 		}
 	}
 	return visibleRoutes, nil
-}
-
-// buildDynamicActionCatalog builds the executable catalog for low-token dynamic
-// mode. Filters run before standalone tools are added so configured exclusions,
-// token scopes, and read-only mode cannot leave hidden catalog actions behind.
-func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, withheldActions, error) {
-	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
-		Tier:       cfg.Tier,
-		IncludeMCP: true,
-	})
-	if err != nil {
-		return nil, withheldActions{}, fmt.Errorf("build action catalog: %w", err)
-	}
-	filtered, withheld, filterErr := filterActionCatalog(catalog, cfg)
-	if filterErr != nil {
-		return nil, withheldActions{}, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
-	}
-	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
-		ReadOnly:     cfg.ReadOnly,
-		ExcludeTools: cfg.ExcludeTools,
-	})
-	if standaloneErr != nil {
-		return nil, withheldActions{}, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
-	}
-	return withStandalone, withheld, nil
-}
-
-// withheldActions records the catalog actions a filter removed, split by whose
-// decision it was. Only the token-scope half is something the caller can act
-// on, so the two must not be merged into one message.
-type withheldActions struct {
-	byTokenScope []string
-	byOperator   []string
-	// excludedByName are the actions --exclude-tools removed. They are kept
-	// apart from the two above and never reach WithWithheldActions: a withheld
-	// action is one the model is told about so it can act on the reason, and
-	// naming an excluded tool would both leak the configuration and contradict
-	// the exclusion. They are recorded because the tool surface is not the only
-	// request path to the same GitLab object, and resources/read has to be
-	// narrowed by the same decision.
-	excludedByName []string
-}
-
-func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (*actioncatalog.Catalog, withheldActions, error) {
-	var withheld withheldActions
-	// Tools the operator excluded by name are not "withheld": the point of the
-	// exclusion is that they do not exist for this deployment, so naming them
-	// in an error would both leak the configuration and contradict it.
-	filtered := excludeFromCatalog(catalog, cfg.ExcludeTools)
-	// Resolved against the catalog before any filtering, which is the only
-	// place the operator's entries can be resolved at all: --exclude-tools
-	// accepts a group name, a tool name or an action ID, and a catalog that
-	// already dropped them can no longer map any of the three.
-	withheld.excludedByName = catalog.ExcludedActionIDs(cfg.ExcludeTools)
-	scoped, err := gitlabtools.FilterScopeFilteredCatalog(filtered, cfg.TokenScopes)
-	if err != nil {
-		return nil, withheldActions{}, err
-	}
-	withheld.byTokenScope = removedActionKeys(filtered, scoped)
-	filtered = scoped
-	if cfg.ReadOnly {
-		// Filter at action granularity, not group granularity: a domain that
-		// mixes reads and writes must keep its read actions reachable instead
-		// of disappearing with them.
-		readable := filtered.FilterReadOnlyActions()
-		removed := removedActionKeys(filtered, readable)
-		if cfg.ReadOnlyFromTokenScope {
-			withheld.byTokenScope = append(withheld.byTokenScope, removed...)
-		} else {
-			withheld.byOperator = append(withheld.byOperator, removed...)
-		}
-		filtered = readable
-	}
-	if cfg.SafeMode {
-		// Same granularity argument: dispatcher tools cover reads and writes
-		// alike, so safe mode is applied per action in the catalog rather than
-		// by intercepting whole tools.
-		filtered = filtered.WithSafeModePreviews()
-	}
-	return filtered, withheld, nil
-}
-
-// removedActionKeys lists every canonical action ID, and every alias resolving
-// to one, that `before` carried and `after` does not.
-//
-// Aliases count because a caller who asked find for an action before the
-// narrowing, or who is working from documentation, names the action the way the
-// catalog used to: answering only the canonical form leaves the alias reported
-// as a typo, which is the misdiagnosis this exists to prevent.
-func removedActionKeys(before, after *actioncatalog.Catalog) []string {
-	if before == nil || after == nil {
-		return nil
-	}
-	kept := make(map[actioncatalog.ActionID]struct{})
-	for _, action := range after.Actions() {
-		kept[action.ID] = struct{}{}
-	}
-	var keys []string
-	for _, action := range before.Actions() {
-		if _, ok := kept[action.ID]; ok {
-			continue
-		}
-		keys = append(keys, string(action.ID))
-		keys = append(keys, action.Aliases...)
-		// Compatibility aliases resolve in the dynamic registry exactly as the
-		// declared ones do, so a caller working from an older action name
-		// would otherwise be told the action is unknown — the misdiagnosis
-		// this whole path exists to prevent.
-		for _, alias := range action.Compatibility.ActionAliases {
-			keys = append(keys, alias.Alias)
-		}
-	}
-	return keys
 }
 
 // countCatalogActions sums actions across catalog route maps for startup logs.
