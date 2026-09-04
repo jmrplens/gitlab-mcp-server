@@ -1,7 +1,8 @@
 # CI pipeline for gitlab-mcp-server
 #
 # Runs on: pull requests to main, pushes to main
-# Jobs: test, sonarcloud, build, Go analysis, markdown, docker (PR+paths),
+# Jobs: test, sonarcloud, docs-audit, build, Go analysis, markdown,
+#       docker (PR+paths),
 #       cross-platform (Linux, macOS, Windows)
 
 name: CI
@@ -134,6 +135,45 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: coverage
+      - name: SonarCloud Scan
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8
+        continue-on-error: true
+        env:
+          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Split out of the SonarCloud job, where it was the step before the scan and
+  # the only one that could fail it. The scan itself is continue-on-error, so a
+  # required check named "SA: SonarCloud" could not fail because of SonarCloud
+  # and could fail because npmjs.org did not answer, which happened on three
+  # pull requests in one afternoon: `pnpm audit` retried twice and timed out,
+  # the scan was skipped entirely, and the merge was blocked by something that
+  # is neither code quality nor under our control.
+  #
+  # Separated, the audit reports its own verdict under its own name and a
+  # registry outage stops blocking merges, while the analysis still runs and is
+  # still published. This job is deliberately not in the required-check list:
+  # what it reports is the state of somebody else's advisory database, which
+  # can turn red without a commit.
+  docs-audit:
+    name: Docs dependency audit
+    runs-on: ubuntu-latest
+    # The whole job is one call to somebody else's registry, and that call has
+    # already stalled here: pnpm retried twice over two minutes and gave up.
+    # Without a bound, a registry that accepts the connection and never answers
+    # holds a runner for the six-hour default.
+    timeout-minutes: 15
+    steps:
+      # This job runs third-party code: `pnpm install` may execute a
+      # dependency's lifecycle scripts. Without this the checkout token stays
+      # in .git/config while they run, so a compromised dependency in the
+      # documentation site's tree could read it. Nothing here talks to git
+      # after the checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           package_json_file: site/package.json
@@ -144,17 +184,34 @@ jobs:
           cache-dependency-path: site/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: site
+      # Advisories already judged live in site/pnpm-workspace.yaml, under
+      # auditConfig.ignoreGhsas, each with the reason beside it. That is the
+      # only place pnpm reads them from: from v10 the settings moved out of
+      # package.json, and a `pnpm` field there is now ignored with a warning
+      # rather than an error, so an exception added to it looks applied and is
+      # not.
+      #
+      # A registry that does not answer produces no verdict, and reporting one
+      # anyway is the mistake this job was split out of the SonarCloud job to
+      # stop making: a red check that means "npmjs.org timed out" is
+      # indistinguishable from one that means "a dependency has a high
+      # advisory", so the second stops being read. pnpm exits non-zero for
+      # both, so the two are told apart by what it printed, and an unanswered
+      # run is annotated rather than failed.
       - name: Audit docs dependencies
-        run: pnpm audit --audit-level=high
+        shell: bash
         working-directory: site
-      - name: SonarCloud Scan
-        if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8
-        continue-on-error: true
-        env:
-          SONAR_HOST_URL: https://sonarcloud.io
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          output=$(pnpm audit --audit-level=high 2>&1)
+          status=$?
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ] && printf '%s' "$output" |
+              grep -qE 'TimeoutError|operation was aborted|ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|socket hang up'; then
+            echo "::warning title=Dependency audit did not run::the npm advisories endpoint did not answer, so this run says nothing about the dependencies"
+            exit 0
+          fi
+          exit "$status"
 
   build:
     name: Build
@@ -246,8 +303,14 @@ jobs:
   site-lint:
     name: Site static lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
+      # Same reasoning as docs-audit: this is the other job that installs the
+      # documentation site's dependencies, so it is the other one that runs
+      # code this repository did not write.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11
