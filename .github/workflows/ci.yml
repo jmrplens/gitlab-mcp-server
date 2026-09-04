@@ -190,9 +190,28 @@ jobs:
       # package.json, and a `pnpm` field there is now ignored with a warning
       # rather than an error, so an exception added to it looks applied and is
       # not.
+      #
+      # A registry that does not answer produces no verdict, and reporting one
+      # anyway is the mistake this job was split out of the SonarCloud job to
+      # stop making: a red check that means "npmjs.org timed out" is
+      # indistinguishable from one that means "a dependency has a high
+      # advisory", so the second stops being read. pnpm exits non-zero for
+      # both, so the two are told apart by what it printed, and an unanswered
+      # run is annotated rather than failed.
       - name: Audit docs dependencies
-        run: pnpm audit --audit-level=high
+        shell: bash
         working-directory: site
+        run: |
+          set +e
+          output=$(pnpm audit --audit-level=high 2>&1)
+          status=$?
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ] && printf '%s' "$output" |
+              grep -qE 'TimeoutError|operation was aborted|ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|socket hang up'; then
+            echo "::warning title=Dependency audit did not run::the npm advisories endpoint did not answer, so this run says nothing about the dependencies"
+            exit 0
+          fi
+          exit "$status"
 
   build:
     name: Build
