@@ -19,6 +19,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -55,8 +56,12 @@ func main() {
 	flag.String("gitlab-url", "", "accepted and ignored")
 	flag.String("tool-surface", "", "accepted and ignored")
 	flag.Int("rate-limit-rps", 0, "accepted and ignored")
-	flag.Bool("telemetry", false, "accepted and ignored")
+	telemetry := flag.Bool("telemetry", false, "send one export to OTEL_EXPORTER_OTLP_ENDPOINT, as the real server's exporters would")
 	flag.Parse()
+
+	if *telemetry {
+		exportTelemetry(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	}
 
 	if *httpMode {
 		if err := serveHTTP(*addr); err != nil {
@@ -76,6 +81,33 @@ func main() {
 }
 
 // serveHTTP answers /health and /mcp until the process is killed.
+// exportTelemetry posts one metrics export to the OTLP endpoint the harness
+// configured, so a run with telemetry on reaches the sink the way the real
+// server's exporters do and a harness that stopped wiring the endpoint is
+// caught. Best effort: the sink's answer changes nothing here, and an
+// unreachable one is reported and otherwise ignored, as an exporter would.
+func exportTelemetry(endpoint string) {
+	if endpoint == "" {
+		fmt.Fprintln(os.Stderr, "standin: --telemetry without OTEL_EXPORTER_OTLP_ENDPOINT, nothing exported")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	body := strings.NewReader(`{"resourceMetrics":[]}`)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(endpoint, "/")+"/v1/metrics", body)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "standin: telemetry export:", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "standin: telemetry export:", err)
+		return
+	}
+	_ = resp.Body.Close()
+}
+
 func serveHTTP(addr string) error {
 	if addr == "" {
 		return fmt.Errorf("--http needs --http-addr")

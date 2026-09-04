@@ -282,7 +282,12 @@ func runWithStandin(m *testing.M) int {
 		}
 		defer func() { _ = os.RemoveAll(dir) }()
 		path := filepath.Join(dir, "standin")
-		build := exec.CommandContext(context.Background(), "go", "build", "-o", path, "./testdata/standin")
+		// Bounded like buildServer: the Go test timeout cannot stop a build
+		// started before m.Run, so a stalled one would hold the package until
+		// an outer runner gave up.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		build := exec.CommandContext(ctx, "go", "build", "-o", path, "./testdata/standin")
 		if out, buildErr := build.CombinedOutput(); buildErr != nil {
 			fmt.Fprintf(os.Stderr, "build testdata/standin: %v\n%s", buildErr, out)
 			return 1

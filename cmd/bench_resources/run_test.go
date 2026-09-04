@@ -422,6 +422,12 @@ func TestRunScenario_HTTP_FillsEveryPublishedFigure(t *testing.T) {
 	if r.serverInfo.Version != "standin" {
 		t.Errorf("the runner kept server info %+v, want what /health reported", r.serverInfo)
 	}
+	// Telemetry was on, so the endpoint the harness configured must have
+	// been reached: a plan that says telemetry while nothing is exported
+	// would publish figures for a configuration that was never measured.
+	if got := r.otlp.requests.Load(); got == 0 {
+		t.Error("the OTLP sink received no export from a scenario with telemetry on")
+	}
 }
 
 // assertStartupMeasured checks the three startup milestones and the size of
@@ -534,5 +540,8 @@ func TestRunScenario_FailedCalls_AreNotedRatherThanFatal(t *testing.T) {
 	}
 	if list, ok := scenario.latency(methodToolsList); !ok || list.Count != plan.Clients*plan.Parallel {
 		t.Errorf("tools/list distribution %+v, want unaffected", list)
+	}
+	if resources, ok := scenario.latency(methodResourcesList); !ok || resources.Count != plan.Clients*plan.Parallel {
+		t.Errorf("resources/list distribution %+v, want unaffected", resources)
 	}
 }
