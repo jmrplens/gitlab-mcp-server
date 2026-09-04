@@ -249,9 +249,9 @@ make sonar-status                # just print the latest gate (no re-scan)
 
 GitHub Actions uses the same separation as Make:
 
-- `golangci-lint` job installs `golangci-lint` and runs `make golangci-lint`.
-- `govulncheck` job installs `govulncheck` and runs `make govulncheck`.
-- `Analyze Markdown` runs `markdownlint-cli2` for Markdown and MDX content.
+- The `golangci-lint` job installs the pinned `golangci-lint` release through the official action and runs `make golangci-lint`, so CI and a developer's machine run the same three commands with the same version. Its per-package analysis cache is kept between runs.
+- The `govulncheck` job installs a pinned `govulncheck` and runs `make govulncheck`.
+- The `Markdown` job runs `markdownlint-cli2` for Markdown and MDX content through the linter's own action, which bundles the tool and touches no registry.
 
 Separate jobs for `goimports`, `gofmt`, `go vet`, `modernize`, `gosec`, and `staticcheck` are intentionally omitted because `golangci-lint` already covers them with the repository configuration.
 
