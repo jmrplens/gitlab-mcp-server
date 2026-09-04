@@ -30,17 +30,27 @@
 # Windows regression pass as one more flake. This keeps the distinction, and
 # keeps a record of every crash where a reader looks for one.
 #
-# The signatures are the runtime's own words for a corrupted heap or stack,
-# and only those. "panic: runtime error" is not one: an unrecovered nil
-# dereference is a bug in the code under test. Neither is a deadlock nor a
-# concurrent map write, which the runtime also reports as a fatal error and
-# which are bugs too.
+# A crash is a "fatal error:" line from the runtime, minus the messages the
+# runtime uses for a bug in the code under test. The first version of this
+# script named the corruption messages instead (a fault, a pointer to a free
+# object, a bad pointer in the heap) and the third crash seen was none of
+# them: "acquireSudog: found s.elem != nil in cache", the sudog cache's own
+# consistency check tripping over the same corrupted heap. A corrupted heap
+# trips whichever runtime invariant reads it first, so the list can never be
+# complete; the list of things the runtime says about a bug in user code is
+# short and stable, and that is the one kept. "panic: runtime error" is never
+# a crash: an unrecovered nil dereference is a bug in the code under test.
 set -uo pipefail
 
 JSON_DIR="${1:?Usage: $0 <json-dir> [-flag=value ...] <packages ...>}"
 shift
 
-CRASH_SIGNATURES='fatal error: (fault|found pointer to free object|found bad pointer in Go heap|unexpected signal|bad pointer in frame)|runtime: marked free object in span|traceback did not unwind completely'
+CRASH_MARK='^fatal error: '
+# Fatal errors the runtime reports for a bug in the code under test: a
+# deadlock, a concurrent map access, a sync misuse, out of memory, a goroutine
+# stack past its limit, a thread-limit overrun, a checkptr violation, a test
+# calling os.Exit. These fail the run and are not rerun.
+BUG_MARK='^fatal error: (all goroutines are asleep|concurrent map |sync: |runtime: out of memory|out of memory|stack overflow|runtime: program exceeds|checkptr|unexpected call to os\.Exit|too many )'
 
 flags=()
 packages=()
@@ -57,10 +67,10 @@ fi
 
 mkdir -p "$JSON_DIR"
 
-# crashed_packages lists the packages whose output carries a crash signature.
+# crashed_packages lists the packages whose output carries a runtime crash.
 crashed_packages() {
-  jq -r --arg re "$CRASH_SIGNATURES" \
-    'select(.Action == "output" and (.Output | test($re))) | .Package' "$1" | sort -u
+  jq -r --arg crash "$CRASH_MARK" --arg bug "$BUG_MARK" \
+    'select(.Action == "output" and (.Output | test($crash)) and (.Output | test($bug) | not)) | .Package' "$1" | sort -u
 }
 
 # failed_packages lists the packages with a package-level fail event.
@@ -73,10 +83,10 @@ failed_tests() {
   jq -r 'select(.Action == "fail" and .Test != null) | "\(.Package)\t\(.Test)"' "$1" | sort -u
 }
 
-# crash_lines lists "package<TAB>first signature line" per crashed package.
+# crash_lines lists "package<TAB>first crash line" per crashed package.
 crash_lines() {
-  jq -r --arg re "$CRASH_SIGNATURES" \
-    'select(.Action == "output" and (.Output | test($re))) | "\(.Package)\t\(.Output | rtrimstr("\n"))"' "$1" \
+  jq -r --arg crash "$CRASH_MARK" --arg bug "$BUG_MARK" \
+    'select(.Action == "output" and (.Output | test($crash)) and (.Output | test($bug) | not)) | "\(.Package)\t\(.Output | rtrimstr("\n"))"' "$1" \
     | sort -u -k1,1
 }
 
