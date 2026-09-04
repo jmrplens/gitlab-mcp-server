@@ -366,7 +366,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 | `internal/tools/dynamic/standalone.go`    | Adds standalone actions such as project discovery and interactive creation flows to the canonical action catalog         |
 | `internal/tools/actioncompat`             | Historical action aliases, parameter aliases, and execute-time compatibility normalizers projected into catalog metadata |
 | `internal/toolutil/action_spec.go`        | Canonical per-action metadata model, including aliases, tags, usage hints, related actions, and parameter guidance       |
-| `internal/toolutil/metatool.go`           | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers                                       |
+| `internal/toolutil/meta_tool.go`          | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers                                       |
 | `cmd/server/main.go`                      | Selects `GITLAB_MCP_TOOL_SURFACE` and registers meta, individual, or dynamic surfaces                                    |
 | `cmd/eval_mcp_surfaces`                   | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks                                          |
 | `test/e2e/suite/dynamic_test.go`          | E2E coverage for the default dynamic two-tool surface                                                                    |

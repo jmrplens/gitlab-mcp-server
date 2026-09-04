@@ -413,7 +413,7 @@ func legacyRuntimeBridgeFindings(root string) ([]string, error) {
 			"legacyIndividualToolDescriptions",
 			"listToolsForDescriptionCapture",
 		},
-		filepath.Join(root, "internal", "toolutil", "metatool.go"): {
+		filepath.Join(root, "internal", "toolutil", "meta_tool.go"): {
 			"CaptureMetaToolDefinitions",
 			"MetaToolDefinition",
 		},

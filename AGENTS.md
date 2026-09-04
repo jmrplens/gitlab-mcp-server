@@ -151,7 +151,7 @@ and return `NotFoundResult` with `nil` error. `IsHTTPStatus` and
 ## Markdown formatter pattern
 
 Sub-packages self-register formatters via `init()` against a type-keyed
-registry in `internal/toolutil/mdregistry.go`. There is no central
+registry in `internal/toolutil/md_registry.go`. There is no central
 dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
 `toolutil.MarkdownForResult`. List output should include
 `toolutil.HintPreserveLinks` so LLMs keep `[text](url)` clickable.

@@ -25,6 +25,11 @@ Create a new sub-package under `internal/tools/{domain}/`:
 └── {domain}_test.go    # Table-driven tests with httptest
 ```
 
+A multi-word domain separates the words with underscores in its **file** names
+only: `merge_requests.go` and `merge_requests_test.go` in `package mergerequests`.
+Go's convention and the `stylecheck`/`revive` naming rules refuse underscores in
+a package identifier, and the directory follows the package.
+
 ## Step 1: Define Input/Output Structs
 
 In `{domain}.go`:

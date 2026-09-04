@@ -715,7 +715,7 @@ func catalogFirstFixtureFiles() map[string]string {
 		"internal/tools/action_catalog.go":            "package tools\n",
 		"internal/tools/register_meta.go":             "package tools\n",
 		"internal/tools/register.go":                  "package tools\n",
-		"internal/toolutil/metatool.go":               "package toolutil\n",
+		"internal/toolutil/meta_tool.go":              "package toolutil\n",
 		"internal/tools/dynamic/register.go":          "package dynamic\n",
 		"internal/tools/action_specs.go":              "package tools\n\nfunc buildAlphaActionSpecs() {}\n",
 		"internal/tools/action_specs_manifest_gen.go": "package tools\n\nfunc actionSpecGroupBuilders() []actionSpecGroupBuilder {\n\treturn []actionSpecGroupBuilder{\n\t\tbuildAlphaActionSpecs,\n\t}\n}\n",
@@ -811,8 +811,8 @@ func TestBuildCoverageReport_BrokenFixtures_ReportsFirstFailingAssertion(t *test
 			wantErr: "production legacy bridge count = 1",
 		},
 		{
-			name:    "metatool.go missing",
-			mutate:  func(f map[string]string) { delete(f, "internal/toolutil/metatool.go") },
+			name:    "meta_tool.go missing",
+			mutate:  func(f map[string]string) { delete(f, "internal/toolutil/meta_tool.go") },
 			wantErr: "read ",
 		},
 		{
@@ -898,7 +898,7 @@ func TestAssertNoLegacyRuntimeBridges_Scenarios_ReadsFixedFiles(t *testing.T) {
 		"internal/tools/action_catalog.go": "package tools\n",
 		"internal/tools/register_meta.go":  "package tools\n",
 		"internal/tools/register.go":       "package tools\n",
-		"internal/toolutil/metatool.go":    "package toolutil\n",
+		"internal/toolutil/meta_tool.go":   "package toolutil\n",
 	}
 	bridged := maps.Clone(clean)
 	bridged["internal/tools/register_meta.go"] = "package tools\n\n// domain.RegisterMeta(server)\n"

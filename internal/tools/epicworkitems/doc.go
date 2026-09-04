@@ -1,6 +1,6 @@
 // Package epicworkitems is the home for the shared GraphQL helpers used by
 // the epic-family sub-packages (epics, epicnotes, epicissues). The exported
-// functions in workitems.go (ResolveEpicGID, ResolveWorkItemGID) translate
+// functions in work_items.go (ResolveEpicGID, ResolveWorkItemGID) translate
 // a (group_path, iid) pair into the work item's global ID for use in
 // subsequent GraphQL mutations.
 //

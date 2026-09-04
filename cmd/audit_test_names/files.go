@@ -11,7 +11,7 @@
 //     external test package.
 //   - <module>_<qualifier>_test.go carrying a //go:build constraint, when
 //     <module>.go exists: a platform-gated test cannot live in the module's
-//     unconstrained test file (fileutils.go -> fileutils_unix_test.go).
+//     unconstrained test file (file_utils.go -> file_utils_unix_test.go).
 //   - <module>_<qualifier>_test.go in an external package (package x_test),
 //     when <module>.go exists and an internal <module>_test.go holds the
 //     plain name: Go allows one package per file name, so external-package

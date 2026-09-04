@@ -221,7 +221,7 @@ Meta-tool parameter parsing combines two complementary mechanisms to surface
 actionable errors when LLMs mistype argument names:
 
 1. **Strict unknown-key rejection** — `strictUnmarshal` in
-   `internal/toolutil/metatool.go` decodes the `params` envelope with
+   `internal/toolutil/meta_tool.go` decodes the `params` envelope with
    `json.Decoder.DisallowUnknownFields()`. Reserved meta keys (e.g. `confirm`)
    are stripped from the params map before unmarshalling; any other key that
    does not map to a field on the action's input struct produces an immediate

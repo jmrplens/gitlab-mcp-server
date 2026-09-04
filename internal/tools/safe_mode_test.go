@@ -1,0 +1,290 @@
+// safe_mode_test.go contains unit tests for GITLAB_SAFE_MODE behavior:
+// WrapMutatingToolsForSafeMode intercepts mutating tools and returns a
+// SafeModePreview, while read-only tools continue to call the real handler.
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"sync/atomic"
+	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// TestWrapMutatingToolsForSafeMode_ReadOnlyToolPassesThrough verifies that
+// read-only tools are not wrapped by SafeMode and still call the real handler.
+func TestWrapMutatingToolsForSafeMode_ReadOnlyToolPassesThrough(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	called := false
+	server.AddTool(&mcp.Tool{
+		Name:        "gitlab_list_projects",
+		Description: "List projects",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+		InputSchema: &map[string]any{"type": "object"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		called = true
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "real result"}},
+		}, nil
+	})
+
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
+	if wrapped != 0 {
+		t.Fatalf("expected 0 tools wrapped, got %d", wrapped)
+	}
+
+	result := callTool(t, server, "gitlab_list_projects", nil)
+	if !called {
+		t.Fatal("expected real handler to be called for read-only tool")
+	}
+	text := extractText(t, result)
+	if text != "real result" {
+		t.Fatalf("expected 'real result', got %q", text)
+	}
+}
+
+// TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview verifies that
+// mutating tools return a SafeModePreview instead of executing.
+func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	var mutatingCalls atomic.Int64
+	server.AddTool(&mcp.Tool{
+		Name:        "gitlab_create_issue",
+		Description: "Create an issue",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false},
+		InputSchema: &map[string]any{"type": "object"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		mutatingCalls.Add(1)
+		return nil, errors.New("mutating handler must not run in safe mode")
+	})
+
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
+	if wrapped != 1 {
+		t.Fatalf("expected 1 tool wrapped, got %d", wrapped)
+	}
+
+	args := json.RawMessage(`{"project_id":123,"title":"Bug report"}`)
+	result := callTool(t, server, "gitlab_create_issue", args)
+
+	if n := mutatingCalls.Load(); n != 0 {
+		t.Errorf("mutating handler was called %d time(s) in safe mode", n)
+	}
+	// The preview IS an error result. The tool did not run, so it produced none
+	// of the output its schema describes, and a tool that declares an
+	// outputSchema must return structured results conforming to it. A plain
+	// success carrying only prose would violate that on every mutating tool at
+	// once. The preview payload is still the text content, asserted below.
+	if !result.IsError {
+		t.Fatal("safe mode intercepted the call without marking the result as an error, so a tool declaring an outputSchema returned neither structured content nor an error")
+	}
+
+	var preview SafeModePreview
+	text := extractText(t, result)
+	if err := json.Unmarshal([]byte(text), &preview); err != nil {
+		t.Fatalf("failed to unmarshal preview: %v", err)
+	}
+	if preview.Status != "blocked" {
+		t.Errorf("expected status 'blocked', got %q", preview.Status)
+	}
+	if preview.Mode != "safe" {
+		t.Errorf("expected mode 'safe', got %q", preview.Mode)
+	}
+	if preview.Tool != "gitlab_create_issue" {
+		t.Errorf("expected tool 'gitlab_create_issue', got %q", preview.Tool)
+	}
+	if preview.Hint == "" {
+		t.Error("expected non-empty hint")
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(preview.Params, &params); err != nil {
+		t.Fatalf("failed to unmarshal params: %v", err)
+	}
+	if params["project_id"] != float64(123) {
+		t.Errorf("expected project_id 123, got %v", params["project_id"])
+	}
+}
+
+// TestWrapMutatingToolsForSafeMode_NilAnnotations verifies that tools with nil
+// annotations are treated as mutating and get wrapped.
+func TestWrapMutatingToolsForSafeMode_NilAnnotations(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	var handlerCalls atomic.Int64
+	server.AddTool(&mcp.Tool{
+		Name:        "gitlab_delete_project",
+		Description: "Delete a project",
+		InputSchema: &map[string]any{"type": "object"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handlerCalls.Add(1)
+		return nil, errors.New("wrapped handler must not run in safe mode")
+	})
+
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
+	if wrapped != 1 {
+		t.Fatalf("expected 1 tool wrapped, got %d", wrapped)
+	}
+
+	result := callTool(t, server, "gitlab_delete_project", nil)
+	if n := handlerCalls.Load(); n != 0 {
+		t.Errorf("wrapped handler was called %d time(s) in safe mode", n)
+	}
+	var preview SafeModePreview
+	if err := json.Unmarshal([]byte(extractText(t, result)), &preview); err != nil {
+		t.Fatalf("failed to unmarshal preview: %v", err)
+	}
+	if preview.Status != "blocked" {
+		t.Errorf("expected status 'blocked', got %q", preview.Status)
+	}
+}
+
+// TestWrapMutatingToolsForSafeMode_MixedTools verifies that only mutating tools
+// are wrapped when a mix of read-only and mutating tools are registered.
+func TestWrapMutatingToolsForSafeMode_MixedTools(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+
+	readOnlyCalled := false
+	server.AddTool(&mcp.Tool{
+		Name:        "gitlab_get_issue",
+		Description: "Get an issue",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+		InputSchema: &map[string]any{"type": "object"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		readOnlyCalled = true
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "issue data"}},
+		}, nil
+	})
+
+	var mutatingCalls atomic.Int64
+	server.AddTool(&mcp.Tool{
+		Name:        "gitlab_update_issue",
+		Description: "Update an issue",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false},
+		InputSchema: &map[string]any{"type": "object"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		mutatingCalls.Add(1)
+		return nil, errors.New("mutating handler must not run in safe mode")
+	})
+
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
+	if wrapped != 1 {
+		t.Fatalf("expected 1 tool wrapped, got %d", wrapped)
+	}
+
+	result := callTool(t, server, "gitlab_get_issue", nil)
+	if !readOnlyCalled {
+		t.Fatal("read-only handler should have been called")
+	}
+	if extractText(t, result) != "issue data" {
+		t.Fatalf("unexpected read-only result: %s", extractText(t, result))
+	}
+
+	result = callTool(t, server, "gitlab_update_issue", nil)
+	if n := mutatingCalls.Load(); n != 0 {
+		t.Errorf("mutating handler was called %d time(s) in safe mode", n)
+	}
+	var preview SafeModePreview
+	if err := json.Unmarshal([]byte(extractText(t, result)), &preview); err != nil {
+		t.Fatalf("failed to unmarshal preview: %v", err)
+	}
+	if preview.Tool != "gitlab_update_issue" {
+		t.Errorf("expected tool 'gitlab_update_issue', got %q", preview.Tool)
+	}
+}
+
+// TestSafeModeHandler_MarshalError verifies invalid raw arguments are surfaced
+// as an MCP tool error result rather than a Go error.
+func TestSafeModeHandler_MarshalError(t *testing.T) {
+	handler := safeModeHandler("gitlab_bad_args")
+	result, err := handler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+		Name:      "gitlab_bad_args",
+		Arguments: json.RawMessage(`{`),
+	}})
+	if err != nil {
+		t.Fatalf("safeModeHandler() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("safeModeHandler() result = %+v, want error result", result)
+	}
+	if text := extractText(t, result); text != "safe mode: failed to marshal preview" {
+		t.Fatalf("safe mode text = %q", text)
+	}
+}
+
+// callTool invokes a tool via an ephemeral in-memory MCP session and returns
+// the result.
+func callTool(t *testing.T, server *mcp.Server, name string, args json.RawMessage) *mcp.CallToolResult {
+	t.Helper()
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	sess, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { sess.Close() })
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-caller", Version: "0"}, nil)
+	clientSess, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { clientSess.Close() })
+
+	result, err := clientSess.CallTool(ctx, &mcp.CallToolParams{
+		Name:      name,
+		Arguments: args,
+	})
+	if err != nil {
+		t.Fatalf("CallTool(%s) error: %v", name, err)
+	}
+	return result
+}
+
+// extractText returns the text from the first TextContent in a CallToolResult.
+func extractText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatal("expected at least one content item")
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	}
+	return tc.Text
+}
+
+// TestSafeModeAndReadOnlyFilters_WithoutAServer_ChangeNothing covers what both
+// registration-time filters do when the surface cannot be listed.
+//
+// They work by listing the registered tools through an ephemeral in-memory
+// session, and that inspection is the one thing that can fail. Reporting zero
+// is the honest answer — nothing was wrapped, nothing was removed — and it is
+// logged rather than swallowed, because a deployment that asked for safe mode
+// and silently got none is worse than one that fails.
+func TestSafeModeAndReadOnlyFilters_WithoutAServer_ChangeNothing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		apply func() int
+	}{
+		{name: "safe mode wraps nothing", apply: func() int { return WrapMutatingToolsForSafeMode(context.Background(), nil) }},
+		{name: "safe mode with exemptions wraps nothing", apply: func() int {
+			return WrapMutatingToolsForSafeModeExcept(context.Background(), nil, map[string]struct{}{"gitlab_issue": {}})
+		}},
+		{name: "read-only removes nothing", apply: func() int { return RemoveNonReadOnlyTools(context.Background(), nil) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tt.apply(); got != 0 {
+				t.Errorf("filter reported %d tools changed on a server it could not inspect", got)
+			}
+		})
+	}
+}

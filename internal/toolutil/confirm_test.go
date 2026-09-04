@@ -447,7 +447,7 @@ func TestConfirmAction_UnknownActionFailsClosed(t *testing.T) {
 // detects the reserved confirm key on both call shapes it must support
 // (flat on individual tools, nested under params on dispatcher surfaces),
 // and fails closed (false) for a nil/malformed request instead of panicking
-// or misreporting confirmation. This matters because clearguard.go gates a
+// or misreporting confirmation. This matters because clear_guard.go gates a
 // destructive workitems action on this return value: a false positive here
 // would let a destructive call bypass confirmation, and a JSON-decode panic
 // would crash the handler on any malformed client payload.

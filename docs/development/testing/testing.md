@@ -966,7 +966,7 @@ variables** overridden in tests with `t.Cleanup` to restore originals.
 internal/wizard/
 ├── clients_test.go        # 25 tests — MCP client detection and config paths
 ├── cli_test.go            # 18 tests — CLI-mode wizard flow
-├── envfile_test.go        #  3 tests — .env file operations
+├── env_file_test.go        #  3 tests — .env file operations
 ├── install_test.go        #  6 tests — Binary installation logic
 ├── jsonmerge_test.go      #  9 tests — JSON config merge operations
 ├── paths_test.go          #  4 tests — Platform-specific path resolution

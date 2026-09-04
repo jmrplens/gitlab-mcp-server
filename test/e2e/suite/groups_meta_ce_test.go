@@ -16,7 +16,7 @@ import (
 )
 
 // TestMeta_GroupDeep exercises gitlab_group meta-tool actions not covered
-// by groups_ce_test.go, grouplabels_ce_test.go, or groupmilestones_ce_test.go.
+// by groups_ce_test.go, group_labels_ce_test.go, or group_milestones_ce_test.go.
 //
 // The test creates a parent group fixture and a child subgroup, then
 // drives the deep group actions (transfer, search, restore, and other

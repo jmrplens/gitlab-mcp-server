@@ -19,7 +19,7 @@ import (
 // label_details (LabelDetailsOutput), task_completion_status
 // (TaskCompletionStatusOutput), head_pipeline (PipelineOutput), pipeline
 // (PipelineInfoOutput), user (MergeRequestUserOutput), and diff_refs
-// (DiffRefsOutput, defined in mergerequests.go).
+// (DiffRefsOutput, defined in merge_requests.go).
 
 // MilestoneOutput mirrors gl.Milestone (the merge-request milestone object).
 

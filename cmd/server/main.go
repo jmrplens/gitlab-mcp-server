@@ -328,7 +328,7 @@ func main() {
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
 
 	// Settings that used to be reachable only through the environment. See
-	// envflags.go for why the flag writes the variable rather than being read
+	// env_flags.go for why the flag writes the variable rather than being read
 	// directly, and for the one setting deliberately left without a flag.
 	registerEnvBackedFlags()
 
@@ -1586,7 +1586,7 @@ func newServerShell(
 		Capabilities: serverCapabilities,
 		// The SDK asks the RESOLVED server for the session ID, so a tag minted
 		// here is a trustworthy statement about which pooled entry owns the
-		// session. cmd/server/authgate.go checks it on every later request:
+		// session. cmd/server/auth_gate.go checks it on every later request:
 		// without that, the SDK serves any request carrying a known session ID
 		// from the session's own server, discarding the per-credential
 		// resolution entirely (go-sdk streamable.go serveStatefulPOST returns

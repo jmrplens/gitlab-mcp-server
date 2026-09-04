@@ -3,7 +3,7 @@
 // mapping (author, resolved_by, position, line range) plus nil-guard paths.
 // Shared note shapes (NoteUserOutput, LinePositionOutput, LineRangeOutput,
 // NotePositionOutput) live in internal/toolutil since DEDUP-001 wave 2;
-// the canonical converter unit tests are in toolutil/noteshapes_test.go.
+// the canonical converter unit tests are in toolutil/note_shapes_test.go.
 package commitdiscussions
 
 import (

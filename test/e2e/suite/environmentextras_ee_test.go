@@ -4,7 +4,7 @@
 // actions the e2e gap audit reported as unexercised: the project-level
 // protected environment update (environment.protected_update) and the
 // deployment approval flow (environment.deployment_approve_or_reject), both
-// via the gitlab_environment meta-tool. The existing protectedenvs_ee_test.go
+// via the gitlab_environment meta-tool. The existing protected_envs_ee_test.go
 // already covers protect/list/get/unprotect; only the missing actions are
 // added here.
 //

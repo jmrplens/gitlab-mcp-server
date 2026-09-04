@@ -55,7 +55,7 @@ gitlab-mcp-server/
 │   ├── tools/                   # Tool orchestration layer + ~175 internal/tools packages (166 with action_specs.go)
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
 │   │   ├── register_meta.go     # RegisterAllMeta() — catalog-backed meta-tool groups and standalone surfaces
-│   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
+│   │   ├── meta_tool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
 │   │   ├── markdown.go          # markdownForResult delegator to toolutil.MarkdownForResult
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
