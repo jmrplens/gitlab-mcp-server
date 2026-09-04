@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -322,3 +323,44 @@ func TestStdioRPC_ContextCancelled_ReturnsPromptly(t *testing.T) {
 
 // itoa renders an id for the fixtures above.
 func itoa(value int64) string { return strconv.FormatInt(value, 10) }
+
+// TestCommandProcess_RefusesPipesAlreadyWired covers the two ways exec.Cmd
+// declines to hand out a pipe: a stream the caller already assigned.
+func TestCommandProcess_RefusesPipesAlreadyWired(t *testing.T) {
+	cases := []struct {
+		name    string
+		prepare func(*exec.Cmd)
+		wantErr string
+	}{
+		{name: "stdin already set", prepare: func(c *exec.Cmd) { c.Stdin = strings.NewReader("") }, wantErr: "stdin pipe"},
+		{name: "stdout already set", prepare: func(c *exec.Cmd) { c.Stdout = io.Discard }, wantErr: "stdout pipe"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.CommandContext(t.Context(), "go", "version")
+			tc.prepare(cmd)
+			_, _, err := commandProcess(cmd)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("commandProcess = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestFirstLine_TrimsForAnErrorMessage checks a body is cut at its first line
+// and at two hundred bytes, since the message it goes into is one line of a
+// note.
+func TestFirstLine_TrimsForAnErrorMessage(t *testing.T) {
+	cases := []struct{ name, body, want string }{
+		{name: "multi-line", body: "  first\nsecond\n", want: "first"},
+		{name: "long", body: strings.Repeat("x", 250), want: strings.Repeat("x", 200)},
+		{name: "blank", body: "\n\n", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := firstLine([]byte(tc.body)); got != tc.want {
+				t.Errorf("firstLine(%q) = %q, want %q", tc.body, got, tc.want)
+			}
+		})
+	}
+}

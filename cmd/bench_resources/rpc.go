@@ -342,6 +342,9 @@ func commandProcess(cmd *exec.Cmd) (io.WriteCloser, io.Reader, error) {
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		// The command is never started on this path, so nothing else will
+		// close the stdin pipe already wired to it.
+		_ = stdin.Close()
 		return nil, nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 	return stdin, stdout, nil

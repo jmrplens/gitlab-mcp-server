@@ -458,3 +458,44 @@ func TestWriteFile_UnreadablePath_IsAnErrorNotAChange(t *testing.T) {
 		t.Error("an absent file was not reported as a change")
 	}
 }
+
+// TestShortCommit_TrimsToEightCharacters covers the width the rest of the
+// documentation uses, and a short value left whole.
+func TestShortCommit_TrimsToEightCharacters(t *testing.T) {
+	cases := []struct{ name, commit, want string }{
+		{name: "full sha", commit: "0123456789abcdef", want: "01234567"},
+		{name: "already short", commit: "abc", want: "abc"},
+		{name: "empty", commit: "", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shortCommit(tc.commit); got != tc.want {
+				t.Errorf("shortCommit(%q) = %q, want %q", tc.commit, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTableCells_ZeroIsNotAvailable checks the two table formatters print n/a
+// for a figure that was not measured rather than a zero a reader would take
+// for a measurement.
+func TestTableCells_ZeroIsNotAvailable(t *testing.T) {
+	cases := []struct {
+		name   string
+		render func(float64) string
+		value  float64
+		want   string
+	}{
+		{name: "mib unmeasured", render: mib, value: 0, want: "n/a"},
+		{name: "mib measured", render: mib, value: 63.4, want: "63"},
+		{name: "ms unmeasured", render: ms, value: 0, want: "n/a"},
+		{name: "ms measured", render: ms, value: 12.6, want: "13"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.render(tc.value); got != tc.want {
+				t.Errorf("%s(%v) = %q, want %q", tc.name, tc.value, got, tc.want)
+			}
+		})
+	}
+}

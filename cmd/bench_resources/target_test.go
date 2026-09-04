@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"net"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -259,5 +260,160 @@ func TestFreePort_SuccessiveCalls_DoNotCollide(t *testing.T) {
 	}
 	if second == first {
 		t.Errorf("both reservations returned %d while the first was held", first)
+	}
+}
+
+// standinPlan is the plan the process-level tests hand a target: two clients,
+// two in flight, one round, on the surface the stand-in claims to serve.
+func standinPlan(transport string) scenarioPlan {
+	return scenarioPlan{
+		ID: transport + "-dynamic", Transport: transport, Surface: surfaceDynamic,
+		Clients: 2, Parallel: 2, Rounds: 1,
+	}
+}
+
+// assertClientTalks admits one client and checks it gets the surface back.
+func assertClientTalks(t *testing.T, tgt target, index int) *clientConn {
+	t.Helper()
+	conn, _, err := tgt.addClient(t.Context(), index)
+	if err != nil {
+		t.Fatalf("addClient(%d): %v", index, err)
+	}
+	payload, callErr := conn.rpc.call(t.Context(), methodToolsList, nil)
+	if callErr != nil {
+		t.Fatalf("tools/list on client %d: %v", index, callErr)
+	}
+	if !strings.Contains(string(payload), "gitlab_find_action") {
+		t.Errorf("client %d got %q, want the stand-in's surface", index, payload)
+	}
+	return conn
+}
+
+// TestHTTPTarget_OneProcessServesEveryCredential starts the stand-in the way
+// the HTTP scenarios do and walks the target's whole life: readiness through
+// /health, one process however many clients, a client per credential, the
+// traceback that ends it, and a close that finds nothing left to stop.
+func TestHTTPTarget_OneProcessServesEveryCredential(t *testing.T) {
+	stub := startStubGitLab()
+	t.Cleanup(stub.close)
+	tgt := &httpTarget{binary: standinBinary(t), plan: standinPlan(transportHTTP), stubURL: stub.url}
+	t.Cleanup(tgt.close)
+
+	if procs := tgt.processes(); procs != nil {
+		t.Errorf("processes() before start = %v, want none", procs)
+	}
+	if _, err := tgt.goroutines(); err == nil {
+		t.Error("goroutines() before start returned a count")
+	}
+
+	ready, err := tgt.start(t.Context())
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if ready <= 0 {
+		t.Errorf("start reported %s to readiness", ready)
+	}
+	if info := tgt.serverInfo(); info.Version != "standin" || info.Commit == "" {
+		t.Errorf("serverInfo = %+v, want what /health reported", info)
+	}
+	if procs := tgt.processes(); len(procs) != 1 {
+		t.Errorf("%d processes, want the one HTTP server", len(procs))
+	}
+
+	first := assertClientTalks(t, tgt, 0)
+	second := assertClientTalks(t, tgt, 1)
+	if procs := tgt.processes(); len(procs) != 1 {
+		t.Errorf("%d processes after two clients, want still one", len(procs))
+	}
+	first.rpc.close()
+	second.rpc.close()
+
+	count, dumpErr := tgt.goroutines()
+	if dumpErr != nil {
+		t.Fatalf("goroutines: %v", dumpErr)
+	}
+	if count < 1 {
+		t.Errorf("counted %d goroutines in the traceback", count)
+	}
+	tgt.close() // the process is already gone, and closing twice must be harmless
+}
+
+// TestHTTPTarget_ExecFailure_IsReportedAsSuch gives the target a binary that
+// is not there, which must fail at the exec rather than after sixty seconds of
+// polling a port nothing listens on.
+func TestHTTPTarget_ExecFailure_IsReportedAsSuch(t *testing.T) {
+	tgt := &httpTarget{
+		binary: filepath.Join(t.TempDir(), "absent"), plan: standinPlan(transportHTTP), stubURL: "http://127.0.0.1:1",
+	}
+	_, err := tgt.start(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "start server") {
+		t.Errorf("start = %v, want the exec failure", err)
+	}
+}
+
+// TestStdioTarget_EveryClientIsItsOwnProcess spawns two stand-ins the way the
+// stdio scenarios do and checks what the transport's shape implies: nothing
+// exists before a client, each client is a process, the traceback ends only
+// the first, and the second keeps answering until close.
+func TestStdioTarget_EveryClientIsItsOwnProcess(t *testing.T) {
+	stub := startStubGitLab()
+	t.Cleanup(stub.close)
+	tgt := &stdioTarget{binary: standinBinary(t), plan: standinPlan(transportStdio), stubURL: stub.url}
+	t.Cleanup(tgt.close)
+
+	if ready, err := tgt.start(t.Context()); err != nil || ready != 0 {
+		t.Errorf("start = (%s, %v), want the honest zero for a transport with no process yet", ready, err)
+	}
+	if info := tgt.serverInfo(); info != (ServerInfo{}) {
+		t.Errorf("serverInfo = %+v, want empty on stdio", info)
+	}
+	if _, err := tgt.goroutines(); err == nil {
+		t.Error("goroutines() with no process returned a count")
+	}
+
+	conn, spawn, err := tgt.addClient(t.Context(), 0)
+	if err != nil {
+		t.Fatalf("addClient(0): %v", err)
+	}
+	if spawn <= 0 {
+		t.Errorf("the exec took %s", spawn)
+	}
+	if _, callErr := conn.rpc.call(t.Context(), methodToolsList, nil); callErr != nil {
+		t.Fatalf("tools/list on process 0: %v", callErr)
+	}
+	second := assertClientTalks(t, tgt, 1)
+	if procs := tgt.processes(); len(procs) != 2 {
+		t.Fatalf("%d processes, want one per client", len(procs))
+	}
+
+	count, dumpErr := tgt.goroutines()
+	if dumpErr != nil {
+		t.Fatalf("goroutines: %v", dumpErr)
+	}
+	if count < 1 {
+		t.Errorf("counted %d goroutines in the traceback", count)
+	}
+	if _, callErr := second.rpc.call(t.Context(), methodResourcesList, nil); callErr != nil {
+		t.Errorf("the second process stopped answering after the first was dumped: %v", callErr)
+	}
+	if _, callErr := conn.rpc.call(t.Context(), methodResourcesList, nil); callErr == nil {
+		t.Error("the dumped process still answered")
+	}
+	tgt.close()
+}
+
+// TestStdioTarget_ExecFailure_NamesTheClient checks a client whose process
+// cannot start is reported by index, and leaves no process recorded for the
+// sampler to ask about.
+func TestStdioTarget_ExecFailure_NamesTheClient(t *testing.T) {
+	tgt := &stdioTarget{
+		binary: filepath.Join(t.TempDir(), "absent"), plan: standinPlan(transportStdio), stubURL: "http://127.0.0.1:1",
+	}
+	_, _, err := tgt.addClient(t.Context(), 3)
+	if err == nil || !strings.Contains(err.Error(), "start stdio server 3") {
+		t.Errorf("addClient = %v, want the exec failure naming client 3", err)
+	}
+	if procs := tgt.processes(); len(procs) != 0 {
+		t.Errorf("%d processes recorded for a client that never started", len(procs))
 	}
 }
