@@ -9,6 +9,7 @@
 // answers slowly enough to keep every attempt alive. The deadline is what
 // ends those, so the process cannot be made to hold a goroutine, a
 // connection and a pooled entry for as long as someone cares to keep asking.
+
 package toolutil
 
 import (
@@ -42,7 +43,7 @@ func ActionTimeout() time.Duration {
 func withActionDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
 	d := ActionTimeout()
 	if d <= 0 {
-		return ctx, func() {}
+		return ctx, func() { /* no deadline was added, so there is nothing to cancel */ }
 	}
 	return context.WithTimeout(ctx, d)
 }

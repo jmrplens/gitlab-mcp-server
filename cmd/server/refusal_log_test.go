@@ -84,3 +84,13 @@ func TestLineThrottle_Log(t *testing.T) {
 		t.Error("a line below the handler's level was written")
 	}
 }
+
+// forgetRefusalLines clears what the process-wide throttle remembers, so a
+// test asserting one of its lines is not answered by a window another test
+// opened a moment earlier. Under the throttle's own lock, because parallel
+// tests write through it at the same time.
+func forgetRefusalLines() {
+	refusalLog.mu.Lock()
+	defer refusalLog.mu.Unlock()
+	clear(refusalLog.lines)
+}

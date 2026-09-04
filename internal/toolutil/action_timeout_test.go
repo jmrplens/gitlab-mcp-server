@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
@@ -110,5 +111,19 @@ func TestSetActionTimeout_NegativeMeansNone(t *testing.T) {
 	withActionTimeout(t, -time.Second)
 	if got := ActionTimeout(); got != 0 {
 		t.Errorf("ActionTimeout() = %s after a negative value, want 0", got)
+	}
+}
+
+// TestDefaultActionTimeout_OutlastsTheLongestWait pins the default above the
+// longest wait any action offers. A pipeline wait may run for PollMaxTimeout
+// seconds and the deadline starts before the handler does, so a default equal
+// to that wait would end it a moment before it returned on its own and report
+// a deadline error in place of the wait's own answer. The inequality lives
+// here because config cannot import the constant it has to exceed.
+func TestDefaultActionTimeout_OutlastsTheLongestWait(t *testing.T) {
+	longest := time.Duration(PollMaxTimeout) * time.Second
+	if config.DefaultActionTimeout <= longest {
+		t.Fatalf("DefaultActionTimeout = %s, want more than the longest wait an action offers (%s)",
+			config.DefaultActionTimeout, longest)
 	}
 }

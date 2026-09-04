@@ -42,11 +42,15 @@ const (
 	DefaultSessionTimeout     = 30 * time.Minute
 	DefaultRevalidateInterval = 15 * time.Minute
 	DefaultPoolIdleTimeout    = 1 * time.Hour
-	// DefaultActionTimeout bounds one action's handler. An hour is above the
-	// longest wait any action offers (a pipeline wait caps itself at 3600 s),
-	// so it never cuts a legitimate call and still ends one that would
-	// otherwise park until its client gave up.
-	DefaultActionTimeout  = 1 * time.Hour
+	// DefaultActionTimeout bounds one action's handler: it ends one that would
+	// otherwise park until its client gave up, and never cuts a legitimate
+	// call. It is the longest wait any action offers, a pipeline wait's
+	// 3600-second ceiling, plus five minutes for the calls around it, since
+	// the deadline starts before the handler does and a default equal to the
+	// wait would end it a moment before it returned on its own. toolutil pins
+	// the inequality in a test, since this package cannot import the constant
+	// it must exceed.
+	DefaultActionTimeout  = 65 * time.Minute
 	MaxHTTPClients        = 10000
 	MaxSessionTimeout     = 24 * time.Hour
 	MaxRevalidateInterval = 24 * time.Hour

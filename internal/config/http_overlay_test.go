@@ -350,15 +350,23 @@ func clearOverlayEnv(t *testing.T) {
 		"GITLAB_READ_ONLY", "GITLAB_SAFE_MODE", "EMBEDDED_RESOURCES",
 		"GITLAB_IGNORE_SCOPES", "EXCLUDE_TOOLS", "MAX_HTTP_CLIENTS",
 		"SESSION_TIMEOUT", "POOL_IDLE_TIMEOUT", "SESSION_REVALIDATE_INTERVAL",
+		"ACTION_TIMEOUT",
 		"AUTH_MODE", "PUBLIC_URL", "TRUSTED_ORIGINS", "OAUTH_CACHE_TTL",
 		"RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 	} {
 		// t.Setenv registers the restore; unsetting afterwards makes the
 		// variable genuinely absent rather than present-and-empty, which is
 		// the state these tests claim to exercise.
-		t.Setenv(name, "")
-		if err := os.Unsetenv(name); err != nil {
-			t.Fatalf("unset %s: %v", name, err)
+		//
+		// Both spellings: the prefixed one wins when both are set, so a
+		// GITLAB_MCP_* value exported by the developer would override the
+		// bare-name fixture a case sets and fail it for a reason outside the
+		// test.
+		for _, spelling := range []string{name, EnvPrefix + name} {
+			t.Setenv(spelling, "")
+			if err := os.Unsetenv(spelling); err != nil {
+				t.Fatalf("unset %s: %v", spelling, err)
+			}
 		}
 	}
 }

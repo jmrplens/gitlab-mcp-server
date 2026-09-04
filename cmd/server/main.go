@@ -557,7 +557,7 @@ FLAGS
  Limits and pooling (HTTP mode)
   -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
   -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
-  -action-timeout dur       Cancel an action still running after this long (default 1h, 0 to disable)
+  -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -rate-limit-rps float     Per-server tools/call rate limit (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
@@ -640,7 +640,7 @@ ENVIRONMENT VARIABLES (HTTP mode)
   SESSION_TIMEOUT                   Idle MCP session timeout; --stateless=false only (default 30m)
   GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
   GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long, both transports
-                                    (default 1h, 0 disables)
+                                    (default 65m, 0 disables)
   SESSION_REVALIDATE_INTERVAL       Token re-validation interval (default 15m, 0 disables)
 
 JSON CONFIGURATION EXAMPLES

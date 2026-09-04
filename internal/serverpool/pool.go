@@ -39,6 +39,11 @@ type poolEntry struct {
 	createdAt     time.Time
 	lastValidated time.Time
 	lastUsed      time.Time
+	// rejected is set the moment GitLab answers 401 to a call on this entry,
+	// before the eviction that follows has taken the lock, so a request that
+	// finds the entry in between rebuilds instead of reusing a credential
+	// GitLab has already refused.
+	rejected atomic.Bool
 }
 
 // UserIdentity is the GitLab user a pooled credential belongs to.
@@ -374,9 +379,17 @@ func (p *ServerPool) GetOrCreateWithScopes(token, gitlabURL string, scopes []str
 	// Read under the same lock that guards the field: lastValidated is
 	// written by the revalidation goroutine.
 	stale := ok && p.maxCredentialAge > 0 && time.Since(cached.lastValidated) > p.maxCredentialAge
+	rejected := ok && cached.rejected.Load()
 	p.mu.RUnlock()
 
 	switch {
+	case ok && rejected:
+		// GitLab refused this entry's credential on a call and the eviction
+		// that follows has not taken the lock yet. Dropping it here, rather
+		// than serving it once more, sends this request down the slow path,
+		// which rebuilds and re-verifies; the pending eviction then finds
+		// nothing under the key and does nothing.
+		p.dropRejectedEntry(key, cached)
 	case ok && stale:
 		// The credential behind this entry has not been checked with GitLab
 		// inside the ceiling, so the entry stops being an answer. Dropping it
@@ -502,8 +515,14 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 	// there would otherwise wait on the sweep for a lock the sweep holds.
 	// The call fires once per client, so this is one goroutine per revoked
 	// credential, never per request.
+	// The mark is synchronous and the drop is not: between the two, a
+	// request racing for the same key sees the mark on the fast path and
+	// rebuilds rather than reusing the refused credential.
 	key := sessionKey(token, gitlabURL)
-	client.SetOnUnauthorized(func() { go p.evictRejectedCredential(key, entry) })
+	client.SetOnUnauthorized(func() {
+		entry.rejected.Store(true)
+		go p.evictRejectedCredential(key, entry)
+	})
 	return entry, nil
 }
 

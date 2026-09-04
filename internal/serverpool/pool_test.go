@@ -154,6 +154,59 @@ func TestGetOrCreate_A401OnACallDropsTheEntry(t *testing.T) {
 	}
 }
 
+// TestGetOrCreate_ARejectedEntryIsRebuiltBeforeTheEvictionLands verifies the
+// window between GitLab's 401 and the eviction it schedules: the entry is
+// marked rejected on the calling goroutine, and a request that finds the mark
+// rebuilds instead of reusing the refused credential. The eviction runs on a
+// goroutine of its own, so without the mark a request in that window was
+// served the entry GitLab had just refused.
+func TestGetOrCreate_ARejectedEntryIsRebuiltBeforeTheEvictionLands(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+
+	pool := New(testConfig(srv.URL), testFactory())
+	first, err := pool.GetOrCreate("glpat-live", srv.URL)
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	key := sessionKey("glpat-live", srv.URL)
+	pool.mu.RLock()
+	entry := pool.entries[key]
+	pool.mu.RUnlock()
+	if entry == nil {
+		t.Fatal("no entry after GetOrCreate")
+	}
+
+	// The mark alone, with the eviction that would follow it still pending.
+	entry.rejected.Store(true)
+	second, err := pool.GetOrCreate("glpat-live", srv.URL)
+	if err != nil {
+		t.Fatalf("GetOrCreate after the mark: %v", err)
+	}
+	if second == first {
+		t.Fatal("the request that found the rejected mark was served the refused entry")
+	}
+	if got := pool.Size(); got != 1 {
+		t.Errorf("pool size = %d after the rebuild, want 1", got)
+	}
+	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
+		t.Errorf("RejectedCredentialEvictions = %d, want 1: the rebuild is the eviction", got)
+	}
+
+	// The pending eviction finds another entry under the key and leaves the
+	// rebuilt one alone.
+	pool.evictRejectedCredential(key, entry)
+	if got := pool.Size(); got != 1 {
+		t.Errorf("pool size = %d after the late eviction, want the rebuilt entry kept", got)
+	}
+	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
+		t.Errorf("RejectedCredentialEvictions = %d after the late eviction, want still 1", got)
+	}
+}
+
 // TestGetOrCreate_EmptyToken verifies that GetOrCreate rejects empty tokens
 // to prevent all unauthenticated callers from sharing a single server entry.
 func TestGetOrCreate_EmptyToken(t *testing.T) {

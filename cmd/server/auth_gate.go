@@ -411,7 +411,7 @@ func (g *mcpServerGate) checkSessionOwnership(r *http.Request, server *mcp.Serve
 	}
 	owned, found := g.sessionTags.Load(server)
 	if !found || owned != presented {
-		slog.WarnContext(r.Context(), "request rejected: session ID does not belong to the presented credential")
+		refusalLog.log(r.Context(), slog.LevelWarn, "request rejected: session ID does not belong to the presented credential")
 		return sessionOwnershipFailure()
 	}
 	return nil
@@ -432,7 +432,11 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	source := transportSource(r)
 
 	if g.blockedByBudget(ip, source) {
-		slog.WarnContext(r.Context(), "request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
+		// Named apart from the bearer guard's line: the throttle keys on the
+		// message, and one gate's window must not swallow the other's first
+		// report. The source is what spent the budget; behind a proxy the ip
+		// is often whoever arrived next.
+		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures (legacy auth mode)", "ip", ip, "source", source) //#nosec G706 -- slog structured args are not interpolated
 		return nil, &gateFailure{
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
