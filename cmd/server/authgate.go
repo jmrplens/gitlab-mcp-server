@@ -27,13 +27,15 @@ const (
 	// the connection actually came from rather than to whatever a trusted
 	// proxy header claims.
 	//
-	// It exists because the primary budget's key is caller-controlled once
-	// --trusted-proxy-header is set: an attacker who can also reach the
-	// server directly supplies that header themselves and rotates it, so
-	// every request gets a distinct key, the ten-a-minute lockout never
+	// It exists because the primary budget's key is whatever a trusted proxy
+	// said once --trusted-proxy-header is set, and a proxy that copies a
+	// caller's own header into it hands that key to the caller: rotate it
+	// and every request gets a distinct key, the ten-a-minute lockout never
 	// fires, and each invalid token is relayed one to one to GitLab as a
 	// /user verification, spending the deployment's own throttle budget
-	// there from a cheap client.
+	// there from a cheap client. --trusted-proxies closes the direct route
+	// (a header from any other peer is ignored, see [clientIP]); this
+	// budget covers the proxy that forwards what it was told.
 	//
 	// It counts distinct primary keys, not failures. See [transportBudget]:
 	// charging it per failure aggregated a whole fleet behind one proxy, so
@@ -226,6 +228,9 @@ type mcpServerGate struct {
 	// like limiter.
 	sourceBudget       *transportBudget
 	trustedProxyHeader string
+	// trustedProxies are the peers trustedProxyHeader is believed from; from
+	// anybody else the header is ignored and the peer is charged.
+	trustedProxies trustedProxies
 	// challenge is the WWW-Authenticate value sent with a 401.
 	challenge string
 	// oauthMode reports whether this gate sits behind the bearer guard, which
@@ -423,7 +428,7 @@ func sessionOwnershipFailure() *gateFailure {
 }
 
 func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
-	ip := clientIP(r, g.trustedProxyHeader)
+	ip := clientIP(r, g.trustedProxyHeader, g.trustedProxies)
 	source := transportSource(r)
 
 	if g.blockedByBudget(ip, source) {
@@ -633,7 +638,7 @@ func (b *transportBudget) cleanup() {
 // secondary budget: RemoteAddr is set by the kernel from the accepted socket,
 // so nothing a caller sends can change it.
 func transportSource(r *http.Request) string {
-	return clientIP(r, "")
+	return remoteHost(r)
 }
 
 // errMissingGitLabURL is returned when a deployment publishes several

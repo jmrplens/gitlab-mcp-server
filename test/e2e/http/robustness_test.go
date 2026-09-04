@@ -324,7 +324,7 @@ func TestRobust_ManyAndLargeHeaders(t *testing.T) {
 // else — the failure budget bounds the upstream cost, and the process stays up.
 func TestRobust_SustainedInvalidTrafficKeepsServing(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--trusted-proxy-header=X-Real-IP")
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--trusted-proxy-header=X-Real-IP", "--trusted-proxies=127.0.0.1,::1")
 
 	const addresses, perAddress = 8, 20
 	var wg sync.WaitGroup

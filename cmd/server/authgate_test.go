@@ -886,6 +886,7 @@ func TestMCPServerGate_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
 			gate := newGate(t, okFactory)
 			gate.trustedProxyHeader = tc.header
 			if tc.header != "" {
+				gate.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
 				gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
 			}
 			handler := gate.middleware(http.NotFoundHandler())
@@ -899,7 +900,10 @@ func TestMCPServerGate_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
 				if tc.header != "" {
 					value := "198.51.100.1"
 					if tc.rotate {
-						value = "198.51.100." + strconv.Itoa(i%250+1) + ":" + strconv.Itoa(i)
+						// Two octets vary: the key is the address alone, a
+						// port on the hop is stripped, and one octet gives
+						// fewer distinct keys than the coarse budget holds.
+						value = "198.51." + strconv.Itoa(i/250) + "." + strconv.Itoa(i%250+1)
 					}
 					req.Header.Set(tc.header, value)
 				}
@@ -929,6 +933,7 @@ func TestMCPServerGate_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
 func TestMCPServerGate_TrustedProxyKeepsPerClientGranularity(t *testing.T) {
 	gate := newGate(t, okFactory)
 	gate.trustedProxyHeader = "X-Forwarded-For"
+	gate.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
 	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
 	handler := gate.middleware(http.NotFoundHandler())
 
@@ -967,6 +972,7 @@ func TestMCPServerGate_TrustedProxyKeepsPerClientGranularity(t *testing.T) {
 func TestMCPServerGate_TrustedProxy_TheFleetBudgetCountsClientsNotFailures(t *testing.T) {
 	gate := newGate(t, okFactory)
 	gate.trustedProxyHeader = "X-Forwarded-For"
+	gate.trustedProxies = trustedProxiesOf([]string{"203.0.113.7"})
 	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
 	handler := gate.middleware(http.NotFoundHandler())
 
@@ -1056,7 +1062,10 @@ func TestTransportSource(t *testing.T) {
 	}{
 		{"host_and_port", "203.0.113.7:44444", "203.0.113.7"},
 		{"ipv6", "[2001:db8::1]:443", "2001:db8::1"},
-		{"no_port", "203.0.113.7", ""},
+		// A peer without a port is what a unix socket listener reports; it
+		// is charged as reported rather than to an empty key.
+		{"no_port", "203.0.113.7", "203.0.113.7"},
+		{"unix_socket", "@", "@"},
 		{"empty", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

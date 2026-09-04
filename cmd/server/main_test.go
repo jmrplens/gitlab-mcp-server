@@ -3947,88 +3947,6 @@ func TestAllowedHosts_EmptyHost(t *testing.T) {
 	}
 }
 
-// TestClientIP_RemoteAddr verifies that clientIP returns the RemoteAddr host
-// (without port) when no trusted proxy header is configured.
-func TestClientIP_RemoteAddr(t *testing.T) {
-	t.Parallel()
-	r := &http.Request{RemoteAddr: "203.0.113.1:12345"}
-	if got := clientIP(r, ""); got != "203.0.113.1" {
-		t.Errorf("clientIP() = %q, want 203.0.113.1", got)
-	}
-}
-
-// TestClientIP_TrustedProxyHeader verifies that clientIP returns the IP from
-// the configured trusted proxy header (e.g. X-Real-IP) instead of RemoteAddr.
-func TestClientIP_TrustedProxyHeader(t *testing.T) {
-	t.Parallel()
-	r := &http.Request{
-		RemoteAddr: "10.0.0.1:12345",
-		Header:     http.Header{"X-Real-Ip": {"203.0.113.42"}},
-	}
-	if got := clientIP(r, "X-Real-IP"); got != "203.0.113.42" {
-		t.Errorf("clientIP() = %q, want 203.0.113.42", got)
-	}
-}
-
-// TestClientIP_TrustedProxyHeader_XForwardedFor verifies that for
-// comma-separated X-Forwarded-For values, clientIP returns the rightmost IP
-// (added by the real trusted proxy) rather than the leftmost (spoofable).
-func TestClientIP_TrustedProxyHeader_XForwardedFor(t *testing.T) {
-	t.Parallel()
-	// For comma-separated proxy-appended headers, clientIP returns the
-	// rightmost IP because the leftmost entry is client-supplied and
-	// therefore spoofable.
-	r := &http.Request{
-		RemoteAddr: "10.0.0.1:12345",
-		Header:     http.Header{"X-Forwarded-For": {"203.0.113.1, 10.0.0.2, 10.0.0.77"}},
-	}
-	if got := clientIP(r, "X-Forwarded-For"); got != "10.0.0.77" {
-		t.Errorf("clientIP() = %q, want 10.0.0.77 (rightmost entry, non-spoofable)", got)
-	}
-}
-
-// TestClientIP_TrustedProxyHeader_SpoofResistant verifies that clientIP
-// ignores attacker-prepended IPs in X-Forwarded-For and returns the rightmost
-// (trusted-proxy-appended) entry to prevent IP spoofing.
-func TestClientIP_TrustedProxyHeader_SpoofResistant(t *testing.T) {
-	t.Parallel()
-	// An attacker-controlled client prepends a fake IP. The rightmost entry
-	// (added by the real trusted proxy) must be returned.
-	r := &http.Request{
-		RemoteAddr: "10.0.0.1:12345",
-		Header:     http.Header{"X-Forwarded-For": {"1.2.3.4, 203.0.113.55"}},
-	}
-	if got := clientIP(r, "X-Forwarded-For"); got != "203.0.113.55" {
-		t.Errorf("clientIP() = %q, want 203.0.113.55 (ignores leftmost spoofed value)", got)
-	}
-}
-
-// TestClientIP_TrustedProxyHeader_Empty verifies that clientIP falls back to
-// RemoteAddr when the configured trusted proxy header is absent or empty.
-func TestClientIP_TrustedProxyHeader_Empty(t *testing.T) {
-	t.Parallel()
-	r := &http.Request{
-		RemoteAddr: "203.0.113.99:12345",
-		Header:     http.Header{},
-	}
-	if got := clientIP(r, "X-Real-IP"); got != "203.0.113.99" {
-		t.Errorf("clientIP() = %q, want 203.0.113.99 (fallback to RemoteAddr)", got)
-	}
-}
-
-// TestClientIP_TrustedProxyHeader_TrailingCommas verifies that clientIP skips
-// empty entries produced by trailing commas and returns the rightmost non-empty IP.
-func TestClientIP_TrustedProxyHeader_TrailingCommas(t *testing.T) {
-	t.Parallel()
-	r := &http.Request{
-		RemoteAddr: "203.0.113.99:12345",
-		Header:     http.Header{"X-Forwarded-For": {"10.0.0.1, "}},
-	}
-	if got := clientIP(r, "X-Forwarded-For"); got != "10.0.0.1" {
-		t.Errorf("clientIP() = %q, want 10.0.0.1 (skip empty trailing entry)", got)
-	}
-}
-
 // TestBuildServerCard_ReturnsValidJSON verifies that [buildServerCard] produces
 // valid JSON containing serverInfo, authentication, and a non-empty tools array
 // with meta-tools when MetaTools=true.
@@ -7358,6 +7276,29 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			name:    "a documentation link that is not a URL",
 			mutate:  func(c *config.Config) { c.ResourceDocumentation = "see the wiki" },
 			wantErr: "resource-documentation",
+		},
+		{
+			name: "a proxy header with its proxies",
+			mutate: func(c *config.Config) {
+				c.TrustedProxyHeader, c.TrustedProxies = "X-Forwarded-For", []string{"127.0.0.1", "10.0.0.0/8"}
+			},
+		},
+		{
+			name:    "a proxy header nobody is trusted to set",
+			mutate:  func(c *config.Config) { c.TrustedProxyHeader = "X-Real-IP" },
+			wantErr: "trusted-proxies",
+		},
+		{
+			name:    "trusted proxies whose header is never read",
+			mutate:  func(c *config.Config) { c.TrustedProxies = []string{"127.0.0.1"} },
+			wantErr: "trusted-proxy-header",
+		},
+		{
+			name: "a trusted proxy that is not an address",
+			mutate: func(c *config.Config) {
+				c.TrustedProxyHeader, c.TrustedProxies = "X-Real-IP", []string{"proxy.internal"}
+			},
+			wantErr: "proxy.internal",
 		},
 	}
 
