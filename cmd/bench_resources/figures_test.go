@@ -318,9 +318,11 @@ func TestCallDetail_TranslatesOnlyWhatItKnows(t *testing.T) {
 	// bundles, or a page silently prints the other language.
 	for _, bundle := range []labels{englishLabels(), spanish} {
 		for _, detail := range recordedCallDetails {
-			if _, ok := bundle.CallDetail[detail]; !ok {
-				t.Errorf("the %s bundle has no wording for the recorded description %q", bundle.Code, detail)
-			}
+			t.Run(bundle.Code+"/"+detail, func(t *testing.T) {
+				if _, ok := bundle.CallDetail[detail]; !ok {
+					t.Errorf("the %s bundle has no wording for the recorded description %q", bundle.Code, detail)
+				}
+			})
 		}
 	}
 }
