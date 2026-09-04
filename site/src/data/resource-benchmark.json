@@ -1,0 +1,744 @@
+{
+  "schema": 1,
+  "generated_at": "2026-09-03T23:43:59Z",
+  "server": {
+    "version": "2.7.6-0.20260903234347-3ee720d09ea7",
+    "commit": "3ee720d09ea717862843658b30a4e51150369982"
+  },
+  "host": {
+    "os": "linux",
+    "arch": "amd64",
+    "cpu_model": "AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx",
+    "cpus": 8,
+    "mem_total_gib": 60.778,
+    "kernel": "6.1.0-52-amd64",
+    "go_version": "go1.27.1"
+  },
+  "settings": {
+    "rounds": 3,
+    "sample_interval_ms": 100,
+    "quick": false
+  },
+  "scenarios": [
+    {
+      "id": "stdio-dynamic",
+      "transport": "stdio",
+      "surface": "dynamic",
+      "telemetry": false,
+      "clients": 4,
+      "parallel": 4,
+      "rounds": 3,
+      "list_bytes": 12119,
+      "startup": {
+        "process_ready_ms": 0.27,
+        "first_list_ms": 1729.472,
+        "warm_list_ms": 4.565
+      },
+      "memory": {
+        "idle_mib": 0,
+        "one_client_mib": 210.723,
+        "all_clients_mib": 862.793,
+        "peak_mib": 929.117,
+        "per_extra_client_mib": 217.357
+      },
+      "cpu": {
+        "startup_seconds": 13.14,
+        "load_seconds": 1.5,
+        "load_percent": 507.863,
+        "total_seconds": 14.64
+      },
+      "goroutines": 26,
+      "ramp": [
+        {
+          "client": 1,
+          "cold_list_ms": 1729.472,
+          "rss_mib": 210.723
+        },
+        {
+          "client": 2,
+          "cold_list_ms": 1731.456,
+          "rss_mib": 458.469
+        },
+        {
+          "client": 3,
+          "cold_list_ms": 1812.896,
+          "rss_mib": 670.043
+        },
+        {
+          "client": 4,
+          "cold_list_ms": 1778.517,
+          "rss_mib": 862.793
+        }
+      ],
+      "latency": [
+        {
+          "method": "resources/list",
+          "detail": "smallest listing",
+          "count": 48,
+          "p50_ms": 1.576,
+          "p90_ms": 2.168,
+          "p99_ms": 2.481,
+          "max_ms": 2.481
+        },
+        {
+          "method": "tools/call",
+          "detail": "gitlab_find_action",
+          "count": 48,
+          "p50_ms": 70.36,
+          "p90_ms": 92.928,
+          "p99_ms": 96.195,
+          "max_ms": 96.195
+        },
+        {
+          "method": "tools/list",
+          "detail": "whole surface",
+          "count": 48,
+          "p50_ms": 4.565,
+          "p90_ms": 5.43,
+          "p99_ms": 11.476,
+          "max_ms": 11.476
+        }
+      ]
+    },
+    {
+      "id": "stdio-meta",
+      "transport": "stdio",
+      "surface": "meta",
+      "telemetry": false,
+      "clients": 4,
+      "parallel": 4,
+      "rounds": 3,
+      "list_bytes": 598262,
+      "startup": {
+        "process_ready_ms": 0.357,
+        "first_list_ms": 1771.369,
+        "warm_list_ms": 104.768
+      },
+      "memory": {
+        "idle_mib": 0,
+        "one_client_mib": 193.371,
+        "all_clients_mib": 782.691,
+        "peak_mib": 813.926,
+        "per_extra_client_mib": 196.44
+      },
+      "cpu": {
+        "startup_seconds": 12.68,
+        "load_seconds": 1.89,
+        "load_percent": 430.875,
+        "total_seconds": 14.57
+      },
+      "goroutines": 28,
+      "ramp": [
+        {
+          "client": 1,
+          "cold_list_ms": 1771.369,
+          "rss_mib": 193.371
+        },
+        {
+          "client": 2,
+          "cold_list_ms": 1890.582,
+          "rss_mib": 386.805
+        },
+        {
+          "client": 3,
+          "cold_list_ms": 1809.06,
+          "rss_mib": 582.473
+        },
+        {
+          "client": 4,
+          "cold_list_ms": 1819.397,
+          "rss_mib": 782.691
+        }
+      ],
+      "latency": [
+        {
+          "method": "resources/list",
+          "detail": "smallest listing",
+          "count": 48,
+          "p50_ms": 3.142,
+          "p90_ms": 9.118,
+          "p99_ms": 13.517,
+          "max_ms": 13.517
+        },
+        {
+          "method": "tools/call",
+          "detail": "gitlab_server (status)",
+          "count": 48,
+          "p50_ms": 4.365,
+          "p90_ms": 7.843,
+          "p99_ms": 9.845,
+          "max_ms": 9.845
+        },
+        {
+          "method": "tools/list",
+          "detail": "whole surface",
+          "count": 48,
+          "p50_ms": 104.768,
+          "p90_ms": 136.771,
+          "p99_ms": 141.765,
+          "max_ms": 141.765
+        }
+      ]
+    },
+    {
+      "id": "stdio-individual",
+      "transport": "stdio",
+      "surface": "individual",
+      "telemetry": false,
+      "clients": 4,
+      "parallel": 2,
+      "rounds": 3,
+      "list_bytes": 3227298,
+      "startup": {
+        "process_ready_ms": 5.401,
+        "first_list_ms": 4301.358,
+        "warm_list_ms": 907.429
+      },
+      "memory": {
+        "idle_mib": 0,
+        "one_client_mib": 330.828,
+        "all_clients_mib": 1218.465,
+        "peak_mib": 1218.465,
+        "per_extra_client_mib": 295.879
+      },
+      "cpu": {
+        "startup_seconds": 26.02,
+        "load_seconds": 16.67,
+        "load_percent": 560.54,
+        "total_seconds": 42.69
+      },
+      "goroutines": 28,
+      "ramp": [
+        {
+          "client": 1,
+          "cold_list_ms": 4301.358,
+          "rss_mib": 330.828
+        },
+        {
+          "client": 2,
+          "cold_list_ms": 4177.225,
+          "rss_mib": 640.773
+        },
+        {
+          "client": 3,
+          "cold_list_ms": 4288.435,
+          "rss_mib": 950.984
+        },
+        {
+          "client": 4,
+          "cold_list_ms": 4240.742,
+          "rss_mib": 1218.465
+        }
+      ],
+      "latency": [
+        {
+          "method": "resources/list",
+          "detail": "smallest listing",
+          "count": 24,
+          "p50_ms": 1.114,
+          "p90_ms": 1.692,
+          "p99_ms": 1.85,
+          "max_ms": 1.85
+        },
+        {
+          "method": "tools/call",
+          "detail": "gitlab_server_status",
+          "count": 24,
+          "p50_ms": 2.119,
+          "p90_ms": 2.719,
+          "p99_ms": 2.981,
+          "max_ms": 2.981
+        },
+        {
+          "method": "tools/list",
+          "detail": "whole surface",
+          "count": 24,
+          "p50_ms": 907.429,
+          "p90_ms": 997.812,
+          "p99_ms": 1029.666,
+          "max_ms": 1029.666
+        }
+      ]
+    },
+    {
+      "id": "stdio-dynamic-telemetry",
+      "transport": "stdio",
+      "surface": "dynamic",
+      "telemetry": true,
+      "clients": 4,
+      "parallel": 4,
+      "rounds": 3,
+      "list_bytes": 12119,
+      "startup": {
+        "process_ready_ms": 0.298,
+        "first_list_ms": 1807.444,
+        "warm_list_ms": 6.956
+      },
+      "memory": {
+        "idle_mib": 0,
+        "one_client_mib": 248.328,
+        "all_clients_mib": 927.914,
+        "peak_mib": 973.203,
+        "per_extra_client_mib": 226.529
+      },
+      "cpu": {
+        "startup_seconds": 13.85,
+        "load_seconds": 1.58,
+        "load_percent": 427.393,
+        "total_seconds": 15.43
+      },
+      "goroutines": 35,
+      "ramp": [
+        {
+          "client": 1,
+          "cold_list_ms": 1807.444,
+          "rss_mib": 248.328
+        },
+        {
+          "client": 2,
+          "cold_list_ms": 2010.65,
+          "rss_mib": 477.926
+        },
+        {
+          "client": 3,
+          "cold_list_ms": 1825.059,
+          "rss_mib": 726.891
+        },
+        {
+          "client": 4,
+          "cold_list_ms": 1898.132,
+          "rss_mib": 927.914
+        }
+      ],
+      "latency": [
+        {
+          "method": "resources/list",
+          "detail": "smallest listing",
+          "count": 48,
+          "p50_ms": 1.977,
+          "p90_ms": 2.524,
+          "p99_ms": 2.699,
+          "max_ms": 2.699
+        },
+        {
+          "method": "tools/call",
+          "detail": "gitlab_find_action",
+          "count": 48,
+          "p50_ms": 77.236,
+          "p90_ms": 125.686,
+          "p99_ms": 133.174,
+          "max_ms": 133.174
+        },
+        {
+          "method": "tools/list",
+          "detail": "whole surface",
+          "count": 48,
+          "p50_ms": 6.956,
+          "p90_ms": 12.577,
+          "p99_ms": 29.757,
+          "max_ms": 29.757
+        }
+      ]
+    },
+    {
+      "id": "http-dynamic",
+      "transport": "http",
+      "surface": "dynamic",
+      "telemetry": false,
+      "clients": 8,
+      "parallel": 4,
+      "rounds": 3,
+      "list_bytes": 12142,
+      "startup": {
+        "process_ready_ms": 51.645,
+        "first_list_ms": 1949.775,
+        "warm_list_ms": 13.84
+      },
+      "memory": {
+        "idle_mib": 39.93,
+        "one_client_mib": 219.328,
+        "all_clients_mib": 717.277,
+        "peak_mib": 862.512,
+        "per_extra_client_mib": 71.136
+      },
+      "cpu": {
+        "startup_seconds": 20.78,
+        "load_seconds": 3.73,
+        "load_percent": 446.795,
+        "total_seconds": 24.51
+      },
+      "goroutines": 66,
+      "ramp": [
+        {
+          "client": 1,
+          "cold_list_ms": 1949.775,
+          "rss_mib": 219.328
+        },
+        {
+          "client": 2,
+          "cold_list_ms": 1371.238,
+          "rss_mib": 294.762
+        },
+        {
+          "client": 3,
+          "cold_list_ms": 1341.243,
+          "rss_mib": 357.848
+        },
+        {
+          "client": 4,
+          "cold_list_ms": 1338.367,
+          "rss_mib": 397.84
+        },
+        {
+          "client": 5,
+          "cold_list_ms": 1415.837,
+          "rss_mib": 487.387
+        },
+        {
+          "client": 6,
+          "cold_list_ms": 1267.558,
+          "rss_mib": 575.758
+        },
+        {
+          "client": 7,
+          "cold_list_ms": 1169.558,
+          "rss_mib": 650.098
+        },
+        {
+          "client": 8,
+          "cold_list_ms": 1281.44,
+          "rss_mib": 717.277
+        }
+      ],
+      "latency": [
+        {
+          "method": "resources/list",
+          "detail": "smallest listing",
+          "count": 96,
+          "p50_ms": 9.771,
+          "p90_ms": 15.033,
+          "p99_ms": 15.692,
+          "max_ms": 15.692
+        },
+        {
+          "method": "tools/call",
+          "detail": "gitlab_find_action",
+          "count": 96,
+          "p50_ms": 173.566,
+          "p90_ms": 355.687,
+          "p99_ms": 374.643,
+          "max_ms": 374.643
+        },
+        {
+          "method": "tools/list",
+          "detail": "whole surface",
+          "count": 96,
+          "p50_ms": 13.84,
+          "p90_ms": 15.305,
+          "p99_ms": 16.554,
+          "max_ms": 16.554
+        }
+      ]
+    },
+    {
+      "id": "http-meta",
+      "transport": "http",
+      "surface": "meta",
+      "telemetry": false,
+      "clients": 8,
+      "parallel": 4,
+      "rounds": 3,
+      "list_bytes": 598285,
+      "startup": {
+        "process_ready_ms": 102.31,
+        "first_list_ms": 2025.375,
+        "warm_list_ms": 222.182
+      },
+      "memory": {
+        "idle_mib": 39.047,
+        "one_client_mib": 196.953,
+        "all_clients_mib": 445.348,
+        "peak_mib": 598.578,
+        "per_extra_client_mib": 35.485
+      },
+      "cpu": {
+        "startup_seconds": 19.24,
+        "load_seconds": 3.98,
+        "load_percent": 416.584,
+        "total_seconds": 23.22
+      },
+      "goroutines": 68,
+      "ramp": [
+        {
+          "client": 1,
+          "cold_list_ms": 2025.375,
+          "rss_mib": 196.953
+        },
+        {
+          "client": 2,
+          "cold_list_ms": 1301.802,
+          "rss_mib": 237.688
+        },
+        {
+          "client": 3,
+          "cold_list_ms": 1310.372,
+          "rss_mib": 260.293
+        },
+        {
+          "client": 4,
+          "cold_list_ms": 1351.014,
+          "rss_mib": 309.438
+        },
+        {
+          "client": 5,
+          "cold_list_ms": 1479.237,
+          "rss_mib": 351.242
+        },
+        {
+          "client": 6,
+          "cold_list_ms": 1266.045,
+          "rss_mib": 372.867
+        },
+        {
+          "client": 7,
+          "cold_list_ms": 1150.676,
+          "rss_mib": 416.914
+        },
+        {
+          "client": 8,
+          "cold_list_ms": 1255.803,
+          "rss_mib": 445.348
+        }
+      ],
+      "latency": [
+        {
+          "method": "resources/list",
+          "detail": "smallest listing",
+          "count": 96,
+          "p50_ms": 5.434,
+          "p90_ms": 8.278,
+          "p99_ms": 10.167,
+          "max_ms": 10.167
+        },
+        {
+          "method": "tools/call",
+          "detail": "gitlab_server (status)",
+          "count": 96,
+          "p50_ms": 14.037,
+          "p90_ms": 17.842,
+          "p99_ms": 18.783,
+          "max_ms": 18.783
+        },
+        {
+          "method": "tools/list",
+          "detail": "whole surface",
+          "count": 96,
+          "p50_ms": 222.182,
+          "p90_ms": 329.798,
+          "p99_ms": 360.598,
+          "max_ms": 360.598
+        }
+      ]
+    },
+    {
+      "id": "http-individual",
+      "transport": "http",
+      "surface": "individual",
+      "telemetry": false,
+      "clients": 8,
+      "parallel": 2,
+      "rounds": 3,
+      "list_bytes": 3227321,
+      "startup": {
+        "process_ready_ms": 51.823,
+        "first_list_ms": 4624.681,
+        "warm_list_ms": 2391.349
+      },
+      "memory": {
+        "idle_mib": 39.207,
+        "one_client_mib": 334.305,
+        "all_clients_mib": 589.031,
+        "peak_mib": 1164.188,
+        "per_extra_client_mib": 36.389
+      },
+      "cpu": {
+        "startup_seconds": 38.07,
+        "load_seconds": 33.75,
+        "load_percent": 434.498,
+        "total_seconds": 71.82
+      },
+      "goroutines": 52,
+      "ramp": [
+        {
+          "client": 1,
+          "cold_list_ms": 4624.681,
+          "rss_mib": 334.305
+        },
+        {
+          "client": 2,
+          "cold_list_ms": 2574.389,
+          "rss_mib": 331.238
+        },
+        {
+          "client": 3,
+          "cold_list_ms": 2434.699,
+          "rss_mib": 373.898
+        },
+        {
+          "client": 4,
+          "cold_list_ms": 2480.073,
+          "rss_mib": 432.57
+        },
+        {
+          "client": 5,
+          "cold_list_ms": 2396.068,
+          "rss_mib": 491.738
+        },
+        {
+          "client": 6,
+          "cold_list_ms": 2893.852,
+          "rss_mib": 548.301
+        },
+        {
+          "client": 7,
+          "cold_list_ms": 2849.002,
+          "rss_mib": 592.398
+        },
+        {
+          "client": 8,
+          "cold_list_ms": 2974.567,
+          "rss_mib": 589.031
+        }
+      ],
+      "latency": [
+        {
+          "method": "resources/list",
+          "detail": "smallest listing",
+          "count": 48,
+          "p50_ms": 3.418,
+          "p90_ms": 5.732,
+          "p99_ms": 6.717,
+          "max_ms": 6.717
+        },
+        {
+          "method": "tools/call",
+          "detail": "gitlab_server_status",
+          "count": 48,
+          "p50_ms": 7.738,
+          "p90_ms": 9.887,
+          "p99_ms": 11.048,
+          "max_ms": 11.048
+        },
+        {
+          "method": "tools/list",
+          "detail": "whole surface",
+          "count": 48,
+          "p50_ms": 2391.349,
+          "p90_ms": 2878.513,
+          "p99_ms": 2897.386,
+          "max_ms": 2897.386
+        }
+      ]
+    },
+    {
+      "id": "http-dynamic-telemetry",
+      "transport": "http",
+      "surface": "dynamic",
+      "telemetry": true,
+      "clients": 8,
+      "parallel": 4,
+      "rounds": 3,
+      "list_bytes": 12142,
+      "startup": {
+        "process_ready_ms": 102.642,
+        "first_list_ms": 2138.534,
+        "warm_list_ms": 24.021
+      },
+      "memory": {
+        "idle_mib": 42.719,
+        "one_client_mib": 241.781,
+        "all_clients_mib": 718.652,
+        "peak_mib": 840.059,
+        "per_extra_client_mib": 68.124
+      },
+      "cpu": {
+        "startup_seconds": 20.23,
+        "load_seconds": 4.19,
+        "load_percent": 463.564,
+        "total_seconds": 24.42
+      },
+      "goroutines": 75,
+      "ramp": [
+        {
+          "client": 1,
+          "cold_list_ms": 2138.534,
+          "rss_mib": 241.781
+        },
+        {
+          "client": 2,
+          "cold_list_ms": 1222.982,
+          "rss_mib": 270.492
+        },
+        {
+          "client": 3,
+          "cold_list_ms": 1253.349,
+          "rss_mib": 354.59
+        },
+        {
+          "client": 4,
+          "cold_list_ms": 1249.524,
+          "rss_mib": 421.41
+        },
+        {
+          "client": 5,
+          "cold_list_ms": 1313.541,
+          "rss_mib": 507.242
+        },
+        {
+          "client": 6,
+          "cold_list_ms": 1274.795,
+          "rss_mib": 566.332
+        },
+        {
+          "client": 7,
+          "cold_list_ms": 1301.966,
+          "rss_mib": 658.074
+        },
+        {
+          "client": 8,
+          "cold_list_ms": 1244.194,
+          "rss_mib": 718.652
+        }
+      ],
+      "latency": [
+        {
+          "method": "resources/list",
+          "detail": "smallest listing",
+          "count": 96,
+          "p50_ms": 6.118,
+          "p90_ms": 9.141,
+          "p99_ms": 11.188,
+          "max_ms": 11.188
+        },
+        {
+          "method": "tools/call",
+          "detail": "gitlab_find_action",
+          "count": 96,
+          "p50_ms": 158.726,
+          "p90_ms": 330.339,
+          "p99_ms": 340.365,
+          "max_ms": 340.365
+        },
+        {
+          "method": "tools/list",
+          "detail": "whole surface",
+          "count": 96,
+          "p50_ms": 24.021,
+          "p90_ms": 38.749,
+          "p99_ms": 49.275,
+          "max_ms": 49.275
+        }
+      ]
+    }
+  ]
+}

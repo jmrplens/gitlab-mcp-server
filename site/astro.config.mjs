@@ -757,6 +757,11 @@ export default defineConfig({
 							translations: { es: "Despliegue remoto" },
 						},
 						{
+							slug: "operations/resource-benchmark",
+							label: "Resource Benchmark",
+							translations: { es: "Consumo de recursos" },
+						},
+						{
 							slug: "operations/error-handling",
 							label: "Error Handling",
 							translations: { es: "Errores y formato" },

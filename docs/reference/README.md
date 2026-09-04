@@ -14,16 +14,17 @@ authoritative and edit the source, not the Markdown.
 
 > **Diátaxis type**: Reference · **Audience**: 👤🔧 All users & integrators
 
-| Reference                              | Covers                                                                                      |
-| -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [Configuration](configuration.md)      | Transport modes, dotenv setup, and how settings are loaded                                  |
-| [Environment Variables](env.md)        | Every environment variable with defaults and descriptions                                   |
-| [CLI Reference](cli.md)                | All command-line flags with usage examples                                                  |
-| [Output Format](output-format.md)      | How responses are structured: Markdown + JSON, annotations, links, next-step hints          |
-| [Tools](tools/README.md)               | Per-domain tool documentation across every catalog group                                    |
-| [Resources](resources.md)              | MCP resources and URI templates, including the surface-aware tool manifest                  |
-| [Prompts](prompts.md)                  | Every prompt with its arguments and output format                                           |
-| [Capabilities](capabilities/README.md) | The MCP capabilities (progress, completions, elicitation, resource subscriptions) and icons |
+| Reference                                   | Covers                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [Configuration](configuration.md)           | Transport modes, dotenv setup, and how settings are loaded                                  |
+| [Environment Variables](env.md)             | Every environment variable with defaults and descriptions                                   |
+| [CLI Reference](cli.md)                     | All command-line flags with usage examples                                                  |
+| [Output Format](output-format.md)           | How responses are structured: Markdown + JSON, annotations, links, next-step hints          |
+| [Tools](tools/README.md)                    | Per-domain tool documentation across every catalog group                                    |
+| [Resources](resources.md)                   | MCP resources and URI templates, including the surface-aware tool manifest                  |
+| [Prompts](prompts.md)                       | Every prompt with its arguments and output format                                           |
+| [Capabilities](capabilities/README.md)      | The MCP capabilities (progress, completions, elicitation, resource subscriptions) and icons |
+| [Resource Benchmark](resource-benchmark.md) | What the server costs to run: memory, processor time, goroutines and latency, measured      |
 
 **Looking for something else?**
 [Guides](../guides/README.md) for step-by-step tasks ·

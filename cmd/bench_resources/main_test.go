@@ -1,0 +1,250 @@
+// main_test.go covers the command's own decisions: which matrix a set of flags
+// selects, and the guard that keeps a smoke run from overwriting published
+// measurements.
+package main
+
+import (
+	"flag"
+	"io"
+	"os"
+	"strings"
+	"testing"
+	"time"
+)
+
+// withArgs runs parseFlags against a command line, on a flag set of its own so
+// the test binary's own flags are untouched.
+func withArgs(t *testing.T, args ...string) options {
+	t.Helper()
+	previousArgs, previousFlags := os.Args, flag.CommandLine
+	t.Cleanup(func() { os.Args, flag.CommandLine = previousArgs, previousFlags })
+
+	flag.CommandLine = flag.NewFlagSet("bench_resources", flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+	os.Args = append([]string{"bench_resources"}, args...)
+	return parseFlags()
+}
+
+// TestParseFlags_RecordsWhetherTheOutputPathWasChosen verifies -json is
+// remembered as given rather than merely as a value.
+//
+// It is what lets the guard tell a partial run writing somewhere of its own
+// from a partial run about to overwrite the published record: the two are
+// indistinguishable by path, because passing the default path explicitly is a
+// deliberate act and defaulting into it is not.
+func TestParseFlags_RecordsWhetherTheOutputPathWasChosen(t *testing.T) {
+	t.Run("not given", func(t *testing.T) {
+		opts := withArgs(t)
+		if opts.recordSet {
+			t.Error("recordSet is true with no -json on the command line")
+		}
+		if opts.record != defaultRecord {
+			t.Errorf("record = %q, want the default %q", opts.record, defaultRecord)
+		}
+	})
+
+	t.Run("given a different path", func(t *testing.T) {
+		opts := withArgs(t, "-json=/tmp/somewhere-else.json")
+		if !opts.recordSet {
+			t.Error("recordSet is false although -json was given")
+		}
+		if opts.record != "/tmp/somewhere-else.json" {
+			t.Errorf("record = %q, want the path given", opts.record)
+		}
+	})
+
+	t.Run("given the default path explicitly", func(t *testing.T) {
+		// The distinction the guard rests on: same value, different intent.
+		opts := withArgs(t, "-json="+defaultRecord)
+		if !opts.recordSet {
+			t.Error("recordSet is false although -json was given explicitly")
+		}
+	})
+}
+
+// TestParseFlags_Defaults_AreTheOnesTheDocumentationClaims verifies the values
+// a plain run measures with, since the published page states them.
+func TestParseFlags_Defaults_AreTheOnesTheDocumentationClaims(t *testing.T) {
+	opts := withArgs(t)
+	if opts.rounds != 3 {
+		t.Errorf("rounds = %d, want 3", opts.rounds)
+	}
+	if opts.sampleInterval != 100*time.Millisecond {
+		t.Errorf("sample interval = %v, want 100ms", opts.sampleInterval)
+	}
+	for name, got := range map[string]bool{
+		"render": opts.render, "check": opts.check, "quick": opts.quick, "v": opts.verbose,
+	} {
+		t.Run("-"+name+" is off", func(t *testing.T) {
+			if got {
+				t.Errorf("-%s defaults to on", name)
+			}
+		})
+	}
+}
+
+// TestParseFlags_MeasurementFlags_AreRead verifies the flags a run is steered
+// with reach the options struct, since a silently ignored one would produce a
+// record that does not match what was asked for.
+func TestParseFlags_MeasurementFlags_AreRead(t *testing.T) {
+	opts := withArgs(t,
+		"-rounds=7",
+		"-sample-interval=250ms",
+		"-scenarios=http-dynamic,stdio-meta",
+		"-quick",
+		"-v",
+		"-binary=/somewhere/gitlab-mcp-server",
+	)
+	if opts.rounds != 7 {
+		t.Errorf("rounds = %d, want 7", opts.rounds)
+	}
+	if opts.sampleInterval != 250*time.Millisecond {
+		t.Errorf("sample interval = %v, want 250ms", opts.sampleInterval)
+	}
+	if opts.scenarios != "http-dynamic,stdio-meta" {
+		t.Errorf("scenarios = %q, want the two given", opts.scenarios)
+	}
+	if !opts.quick || !opts.verbose {
+		t.Errorf("-quick/-v = %v/%v, want both on", opts.quick, opts.verbose)
+	}
+	if opts.binary != "/somewhere/gitlab-mcp-server" {
+		t.Errorf("binary = %q, want the path given", opts.binary)
+	}
+}
+
+// TestMatrixFor_FullRun_UsesThePublishedMatrix verifies a plain run measures
+// everything the page publishes, at the requested number of rounds.
+func TestMatrixFor_FullRun_UsesThePublishedMatrix(t *testing.T) {
+	plans, err := matrixFor(options{rounds: 5})
+	if err != nil {
+		t.Fatalf("matrixFor: %v", err)
+	}
+	if len(plans) != len(publishedMatrix(5)) {
+		t.Errorf("selected %d scenarios, want the whole matrix", len(plans))
+	}
+	for _, plan := range plans {
+		if plan.Rounds != 5 {
+			t.Errorf("%s runs %d rounds, want the 5 that were asked for", plan.ID, plan.Rounds)
+		}
+	}
+}
+
+// TestMatrixFor_PartialRun_RefusesToOverwriteTheRecord verifies a smoke or
+// filtered run insists on being told where to write.
+//
+// Without this, `-quick` would replace measured, published numbers with a
+// two-scenario smoke test and the documentation would keep presenting them as
+// the figures. The guard is on the flag having been given, not on its value,
+// so passing the default path explicitly is still allowed: that is someone
+// saying what they mean.
+func TestMatrixFor_PartialRun_RefusesToOverwriteTheRecord(t *testing.T) {
+	tests := []struct {
+		name    string
+		opts    options
+		wantErr bool
+	}{
+		{name: "quick without a path", opts: options{quick: true, rounds: 1}, wantErr: true},
+		{name: "quick with a path", opts: options{quick: true, rounds: 1, recordSet: true}},
+		{name: "filtered without a path", opts: options{scenarios: "http-meta", rounds: 1}, wantErr: true},
+		{name: "filtered with a path", opts: options{scenarios: "http-meta", rounds: 1, recordSet: true}},
+		{name: "full run needs no path", opts: options{rounds: 1}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := matrixFor(tc.opts)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("matrixFor allowed a partial matrix to write to the published record")
+				}
+				if !strings.Contains(err.Error(), "-json") {
+					t.Errorf("error %q does not say how to fix it", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("matrixFor: %v", err)
+			}
+		})
+	}
+}
+
+// TestMatrixFor_UnknownScenario_ReportsIt verifies a mistyped scenario name
+// stops the run instead of measuring a smaller matrix.
+func TestMatrixFor_UnknownScenario_ReportsIt(t *testing.T) {
+	if _, err := matrixFor(options{scenarios: "http-dinamic", rounds: 1, recordSet: true}); err == nil {
+		t.Error("matrixFor accepted a scenario name that does not exist")
+	}
+}
+
+// TestResolveAndRel_RoundTrip verifies flag paths are resolved against the
+// module root and reported back relative to it, so the command's output names
+// files the way the repository does.
+func TestResolveAndRel_RoundTrip(t *testing.T) {
+	root := t.TempDir()
+
+	absolute := resolve(root, "docs/reference/benchmarks")
+	if !strings.HasPrefix(absolute, root) {
+		t.Errorf("resolve = %q, want it under %q", absolute, root)
+	}
+	if got := rel(root, absolute); got != "docs/reference/benchmarks" {
+		t.Errorf("rel = %q, want the relative path back", got)
+	}
+
+	// An absolute flag value is left alone, which is what lets a smoke run
+	// write outside the repository.
+	outside := "/tmp/bench.json"
+	if got := resolve(root, outside); got != outside {
+		t.Errorf("resolve rewrote an absolute path: %q", got)
+	}
+}
+
+// TestProgressFunc_QuietUnlessAsked verifies the per-client reporter is silent
+// by default, so a full run prints one line per scenario rather than hundreds.
+func TestProgressFunc_QuietUnlessAsked(t *testing.T) {
+	quiet := progressFunc(false)
+	quiet("this must not panic %d", 1)
+
+	loud := progressFunc(true)
+	loud("nor this %d", 2)
+}
+
+// TestOptionsValidate_RejectsValuesThatWouldMeasureNothing verifies the two
+// flags that reach the measurement machinery are refused before it starts.
+//
+// Both used to be taken verbatim. A non-positive -sample-interval reached
+// time.NewTicker, which panics, several minutes into a run; a non-positive
+// -rounds produced a plan with no load rounds, whose zero-sample latencies
+// were then written over the published record. Rejecting them at the front
+// costs a line and saves a run.
+func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
+	const good = 100 * time.Millisecond
+	cases := []struct {
+		name    string
+		opts    options
+		wantErr string
+	}{
+		{"zero rounds", options{rounds: 0, sampleInterval: good}, "-rounds"},
+		{"negative rounds", options{rounds: -1, sampleInterval: good}, "-rounds"},
+		{"zero interval", options{rounds: 3, sampleInterval: 0}, "-sample-interval"},
+		{"negative interval", options{rounds: 3, sampleInterval: -time.Second}, "-sample-interval"},
+		{"both valid", options{rounds: 3, sampleInterval: good}, ""},
+		// A redraw reads the committed record and reaches neither a ticker
+		// nor a round, so refusing it over an unused flag would reject a
+		// legitimate command.
+		{"render ignores them", options{render: true}, ""},
+		{"check ignores them", options{check: true}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.validate()
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Errorf("validate() = %v, want no error", err)
+			case tc.wantErr != "" && err == nil:
+				t.Errorf("validate() = nil, want an error naming %s", tc.wantErr)
+			case tc.wantErr != "" && err != nil && !strings.Contains(err.Error(), tc.wantErr):
+				t.Errorf("validate() = %v, want it to name %s", err, tc.wantErr)
+			}
+		})
+	}
+}

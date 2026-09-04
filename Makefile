@@ -13,6 +13,7 @@
 	check-readonly-graphql audit-readonly-graphql \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
+	bench-resources bench-resources-render check-bench-resources \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -922,6 +923,28 @@ gen-site-stats:
 ## check-site-stats: verify the committed site stats JSON is current.
 check-site-stats:
 	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
+
+## bench-resources: measure what the server costs to run and redraw the charts.
+## Starts the real binary on both transports against an in-process stand-in
+## GitLab, so it needs no instance and no credentials. Takes several minutes:
+## every scenario builds a tool catalog per client, which is the cost being
+## measured. Writes site/src/data/resource-benchmark.json, the SVG pairs under
+## docs/reference/benchmarks and site/public/benchmarks, and the generated
+## blocks in the three documentation pages.
+bench-resources:
+	go run ./cmd/bench_resources/
+
+## bench-resources-render: redraw the charts and tables from the committed
+## measurements, without re-measuring. This is what to run after changing a
+## figure; the numbers stay exactly as they were published.
+bench-resources-render:
+	go run ./cmd/bench_resources/ -render
+
+## check-bench-resources: verify the committed charts and tables match the
+## committed measurements. Seconds, and no benchmark is run, which is what
+## makes it a CI gate.
+check-bench-resources:
+	go run ./cmd/bench_resources/ -check
 
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
 ## Runs unit-test coverage over ./cmd/... and ./internal/..., so it takes minutes.

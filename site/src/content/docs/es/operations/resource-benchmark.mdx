@@ -1,0 +1,192 @@
+---
+title: Consumo de recursos
+description: "Lo que cuesta ejecutar el servidor, medido y no estimado: memoria residente, tiempo de procesador, goroutines y latencia por método en ambos transportes, según la superficie de herramientas, el número de clientes y la telemetría."
+datePublished: "2026-09-04"
+faq:
+  - q: "¿Cuánta memoria le doy al contenedor?"
+    a: "En modo HTTP dimensiona por **credenciales concurrentes, no por peticiones**. El proceso reposa cerca de 40 MiB sin ningún catálogo de herramientas, y a partir de ahí construye un catálogo por cada token distinto: cada credencial activa añadió entre 35 y 71 MiB según la superficie, y ocho de ellas llegaron a entre 445 y 719 MiB, con picos de hasta 1,14 GiB mientras las ocho llamaban a la vez. Con 512 MiB atiendes holgadamente a unas pocas credenciales; un despliegue que espere decenas necesita gigabytes, o un `--max-http-clients` más bajo. En modo stdio cada cliente tiene su propio proceso, de entre 190 y 330 MiB."
+  - q: "¿Por qué la primera llamada de un token nuevo tarda tanto?"
+    a: "Está pagando el registro. El proceso responde a `/health` en unos 50 a 100 ms sin tener ningún catálogo; la primera petición de una credencial construye el suyo, y eso tardó unos 2 segundos en las superficies dynamic y meta, y entre 4 y 5 segundos en la superficie individual. Cualquier llamada posterior de esa credencial se sirve ya del catálogo construido. La espera vuelve cuando el pool recupera la entrada, lo que deciden `--pool-idle-timeout` y `--max-http-clients`."
+  - q: "¿La superficie de herramientas cambia la memoria que necesita el servidor?"
+    a: "Menos de lo que cambia todo lo demás, y no en la dirección que parecería. Por credencial, la superficie dynamic fue la que más memoria costó de las tres, 71 MiB frente a 35 de meta y 36 de individual, porque construye un índice de búsqueda que las otras no tienen, mientras que la superficie individual comparte los esquemas de sus herramientas entre las entradas del pool. Lo que la superficie sí cambia es el tamaño de un `tools/list`: 12 KB en dynamic, 584 KB en meta y 3,1 MB en individual, es decir, una respuesta en caliente de 14 ms frente a 2,4 segundos."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import ChartPair from "../../../../components/ChartPair.astro";
+
+Nada de lo publicado hasta ahora sobre este servidor decía lo que cuesta
+ejecutarlo. Esta página sí: memoria residente, tiempo de procesador, número de
+goroutines y latencia por método, medidos en ambos transportes y según los
+ajustes que de verdad mueven esas cifras.
+
+<Aside type="tip" title="De un vistazo">
+
+- **El modo HTTP se dimensiona por credenciales, no por peticiones.** Un
+  proceso en reposo no tiene ningún catálogo de herramientas; cada token
+  distinto construye el suyo en el pool.
+- **La primera llamada de cada credencial paga el registro**, y son segundos,
+  no milisegundos. Ninguna llamada posterior vuelve a pagarlo, aunque en
+  `individual` un `tools/list` en caliente sigue tardando segundos por sí solo.
+- **La superficie de herramientas apenas cambia la memoria y cambia por
+  completo las respuestas**: un `tools/list` ocupa 12 KB en `dynamic` y 3,1 MB
+  en `individual`.
+
+</Aside>
+
+## Cómo se ha medido
+
+El binario real, compilado desde la copia de trabajo actual y arrancado como
+lo arranca un cliente, en ambos transportes. GitLab se sustituye por un
+servidor HTTP dentro del propio arnés, así que una ejecución no necesita
+instancia, ni credenciales, ni red, y dos personas que repitan la medición
+comparan este servidor y no sus instalaciones de GitLab. La superficie de
+herramientas se pasa de forma explícita en lugar de leerse del entorno, para
+que una máquina de desarrollo y la integración continua midan lo mismo.
+
+Todo lo que sigue lo regenera una sola orden, `make bench-resources`, que
+ejecuta el banco de pruebas y redibuja las gráficas a partir del registro que
+escribe. La máquina, la compilación y el método aparecen en el texto bajo el
+encabezado, porque una cifra de memoria residente sin ellos no es accionable.
+
+<Aside type="caution" title="Léelas como formas, no como constantes">
+Una máquina, un sistema operativo, una cadena de herramientas de Go. Las
+relaciones entre las cifras deberían trasladarse a tu equipo; los valores
+absolutos no. La memoria residente incluye además lo que el recolector de Go
+todavía no ha devuelto, que es justo lo honesto para dimensionar un límite y
+no lo mismo que el montículo vivo.
+</Aside>
+
+## Mediciones
+
+{/*START BENCHMARK*/}
+
+Medido en AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx, 8 CPU lógicas, 61 GiB de RAM, linux/amd64, núcleo 6.1.0-52-amd64, go1.27.1, compilación 2.7.6-0.20260903234347-3ee720d09ea7 (3ee720d0), 2026-09-03T23:43:59Z. 3 rondas por método, conjunto residente muestreado cada 100 ms.
+
+<ChartPair name="memory" lang="es" alt="Barras agrupadas que comparan la memoria residente de las superficies dynamic, meta e individual en ambos transportes." />
+
+<ChartPair name="memory-ramp" lang="es" alt="Líneas que muestran cómo crece la memoria residente cuando cada credencial nueva construye su catálogo en el pool HTTP." />
+
+<ChartPair name="startup" lang="es" alt="Barras agrupadas en escala logarítmica que comparan el arranque del proceso, el primer tools/list en frío y uno en caliente." />
+
+<ChartPair name="latency" lang="es" alt="Barras agrupadas en escala logarítmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie." />
+
+### Memoria, goroutines y tiempo de procesador por escenario
+
+| Escenario                 | Clientes | En reposo | Un cliente | Todos los clientes | Por cliente extra | Pico | Goroutines | CPU, % de un núcleo |
+| ------------------------- | -------: | --------: | ---------: | -----------------: | ----------------: | ---: | ---------: | ------------------: |
+| stdio, dynamic            |        4 |       n/a |        211 |                863 |               217 |  929 |         26 |                508% |
+| stdio, meta               |        4 |       n/a |        193 |                783 |               196 |  814 |         28 |                431% |
+| stdio, individual         |        4 |       n/a |        331 |               1218 |               296 | 1218 |         28 |                561% |
+| stdio, dynamic, telemetry |        4 |       n/a |        248 |                928 |               227 |  973 |         35 |                427% |
+| http, dynamic             |        8 |        40 |        219 |                717 |                71 |  863 |         66 |                447% |
+| http, meta                |        8 |        39 |        197 |                445 |                35 |  599 |         68 |                417% |
+| http, individual          |        8 |        39 |        334 |                589 |                36 | 1164 |         52 |                434% |
+| http, dynamic, telemetry  |        8 |        43 |        242 |                719 |                68 |  840 |         75 |                464% |
+
+### Lo que espera un cliente, por escenario
+
+| Escenario                 | Proceso listo | Primer tools/list | tools/list en caliente (p50) | Tamaño de tools/list |
+| ------------------------- | ------------: | ----------------: | ---------------------------: | -------------------: |
+| stdio, dynamic            |          0.27 |              1729 |                          4.6 |                12 KB |
+| stdio, meta               |          0.36 |              1771 |                          105 |               584 KB |
+| stdio, individual         |           5.4 |              4301 |                          907 |               3.1 MB |
+| stdio, dynamic, telemetry |          0.30 |              1807 |                          7.0 |                12 KB |
+| http, dynamic             |            52 |              1950 |                           14 |                12 KB |
+| http, meta                |           102 |              2025 |                          222 |               584 KB |
+| http, individual          |            52 |              4625 |                         2391 |               3.1 MB |
+| http, dynamic, telemetry  |           103 |              2139 |                           24 |                12 KB |
+
+### Percentiles de latencia por método
+
+| Escenario                 | Método           | Llamada                |  p50 |  p90 |  p99 |  Máx |
+| ------------------------- | ---------------- | ---------------------- | ---: | ---: | ---: | ---: |
+| stdio, dynamic            | `resources/list` | el listado más pequeño |  1.6 |  2.2 |  2.5 |  2.5 |
+| stdio, dynamic            | `tools/call`     | gitlab_find_action     |   70 |   93 |   96 |   96 |
+| stdio, dynamic            | `tools/list`     | la superficie completa |  4.6 |  5.4 |   11 |   11 |
+| stdio, meta               | `resources/list` | el listado más pequeño |  3.1 |  9.1 |   14 |   14 |
+| stdio, meta               | `tools/call`     | gitlab_server (status) |  4.4 |  7.8 |  9.8 |  9.8 |
+| stdio, meta               | `tools/list`     | la superficie completa |  105 |  137 |  142 |  142 |
+| stdio, individual         | `resources/list` | el listado más pequeño |  1.1 |  1.7 |  1.9 |  1.9 |
+| stdio, individual         | `tools/call`     | gitlab_server_status   |  2.1 |  2.7 |  3.0 |  3.0 |
+| stdio, individual         | `tools/list`     | la superficie completa |  907 |  998 | 1030 | 1030 |
+| stdio, dynamic, telemetry | `resources/list` | el listado más pequeño |  2.0 |  2.5 |  2.7 |  2.7 |
+| stdio, dynamic, telemetry | `tools/call`     | gitlab_find_action     |   77 |  126 |  133 |  133 |
+| stdio, dynamic, telemetry | `tools/list`     | la superficie completa |  7.0 |   13 |   30 |   30 |
+| http, dynamic             | `resources/list` | el listado más pequeño |  9.8 |   15 |   16 |   16 |
+| http, dynamic             | `tools/call`     | gitlab_find_action     |  174 |  356 |  375 |  375 |
+| http, dynamic             | `tools/list`     | la superficie completa |   14 |   15 |   17 |   17 |
+| http, meta                | `resources/list` | el listado más pequeño |  5.4 |  8.3 |   10 |   10 |
+| http, meta                | `tools/call`     | gitlab_server (status) |   14 |   18 |   19 |   19 |
+| http, meta                | `tools/list`     | la superficie completa |  222 |  330 |  361 |  361 |
+| http, individual          | `resources/list` | el listado más pequeño |  3.4 |  5.7 |  6.7 |  6.7 |
+| http, individual          | `tools/call`     | gitlab_server_status   |  7.7 |  9.9 |   11 |   11 |
+| http, individual          | `tools/list`     | la superficie completa | 2391 | 2879 | 2897 | 2897 |
+| http, dynamic, telemetry  | `resources/list` | el listado más pequeño |  6.1 |  9.1 |   11 |   11 |
+| http, dynamic, telemetry  | `tools/call`     | gitlab_find_action     |  159 |  330 |  340 |  340 |
+| http, dynamic, telemetry  | `tools/list`     | la superficie completa |   24 |   39 |   49 |   49 |
+
+{/*END BENCHMARK*/}
+
+## Dimensionar un despliegue
+
+**stdio.** Un proceso por cliente, y el proceso empieza a construir su
+catálogo nada más arrancar, así que no hay ningún estado de reposo en el que
+ahorrar memoria. Entre 190 y 330 MiB por proceso según la superficie, con
+picos algo mayores bajo carga. Una máquina de desarrollo con un solo cliente
+no lo notará; un equipo con muchos clientes stdio tiene muchos procesos y paga
+por cada uno.
+
+**HTTP.** Parte de unos 40 MiB para un proceso que no atiende a nadie y suma
+un catálogo por cada token distinto. Medido por credencial adicional: 35 MiB
+en `meta`, 36 MiB en `individual` y 71 MiB en `dynamic`. El pico de memoria
+residente con ocho credenciales llamando a la vez llegó a entre 599 MiB y 1,16
+GiB según la superficie.
+
+Una regla práctica para HTTP: **reserva unos 100 MiB por credencial que
+esperes tener activa a la vez, más 128 MiB para el proceso**, y trata
+`--max-http-clients` como un ajuste de memoria y no de concurrencia. Su valor
+por defecto de 100 entradas describe un pool mucho mayor de lo que cabe en una
+instancia pequeña; bájalo a lo que permita tu memoria, o acorta
+`--pool-idle-timeout` para que las entradas se recuperen antes.
+
+## Qué espera un cliente
+
+El proceso está listo en milisegundos y la superficie que hay detrás no. En
+HTTP, `/health` responde en 50 a 100 ms mientras el pool está vacío; la
+primera petición de una credencial construye su catálogo, y ahí está la
+espera: unos 2 segundos en `dynamic` y `meta`, y entre 4 y 5 segundos en
+`individual`. En stdio el proceso se ejecuta en unos pocos milisegundos y
+empieza a construir de inmediato, así que su primera petición espera ese mismo
+trabajo.
+
+Esa espera es por credencial y vuelve: una entrada que `--pool-idle-timeout`
+recupere, o que el límite de tamaño del pool expulse, se reconstruye entera en
+la siguiente petición que la necesite.
+
+Ya en caliente la imagen se invierte. Un `tools/list` cuesta entre 5 y 24 ms
+en `dynamic`, entre 100 y 220 ms en `meta` y entre 0,9 y 2,4 segundos en
+`individual`, que es lo que cuesta serializar 12 KB, 584 KB y 3,1 MB
+respectivamente. Un cliente que hable el protocolo 2026-07-28 puede servir los
+listados repetidos desde su propia caché y pagarlo menos veces, pero lo paga
+al menos una vez por sesión.
+
+## Telemetría
+
+Exportar por OTLP cuesta unas pocas goroutines y tiempo de procesador
+medible, y nada de memoria apreciable. Viene desactivada por defecto; en
+[OpenTelemetry](/gitlab-mcp-server/es/operations/telemetry/) está qué exporta
+y adónde va.
+
+## Reproducirlo
+
+```bash
+make bench-resources          # medir y redibujarlo todo
+make bench-resources-render   # redibujar desde el registro, sin medir
+make check-bench-resources    # comprobar que las gráficas cuadran con el registro
+```
+
+La matriz completa tarda unos minutos, la mayor parte construyendo un catálogo
+por cliente, que es justo el coste que se está midiendo y no una sobrecarga
+del arnés. Los detalles para quien desarrolle, incluido lo que el arnés
+deliberadamente no mide, están en
+[la referencia de consumo de recursos](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/resource-benchmark.md).
