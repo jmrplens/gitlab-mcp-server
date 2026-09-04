@@ -1,9 +1,40 @@
 # CI pipeline for gitlab-mcp-server
 #
 # Runs on: pull requests to main, pushes to main
-# Jobs: test, sonarcloud, docs-audit, build, Go analysis, markdown,
-#       docker (PR+paths),
-#       cross-platform (Linux, macOS, Windows)
+#
+# Shape. A job depends on another only when it consumes something the other
+# produced, and everything converges on one final job, "CI", which is the one
+# check branch protection requires. That is what makes the graph read as a
+# flow rather than as a box of unconnected names, and it is also what lets the
+# job list change without touching a repository setting: a required check
+# named after a job is a setting that has to move with the job.
+#
+#   compile ─┬─ typecheck (windows/amd64 · darwin/arm64 · linux/arm64)
+#            ├─ e2e-http
+#            └─ e2e-stdio
+#   coverage ─── sonarcloud
+#   docker (×2) ─── docker-build
+#   cross_platform (×3) ─── cross_platform_summary
+#   generated · golangci-lint · govulncheck · markdown · site-lint · hadolint
+#   server-json-schema · supply-chain · docs-audit ─── checks
+#                                                          └──► ci
+#
+# Every edge joins neighbouring columns, and that is deliberate. GitHub draws
+# a job with no parent and no child at the end of the first column, in one box
+# with every other such job, and draws that box's single edge straight to
+# whatever needs it. With "ci" two columns away, that edge crossed every node
+# of the second column on its way there, and so did the direct edges from
+# compile and coverage. So the standalone jobs fan into "checks" first, and
+# "ci" needs only second-column nodes; compile and coverage are still decided
+# there, because when either fails its children are skipped, and a skip is a
+# failure to the verdict script.
+#
+# Speed. The critical path used to be Test then Build in series, about twenty
+# minutes, and Build consumed nothing Test produced. Now the longest path is
+# the coverage run followed by the SonarCloud scan, around eleven, level with
+# the macOS leg of the platform matrix. Everything that runs a command by name
+# runs a pinned version, and nothing resolves a package from a registry at run
+# time except the audit whose job is to ask the registry.
 
 name: CI
 
@@ -29,9 +60,47 @@ env:
   COVERAGE_MIN: "90"
 
 jobs:
-  test:
-    name: Test
+  # The unit suite with coverage, and nothing else: it is the longest single
+  # command in the pipeline at close to seven minutes, so anything that shares
+  # a job with it waits on it for no reason, and the only consumer of its
+  # output is the SonarCloud scan below.
+  coverage:
+    name: "🧪 Coverage"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - name: Run tests with coverage
+        run: |
+          go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...
+          go tool cover -func=coverage.out
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          if awk "BEGIN {exit !(${COVERAGE} + 0 < ${COVERAGE_MIN} + 0)}"; then
+            echo "FAIL: coverage ${COVERAGE}% is below minimum ${COVERAGE_MIN}%"
+            exit 1
+          fi
+          echo "PASS: coverage ${COVERAGE}% meets minimum ${COVERAGE_MIN}%"
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 1
+
+  # Every gate that compares a committed artifact with what the source tree
+  # would generate now. They used to sit in front of the coverage run in one
+  # job, which meant a stale README table delayed the coverage result by two
+  # minutes and a failing one hid it entirely. None of them needs the suite.
+  generated:
+    name: "🔎 Generated artifacts"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -95,27 +164,9 @@ jobs:
       # already waits on. `make gen-testing-docs` refreshes the numbers.
       - name: Check the generated testing reference
         run: make check-testing-docs
-      - name: Run tests with coverage
-        run: |
-          go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...
-          go tool cover -func=coverage.out
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
-          echo "Total coverage: ${COVERAGE}%"
-          if awk "BEGIN {exit !(${COVERAGE} + 0 < ${COVERAGE_MIN} + 0)}"; then
-            echo "FAIL: coverage ${COVERAGE}% is below minimum ${COVERAGE_MIN}%"
-            exit 1
-          fi
-          echo "PASS: coverage ${COVERAGE}% meets minimum ${COVERAGE_MIN}%"
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: coverage
-          path: coverage.out
-          retention-days: 1
 
   sonarcloud:
-    name: "SA: SonarCloud"
+    name: "📊 SonarCloud"
     runs-on: ubuntu-latest
     # The only job here with a bound, because a hung scanner would otherwise
     # sit on a runner for the six-hour default. It has to leave room for the
@@ -127,7 +178,7 @@ jobs:
     # a genuine hang while giving the scan roughly three times its current
     # runtime, so ordinary growth does not re-break it.
     timeout-minutes: 15
-    needs: [test]
+    needs: [coverage]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -146,7 +197,7 @@ jobs:
 
   # Split out of the SonarCloud job, where it was the step before the scan and
   # the only one that could fail it. The scan itself is continue-on-error, so a
-  # required check named "SA: SonarCloud" could not fail because of SonarCloud
+  # required check named after SonarCloud could not fail because of SonarCloud
   # and could fail because npmjs.org did not answer, which happened on three
   # pull requests in one afternoon: `pnpm audit` retried twice and timed out,
   # the scan was skipped entirely, and the merge was blocked by something that
@@ -158,7 +209,7 @@ jobs:
   # what it reports is the state of somebody else's advisory database, which
   # can turn red without a commit.
   docs-audit:
-    name: Docs dependency audit
+    name: "📦 Site dependency audit"
     runs-on: ubuntu-latest
     # The whole job is one call to somebody else's registry, and that call has
     # already stalled here: pnpm retried twice over two minutes and gave up.
@@ -213,10 +264,18 @@ jobs:
           fi
           exit "$status"
 
-  build:
-    name: Build
+  # The one thing every job below this one has in common: the server and the
+  # e2e suite compile. It is a minute, and it is the parent of the type-check
+  # matrix and the two transport modules so that the graph shows them as what
+  # they are, three questions asked of one binary. The children do not receive
+  # it as an artifact, since each transport harness builds ./cmd/server itself
+  # in its TestMain; waiting on this job costs them a minute and saves nothing
+  # when it passes, but it is a minute well below the pipeline's longest path,
+  # so the picture is free.
+  compile:
+    name: "🔨 Compile"
     runs-on: ubuntu-latest
-    needs: [test]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -227,81 +286,167 @@ jobs:
       - name: Verify E2E tests compile
         run: go test -tags e2e -c -o /dev/null ./test/e2e/suite/
 
-      # Seconds on a Linux runner, and it type-checks every build-constrained
-      # file including the tests, for all three platforms this project ships.
-      # The cross-platform matrix does this too, on real runners, but that
-      # matrix is expensive enough that somebody may reasonably narrow it
-      # later; this step means narrowing it can never take the compile of
-      # cmd/server/socketmode_windows.go with it, which before either existed
-      # was first compiled by GoReleaser during a release.
-      - name: Type-check every shipped platform
-        run: |
-          for target in windows/amd64 darwin/arm64 linux/arm64; do
-            echo "==> ${target}"
-            GOOS="${target%%/*}" GOARCH="${target##*/}" go vet ./...
-          done
+  # Type-checks every build-constrained file including the tests, for each
+  # platform this project ships, on a Linux runner. The cross-platform matrix
+  # does this too, on real runners, but that matrix is expensive enough that
+  # somebody may reasonably narrow it later; this job means narrowing it can
+  # never take the compile of cmd/server/socketmode_windows.go with it, which
+  # before either existed was first compiled by GoReleaser during a release.
+  #
+  # One job per target rather than a loop in one job: the three vets took four
+  # minutes in series and take under two in parallel, and a failure names the
+  # platform in the job list instead of in a log.
+  typecheck:
+    name: "🧭 Type-check (${{ matrix.target }})"
+    runs-on: ubuntu-latest
+    needs: [compile]
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [windows/amd64, darwin/arm64, linux/arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - name: Vet for ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: GOOS="${TARGET%%/*}" GOARCH="${TARGET##*/}" go vet ./...
 
-      # The HTTP transport module needs no GitLab and no credentials, so it
-      # runs here rather than only on demand. It is the gate for the handler
-      # chain in package main — cross-origin, preflight, auth modes, rate
-      # limiting, and every flag that restricts something — which unit tests
-      # cannot reach and which has shipped broken more than once. The nginx
-      # cases skip when Docker is unavailable.
+  # The HTTP transport module needs no GitLab and no credentials, so it runs
+  # here rather than only on demand. It is the gate for the handler chain in
+  # package main — cross-origin, preflight, auth modes, rate limiting, and every
+  # flag that restricts something — which unit tests cannot reach and which has
+  # shipped broken more than once. The nginx cases skip when Docker is
+  # unavailable.
+  e2e-http:
+    name: "🌐 HTTP transport e2e"
+    runs-on: ubuntu-latest
+    needs: [compile]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
       - name: HTTP transport end-to-end
         run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
 
-      # stdio is the primary transport and nothing drove it until this module
-      # existed: the e2e suite uses an in-memory transport in the same process,
-      # so no pipes, no process, no separation of stdout from stderr, and none
-      # of the environment-variable configuration stdio mode actually uses.
-      # Two defects that shipped were reachable here and invisible everywhere
-      # else, one of them held in place by a unit test asserting the opposite.
+  # stdio is the primary transport and nothing drove it until this module
+  # existed: the e2e suite uses an in-memory transport in the same process, so
+  # no pipes, no process, no separation of stdout from stderr, and none of the
+  # environment-variable configuration stdio mode actually uses. Two defects
+  # that shipped were reachable here and invisible everywhere else, one of them
+  # held in place by a unit test asserting the opposite.
+  e2e-stdio:
+    name: "🔌 stdio transport e2e"
+    runs-on: ubuntu-latest
+    needs: [compile]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
       - name: stdio transport end-to-end
         run: go test -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/
 
+  # The linter used to be `go install …@latest`: fifty seconds compiling it
+  # from source on every run, and whichever version the proxy served that
+  # morning, so two runs of the same commit could disagree. The official action
+  # downloads a release binary for an exact version and caches it. It only
+  # installs; the Makefile target is still what runs, so CI and a developer's
+  # `make golangci-lint` are the same three commands.
   golangci-lint:
-    name: golangci-lint
+    name: "🧹 golangci-lint"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
       - run: go mod download
-      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          # The version developers run locally, so `make golangci-lint` means
+          # the same thing on both sides of a push.
+          version: v2.13.1
+          install-only: true
+      # golangci-lint keeps a per-package analysis cache and skips what has
+      # not changed, which is most of the tree on most pull requests. The key
+      # names the linter config and go.sum, so a change to either starts
+      # fresh; restore-keys lets a run reuse the newest cache for the same
+      # config even when go.sum moved, since a dependency bump does not
+      # invalidate the analysis of packages that do not import it.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ hashFiles('.golangci.yml', 'go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            golangci-lint-${{ hashFiles('.golangci.yml', 'go.sum') }}-
+            golangci-lint-
       - run: make golangci-lint
 
   govulncheck:
-    name: govulncheck
+    name: "🛡️ govulncheck"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
       - run: go mod download
-      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      # Pinned for the same reason as the linter: a scanner that changes under
+      # us changes what "no known vulnerability" meant last week.
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
       - run: make govulncheck
 
+  # This job took six and a half minutes on a day the npm registry was slow, of
+  # which the lint itself was eight seconds: `npx --yes` resolved and installed
+  # markdownlint-cli2 from the registry on every run, and then did the same for
+  # the mcpb CLI. The linter now comes bundled in its own action, which touches
+  # no registry, and the CLI's npx cache is kept between runs keyed on the
+  # version the Makefile pins, so the registry is asked once per version.
   analyze-md:
-    name: Analyze Markdown
+    name: "📝 Markdown"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
+        with:
+          globs: |
+            **/*.{md,mdx}
+            #plan
+            #node_modules
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24.18.0"
-      - run: npx --yes markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"
-      # Node-based freshness gates live here rather than in `test`, which has no
-      # Node toolchain. check-doc-links resolves every relative link in tracked
-      # Markdown, so it needs the working tree, not just the Go module.
+      - name: Read the pinned mcpb CLI version
+        id: mcpb
+        run: echo "version=$(sed -n 's/^MCPB_CLI_VERSION := //p' Makefile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm/_npx
+          key: npx-mcpb-${{ steps.mcpb.outputs.version }}
+      # Node-based freshness gates live here rather than beside the Go gates,
+      # which have no Node toolchain. check-doc-links resolves every relative
+      # link in tracked Markdown, so it needs the working tree, not just the Go
+      # module.
       - name: Check documentation local links
         run: make check-doc-links
       - name: Check Claude Desktop extension manifest
         run: make check-mcpb
 
   site-lint:
-    name: Site static lint
+    name: "🎨 Site lint"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -349,8 +494,9 @@ jobs:
         working-directory: site
 
   hadolint:
-    name: hadolint
+    name: "📐 hadolint"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
@@ -360,8 +506,9 @@ jobs:
           ignore: DL3008,DL3018
 
   server-json-schema:
-    name: server.json schema
+    name: "📄 server.json schema"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -398,9 +545,10 @@ jobs:
   # binary asked for the glibc loader the Alpine runtime does not ship —
   # passed CI and every release gate on its way to the registry.
   docker:
-    name: Docker Build (${{ matrix.platform }})
+    name: "🐳 Docker (${{ matrix.platform }})"
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -447,26 +595,22 @@ jobs:
         if: steps.filter.outputs.docker == 'true'
         run: bash scripts/smoke-test-image.sh ci "gitlab-mcp-server:ci=${{ matrix.platform }}"
 
-  # Branch protection requires a check named exactly "Docker Build", and the
-  # job above stopped producing one the moment it became a matrix: GitHub
-  # appends the matrix value, so it now reports "Docker Build (linux/amd64)"
-  # and "Docker Build (linux/arm64)". The required check was left permanently
-  # "expected" and every pull request became unmergeable, which is a strange
-  # way for a build fix to fail.
-  #
-  # Naming the required check after the matrix instead would tie branch
-  # protection, which lives in repository settings rather than in this file,
-  # to the platform list right below it: adding linux/arm/v7 here would block
-  # main until somebody edited a setting nothing in the repository mentions.
-  # This job keeps the contract stable, so the matrix stays free to change.
+  # One node for the matrix above. It began life because branch protection
+  # required a check named exactly "Docker Build" and a matrix job reports
+  # "Docker Build (linux/amd64)" instead, which left the required check
+  # permanently "expected" and every pull request unmergeable. The single
+  # required check is "CI" now, so that reason is gone; this stays because the
+  # final job wants one answer for "did the images build" rather than one per
+  # platform, and because the graph reads better with the fan-in drawn.
   docker-build:
-    name: Docker Build
+    name: "🐳 Docker images"
     needs: docker
     # always(), so a failing matrix is reported rather than skipped along with
     # it. The event guard matches the matrix's own, so pushes to main see this
     # check no more than they see the job it summarizes.
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Report the platform builds
         env:
@@ -485,8 +629,9 @@ jobs:
   # Dependabot cooldowns, a security policy that names the shipping major, and
   # installers that verify the release signature.
   supply-chain:
-    name: Supply-chain policy
+    name: "🔗 Supply chain"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -506,6 +651,39 @@ jobs:
       - name: Test the installer and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 
+  # One node for the jobs that depend on nothing. They are fanned in here
+  # rather than straight into "ci" for the graph's sake, explained at the top
+  # of the file: this node lands below the matrix summaries, because its
+  # parents are drawn last, and every edge stays between neighbouring columns.
+  #
+  # The site dependency audit reaches here and is printed, but does not
+  # decide: it reports the state of somebody else's advisory database.
+  checks:
+    name: "🧰 Checks"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - generated
+      - golangci-lint
+      - govulncheck
+      - analyze-md
+      - site-lint
+      - hadolint
+      - server-json-schema
+      - supply-chain
+      - docs-audit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Decide
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          INFORMATIONAL: docs-audit
+        run: bash .github/scripts/needs-verdict.sh
+
   # Every job above runs on Linux, and until this one existed that was the only
   # platform any test in this repository had ever seen, while the project ships
   # binaries for three. cmd/server/socketmode_windows.go was first compiled by
@@ -523,7 +701,7 @@ jobs:
   # because it is the control: without it, a macOS-only failure cannot be told
   # apart from a command that would have failed anywhere.
   cross_platform:
-    name: Cross-platform (${{ matrix.os }})
+    name: "🖥️ Cross-platform (${{ matrix.os }})"
     runs-on: ${{ matrix.os }}
     # A hung test must not sit for the six-hour default on a runner billing ten
     # times the Linux rate (macOS) or twice it (Windows). The Linux unit suite
@@ -571,6 +749,13 @@ jobs:
       # and drive it the way a client does, over pipes and sockets, which is
       # where a platform difference actually surfaces.
       #
+      # macOS only. Linux has them as jobs of their own, e2e-http and
+      # e2e-stdio, on the same runner image with the same commands, so running
+      # them here as well was six minutes of runner time answering a question
+      # already answered in the same run. The unit suite above does stay on
+      # Linux, as the control that tells a macOS-only failure from one that
+      # would fail anywhere.
+      #
       # Not on Windows yet, and the reason is in the harnesses rather than in
       # the server: both terminate the process with syscall.SIGTERM, which
       # Windows does not implement, so every case that asserts on shutdown
@@ -579,24 +764,23 @@ jobs:
       # in https://github.com/jmrplens/gitlab-mcp-server/issues/439. macOS runs
       # them today because SIGTERM and unix sockets both behave there.
       - name: HTTP transport end-to-end
-        if: matrix.os != 'windows-latest'
+        if: matrix.os == 'macos-latest'
         run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
       - name: stdio transport end-to-end
-        if: matrix.os != 'windows-latest'
+        if: matrix.os == 'macos-latest'
         run: go test -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/
 
-  # A stable check name over the matrix above, for the same reason the
-  # "Docker Build" job below the docker matrix exists: GitHub appends the matrix
-  # value to the job name, so branch protection can only require a name that
-  # names a platform, which would tie a repository setting to the platform list
-  # in this file. This job keeps the contract while the matrix stays free.
+  # One node for the matrix above, for the same reason the Docker images job
+  # exists: the final job wants one answer for the platform question, and the
+  # graph draws the fan-in.
   cross_platform_summary:
-    name: Cross-platform
+    name: "🖥️ Cross-platform"
     needs: cross_platform
     # always(), so a failing platform is reported rather than skipped along
     # with the job it belongs to.
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Report the platform suites
         env:
@@ -610,3 +794,44 @@ jobs:
             success) ;;
             *) echo "::error::the cross-platform suites did not succeed ($RESULT)"; exit 1 ;;
           esac
+
+  # The one check branch protection requires. Everything converges here, so
+  # the job list above can change shape without a repository setting having to
+  # follow it, and the graph has an end.
+  #
+  # It needs only second-column nodes, for the graph's sake (see the top of
+  # the file), and loses nothing by it: compile and coverage are decided
+  # through their children, which are skipped when the parent fails, and the
+  # standalone jobs through "checks". One result is read but does not decide,
+  # for a reason recorded where the job is defined: the platform matrix has a
+  # Windows leg that crashes inside the Go runtime now and then, tracked in
+  # https://github.com/jmrplens/gitlab-mcp-server/issues/467. It is printed so
+  # a red one is seen, and cannot block a merge until that changes.
+  #
+  # "skipped" passes only for the Docker summary, which skips itself on pushes
+  # to main along with the matrix it summarizes. For every other job a skip
+  # means an upstream failure took it down, which is a failure.
+  ci:
+    name: "✅ CI"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - typecheck
+      - e2e-http
+      - e2e-stdio
+      - sonarcloud
+      - docker-build
+      - cross_platform_summary
+      - checks
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Decide
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          INFORMATIONAL: cross_platform_summary
+          MAY_SKIP: docker-build
+        run: bash .github/scripts/needs-verdict.sh
