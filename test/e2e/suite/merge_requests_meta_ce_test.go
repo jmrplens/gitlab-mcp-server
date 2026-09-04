@@ -34,7 +34,7 @@ import (
 )
 
 // TestMeta_MRDeep exercises gitlab_merge_request meta-tool actions not covered
-// by merge_requests_test.go, mrapproval_test.go, or stateevents_test.go.
+// by merge_requests_test.go, mr_approval_test.go, or state_events_test.go.
 //
 //nolint:maintidx // Ordered E2E workflow keeps merge request lifecycle state visible across related GitLab operations.
 func TestMeta_MRDeep(t *testing.T) {
