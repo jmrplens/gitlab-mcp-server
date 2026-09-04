@@ -14,6 +14,12 @@
 # Requires GH_TOKEN with read access to the repository's releases, and cosign
 # on PATH. REPO defaults to $GITHUB_REPOSITORY.
 #
+# REHEARSAL_ARCHIVE, when set, names a tar of the GoReleaser job's own build
+# and replaces the download: a release rehearsal has no release to fetch and
+# signs nothing, so the archive is unpacked into <dest-dir> and checked against
+# the checksums.txt it carries. That is the same integrity check a real
+# release gets, minus the signature a rehearsal deliberately does not mint.
+#
 # Why this exists. The npm and PyPI distributions used to be assembled inside
 # the same job that produced the binaries, from a plain `cp` of GoReleaser's
 # output, with the signed checksums.txt sitting unread beside them. Anything
@@ -51,60 +57,93 @@ REPO="${REPO:-${GITHUB_REPOSITORY:-jmrplens/gitlab-mcp-server}}"
 TAG="v${VERSION}"
 OIDC_ISSUER="https://token.actions.githubusercontent.com"
 SIGNER_IDENTITY="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${TAG}"
+ARCHIVE="${REHEARSAL_ARCHIVE:-}"
 
 mkdir -p "$DEST"
 
-echo "Downloading ${TAG} assets from ${REPO} into ${DEST}"
-args=(--repo "$REPO" --dir "$DEST" --clobber)
-for pattern in "${PATTERNS[@]}"; do
-  args+=(--pattern "$pattern")
-done
-# checksums.txt and its bundle are never optional: they are what makes the rest
-# verifiable.
-args+=(--pattern "checksums.txt" --pattern "checksums.txt.sigstore.json")
-gh release download "$TAG" "${args[@]}"
-
-for required in checksums.txt checksums.txt.sigstore.json; do
-  if [ ! -f "$DEST/$required" ]; then
-    echo "ERROR: ${TAG} published no $required — refusing to package unverifiable assets" >&2
-    exit 1
+if [ -n "$ARCHIVE" ]; then
+  echo "Rehearsal: unpacking ${ARCHIVE} into ${DEST} in place of the ${TAG} release assets"
+  if [ "$CHECKSUMS_ONLY" -eq 1 ]; then
+    tar -xf "$ARCHIVE" -C "$DEST" checksums.txt
+    echo "checksums.txt unpacked; no assets requested"
+    exit 0
   fi
-done
+  tar -xf "$ARCHIVE" -C "$DEST"
+else
+  echo "Downloading ${TAG} assets from ${REPO} into ${DEST}"
+  args=(--repo "$REPO" --dir "$DEST" --clobber)
+  for pattern in "${PATTERNS[@]}"; do
+    args+=(--pattern "$pattern")
+  done
+  # checksums.txt and its bundle are never optional: they are what makes the
+  # rest verifiable.
+  args+=(--pattern "checksums.txt" --pattern "checksums.txt.sigstore.json")
+  gh release download "$TAG" "${args[@]}"
 
-echo "Verifying checksums.txt against its Sigstore bundle"
-cosign verify-blob \
-  --bundle "$DEST/checksums.txt.sigstore.json" \
-  --certificate-identity "$SIGNER_IDENTITY" \
-  --certificate-oidc-issuer "$OIDC_ISSUER" \
-  "$DEST/checksums.txt"
+  for required in checksums.txt checksums.txt.sigstore.json; do
+    if [ ! -f "$DEST/$required" ]; then
+      echo "ERROR: ${TAG} published no $required — refusing to package unverifiable assets" >&2
+      exit 1
+    fi
+  done
 
-if [ "$CHECKSUMS_ONLY" -eq 1 ]; then
-  echo "checksums.txt verified; no assets requested"
-  exit 0
+  echo "Verifying checksums.txt against its Sigstore bundle"
+  cosign verify-blob \
+    --bundle "$DEST/checksums.txt.sigstore.json" \
+    --certificate-identity "$SIGNER_IDENTITY" \
+    --certificate-oidc-issuer "$OIDC_ISSUER" \
+    "$DEST/checksums.txt"
+
+  if [ "$CHECKSUMS_ONLY" -eq 1 ]; then
+    echo "checksums.txt verified; no assets requested"
+    exit 0
+  fi
 fi
 
-# --ignore-missing passes vacuously on an empty intersection, so count what was
-# actually checked rather than trusting the exit status alone.
-echo "Verifying downloaded assets against checksums.txt"
+if [ ! -f "$DEST/checksums.txt" ]; then
+  echo "ERROR: no checksums.txt in ${DEST} — nothing here can be verified" >&2
+  exit 1
+fi
+
+# The exit status of --ignore-missing is not trusted either way. On an empty
+# intersection it is 1 with "no file was verified", and the empty intersection
+# is a normal case: the registry and manifest jobs fetch the bundle alone, and
+# the bundle is deliberately absent from checksums.txt. Read as a failure, that
+# status stopped both jobs before the bundle's own verification below could
+# run, which the first rehearsal to reach them found. So a FAILED line fails
+# here, and what was actually checked is counted, with the bundle joining the
+# count on its own evidence.
+echo "Verifying assets against checksums.txt"
 (
   cd "$DEST"
-  sha256sum --check --ignore-missing checksums.txt | tee sha256-check.log
+  sha256sum --check --ignore-missing checksums.txt > sha256-check.log 2>&1 || true
+  cat sha256-check.log
 )
+if grep -q ": FAILED" "$DEST/sha256-check.log"; then
+  echo "ERROR: an asset does not match checksums.txt" >&2
+  rm -f "$DEST/sha256-check.log"
+  exit 1
+fi
 verified=$(grep -c ": OK$" "$DEST/sha256-check.log" || true)
 rm -f "$DEST/sha256-check.log"
-echo "Verified ${verified} asset(s) against the signed checksums.txt"
+echo "Verified ${verified} asset(s) against checksums.txt"
 
 # The .mcpb is built outside GoReleaser, so it is absent from checksums.txt and
 # is the one asset a job can legitimately fetch on its own. Its integrity comes
 # from the build-provenance attestation instead, and it counts towards the
-# "something was actually verified" floor below.
+# "something was actually verified" floor below. A rehearsal attests nothing,
+# and the bundle it unpacked was built by a job of the same run.
 if [ -f "$DEST/gitlab-mcp-server.mcpb" ]; then
-  echo "Verifying the .mcpb build-provenance attestation"
-  gh attestation verify "$DEST/gitlab-mcp-server.mcpb" --repo "$REPO"
+  if [ -n "$ARCHIVE" ]; then
+    echo "Rehearsal: the .mcpb came from this run's own build; its attestation is minted at release"
+  else
+    echo "Verifying the .mcpb build-provenance attestation"
+    gh attestation verify "$DEST/gitlab-mcp-server.mcpb" --repo "$REPO"
+  fi
   verified=$((verified + 1))
 fi
 
 if [ "$verified" -eq 0 ]; then
-  echo "ERROR: nothing downloaded could be verified — checksums.txt matched no file and no attested bundle was fetched" >&2
+  echo "ERROR: nothing here could be verified — checksums.txt matched no file and no bundle was found" >&2
   exit 1
 fi

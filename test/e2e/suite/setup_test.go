@@ -30,6 +30,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamiccatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -247,23 +248,25 @@ func configureReadOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) 
 // configureDynamicModeE2EServer registers the dynamic find/execute surface with
 // read-only filtering or safe-mode previews applied to the catalog, which is
 // where both policies act for dispatcher surfaces.
+//
+// Built by the same function the server uses, and registered with the same
+// bookkeeping. This used to assemble a catalog of its own: standalone actions
+// first, then the filter, and no record of what the filter removed, so the
+// read-only session answered a withheld write with "unknown action" while the
+// binary answered "exists but is not available", and the suite was green on
+// the copy.
 func configureDynamicModeE2EServer(glClient *gitlabclient.Client, enterprise bool, mode string) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		catalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
+		catalog, withheld, err := dynamiccatalog.Build(glClient, &config.ServerConfig{
+			Tier:     edition.TierForEnterprise(enterprise),
+			ReadOnly: mode == dynamicModeReadOnly,
+			SafeMode: mode == dynamicModeSafe,
+		})
 		if err != nil {
 			return fmt.Errorf("build dynamic %s catalog: %w", mode, err)
 		}
-		catalog, err = dynamictools.AddStandaloneCatalog(catalog, glClient, dynamictools.StandaloneOptions{ReadOnly: mode == dynamicModeReadOnly})
-		if err != nil {
-			return fmt.Errorf("add standalone dynamic %s catalog: %w", mode, err)
-		}
-		switch mode {
-		case dynamicModeReadOnly:
-			catalog = catalog.FilterReadOnlyActions()
-		case dynamicModeSafe:
-			catalog = catalog.WithSafeModePreviews()
-		}
-		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+		dynamictools.RegisterCatalogFindExecuteTools(server, catalog,
+			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator))
 		return nil
 	}
 }

@@ -26,20 +26,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 )
 
-// modeCallText calls a tool on session and returns its concatenated text
-// content. A blocked or rejected call is a result to assert on, so only
-// transport errors fail the test.
-func modeCallText(ctx context.Context, t *testing.T, session *mcp.ClientSession, name string, args map[string]any) string {
+// modeCall calls a tool on session and returns its concatenated text content
+// and whether the result was flagged as an error. A blocked or rejected call
+// is a result to assert on, so only transport errors fail the test.
+func modeCall(ctx context.Context, t *testing.T, session *mcp.ClientSession, name string, args map[string]any) (text string, isError bool) {
 	t.Helper()
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 	requireNoError(t, err, "call "+name)
-	var text strings.Builder
+	var b strings.Builder
 	for _, content := range result.Content {
 		if textContent, ok := content.(*mcp.TextContent); ok {
-			text.WriteString(textContent.Text)
+			b.WriteString(textContent.Text)
 		}
 	}
-	return text.String()
+	return b.String(), result.IsError
+}
+
+// modeCallText is modeCall for the tests that assert on the text alone.
+func modeCallText(ctx context.Context, t *testing.T, session *mcp.ClientSession, name string, args map[string]any) string {
+	t.Helper()
+	text, _ := modeCall(ctx, t, session, name, args)
+	return text
 }
 
 // modeSafePreview parses text as a safe-mode preview, reporting whether it is

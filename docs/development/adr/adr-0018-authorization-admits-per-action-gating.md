@@ -134,7 +134,7 @@ carrying every tool, resource, template and prompt with its schemas.
   `unknown action "issue.create". Did you mean group.issues, issue.list, …` —
   five real read-only near misses, which reads as a confident "this server
   cannot create issues" rather than "this token cannot".
-  `filterActionCatalog` records what each narrowing removed, split by cause,
+  `tools.FilterActionCatalog` records what each narrowing removed, split by cause,
   and the registry answers from that (`dynamic.WithWithheldActions`). A
   protocol-level 403 carrying `WWW-Authenticate: Bearer
   error="insufficient_scope", scope="api"` would let a client reauthorize
