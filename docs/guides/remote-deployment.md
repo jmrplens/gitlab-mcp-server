@@ -880,20 +880,33 @@ header and with `PRIVATE-TOKEN` instead, to confirm both fallbacks pin as well.
 
 ### Rolling updates, probes and egress
 
-**Take an instance out of rotation before you signal it.** The process gives no
-draining signal of its own: on `SIGTERM` it closes the listener first, so
-`/health` stops answering immediately rather than reporting unhealthy, and it
-never returns `503` on the way down. In-flight requests then get up to 15
-seconds to finish before the remaining connections are closed. Remove the
-backend at the balancer, let streams drain, then restart. Under consistent
-hashing the callers pinned to it move to a neighbour, warm an entry there, and
-come back when it returns.
+**Announce the drain before the listener closes.** On `SIGTERM` the process
+marks itself draining first: from that moment `/health` answers `503` with
+`"status": "draining"` and `Cache-Control: no-store`. By default the listener
+closes right after, so a balancer polling `/health` usually notices the closed
+listener rather than the `503`, one probe later, and every request it sent in
+that window failed. Start each instance with `--drain-delay` set to at least
+one probe interval (`--drain-delay=10s` for a 5-second probe that tolerates two
+failures): the listener then stays open that long answering `503`, the balancer
+removes the backend, and only then does the listener close and the in-flight
+requests get their 15 seconds to finish before the remaining connections are
+closed. Under consistent hashing the callers pinned to it move to a neighbour,
+warm an entry there, and come back when it returns. A balancer that cannot poll
+still works the old way: remove the backend by hand, let streams drain, then
+signal.
 
 **`/health` is the probe, and it is honest about what it knows.** No credential,
-no GitLab round trip, `200` with `status`, `version`, `commit`, `started_at` and
-`uptime_seconds`. `status` is the constant `ok`; the HTTP status carries
-liveness. It deliberately does not test GitLab reachability, so a balancer must
-not read a `200` as "GitLab is up", and there is no separate readiness endpoint.
+no GitLab round trip, `200` with `status`, `version`, `commit`, `build`,
+`config_digest`, `started_at` and `uptime_seconds`. `status` is `ok` while
+serving and `draining` once shutdown was requested; the HTTP status carries the
+same verdict. `build` is the label to put on a dashboard, the closest release
+plus the short commit, so a release binary and a build from `main` read alike.
+`config_digest` is the fleet check: every instance behind one balancer must
+report the same one, or one of them serves a different catalog to whichever
+clients reach it and nothing else notices. Compare it in the same loop that
+proves the affinity. The endpoint deliberately does not test GitLab
+reachability, so a balancer must not read a `200` as "GitLab is up", and there
+is no separate readiness endpoint.
 
 **Give the fleet a fixed egress address.** GitLab applies its own rate limits and
 any IP allow-lists per source address. Instances behind a NAT gateway with a

@@ -50,12 +50,20 @@ const (
 	// wait would end it a moment before it returned on its own. toolutil pins
 	// the inequality in a test, since this package cannot import the constant
 	// it must exceed.
-	DefaultActionTimeout  = 65 * time.Minute
+	DefaultActionTimeout = 65 * time.Minute
+	// DefaultDrainDelay is zero: on SIGTERM the listener closes at once, as
+	// it always has. A deployment behind a balancer that polls /health sets
+	// it to at least one probe interval, so the 503 the endpoint answers
+	// while draining is seen before the close is.
+	DefaultDrainDelay     = 0 * time.Second
 	MaxHTTPClients        = 10000
 	MaxSessionTimeout     = 24 * time.Hour
 	MaxRevalidateInterval = 24 * time.Hour
 	MaxPoolIdleTimeout    = 24 * time.Hour
 	MaxActionTimeout      = 24 * time.Hour
+	// MaxDrainDelay caps the announcement: a delay longer than this holds a
+	// stopping process open past what any supervisor waits.
+	MaxDrainDelay = 5 * time.Minute
 )
 
 // OAuth defaults.
@@ -186,6 +194,10 @@ type Config struct {
 	// still running after this long is cancelled and answered with the
 	// deadline error. 0 disables the bound.
 	ActionTimeout time.Duration
+	// DrainDelay is how long, after SIGTERM, the HTTP listener stays open
+	// answering /health with 503 draining before it closes, so a balancer
+	// takes the instance out of rotation first. 0 closes at once.
+	DrainDelay time.Duration
 	// PoolIdleTimeout is how long a pooled per-token-and-URL server entry may go unused
 	// before it is reclaimed; 0 keeps entries until the pool's size bound
 	// evicts them (HTTP mode only).
@@ -457,6 +469,7 @@ func Load() (*Config, error) {
 		RevalidateInterval: limits.revalidateInterval,
 		PoolIdleTimeout:    limits.poolIdleTimeout,
 		ActionTimeout:      limits.actionTimeout,
+		DrainDelay:         limits.drainDelay,
 		AuthMode:           auth.mode,
 		PublicURL:          auth.publicURL,
 		OAuthCacheTTL:      auth.oauthCacheTTL,
@@ -490,6 +503,7 @@ type limitEnv struct {
 	revalidateInterval time.Duration
 	poolIdleTimeout    time.Duration
 	actionTimeout      time.Duration
+	drainDelay         time.Duration
 }
 
 type authEnv struct {
@@ -604,6 +618,9 @@ func loadLimitEnv() (limitEnv, error) {
 		return limitEnv{}, err
 	}
 	if values.actionTimeout, err = parseDisableableDurationEnv("ACTION_TIMEOUT", DefaultActionTimeout, MaxActionTimeout); err != nil {
+		return limitEnv{}, err
+	}
+	if values.drainDelay, err = parseDisableableDurationEnv("DRAIN_DELAY", DefaultDrainDelay, MaxDrainDelay); err != nil {
 		return limitEnv{}, err
 	}
 	return values, nil

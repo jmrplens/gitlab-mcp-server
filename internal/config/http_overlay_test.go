@@ -43,6 +43,7 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"PoolIdleTimeout":    overlay.PoolIdleTimeout == nil,
 		"RevalidateInterval": overlay.RevalidateInterval == nil,
 		"ActionTimeout":      overlay.ActionTimeout == nil,
+		"DrainDelay":         overlay.DrainDelay == nil,
 		"AuthMode":           overlay.AuthMode == nil,
 		"PublicURL":          overlay.PublicURL == nil,
 		"TrustedOrigins":     overlay.TrustedOrigins == nil,
@@ -204,6 +205,7 @@ func presentVariableCases() []presentVariableCase {
 				"POOL_IDLE_TIMEOUT":           "6h",
 				"SESSION_REVALIDATE_INTERVAL": "5m",
 				"ACTION_TIMEOUT":              "20m",
+				"DRAIN_DELAY":                 "5s",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -214,6 +216,7 @@ func presentVariableCases() []presentVariableCase {
 				assertDur(t, "PoolIdleTimeout", o.PoolIdleTimeout, 6*time.Hour)
 				assertDur(t, "RevalidateInterval", o.RevalidateInterval, 5*time.Minute)
 				assertDur(t, "ActionTimeout", o.ActionTimeout, 20*time.Minute)
+				assertDur(t, "DrainDelay", o.DrainDelay, 5*time.Second)
 			},
 		},
 		{
@@ -288,6 +291,8 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"POOL_IDLE_TIMEOUT", "48h", "exceeds maximum"},
 		{"ACTION_TIMEOUT", "bogus", "ACTION_TIMEOUT"},
 		{"ACTION_TIMEOUT", "48h", "exceeds maximum"},
+		{"DRAIN_DELAY", "bogus", "DRAIN_DELAY"},
+		{"DRAIN_DELAY", "10m", "exceeds maximum"},
 	}
 
 	for _, tt := range tests {
@@ -351,7 +356,7 @@ func clearOverlayEnv(t *testing.T) {
 		"GITLAB_READ_ONLY", "GITLAB_SAFE_MODE", "EMBEDDED_RESOURCES",
 		"GITLAB_IGNORE_SCOPES", "EXCLUDE_TOOLS", "MAX_HTTP_CLIENTS",
 		"SESSION_TIMEOUT", "POOL_IDLE_TIMEOUT", "SESSION_REVALIDATE_INTERVAL",
-		"ACTION_TIMEOUT",
+		"ACTION_TIMEOUT", "DRAIN_DELAY",
 		"AUTH_MODE", "PUBLIC_URL", "TRUSTED_ORIGINS", "OAUTH_CACHE_TTL",
 		"RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 	} {

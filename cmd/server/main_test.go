@@ -2739,7 +2739,7 @@ func TestHealthHandler_ReturnsOK(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
-	healthHandler(rec, req)
+	healthHandler("", new(atomic.Bool))(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
@@ -2789,7 +2789,7 @@ func TestNewHealthResponse_UptimeAndStartedAt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := newHealthResponse(start, tc.now)
+			got := newHealthResponse(start, tc.now, "", false)
 			if got.UptimeSeconds != tc.wantUptime {
 				t.Errorf("uptime_seconds = %d, want %d", got.UptimeSeconds, tc.wantUptime)
 			}
@@ -2812,7 +2812,7 @@ func TestNewHealthResponse_StartedAtIsRFC3339InUTC(t *testing.T) {
 	}
 	start := time.Date(2026, 8, 22, 12, 0, 0, 0, madrid) // 10:00 UTC
 
-	got := newHealthResponse(start, start)
+	got := newHealthResponse(start, start, "", false)
 	parsed, err := time.Parse(time.RFC3339, got.StartedAt)
 	if err != nil {
 		t.Fatalf("started_at %q does not parse as RFC 3339: %v", got.StartedAt, err)
@@ -2831,7 +2831,7 @@ func TestHealthHandler_ExposesLivenessFields(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	healthHandler(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil))
+	healthHandler("", new(atomic.Bool))(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil))
 
 	var body healthResponse
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
@@ -7309,6 +7309,11 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			name:    "a negative action timeout",
 			mutate:  func(c *config.Config) { c.ActionTimeout = -time.Second },
 			wantErr: "action-timeout",
+		},
+		{
+			name:    "a drain delay past its maximum",
+			mutate:  func(c *config.Config) { c.DrainDelay = config.MaxDrainDelay + time.Second },
+			wantErr: "drain-delay",
 		},
 	}
 
