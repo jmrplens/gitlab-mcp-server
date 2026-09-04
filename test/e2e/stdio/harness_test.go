@@ -328,6 +328,33 @@ func (s *session) stderrText() string {
 	return s.stderr.String()
 }
 
+// waitForStderr returns the server's stderr once it contains needle, and fails
+// the test if it does not within the window.
+//
+// stderr is copied into the buffer by a goroutine of this harness, so a line
+// the server wrote before answering on stdout can still be in the pipe when
+// the test reads the buffer: the stdout reply and the stderr copy are two
+// goroutines with no ordering between them. A test that asserted on
+// stderrText right after a call therefore found it empty now and then,
+// including for the OTEL_SDK_DISABLED veto, which the server logs before it
+// serves anything. Waiting for the line the assertion is about removes the
+// race without loosening the assertion; an absence assertion that follows
+// should anchor on a line the server always writes after the one it denies.
+func (s *session) waitForStderr(t *testing.T, needle string, within time.Duration) string {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for {
+		text := s.stderrText()
+		if strings.Contains(text, needle) {
+			return text
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stderr did not carry %q within %s\nstderr: %s", needle, within, text)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // request builds a JSON-RPC request carrying the per-request _meta a
 // 2026-07-28 client sends.
 func request(id int, method, params string) string {

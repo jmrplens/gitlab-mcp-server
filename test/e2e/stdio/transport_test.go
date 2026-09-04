@@ -49,9 +49,10 @@ func TestStdout_CarriesNothingButJSONRPC(t *testing.T) {
 		})
 	}
 
-	if logs := s.stderrText(); logs == "" {
-		t.Error("nothing was logged to stderr at LOG_LEVEL=info; either logging is off or it went somewhere else")
-	}
+	// The startup line is written before the server answers anything, so its
+	// absence here would mean logging is off or went somewhere else; waited
+	// for, because the harness copies stderr on a goroutine of its own.
+	s.waitForStderr(t, "starting MCP server", 5*time.Second)
 }
 
 // TestStderr_TakesTheLogsAndStdoutDoesNot checks the other half of the same
@@ -68,11 +69,10 @@ func TestStderr_TakesTheLogsAndStdoutDoesNot(t *testing.T) {
 	}
 
 	// Debug logging produces a lot; none of it may appear on stdout, and
-	// readMessage would have failed above if it had.
-	logs := s.stderrText()
-	if !strings.Contains(logs, "level=DEBUG") && !strings.Contains(logs, "DEBUG") {
-		t.Errorf("LOG_LEVEL=debug produced no debug lines on stderr:\n%s", logs)
-	}
+	// readMessage would have failed above if it had. The debug lines are
+	// waited for rather than read, since the harness copies stderr on a
+	// goroutine of its own.
+	s.waitForStderr(t, "DEBUG", 5*time.Second)
 }
 
 // TestStderr_DefaultLevelIsNotAllSessionChatter pins what an operator actually
@@ -100,7 +100,10 @@ func TestStderr_DefaultLevelIsNotAllSessionChatter(t *testing.T) {
 		}
 	}
 
-	logs := s.stderrText()
+	// Anchored on a line the server writes after the session is up, so the
+	// absences asserted below are absences in what was logged rather than in
+	// what the harness had copied so far.
+	logs := s.waitForStderr(t, "starting MCP server", 5*time.Second)
 	for _, chatter := range []string{
 		"server session connected",
 		"server session disconnected",
