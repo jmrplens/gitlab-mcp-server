@@ -85,9 +85,7 @@ func FormatTraceMarkdown(t TraceOutput) string {
 	if t.Truncated {
 		b.WriteString(toolutil.EmojiWarning + " *Trace truncated at 100KB.*\n\n")
 	}
-	b.WriteString("```\n")
-	b.WriteString(t.Trace)
-	b.WriteString(fmtCodeFenceEnd)
+	b.WriteString(toolutil.MarkdownFencedBlock("", t.Trace))
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_job_get` to see job details",

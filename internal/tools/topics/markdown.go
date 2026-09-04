@@ -39,7 +39,7 @@ func FormatTopicMarkdown(t TopicItem) *mcp.CallToolResult {
 		fmt.Fprintf(&sb, toolutil.FmtMdTitle, t.Title)
 	}
 	if t.Description != "" {
-		fmt.Fprintf(&sb, toolutil.FmtMdDescription, t.Description)
+		toolutil.WriteDescription(&sb, t.Description)
 	}
 	fmt.Fprintf(&sb, "- **Projects**: %d\n", t.TotalProjectsCount)
 	if t.AvatarURL != "" {

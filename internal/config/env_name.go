@@ -30,6 +30,7 @@ const EnvPrefix = "GITLAB_MCP_"
 // OpenTelemetry specification and the exporters read them directly, so a
 // prefixed spelling would simply not be seen.
 var prefixedNames = []string{
+	"ACTION_TIMEOUT",
 	"AUTH_MODE",
 	"CAPABILITY_SURFACE",
 	"CLIENT_COMPAT",

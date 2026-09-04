@@ -13,7 +13,7 @@ import (
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Runner Controller #%d\n\n", out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdDescription, out.Description)
+	toolutil.WriteDescription(&b, out.Description)
 	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
@@ -29,7 +29,7 @@ func FormatOutputMarkdown(out Output) string {
 func FormatDetailsMarkdown(out DetailsOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Runner Controller #%d: Details\n\n", out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdDescription, out.Description)
+	toolutil.WriteDescription(&b, out.Description)
 	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
 	fmt.Fprintf(&b, "- **Connected**: %t\n", out.Connected)
 	if out.CreatedAt != "" {

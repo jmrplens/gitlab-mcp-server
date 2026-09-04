@@ -444,7 +444,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	token := g.extractCredential(r)
 	if token == "" {
 		g.chargeFailure(ip, source)
-		slog.InfoContext(r.Context(), "request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
@@ -454,7 +454,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	}
 
 	if err := requireExplicitInstance(r, g.gitlabURLs); err != nil {
-		slog.InfoContext(r.Context(), "request rejected: no instance selected on a multi-instance deployment",
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: no instance selected on a multi-instance deployment",
 			"instances", len(g.gitlabURLs))
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
@@ -472,14 +472,14 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		// told to send the header rather than to go and find the operator, and
 		// logged at INFO because nothing here is the deployment's fault.
 		if errors.Is(err, serverpool.ErrMissingGitLabURL) {
-			slog.InfoContext(r.Context(), "request rejected: no instance selected and none is published")
+			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: no instance selected and none is published")
 			return nil, &gateFailure{
 				status:  http.StatusBadRequest,
 				code:    errCodeInvalidRequest,
 				message: capitalizeFirst(err.Error()) + ".",
 			}
 		}
-		slog.ErrorContext(r.Context(), "request rejected: invalid GITLAB-URL header", "error", err)
+		refusalLog.log(r.Context(), slog.LevelError, "request rejected: invalid GITLAB-URL header", "error", err)
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
 			code:    errCodeInvalidRequest,
@@ -495,7 +495,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		// limiter — this is the path that stops a stream of invented tokens
 		// from churning the pool.
 		g.chargeFailure(ip, source)
-		slog.InfoContext(r.Context(), "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,

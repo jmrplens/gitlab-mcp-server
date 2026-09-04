@@ -64,6 +64,12 @@ type responseLimitTransport struct {
 // reader that refuses to deliver more than the client's ceiling.
 func (t *responseLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.base.RoundTrip(req)
+	if err == nil && resp != nil && resp.StatusCode == http.StatusUnauthorized {
+		// Innermost layer, so every call the SDK makes passes here: the first
+		// data call GitLab refuses is the revocation signal, not the next
+		// periodic re-check.
+		t.client.notifyUnauthorized()
+	}
 	if err != nil || resp == nil || resp.Body == nil {
 		return resp, err
 	}

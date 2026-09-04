@@ -109,6 +109,7 @@ func applyOverlayDurations(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 		{"pool-idle-timeout", &hcfg.poolIdleTimeout, o.PoolIdleTimeout},
 		{"revalidate-interval", &hcfg.revalidateInterval, o.RevalidateInterval},
 		{"oauth-cache-ttl", &hcfg.oauthCacheTTL, o.OAuthCacheTTL},
+		{"action-timeout", &hcfg.actionTimeout, o.ActionTimeout},
 	}
 	for _, d := range durations {
 		if d.value != nil && !hcfg.setFlags[d.flagName] {

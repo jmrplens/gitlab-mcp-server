@@ -93,12 +93,8 @@ func FormatBlameMarkdown(out BlameOutput) string {
 		fmt.Fprintf(&b, "### Range %d: %s (%s)\n\n", i+1,
 			toolutil.EscapeMdTableCell(r.Commit.AuthorName), r.Commit.ID[:minLen(len(r.Commit.ID), 8)])
 		fmt.Fprintf(&b, "**%s**\n\n", toolutil.EscapeMdTableCell(r.Commit.Message))
-		fmt.Fprintf(&b, "```%s\n", langFromPath(out.FilePath))
-		for _, line := range r.Lines {
-			b.WriteString(line)
-			b.WriteString("\n")
-		}
-		b.WriteString("```\n\n")
+		b.WriteString(toolutil.MarkdownFencedBlock(langFromPath(out.FilePath), strings.Join(r.Lines, "\n")))
+		b.WriteString("\n")
 	}
 	toolutil.WriteHints(
 		&b,
@@ -136,12 +132,7 @@ func FormatRawMarkdown(out RawOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Raw File: %s\n\n", out.FilePath)
 	fmt.Fprintf(&b, fmtSizeBytes+"\n", out.Size)
-	fmt.Fprintf(&b, "```%s\n", langFromPath(out.FilePath))
-	b.WriteString(out.Content)
-	if !strings.HasSuffix(out.Content, "\n") {
-		b.WriteByte('\n')
-	}
-	b.WriteString("```\n")
+	b.WriteString(toolutil.MarkdownFencedBlock(langFromPath(out.FilePath), out.Content))
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_file_update` to modify this file",

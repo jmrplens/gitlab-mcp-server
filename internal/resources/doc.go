@@ -35,9 +35,10 @@
 // carries the excluded actions and that package keeps its own prompt-to-action
 // table.
 //
-// One control still does not reach this surface, because it is applied where
-// tools are registered rather than here: the tools/call rate limiter does not
-// meter resources/read, resources/subscribe or prompts/get, so all three remain
-// unmetered proxies to GitLab. It is noted so the silence does not read as
-// coverage.
+// The rate limiter applied where tools are registered meters this surface too:
+// resources/read, resources/subscribe and subscriptions/listen draw on the
+// same bucket as tools/call, as prompts/get does, so none of them is an
+// unmetered proxy to GitLab. A refused request here is a JSON-RPC error
+// carrying the code that mirrors HTTP 429, since a resource result has no
+// error flag of its own. See [toolutil.AttachRateLimit].
 package resources

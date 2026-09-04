@@ -19,7 +19,7 @@ func FormatOutputMarkdown(v Output) string {
 	fmt.Fprintf(&b, "- **Masked**: %t\n", v.Masked)
 	fmt.Fprintf(&b, "- **Raw**: %t\n", v.Raw)
 	if v.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, v.Description)
+		toolutil.WriteDescription(&b, v.Description)
 	}
 	if !v.Masked {
 		fmt.Fprintf(&b, "- **Value**: %s\n", v.Value)

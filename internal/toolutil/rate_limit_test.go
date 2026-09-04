@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -146,6 +147,67 @@ func TestAttachRateLimit_BlocksAfterBurst(t *testing.T) {
 	}
 	if !strings.Contains(text.Text, "echo") {
 		t.Errorf("rate-limited message = %q, want to contain tool name 'echo'", text.Text)
+	}
+}
+
+// TestAttachRateLimit_GatesTheOtherDoorsToGitLab verifies resources/read and
+// prompts/get draw on the same bucket as tools/call and are refused with the
+// JSON-RPC code that mirrors HTTP 429 once it is empty. Each was an unmetered
+// proxy to GitLab with the caller's credential while the limiter watched tool
+// calls alone. The subscription methods sit in the same switch case; their
+// refusal is pinned on the wire by the HTTP transport module, since the SDK's
+// client discards a subscribe response and cannot show it here.
+func TestAttachRateLimit_GatesTheOtherDoorsToGitLab(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		call func(ctx context.Context, session *mcp.ClientSession) error
+	}{
+		{name: "resources/read", call: func(ctx context.Context, session *mcp.ClientSession) error {
+			_, err := session.ReadResource(ctx, &mcp.ReadResourceParams{URI: "test://one"})
+			return err
+		}},
+		{name: "prompts/get", call: func(ctx context.Context, session *mcp.ClientSession) error {
+			_, err := session.GetPrompt(ctx, &mcp.GetPromptParams{Name: "greet"})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+			server.AddResource(&mcp.Resource{URI: "test://one", Name: "one"},
+				func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+					return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: req.Params.URI, Text: "hi"}}}, nil
+				})
+			server.AddPrompt(&mcp.Prompt{Name: "greet"},
+				func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+					return &mcp.GetPromptResult{Messages: []*mcp.PromptMessage{{Role: "user", Content: &mcp.TextContent{Text: "hi"}}}}, nil
+				})
+			AttachRateLimit(server, NewRateLimiter(1, 2))
+			session, ctx := connectClient(t, server)
+
+			for i := range 2 {
+				if err := tc.call(ctx, session); err != nil {
+					t.Fatalf("%s #%d inside the burst: %v", tc.name, i+1, err)
+				}
+			}
+			err := tc.call(ctx, session)
+			if err == nil {
+				t.Fatalf("%s over budget succeeded, want the rate-limit refusal", tc.name)
+			}
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) {
+				t.Fatalf("%s over budget: error %T %v, want a JSON-RPC error", tc.name, err, err)
+			}
+			if rpcErr.Code != rateLimitedErrorCode {
+				t.Errorf("%s over budget: code %d, want %d", tc.name, rpcErr.Code, rateLimitedErrorCode)
+			}
+			if !strings.Contains(rpcErr.Message, "rate limit") || !strings.Contains(rpcErr.Message, tc.name) {
+				t.Errorf("%s over budget: message %q, want it to name the limit and the method", tc.name, rpcErr.Message)
+			}
+		})
 	}
 }
 

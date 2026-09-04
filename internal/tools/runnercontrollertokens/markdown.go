@@ -14,7 +14,7 @@ func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Runner Controller Token #%d\n\n", out.ID)
 	fmt.Fprintf(&b, "- **Controller ID**: %d\n", out.RunnerControllerID)
-	fmt.Fprintf(&b, toolutil.FmtMdDescription, out.Description)
+	toolutil.WriteDescription(&b, out.Description)
 	if out.Token != "" {
 		fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
 	}

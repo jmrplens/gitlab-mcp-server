@@ -106,9 +106,7 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatContentMarkdown(out ContentOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Snippet #%d Content\n\n", out.SnippetID)
-	b.WriteString("```\n")
-	b.WriteString(out.Content)
-	b.WriteString("\n```\n")
+	b.WriteString(toolutil.MarkdownFencedBlock("", out.Content))
 	toolutil.WriteHints(
 		&b,
 		"Use action 'file_content' to get content of a specific file",
@@ -121,9 +119,7 @@ func FormatContentMarkdown(out ContentOutput) string {
 func FormatFileContentMarkdown(out FileContentOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Snippet #%d File: %s (ref: %s)\n\n", out.SnippetID, out.FileName, out.Ref)
-	b.WriteString("```\n")
-	b.WriteString(out.Content)
-	b.WriteString("\n```\n")
+	b.WriteString(toolutil.MarkdownFencedBlock("", out.Content))
 	toolutil.WriteHints(
 		&b,
 		"Use action 'content' to get the full snippet content",

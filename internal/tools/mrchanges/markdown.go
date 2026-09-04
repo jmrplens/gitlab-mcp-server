@@ -133,12 +133,7 @@ func FormatRawDiffsMarkdown(out RawDiffsOutput) string {
 		b.WriteString("No diffs found.\n")
 		return b.String()
 	}
-	b.WriteString("```diff\n")
-	b.WriteString(out.RawDiff)
-	if !strings.HasSuffix(out.RawDiff, "\n") {
-		b.WriteByte('\n')
-	}
-	b.WriteString("```\n")
+	b.WriteString(toolutil.MarkdownFencedBlock("diff", out.RawDiff))
 	toolutil.WriteHints(&b, "Use action 'changes_get' for file-level change summary")
 	return b.String()
 }

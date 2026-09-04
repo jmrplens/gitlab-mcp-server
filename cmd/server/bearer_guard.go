@@ -143,7 +143,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		// budget charged to the transport source is shared by everything
 		// behind one proxy, so ip is frequently just whoever arrived next;
 		// naming it alone pointed an operator at an innocent machine.
-		slog.WarnContext(r.Context(), "request blocked: too many authentication failures", "ip", ip, "source", source) //#nosec G706 -- slog structured args are not interpolated
+		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures", "ip", ip, "source", source) //#nosec G706 -- slog structured args are not interpolated
 		return &gateFailure{
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
@@ -179,7 +179,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			// answering would put this bearer on the wire to an instance the
 			// caller never named, and it is answered BEFORE verification for
 			// exactly that reason.
-			slog.InfoContext(r.Context(), "request rejected: no instance selected on a multi-instance deployment",
+			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: no instance selected on a multi-instance deployment",
 				"instances", len(g.instances))
 			return &gateFailure{
 				status: http.StatusBadRequest,
@@ -190,7 +190,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			}
 		}
 		if err != nil {
-			slog.InfoContext(r.Context(), "request rejected: unpublished GitLab instance requested", "error", err)
+			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: unpublished GitLab instance requested", "error", err)
 			return &gateFailure{
 				status:  http.StatusForbidden,
 				code:    errCodeForbidden,
@@ -208,12 +208,12 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		// it.
 		if kind, cached := g.rejected.Lookup(instance, token); cached {
 			if kind == oauth.RejectionUnaccepted {
-				slog.InfoContext(r.Context(), "request rejected: token already known not to be issued to an admitted OAuth application",
+				refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known not to be issued to an admitted OAuth application",
 					"token_suffix", safeTokenSuffix(token))
 				return g.unacceptedRecipientFailure()
 			}
 			g.recordFailure(ip, source)
-			slog.InfoContext(r.Context(), "request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
+			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
 			return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
 		}
 	}
@@ -227,7 +227,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		// Not charged to the limiter: the credential is genuine and the
 		// caller is who they say they are. Counting it would let a client
 		// holding a valid but under-scoped token lock its own address out.
-		slog.InfoContext(r.Context(), "request rejected: token cannot read the API",
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token cannot read the API",
 			"minimum", g.minimumScope, "granted", strings.Join(info.Scopes, " "))
 		return &gateFailure{
 			status:  http.StatusForbidden,

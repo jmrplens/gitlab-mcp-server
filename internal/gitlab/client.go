@@ -83,6 +83,33 @@ type Client struct {
 	initMu sync.Mutex
 	// lastInitAttempt prevents thundering herd on a recovering GitLab instance.
 	lastInitAttempt time.Time
+
+	// onUnauthorized is called once, the first time GitLab answers a call
+	// made with this client's credential with 401. The server pool uses it
+	// to drop the entry so the next request re-verifies, instead of serving
+	// a revoked token until the periodic check notices.
+	onUnauthorized   atomic.Pointer[func()]
+	unauthorizedOnce sync.Once
+}
+
+// SetOnUnauthorized registers fn to run the first time GitLab answers a
+// call made with this client's credential with 401. fn runs on the calling
+// goroutine, once; a nil fn clears it.
+func (c *Client) SetOnUnauthorized(fn func()) {
+	if fn == nil {
+		c.onUnauthorized.Store(nil)
+		return
+	}
+	c.onUnauthorized.Store(&fn)
+}
+
+// notifyUnauthorized fires the registered callback, once.
+func (c *Client) notifyUnauthorized() {
+	fn := c.onUnauthorized.Load()
+	if fn == nil {
+		return
+	}
+	c.unauthorizedOnce.Do(func() { (*fn)() })
 }
 
 // initCooldown is the minimum interval between lazy re-initialization attempts

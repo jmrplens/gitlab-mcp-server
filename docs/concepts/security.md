@@ -365,8 +365,11 @@ govulncheck ./...
 
 ## Rate Limiting Model
 
-The server ships a token-bucket rate limiter that gates `tools/call`
-invocations. It exists to protect operators against runaway agents and noisy
+The server ships a token-bucket rate limiter that gates every call that reaches
+GitLab with the caller's credential: `tools/call`, `resources/read`,
+`resources/subscribe`, `subscriptions/listen` and `prompts/get` draw on one
+bucket, since a limit that metered tool calls alone left the other doors open to
+the same upstream. It exists to protect operators against runaway agents and noisy
 clients, not to replace upstream throttling: GitLab itself remains the canonical
 rate-limit authority.
 

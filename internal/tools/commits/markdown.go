@@ -220,7 +220,7 @@ func FormatStatusMarkdown(s StatusOutput) string {
 	fmt.Fprintf(&b, toolutil.FmtMdName, s.Name)
 	fmt.Fprintf(&b, "- **Ref**: %s\n", s.Ref)
 	if s.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, s.Description)
+		toolutil.WriteDescription(&b, s.Description)
 	}
 	if s.TargetURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, s.TargetURL)

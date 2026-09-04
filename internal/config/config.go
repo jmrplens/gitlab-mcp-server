@@ -42,10 +42,16 @@ const (
 	DefaultSessionTimeout     = 30 * time.Minute
 	DefaultRevalidateInterval = 15 * time.Minute
 	DefaultPoolIdleTimeout    = 1 * time.Hour
-	MaxHTTPClients            = 10000
-	MaxSessionTimeout         = 24 * time.Hour
-	MaxRevalidateInterval     = 24 * time.Hour
-	MaxPoolIdleTimeout        = 24 * time.Hour
+	// DefaultActionTimeout bounds one action's handler. An hour is above the
+	// longest wait any action offers (a pipeline wait caps itself at 3600 s),
+	// so it never cuts a legitimate call and still ends one that would
+	// otherwise park until its client gave up.
+	DefaultActionTimeout  = 1 * time.Hour
+	MaxHTTPClients        = 10000
+	MaxSessionTimeout     = 24 * time.Hour
+	MaxRevalidateInterval = 24 * time.Hour
+	MaxPoolIdleTimeout    = 24 * time.Hour
+	MaxActionTimeout      = 24 * time.Hour
 )
 
 // OAuth defaults.
@@ -172,6 +178,10 @@ type Config struct {
 	MaxHTTPClients     int           // Maximum unique tokens in the server pool (HTTP mode only)
 	SessionTimeout     time.Duration // Idle MCP session timeout (HTTP mode only)
 	RevalidateInterval time.Duration // Token re-validation interval (HTTP mode only)
+	// ActionTimeout bounds one action's handler in both transports: a call
+	// still running after this long is cancelled and answered with the
+	// deadline error. 0 disables the bound.
+	ActionTimeout time.Duration
 	// PoolIdleTimeout is how long a pooled per-token-and-URL server entry may go unused
 	// before it is reclaimed; 0 keeps entries until the pool's size bound
 	// evicts them (HTTP mode only).
@@ -442,6 +452,7 @@ func Load() (*Config, error) {
 		SessionTimeout:     limits.sessionTimeout,
 		RevalidateInterval: limits.revalidateInterval,
 		PoolIdleTimeout:    limits.poolIdleTimeout,
+		ActionTimeout:      limits.actionTimeout,
 		AuthMode:           auth.mode,
 		PublicURL:          auth.publicURL,
 		OAuthCacheTTL:      auth.oauthCacheTTL,
@@ -474,6 +485,7 @@ type limitEnv struct {
 	sessionTimeout     time.Duration
 	revalidateInterval time.Duration
 	poolIdleTimeout    time.Duration
+	actionTimeout      time.Duration
 }
 
 type authEnv struct {
@@ -585,6 +597,9 @@ func loadLimitEnv() (limitEnv, error) {
 		return limitEnv{}, err
 	}
 	if values.revalidateInterval, err = parseDisableableDurationEnv("SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval); err != nil {
+		return limitEnv{}, err
+	}
+	if values.actionTimeout, err = parseDisableableDurationEnv("ACTION_TIMEOUT", DefaultActionTimeout, MaxActionTimeout); err != nil {
 		return limitEnv{}, err
 	}
 	return values, nil

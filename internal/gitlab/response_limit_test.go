@@ -294,6 +294,70 @@ func TestLimitedBody_StaysFailedAfterOverflow(t *testing.T) {
 // TestResponseLimitTransport_PassesThroughUnlimited verifies a client whose
 // ceiling is removed gets the untouched body back, and that a transport error
 // is returned as-is rather than being wrapped in a limiter.
+// TestResponseLimitTransport_A401FiresTheUnauthorizedHookOnce verifies the
+// innermost transport reports the first 401 GitLab answers to whoever
+// registered for it, once, and never for any other status. The server pool
+// registers to drop its entry, so a revoked token stops being served on the
+// first call GitLab refuses rather than on the next periodic check.
+func TestResponseLimitTransport_A401FiresTheUnauthorizedHookOnce(t *testing.T) {
+	t.Parallel()
+
+	roundTrip := func(t *testing.T, transport *responseLimitTransport) {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://gitlab.example.com/x", http.NoBody)
+		if err != nil {
+			t.Fatalf("NewRequest: %v", err)
+		}
+		resp, err := transport.RoundTrip(req)
+		if err != nil {
+			t.Fatalf("RoundTrip: %v", err)
+		}
+		_ = resp.Body.Close()
+	}
+
+	t.Run("three refusals fire it once", func(t *testing.T) {
+		t.Parallel()
+		client := &Client{}
+		fired := 0
+		client.SetOnUnauthorized(func() { fired++ })
+		transport := &responseLimitTransport{base: &stubRoundTripper{body: "{}", status: http.StatusUnauthorized}, client: client}
+		for range 3 {
+			roundTrip(t, transport)
+		}
+		if fired != 1 {
+			t.Errorf("the hook fired %d times over three 401s, want once", fired)
+		}
+	})
+	t.Run("any other status leaves it alone", func(t *testing.T) {
+		t.Parallel()
+		client := &Client{}
+		fired := 0
+		client.SetOnUnauthorized(func() { fired++ })
+		// sequential: one hook counts across every status, asserted once below
+		for _, status := range []int{http.StatusOK, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError} {
+			roundTrip(t, &responseLimitTransport{base: &stubRoundTripper{body: "{}", status: status}, client: client})
+		}
+		if fired != 0 {
+			t.Errorf("the hook fired %d times without a 401", fired)
+		}
+	})
+	t.Run("a client with no hook is untouched by a 401", func(t *testing.T) {
+		t.Parallel()
+		roundTrip(t, &responseLimitTransport{base: &stubRoundTripper{body: "{}", status: http.StatusUnauthorized}, client: &Client{}})
+	})
+	t.Run("a nil hook clears it", func(t *testing.T) {
+		t.Parallel()
+		client := &Client{}
+		fired := 0
+		client.SetOnUnauthorized(func() { fired++ })
+		client.SetOnUnauthorized(nil)
+		roundTrip(t, &responseLimitTransport{base: &stubRoundTripper{body: "{}", status: http.StatusUnauthorized}, client: client})
+		if fired != 0 {
+			t.Errorf("a cleared hook fired %d times", fired)
+		}
+	})
+}
+
 func TestResponseLimitTransport_PassesThroughUnlimited(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -349,6 +413,8 @@ func TestResponseLimitTransport_PassesThroughUnlimited(t *testing.T) {
 type stubRoundTripper struct {
 	fail bool
 	body string
+	// status is the answer's status code; zero means 200.
+	status int
 }
 
 // RoundTrip returns the stubbed response or error.
@@ -356,8 +422,12 @@ func (s *stubRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 	if s.fail {
 		return nil, errors.New("stub transport failure")
 	}
+	status := s.status
+	if status == 0 {
+		status = http.StatusOK
+	}
 	return &http.Response{
-		StatusCode: http.StatusOK,
+		StatusCode: status,
 		Body:       io.NopCloser(strings.NewReader(s.body)),
 		Header:     make(http.Header),
 	}, nil

@@ -202,6 +202,7 @@ func presentVariableCases() []presentVariableCase {
 				"SESSION_TIMEOUT":             "10m",
 				"POOL_IDLE_TIMEOUT":           "6h",
 				"SESSION_REVALIDATE_INTERVAL": "5m",
+				"ACTION_TIMEOUT":              "20m",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -211,6 +212,7 @@ func presentVariableCases() []presentVariableCase {
 				assertDur(t, "SessionTimeout", o.SessionTimeout, 10*time.Minute)
 				assertDur(t, "PoolIdleTimeout", o.PoolIdleTimeout, 6*time.Hour)
 				assertDur(t, "RevalidateInterval", o.RevalidateInterval, 5*time.Minute)
+				assertDur(t, "ActionTimeout", o.ActionTimeout, 20*time.Minute)
 			},
 		},
 		{
@@ -283,6 +285,8 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"RATE_LIMIT_RPS", "bogus", "RATE_LIMIT_RPS"},
 		{"RATE_LIMIT_BURST", "bogus", "RATE_LIMIT_BURST"},
 		{"POOL_IDLE_TIMEOUT", "48h", "exceeds maximum"},
+		{"ACTION_TIMEOUT", "bogus", "ACTION_TIMEOUT"},
+		{"ACTION_TIMEOUT", "48h", "exceeds maximum"},
 	}
 
 	for _, tt := range tests {
