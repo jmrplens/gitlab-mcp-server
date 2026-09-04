@@ -105,7 +105,7 @@ A server reached over HTTP refuses every caller-supplied local path whatever the
 
 ## Optional — Transport Limits
 
-These bound one call whichever transport carries it, so the tool surface makes no difference to them: the first two bound work the server does before any tool runs, the third bounds the tool itself.
+These apply whichever transport carries the call, so the tool surface makes no difference to them: `GITLAB_MCP_ACTION_TIMEOUT` bounds the action handler, `GITLAB_MCP_STDIO_MAX_LINE_BYTES` caps each stdio input message, and `GITLAB_MCP_MAX_LISTEN_STREAMS` caps the concurrent `subscriptions/listen` streams one credential may hold open.
 
 | Variable                          | Default | Description                                                                                                                                                                                                                                                                                                                                                                                          |
 | --------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -117,7 +117,7 @@ These bound one call whichever transport carries it, so the tool surface makes n
 
 ## Optional — HTTP Mode (Server Pool)
 
-These variables configure the HTTP server pool. Each has a CLI flag counterpart, and the flag wins when it is passed explicitly — see [HTTP Mode Equivalents](#http-mode-equivalents) below. In stdio mode they are parsed but unused, since stdio runs a single server with no pool.
+These variables configure the HTTP server pool. Each has a CLI flag counterpart, and the flag wins when it is passed explicitly — see [HTTP Mode Equivalents](#http-mode-equivalents) below. In stdio mode they are parsed but unused, since stdio runs a single server with no pool, with one exception: the two rate-limit variables at the end of the table meter stdio's single server as well, where the limiter is off unless they turn it on.
 
 | Variable                       | Default   | Description                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -42,6 +42,7 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"SessionTimeout":     overlay.SessionTimeout == nil,
 		"PoolIdleTimeout":    overlay.PoolIdleTimeout == nil,
 		"RevalidateInterval": overlay.RevalidateInterval == nil,
+		"ActionTimeout":      overlay.ActionTimeout == nil,
 		"AuthMode":           overlay.AuthMode == nil,
 		"PublicURL":          overlay.PublicURL == nil,
 		"TrustedOrigins":     overlay.TrustedOrigins == nil,
