@@ -881,6 +881,13 @@ jobs:
       # A fresh checkout of main in a job that runs no third-party code. The
       # deploy key pushes straight to a protected branch, so nothing that ran
       # earlier in some other job can have rewritten what it commits.
+      #
+      # main in a rehearsal too, since main is what the commit would land on,
+      # which means this job runs main's scripts against the rehearsal's
+      # archive rather than the dispatched branch's. A rehearsal of a change
+      # to a script this job calls therefore passes here only once that
+      # change is on main; the fourth rehearsal found a latent failure in
+      # main's fetch script exactly this way.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main

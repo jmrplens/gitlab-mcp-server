@@ -105,13 +105,25 @@ if [ ! -f "$DEST/checksums.txt" ]; then
   exit 1
 fi
 
-# --ignore-missing passes vacuously on an empty intersection, so count what was
-# actually checked rather than trusting the exit status alone.
+# The exit status of --ignore-missing is not trusted either way. On an empty
+# intersection it is 1 with "no file was verified", and the empty intersection
+# is a normal case: the registry and manifest jobs fetch the bundle alone, and
+# the bundle is deliberately absent from checksums.txt. Read as a failure, that
+# status stopped both jobs before the bundle's own verification below could
+# run, which the first rehearsal to reach them found. So a FAILED line fails
+# here, and what was actually checked is counted, with the bundle joining the
+# count on its own evidence.
 echo "Verifying assets against checksums.txt"
 (
   cd "$DEST"
-  sha256sum --check --ignore-missing checksums.txt | tee sha256-check.log
+  sha256sum --check --ignore-missing checksums.txt > sha256-check.log 2>&1 || true
+  cat sha256-check.log
 )
+if grep -q ": FAILED" "$DEST/sha256-check.log"; then
+  echo "ERROR: an asset does not match checksums.txt" >&2
+  rm -f "$DEST/sha256-check.log"
+  exit 1
+fi
 verified=$(grep -c ": OK$" "$DEST/sha256-check.log" || true)
 rm -f "$DEST/sha256-check.log"
 echo "Verified ${verified} asset(s) against checksums.txt"
