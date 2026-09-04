@@ -784,8 +784,19 @@ jobs:
       # The bound is raised from the 10 minute default because cmd/server
       # exceeded it on Windows, where the suite runs roughly three times slower
       # than on Linux.
+      #
+      # Through the crash-aware runner rather than a bare go test: the Windows
+      # leg dies inside the Go runtime now and then, for a reason recorded in
+      # the script and in issue 467, and the runner tells that crash apart
+      # from a failing test, reruns only the crashed package, and puts the
+      # outcome in the job summary. A failing test fails the leg as before.
+      # Flags carry their value in the same word, which is how the runner
+      # tells them from packages.
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum
       - name: Unit suite
-        run: go test -count=1 -timeout 30m ./cmd/server/... ./internal/...
+        shell: bash
+        run: bash .github/scripts/go-test-crash-aware.sh test-results/unit-suite -count=1 -timeout=30m ./cmd/server/... ./internal/...
       # The two transport modules need neither GitLab nor a credential, and
       # they are why this is not a build-only check: they start the real binary
       # and drive it the way a client does, over pipes and sockets, which is
@@ -847,8 +858,12 @@ jobs:
   # standalone jobs through "checks". One result is read but does not decide,
   # for a reason recorded where the job is defined: the platform matrix has a
   # Windows leg that crashes inside the Go runtime now and then, tracked in
-  # https://github.com/jmrplens/gitlab-mcp-server/issues/467. It is printed so
-  # a red one is seen, and cannot block a merge until that changes.
+  # https://github.com/jmrplens/gitlab-mcp-server/issues/467. Its unit suite
+  # runs through .github/scripts/go-test-crash-aware.sh, which reruns a
+  # crashed package alone and records the crash in the job summary, so a red
+  # leg now means a failing test or a package that crashed twice. It is
+  # printed so a red one is seen; it becomes a deciding result once a run of
+  # weeks shows it red for those reasons only.
   #
   # "skipped" passes only for the Docker summary, which skips itself on pushes
   # to main along with the matrix it summarizes. For every other job a skip
