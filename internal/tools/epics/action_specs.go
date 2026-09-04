@@ -83,7 +83,7 @@ func epicListEnumOverrides() []toolutil.InputSchemaOverride {
 
 // epicCreateEnumOverrides constrains health_status on the epic create action.
 // Values match the GraphQL HealthStatus enum: onTrack, needsAttention, atRisk
-// (source: client-go workitems.go line 747 comment + test fixtures).
+// (source: client-go work_items.go line 747 comment + test fixtures).
 func epicCreateEnumOverrides() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("health_status", map[string]any{

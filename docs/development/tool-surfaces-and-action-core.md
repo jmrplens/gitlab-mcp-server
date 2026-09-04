@@ -63,7 +63,7 @@ The core pieces are:
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `internal/toolutil/action_spec.go`            | Canonical per-action metadata model, validation, defensive cloning, compatibility policy, and route/catalog projection        |
 | `internal/toolutil/action_spec_individual.go` | `ActionSpec` projection into individual `mcp.Tool` metadata and schema/annotation policy                                      |
-| `internal/toolutil/metatool.go`               | Route primitives such as `ActionRoute`, `ActionMap`, schema helpers, destructive confirmation dispatch, and `MakeMetaHandler` |
+| `internal/toolutil/meta_tool.go`              | Route primitives such as `ActionRoute`, `ActionMap`, schema helpers, destructive confirmation dispatch, and `MakeMetaHandler` |
 | `internal/tools/actioncatalog/catalog.go`     | Canonical action catalog data model, deterministic ordering, filters, and `domain.action` IDs                                 |
 | `internal/tools/actioncatalog/group_spec.go`  | `CatalogGroupSpec`, `SurfaceKind`, group validation, group option projection, and compatibility alias conflict checks         |
 | `internal/tools/action_specs.go`              | Deterministic collector for domain `ActionSpec` builders, including Enterprise and GitLab.com gating                          |

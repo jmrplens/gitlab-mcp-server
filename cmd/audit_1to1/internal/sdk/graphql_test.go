@@ -189,10 +189,10 @@ func TestServiceForPackage_Names_MatchCaseInsensitivelyOrByAlias(t *testing.T) {
 // is dropped rather than reported, and the table's decision decides the status.
 func TestBuildGraphQLOperations_Sites_GroupPerFunctionAndAdjudicate(t *testing.T) {
 	sites := []graphqlSite{
-		{pkg: "workitems", function: "List", position: "internal/tools/workitems/workitems.go:10"},
-		{pkg: "workitems", function: "List", position: "internal/tools/workitems/workitems.go:20"},
-		{pkg: "workitems", function: "Get", position: "internal/tools/workitems/workitems.go:40"},
-		{pkg: "cicatalog", function: "List", position: "internal/tools/cicatalog/cicatalog.go:10"},
+		{pkg: "workitems", function: "List", position: "internal/tools/workitems/work_items.go:10"},
+		{pkg: "workitems", function: "List", position: "internal/tools/workitems/work_items.go:20"},
+		{pkg: "workitems", function: "Get", position: "internal/tools/workitems/work_items.go:40"},
+		{pkg: "cicatalog", function: "List", position: "internal/tools/cicatalog/ci_catalog.go:10"},
 	}
 	services := map[string]sdkService{"WorkItems": {Service: "WorkItems", APIMethods: 6}}
 	decisions := map[string]decision{"workitems.List": {decisionMigrate, "the wrapper covers it"}}
@@ -202,12 +202,12 @@ func TestBuildGraphQLOperations_Sites_GroupPerFunctionAndAdjudicate(t *testing.T
 		{
 			Package: "workitems", Operation: "Get", Service: "WorkItems", ServiceMethods: 6,
 			Status: statusUnadjudicated,
-			Sites:  []string{"internal/tools/workitems/workitems.go:40"},
+			Sites:  []string{"internal/tools/workitems/work_items.go:40"},
 		},
 		{
 			Package: "workitems", Operation: "List", Service: "WorkItems", ServiceMethods: 6,
 			Status: statusAdjudicated, Decision: decisionMigrate, Reason: "the wrapper covers it",
-			Sites: []string{"internal/tools/workitems/workitems.go:10", "internal/tools/workitems/workitems.go:20"},
+			Sites: []string{"internal/tools/workitems/work_items.go:10", "internal/tools/workitems/work_items.go:20"},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {

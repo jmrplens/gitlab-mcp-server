@@ -10,7 +10,7 @@
 // Not every endpoint family is graded by its owner package's page: some are
 // documented on a different API page (group webhooks) or carry their tier badge
 // only on a user-facing page (merge request dependencies). actionDocOverrides
-// in docmap.go redirects those actions to the page that actually states their
+// in doc_map.go redirects those actions to the page that actually states their
 // tier, and the tier is still parsed from that page's badge.
 //
 // The current MCP gating is binary and positional: an action is either present

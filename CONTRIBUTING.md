@@ -164,7 +164,7 @@ docs(readme): update tool count after wiki tools
 internal/tools/
 ├── register.go              # RegisterAll() — projects individual tools from the canonical catalog
 ├── register_meta.go         # RegisterAllMeta() — meta-tool registration
-├── metatool.go              # Meta-tool registration infrastructure
+├── meta_tool.go              # Meta-tool registration infrastructure
 ├── pagination.go            # Pagination type aliases
 ├── errors.go                # Error helpers (bridge to toolutil)
 ├── markdown.go              # Markdown formatting (bridge to toolutil)

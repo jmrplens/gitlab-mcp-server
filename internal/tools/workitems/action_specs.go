@@ -121,7 +121,7 @@ func workItemListEnumOverrides() []toolutil.InputSchemaOverride {
 
 // workItemCreateEnumOverrides constrains health_status and the nested
 // linked_items.link_type on the work item create action.
-// health_status values: GraphQL HealthStatus enum (client-go workitems.go:747).
+// health_status values: GraphQL HealthStatus enum (client-go work_items.go:747).
 // link_type values: SDK comment on CreateWorkItemOptionsLinkedItems.LinkType.
 func workItemCreateEnumOverrides() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{

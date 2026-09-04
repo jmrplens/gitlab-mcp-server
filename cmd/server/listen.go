@@ -76,7 +76,7 @@ func listenUnix(ctx context.Context, path string, socketMode os.FileMode) (net.L
 	// the operator's own path would be racing anybody who can write to that
 	// directory, since they could swap the socket for a symlink in between and
 	// have the mode land on whatever it points at (CWE-367). See
-	// socketmode_unix.go for the alternatives that do not work, the umask this
+	// socket_mode_unix.go for the alternatives that do not work, the umask this
 	// replaced among them.
 	listener, err := bindUnixSocket(ctx, path, socketMode)
 	if err != nil {

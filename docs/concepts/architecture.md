@@ -181,7 +181,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, the tool manifest, audits, and generators |
 | `meta_catalog.go`   | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog                                                    |
 | `actioncatalog/`    | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters                                                  |
-| `metatool.go`       | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`                                                         |
+| `meta_tool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`                                                         |
 | `markdown.go`       | Thin `markdownForResult` delegator to the type-based Markdown registry                                                                      |
 | `pagination.go`     | Shared pagination type aliases                                                                                                              |
 | `errors.go`         | Error helpers (`wrapErr`, `handleGitLabError`)                                                                                              |
@@ -210,7 +210,7 @@ Infrastructure shared by all tool sub-packages:
 | File               | Purpose                                                                                                                             |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `action_spec.go`   | `ActionSpec`, compatibility policy, individual projection metadata, and schema/result policy fields                                 |
-| `metatool.go`      | `MetaToolInput`, `ActionRoute`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute`                                 |
+| `meta_tool.go`     | `MetaToolInput`, `ActionRoute`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute`                                 |
 | `annotations.go`   | Tool annotations (`ReadAnnotations`, `DeleteAnnotations`) and content annotations (`ContentList`, `ContentDetail`, `ContentMutate`) |
 | `hints.go`         | Next-step hints: `WriteHints`, `ExtractHints`, `HintPreserveLinks`                                                                  |
 | `addtool.go`       | `AddTool` wrapper — suppresses structuredContent for individual tools                                                               |
@@ -223,7 +223,7 @@ Infrastructure shared by all tool sub-packages:
 | `logging.go`       | `LogToolCallAll` structured logging helper                                                                                          |
 | `diff.go`          | Diff formatting utilities                                                                                                           |
 | `doc.go`           | Package documentation                                                                                                               |
-| `fileutils.go`     | File operation helpers (upload size validation, SHA-256)                                                                            |
+| `file_utils.go`    | File operation helpers (upload size validation, SHA-256)                                                                            |
 | `issue_report.go`  | Auto-generate GitLab issue reports on tool errors                                                                                   |
 | `string_or_int.go` | Flexible JSON unmarshalling for string-or-int fields                                                                                |
 | `time_helpers.go`  | Time formatting and parsing utilities                                                                                               |
@@ -256,7 +256,7 @@ Shared helpers for unit testing with httptest mocks:
 - `RespondJSON()` — responds with JSON body
 - `RespondJSONWithPagination()` — responds with pagination headers
 
-### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
+### Meta-Tool Dispatcher (`internal/tools/meta_tool.go`)
 
 The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 32 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 17 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`, while HTTP mode can force the tier with `--tier` or detect it per token+URL pool entry from the instance license (fallback `free`).
 
@@ -638,7 +638,7 @@ Collection **resources** are a different case, and the difference is in the prot
 | File                                  | What it teaches you               |
 | ------------------------------------- | --------------------------------- |
 | `cmd/server/main.go`                  | How all components wire together  |
-| `internal/toolutil/metatool.go`       | The meta-tool dispatcher pattern  |
+| `internal/toolutil/meta_tool.go`      | The meta-tool dispatcher pattern  |
 | `internal/tools/register_meta.go`     | How tools become meta-tools       |
 | `internal/tools/branches/branches.go` | A complete tool handler example   |
 | `internal/toolutil/errors.go`         | Error handling patterns           |

@@ -95,7 +95,7 @@ gitlab-mcp-server/
 │   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/             # Low-token dynamic find/execute surface over catalog routes
 │   │   ├── markdown.go          # Thin delegator to the type-based Markdown registry (toolutil.MarkdownForResult)
-│   │   ├── metatool.go          # Meta-tool registration: addMetaTool (DeriveAnnotations), addReadOnlyMetaTool, route wrappers
+│   │   ├── meta_tool.go          # Meta-tool registration: addMetaTool (DeriveAnnotations), addReadOnlyMetaTool, route wrappers
 │   │   ├── errors.go            # Error helpers (WrapErr, WrapErrWithMessage, WrapErrWithHint, ExtractGitLabMessage)
 │   │   ├── logging.go           # logToolCall helper
 │   │   ├── pagination.go        # Pagination type aliases
@@ -190,8 +190,8 @@ rewrite across many files, and the result must be verified to build.
 ### Adding a New MCP Tool
 
 1. Create `internal/tools/{domain}/` sub-package directory
-2. Create `{domain}.go` with typed input/output structs (no domain prefix — package provides namespace)
-3. Create `{domain}_test.go` with table-driven tests using `testutil.NewTestClient` and `httptest`
+2. Create `{domain}.go` with typed input/output structs (no domain prefix — package provides namespace). A multi-word name separates its words with underscores in the **file** only: `merge_requests.go` in `package mergerequests`, since Go's convention and the `stylecheck`/`revive` naming rules refuse underscores in package identifiers and directories follow the package
+3. Create `{domain}_test.go` with table-driven tests using `testutil.NewTestClient` and `httptest`; the test file carries the module's name, underscores included (`merge_requests_test.go`)
 4. Add or update domain-local `ActionSpecs` so the action has one canonical route, owner package, metadata, compatibility policy, individual projection metadata, and tests.
 5. If the domain is new, update the generated/audited catalog aggregation path rather than adding ad hoc root registration calls.
 6. Add markdown formatters in the sub-package `markdown.go` `init()` function using `toolutil.RegisterMarkdown[T]` with appropriate content annotations (`ContentList`, `ContentDetail`, `ContentMutate`)
@@ -264,7 +264,7 @@ All tests use `httptest` to mock GitLab API responses. Shared helpers in `intern
 - **Never `t.Fatal`/`FailNow` off the test goroutine** (httptest handlers, `go` statements, MCP handlers): follow the six-rule contract in `.github/instructions/test-goroutines.instructions.md` — `t.Errorf` + deterministic response + `return`, or record with atomics and assert afterwards. `make check-test-goroutines` detects violations; `make audit-test-goroutines` writes the work list
 - **Every case table runs under `t.Run`**: a range over a slice or map literal that asserts must open one subtest per case, named by a `name` field, the string element, or the map key. `go run ./cmd/audit_test_subtests/ -fix` rewrites the unambiguous shapes; `// sequential: <reason>` on the line above a loop declares dependent steps rather than cases; `make check-test-subtests` gates it in CI
 - Test naming: `TestToolName_Scenario_ExpectedResult`
-- Test-file naming: a `_test.go` exists only under the name of a module it tests (`register.go` → `register_test.go`); `export_test.go`, build-constrained qualifiers (`fileutils_unix_test.go`), external-package qualifiers (`kind_integration_test.go`), and `test/e2e/` are the codified exemptions. `make check-test-file-names` gates it in CI
+- Test-file naming: a `_test.go` exists only under the name of a module it tests (`register.go` → `register_test.go`); `export_test.go`, build-constrained qualifiers (`file_utils_unix_test.go`), external-package qualifiers (`kind_integration_test.go`), and `test/e2e/` are the codified exemptions. `make check-test-file-names` gates it in CI
 
 ### Build & test commands
 
@@ -378,7 +378,7 @@ make analyze-report                        # generate LLM-consumable report
 ### Environment variables
 
 Settings this project defines are read as `GITLAB_MCP_<NAME>`; `config.Getenv`
-and `config.TrimmedGetenv` in `internal/config/envname.go` resolve both
+and `config.TrimmedGetenv` in `internal/config/env_name.go` resolve both
 spellings, prefer the prefixed one, and record the fallback so `cmd/server`
 can warn once at startup. A new setting is added to `prefixedNames` there and
 read through those helpers, never through `os.Getenv`.
@@ -434,7 +434,7 @@ driven by `make` targets, never beside another tool's variables in a shell).
 | `EVAL_SURFACE_FIXTURE_SMOKE` | No   | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) |
 | `--max-output-retries`  | No       | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output (`2` default, `0` disables) |
 
-None of the three `GITLAB_MCP_ALLOWED_*_DIRS` allow-lists applies in HTTP mode: a server reached over HTTP refuses every caller-supplied local path, since the caller has no files on the machine the server runs on and `content_base64` is the remote form. The transport is inferred from the process arguments in `internal/toolutil/fileutils.go`, so a deployment that never heard of this policy still gets the right answer.
+None of the three `GITLAB_MCP_ALLOWED_*_DIRS` allow-lists applies in HTTP mode: a server reached over HTTP refuses every caller-supplied local path, since the caller has no files on the machine the server runs on and `content_base64` is the remote form. The transport is inferred from the process arguments in `internal/toolutil/file_utils.go`, so a deployment that never heard of this policy still gets the right answer.
 
 In **HTTP mode**, configuration comes from CLI flags instead of environment variables:
 
@@ -467,7 +467,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--oauth-client-uid`  | _(empty)_ | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts |
 | `--pool-idle-timeout` | `1h` | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h) |
 | `--revalidate-interval` | `15m` | Token re-validation interval; `0` stops the periodic check, but an entry whose credential is older than 1h is still rebuilt, which re-runs the probe. Upper bound 24h |
-| `--trusted-proxies` | _(empty)_ | Comma-separated addresses or CIDR ranges of the reverse proxies whose `--trusted-proxy-header` is believed (e.g. `127.0.0.1,10.0.0.0/8`). From any other peer the header is ignored and the peer itself is charged, so a caller who reaches the listener directly cannot choose the address its failures count against. For `X-Forwarded-For` the value is read from the right, skipping hops that are themselves listed, so the first hop nobody in the list vouches for is the client; a hop that is not an address charges the peer. Required with `--trusted-proxy-header`, and refused without it. `cmd/server/clientip.go` |
+| `--trusted-proxies` | _(empty)_ | Comma-separated addresses or CIDR ranges of the reverse proxies whose `--trusted-proxy-header` is believed (e.g. `127.0.0.1,10.0.0.0/8`). From any other peer the header is ignored and the peer itself is charged, so a caller who reaches the listener directly cannot choose the address its failures count against. For `X-Forwarded-For` the value is read from the right, skipping hops that are themselves listed, so the first hop nobody in the list vouches for is the client; a hop that is not an address charges the peer. Required with `--trusted-proxy-header`, and refused without it. `cmd/server/client_ip.go` |
 | `--trusted-proxy-header` | _(empty)_ | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`); believed only on a connection from an address in `--trusted-proxies`, which it requires |
 | `--rate-limit-rps` | `10` | Per-server tools/call rate limit in req/s (`0` disables it). On by default in HTTP mode; the `GITLAB_MCP_RATE_LIMIT_RPS` env var used by stdio still defaults to `0` |
 | `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |
@@ -658,7 +658,7 @@ The `internal/tools/` package family is split into 177 packages. Runtime tool su
 
 ### Markdown registry pattern
 
-Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.go` instead of a central dispatch switch. Each sub-package self-registers its formatters via `init()` functions:
+Markdown formatters use a type-based registry in `internal/toolutil/md_registry.go` instead of a central dispatch switch. Each sub-package self-registers its formatters via `init()` functions:
 
 - `toolutil.RegisterMarkdown[T](fn)` — registers a formatter for output type `T`
 - `toolutil.RegisterMarkdownResult[T](fn)` — registers a formatter for `*mcp.CallToolResult` types

@@ -31,8 +31,8 @@ import (
 )
 
 // TestMeta_IssuesDeep exercises gitlab_issue meta-tool actions not covered
-// by issues_test.go, issuediscussions_test.go, awardemoji_test.go, or
-// stateevents_test.go.
+// by issues_test.go, issue_discussions_test.go, award_emoji_test.go, or
+// state_events_test.go.
 //
 //nolint:maintidx // Ordered E2E workflow keeps issue lifecycle state visible across related GitLab operations.
 func TestMeta_IssuesDeep(t *testing.T) {

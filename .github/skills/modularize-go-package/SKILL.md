@@ -36,7 +36,7 @@ Scan the source package and classify every file:
 
 | Category | Files | Action |
 |----------|-------|--------|
-| **Shared utilities** | errors.go, pagination.go, logging.go, markdown.go, text.go, metatool.go, string_or_int.go, fileutils.go, time_helpers.go | Extract to `${utilPackage}` |
+| **Shared utilities** | errors.go, pagination.go, logging.go, markdown.go, text.go, meta_tool.go, string_or_int.go, file_utils.go, time_helpers.go | Extract to `${utilPackage}` |
 | **Shared constants** | Annotation variables, format constants | Extract to `${utilPackage}` |
 | **Domain handlers** | branches.go, commits.go, etc. | Move to `${sourcePackage}/{domain}/` |
 | **Domain tests** | branches_test.go, commits_test.go, etc. | Move with their domain |

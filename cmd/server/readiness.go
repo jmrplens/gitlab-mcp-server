@@ -294,7 +294,7 @@ func (d *deferredCallIdentifier) Identify(toolName string, arguments any) (mcpot
 // logging and the telemetry identity policy both read it from the request
 // context, so it is put back there per request instead.
 //
-// Only stdio installs this. HTTP resolves identity per request in authgate.go,
+// Only stdio installs this. HTTP resolves identity per request in auth_gate.go,
 // from the credential that request carried.
 type deferredIdentity struct {
 	resolved atomic.Pointer[toolutil.UserIdentity]

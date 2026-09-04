@@ -310,7 +310,7 @@ jobs:
   # platform this project ships, on a Linux runner. The cross-platform matrix
   # does this too, on real runners, but that matrix is expensive enough that
   # somebody may reasonably narrow it later; this job means narrowing it can
-  # never take the compile of cmd/server/socketmode_windows.go with it, which
+  # never take the compile of cmd/server/socket_mode_windows.go with it, which
   # before either existed was first compiled by GoReleaser during a release.
   #
   # One job per target rather than a loop in one job: the three vets took four
@@ -728,7 +728,7 @@ jobs:
 
   # Every job above runs on Linux, and until this one existed that was the only
   # platform any test in this repository had ever seen, while the project ships
-  # binaries for three. cmd/server/socketmode_windows.go was first compiled by
+  # binaries for three. cmd/server/socket_mode_windows.go was first compiled by
   # GoReleaser during a release, where a compile error breaks the release
   # instead of a pull request.
   #

@@ -160,7 +160,7 @@ Meta-tools are registered from the canonical action catalog built by `internal/t
 `RegisterAllMeta()` registers visible domain dispatchers from that catalog.
 Developers define action metadata through `ActionSpec` and `CatalogGroupSpec`; meta-tools use that metadata for parameter schemas, output schemas, destructive flags, aliases, usage hints, individual projection policy, and result formatting.
 
-All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
+All meta-tools use the shared infrastructure in `internal/toolutil/meta_tool.go`:
 
 - `ActionSpec` — canonical action metadata, including the typed route, ownership, aliases, tags, usage hints, projection policy, result policies, and compatibility policy
 - `CatalogGroupSpec` — visible meta-tool group metadata and the ordered action set used to build the catalog
