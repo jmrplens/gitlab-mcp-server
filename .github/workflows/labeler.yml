@@ -6,7 +6,9 @@ name: Labeler
 # pull request's code, so the elevated token is not exposed to it.
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    # edited as well: the kind step below reads the title, and a title is the
+    # one thing about a pull request that is routinely fixed after opening.
+    types: [opened, synchronize, reopened, edited]
 
 # Keyed on the pull request number, not github.ref: under pull_request_target
 # that ref is the base branch, so every open pull request would share one group
@@ -21,8 +23,9 @@ permissions:
 
 jobs:
   label:
-    name: Label by changed paths
+    name: "🏷️ Label by changed paths"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7
         with:
@@ -32,3 +35,29 @@ jobs:
           # (.github/, .goreleaser.yml, .golangci.yml), and a default is a
           # property of the action, not of this repository.
           dot: true
+
+      # What kind of change, from the title's conventional prefix: `fix` is a
+      # bug, `feat` a feature. About half the titles carry one, which is the
+      # right amount for a label to be worth reading, and the mapping is left
+      # at those two: `docs:` would collide with the docs-only meaning of the
+      # documentation label, and `ci:` is already decided by the paths. Only
+      # ever adds, like the path labeler, so a label applied by hand survives.
+      #
+      # The title is read from the event payload and nothing of the pull
+      # request is checked out or run, which is what keeps pull_request_target
+      # safe here.
+      - name: Label the kind from the title
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          case "$TITLE" in
+            fix\(*\):*|fix:*|fix!:*|fix\(*\)!:*) label=bug ;;
+            feat\(*\):*|feat:*|feat!:*|feat\(*\)!:*) label=feature ;;
+            *) echo "title carries no fix/feat prefix, nothing to add"; exit 0 ;;
+          esac
+          echo "title says $label"
+          gh pr edit "$NUMBER" --add-label "$label"

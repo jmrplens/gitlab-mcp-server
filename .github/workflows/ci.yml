@@ -55,8 +55,10 @@ concurrency:
 permissions:
   contents: read
 
+# The Go version is not stated here: every setup-go step reads it from go.mod,
+# which is the one place a Go bump has to touch. The same goes for Node
+# (site/.node-version) and pnpm (the packageManager field in site/package.json).
 env:
-  GO_VERSION: "1.27.1"
   COVERAGE_MIN: "90"
 
 jobs:
@@ -72,7 +74,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
       - name: Run tests with coverage
         run: |
@@ -105,7 +107,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
       - name: Check generated llms files
         run: make check-llms
@@ -225,12 +227,30 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # pnpm/action-setup installs pnpm itself from the npm registry on every
+      # run, into ~/setup-pnpm, and that download took 54 seconds here and 164
+      # in the Pages build on a slow registry day, against 8 seconds for the
+      # dependency install that follows it from cache. So the installed pnpm is
+      # cached too, keyed on the exact packageManager string in package.json,
+      # and on a hit the action is skipped and its bin directory put on PATH.
+      - name: Read the pinned pnpm version
+        id: pnpm
+        run: echo "spec=$(jq -r .packageManager site/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: pnpm-cache
+        with:
+          path: ~/setup-pnpm
+          key: pnpm-${{ runner.os }}-${{ steps.pnpm.outputs.spec }}
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        if: steps.pnpm-cache.outputs.cache-hit != 'true'
         with:
           package_json_file: site/package.json
+      - name: Put the cached pnpm on PATH
+        if: steps.pnpm-cache.outputs.cache-hit == 'true'
+        run: echo "$HOME/setup-pnpm/node_modules/.bin" >> "$GITHUB_PATH"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.18.0"
+          node-version-file: site/.node-version
           cache: pnpm
           cache-dependency-path: site/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -280,7 +300,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
       - run: go build -o /dev/null ./cmd/server
       - name: Verify E2E tests compile
@@ -309,7 +329,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
       - name: Vet for ${{ matrix.target }}
         env:
@@ -331,7 +351,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
       - name: HTTP transport end-to-end
         run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
@@ -351,7 +371,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
       - name: stdio transport end-to-end
         run: go test -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/
@@ -370,13 +390,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
+      # The version lives in the Makefile beside the other tool pins, so it is
+      # stated once; the reason it is not a go.mod tool directive is recorded
+      # there.
+      - name: Read the pinned linter version
+        id: lint
+        run: echo "version=$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile)" >> "$GITHUB_OUTPUT"
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          # The version developers run locally, so `make golangci-lint` means
-          # the same thing on both sides of a push.
-          version: v2.13.1
+          version: ${{ steps.lint.outputs.version }}
           install-only: true
       # golangci-lint keeps a per-package analysis cache and skips what has
       # not changed, which is most of the tree on most pull requests. The key
@@ -401,11 +425,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
-      # Pinned for the same reason as the linter: a scanner that changes under
-      # us changes what "no known vulnerability" meant last week.
-      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+      # No version here on purpose: govulncheck is a `tool` directive in go.mod,
+      # so `go install` without @version installs the version go.mod names and
+      # Dependabot bumps it with the other modules. A scanner that changed under
+      # us would change what "no known vulnerability" meant last week.
+      - run: go install golang.org/x/vuln/cmd/govulncheck
       - run: make govulncheck
 
   # This job took six and a half minutes on a day the npm registry was slow, of
@@ -428,7 +454,7 @@ jobs:
             #node_modules
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.18.0"
+          node-version-file: site/.node-version
       - name: Read the pinned mcpb CLI version
         id: mcpb
         run: echo "version=$(sed -n 's/^MCPB_CLI_VERSION := //p' Makefile)" >> "$GITHUB_OUTPUT"
@@ -456,12 +482,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      # Same arrangement as docs-audit, for the same 54-second reason. This job
+      # used to ask for "version: 11" here while package.json pins pnpm to an
+      # exact version with a hash; reading that field is what makes the two
+      # jobs, Pages and a developer's machine install the same pnpm.
+      - name: Read the pinned pnpm version
+        id: pnpm
+        run: echo "spec=$(jq -r .packageManager site/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: pnpm-cache
         with:
-          version: 11
+          path: ~/setup-pnpm
+          key: pnpm-${{ runner.os }}-${{ steps.pnpm.outputs.spec }}
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        if: steps.pnpm-cache.outputs.cache-hit != 'true'
+        with:
+          package_json_file: site/package.json
+      - name: Put the cached pnpm on PATH
+        if: steps.pnpm-cache.outputs.cache-hit == 'true'
+        run: echo "$HOME/setup-pnpm/node_modules/.bin" >> "$GITHUB_PATH"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.18.0"
+          node-version-file: site/.node-version
           cache: pnpm
           cache-dependency-path: site/pnpm-lock.yaml
       # The build-independent half of `pnpm run lint`: type check, palette
@@ -636,7 +678,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       # Still needed by the installer and packaging tests below, which are
       # Python because what they test is. The auditor no longer is, so nothing
       # here installs a package at run time any more.
@@ -718,7 +760,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - run: go mod download
       # Build constraints resolve against the host, so these two steps are the
       # first thing in the pipeline that compiles the windows-only source at

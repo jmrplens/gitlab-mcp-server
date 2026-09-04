@@ -1,7 +1,8 @@
 # Release pipeline for gitlab-mcp-server
 #
 # Triggers: tag push matching v*
-# Pipeline: E2E → Docker → GoReleaser → per-publisher jobs → Winget
+# Pipeline: Preflight → E2E (the reusable e2e.yml) → Docker → GoReleaser →
+#           per-publisher jobs → Winget
 # If E2E tests fail, nothing is released.
 #
 # One job per credential. Until 2.7.5 a single `release` job held the OIDC
@@ -41,8 +42,9 @@ concurrency:
 # Every job declares the minimum it needs; the default is nothing.
 permissions: {}
 
+# The Go version is not stated here: setup-go reads it from go.mod, the one
+# place a Go bump has to touch.
 env:
-  GO_VERSION: "1.27.1"
   REGISTRY: ghcr.io
   IMAGE_NAME: jmrplens/gitlab-mcp-server
   DOCKERHUB_IMAGE: jmrplens/gitlab-mcp-server
@@ -53,19 +55,20 @@ env:
   SYFT_VERSION: "v1.51.1"
 
 jobs:
-  e2e:
-    name: E2E Gate
+  # The one check that has to run before anything else spends a runner. The
+  # docker job tags ghcr.io from VERSION while everything else uses the git
+  # tag; server.json pins the OCI tag from the git tag and validate-npm stamps
+  # from VERSION. If the two disagree, fail before the E2E gate boots a GitLab.
+  preflight:
+    name: "🔎 Preflight"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      # The docker job tags ghcr.io from VERSION while everything else uses
-      # the git tag; server.json pins the OCI tag from the git tag and
-      # validate-npm stamps from VERSION. Fail the whole release before
-      # anything publishes if the two disagree.
+        with:
+          persist-credentials: false
       - name: Verify VERSION file matches the release tag
         run: |
           set -euo pipefail
@@ -76,60 +79,21 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@latest
-
-      - name: Pull GitLab image
-        run: docker pull gitlab/gitlab-ce:latest
-
-      - name: Start GitLab via Docker Compose
-        working-directory: test/e2e
-        run: |
-          docker compose up -d
-          echo "GitLab container started — waiting for readiness..."
-
-      - name: Wait for GitLab readiness
-        run: bash test/e2e/scripts/wait-for-gitlab.sh
-        timeout-minutes: 10
-
-      - name: Setup GitLab user and token
-        run: bash test/e2e/scripts/setup-gitlab.sh
-
-      - name: Register GitLab Runner
-        run: bash test/e2e/scripts/register-runner.sh
-
-      - name: Load environment
-        run: cat test/e2e/.env.docker >> "$GITHUB_ENV"
-
-      - name: Run E2E tests
-        run: |
-          gotestsum \
-            --junitfile test-results/e2e-junit.xml \
-            --format standard-verbose \
-            -- -v -tags e2e -timeout 1800s -count=1 ./test/e2e/suite/
-        env:
-          E2E_MODE: "docker"
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: e2e-test-results
-          path: test-results/
-          retention-days: 14
-
-      - name: Tear down GitLab
-        if: always()
-        working-directory: test/e2e
-        run: docker compose down -v --remove-orphans
+  # The same workflow a maintainer runs by hand, called rather than copied.
+  # This job used to be e2e.yml pasted in line for line, so a fix to the
+  # harness landed in one file and not the other; now there is one harness
+  # and the release graph shows it as the reused node it is.
+  e2e:
+    name: "🧫 E2E gate"
+    needs: [preflight]
+    uses: ./.github/workflows/e2e.yml
+    permissions:
+      contents: read
 
   docker:
-    name: Docker
+    name: "🐳 Docker"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [e2e]
     # No `environment:` — this job never ran under one, and adding it would
     # subject the image publish to whatever protection rules the release
@@ -307,8 +271,9 @@ jobs:
           readme-filepath: ./.github/dockerhub-description.md
 
   release:
-    name: GoReleaser
+    name: "📦 GoReleaser"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: release
     # docker is a prerequisite because the release is what downstream publishers
     # fetch, and the MCP Registry publish validates the server.json OCI entry by
@@ -330,7 +295,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
           # setup-go caches ~/go/pkg/mod and the build cache by default, and a
           # tag run restores what a run on main wrote. This job signs what it
           # compiles, so its inputs must all be fixed by the repository: the
@@ -439,8 +404,9 @@ jobs:
         run: gh release edit "v${GITHUB_REF#refs/tags/v}" --draft=false
 
   npm:
-    name: Publish to npm
+    name: "📮 Publish to npm"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [release]
     environment: release
     permissions:
@@ -494,8 +460,9 @@ jobs:
           bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}" --no-assemble
 
   pypi:
-    name: Publish to PyPI
+    name: "🐍 Publish to PyPI"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [release]
     environment: release
     permissions:
@@ -529,8 +496,9 @@ jobs:
           skip-existing: true
 
   homebrew:
-    name: Homebrew tap
+    name: "🍺 Homebrew tap"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # verify-published, like mcp-registry and commit-manifests. The formula
     # itself does not need it — it pins release-asset hashes taken from the
     # cosign-verified checksums.txt in this job, which is a stronger check than
@@ -579,8 +547,9 @@ jobs:
           bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
 
   mcp-registry:
-    name: Publish to MCP Registry
+    name: "🗂️ Publish to MCP Registry"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # npm and pypi because the registry validates those package entries by
     # fetching the versions this release published: a pypi entry is checked by
     # GETting pypi.org/pypi/<name>/<version>/json, so racing the upload spends
@@ -685,8 +654,9 @@ jobs:
           fi
 
   verify-published:
-    name: Verify published packages
+    name: "🔬 Verify published packages"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [npm, pypi]
     permissions:
       contents: read # download the published release assets
@@ -720,8 +690,9 @@ jobs:
             "${GITHUB_REF#refs/tags/v}" dist/checksums.txt
 
   commit-manifests:
-    name: Commit manifests to main
+    name: "📝 Commit manifests to main"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Last, deliberately. The commit lands the stamped server.json on main, and
     # a push to main runs check-server-json-packages, which fetches every
     # package the manifest declares. Committing before npm and PyPI have
@@ -814,8 +785,9 @@ jobs:
           git push origin main
 
   winget:
-    name: Winget
+    name: "🪟 Winget"
     runs-on: windows-latest
+    timeout-minutes: 20
     needs: [release]
     permissions: {} # both steps authenticate with WINGET_TOKEN, not GITHUB_TOKEN
     steps:

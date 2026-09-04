@@ -25,8 +25,9 @@ concurrency:
 
 jobs:
   build:
-    name: Build docs
+    name: "📚 Build docs"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -36,13 +37,31 @@ jobs:
           # only reads local git history, so the remote token is not needed.
           persist-credentials: false
 
+      # pnpm/action-setup installs pnpm itself from the npm registry on every
+      # run, into ~/setup-pnpm, and that took 164 seconds in the last deploy
+      # against 19 for the build it was setting up. The installed pnpm is
+      # cached, keyed on the exact packageManager string, and on a hit the
+      # action is skipped and its bin directory put on PATH. Same arrangement
+      # as ci.yml's two site jobs.
+      - name: Read the pinned pnpm version
+        id: pnpm
+        run: echo "spec=$(jq -r .packageManager site/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: pnpm-cache
+        with:
+          path: ~/setup-pnpm
+          key: pnpm-${{ runner.os }}-${{ steps.pnpm.outputs.spec }}
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        if: steps.pnpm-cache.outputs.cache-hit != 'true'
         with:
           package_json_file: site/package.json
+      - name: Put the cached pnpm on PATH
+        if: steps.pnpm-cache.outputs.cache-hit == 'true'
+        run: echo "$HOME/setup-pnpm/node_modules/.bin" >> "$GITHUB_PATH"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.18.0"
+          node-version-file: site/.node-version
           cache: pnpm
           cache-dependency-path: site/pnpm-lock.yaml
 
@@ -52,6 +71,16 @@ jobs:
       # rehype-mermaid renders every ```mermaid block to inline SVG at build
       # time using a headless Chromium, so the browser must be present before
       # `pnpm run build` — without it the build fails rather than degrading.
+      #
+      # The browser is a download outside any lockfile, 25 seconds per run, so
+      # it is cached keyed on the lockfile: the Playwright version the lockfile
+      # pins is what decides which browser build is fetched. `--with-deps`
+      # installs system libraries with apt on every run regardless, which is
+      # cheap and is not cacheable.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('site/pnpm-lock.yaml') }}
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
         working-directory: site
@@ -64,9 +93,10 @@ jobs:
           path: site/dist
 
   deploy:
-    name: Deploy
+    name: "🚀 Deploy"
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pages: write # publish the uploaded artifact
@@ -81,9 +111,10 @@ jobs:
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
 
   indexnow:
-    name: Submit to IndexNow
+    name: "📡 Submit to IndexNow"
     needs: deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Notify IndexNow of updated URLs
         env:

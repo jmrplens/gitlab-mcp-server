@@ -129,3 +129,106 @@ dependencies:
           - go.sum
           - site/package.json
           - site/pnpm-lock.yaml
+
+# --- Area ---------------------------------------------------------------------
+#
+# Where a change lives, as opposed to what kind of change it is. The same
+# discipline as above: each of these was checked against the recent history
+# and none fires on more than about a third of pull requests. The GitLab tool
+# surface itself, internal/tools/, has no rule for the reason given at the top,
+# two thirds of pull requests touch it; its `tools` label exists for the issue
+# form's Area dropdown only. The same names are what that dropdown applies, so
+# an issue and the pull request that closes it carry the same word.
+
+# The server process and both transports, and the two modules that drive the
+# real binary over pipes and sockets. cmd/server holds the flag parsing and
+# the HTTP handler chain as well, which is why a change to what a flag means
+# lands here rather than nowhere.
+transport:
+  - changed-files:
+      - any-glob-to-any-file:
+          - cmd/server/**
+          - test/e2e/http/**
+          - test/e2e/stdio/**
+
+# Every MCP capability other than tools. Small packages, rarely touched, and
+# a change to one is easy to review as if it were a tool change when it is
+# not: a prompt runs handler code holding the caller's credential, and a
+# subscription is a poller with a lifetime of its own.
+mcp:
+  - changed-files:
+      - any-glob-to-any-file:
+          - internal/resources/**
+          - internal/prompts/**
+          - internal/completions/**
+          - internal/subscriptions/**
+          - internal/elicitation/**
+          - internal/progress/**
+
+telemetry:
+  - changed-files:
+      - any-glob-to-any-file:
+          - internal/telemetry/**
+          - internal/mcpotel/**
+          - docs/guides/telemetry.md
+
+# The site's machinery, not its content: content is documentation and sits on
+# the other side of the docs-only line drawn at the top. A change here is a
+# change to how every page is built or rendered.
+site:
+  - changed-files:
+      - any-glob-to-any-file:
+          - site/astro.config.mjs
+          - site/src/components/**
+          - site/src/styles/**
+          - site/src/layouts/**
+          - site/scripts/**
+          - site/public/**
+          - site/*.json
+          - site/*.mjs
+          - site/*.ts
+          - .github/workflows/pages.yml
+
+# Maintainer tooling: the auditors, generators and evaluators under cmd/,
+# everything there except the server. Reviewed as Go, but with a different
+# question in mind: these run on this repository's own checkout from a
+# Makefile target, never on a user's machine.
+tooling:
+  - changed-files:
+      - any-glob-to-any-file:
+          - cmd/audit_*/**
+          - cmd/gen_*/**
+          - cmd/bench_resources/**
+          - cmd/eval_mcp_surfaces/**
+          - cmd/format_md_tables/**
+          - cmd/godoc_tool/**
+          - cmd/internal/**
+
+# Source that exists for one operating system, and the CI leg that is the
+# only place it compiles before a release. A change here has a reviewer
+# question the other labels do not raise: was it run on that platform?
+platform:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*_windows.go"
+          - "**/*_windows_test.go"
+          - "**/*_darwin.go"
+          - "**/*_darwin_test.go"
+          - "**/*_unix.go"
+          - "**/*_unix_test.go"
+          - scripts/install.ps1
+
+# The suite that needs a GitLab, and the fixtures that stand one up. The
+# transport modules are under `transport` instead: they need no GitLab, and
+# what they test is the process, not the API surface.
+e2e:
+  - changed-files:
+      - any-glob-to-any-file:
+          - test/e2e/suite/**
+          - test/e2e/orbit/**
+          - test/e2e/collector/**
+          - test/e2e/scripts/**
+          - test/e2e/docker-compose.yml
+          - test/e2e/.env.docker
+          - test/fixtures/**
+          - .github/workflows/e2e.yml
