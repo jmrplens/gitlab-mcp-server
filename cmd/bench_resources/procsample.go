@@ -174,7 +174,16 @@ type sampler struct {
 	// ctx bounds the reads a sample makes. It matters only where the
 	// statistics come from a subprocess rather than from /proc, but carrying
 	// it means a cancelled run stops sampling with everything else.
-	ctx context.Context
+	//
+	// It is stored rather than passed per method, which the usual guidance
+	// argues against, because that guidance is written for request-scoped
+	// calls: they have a caller to take a context from. This one is a worker.
+	// start launches a ticker loop that nobody calls again, so the loop's own
+	// reads have no parameter to arrive through; handing it to start would
+	// store it in this same field with an extra step, and current is read from
+	// outside the loop too, so threading it everywhere would put the same
+	// context in the same struct and add an argument to five signatures.
+	ctx context.Context // NOSONAR: a worker's context, for the reason above
 	// pidsFn is asked for the set to sample on every tick rather than being
 	// told once, because a stdio scenario grows a process per client while the
 	// sampler is already running.
