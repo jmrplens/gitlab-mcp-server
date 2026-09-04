@@ -24,8 +24,9 @@ concurrency:
 
 jobs:
   retire:
-    name: Retire needs-triage
+    name: "🧹 Retire needs-triage"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     # Cheap guard so the job does not start for the majority of events, which
     # are about issues that never carried the label.
     if: contains(github.event.issue.labels.*.name, 'needs-triage')

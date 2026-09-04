@@ -3,10 +3,18 @@
 
 name: GitLab Mirror
 
+# Pushes to main and tags mirror at once. Work branches used to as well, with
+# `branches: "**"`, which meant every push of every pull request replicated the
+# whole repository and put a "Mirror repository" check on the pull request: on
+# a day of many small pull requests, ten mirror runs an hour for branches
+# nobody reads on GitLab. Those now arrive through the six-hourly schedule
+# below, and the push below is the only one that can be delayed by pruning:
+# the whole refspec is pushed every time, so main and the tags carry every
+# branch with them anyway.
 on:
   push:
     branches:
-      - "**"
+      - main
     tags:
       - "**"
   workflow_run:
@@ -33,8 +41,9 @@ env:
 
 jobs:
   repository:
-    name: Mirror repository
+    name: "🪞 Mirror repository"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Configure GitLab SSH key
@@ -82,8 +91,9 @@ jobs:
             '+refs/tags/*:refs/tags/*'
 
   releases:
-    name: Sync linked releases
+    name: "🔗 Sync linked releases"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||

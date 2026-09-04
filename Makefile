@@ -758,6 +758,15 @@ check-openplugin:
 # Pin the MCPB packer CLI for supply-chain integrity (also pinned in scripts/build-mcpb.sh).
 MCPB_CLI_VERSION := 2.1.2
 
+## GOLANGCI_LINT_VERSION: the linter release CI installs, read from here by
+## .github/workflows/ci.yml so the version lives in one place. Not a go.mod tool
+## directive on purpose: golangci-lint advises against building it from source
+## (slower, and results can vary with the compiling Go), and its dependency
+## tree would land in go.sum for every job that runs `go mod download`. Keep it
+## equal to what developers run locally, so `make golangci-lint` means the same
+## on both sides of a push.
+GOLANGCI_LINT_VERSION := v2.13.1
+
 ## check-mcpb: validate the Claude Desktop extension manifest (mcpb/manifest.json).
 check-mcpb:
 	npx --yes @anthropic-ai/mcpb@$(MCPB_CLI_VERSION) validate mcpb/manifest.json
