@@ -13,6 +13,28 @@ body:
             and this enhancement has not been proposed.
           required: true
 
+  # The options are matched by name in .github/workflows/issue-area.yml, which
+  # applies the label they pair with; change them there and in the other two
+  # templates together.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the server would this touch? It becomes a label, so the work can be found by the same word.
+      options:
+        - "Not sure"
+        - "Transport: stdio or the HTTP server"
+        - "Authentication and authorization"
+        - "GitLab tools: the API surface"
+        - "MCP capabilities: resources, prompts, completions, subscriptions"
+        - "Telemetry"
+        - "Installation and distribution"
+        - "Documentation site"
+        - "CI and maintainer tooling"
+        - "Platform specific: Windows or macOS"
+    validations:
+      required: true
+
   - type: textarea
     id: summary
     attributes:

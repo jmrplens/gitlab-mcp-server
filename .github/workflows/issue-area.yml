@@ -1,0 +1,71 @@
+name: Issue area
+
+# Applies the area label an issue form asked for. The templates carry an
+# "Area" dropdown whose options name the same labels the path labeler puts on
+# pull requests, so an issue and the pull request that closes it carry the
+# same word. GitHub cannot map a dropdown answer to a label by itself: a form
+# can only apply the fixed labels in its front matter, so this reads the
+# rendered answer out of the body and applies the label it names.
+#
+# Only ever adds, like the path labeler: a label placed by hand survives an
+# edit, and an answer changed to "Not sure" removes nothing, since the person
+# who chose the earlier area may have been right.
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: issue-area-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  area:
+    name: "🏷️ Area from the form"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Pull requests reach the issues event too, and have no form.
+    if: ${{ !github.event.issue.pull_request }}
+    steps:
+      - name: Apply the area the form named
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          set -euo pipefail
+          # An issue form renders each field as a level-3 heading followed by
+          # a blank line and the answer. Take the first non-empty line after
+          # the "Area" heading; a body written by hand has no such heading and
+          # yields nothing, which is the right answer for it. Carriage returns
+          # are stripped before the match rather than after: a body submitted
+          # from Windows ends its lines with them, and the runner's awk does
+          # not count one as whitespace, so the heading would never match.
+          answer=$(printf '%s\n' "$BODY" | tr -d '\r' | awk '
+            /^### Area[[:space:]]*$/ { seen = 1; next }
+            seen && NF { print; exit }
+          ')
+          case "$answer" in
+            "Transport: stdio or the HTTP server")                          label=transport ;;
+            "Authentication and authorization")                             label=security ;;
+            "GitLab tools: the API surface")                                label=tools ;;
+            "MCP capabilities: resources, prompts, completions, subscriptions") label=mcp ;;
+            "Telemetry")                                                    label=telemetry ;;
+            "Installation and distribution")                                label=distribution ;;
+            "Documentation site")                                           label=site ;;
+            "CI and maintainer tooling")                                    label=tooling ;;
+            "Platform specific: Windows or macOS")                          label=platform ;;
+            ""|"_No response_"|"Not sure")
+              echo "no area chosen (answer: '${answer}'), nothing to add"; exit 0 ;;
+            *)
+              # An option this workflow does not know is a template that
+              # changed without this file following it. Say so rather than
+              # pass quietly.
+              echo "::error::unknown Area answer '${answer}'; the templates and this workflow disagree"
+              exit 1 ;;
+          esac
+          echo "area '${answer}' pairs with label ${label}"
+          gh issue edit "$ISSUE" --add-label "$label"

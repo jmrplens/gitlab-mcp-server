@@ -272,26 +272,37 @@ Templates auto-apply the relevant labels listed in [Labels](#labels).
 
 ## Labels
 
-Issue templates auto-assign labels on submission, and pull requests are labeled from the paths they touch by `.github/workflows/labeler.yml` against the map in `.github/labeler.yml`. The repo uses a flat label set (no `type::`/`priority::` namespaces — those are GitLab conventions):
+Labels arrive four ways, none of which removes one placed by hand. Issue templates apply their kind label on submission, and their "Area" dropdown is read by `.github/workflows/issue-area.yml`, which applies the area label the answer names. Pull requests are labeled from the paths they touch by `.github/workflows/labeler.yml` against the map in `.github/labeler.yml`, and from the title's conventional prefix by the same workflow: `fix:` is a `bug`, `feat:` a `feature`, and nothing else is mapped. Milestones pair with a version label both ways (`v2.8.0` for milestone `2.8.0`), kept in step by `.github/workflows/version-labels.yml`. The repo uses a flat label set (no `type::`/`priority::` namespaces — those are GitLab conventions), and the area labels use the same words on issues and on pull requests so the two can be filtered together:
 
-| Label              | Color     | Used by                                                |
-| ------------------ | --------- | ------------------------------------------------------ |
-| `bug`              | `#d73a4a` | Bug Report template                                    |
-| `feature`          | `#a2eeef` | Feature Request template                               |
-| `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)                  |
-| `documentation`    | `#0075ca` | Documentation template; path labeler on docs-only PRs  |
-| `security`         | `#d73a4a` | Security Advisories; path labeler on security paths    |
-| `ci`               | `#bfdadc` | Path labeler — pipeline, workflows, lint configuration |
-| `distribution`     | `#fbca04` | Path labeler — release artifacts and install channels  |
-| `dependencies`     | `#0052cc` | Path labeler and Dependabot — dependency files         |
-| `release`          | `#0e8a16` | Manual — release tracking issues                       |
-| `high-priority`    | `#b60205` | Manual — critical bugs and security advisories         |
-| `needs-triage`     | `#c2e0c6` | All issue templates (auto-applied on submission)       |
-| `good first issue` | `#7057ff` | Manual — newcomer-friendly issues                      |
-| `help wanted`      | `#008672` | Manual — community contributions welcome               |
-| `question`         | `#d876e3` | Manual — questions / discussions                       |
-| `duplicate`        | `#cfd3d7` | Manual — duplicates of existing issues                 |
-| `invalid`          | `#e4e669` | Manual — out of scope                                  |
-| `wontfix`          | `#ffffff` | Manual — accepted but won't implement                  |
+| Label              | Color     | Used by                                                                          |
+| ------------------ | --------- | -------------------------------------------------------------------------------- |
+| `bug`              | `#d73a4a` | Bug Report template; `fix:` titles                                               |
+| `feature`          | `#a2eeef` | Feature Request template; `feat:` titles                                         |
+| `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)                                            |
+| `documentation`    | `#0075ca` | Documentation template; path labeler on docs-only PRs                            |
+| `security`         | `#d73a4a` | Security Advisories; path labeler on security paths; Area "Authentication"       |
+| `ci`               | `#bfdadc` | Path labeler — pipeline, workflows, lint configuration                           |
+| `distribution`     | `#fbca04` | Path labeler — release artifacts and install channels; Area "Installation"       |
+| `dependencies`     | `#0052cc` | Path labeler and Dependabot — dependency files                                   |
+| `transport`        | `#5c8dd6` | Path labeler — `cmd/server`, the transport e2e modules; Area "Transport"         |
+| `mcp`              | `#a371f7` | Path labeler — resources, prompts, completions, subscriptions; Area "MCP"        |
+| `tools`            | `#1f883d` | Area "GitLab tools" only: two thirds of PRs touch `internal/tools/`, so no path  |
+| `telemetry`        | `#6fbf9a` | Path labeler — `internal/telemetry`, `internal/mcpotel`; Area "Telemetry"        |
+| `site`             | `#f0a35c` | Path labeler — the site's build and components, not its content; Area "Site"     |
+| `tooling`          | `#9aa5b1` | Path labeler — the auditors and generators under `cmd/`; Area "CI and tooling"   |
+| `platform`         | `#e9c46a` | Path labeler — `*_windows.go`, `*_darwin.go`, `*_unix.go`; Area "Platform"       |
+| `e2e`              | `#8bd3c7` | Path labeler — the e2e suite and its Docker fixtures                             |
+| `release`          | `#0e8a16` | Manual — release tracking issues                                                 |
+| `high-priority`    | `#b60205` | Manual — critical bugs and security advisories                                   |
+| `needs-triage`     | `#c2e0c6` | All issue templates; retired by `triage.yml` on milestone or close               |
+| `v<version>`       | `#1d76db` | `version-labels.yml` — paired with the milestone of the same number              |
+| `good first issue` | `#7057ff` | Manual — newcomer-friendly issues                                                |
+| `help wanted`      | `#008672` | Manual — community contributions welcome                                         |
+| `question`         | `#d876e3` | Manual — questions / discussions                                                 |
+| `duplicate`        | `#cfd3d7` | Manual — duplicates of existing issues                                           |
+| `invalid`          | `#e4e669` | Manual — out of scope                                                            |
+| `wontfix`          | `#ffffff` | Manual — accepted but won't implement                                            |
+
+The Area dropdown's options are the strings `issue-area.yml` matches, so a change to one has to land in the three templates and that workflow together; an answer the workflow does not know fails its run rather than passing quietly, which is how the drift is noticed.
 
 The path labeler never removes a label (`sync-labels: false`), so anything applied by hand survives a later push. It also cannot create one, because the workflow grants only `pull-requests: write`. A label named in `.github/labeler.yml` that does not exist in the repository is therefore not skipped: the action sends the whole set in a single request, so that one name costs the pull request every label it should have had, and the job says so rather than passing quietly. Create the label first, with `gh label list` / `gh label create`.
