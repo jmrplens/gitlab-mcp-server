@@ -9,8 +9,9 @@
 # of them had run for real, and the first real run would have been the next
 # tag, with credentials, against registries where a mistake is permanent.
 # Dispatching this workflow by hand rehearses the release of the dispatched
-# ref: preflight holds the tag input to the tree's VERSION exactly as it holds
-# a pushed tag, the E2E gate boots a GitLab, GoReleaser builds every binary as
+# ref, as the version its VERSION file carries (an optional input may state
+# it, and preflight holds the two to each other exactly as it holds a pushed
+# tag): the E2E gate boots a GitLab, GoReleaser builds every binary as
 # a snapshot carrying that version, the image is built for both platforms,
 # smoke-tested and exported to an OCI layout so its index digest is real, and
 # the publishers take that build from a workflow artifact, pack it, validate
@@ -50,13 +51,15 @@ on:
     tags:
       - "v*"
   # A dispatch is always a rehearsal; there is no input to make it publish.
-  # The tag is the version the dispatched tree would be released as, held to
-  # VERSION by preflight the way a real tag is; it does not have to exist.
+  # The version rehearsed is the one the dispatched tree carries in VERSION;
+  # the input exists to state it explicitly, and preflight holds the two to
+  # each other the way it holds a pushed tag. The tag does not have to exist.
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to rehearse the release of, e.g. v2.7.6; must match VERSION on the dispatched ref. Nothing is published."
-        required: true
+        description: "Version tag to rehearse as, e.g. v2.7.6. Empty reads it from VERSION on the dispatched ref; a value must match it. Nothing is published."
+        required: false
+        default: ""
         type: string
 
 # Serialize releases: two close tag pushes would otherwise race on the
@@ -73,10 +76,12 @@ permissions: {}
 # The Go version is not stated here: setup-go reads it from go.mod, the one
 # place a Go bump has to touch.
 env:
-  # The two switches every step reads. RELEASE_TAG is the version whichever
-  # way the run started, so a step stamps, packs or compares against one name.
+  # The switch every step reads. Its companion, RELEASE_TAG, is the version
+  # whichever way the run started, so a step stamps, packs or compares against
+  # one name; it is a job-level variable fed from preflight's output rather
+  # than a workflow-level one, because on a dispatch it comes from the VERSION
+  # file, which no expression up here can read.
   REHEARSAL: ${{ github.event_name == 'workflow_dispatch' }}
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   REGISTRY: ghcr.io
   IMAGE_NAME: jmrplens/gitlab-mcp-server
   DOCKERHUB_IMAGE: jmrplens/gitlab-mcp-server
@@ -97,22 +102,37 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+    outputs:
+      # The version every later job releases, or rehearses, as. A pushed tag
+      # names it; a dispatch reads it from VERSION unless the input names it,
+      # and either way the file and the name have to agree.
+      release_tag: ${{ steps.tag.outputs.release_tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Verify VERSION file matches the release tag
+      - name: Resolve the release tag and hold it to VERSION
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           FILE_V="$(tr -d '[:space:]' < VERSION)"
-          TAG_V="${RELEASE_TAG#v}"
+          if [ "$REHEARSAL" = "true" ]; then
+            TAG="${INPUT_TAG:-v${FILE_V}}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          TAG_V="${TAG#v}"
           if [ "${FILE_V}" != "${TAG_V}" ]; then
             echo "::error::VERSION file says ${FILE_V} but the tag is v${TAG_V} — the docker job would tag ghcr.io:${FILE_V} while server.json pins ghcr.io/jmrplens/gitlab-mcp-server:${TAG_V}"
             if [ "$REHEARSAL" = "true" ]; then
-              echo "::error::a rehearsal names the version this tree would release: dispatch it with tag=v${FILE_V}"
+              echo "::error::a rehearsal is of the version this tree carries: leave the tag input empty, or set it to v${FILE_V}"
             fi
             exit 1
           fi
+          echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "release tag ${TAG}, VERSION ${FILE_V}, rehearsal=${REHEARSAL}"
 
   # The same workflow a maintainer runs by hand, called rather than copied.
   # This job used to be e2e.yml pasted in line for line, so a fix to the
@@ -129,7 +149,9 @@ jobs:
     name: "🐳 Docker"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [e2e]
+    needs: [preflight, e2e]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     # No `environment:` — this job never ran under one, and adding it would
     # subject the image publish to whatever protection rules the release
     # environment carries.
@@ -154,7 +176,13 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
+      # No registry login in a rehearsal: the smoke builds pull through the
+      # Actions cache and the multi-platform build is exported to disk, so a
+      # rehearsal never needs a credential for either registry and is not
+      # given one. The dispatched code runs in this job, and code that runs
+      # without a login cannot push.
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        if: env.REHEARSAL != 'true'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -173,7 +201,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - if: steps.dockerhub-login.outputs.skip == 'false'
+      - if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: docker.io
@@ -345,7 +373,9 @@ jobs:
     # fetch, and the MCP Registry publish validates the server.json OCI entry by
     # fetching ghcr.io for this version's tag — a tag only the docker job
     # pushes. Racing it 404s the registry publish.
-    needs: [e2e, docker]
+    needs: [preflight, e2e, docker]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:
       contents: write # GoReleaser creates the release; gh uploads/publishes the .mcpb
       id-token: write # cosign keyless signing of checksums.txt
@@ -508,7 +538,9 @@ jobs:
     name: "📮 Publish to npm"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [release]
+    needs: [preflight, release]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
     permissions:
       contents: read # download the published release assets
@@ -579,7 +611,9 @@ jobs:
     name: "🐍 Publish to PyPI"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [release]
+    needs: [preflight, release]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
     permissions:
       contents: read # download the published release assets
@@ -635,7 +669,9 @@ jobs:
     # accepted cost is that a release whose npm or PyPI publish failed now
     # leaves the tap on the previous version, which is the correct outcome for
     # a release that is not fully out.
-    needs: [release, verify-published]
+    needs: [preflight, release, verify-published]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
     permissions:
       contents: read # download the published release assets
@@ -663,28 +699,29 @@ jobs:
       # that runs no third-party code and holds nothing else.
       - name: Update Homebrew tap formula
         env:
-          TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}
+          # Withheld from a rehearsal, not merely unused by it: the tap is
+          # cloned read-only over https and the commit is shown, not pushed,
+          # so the step has no reason to hold the key and is not given it.
+          TAP_DEPLOY_KEY_B64: ${{ env.REHEARSAL != 'true' && secrets.TAP_DEPLOY_KEY_B64 || '' }}
         run: |
           set -euo pipefail
-          # A rehearsal clones the tap read-only over https and pushes
-          # nothing, so it does not need the deploy key at all.
-          if [ -z "${TAP_DEPLOY_KEY_B64}" ] && [ "$REHEARSAL" != "true" ]; then
+          VERSION="${RELEASE_TAG#v}"
+          if [ "$REHEARSAL" = "true" ]; then
+            TAP_REPO=https://github.com/jmrplens/homebrew-tap.git \
+              bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap" --dry-run
+            exit 0
+          fi
+          if [ -z "${TAP_DEPLOY_KEY_B64}" ]; then
             echo "::warning::TAP_DEPLOY_KEY_B64 secret is not configured — skipping Homebrew tap update"
             exit 0
           fi
-          VERSION="${RELEASE_TAG#v}"
           KEY_FILE="${RUNNER_TEMP}/tap_deploy_key"
           KNOWN_HOSTS_FILE="${RUNNER_TEMP}/tap_known_hosts"
           echo "${TAP_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
           chmod 600 "${KEY_FILE}"
           ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
           export GIT_SSH_COMMAND="ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
-          if [ "$REHEARSAL" = "true" ]; then
-            TAP_REPO=https://github.com/jmrplens/homebrew-tap.git \
-              bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap" --dry-run
-          else
-            bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
-          fi
+          bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
 
   mcp-registry:
     name: "🗂️ Publish to MCP Registry"
@@ -698,7 +735,9 @@ jobs:
     # verify-published because this job is what points installers at the npm
     # and PyPI packages: the listing must not advertise bytes nobody compared
     # with the signed checksums.
-    needs: [release, npm, pypi, docker, verify-published]
+    needs: [preflight, release, npm, pypi, docker, verify-published]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
     permissions:
       contents: read # download the published release assets
@@ -813,7 +852,9 @@ jobs:
     name: "🔬 Verify published packages"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [npm, pypi]
+    needs: [preflight, npm, pypi]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:
       contents: read # download the published release assets
     steps:
@@ -872,7 +913,9 @@ jobs:
     # is listed for the same reason and not left to transitivity through
     # mcp-registry: if what the registries serve does not match the signed
     # checksums, main must not gain a manifest advertising it.
-    needs: [release, docker, npm, pypi, homebrew, mcp-registry, verify-published]
+    needs: [preflight, release, docker, npm, pypi, homebrew, mcp-registry, verify-published]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
     permissions:
       contents: read # download the published release assets
@@ -910,31 +953,33 @@ jobs:
 
       - name: Commit updated server.json and plugin.json to main
         env:
-          RELEASE_DEPLOY_KEY_B64: ${{ secrets.RELEASE_DEPLOY_KEY_B64 }}
+          # Withheld from a rehearsal: the commit is shown, not pushed, so the
+          # step has no reason to hold the key and is not given it. The
+          # remote then stays https, which is all the refresh below needs.
+          RELEASE_DEPLOY_KEY_B64: ${{ env.REHEARSAL != 'true' && secrets.RELEASE_DEPLOY_KEY_B64 || '' }}
           OCI_DIGEST: ${{ needs.docker.outputs.digest }}
         run: |
           set -euo pipefail
 
           VERSION="${RELEASE_TAG#v}"
-          # A rehearsal commits locally and pushes nothing, so it does not
-          # need the deploy key.
-          if [ -z "${RELEASE_DEPLOY_KEY_B64}" ] && [ "$REHEARSAL" != "true" ]; then
-            echo "::error::RELEASE_DEPLOY_KEY_B64 secret is not configured"
-            exit 1
-          fi
           if [ -z "${OCI_DIGEST}" ]; then
             echo "::error::the docker job published no image digest; server.json cannot be pinned"
             exit 1
           fi
 
-          KEY_FILE="${RUNNER_TEMP}/release_deploy_key"
-          KNOWN_HOSTS_FILE="${RUNNER_TEMP}/known_hosts"
-          echo "${RELEASE_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
-          chmod 600 "${KEY_FILE}"
-          ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
-
-          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
-          git config core.sshCommand "ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
+          if [ "$REHEARSAL" != "true" ]; then
+            if [ -z "${RELEASE_DEPLOY_KEY_B64}" ]; then
+              echo "::error::RELEASE_DEPLOY_KEY_B64 secret is not configured"
+              exit 1
+            fi
+            KEY_FILE="${RUNNER_TEMP}/release_deploy_key"
+            KNOWN_HOSTS_FILE="${RUNNER_TEMP}/known_hosts"
+            echo "${RELEASE_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
+            chmod 600 "${KEY_FILE}"
+            ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
+            git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+            git config core.sshCommand "ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
+          fi
 
           git config user.name "José M. Requena Plens"
           git config user.email "jmrplens@gmail.com"
