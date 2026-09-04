@@ -56,21 +56,8 @@ jobs:
 
       # No version: gotestsum is a `tool` directive in go.mod, so this installs
       # the version go.mod names and Dependabot bumps it with the other modules.
-      #
-      # A release rehearsal checks out a tag from before that directive
-      # existed, which is the one case the resolution has nothing to read; the
-      # first rehearsal against v2.7.5 stopped here with "no required module
-      # provides package". So an old tree falls back to the version stated
-      # below. Bump both when bumping gotestsum.
       - name: Install gotestsum
-        run: |
-          set -euo pipefail
-          if go list -m gotest.tools/gotestsum >/dev/null 2>&1; then
-            go install gotest.tools/gotestsum
-          else
-            echo "the checked-out go.mod predates the gotestsum tool directive; installing the stated fallback"
-            go install gotest.tools/gotestsum@v1.13.0
-          fi
+        run: go install gotest.tools/gotestsum
 
       - name: Pull GitLab image
         run: docker pull "${GITLAB_IMAGE}"

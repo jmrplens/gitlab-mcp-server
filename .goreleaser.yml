@@ -48,6 +48,14 @@ archives:
 checksum:
   name_template: checksums.txt
 
+snapshot:
+  # A release rehearsal (release.yml on workflow_dispatch) builds the
+  # dispatched tree under the version its tag input names, and the npm and
+  # PyPI validators downstream compare the binary's own version with the one
+  # the packages carry, so a snapshot there has to answer with that version
+  # and nothing appended. Anywhere else a snapshot keeps GoReleaser's naming.
+  version_template: '{{ if index .Env "RELEASE_TAG" }}{{ trimprefix .Env.RELEASE_TAG "v" }}{{ else }}{{ .Version }}-SNAPSHOT-{{ .ShortCommit }}{{ end }}'
+
 changelog:
   use: github
   sort: asc

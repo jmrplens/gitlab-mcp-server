@@ -6,18 +6,23 @@
 # If E2E tests fail, nothing is released.
 #
 # Rehearsal. Every publisher job below was added after 2.7.5 shipped, so none
-# of them has run for real, and the first real run would be the next tag, with
-# credentials, against registries where a mistake is permanent. Dispatching
-# this workflow by hand on an existing tag runs the whole chain in the same
-# jobs with the same secrets and skips only the steps that cannot be undone:
-# the image push and its signatures, the GitHub release and its attestations,
-# the npm and PyPI uploads, the tap push, the registry publish, the commit to
-# main and the winget submission. Everything else is real: the E2E gate boots
-# a GitLab, GoReleaser builds every binary, the publishers download the assets
-# that tag really shipped and verify them against the signed checksums, the
-# packages are packed and validated, and verify-published reads what the
-# registries serve. REHEARSAL is the switch and RELEASE_TAG is the tag either
-# way, so a step reads one variable and does not care how it was started.
+# of them had run for real, and the first real run would have been the next
+# tag, with credentials, against registries where a mistake is permanent.
+# Dispatching this workflow by hand rehearses the release of the dispatched
+# ref: preflight holds the tag input to the tree's VERSION exactly as it holds
+# a pushed tag, the E2E gate boots a GitLab, GoReleaser builds every binary as
+# a snapshot carrying that version, the image is built for both platforms,
+# smoke-tested and exported to an OCI layout so its index digest is real, and
+# the publishers take that build from a workflow artifact, pack it, validate
+# it and run their publish commands dry. Skipped is exactly what cannot be
+# undone: the image push and its signatures, the GitHub release and the
+# attestations, the npm and PyPI uploads, the tap push, the registry publish,
+# the commit to main and the winget submission; verify-published has nothing
+# to read and says so. REHEARSAL is the switch and RELEASE_TAG is the version
+# either way, so a step reads one variable and does not care how it was
+# started. The tree is always the triggering commit, never the tag named: a
+# rehearsal is of the code about to be released, and the first one, run
+# against v2.7.5's tree, found half the scripts this workflow calls missing.
 #
 # One job per credential. Until 2.7.5 a single `release` job held the OIDC
 # identity that npm, PyPI, cosign, the MCP Registry and the attestation store
@@ -45,12 +50,12 @@ on:
     tags:
       - "v*"
   # A dispatch is always a rehearsal; there is no input to make it publish.
-  # The tag has to exist and have a published release, because the publisher
-  # jobs download what it shipped.
+  # The tag is the version the dispatched tree would be released as, held to
+  # VERSION by preflight the way a real tag is; it does not have to exist.
   workflow_dispatch:
     inputs:
       tag:
-        description: "An existing release tag to rehearse against, e.g. v2.7.5"
+        description: "Tag to rehearse the release of, e.g. v2.7.6; must match VERSION on the dispatched ref. Nothing is published."
         required: true
         type: string
 
@@ -68,8 +73,8 @@ permissions: {}
 # The Go version is not stated here: setup-go reads it from go.mod, the one
 # place a Go bump has to touch.
 env:
-  # The two switches every step reads. RELEASE_TAG is the tag whichever way
-  # the run started, so a step compares or downloads against one name.
+  # The two switches every step reads. RELEASE_TAG is the version whichever
+  # way the run started, so a step stamps, packs or compares against one name.
   REHEARSAL: ${{ github.event_name == 'workflow_dispatch' }}
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   REGISTRY: ghcr.io
@@ -95,7 +100,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
       - name: Verify VERSION file matches the release tag
         run: |
@@ -104,6 +108,9 @@ jobs:
           TAG_V="${RELEASE_TAG#v}"
           if [ "${FILE_V}" != "${TAG_V}" ]; then
             echo "::error::VERSION file says ${FILE_V} but the tag is v${TAG_V} — the docker job would tag ghcr.io:${FILE_V} while server.json pins ghcr.io/jmrplens/gitlab-mcp-server:${TAG_V}"
+            if [ "$REHEARSAL" = "true" ]; then
+              echo "::error::a rehearsal names the version this tree would release: dispatch it with tag=v${FILE_V}"
+            fi
             exit 1
           fi
 
@@ -115,10 +122,6 @@ jobs:
     name: "🧫 E2E gate"
     needs: [preflight]
     uses: ./.github/workflows/e2e.yml
-    # Not env.RELEASE_TAG: a reusable-workflow call cannot read the env
-    # context, so the same expression is written out here.
-    with:
-      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     permissions:
       contents: read
 
@@ -132,10 +135,10 @@ jobs:
     # environment carries.
     # server.json pins the image by digest, and the stamping jobs read it.
     outputs:
-      # In a rehearsal nothing is pushed, so the digest the stamping jobs read
-      # is the one the registry already holds for that tag: the real value,
-      # resolved rather than produced.
-      digest: ${{ steps.docker-push.outputs.digest || steps.published-digest.outputs.digest }}
+      # In a rehearsal nothing is pushed; the digest is read from the OCI
+      # layout the same build was exported to, so the stamping jobs pin the
+      # index the registry would have received.
+      digest: ${{ steps.docker-push.outputs.digest || steps.rehearsal-digest.outputs.digest }}
     permissions:
       contents: read # checkout
       packages: write # ghcr.io push via GITHUB_TOKEN login
@@ -143,7 +146,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - name: Extract version
@@ -229,12 +231,17 @@ jobs:
           EXPECTED_VERSION: ${{ steps.version.outputs.version }}
         run: bash scripts/smoke-test-image.sh "${EXPECTED_VERSION}" gitlab-mcp-server:smoke-amd64=linux/amd64 gitlab-mcp-server:smoke-arm64=linux/arm64
 
+      # In a rehearsal the same multi-platform build, with the same provenance,
+      # SBOM and annotations, is exported to an OCI layout on the runner
+      # instead of pushed: the image index that would have gone to the
+      # registry exists, so its digest is real and the stamping jobs pin it,
+      # and nothing has left the machine.
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         id: docker-push
-        if: env.REHEARSAL != 'true'
         with:
           context: .
-          push: true
+          push: ${{ env.REHEARSAL != 'true' }}
+          outputs: ${{ env.REHEARSAL == 'true' && format('type=oci,dest={0}/rehearsal-image.tar', runner.temp) || '' }}
           platforms: linux/amd64,linux/arm64
           provenance: true
           sbom: true
@@ -279,20 +286,26 @@ jobs:
           IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.docker-push.outputs.digest }}
         run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
 
-      # Rehearsal only: the digest the stamping jobs need is the one this tag
-      # already has on ghcr.io. Resolving it here means server.json is stamped
-      # with a real digest and the stamp path runs exactly as it would.
-      - name: Resolve the published image digest
-        id: published-digest
+      # Rehearsal only: the action reports the exported index's digest the same
+      # way it reports a pushed one, and the OCI layout's own index.json is
+      # read if it does not, so the stamping jobs never run on an empty value.
+      - name: Read the rehearsed image's digest
+        id: rehearsal-digest
         if: env.REHEARSAL == 'true'
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          BUILT_DIGEST: ${{ steps.docker-push.outputs.digest }}
         run: |
           set -euo pipefail
-          digest=$(docker buildx imagetools inspect "${IMAGE}:${RELEASE_TAG#v}" --format '{{json .Manifest.Digest}}' | tr -d '"')
-          [ -n "$digest" ] || { echo "::error::no published image for ${IMAGE}:${RELEASE_TAG#v}"; exit 1; }
+          digest="${BUILT_DIGEST}"
+          if [ -z "$digest" ]; then
+            digest=$(tar -xOf "${RUNNER_TEMP}/rehearsal-image.tar" index.json | jq -r '.manifests[0].digest')
+          fi
+          if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::the OCI export reported no digest (got '${digest}')"
+            exit 1
+          fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "rehearsing against ${IMAGE}:${RELEASE_TAG#v} ($digest)"
+          echo "rehearsed image index ${digest}, exported to a tarball and pushed nowhere"
 
       - name: Sign Docker image (Docker Hub)
         if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
@@ -343,7 +356,6 @@ jobs:
       # reads its token from the environment instead.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -401,10 +413,13 @@ jobs:
           # config is a version: 2 config.
           version: ${{ env.GORELEASER_VERSION }}
           # A rehearsal builds everything and publishes nothing: --snapshot
-          # skips the tag validation and the GitHub release, --skip=publish
-          # keeps every artifact local, and --skip=sign leaves the signing
-          # identity unused on artifacts nobody will ship. The SBOMs are still
-          # generated, so syft's install and the binaries' scan are exercised.
+          # skips the tag validation and the GitHub release (the binaries
+          # still carry the rehearsed version, through snapshot.version_template
+          # in .goreleaser.yml, so the validators downstream accept them),
+          # --skip=publish keeps every artifact local, and --skip=sign leaves
+          # the signing identity unused on artifacts nobody will ship. The
+          # SBOMs are still generated, so syft's install and the binaries'
+          # scan are exercised.
           args: ${{ env.REHEARSAL == 'true' && 'release --clean --snapshot --skip=publish,sign,announce' || 'release --clean' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -440,6 +455,26 @@ jobs:
             exit 0
           fi
           gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
+
+      # A rehearsal hands its build to the publisher jobs the way a release
+      # hands them the published assets: the staged binaries, checksums.txt
+      # and the bundle, which fetch-release-assets.sh unpacks and checks in
+      # place of downloading. One tar rather than the files, so the executable
+      # bits survive the trip.
+      - name: Hand the rehearsal's build to the publishers
+        if: env.REHEARSAL == 'true'
+        run: |
+          set -euo pipefail
+          (cd dist && tar -cf "${RUNNER_TEMP}/rehearsal-assets.tar" checksums.txt gitlab-mcp-server.mcpb gitlab-mcp-server-*)
+          tar -tf "${RUNNER_TEMP}/rehearsal-assets.tar"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: env.REHEARSAL == 'true'
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal-assets.tar
+          retention-days: 1
+          if-no-files-found: error
 
       # SLSA build provenance for every GoReleaser artifact, keyed by the exact
       # asset names in checksums.txt, plus the .mcpb built outside GoReleaser.
@@ -481,7 +516,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -490,9 +524,17 @@ jobs:
       # actually published and verifies it against the cosign-signed
       # checksums.txt before packing anything. build-npm.mjs re-checks each
       # binary against the same manifest as it copies.
+      - name: Take the rehearsal's own build
+        if: env.REHEARSAL == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal
+
       - name: Fetch and verify release binaries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
       # npm >= 11.5.1 performs the OIDC exchange that trusted publishing needs;
@@ -545,14 +587,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
+      - name: Take the rehearsal's own build
+        if: env.REHEARSAL == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal
+
       - name: Fetch and verify release binaries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
       # One wheel per platform with the native binary in .data/scripts (the
@@ -593,14 +642,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
+      - name: Take the rehearsal's own build
+        if: env.REHEARSAL == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal
+
       - name: Fetch and verify checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh --checksums-only "${RELEASE_TAG#v}" dist
 
       # The tap deploy key writes to another repository, so it lives in a job
@@ -651,14 +707,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
+      - name: Take the rehearsal's own build
+        if: env.REHEARSAL == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal
+
       - name: Fetch and verify release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist "gitlab-mcp-server.mcpb"
 
       # Stamp the working tree only — the commit to main is a separate job with
@@ -756,14 +819,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
+      - name: Take the rehearsal's own build
+        if: env.REHEARSAL == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal
+
       - name: Fetch and verify the signed checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh --checksums-only "${RELEASE_TAG#v}" dist
 
       # Downloads what npm and PyPI actually serve and compares the embedded
@@ -778,10 +848,16 @@ jobs:
       # spent only on downloads — a digest that does not match the signed
       # checksums fails on sight, with no second attempt.
       - name: Compare registry packages with the signed checksums
+        if: env.REHEARSAL != 'true'
         run: |
           python3 scripts/verify_published_packages.py \
             --retry-budget 480 --retry-delay 30 \
             "${RELEASE_TAG#v}" dist/checksums.txt
+
+      - name: Nothing to verify in a rehearsal
+        if: env.REHEARSAL == 'true'
+        run: |
+          echo "::notice::rehearsal: nothing was published, so there is nothing on npm or PyPI to compare with the checksums; this comparison runs on the next real release"
 
   commit-manifests:
     name: "📝 Commit manifests to main"
@@ -812,9 +888,17 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
+      - name: Take the rehearsal's own build
+        if: env.REHEARSAL == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal
+
       - name: Fetch and verify release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist "gitlab-mcp-server.mcpb"
 
       - name: Commit updated server.json and plugin.json to main
