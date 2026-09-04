@@ -132,11 +132,24 @@ func TestWait_Timeout(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
+	// The budget has to outlast a poll, not merely a tick. This test is the
+	// only one here that reaches the deadline on purpose, so it is the only
+	// one that needs a status observed before the deadline arrives: the poll
+	// runs under a context bounded by that same deadline, and a poll cut short
+	// leaves FinalStatus empty, which is honest but is not what this asserts.
+	//
+	// It used to ask for 20ms, which is barely one tick of Windows' 15.6ms
+	// timer, so the first loopback round-trip could not finish inside it and
+	// the assertion failed there and nowhere else. 200ms is ~40 polls at the
+	// interval below. Do not trim it back: the seconds are milliseconds here,
+	// and IntervalSeconds is 5 rather than 1 because ClampPollInterval floors
+	// anything below PollMinInterval to the ten-second default, so a 1 read as
+	// 10ms rather than the 1ms it appears to say.
 	out, err := Wait(context.Background(), nil, client, WaitInput{
 		ProjectID:       "42",
 		PipelineID:      10,
-		IntervalSeconds: 1,
-		TimeoutSeconds:  20,
+		IntervalSeconds: 5,
+		TimeoutSeconds:  200,
 	})
 	if err != nil {
 		t.Fatalf("Wait() unexpected error: %v", err)
