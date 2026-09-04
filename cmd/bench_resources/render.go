@@ -24,8 +24,8 @@ import (
 // an MDX expression comment, because MDX parses an HTML comment as markup and
 // refuses the file.
 const (
-	docStartMark  = "<!-- START BENCHMARK -->"
-	docEndMark    = "<!-- END BENCHMARK -->"
+	docStartMark = "<!-- START BENCHMARK -->"
+	docEndMark   = "<!-- END BENCHMARK -->"
 	// The MDX comment carries no spaces inside its delimiters on purpose:
 	// markdownlint reads "/* " as an emphasis marker followed by a space and
 	// fails the page on MD037.
