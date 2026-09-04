@@ -37,7 +37,7 @@ import (
 // later would have to remember. Registration is the one place every error
 // passes through, so the -32603 default lands here and the explicit
 // [errInvalidParams] calls in the handlers take precedence over it.
-func addPrompt(server *mcp.Server, prompt *mcp.Prompt, handler mcp.PromptHandler) {
+func addPrompt(server registrar, prompt *mcp.Prompt, handler mcp.PromptHandler) {
 	server.AddPrompt(prompt, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		result, err := handler(ctx, req)
 		if err == nil {

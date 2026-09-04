@@ -5,6 +5,7 @@ package usagedata
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -217,6 +218,117 @@ func TestGetMetricDefinitions(t *testing.T) {
 	}
 	if out.YAML != yamlContent {
 		t.Errorf("YAML = %q, want %q", out.YAML, yamlContent)
+	}
+	if out.Truncated {
+		t.Error("Truncated = true for a document well under the ceiling, want false")
+	}
+}
+
+// countingReader serves a fixed number of bytes and records how many were read.
+//
+// Deliberately finite. An endless reader also proves the point, by hanging
+// until the test binary's timeout, but it proves it by making a regression cost
+// a 30-second stall and however much memory io.ReadAll manages to claim first.
+// A stream a few times the ceiling fails on the byte count instead, which is
+// the same evidence delivered as an assertion.
+type countingReader struct {
+	remaining int
+	read      int
+}
+
+func (r *countingReader) Read(p []byte) (int, error) {
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	n := min(len(p), r.remaining)
+	for i := range p[:n] {
+		p[i] = 'y'
+	}
+	r.remaining -= n
+	r.read += n
+	return n, nil
+}
+
+// TestMetricDefinitionsOutput_StopsReadingAtTheCeiling verifies that the
+// ceiling bounds the read itself rather than only the value returned.
+//
+// This is the assertion that separates a real ceiling from a cosmetic one.
+// Slicing the buffer after reading it produces exactly the same output either
+// way, so a test written against YAML and Truncated alone still passes with the
+// io.LimitReader deleted. The defect being fixed is the memory the process
+// holds while an instance streams at it, and the byte count is the only thing
+// in the returned value that can see it.
+func TestMetricDefinitionsOutput_StopsReadingAtTheCeiling(t *testing.T) {
+	reader := &countingReader{remaining: 8 * maxMetricDefinitionsBytes}
+	out, err := metricDefinitionsOutput(reader)
+	if err != nil {
+		t.Fatalf("metricDefinitionsOutput() error = %v", err)
+	}
+	if !out.Truncated {
+		t.Error("Truncated = false for an oversized document, want true")
+	}
+	if len(out.YAML) != maxMetricDefinitionsBytes {
+		t.Errorf("len(YAML) = %d, want %d", len(out.YAML), maxMetricDefinitionsBytes)
+	}
+	// io.ReadAll grows its buffer, so it asks for a little more than it keeps;
+	// what matters is that the stream was not drained, not an exact count.
+	if reader.read > 2*maxMetricDefinitionsBytes {
+		t.Errorf("read %d bytes of an %d-byte stream, want the ceiling to stop it near %d",
+			reader.read, 8*maxMetricDefinitionsBytes, maxMetricDefinitionsBytes)
+	}
+}
+
+// TestMetricDefinitionsOutput_DocumentSizes_AreTruncatedAndFlagged verifies
+// that a document above the ceiling comes back cut and marked, and one at or
+// below it comes back whole and unmarked.
+//
+// The flag is half the fix: a prefix of this document reads as valid
+// definitions, so a caller told nothing would treat a truncated answer as the
+// complete set. The exactly-at-the-ceiling case is here because an off-by-one
+// in the limit reader would flag a document that fits.
+func TestMetricDefinitionsOutput_DocumentSizes_AreTruncatedAndFlagged(t *testing.T) {
+	tests := []struct {
+		name          string
+		size          int
+		wantTruncated bool
+	}{
+		{name: "document under the ceiling is returned whole", size: 1024},
+		{name: "document exactly at the ceiling is returned whole", size: maxMetricDefinitionsBytes},
+		{name: "document over the ceiling is cut and flagged", size: maxMetricDefinitionsBytes + 1, wantTruncated: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := metricDefinitionsOutput(strings.NewReader(strings.Repeat("y", tt.size)))
+			if err != nil {
+				t.Fatalf("metricDefinitionsOutput(%d bytes) error = %v", tt.size, err)
+			}
+			if out.Truncated != tt.wantTruncated {
+				t.Errorf("Truncated = %v, want %v", out.Truncated, tt.wantTruncated)
+			}
+			wantLen := min(tt.size, maxMetricDefinitionsBytes)
+			if len(out.YAML) != wantLen {
+				t.Errorf("len(YAML) = %d, want %d", len(out.YAML), wantLen)
+			}
+		})
+	}
+}
+
+// TestFormatMetricDefinitionsMarkdown_Truncated verifies that a truncated
+// document says so in the Markdown a model reads.
+//
+// The formatter already shortens a long document for display, which looks the
+// same in the rendered output and means something different: that cut is
+// cosmetic and the whole document is still in the response, while this one
+// means the rest was never read. Without a distinct line the model cannot tell
+// a complete answer from a partial one.
+func TestFormatMetricDefinitionsMarkdown_Truncated(t *testing.T) {
+	truncated := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: "metrics: []", Truncated: true})
+	if !strings.Contains(truncated, "Truncated") {
+		t.Errorf("markdown for a truncated document = %q, want it to say so", truncated)
+	}
+	whole := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: "metrics: []"})
+	if strings.Contains(whole, "Truncated") {
+		t.Errorf("markdown for a whole document = %q, want no truncation notice", whole)
 	}
 }
 

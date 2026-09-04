@@ -58,7 +58,7 @@ func isDefaultBranchProtected(branches []*gl.ProtectedBranch, defaultBranch stri
 //   - audit_project_full: a comprehensive audit covering settings, branch
 //     protection, access, labels, milestones, templates, webhooks, and
 //     push rules.
-func registerAuditPrompts(server *mcp.Server, client *gitlabclient.Client) {
+func registerAuditPrompts(server registrar, client *gitlabclient.Client) {
 	registerAuditProjectWorkflowPrompt(server, client)
 	registerAuditProjectFullPrompt(server, client)
 }
@@ -387,7 +387,7 @@ func writeMemberTable(b *strings.Builder, members []*gl.ProjectMember) {
 // audit_project_workflow.
 
 // registerAuditProjectWorkflowPrompt registers the audit_project_workflow prompt.
-func registerAuditProjectWorkflowPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerAuditProjectWorkflowPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:  "audit_project_workflow",
 		Title: toolutil.TitleFromName("audit_project_workflow"),
@@ -544,7 +544,7 @@ func writeTemplatesAudit(b *strings.Builder, issueTPL, mrTPL []*gl.ProjectTempla
 // audit_project_full.
 
 // registerAuditProjectFullPrompt registers the audit_project_full prompt.
-func registerAuditProjectFullPrompt(server *mcp.Server, client *gitlabclient.Client) {
+func registerAuditProjectFullPrompt(server registrar, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:  "audit_project_full",
 		Title: toolutil.TitleFromName("audit_project_full"),

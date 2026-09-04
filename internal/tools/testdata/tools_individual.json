@@ -36703,12 +36703,16 @@
             "array"
           ]
         },
+        "truncated": {
+          "type": "boolean"
+        },
         "yaml": {
           "type": "string"
         }
       },
       "required": [
-        "yaml"
+        "yaml",
+        "truncated"
       ],
       "type": "object"
     },

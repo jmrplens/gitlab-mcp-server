@@ -1890,7 +1890,13 @@ func registerConfiguredCapabilities(
 	if capabilitySurface == config.CapabilitySurfaceFull {
 		resources.Register(server, client, resources.RegisterOptions{ExcludedActions: excludedActions})
 		resources.RegisterWorkflowGuides(server)
-		prompts.Register(server, client)
+		// Prompts take the same exclusions as resources, and for the same
+		// reason: a prompt is a third request path carrying the same
+		// credential, so a prompt that serves data from an excluded action
+		// would be a way around --exclude-tools rather than a separate
+		// feature. The mechanism arrived with the prompt surface's own
+		// change; this is the line that makes it take effect in the binary.
+		prompts.Register(server, client, prompts.RegisterOptions{ExcludedActions: excludedActions})
 	}
 }
 

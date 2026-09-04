@@ -200,7 +200,31 @@ type GetMetricDefinitionsInput struct{}
 type MetricDefinitionsOutput struct {
 	toolutil.HintableOutput
 	YAML string `json:"yaml"`
+	// Truncated reports that the document was cut at [maxMetricDefinitionsBytes]
+	// and that YAML holds a prefix rather than the whole definition set.
+	Truncated bool `json:"truncated"`
 }
+
+// maxMetricDefinitionsBytes is the largest metric-definition document this
+// action reads into memory.
+//
+// The ceiling is on the bytes read, which here is also the bytes returned:
+// unlike the archive and avatar downloads this document is returned as text
+// rather than base64, so there is no encoded copy a third larger to account for
+// and the two ways of expressing the ceiling are the same number.
+//
+// 2 MiB sits above the definition set GitLab actually ships and below the 4 MiB
+// default message ceiling both transports apply. That upper bound is the real
+// constraint: the whole document goes into the JSON response, so a ceiling at
+// or above the message limit would trade an unbounded read for a response the
+// transport refuses, which answers the caller no better than the read did.
+//
+// This endpoint is admin-only, so it is not the ordinary-tenant exposure the
+// avatar download is. It is bounded for the same reason regardless: an
+// unbounded read of a remote response is a ceiling nobody chose, and being
+// reachable only by an administrator makes it a smaller problem rather than
+// a different one.
+const maxMetricDefinitionsBytes = 2 << 20
 
 // GetMetricDefinitions retrieves metric definitions as YAML (admin-only).
 func GetMetricDefinitions(ctx context.Context, client *gitlabclient.Client, _ GetMetricDefinitionsInput) (MetricDefinitionsOutput, error) {
@@ -211,11 +235,31 @@ func GetMetricDefinitions(ctx context.Context, client *gitlabclient.Client, _ Ge
 	}
 	defer reader.Close()
 
-	data, err := io.ReadAll(reader)
+	return metricDefinitionsOutput(reader)
+}
+
+// metricDefinitionsOutput reads a definition document up to
+// [maxMetricDefinitionsBytes] and reports whether it had to stop early.
+//
+// Split out from [GetMetricDefinitions] so a test can hand it a reader and
+// observe how much of it was consumed. That is the only way to see this
+// ceiling: truncating the slice afterwards produces the identical output
+// whether or not the read itself was bounded, so a test written against the
+// output alone passes with the bound removed and proves nothing.
+func metricDefinitionsOutput(reader io.Reader) (MetricDefinitionsOutput, error) {
+	data, err := io.ReadAll(io.LimitReader(reader, maxMetricDefinitionsBytes+1))
 	if err != nil {
 		return MetricDefinitionsOutput{}, toolutil.WrapErrWithMessage("get_metric_definitions", fmt.Errorf("reading response body: %w", err))
 	}
-	return MetricDefinitionsOutput{YAML: string(data)}, nil
+	// Truncated rather than refused, which is the opposite of what the archive
+	// and avatar downloads do: those return a file whose prefix is not a file,
+	// while a prefix of this document still reads as the definitions it holds,
+	// the way a truncated job trace does.
+	truncated := len(data) > maxMetricDefinitionsBytes
+	if truncated {
+		data = data[:maxMetricDefinitionsBytes]
+	}
+	return MetricDefinitionsOutput{YAML: string(data), Truncated: truncated}, nil
 }
 
 // ---------------------------------------------------------------------------

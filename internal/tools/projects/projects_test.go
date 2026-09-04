@@ -4,6 +4,7 @@
 package projects
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -6393,6 +6394,87 @@ func TestDownloadAvatar_Success(t *testing.T) {
 	expectedB64 := base64.StdEncoding.EncodeToString(rawBytes)
 	if out.ContentBase64 != expectedB64 {
 		t.Errorf("ContentBase64 mismatch")
+	}
+}
+
+// TestDownloadAvatarOutputFromReader_AvatarOverTheCeiling_IsRefusedNotTruncated
+// verifies that the image this action turns into base64 and copies into a
+// JSON-RPC message is bounded, and that an image above the bound produces an
+// error naming the way out rather than a partial image.
+//
+// The action is registered read-only, so before the ceiling existed any tenant
+// holding a token could make the server buffer a whole response and then hold a
+// base64 copy a third larger beside it, with only the client-wide response
+// ceiling in the way. The prefix of a PNG decodes to no image, so this refuses
+// where the job trace truncates. The exactly-at-the-ceiling case is here
+// because an off-by-one in the limit reader would refuse an avatar that fits.
+func TestDownloadAvatarOutputFromReader_AvatarOverTheCeiling_IsRefusedNotTruncated(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{name: "ordinary avatar is returned whole", size: 4096},
+		{name: "avatar exactly at the ceiling is returned whole", size: maxAvatarBytes},
+		{name: "avatar one byte over the ceiling is refused", size: maxAvatarBytes + 1, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := downloadAvatarOutputFromReader(bytes.NewReader(make([]byte, tt.size)))
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("downloadAvatarOutputFromReader(%d bytes) error = nil, want a refusal", tt.size)
+				}
+				if !strings.Contains(err.Error(), "download it from GitLab directly") {
+					t.Errorf("downloadAvatarOutputFromReader(%d bytes) error = %v, want it to name the way out", tt.size, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("downloadAvatarOutputFromReader(%d bytes) error = %v", tt.size, err)
+			}
+			if out.SizeBytes != tt.size {
+				t.Errorf("SizeBytes = %d, want %d", out.SizeBytes, tt.size)
+			}
+		})
+	}
+}
+
+// countingAvatarReader serves a fixed number of bytes and records how many
+// were read, so a test can see how much of a stream the action consumed.
+type countingAvatarReader struct {
+	remaining int
+	read      int
+}
+
+func (r *countingAvatarReader) Read(p []byte) (int, error) {
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	n := min(len(p), r.remaining)
+	r.remaining -= n
+	r.read += n
+	return n, nil
+}
+
+// TestDownloadAvatarOutputFromReader_StopsReadingAtTheCeiling verifies that the
+// ceiling bounds the read itself, not only the answer the caller gets.
+//
+// The refusal test above passes with the io.LimitReader removed, because
+// checking the length after buffering the whole body refuses exactly the same
+// downloads. It refuses them having already done the thing the ceiling exists
+// to prevent: an unbounded response is held in memory first and rejected
+// second, which is no protection at all against a tenant pointing this
+// read-only action at a large object. Only the byte count distinguishes the
+// two.
+func TestDownloadAvatarOutputFromReader_StopsReadingAtTheCeiling(t *testing.T) {
+	reader := &countingAvatarReader{remaining: 8 * maxAvatarBytes}
+	if _, err := downloadAvatarOutputFromReader(reader); err == nil {
+		t.Fatal("downloadAvatarOutputFromReader() error = nil, want a refusal")
+	}
+	if reader.read > 2*maxAvatarBytes {
+		t.Errorf("read %d bytes of an %d-byte stream, want the ceiling to stop it near %d",
+			reader.read, 8*maxAvatarBytes, maxAvatarBytes)
 	}
 }
 

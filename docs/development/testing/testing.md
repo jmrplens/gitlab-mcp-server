@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,531 |
-| Unit test functions                                   | 12,965 |
+| Total test functions                                  | 13,539 |
+| Unit test functions                                   | 12,973 |
 | E2E test functions                                    |    566 |
 | cmd test functions                                    |  2,047 |
-| Test files (internal/)                                |    498 |
+| Test files (internal/)                                |    499 |
 | Test files (cmd/)                                     |    120 |
 | Test files (test/e2e/)                                |    221 |
 | Tool sub-packages tested                              |    175 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,258 | 83.2% |
-| `TestFunc` (no underscore)             |    968 |  7.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,305 |  9.6% |
+| `TestFunc_Scenario` (2-part)           | 11,264 | 83.2% |
+| `TestFunc` (no underscore)             |    968 |  7.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,307 |  9.7% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,184 |        131 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,187 |        132 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            301 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,433 |        354 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,438 |        354 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            566 |        221 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,047 |        120 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,531** |    **839** |                                                                                                 |
+| **Total**               |     **13,539** |    **840** |                                                                                                 |
 
 ### Core Packages
 
@@ -70,20 +70,20 @@
 | mcpotel       |        76 |    99.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
 | oauth         |        70 |    98.4% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
-| prompts       |       272 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
+| prompts       |       275 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
 | resources     |       180 |    99.4% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
 | serverpool    |        91 |    98.3% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                                                                    |
 | subscriptions |        90 |    98.5% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        37 |    89.6% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       793 |    98.4% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,184** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**  | **2,187** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   390 |   100.0% |    57 |
+| projects          |   392 |   100.0% |    57 |
 | groups            |   249 |   100.0% |    37 |
 | mergerequests     |   242 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
@@ -246,7 +246,7 @@
 | projectimportexport     |        40 |          1 |    99.5% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        63 |          2 |   100.0% |         7 |
-| projects                |       390 |          6 |   100.0% |        57 |
+| projects                |       392 |          6 |   100.0% |        57 |
 | projectserviceaccounts  |        11 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        19 |          2 |   100.0% |         6 |
@@ -282,7 +282,7 @@
 | todos                   |        35 |          2 |   100.0% |         3 |
 | topics                  |        29 |          2 |   100.0% |         5 |
 | uploads                 |        49 |          2 |   100.0% |         4 |
-| usagedata               |        28 |          1 |   100.0% |         6 |
+| usagedata               |        31 |          1 |   100.0% |         6 |
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
 | users                   |       210 |          7 |   100.0% |        38 |
@@ -291,7 +291,7 @@
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        95 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        49 |          4 |   100.0% |         7 |
-| **Total**               | **8,433** |    **354** |          | **1,175** |
+| **Total**               | **8,438** |    **354** |          | **1,175** |
 
 </details>
 

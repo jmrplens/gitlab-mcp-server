@@ -3721,6 +3721,34 @@ type DownloadAvatarOutput struct {
 	SizeBytes     int    `json:"size_bytes"`
 }
 
+// maxAvatarBytes is the largest avatar image this action returns in one
+// response, measured against the decoded image rather than the base64 text.
+//
+// Decoded is the side worth naming because it is the side a caller can reason
+// about: it is the size GitLab reports for the file, and the size the upload
+// action accepts. What the response costs is a multiple of it, since the
+// decoded bytes and the base64 copy a third larger again are held at the same
+// time and then copied into a JSON-RPC message, so a ceiling of 1 MiB bounds a
+// call at roughly 2.3 MiB rather than at 1.
+//
+// 1 MiB comes from the endpoint itself: GitLab caps an avatar upload at 200 KB,
+// which the sibling upload action already tells the caller. Five times that
+// leaves room for an avatar stored before the limit existed, or through an
+// import that did not enforce it, while staying far below a size worth
+// streaming. The action is registered read-only, so this is a ceiling any
+// tenant with a token can reach, and it is the reason it exists.
+//
+// An avatar above the ceiling is refused rather than truncated. Truncation is
+// right for a job trace, which stays readable when it is cut; the prefix of a
+// PNG or a JPEG decodes to no image at all, so a partial answer here would be
+// a wrong answer wearing a flag.
+const maxAvatarBytes = 1 << 20
+
+// errAvatarTooLarge is the hint for an avatar this action will not carry,
+// whichever ceiling stopped it: this one, or the client-wide response ceiling
+// that stops the read before it reaches here.
+const errAvatarTooLarge = "the avatar is too large to return in one MCP response; download it from GitLab directly (GET /projects/:id/avatar)"
+
 // DownloadAvatar downloads the avatar image for a project as base64-encoded data.
 func DownloadAvatar(ctx context.Context, client *gitlabclient.Client, input DownloadAvatarInput) (DownloadAvatarOutput, error) {
 	if err := ctx.Err(); err != nil {
@@ -3731,6 +3759,9 @@ func DownloadAvatar(ctx context.Context, client *gitlabclient.Client, input Down
 	}
 	reader, _, err := client.GL().Projects.DownloadAvatar(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
+		if errors.Is(err, gitlabclient.ErrResponseTooLarge) {
+			return DownloadAvatarOutput{}, toolutil.WrapErrWithHint("projectDownloadAvatar", err, errAvatarTooLarge)
+		}
 		return DownloadAvatarOutput{}, toolutil.WrapErrWithStatusHint("projectDownloadAvatar", err, http.StatusNotFound,
 			"project has no custom avatar configured. GitLab serves a generated identicon when no avatar is set")
 	}
@@ -3738,9 +3769,16 @@ func DownloadAvatar(ctx context.Context, client *gitlabclient.Client, input Down
 }
 
 func downloadAvatarOutputFromReader(reader io.Reader) (DownloadAvatarOutput, error) {
-	data, err := io.ReadAll(reader)
+	data, err := io.ReadAll(io.LimitReader(reader, maxAvatarBytes+1))
 	if err != nil {
 		return DownloadAvatarOutput{}, fmt.Errorf("projectDownloadAvatar: reading response: %w", err)
+	}
+	if len(data) > maxAvatarBytes {
+		return DownloadAvatarOutput{}, toolutil.WrapErrWithHint(
+			"projectDownloadAvatar",
+			fmt.Errorf("the avatar exceeds the %d MiB this action returns", maxAvatarBytes>>20),
+			errAvatarTooLarge,
+		)
 	}
 	return DownloadAvatarOutput{
 		ContentBase64: base64.StdEncoding.EncodeToString(data),
