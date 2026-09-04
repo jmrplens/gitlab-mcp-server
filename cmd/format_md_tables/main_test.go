@@ -524,16 +524,20 @@ func TestDiscoverMarkdownFiles_FindsMDX(t *testing.T) {
 // directory no longer exists, so getcwd fails) is reported as a root
 // resolution error rather than an open error on an empty path.
 func TestRun_RemovedWorkingDirectory_ReturnsResolveRootError(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows getcwd does not fail when the current directory is removed")
-	}
 	gone := filepath.Join(t.TempDir(), "gone")
 	if err := os.Mkdir(gone, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	t.Chdir(gone)
+	// Windows refuses to remove a process's working directory, and macOS
+	// keeps answering getcwd from the path it remembers, so on neither can
+	// the failure be produced this way: both skip rather than report the
+	// operating system's design as a defect here.
 	if err := os.RemoveAll(gone); err != nil {
-		t.Fatalf("remove working directory: %v", err)
+		t.Skipf("this platform will not remove the working directory: %v", err)
+	}
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("this platform's getcwd still answers after the working directory is removed")
 	}
 
 	var stdout bytes.Buffer
