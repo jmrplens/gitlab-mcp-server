@@ -481,6 +481,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | Flag           | Default | Description                                                    |
 | -------------- | ------- | -------------------------------------------------------------- |
 | `--shutdown`   | `false` | Terminate all running instances of this binary and exit. Used by external updaters (pe-agnostic-store) before replacing the binary on disk. |
+| `--probe`      | `false` | Ask the running instance's `/health` and exit 0 when it answers 200; the image's `HEALTHCHECK`. With no argument it finds the other instances of this binary (the same lookup as `--shutdown`), reads `--http-addr`, `--tls-cert`, `--transport` and `--http` off their command lines, and probes where they listen: another port, a unix socket, or HTTPS pinned to the certificate `--tls-cert` names (a given `https://` target takes the pin from the probe's own `--tls-cert`, and the standard verification without one). `--transport auto` is settled the way the server settled it, by reading the instance's file descriptor 0 from procfs; an instance serving stdio has nothing to probe and is reported healthy while it runs. A URL, `unix:<path>` or `host:port` after the flag probes that instead. Exit 1 when nothing answered, 2 for a target that does not parse. `cmd/server/probe.go` |
 
 ---
 

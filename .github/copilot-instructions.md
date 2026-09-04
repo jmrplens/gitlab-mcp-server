@@ -254,6 +254,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | Flag           | Default | Description                                                    |
 | -------------- | ------- | -------------------------------------------------------------- |
 | `--shutdown`   | `false` | Terminate all running instances of this binary and exit. Used by external updaters (pe-agnostic-store) before replacing the binary on disk. |
+| `--probe`      | `false` | Ask the running instance's `/health` and exit 0 when it answers; the image's `HEALTHCHECK`. Reads the listener off the instance's own flags, or probes the URL, `unix:<path>` or `host:port` given after the flag. |
 
 ## AI Assistance Infrastructure
 

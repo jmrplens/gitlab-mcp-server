@@ -265,6 +265,7 @@ func main() {
 	var showHelp bool
 	var showVersion bool
 	var shutdownPeers bool
+	var probeHealth bool
 	var useHTTP bool
 	var transport string
 	var toolSearch string
@@ -272,6 +273,7 @@ func main() {
 
 	flag.BoolVar(&showHelp, "h", false, "Show full help with flags, env vars, and examples")
 	flag.BoolVar(&shutdownPeers, "shutdown", false, "Terminate all running instances and exit")
+	flag.BoolVar(&probeHealth, "probe", false, "Ask the running instance's /health and exit 0 when it answers (the container HEALTHCHECK); reads the listener off that instance's flags, or probes the URL, unix:<path> or host:port given after the flag, an https one pinned to --tls-cert when that is given too")
 	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
 	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
@@ -376,6 +378,11 @@ func main() {
 		os.Exit(runShutdown())
 	}
 
+	if probeHealth {
+		deps := probeDeps{peers: livePeers, stdinIsNull: peerStdinIsNull}
+		os.Exit(runProbe(context.Background(), flag.Args(), hcfg.tlsCert, deps, os.Stderr))
+	}
+
 	if toolSearch != "" {
 		toolSurface, _, surfaceErr := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(&hcfg))
 		if surfaceErr != nil {
@@ -469,6 +476,10 @@ FLAGS
   -h, -help                 Show this help message
   -version                  Print version and exit
   -shutdown                 Terminate all running instances and exit
+  -probe [target]           Ask the running instance's /health and exit 0 when it answers (the container
+                            HEALTHCHECK). The listener is read off that instance's own flags, a TLS one
+                            pinned to its -tls-cert; a URL, unix:<path> or host:port after the flag
+                            probes that instead, an https one pinned to -tls-cert when given before it
   -tool-search string       Search tools by name/description and exit
   -log-level string         Logging verbosity: debug|info|warn|error (default info)
 

@@ -320,7 +320,7 @@ services:
       resources:
         limits: { memory: 512M, cpus: "2.0" }
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "gitlab-mcp-server", "--probe"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -358,12 +358,22 @@ here: `--http-addr`, `--http-socket-mode`, `--tls-cert`, `--tls-key`,
 Most of the rest can come from the environment, `--rate-limit-rps` and
 `--rate-limit-burst` included, where an explicitly passed flag still wins.
 
-The image already carries a `HEALTHCHECK`. The Compose block restates it so a
-change to the image's interval does not silently change the deployment's, and
-because the image's check is hardcoded to `http://localhost:8080/health`: move
-the listener to another port, to a unix socket, or behind `--tls-cert`, and the
-container is marked unhealthy while serving perfectly. Restate the check to
-match whatever you changed.
+The image already carries a `HEALTHCHECK`, and from 2.8.0 it is
+`gitlab-mcp-server --probe`: the binary finds the server process in the
+container, reads
+`--http-addr`, `--tls-cert` and the transport off its own command line, and
+asks `/health` where it is actually served. Move the listener to another port,
+to a unix socket, or behind `--tls-cert`, and the check follows without being
+told. The Compose block restates it only so a change to the image's interval
+does not silently change the deployment's. A container a client runs over
+stdio (`docker run -i`) has no listener; the probe reports it healthy while the
+process runs. `--probe <url>`, `--probe unix:<path>` or `--probe host:port`
+skips the discovery, for a check run from outside the container.
+
+The Compose block above restates the check, which is what an image up to 2.7.5
+needs: those carry `wget` against `http://localhost:8080/health`, so any other
+listener is reported unhealthy while it serves. Pinned to 2.8.0 or later the
+`healthcheck:` block can be dropped and the image's own used.
 
 ### Secrets
 
