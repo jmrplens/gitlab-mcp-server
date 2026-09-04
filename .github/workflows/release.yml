@@ -1,9 +1,23 @@
 # Release pipeline for gitlab-mcp-server
 #
-# Triggers: tag push matching v*
+# Triggers: tag push matching v*, and a manual dispatch that REHEARSES.
 # Pipeline: Preflight → E2E (the reusable e2e.yml) → Docker → GoReleaser →
 #           per-publisher jobs → Winget
 # If E2E tests fail, nothing is released.
+#
+# Rehearsal. Every publisher job below was added after 2.7.5 shipped, so none
+# of them has run for real, and the first real run would be the next tag, with
+# credentials, against registries where a mistake is permanent. Dispatching
+# this workflow by hand on an existing tag runs the whole chain in the same
+# jobs with the same secrets and skips only the steps that cannot be undone:
+# the image push and its signatures, the GitHub release and its attestations,
+# the npm and PyPI uploads, the tap push, the registry publish, the commit to
+# main and the winget submission. Everything else is real: the E2E gate boots
+# a GitLab, GoReleaser builds every binary, the publishers download the assets
+# that tag really shipped and verify them against the signed checksums, the
+# packages are packed and validated, and verify-published reads what the
+# registries serve. REHEARSAL is the switch and RELEASE_TAG is the tag either
+# way, so a step reads one variable and does not care how it was started.
 #
 # One job per credential. Until 2.7.5 a single `release` job held the OIDC
 # identity that npm, PyPI, cosign, the MCP Registry and the attestation store
@@ -30,6 +44,15 @@ on:
   push:
     tags:
       - "v*"
+  # A dispatch is always a rehearsal; there is no input to make it publish.
+  # The tag has to exist and have a published release, because the publisher
+  # jobs download what it shipped.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing release tag to rehearse against, e.g. v2.7.5"
+        required: true
+        type: string
 
 # Serialize releases: two close tag pushes would otherwise race on the
 # main manifest commit, npm publish ordering, and the Homebrew tap push.
@@ -45,6 +68,10 @@ permissions: {}
 # The Go version is not stated here: setup-go reads it from go.mod, the one
 # place a Go bump has to touch.
 env:
+  # The two switches every step reads. RELEASE_TAG is the tag whichever way
+  # the run started, so a step compares or downloads against one name.
+  REHEARSAL: ${{ github.event_name == 'workflow_dispatch' }}
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   REGISTRY: ghcr.io
   IMAGE_NAME: jmrplens/gitlab-mcp-server
   DOCKERHUB_IMAGE: jmrplens/gitlab-mcp-server
@@ -68,12 +95,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
       - name: Verify VERSION file matches the release tag
         run: |
           set -euo pipefail
           FILE_V="$(tr -d '[:space:]' < VERSION)"
-          TAG_V="${GITHUB_REF#refs/tags/v}"
+          TAG_V="${RELEASE_TAG#v}"
           if [ "${FILE_V}" != "${TAG_V}" ]; then
             echo "::error::VERSION file says ${FILE_V} but the tag is v${TAG_V} — the docker job would tag ghcr.io:${FILE_V} while server.json pins ghcr.io/jmrplens/gitlab-mcp-server:${TAG_V}"
             exit 1
@@ -87,6 +115,10 @@ jobs:
     name: "🧫 E2E gate"
     needs: [preflight]
     uses: ./.github/workflows/e2e.yml
+    # Not env.RELEASE_TAG: a reusable-workflow call cannot read the env
+    # context, so the same expression is written out here.
+    with:
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     permissions:
       contents: read
 
@@ -100,7 +132,10 @@ jobs:
     # environment carries.
     # server.json pins the image by digest, and the stamping jobs read it.
     outputs:
-      digest: ${{ steps.docker-push.outputs.digest }}
+      # In a rehearsal nothing is pushed, so the digest the stamping jobs read
+      # is the one the registry already holds for that tag: the real value,
+      # resolved rather than produced.
+      digest: ${{ steps.docker-push.outputs.digest || steps.published-digest.outputs.digest }}
     permissions:
       contents: read # checkout
       packages: write # ghcr.io push via GITHUB_TOKEN login
@@ -108,6 +143,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - name: Extract version
@@ -195,6 +231,7 @@ jobs:
 
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         id: docker-push
+        if: env.REHEARSAL != 'true'
         with:
           context: .
           push: true
@@ -237,12 +274,28 @@ jobs:
       # before giving up so a blip on that endpoint stops leaving published
       # images unsigned.
       - name: Sign Docker image (ghcr.io)
+        if: env.REHEARSAL != 'true'
         env:
           IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.docker-push.outputs.digest }}
         run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
 
+      # Rehearsal only: the digest the stamping jobs need is the one this tag
+      # already has on ghcr.io. Resolving it here means server.json is stamped
+      # with a real digest and the stamp path runs exactly as it would.
+      - name: Resolve the published image digest
+        id: published-digest
+        if: env.REHEARSAL == 'true'
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          set -euo pipefail
+          digest=$(docker buildx imagetools inspect "${IMAGE}:${RELEASE_TAG#v}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          [ -n "$digest" ] || { echo "::error::no published image for ${IMAGE}:${RELEASE_TAG#v}"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "rehearsing against ${IMAGE}:${RELEASE_TAG#v} ($digest)"
+
       - name: Sign Docker image (Docker Hub)
-        if: steps.dockerhub-login.outputs.skip == 'false'
+        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
         env:
           IMAGE_REF: docker.io/${{ env.DOCKERHUB_IMAGE }}@${{ steps.docker-push.outputs.digest }}
         run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
@@ -257,7 +310,7 @@ jobs:
       # Hub PAT with read/write/delete scope — the descriptions API rejects
       # narrower ones.
       - name: Update Docker Hub description
-        if: steps.dockerhub-login.outputs.skip == 'false'
+        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
         # Pinned to a commit SHA (like every other action here) because
         # this is an individually-maintained action that receives
         # DOCKERHUB_TOKEN — a mutable tag would let a compromised release
@@ -290,6 +343,7 @@ jobs:
       # reads its token from the environment instead.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -346,7 +400,12 @@ jobs:
           # release's signature. Bump deliberately, and never past v2 — the
           # config is a version: 2 config.
           version: ${{ env.GORELEASER_VERSION }}
-          args: release --clean
+          # A rehearsal builds everything and publishes nothing: --snapshot
+          # skips the tag validation and the GitHub release, --skip=publish
+          # keeps every artifact local, and --skip=sign leaves the signing
+          # identity unused on artifacts nobody will ship. The SBOMs are still
+          # generated, so syft's install and the binaries' scan are exercised.
+          args: ${{ env.REHEARSAL == 'true' && 'release --clean --snapshot --skip=publish,sign,announce' || 'release --clean' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -373,9 +432,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF#refs/tags/v}"
+          VERSION="${RELEASE_TAG#v}"
           bash scripts/build-mcpb.sh "${VERSION}"
           sha256sum dist/gitlab-mcp-server.mcpb
+          if [ "$REHEARSAL" = "true" ]; then
+            echo "rehearsal: the bundle was built and not uploaded"
+            exit 0
+          fi
           gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
 
       # SLSA build provenance for every GoReleaser artifact, keyed by the exact
@@ -383,11 +446,13 @@ jobs:
       # Stored in GitHub's attestation store — no release asset changes.
       # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
       - name: Attest build provenance (release binaries)
+        if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-checksums: dist/checksums.txt
 
       - name: Attest build provenance (Claude Desktop extension)
+        if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: dist/gitlab-mcp-server.mcpb
@@ -399,9 +464,10 @@ jobs:
       # (.goreleaser.yml: draft: true). Everything downstream of this job reads
       # the published assets, so this step is also the handoff.
       - name: Publish release
+        if: env.REHEARSAL != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "v${GITHUB_REF#refs/tags/v}" --draft=false
+        run: gh release edit "v${RELEASE_TAG#v}" --draft=false
 
   npm:
     name: "📮 Publish to npm"
@@ -415,6 +481,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -426,7 +493,7 @@ jobs:
       - name: Fetch and verify release binaries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/fetch-release-assets.sh "${GITHUB_REF#refs/tags/v}" dist
+        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
       # npm >= 11.5.1 performs the OIDC exchange that trusted publishing needs;
       # setup-node's Node 22 ships an older npm, so it is upgraded below.
@@ -457,7 +524,14 @@ jobs:
         run: |
           set -euo pipefail
           npm install -g npm@11.5.1
-          bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}" --no-assemble
+          if [ "$REHEARSAL" = "true" ]; then
+            # npm publish --dry-run packs every tarball and validates it
+            # against the registry without uploading, so the rehearsal runs
+            # the publish script's own path up to the last call.
+            bash scripts/publish-npm.sh dist "${RELEASE_TAG#v}" --no-assemble --dry-run
+          else
+            bash scripts/publish-npm.sh dist "${RELEASE_TAG#v}" --no-assemble
+          fi
 
   pypi:
     name: "🐍 Publish to PyPI"
@@ -471,6 +545,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -478,7 +553,7 @@ jobs:
       - name: Fetch and verify release binaries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/fetch-release-assets.sh "${GITHUB_REF#refs/tags/v}" dist
+        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
       # One wheel per platform with the native binary in .data/scripts (the
       # uv/ruff model), validated before upload because a published PyPI file
@@ -490,6 +565,7 @@ jobs:
       # attached automatically, and skip-existing means a re-run of this job
       # lands on already-uploaded files without failing.
       - name: Publish to PyPI
+        if: env.REHEARSAL != 'true'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: pypi/dist
@@ -517,6 +593,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -524,7 +601,7 @@ jobs:
       - name: Fetch and verify checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/fetch-release-assets.sh --checksums-only "${GITHUB_REF#refs/tags/v}" dist
+        run: bash scripts/fetch-release-assets.sh --checksums-only "${RELEASE_TAG#v}" dist
 
       # The tap deploy key writes to another repository, so it lives in a job
       # that runs no third-party code and holds nothing else.
@@ -533,18 +610,25 @@ jobs:
           TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}
         run: |
           set -euo pipefail
-          if [ -z "${TAP_DEPLOY_KEY_B64}" ]; then
+          # A rehearsal clones the tap read-only over https and pushes
+          # nothing, so it does not need the deploy key at all.
+          if [ -z "${TAP_DEPLOY_KEY_B64}" ] && [ "$REHEARSAL" != "true" ]; then
             echo "::warning::TAP_DEPLOY_KEY_B64 secret is not configured — skipping Homebrew tap update"
             exit 0
           fi
-          VERSION="${GITHUB_REF#refs/tags/v}"
+          VERSION="${RELEASE_TAG#v}"
           KEY_FILE="${RUNNER_TEMP}/tap_deploy_key"
           KNOWN_HOSTS_FILE="${RUNNER_TEMP}/tap_known_hosts"
           echo "${TAP_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
           chmod 600 "${KEY_FILE}"
           ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
           export GIT_SSH_COMMAND="ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
-          bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
+          if [ "$REHEARSAL" = "true" ]; then
+            TAP_REPO=https://github.com/jmrplens/homebrew-tap.git \
+              bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap" --dry-run
+          else
+            bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
+          fi
 
   mcp-registry:
     name: "🗂️ Publish to MCP Registry"
@@ -567,6 +651,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -574,7 +659,7 @@ jobs:
       - name: Fetch and verify release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/fetch-release-assets.sh "${GITHUB_REF#refs/tags/v}" dist "gitlab-mcp-server.mcpb"
+        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist "gitlab-mcp-server.mcpb"
 
       # Stamp the working tree only — the commit to main is a separate job with
       # a separate credential. The OCI digest comes from the docker job, so
@@ -589,7 +674,7 @@ jobs:
             echo "::error::the docker job published no image digest; server.json cannot be pinned"
             exit 1
           fi
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${RELEASE_TAG#v}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
 
       - name: Publish to MCP Registry
         env:
@@ -613,6 +698,14 @@ jobs:
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "${TARBALL}"
           tar xzf "${TARBALL}" mcp-publisher
+          if [ "$REHEARSAL" = "true" ]; then
+            # The tool is downloaded and its signature verified above, which
+            # is the part of this step that can rot; the publish itself is
+            # the irreversible part. Show what would have been published.
+            echo "rehearsal: mcp-publisher ${MCP_PUBLISHER_VERSION} verified; server.json as stamped for this tag:"
+            git --no-pager diff -- server.json
+            exit 0
+          fi
           ./mcp-publisher login github-oidc
           set +e
           PUBLISH_STATUS=1
@@ -647,7 +740,7 @@ jobs:
           set -e
           if [ "${PUBLISH_STATUS}" -ne 0 ]; then
             if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
-              echo "::notice::MCP Registry version ${GITHUB_REF#refs/tags/v} is already published; continuing"
+              echo "::notice::MCP Registry version ${RELEASE_TAG#v} is already published; continuing"
             else
               exit "${PUBLISH_STATUS}"
             fi
@@ -663,6 +756,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -670,7 +764,7 @@ jobs:
       - name: Fetch and verify the signed checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/fetch-release-assets.sh --checksums-only "${GITHUB_REF#refs/tags/v}" dist
+        run: bash scripts/fetch-release-assets.sh --checksums-only "${RELEASE_TAG#v}" dist
 
       # Downloads what npm and PyPI actually serve and compares the embedded
       # binaries with the signed checksums.txt. The publishers re-assemble
@@ -687,7 +781,7 @@ jobs:
         run: |
           python3 scripts/verify_published_packages.py \
             --retry-budget 480 --retry-delay 30 \
-            "${GITHUB_REF#refs/tags/v}" dist/checksums.txt
+            "${RELEASE_TAG#v}" dist/checksums.txt
 
   commit-manifests:
     name: "📝 Commit manifests to main"
@@ -721,7 +815,7 @@ jobs:
       - name: Fetch and verify release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/fetch-release-assets.sh "${GITHUB_REF#refs/tags/v}" dist "gitlab-mcp-server.mcpb"
+        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist "gitlab-mcp-server.mcpb"
 
       - name: Commit updated server.json and plugin.json to main
         env:
@@ -730,8 +824,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          if [ -z "${RELEASE_DEPLOY_KEY_B64}" ]; then
+          VERSION="${RELEASE_TAG#v}"
+          # A rehearsal commits locally and pushes nothing, so it does not
+          # need the deploy key.
+          if [ -z "${RELEASE_DEPLOY_KEY_B64}" ] && [ "$REHEARSAL" != "true" ]; then
             echo "::error::RELEASE_DEPLOY_KEY_B64 secret is not configured"
             exit 1
           fi
@@ -782,6 +878,11 @@ jobs:
           plugin.json (Agent Plugins), .plugin/plugin.json (legacy Open
           Plugins), mcpb/manifest.json (Claude Desktop extension), and
           lhm.plugin.json (LobeHub Marketplace)."
+          if [ "$REHEARSAL" = "true" ]; then
+            echo "rehearsal: main would receive this commit, nothing was pushed"
+            git --no-pager show --stat --format='%h %s' HEAD
+            exit 0
+          fi
           git push origin main
 
   winget:
@@ -789,6 +890,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     needs: [release]
+    # Nothing here can run dry: the sync writes to the fork and the releaser
+    # opens a pull request against microsoft/winget-pkgs, so a rehearsal skips
+    # the job whole. env is not readable at job level, hence the event test.
+    if: github.event_name != 'workflow_dispatch'
     permissions: {} # both steps authenticate with WINGET_TOKEN, not GITHUB_TOKEN
     steps:
       # Publishes a version-update PR to microsoft/winget-pkgs via the

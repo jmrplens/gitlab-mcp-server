@@ -6,12 +6,27 @@
 # pushes it to the tap repository. The caller must have push access to the
 # tap (in CI: an SSH deploy key wired through GIT_SSH_COMMAND).
 #
-# Usage: update-homebrew-tap.sh <checksums-file> <version> [tap-clone-dir]
+# Usage: update-homebrew-tap.sh <checksums-file> <version> [tap-clone-dir] [--dry-run]
+#
+# --dry-run does everything but the push: the formula is rendered, checked
+# with ruby -c and committed to the local clone, and the commit is printed
+# instead of pushed. It is what the release rehearsal runs, so the whole path
+# up to the one irreversible step is exercised with real checksums.
 
 set -euo pipefail
 
-CHECKSUMS_FILE="${1:?Usage: $0 <checksums-file> <version> [tap-clone-dir]}"
-VERSION="${2:?Usage: $0 <checksums-file> <version> [tap-clone-dir]}"
+DRY_RUN=0
+ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=1 ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+set -- "${ARGS[@]}"
+
+CHECKSUMS_FILE="${1:?Usage: $0 <checksums-file> <version> [tap-clone-dir] [--dry-run]}"
+VERSION="${2:?Usage: $0 <checksums-file> <version> [tap-clone-dir] [--dry-run]}"
 TAP_DIR="${3:-homebrew-tap}"
 TAP_REPO="${TAP_REPO:-git@github.com:jmrplens/homebrew-tap.git}"
 BASE_URL="https://github.com/jmrplens/gitlab-mcp-server/releases/download/v${VERSION}"
@@ -111,5 +126,11 @@ if git diff --cached --quiet; then
 fi
 
 git commit -m "gitlab-mcp-server ${VERSION}"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo "Dry run: the tap would receive this commit, nothing was pushed"
+  git --no-pager show --stat --format='%h %s' HEAD
+  git --no-pager diff HEAD~1 -- Formula/gitlab-mcp-server.rb
+  exit 0
+fi
 git push origin HEAD:main
 echo "Tap formula updated to v${VERSION}"
