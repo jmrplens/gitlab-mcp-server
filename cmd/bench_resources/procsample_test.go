@@ -247,7 +247,7 @@ func TestSampler_StartStop_RecordsAPeakAndStopsCleanly(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	s.stop()
 
-	if peak := s.peakRSS(); peak == 0 {
+	if s.peakRSS() == 0 {
 		t.Error("the poller recorded no peak for a process that is running")
 	}
 

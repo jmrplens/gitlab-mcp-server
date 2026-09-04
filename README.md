@@ -459,10 +459,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,062 |     225,763 |
+| Source (`.go`, non-test) |     1,062 |     225,764 |
 | Unit tests (`_test.go`)  |       632 |     366,811 |
 | End-to-end tests         |       223 |      60,624 |
-| **Total**                | **1,917** | **653,198** |
+| **Total**                | **1,917** | **653,199** |
 
 ### Functions
 
