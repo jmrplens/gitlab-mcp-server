@@ -145,7 +145,7 @@ type CreateInput struct {
 	TargetPath         string  `json:"target_path,omitempty" jsonschema:"Target path to show message on"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
-	Theme              string  `json:"theme,omitempty" jsonschema:"Theme: indigo, light-indigo, blue, light-blue, green, light-green, red, light-red"`
+	Theme              string  `json:"theme,omitempty" jsonschema:"Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light"`
 }
 
 // CreateOutput contains the created broadcast message.
@@ -217,7 +217,7 @@ type UpdateInput struct {
 	TargetPath         string  `json:"target_path,omitempty" jsonschema:"Target path to show message on"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
-	Theme              string  `json:"theme,omitempty" jsonschema:"Theme color"`
+	Theme              string  `json:"theme,omitempty" jsonschema:"Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light"`
 }
 
 // UpdateOutput contains the updated broadcast message.

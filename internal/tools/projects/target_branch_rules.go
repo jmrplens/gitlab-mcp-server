@@ -42,7 +42,7 @@ func targetBranchRuleToOutput(r *gl.TargetBranchRule) TargetBranchRuleOutput {
 // branch rules. The GitLab GraphQL project(fullPath:) field does not accept
 // numeric IDs, so project_id must be the full namespace/project path.
 type ListTargetBranchRulesInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Full project path (namespace/project). The target branch rules GraphQL query requires the full path and does not accept a numeric ID,required"`
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Full project path such as my-group/my-project. The target branch rules GraphQL query requires the full path and does not accept a numeric ID,required"`
 }
 
 // ListTargetBranchRulesOutput holds a project's target branch rules. The

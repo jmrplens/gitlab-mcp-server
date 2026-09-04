@@ -17,7 +17,7 @@ import (
 // DownloadInput holds parameters for downloading a ML model package file.
 type DownloadInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"       jsonschema:"Project ID or URL-encoded path,required"`
-	ModelVersionID toolutil.StringOrInt `json:"model_version_id" jsonschema:"Model version ID (numeric or string like candidate:5),required"`
+	ModelVersionID toolutil.StringOrInt `json:"model_version_id" jsonschema:"Model version ID. Either the numeric version ID from the model version URL or a candidate run ID prefixed with candidate: such as candidate:5,required"`
 	Path           string               `json:"path"             jsonschema:"Path within the model package,required"`
 	Filename       string               `json:"filename"         jsonschema:"Name of the file to download,required"`
 }

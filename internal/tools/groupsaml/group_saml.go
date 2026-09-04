@@ -263,8 +263,8 @@ type SAMLUsersListInput struct {
 	Username      string `json:"username,omitempty" jsonschema:"Filter by an exact username"`
 	Active        *bool  `json:"active,omitempty" jsonschema:"Limit to active users only"`
 	Blocked       *bool  `json:"blocked,omitempty" jsonschema:"Limit to blocked users only"`
-	CreatedAfter  string `json:"created_after,omitempty" jsonschema:"Return users created after this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)"`
-	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return users created before this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)"`
+	CreatedAfter  string `json:"created_after,omitempty" jsonschema:"Return users created after the specified time. Format: ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)"`
+	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return users created before the specified time. Format: ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)"`
 	OrderBy       string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id, name, username, created_at)"`
 	Sort          string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput

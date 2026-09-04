@@ -50,8 +50,10 @@ func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
 		aliases = []string{
 			individualTool,
 			"gitlab_get_project_security_settings",
+			"project_security_settings_get",
 			"project_secret_push_protection_get",
 			"project_security_posture",
+			"project_vulnerability_scan_settings",
 		}
 		related = []string{"project.get", "project.security_settings_update"}
 		description = "Read a project's security settings (Ultimate). Returns: secret_push_protection_enabled, continuous_vulnerability_scans_enabled, container scanning, and per-analyzer auto-fix flags. See also: gitlab_update_project_secret_push_protection, gitlab_project_get."

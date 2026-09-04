@@ -50,6 +50,7 @@ func projectImportExportOptions(individualTool string) toolutil.ActionSpecOption
 	opts.RelatedActions = meta.related
 	opts.ParameterGuidance = meta.guidance
 	opts.IndividualTool.Description = meta.description
+	opts.InputSchemaOverrides = meta.overrides
 	return opts
 }
 
@@ -61,6 +62,9 @@ type projectImportExportMetaEntry struct {
 	related     []string
 	guidance    map[string]toolutil.ParameterGuidance
 	description string
+	// overrides constrains the input schema where GitLab documents a closed
+	// value set that the SDK types as a plain string.
+	overrides []toolutil.InputSchemaOverride
 }
 
 // Canonical action IDs used for cross-linking related actions.
@@ -84,6 +88,12 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 		guidance: projectIDGuidance(),
 		description: "Schedule an asynchronous project export. Returns: a confirmation message. " +
 			"See also: gitlab_get_project_export_status, gitlab_download_project_export.",
+		// GitLab accepts only PUT and POST for upload[http_method]
+		// (https://docs.gitlab.com/api/project_import_export/#schedule-an-export).
+		overrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("upload.http_method", "PUT", "POST"),
+			toolutil.SchemaEnumOverride("upload_http_method", "PUT", "POST"),
+		},
 	},
 	"gitlab_get_project_export_status": {
 		usage:    "Get the current export status of a project. Use after gitlab_schedule_project_export to poll until export_status is 'finished'. Status values are none, started, finished, regeneration_in_progress.",
@@ -127,6 +137,14 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 		},
 		description: "Import a project from an export archive. Returns: the new project's import status, type, correlation id, and any import error. " +
 			"See also: gitlab_get_project_import_status, gitlab_download_project_export.",
+		// override_params accepts the create-project attributes, whose closed
+		// value sets are documented on the Projects API
+		// (https://docs.gitlab.com/api/projects/#create-a-project). The central
+		// visibility enum applies to top-level fields only, not to this nested one.
+		overrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("override_params.visibility", "private", "internal", "public"),
+			toolutil.SchemaEnumOverride("override_params.merge_method", "merge", "rebase_merge", "ff"),
+		},
 	},
 	"gitlab_get_project_import_status": {
 		usage:    "Get the import status of a project created by gitlab_import_project_from_file. Poll until import_status is 'finished' or 'failed'. Inspect import_error on failure. Status values are none, scheduled, started, finished, failed.",

@@ -138,6 +138,15 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the commit diff. Omit position entirely for a thread that is not tied to a line."},
 		}
 		options.IndividualTool.Description = "Create a new discussion thread on a commit, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_add_commit_discussion_note, gitlab_list_commit_discussions, gitlab_commit_diff."
+		// Position vocabularies from https://docs.gitlab.com/api/discussions/
+		// (create new commit thread): position_type is one of text, image or
+		// file, and a line_range endpoint type is new for an added line and
+		// old otherwise.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("position.position_type", "text", "image", "file"),
+			toolutil.SchemaEnumOverride("position.line_range.start.type", "new", "old"),
+			toolutil.SchemaEnumOverride("position.line_range.end.type", "new", "old"),
+		}
 	case "gitlab_add_commit_discussion_note":
 		options.Usage = "Reply to an existing commit discussion thread by adding a note. Use this after gitlab_list_commit_discussions or gitlab_create_commit_discussion to continue a thread. Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_add_commit_discussion_note", "reply to commit discussion", "add note to commit discussion", "comment on commit thread"}

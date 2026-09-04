@@ -100,6 +100,17 @@ func pipelineIDGuidance() map[string]toolutil.ParameterGuidance {
 	return map[string]toolutil.ParameterGuidance{paramPipelineID: pipelineIDGuidanceEntry()}
 }
 
+// pipelineSourceValues are the pipeline sources a list or latest lookup can
+// filter by: the CI_PIPELINE_SOURCE vocabulary GitLab documents at
+// https://docs.gitlab.com/ci/jobs/job_rules/#ci_pipeline_source-predefined-variable
+// (the page the pipelines API links its source parameter to), matching the
+// gl.PipelineSource constants in client-go, in documentation order.
+var pipelineSourceValues = []string{
+	"api", "chat", "external", "external_pull_request_event", "merge_request_event",
+	"ondemand_dast_scan", "ondemand_dast_validation", "parent_pipeline", "pipeline", "push",
+	"schedule", "security_orchestration_policy", "trigger", "web", "webide",
+}
+
 func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute pipelines domain action.", Tags: []string{"ci", "pipeline"},
@@ -130,6 +141,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 			toolutil.SchemaEnumOverride("status", "created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"),
 			toolutil.SchemaEnumOverride("scope", "running", "pending", "finished", "branches", "tags"),
 			toolutil.SchemaEnumOverride("order_by", "id", "status", "ref", "updated_at", "user_id"),
+			toolutil.SchemaEnumOverride("source", pipelineSourceValues...),
 		}
 	case "get":
 		options.Usage = "Get one pipeline by project_id and pipeline_id. Use this when the target pipeline is already known and you need detailed status, ref, source, and web URL fields."
@@ -162,6 +174,11 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 			},
 		}
 		options.IndividualTool.Description = "Create a new pipeline. Returns: created pipeline metadata including ID, status, and target ref. See also: gitlab_pipeline_get, gitlab_pipeline_wait, gitlab_job_list_project."
+		// The central variable_type enum covers only a top-level parameter;
+		// each variables[] element carries its own copy (gl.VariableTypeValue).
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("variables.variable_type", "env_var", "file"),
+		}
 	case "cancel":
 		options.Usage = "Cancel a running pipeline's jobs by project_id and pipeline_id. Use when a build must be stopped early. Completed pipelines cannot be cancelled."
 		options.Aliases = []string{"cancel pipeline", "stop pipeline", "abort pipeline"}
@@ -219,6 +236,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 			toolutil.SchemaEnumOverride("status", "created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"),
 			toolutil.SchemaEnumOverride("scope", "running", "pending", "finished", "branches", "tags"),
 			toolutil.SchemaEnumOverride("order_by", "id", "status", "ref", "updated_at", "user_id"),
+			toolutil.SchemaEnumOverride("source", pipelineSourceValues...),
 		}
 	case "update_metadata":
 		options.Usage = "Update a pipeline's metadata (its display name) by project_id and pipeline_id. Use to rename a pipeline. Requires Developer+ role and a non-archived pipeline."

@@ -18,6 +18,8 @@ const (
 	actionNameList        = "list"
 	actionNameGroupList   = "group_list"
 	actionNamePublishDir  = "publish_directory"
+	actionNamePublishLink = "publish_and_link"
+	actionNameFileList    = "file_list"
 	schemaEnum            = "enum"
 	schemaDescription     = "description"
 	paramOrderBy          = "order_by"
@@ -44,13 +46,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_list_group_packages — list packages across a group and its descendant projects.
 		packageReadSpec(actionNameGroupList, toolutil.RouteAction(client, GroupList), "gitlab_list_group_packages"),
 		// gitlab_package_file_list — list files within a single package.
-		packageReadSpec("file_list", toolutil.RouteAction(client, FileList), "gitlab_package_file_list"),
+		packageReadSpec(actionNameFileList, toolutil.RouteAction(client, FileList), "gitlab_package_file_list"),
 		// gitlab_package_delete — delete a package (destructive).
 		packageDeleteSpec("delete", toolutil.DestructiveActionWithRequest(client, deleteOutput), "gitlab_package_delete"),
 		// gitlab_package_file_delete — delete a single file from a package (destructive).
 		packageDeleteSpec("file_delete", toolutil.DestructiveActionWithRequest(client, fileDeleteOutput), "gitlab_package_file_delete"),
 		// gitlab_package_publish_and_link — publish a file and link it to a release in one call.
-		packageCreateSpec("publish_and_link", toolutil.RouteActionWithRequest(client, PublishAndLink), "gitlab_package_publish_and_link"),
+		packageCreateSpec(actionNamePublishLink, toolutil.RouteActionWithRequest(client, PublishAndLink), "gitlab_package_publish_and_link"),
 		// gitlab_package_publish_directory — publish every file from a local directory.
 		packageCreateSpec(actionNamePublishDir, toolutil.RouteActionWithRequest(client, PublishDirectory), "gitlab_package_publish_directory"),
 	}
@@ -145,7 +147,7 @@ var packageActionMetadata = map[string]packageActionMeta{
 		related:     []string{actionPackageList, actionPackageFileList, actionPackageDelete},
 		description: "List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.",
 	},
-	"file_list": {
+	actionNameFileList: {
 		usage:       "List the individual files belonging to one package. Provide project_id and the package_id returned by package.list to enumerate every asset, its size, and checksums.",
 		aliases:     []string{"list package files", "show package assets", "enumerate files in package", "browse package version files"},
 		related:     []string{"package.download", "package.file_delete", actionPackageList},
@@ -163,7 +165,7 @@ var packageActionMetadata = map[string]packageActionMeta{
 		related:     []string{actionPackageFileList, actionPackageDelete, actionPackageList},
 		description: "Delete a single file from a package permanently. Returns: a success confirmation naming the deleted file, package, and project. See also: gitlab_package_file_list, gitlab_package_delete.",
 	},
-	"publish_and_link": {
+	actionNamePublishLink: {
 		usage:       "Publish a Generic Package Registry file and attach it to a release as an asset link in one call. Provide the package coordinates plus the tag_name of the target release.",
 		aliases:     []string{"publish package and link to release", "upload package asset and attach release link", "attach generic package to release", "publish file and create release asset"},
 		related:     []string{actionPackagePublish, "package.publish_directory", "release.create", "release.link_create"},
@@ -178,8 +180,8 @@ var packageActionMetadata = map[string]packageActionMeta{
 
 // packageOptions returns the base [toolutil.ActionSpecOptions] for a
 // Generic Package Registry action and customizes the Usage,
-// ParameterGuidance, and InputSchemaOverrides for the list and
-// publish_directory individual tools.
+// ParameterGuidance, and InputSchemaOverrides for the list, file_list,
+// publish, publish_and_link, and publish_directory individual tools.
 func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute packages domain action.", Tags: []string{"package"},
@@ -267,8 +269,25 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 			}),
 		}
 	}
+	if actionName == actionNameFileList {
+		// https://docs.gitlab.com/api/packages/#list-package-files
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride(paramOrderBy, "id", "file_name", "created_at"),
+		}
+	}
+	if actionName == actionNamePublishLink {
+		// link_type: https://docs.gitlab.com/api/releases/links/#create-a-release-link
+		// status: gl.GenericPackageStatusValue (default, hidden)
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("link_type", "package", "runbook", "image", "other"),
+			toolutil.SchemaEnumOverride("status", "default", "hidden"),
+		}
+	}
 	if actionName == actionNamePublishDir {
 		options.Usage = "Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file. include_pattern is one glob, not a comma-separated file list."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("status", "default", "hidden"),
+		}
 		options.Aliases = []string{"publish local directory", "upload package directory", "generic package directory upload", "publish multiple package files", "publish files from directory", "upload package files from directory", "generic package publish directory files", "publish fixture files directory"}
 		options.Tags = append(options.Tags, "generic_package", "directory_upload", "package-files-directory", "fixture-files-directory")
 		options.RelatedActions = []string{"release.create", "release.link_create_batch", actionPackagePublish}

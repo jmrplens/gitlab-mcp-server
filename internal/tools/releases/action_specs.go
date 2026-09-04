@@ -81,6 +81,9 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 				ExampleBinding: `params.project_id:"group/project"`,
 			},
 		}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("order_by", "released_at", "created_at"),
+		}
 		options.IndividualTool.Description = "List releases in a project with pagination. Returns: tag names, release names, release dates, and summary metadata. See also: gitlab_release_get, gitlab_tag_list, gitlab_release_link_list."
 	case "get":
 		options.Usage = "Get a release by project_id and tag_name. Use this when a specific tag is known and detailed release notes/assets are needed."

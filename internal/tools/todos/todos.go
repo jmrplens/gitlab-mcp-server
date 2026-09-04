@@ -16,12 +16,12 @@ import (
 type ListInput struct {
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
-	Action    string `json:"action,omitempty"     jsonschema:"Filter by action: assigned, mentioned, build_failed, marked, approval_required, directly_addressed"`
+	Action    string `json:"action,omitempty"     jsonschema:"Filter by action: assigned, mentioned, build_failed, marked, approval_required, unmergeable, directly_addressed, merge_train_removed, member_access_requested"`
 	AuthorID  int64  `json:"author_id,omitempty"  jsonschema:"Filter by author user ID"`
 	ProjectID int64  `json:"project_id,omitempty" jsonschema:"Filter by project ID"`
 	GroupID   int64  `json:"group_id,omitempty"   jsonschema:"Filter by group ID"`
 	State     string `json:"state,omitempty"      jsonschema:"Filter by state: pending or done (default: pending)"`
-	Type      string `json:"type,omitempty"       jsonschema:"Filter by target type: Issue, MergeRequest, DesignManagement::Design, AlertManagement::Alert"`
+	Type      string `json:"type,omitempty"       jsonschema:"Filter by target type: Issue, MergeRequest, Commit, Epic, DesignManagement::Design, AlertManagement::Alert, Project, Namespace, Vulnerability, WikiPage::Meta"`
 	OrderBy   string `json:"order_by,omitempty"   jsonschema:"Order results by field (e.g. id, created_at). Combine with sort."`
 	Sort      string `json:"sort,omitempty"       jsonschema:"Sort direction: asc or desc."`
 }

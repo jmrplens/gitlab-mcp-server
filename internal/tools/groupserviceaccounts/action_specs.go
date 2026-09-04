@@ -70,6 +70,11 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 	if individualTool == "gitlab_group_service_account_pat_rotate" {
 		options.Usage += " Rotating revokes the supplied token_id and returns a brand-new token value. Capture the returned token immediately. Omit expires_at unless the task gives an explicit expiry date. If provided, use YYYY-MM-DD within the instance maximum token lifetime."
 	}
+	if individualTool == "gitlab_group_service_account_pat_list" {
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("state", "active", "inactive"),
+		}
+	}
 	if individualTool == "gitlab_group_service_account_pat_revoke" || individualTool == "gitlab_group_service_account_pat_rotate" {
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"token_id": {

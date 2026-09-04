@@ -54,6 +54,11 @@ func userTokenOptions(individualTool string) toolutil.ActionSpecOptions {
 			options.IndividualTool.Description = meta.description
 		}
 	}
+	if individualTool == "gitlab_list_impersonation_tokens" {
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("state", "all", "active", "inactive"),
+		}
+	}
 	return options
 }
 

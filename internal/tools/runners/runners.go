@@ -331,7 +331,7 @@ type ListInput struct {
 	Status  string   `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
 	Paused  *bool    `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList []string `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
-	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead"`
+	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: active, paused, online, or offline. Prefer type and status instead"`
 	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
 	Sort    string   `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
@@ -475,7 +475,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 // ListJobsInput defines parameters for listing jobs processed by a runner.
 type ListJobsInput struct {
 	RunnerID int64  `json:"runner_id"           jsonschema:"Runner ID,required"`
-	Status   string `json:"status,omitempty"    jsonschema:"Job status filter: running, success, failed, canceled"`
+	Status   string `json:"status,omitempty"    jsonschema:"Job status filter: created, waiting_for_resource, preparing, waiting_for_callback, pending, running, success, failed, canceling, canceled, skipped, manual, or scheduled"`
 	OrderBy  string `json:"order_by,omitempty"  jsonschema:"Order by field: id (default)"`
 	Sort     string `json:"sort,omitempty"      jsonschema:"Sort direction: asc, desc"`
 	toolutil.PaginationInput
@@ -527,7 +527,7 @@ type ListProjectInput struct {
 	Status    string               `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
 	Paused    *bool                `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList   []string             `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
-	Scope     string               `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead"`
+	Scope     string               `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: active, paused, online, or offline. Prefer type and status instead"`
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
@@ -865,7 +865,7 @@ type ListAllInput struct {
 	Status  string   `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
 	Paused  *bool    `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList []string `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
-	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead"`
+	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online, or offline. Prefer type and status instead"`
 	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
 	Sort    string   `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput

@@ -67,7 +67,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Reso
 type EditInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Key         string               `json:"key" jsonschema:"Resource group key,required"`
-	ProcessMode string               `json:"process_mode" jsonschema:"Process mode (newest_first, oldest_first, unordered),required"`
+	ProcessMode string               `json:"process_mode" jsonschema:"Process mode: unordered, oldest_first, newest_first, or newest_ready_first,required"`
 }
 
 // Edit edits resources for the resourcegroups package.
@@ -76,7 +76,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Re
 	opts := &gl.EditAnExistingResourceGroupOptions{ProcessMode: &mode}
 	g, _, err := client.GL().ResourceGroup.EditAnExistingResourceGroup(string(input.ProjectID), input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ResourceGroupItem{}, toolutil.WrapErrWithStatusHint("gitlab_edit_resource_group", err, http.StatusNotFound, "verify the resource group key with gitlab_list_resource_groups; valid process_mode values: newest_first, oldest_first, unordered")
+		return ResourceGroupItem{}, toolutil.WrapErrWithStatusHint("gitlab_edit_resource_group", err, http.StatusNotFound, "verify the resource group key with gitlab_list_resource_groups; valid process_mode values: unordered, oldest_first, newest_first, newest_ready_first")
 	}
 	return ResourceGroupItem{ID: g.ID, Key: g.Key, ProcessMode: g.ProcessMode}, nil
 }

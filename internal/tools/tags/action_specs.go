@@ -81,6 +81,12 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 				ExampleBinding: `params.project_id:"group/project"`,
 			},
 		}
+		// Docs: https://docs.gitlab.com/api/tags/#list-project-repository-tags
+		// SDK: ListTagsOptions.OrderBy *string (no consts); the API enforces
+		// values %w[name updated version], default updated.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("order_by", "name", "updated", "version"),
+		}
 	case "get":
 		options.Usage = "Get one tag by project_id and tag_name. Use when a concrete tag is already known and detailed metadata/signature are needed."
 		options.Aliases = []string{"get tag", "show tag details", "lookup tag"}

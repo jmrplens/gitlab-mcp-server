@@ -62,6 +62,11 @@ func groupCredentialOptions(individualTool, description string) toolutil.ActionS
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},
 	}
 	decorateGroupCredentialMeta(&options, individualTool)
+	if individualTool == "gitlab_list_group_personal_access_tokens" {
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("state", "active", "inactive"),
+		}
+	}
 	return options
 }
 

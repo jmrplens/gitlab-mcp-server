@@ -27,6 +27,7 @@ func dependencyOptions(actionName, individualTool string) toolutil.ActionSpecOpt
 	guidance := map[string]toolutil.ParameterGuidance{}
 	aliases := []string{}
 	usage := ""
+	var overrides []toolutil.InputSchemaOverride
 	switch actionName {
 	case "list":
 		aliases = []string{"list project dependencies", "dependency list", "dependencies inventory"}
@@ -35,6 +36,11 @@ func dependencyOptions(actionName, individualTool string) toolutil.ActionSpecOpt
 			SemanticRole:   "scope_project",
 			ValueSource:    "Project ID or path containing dependencies.",
 			ExampleBinding: `params.project_id:"group/project"`,
+		}
+		overrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("package_manager",
+				"bundler", "composer", "conan", "go", "gradle", "maven", "npm",
+				"nuget", "pip", "pipenv", "pnpm", "yarn", "sbt", "setuptools"),
 		}
 	case "export_create":
 		aliases = []string{"create dependency export", "sbom export create", "dependency export create"}
@@ -60,14 +66,15 @@ func dependencyOptions(actionName, individualTool string) toolutil.ActionSpecOpt
 	}
 
 	return toolutil.ActionSpecOptions{
-		Aliases:           aliases,
-		Tags:              []string{"dependency", "sbom"},
-		Usage:             usage,
-		RelatedActions:    []string{"pipeline.get", "security.vulnerability_list", "package.list"},
-		ParameterGuidance: guidance,
-		OpenWorld:         true,
-		Edition:           "premium",
-		OwnerPackage:      "dependencies",
+		Aliases:              aliases,
+		Tags:                 []string{"dependency", "sbom"},
+		Usage:                usage,
+		RelatedActions:       []string{"pipeline.get", "security.vulnerability_list", "package.list"},
+		ParameterGuidance:    guidance,
+		InputSchemaOverrides: overrides,
+		OpenWorld:            true,
+		Edition:              "premium",
+		OwnerPackage:         "dependencies",
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:  individualTool,
 			Title: toolutil.TitleFromName(individualTool),

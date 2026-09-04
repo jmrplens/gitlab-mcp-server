@@ -138,7 +138,7 @@ type AddInput struct {
 	Username     string               `json:"username,omitempty" jsonschema:"Username to add (alternative to user_id)"`
 	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Membership expiration date (YYYY-MM-DD)"`
-	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign (Premium/Ultimate). The role's base access level must match access_level"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level"`
 }
 
 // EditInput contains parameters for editing a group member.
@@ -147,7 +147,7 @@ type EditInput struct {
 	UserID       int64                `json:"user_id" jsonschema:"User ID,required"`
 	AccessLevel  int                  `json:"access_level,omitempty" jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"New membership expiration date (YYYY-MM-DD)"`
-	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign (Premium/Ultimate). The role's base access level must match access_level"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level"`
 }
 
 // RemoveInput contains parameters for removing a group member.

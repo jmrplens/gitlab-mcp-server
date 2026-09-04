@@ -80,6 +80,12 @@ func decorateGroupWikiMeta(options *toolutil.ActionSpecOptions, individualTool s
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
+	switch individualTool {
+	case "gitlab_group_wiki_create", "gitlab_group_wiki_edit":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("format", "markdown", "rdoc", "asciidoc", "org"),
+		}
+	}
 }
 
 // groupWikiActionMetaEntry is the discovery metadata for one group wiki action.

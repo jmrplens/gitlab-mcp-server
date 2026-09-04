@@ -662,7 +662,7 @@ func DeleteHookURLVariable(ctx context.Context, client *gitlabclient.Client, inp
 type TestHookInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	HookID  int64                `json:"hook_id"  jsonschema:"Webhook ID,required"`
-	Trigger string               `json:"trigger"  jsonschema:"Event type to test (push_events, tag_push_events, issues_events, confidential_issues_events, note_events, merge_requests_events, job_events, pipeline_events, wiki_page_events, releases_events, emoji_events, resource_access_token_events),required"`
+	Trigger string               `json:"trigger"  jsonschema:"Event type to test: push_events, tag_push_events, issues_events, confidential_issues_events, note_events, merge_requests_events, job_events, pipeline_events, wiki_page_events, releases_events, milestone_events, emoji_events, or resource_access_token_events,required"`
 }
 
 // TestHook triggers a test event for a group webhook.

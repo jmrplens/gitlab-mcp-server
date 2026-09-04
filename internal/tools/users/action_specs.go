@@ -527,6 +527,14 @@ func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverr
 			toolutil.SchemaEnumOverride("target_type",
 				"Issue", "Milestone", "MergeRequest", "Note", "Project", "Snippet", "User"),
 		}
+	case "gitlab_list_service_accounts":
+		// Docs: https://docs.gitlab.com/api/service_accounts/#list-all-instance-service-accounts
+		// SDK: ListServiceAccountsOptions.OrderBy *string (no consts, string param);
+		// the API enforces values %w[id username], so the "name" the tag once
+		// offered was never accepted.
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("order_by", "id", "username"),
+		}
 	case "gitlab_get_user_memberships":
 		// Docs: https://docs.gitlab.com/ee/api/users.html#list-user-memberships
 		// SDK: GetUserMembershipOptions.Type *string (no consts, string param)

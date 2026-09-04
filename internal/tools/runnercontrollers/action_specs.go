@@ -56,6 +56,12 @@ func runnerControllerOptions(individualTool string) toolutil.ActionSpecOptions {
 		options.RelatedActions = append([]string(nil), meta.related...)
 		options.IndividualTool.Description = meta.description
 	}
+	switch individualTool {
+	case "gitlab_runner_controller_create", "gitlab_runner_controller_update":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("state", "disabled", "enabled", "dry_run"),
+		}
+	}
 	return options
 }
 

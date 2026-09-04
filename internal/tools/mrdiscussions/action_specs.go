@@ -122,6 +122,15 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the MR diff. Omit position entirely for a thread that is not tied to a line."},
 		}
 		options.IndividualTool.Description = "Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_list, gitlab_mr_changes_get."
+		// Position vocabularies from https://docs.gitlab.com/api/discussions/
+		// (create new merge request thread): position_type is one of text,
+		// image or file, and a line_range endpoint type is new for an added
+		// line and old otherwise.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("position.position_type", "text", "image", "file"),
+			toolutil.SchemaEnumOverride("position.line_range.start.type", "new", "old"),
+			toolutil.SchemaEnumOverride("position.line_range.end.type", "new", "old"),
+		}
 	case "gitlab_mr_discussion_list":
 		options.Usage = "List all discussion threads on one merge request, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for an MR's review conversation, or before replying to or resolving a thread. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"gitlab_mr_discussion_list", "list merge request discussions", "show MR review threads", "get merge request conversation"}

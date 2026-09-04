@@ -212,7 +212,7 @@ type CreateApprovalRuleInput struct {
 	ProjectID                     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Name                          string               `json:"name" jsonschema:"Rule name,required"`
 	ApprovalsRequired             int64                `json:"approvals_required" jsonschema:"Number of approvals required,required"`
-	RuleType                      string               `json:"rule_type,omitempty" jsonschema:"Rule type (regular, code_owner)"`
+	RuleType                      string               `json:"rule_type,omitempty" jsonschema:"Rule type: any_approver (the pre-configured default rule with approvals_required 0), regular (an ordinary approval rule), or report_approver (reserved for rules GitLab creates from merge request approval policies, do not send it)"`
 	ReportType                    string               `json:"report_type,omitempty" jsonschema:"Report type for report-approver rules (e.g. code_coverage, license_scanning)"`
 	UserIDs                       []int64              `json:"user_ids,omitempty" jsonschema:"User IDs to assign as approvers"`
 	GroupIDs                      []int64              `json:"group_ids,omitempty" jsonschema:"Group IDs to assign as approvers"`

@@ -6102,7 +6102,7 @@ Action guidance:
 - download: Download a single artifact file from a model package version in the project ML model registry, returning the raw bytes base64-encoded.
 Parameter guidance:
 - download.filename: model_artifact_filename. Source: Artifact file name to download from the package.
-- download.model_version_id: model_version_id. Source: Numeric model package version identifier.
+- download.model_version_id: model_version_id. Source: Numeric model version ID from the model version URL, or a candidate run ID prefixed with candidate: such as candidate:5.
 - download.path: model_artifact_path. Source: Subdirectory path in the package where the artifact is stored.
 - download.project_id: scope_project. Source: Project ID or path that owns the model registry package.
 

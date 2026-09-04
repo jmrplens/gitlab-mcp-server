@@ -84,7 +84,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // GetInput contains parameters for getting a single project template.
 type GetInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	TemplateType string               `json:"template_type" jsonschema:"Template type: dockerfiles, gitignores, gitlab_ci_ymls, licenses,required"`
+	TemplateType string               `json:"template_type" jsonschema:"Template family in the request path: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests,required"`
 	Key          string               `json:"key" jsonschema:"Template key/name,required"`
 }
 

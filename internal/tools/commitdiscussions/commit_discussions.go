@@ -38,7 +38,7 @@ type GetInput struct {
 // multi-line diff comment range.
 type LinePositionInput struct {
 	LineCode string `json:"line_code,omitempty" jsonschema:"Line code identifying this line in the diff."`
-	Type     string `json:"type,omitempty"      jsonschema:"Line type (new, old, or expanded)."`
+	Type     string `json:"type,omitempty"      jsonschema:"Line type: new for a line added by the change, old otherwise. Omit for an unchanged context line."`
 	OldLine  int64  `json:"old_line,omitempty"  jsonschema:"Line number in the old file for this endpoint."`
 	NewLine  int64  `json:"new_line,omitempty"  jsonschema:"Line number in the new file for this endpoint."`
 }
@@ -59,7 +59,7 @@ type PositionInput struct {
 	BaseSHA      string          `json:"base_sha" jsonschema:"Base commit SHA,required"`
 	StartSHA     string          `json:"start_sha" jsonschema:"Start commit SHA,required"`
 	HeadSHA      string          `json:"head_sha" jsonschema:"Head commit SHA,required"`
-	PositionType string          `json:"position_type" jsonschema:"Position type (text or image),required"`
+	PositionType string          `json:"position_type" jsonschema:"Position type: text for a line comment, image for an image coordinate comment, or file for a whole-file comment,required"`
 	NewPath      string          `json:"new_path,omitempty" jsonschema:"File path after change"`
 	NewLine      int64           `json:"new_line,omitempty" jsonschema:"Line number after change"`
 	OldPath      string          `json:"old_path,omitempty" jsonschema:"File path before change"`

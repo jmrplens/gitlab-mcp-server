@@ -89,6 +89,9 @@ func decorateVulnerabilityMeta(options *toolutil.ActionSpecOptions, individualTo
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
+	if len(meta.overrides) > 0 {
+		options.InputSchemaOverrides = append([]toolutil.InputSchemaOverride(nil), meta.overrides...)
+	}
 }
 
 // vulnerabilityActionMetaEntry is the discovery metadata for one
@@ -98,7 +101,15 @@ type vulnerabilityActionMetaEntry struct {
 	aliases     []string
 	related     []string
 	description string
+	overrides   []toolutil.InputSchemaOverride
 }
+
+// dismissalReasonValues is the VulnerabilityDismissalReason GraphQL enum, which
+// the dismiss mutation requires verbatim. An unknown value is otherwise
+// forwarded and rejected by GitLab with an opaque argument error.
+//
+// GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#vulnerabilitydismissalreason
+var dismissalReasonValues = []string{"ACCEPTABLE_RISK", "FALSE_POSITIVE", "MITIGATING_CONTROL", "NOT_APPLICABLE", "USED_IN_TESTS"}
 
 // vulnerabilityActionMeta maps each individual vulnerability tool to its
 // discovery metadata. Aliases are natural-language phrases beyond the tool
@@ -123,6 +134,7 @@ var vulnerabilityActionMeta = map[string]vulnerabilityActionMetaEntry{
 		aliases:     []string{"dismiss vulnerability", "mark vulnerability false positive", "ignore vulnerability"},
 		related:     []string{actionVulnGet, actionVulnConfirm, actionVulnResolve, actionVulnRevert},
 		description: "Dismiss a vulnerability with a dismissal reason. Returns: the updated vulnerability with its new dismissed state and timestamp. See also: gitlab_get_vulnerability, gitlab_confirm_vulnerability, gitlab_revert_vulnerability.",
+		overrides:   []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("dismissal_reason", dismissalReasonValues...)},
 	},
 	"gitlab_confirm_vulnerability": {
 		usage:       "Confirm a vulnerability as a genuine finding that needs remediation. Use during triage to move a detected vulnerability to the confirmed state.",

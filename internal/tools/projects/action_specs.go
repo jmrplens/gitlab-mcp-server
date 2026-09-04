@@ -733,7 +733,29 @@ var projectSettingsEnumOverrides = []toolutil.InputSchemaOverride{
 		"enum":        []any{"unordered", "oldest_first", "newest_first"},
 		"description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
 	}),
+	// dap_powered was removed as an input in GitLab 19.4; it can still be read
+	// back from projects configured before then, so the output keeps it.
+	toolutil.SchemaEnumOverride("reviewer_assignment_strategy", "disabled", "code_owners"),
 }
+
+// projectUpdateEnumOverrides extends the shared settings enums with the two
+// CI/CD role parameters that only the update input carries.
+var projectUpdateEnumOverrides = slices.Concat(projectSettingsEnumOverrides, []toolutil.InputSchemaOverride{
+	toolutil.SchemaEnumOverride("ci_restrict_pipeline_cancellation_role", "developer", "maintainer", "no_one"),
+	toolutil.SchemaEnumOverride("ci_pipeline_variables_minimum_override_role", "owner", "maintainer", "developer", "no_one_allowed"),
+})
+
+// projectHookTestEventOverride pins the webhook test trigger to the event names
+// GitLab accepts on POST /projects/:id/hooks/:hook_id/test/:trigger.
+var projectHookTestEventOverride = toolutil.SchemaEnumOverride("event",
+	"push_events", "tag_push_events", "issues_events", "confidential_issues_events", "note_events",
+	"merge_requests_events", "job_events", "pipeline_events", "wiki_page_events", "releases_events",
+	"milestone_events", "emoji_events", "resource_access_token_events", "resource_deploy_token_events")
+
+// projectApprovalRuleTypeOverride pins rule_type to the values the approval
+// rules API documents for POST /projects/:id/approval_rules. report_approver is
+// among them even though GitLab reserves it for policy-created rules.
+var projectApprovalRuleTypeOverride = toolutil.SchemaEnumOverride("rule_type", "any_approver", "regular", "report_approver")
 
 // projectActionSchemaOverrides maps individual project tool names to their
 // additional input-schema enum overrides. decorateProjectSchemaOverrides
@@ -743,8 +765,10 @@ var projectSettingsEnumOverrides = []toolutil.InputSchemaOverride{
 //nolint:gochecknoglobals // Intentional package-level lookup table; mirrors projectActionMeta pattern.
 var projectActionSchemaOverrides = map[string][]toolutil.InputSchemaOverride{
 	"gitlab_project_create":                projectSettingsEnumOverrides,
-	"gitlab_project_update":                projectSettingsEnumOverrides,
+	"gitlab_project_update":                projectUpdateEnumOverrides,
 	"gitlab_project_create_for_user":       projectSettingsEnumOverrides,
+	"gitlab_project_hook_test":             {projectHookTestEventOverride},
+	"gitlab_project_approval_rule_create":  {projectApprovalRuleTypeOverride},
 	"gitlab_project_list_forks":            {projectListOrderByOverride},
 	"gitlab_project_list_user_projects":    {projectListOrderByOverride},
 	"gitlab_project_list_user_contributed": {projectListOrderByOverride},

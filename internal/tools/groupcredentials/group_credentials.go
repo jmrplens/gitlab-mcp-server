@@ -22,7 +22,7 @@ const (
 type ListPATsInput struct {
 	GroupID        toolutil.StringOrInt `json:"group_id"                  jsonschema:"Group ID or URL-encoded path,required"`
 	Search         string               `json:"search,omitempty"          jsonschema:"Filter tokens by name"`
-	State          string               `json:"state,omitempty"           jsonschema:"Filter by state (active, inactive)"`
+	State          string               `json:"state,omitempty"           jsonschema:"Filter by token state: active or inactive"`
 	Revoked        *bool                `json:"revoked,omitempty"         jsonschema:"Filter by revoked status"`
 	CreatedAfter   string               `json:"created_after,omitempty"   jsonschema:"Return tokens created on or after this date (YYYY-MM-DD)"`
 	CreatedBefore  string               `json:"created_before,omitempty"  jsonschema:"Return tokens created on or before this date (YYYY-MM-DD)"`

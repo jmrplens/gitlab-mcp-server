@@ -185,5 +185,12 @@ func mirrorOptions(individualTool string) toolutil.ActionSpecOptions {
 	if meta, ok := mirrorActionMeta[individualTool]; ok {
 		toolutil.ApplyActionMeta(&options, meta)
 	}
+	switch individualTool {
+	case "gitlab_add_project_mirror", "gitlab_edit_project_mirror":
+		// https://docs.gitlab.com/api/remote_mirrors/ accepts exactly these two.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("auth_method", "ssh_public_key", "password"),
+		}
+	}
 	return options
 }

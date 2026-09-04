@@ -135,7 +135,7 @@ type ListSharedProjectsInput struct {
 	GroupID                  toolutil.StringOrInt `json:"group_id"                  jsonschema:"Group ID or URL-encoded path,required"`
 	Archived                 *bool                `json:"archived,omitempty"        jsonschema:"Filter archived projects"`
 	MinAccessLevel           int                  `json:"min_access_level,omitempty" jsonschema:"Limit to projects where the caller has at least this access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
-	OrderBy                  string               `json:"order_by,omitempty"        jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
+	OrderBy                  string               `json:"order_by,omitempty"        jsonschema:"Order by field: id, name, path, created_at, updated_at, star_count, or last_activity_at. Default is created_at"`
 	Search                   string               `json:"search,omitempty"          jsonschema:"Filter projects by name"`
 	Simple                   *bool                `json:"simple,omitempty"          jsonschema:"Return limited fields"`
 	Sort                     string               `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`

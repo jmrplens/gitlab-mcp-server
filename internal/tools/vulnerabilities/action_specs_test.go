@@ -4,6 +4,7 @@ package vulnerabilities
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -144,6 +145,34 @@ func assertDiscoveryMetadata(t *testing.T, spec toolutil.ActionSpec) {
 	desc := spec.IndividualTool.Description
 	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
 		t.Fatalf("%s: description missing Returns/See also: %q", tool, desc)
+	}
+}
+
+// TestActionSpecs_DismissalReasonEnum verifies that dismiss constrains
+// dismissal_reason to the VulnerabilityDismissalReason enum, and that no other
+// vulnerability action carries a dismissal_reason override.
+func TestActionSpecs_DismissalReasonEnum(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	want := []any{"ACCEPTABLE_RISK", "FALSE_POSITIVE", "MITIGATING_CONTROL", "NOT_APPLICABLE", "USED_IN_TESTS"}
+	for _, spec := range ActionSpecs(client) {
+		wantOverride := spec.IndividualTool.Name == "gitlab_dismiss_vulnerability"
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			has := false
+			for _, override := range spec.InputSchemaOverrides {
+				if override.PropertyPath != "dismissal_reason" {
+					continue
+				}
+				has = true
+				if enum, ok := override.Values["enum"].([]any); !ok || !slices.Equal(enum, want) {
+					t.Errorf("dismissal_reason enum = %v, want %v", override.Values["enum"], want)
+				}
+			}
+			if has != wantOverride {
+				t.Errorf("dismissal_reason override present = %v, want %v", has, wantOverride)
+			}
+		})
 	}
 }
 

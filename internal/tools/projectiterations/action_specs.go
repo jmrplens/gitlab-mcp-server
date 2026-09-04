@@ -39,6 +39,10 @@ func issueIterationReadSpec(name string, route toolutil.ActionRoute, individualT
 				ExampleBinding: "params.include_ancestors:true",
 			},
 		},
+		// https://docs.gitlab.com/api/iterations/#list-project-iterations
+		InputSchemaOverrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("state", "opened", "upcoming", "current", "closed", "all"),
+		},
 		OpenWorld:    true,
 		Edition:      "premium",
 		OwnerPackage: ownerPackage,
