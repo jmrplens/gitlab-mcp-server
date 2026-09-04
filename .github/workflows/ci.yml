@@ -13,11 +13,21 @@
 #            ├─ e2e-http
 #            └─ e2e-stdio
 #   coverage ─── sonarcloud
-#   generated · golangci-lint · govulncheck · markdown · site-lint · hadolint
-#   server-json-schema · supply-chain · docs-audit
 #   docker (×2) ─── docker-build
 #   cross_platform (×3) ─── cross_platform_summary
+#   generated · golangci-lint · govulncheck · markdown · site-lint · hadolint
+#   server-json-schema · supply-chain · docs-audit ─── checks
 #                                                          └──► ci
+#
+# Every edge joins neighbouring columns, and that is deliberate. GitHub draws
+# a job with no parent and no child at the end of the first column, in one box
+# with every other such job, and draws that box's single edge straight to
+# whatever needs it. With "ci" two columns away, that edge crossed every node
+# of the second column on its way there, and so did the direct edges from
+# compile and coverage. So the standalone jobs fan into "checks" first, and
+# "ci" needs only second-column nodes; compile and coverage are still decided
+# there, because when either fails its children are skipped, and a skip is a
+# failure to the verdict script.
 #
 # Speed. The critical path used to be Test then Build in series, about twenty
 # minutes, and Build consumed nothing Test produced. Now the longest path is
@@ -641,6 +651,39 @@ jobs:
       - name: Test the installer and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 
+  # One node for the jobs that depend on nothing. They are fanned in here
+  # rather than straight into "ci" for the graph's sake, explained at the top
+  # of the file: this node lands below the matrix summaries, because its
+  # parents are drawn last, and every edge stays between neighbouring columns.
+  #
+  # The site dependency audit reaches here and is printed, but does not
+  # decide: it reports the state of somebody else's advisory database.
+  checks:
+    name: "🧰 Checks"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - generated
+      - golangci-lint
+      - govulncheck
+      - analyze-md
+      - site-lint
+      - hadolint
+      - server-json-schema
+      - supply-chain
+      - docs-audit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Decide
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          INFORMATIONAL: docs-audit
+        run: bash .github/scripts/needs-verdict.sh
+
   # Every job above runs on Linux, and until this one existed that was the only
   # platform any test in this repository had ever seen, while the project ships
   # binaries for three. cmd/server/socketmode_windows.go was first compiled by
@@ -756,59 +799,39 @@ jobs:
   # the job list above can change shape without a repository setting having to
   # follow it, and the graph has an end.
   #
-  # Two results are read but do not decide the verdict, each for a reason
-  # recorded where the job is defined: the site dependency audit reports the
-  # state of somebody else's advisory database, and the platform matrix has a
+  # It needs only second-column nodes, for the graph's sake (see the top of
+  # the file), and loses nothing by it: compile and coverage are decided
+  # through their children, which are skipped when the parent fails, and the
+  # standalone jobs through "checks". One result is read but does not decide,
+  # for a reason recorded where the job is defined: the platform matrix has a
   # Windows leg that crashes inside the Go runtime now and then, tracked in
-  # https://github.com/jmrplens/gitlab-mcp-server/issues/467. Both are printed
-  # so a red one is seen, and neither can block a merge until that changes.
+  # https://github.com/jmrplens/gitlab-mcp-server/issues/467. It is printed so
+  # a red one is seen, and cannot block a merge until that changes.
   #
-  # "skipped" passes only for the jobs that skip themselves on purpose: the
-  # Docker matrix and its summary run for pull requests alone. For every other
-  # job a skip means an upstream failure took it down, which is a failure.
+  # "skipped" passes only for the Docker summary, which skips itself on pushes
+  # to main along with the matrix it summarizes. For every other job a skip
+  # means an upstream failure took it down, which is a failure.
   ci:
     name: "✅ CI"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
     needs:
-      - coverage
-      - generated
-      - sonarcloud
-      - compile
       - typecheck
       - e2e-http
       - e2e-stdio
-      - golangci-lint
-      - govulncheck
-      - analyze-md
-      - site-lint
-      - hadolint
-      - server-json-schema
-      - supply-chain
+      - sonarcloud
       - docker-build
-      - docs-audit
       - cross_platform_summary
+      - checks
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
       - name: Decide
         env:
           RESULTS: ${{ toJSON(needs) }}
-        run: |
-          set -euo pipefail
-          informational='docs-audit cross_platform_summary'
-          may_skip='docker-build'
-          failed=0
-          for job in $(printf '%s' "$RESULTS" | jq -r 'keys[]'); do
-            result=$(printf '%s' "$RESULTS" | jq -r --arg j "$job" '.[$j].result')
-            printf '%-24s %s\n' "$job" "$result"
-            case " $informational " in *" $job "*) continue ;; esac
-            case "$result" in
-              success) ;;
-              skipped) case " $may_skip " in *" $job "*) ;; *) failed=1 ;; esac ;;
-              *) failed=1 ;;
-            esac
-          done
-          if [ "$failed" -ne 0 ]; then
-            echo "::error::a required job did not succeed; see the table above"
-            exit 1
-          fi
+          INFORMATIONAL: cross_platform_summary
+          MAY_SKIP: docker-build
+        run: bash .github/scripts/needs-verdict.sh
