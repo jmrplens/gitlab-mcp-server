@@ -355,6 +355,48 @@ func TestExtractBearerToken_IgnoresPrivateToken(t *testing.T) {
 // The last case is the point: an unlisted instance is REFUSED, not quietly
 // replaced by the default. Serving the default would answer a question the
 // client did not ask, with another instance's data.
+// assertUnnamedInstanceRefusal checks a request that named no instance on a
+// multi-instance deployment was refused by the resolver itself.
+//
+// The resolver used to answer it with the first published instance while the
+// server's gate refused it, so a caller reaching the resolver without the gate
+// was served an instance the request never named. The refusal is the
+// resolver's now; the set travels on the error for a caller that may echo it,
+// and the message names nobody, since whether the set is public depends on
+// the auth mode.
+func assertUnnamedInstanceRefusal(t *testing.T, err error, allowed []string) {
+	t.Helper()
+	var unnamed *UnnamedInstanceError
+	if !errors.As(err, &unnamed) {
+		t.Fatalf("error = %v, want an *UnnamedInstanceError", err)
+	}
+	if !slices.Equal(unnamed.Allowed, allowed) {
+		t.Errorf("Allowed = %v, want the published set %v", unnamed.Allowed, allowed)
+	}
+	for _, instance := range allowed {
+		if strings.Contains(unnamed.Error(), instance) {
+			t.Errorf("the message names %s, which is the caller's decision to make: %q", instance, unnamed.Error())
+		}
+	}
+}
+
+// assertDisallowedInstanceRefusal checks a header naming an unpublished
+// instance was refused with the published set named and the caller's value
+// not echoed.
+func assertDisallowedInstanceRefusal(t *testing.T, err error, published string) {
+	t.Helper()
+	var disallowed *DisallowedGitLabURLError
+	if !errors.As(err, &disallowed) {
+		t.Fatalf("error = %v, want a *DisallowedGitLabURLError", err)
+	}
+	if !strings.Contains(disallowed.Error(), published) {
+		t.Errorf("error %q does not name the allowed instances", disallowed)
+	}
+	if strings.Contains(disallowed.Error(), "evil.example.com") {
+		t.Error("the rejected value is caller-controlled and must not be echoed back")
+	}
+}
+
 func TestResolveRequestOptionsFor_MultipleInstances(t *testing.T) {
 	const (
 		primary   = "https://gitlab.com"
@@ -363,13 +405,14 @@ func TestResolveRequestOptionsFor_MultipleInstances(t *testing.T) {
 	allowed := []string{primary, secondary}
 
 	tests := []struct {
-		name    string
-		header  string
-		want    string
-		wantErr bool
+		name        string
+		header      string
+		want        string
+		wantErr     bool
+		wantUnnamed bool
 	}{
-		{name: "no header selects the first published instance", want: primary},
-		{name: "header selects the default explicitly", header: primary, want: primary},
+		{name: "no header is refused rather than served the first published instance", wantUnnamed: true},
+		{name: "header selects the first published instance explicitly", header: primary, want: primary},
 		{name: "header selects another published instance", header: secondary, want: secondary},
 		{name: "header selects a trailing-slash spelling of one", header: secondary + "/", want: secondary},
 		{name: "header naming an unpublished instance is refused", header: "https://evil.example.com", wantErr: true},
@@ -382,17 +425,12 @@ func TestResolveRequestOptionsFor_MultipleInstances(t *testing.T) {
 			}
 
 			options, err := ResolveRequestOptionsFor(req, allowed)
+			if tt.wantUnnamed {
+				assertUnnamedInstanceRefusal(t, err, allowed)
+				return
+			}
 			if tt.wantErr {
-				var disallowed *DisallowedGitLabURLError
-				if !errors.As(err, &disallowed) {
-					t.Fatalf("error = %v, want a *DisallowedGitLabURLError", err)
-				}
-				if !strings.Contains(disallowed.Error(), primary) {
-					t.Errorf("error %q does not name the allowed instances", disallowed)
-				}
-				if strings.Contains(disallowed.Error(), "evil.example.com") {
-					t.Error("the rejected value is caller-controlled and must not be echoed back")
-				}
+				assertDisallowedInstanceRefusal(t, err, primary)
 				return
 			}
 			if err != nil {

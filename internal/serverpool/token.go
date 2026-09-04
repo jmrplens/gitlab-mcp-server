@@ -184,10 +184,13 @@ func ResolveRequestOptionsFor(r *http.Request, allowed []string) (RequestOptions
 
 	if len(normalizedAllowed) > 1 {
 		if header == "" {
-			// The first published instance is the deployment's default, so a
-			// client that does not care which instance it reaches keeps
-			// working unchanged.
-			return RequestOptions{GitLabURL: normalizedAllowed[0], IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
+			// Refused rather than defaulted to the first published instance,
+			// which is what this did until the server's gate started refusing
+			// the same request ahead of it: choosing on the caller's behalf
+			// transmits their credential in full to a host they never named.
+			// The refusal lives here so it holds for every caller of the
+			// resolver, gate or no gate.
+			return RequestOptions{}, &UnnamedInstanceError{Allowed: normalizedAllowed}
 		}
 		normalizedHeader, headerErr := normalizeGitLabURL(header)
 		if headerErr != nil {
@@ -288,6 +291,25 @@ func NormalizeGitLabURLs(raw []string) ([]string, error) {
 // their credential in full to a host they never named.
 var ErrMissingGitLabURL = errors.New("this deployment publishes no GitLab instance, so the " +
 	RequestOptionGitLabURL + " header must name the one this request is for")
+
+// UnnamedInstanceError reports a request that named no GitLab instance on a
+// deployment that publishes several.
+//
+// There is no in-band way for a client to say which of the published instances
+// it authenticated against, and in oauth mode the verifier POSTs the bearer to
+// whichever instance is resolved, so a default here would deliver the
+// credential to an instance the caller never chose. The message names no
+// instance: whether the published set may be echoed depends on the auth mode,
+// which the caller knows and this package does not. Allowed carries the set
+// for a caller that may.
+type UnnamedInstanceError struct {
+	Allowed []string
+}
+
+func (e *UnnamedInstanceError) Error() string {
+	return "this deployment serves several GitLab instances, so the " +
+		RequestOptionGitLabURL + " header must name the one this request is for"
+}
 
 // DisallowedGitLabURLError reports a GITLAB-URL header naming an instance the
 // deployment does not publish.
