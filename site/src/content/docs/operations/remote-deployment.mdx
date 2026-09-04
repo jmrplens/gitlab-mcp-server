@@ -277,6 +277,7 @@ services:
   gitlab-mcp-server:
     image: ghcr.io/jmrplens/gitlab-mcp-server:2.7.5
     restart: unless-stopped
+    networks: [mcp]
     ports:
       - "127.0.0.1:8080:8080"
     command:
@@ -286,7 +287,7 @@ services:
       - "--auth-mode=oauth"
       - "--public-url=https://mcp.example.com"
       - "--trusted-proxy-header=X-Real-IP"
-      - "--trusted-proxies=172.16.0.0/12"
+      - "--trusted-proxies=172.28.0.1"
     read_only: true
     tmpfs:
       - /tmp:rw,size=64m,mode=1777
@@ -304,6 +305,12 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+
+networks:
+  mcp:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
 ```
 
 Naming an instance is not optional: HTTP mode exits with `--gitlab-url is
@@ -311,11 +318,14 @@ required in HTTP mode` when none is given, because a deployment that names no
 instance would send whatever token a caller supplied to whatever host that
 caller put in `GITLAB-URL`.
 
-`--trusted-proxies` names where the proxy connects from, and inside Compose that
-address is assigned when the project network comes up. The example trusts
-Docker's default address pools, `172.16.0.0/12`, which also cover the bridge
-gateway a proxy running on the host itself arrives from; narrow it to the
-proxy's own network once you know it.
+`--trusted-proxies` names where the proxy connects from, and that has to be an
+address only the proxy can hold. The example declares its own network with a
+fixed subnet and trusts `172.28.0.1` alone: the gateway, which is where a proxy
+running on the host arrives from through the published port. A proxy that is
+itself a container on that network gets a fixed `ipv4_address`, and that is the
+value to trust instead. Docker's default pools (`172.16.0.0/12`) are the wrong
+answer: every container on the host lives in them, and any of them could then
+name the address a caller's failures are charged to.
 
 Several flags have **no environment-variable equivalent** and must be arguments:
 `--http-addr`, `--http-socket-mode`, `--tls-cert`, `--tls-key`,

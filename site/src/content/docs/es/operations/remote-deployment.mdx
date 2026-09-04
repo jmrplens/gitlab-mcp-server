@@ -282,6 +282,7 @@ services:
   gitlab-mcp-server:
     image: ghcr.io/jmrplens/gitlab-mcp-server:2.7.5
     restart: unless-stopped
+    networks: [mcp]
     ports:
       - "127.0.0.1:8080:8080"
     command:
@@ -291,7 +292,7 @@ services:
       - "--auth-mode=oauth"
       - "--public-url=https://mcp.example.com"
       - "--trusted-proxy-header=X-Real-IP"
-      - "--trusted-proxies=172.16.0.0/12"
+      - "--trusted-proxies=172.28.0.1"
     read_only: true
     tmpfs:
       - /tmp:rw,size=64m,mode=1777
@@ -309,6 +310,12 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+
+networks:
+  mcp:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
 ```
 
 Nombrar una instancia no es opcional: el modo HTTP termina con `--gitlab-url is
@@ -316,11 +323,15 @@ required in HTTP mode` cuando no se da ninguna, porque un despliegue que no
 nombra ninguna instancia enviaría el token que aporte quien llama al host que
 esa misma persona ponga en `GITLAB-URL`.
 
-`--trusted-proxies` nombra desde dónde conecta el proxy, y dentro de Compose esa
-dirección se asigna cuando se levanta la red del proyecto. El ejemplo confía en
-los rangos de direcciones por defecto de Docker, `172.16.0.0/12`, que cubren
-también la puerta de enlace del bridge desde la que llega un proxy que corra en
-la propia máquina; acótalo a la red del proxy en cuanto la conozcas.
+`--trusted-proxies` nombra desde dónde conecta el proxy, y tiene que ser una
+dirección que solo el proxy pueda tener. El ejemplo declara su propia red con
+una subred fija y confía únicamente en `172.28.0.1`: la puerta de enlace, que
+es desde donde llega, a través del puerto publicado, un proxy que corre en la
+máquina. Un proxy que sea a su vez un contenedor de esa red recibe una
+`ipv4_address` fija, y ese es el valor en el que confiar entonces. Los rangos
+por defecto de Docker (`172.16.0.0/12`) son la respuesta equivocada: todos los
+contenedores de la máquina viven en ellos, y cualquiera podría entonces decidir
+a qué dirección se cargan los fallos de quien llama.
 
 Varias opciones **no tienen equivalente en variable de entorno** y deben ir como
 argumentos: `--http-addr`, `--http-socket-mode`, `--tls-cert`, `--tls-key`,
