@@ -57,6 +57,8 @@ Introduce three new functions in `internal/toolutil/errors.go` that layer on top
 | `WrapErrWithMessage(op, err)`    | Like `WrapErr` but includes the GitLab error message     | Mutating operations (default)              |
 | `WrapErrWithHint(op, err, hint)` | Like `WrapErrWithMessage` plus an actionable suggestion  | When a specific corrective action is known |
 
+[Two helpers were layered on later in the same file: `WrapErrWithStatusHint(op, err, code, hint)`, which applies the hint only when the error carries that HTTP status and otherwise behaves as `WrapErrWithMessage`, and `NotFoundResult` in `internal/toolutil/not_found.go`, which turns a 404 on a get handler into an informational tool result instead of a Go error.]
+
 ### Error format progression
 
 ```text
@@ -64,6 +66,8 @@ WrapErr:            "op: classification: <original>"
 WrapErrWithMessage: "op: classification — specific detail: <original>"
 WrapErrWithHint:    "op: classification — specific detail. Suggestion: hint: <original>"
 ```
+
+[The implementation renders the detail in parentheses rather than after a dash: `op: classification (specific detail): <original>` and `op: classification (specific detail). Suggestion: hint: <original>`. The layering is as decided.]
 
 ### Migration strategy
 

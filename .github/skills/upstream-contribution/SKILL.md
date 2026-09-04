@@ -12,6 +12,7 @@ Contribute bug fixes, missing endpoint wrappers, or features to the upstream Git
 1. Identify the specific gap or bug in `gitlab.com/gitlab-org/api/client-go/v2`
 2. Verify it's not already fixed in the latest release
 3. Check existing issues/MRs on the upstream project
+4. Record the finding in `docs/development/upstream-bugs.md`, the permanent register of upstream defects and gaps found from this codebase: follow its entry schema, link the tracker item with a full URL (never a bare `!NNN` or `#NN`, since the repository is mirrored between GitHub and GitLab), and keep the entry when the fix lands, marking it merged with the version that carries it
 
 ## Upstream Project
 

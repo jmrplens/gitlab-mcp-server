@@ -436,17 +436,19 @@ segment between host and path. Started with
 | ----------------------------------------------------- | ------ |
 | `/gitlab/health`, `/health`                           | `200`  |
 | `/gitlab/server-card`, `/server-card`                 | `200`  |
-| `/.well-known/oauth-protected-resource`               | `200`  |
+| `/.well-known/oauth-protected-resource`               | `404`  |
 | `/.well-known/oauth-protected-resource/gitlab`        | `200`  |
 | `/gitlab/.well-known/oauth-protected-resource/gitlab` | `404`  |
 
 `/health` and the server card are mounted under the prefix as well as at the
-root; the OAuth metadata is not, and the `401` challenge points at the host-root
-form. A proxy that routes only `/gitlab` will answer `404` for the document
-every OAuth client fetches first, and discovery fails before the MCP endpoint is
-ever reached. Route `/.well-known/oauth-protected-resource` to the same
-upstream without rewriting it. The derivation itself is documented under
-[OAuth Mode](http-server-mode.md#oauth-mode).
+root; the OAuth metadata is served at exactly one path, the derived one, and
+the `401` challenge points at that host-root form. The path-less document
+belongs to a resource that is the origin itself, so a server under a prefix
+neither serves it nor should have it routed. A proxy that routes only `/gitlab`
+will answer `404` for the document every OAuth client fetches first, and
+discovery fails before the MCP endpoint is ever reached. Route the derived
+path to the same upstream without rewriting it. The derivation itself is
+documented under [OAuth Mode](http-server-mode.md#oauth-mode).
 
 **Do not let the proxy speak CORS.** The server answers its own preflight from
 `--trusted-origins`, to which the `--public-url` origin is added automatically.

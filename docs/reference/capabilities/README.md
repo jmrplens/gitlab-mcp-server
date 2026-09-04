@@ -32,12 +32,21 @@ Provided by the MCP client and consumed by the server at tool execution time.
 Capabilities are declared in `cmd/server/main.go` when constructing the MCP server:
 
 ```go
+serverCapabilities := &mcp.ServerCapabilities{
+    Tools:     &mcp.ToolCapabilities{ListChanged: true},
+    Resources: &mcp.ResourceCapabilities{ListChanged: true},
+}
+if capabilitySurface == config.CapabilitySurfaceFull {
+    serverCapabilities.Prompts = &mcp.PromptCapabilities{ListChanged: true}
+}
+if subscribeHandler != nil {
+    serverCapabilities.Resources.Subscribe = true
+}
+
 server := mcp.NewServer(
-    &mcp.ServerCapabilities{
-        Tools:       &mcp.ToolCapabilities{ListChanged: true},
-        Resources:   &mcp.ResourceCapabilities{ListChanged: true},
-    },
+    &mcp.Implementation{Name: "gitlab-mcp-server", Version: version, Icons: toolutil.IconBrand /* ... */},
     &mcp.ServerOptions{
+        Capabilities:                serverCapabilities,
         CompletionHandler:           completionHandler.Complete,
         ProgressNotificationHandler: progressHandler,
         SubscribeHandler:            subscribeHandler,
@@ -46,9 +55,12 @@ server := mcp.NewServer(
 )
 ```
 
-Setting the subscribe handlers is what turns `Resources.Subscribe` on — the
-SDK derives it. They are left nil on `GITLAB_MCP_CAPABILITY_SURFACE=minimal`, which
-registers no GitLab resources to subscribe to.
+Setting the subscribe handlers is what makes the SDK advertise
+`Resources.Subscribe`; the bit is also stated explicitly because the SDK only
+derives it once a resource has been registered, and the handshake is answered
+while registration is still in flight. Both handlers are nil on
+`GITLAB_MCP_CAPABILITY_SURFACE=minimal`, which registers no GitLab resources to
+subscribe to.
 
 `GITLAB_MCP_CAPABILITY_SURFACE=full` also advertises `Prompts` with `ListChanged: true`
 and registers the full prompt/resource catalog. `GITLAB_MCP_CAPABILITY_SURFACE=minimal`
@@ -73,7 +85,6 @@ All capability implementations in this project follow consistent patterns:
 - **Zero-value safety** — `progress.Tracker` and `elicitation.Client` are value types whose zero values are safe no-ops. Tool handlers never need nil-checks.
 - **Graceful degradation** — If a client doesn't support a capability, tools return informational messages instead of errors. The server never crashes due to missing capabilities.
 - **Security boundaries** — Elicitation validates all responses against schemas.
-- **Nil-safe receivers** — `SessionLogger` methods are safe to call on nil receivers.
 
 ## External References
 

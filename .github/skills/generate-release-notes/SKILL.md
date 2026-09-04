@@ -38,7 +38,7 @@ Common patterns:
 
 #### Approach A: Manual Orchestration (Recommended)
 
-Orchestrate the tools manually and categorize the results yourself:
+Orchestrate the tools manually and categorize the results yourself. The tool names below are the meta surface (`GITLAB_MCP_TOOL_SURFACE=meta`); on the default dynamic surface the same calls go through `gitlab_execute_action` with the canonical action IDs `repository.compare` and `merge_request.list`, and on the individual surface the tools are `gitlab_repository_compare` and `gitlab_mr_list`:
 
 1. **Compare refs** to get commits and diffs:
 

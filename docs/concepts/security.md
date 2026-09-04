@@ -144,12 +144,12 @@ A preflight from a trusted origin is now answered directly:
 HTTP/1.1 204 No Content
 Access-Control-Allow-Origin: https://claude.ai
 Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
-Access-Control-Allow-Headers: Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, Mcp-Method, Mcp-Name, Mcp-Param-Name, Mcp-Param-Uri, Mcp-Param-Cursor
+Access-Control-Allow-Headers: Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, Mcp-Method, Mcp-Name, Mcp-Param-Action
 Access-Control-Max-Age: 86400
 Vary: Origin
 ```
 
-The allowed headers follow the deployment rather than being a constant. `Mcp-Method`, `Mcp-Name` and the `Mcp-Param-*` family are **required** by protocol 2026-07-28 — a `POST` without `Mcp-Method` is rejected before any handler runs — so a preflight that omitted them refused the very headers the server then demanded. `PRIVATE-TOKEN` is added only in legacy mode, which is the only mode that reads it, and `GITLAB-URL` only when the header can actually change which instance a request reaches: never when exactly one instance is pinned, always when several are published.
+The allowed headers follow the deployment rather than being a constant. `Mcp-Method` and `Mcp-Name` are **required** by protocol 2026-07-28 — a `POST` without `Mcp-Method` is rejected before any handler runs — so a preflight that omitted them refused the very headers the server then demanded. `Mcp-Param-*` is not a fixed family: each name comes from an `x-mcp-header` annotation on a tool parameter, and the only one this server declares is `Mcp-Param-Action`, carrying `gitlab_execute_action`'s action ID so a gateway can route on it without reading the body. `PRIVATE-TOKEN` is added only in legacy mode, which is the only mode that reads it, and `GITLAB-URL` only when the header can actually change which instance a request reaches: never when exactly one instance is pinned, always when several are published.
 
 The actual response then carries `Access-Control-Allow-Origin` and `Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate, Retry-After` — a browser cannot read any of them otherwise, since none is CORS-safelisted. `WWW-Authenticate` is what makes automatic discovery work at all: without it a cross-origin client receives the `401` but cannot see the `resource_metadata` URL it points at. `Retry-After` is what lets it honor the backoff a `429` or `503` asks for.
 
@@ -213,10 +213,10 @@ Operations that modify or delete data use a confirmation flow (see [Error Handli
 
 Two opt-in modes narrow what the server can do to a GitLab instance, independently of the token's own permissions:
 
-| Mode      | Variable                                | Effect                                                                                                                                       |
-| --------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Read-only | `GITLAB_READ_ONLY=true` (`--read-only`) | Mutating operations are removed from the catalog. Attempting one fails as an unknown or unadvertised action                                  |
-| Safe mode | `GITLAB_SAFE_MODE=true` (`--safe-mode`) | Mutating operations stay visible but return a JSON preview (`{"status":"blocked","mode":"safe","tool":"<action>",...}`) instead of executing |
+| Mode      | Variable                                | Effect                                                                                                                                                                                                 |
+| --------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Read-only | `GITLAB_READ_ONLY=true` (`--read-only`) | Mutating operations are removed from the catalog. Attempting one is refused: the dynamic surface names it as withheld by the operator (or by the token's scope), a meta-tool reports an unknown action |
+| Safe mode | `GITLAB_SAFE_MODE=true` (`--safe-mode`) | Mutating operations stay visible but return a JSON preview (`{"status":"blocked","mode":"safe","tool":"<action>",...}`) instead of executing                                                           |
 
 Both policies are enforced **per action**, not per tool. This matters because two of the three tool surfaces expose dispatcher tools that cover many actions at once: a meta-tool such as `gitlab_issue` serves `list` and `create` alike, and the dynamic surface routes every action through `gitlab_execute_action`. Classifying those tools as mutating and removing or intercepting them whole would take their read operations down with them, leaving the server unable to read anything in either mode.
 
@@ -244,7 +244,7 @@ When running with `--http`:
 - **TLS can terminate here** — `--tls-cert` and `--tls-key` serve HTTPS on the listener itself, so a reverse proxy is a deployment choice rather than the only way to encrypt. A proxy remains useful for hostname routing, shared certificates and edge caching
 - **Cross-origin request protection** — two layers, because the routes have different jobs. Every route is wrapped in middleware from the Go standard library's `http.NewCrossOriginProtection().Handler`, which rejects browser-originated cross-site requests on non-safe methods while leaving `GET`, `HEAD` and `OPTIONS` alone — that exemption is what keeps `/health` and the server card publicly fetchable. The MCP endpoint itself is additionally wrapped in a guard that refuses an untrusted `Origin` on **every** method with `403`, since the safe-method exemption would otherwise let a cross-origin `GET` open an SSE stream against a stateful session. Together these satisfy the 2026-07-28 streamable-HTTP requirement that servers validate `Origin` on all incoming connections against DNS rebinding. Non-browser clients, which send no `Origin`, are unaffected; a CORS preflight is answered rather than refused, because a browser strips credentials from it. Use `--trusted-origins` to allow specific browser origins — see below
 - **Host validation** — When listening on a specific local host, requests with unexpected `Host` headers are rejected to mitigate DNS rebinding attacks. Binding to all interfaces (`0.0.0.0` or `::`) leaves Host validation to the reverse proxy deployment
-- **`GITLAB-URL` header validation** — What the header may do follows how many instances the deployment published. With none, it selects the instance per request and a malformed value is rejected with HTTP 400. With exactly one (`--gitlab-url` passed once), that instance is authoritative and the header is ignored and logged. With several (`--gitlab-url` repeated, or one comma-separated value), the header selects **among them**, and a value naming anything else is refused — `403` in OAuth mode, `400` in legacy mode — rather than silently served the first instance. The allow-list is what makes a per-request instance safe under OAuth: the bearer token is verified against the instance the request selected, so a free-form header would let a caller name a host of their own and be handed a live credential
+- **`GITLAB-URL` header validation** — What the header may do follows how many instances the deployment published. With none, the server refuses to start unless `--allow-any-gitlab-url` is passed; with that flag the header selects the instance per request, a request that omits it is rejected with HTTP 400 rather than resolved to `https://gitlab.com`, and so is a malformed value. With exactly one (`--gitlab-url` passed once), that instance is authoritative and the header is ignored and logged. With several (`--gitlab-url` repeated, or one comma-separated value), the header selects **among them**, and a value naming anything else is refused — `403` in OAuth mode, `400` in legacy mode — rather than silently served the first instance. The allow-list is what makes a per-request instance safe under OAuth: the bearer token is verified against the instance the request selected, so a free-form header would let a caller name a host of their own and be handed a live credential
 - **Rate limiting** — A per-IP authentication failure rate limiter (10 failures/min) protects against brute-force token guessing. When running behind a reverse proxy, configure `--trusted-proxy-header` (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) together with `--trusted-proxies`, the addresses or CIDR ranges the proxy connects from, so the rate limiter sees real client IPs. The header is believed only on a connection from a listed address; from any other peer it is ignored and the peer itself is charged, so a client that reaches the listener directly cannot choose the address its failures count against. One flag without the other refuses startup. For multi-value headers like `X-Forwarded-For` the server reads from the right, skipping hops that are themselves listed, and charges the first that is not; a hop that is not an address charges the peer
 
 ### OAuth Mode (`--auth-mode=oauth`)
@@ -332,7 +332,7 @@ Explicit boundary markers (e.g., `<user_content>...</user_content>`) were evalua
 
 ### Coverage
 
-Escaping is applied to UGC fields across the 175 packages under `internal/tools`. Key field types:
+Escaping is applied to UGC fields across the 177 packages under `internal/tools`. Key field types:
 
 - **Titles/names**: `EscapeMdTableCell()` in table contexts, `EscapeMdHeading()` in heading contexts
 - **Descriptions/bodies**: `WrapGFMBody()` for multi-line GFM content
@@ -423,11 +423,14 @@ is answered with a `CallToolResult` with `IsError: true` and a human-readable
 hint:
 
 ```text
-Rate limit exceeded for `gitlab_mr_list`. Wait a moment and retry, or raise --rate-limit-rps if this is sustained traffic.
+rate limit exceeded for gitlab_execute_action; retry after a short backoff
 ```
 
 A tool result rather than a JSON-RPC error, so the LLM can parse it and decide
-whether to back off, batch differently, or surface the problem to the user. A
+whether to back off, batch differently, or surface the problem to the user. The
+refusal is also counted as a metric and logged at WARN, one line per ten-second
+window carrying the number of refusals it stands for, since the arrival rate
+minus the limit is unbounded and a line per event would flood the log. A
 `resources/read`, `resources/subscribe`, `subscriptions/listen` or
 `prompts/get` has no error flag in its result, so it is refused with a JSON-RPC
 error carrying code `-42900`, the code that mirrors HTTP 429 on the transport

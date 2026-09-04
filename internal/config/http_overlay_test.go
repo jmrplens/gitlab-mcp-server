@@ -48,6 +48,7 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"PublicURL":          overlay.PublicURL == nil,
 		"TrustedOrigins":     overlay.TrustedOrigins == nil,
 		"OAuthCacheTTL":      overlay.OAuthCacheTTL == nil,
+		"OAuthClientUID":     overlay.OAuthClientUID == nil,
 		"RateLimitRPS":       overlay.RateLimitRPS == nil,
 		"RateLimitBurst":     overlay.RateLimitBurst == nil,
 	}
@@ -114,6 +115,17 @@ func presentVariableCases() []presentVariableCase {
 				t.Helper()
 				assertStr(t, "PublicURL", o.PublicURL, "https://mcp.example.com/gitlab")
 				assertStr(t, "TrustedOrigins", o.TrustedOrigins, "https://claude.ai,https://inspector.example")
+			},
+		},
+		{
+			// The audit of the reference pages found this variable documented
+			// for HTTP mode and read by nothing there: the overlay never
+			// carried it, so only the flag admitted an application.
+			name: "oauth client uid reaches the overlay verbatim",
+			env:  map[string]string{"OAUTH_CLIENT_UID": " 12ab, 34cd "},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertStr(t, "OAuthClientUID", o.OAuthClientUID, "12ab, 34cd")
 			},
 		},
 		{

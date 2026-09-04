@@ -20,7 +20,7 @@ The project uses three complementary analysis surfaces:
 
 Standalone Go tools that are already executed through `golangci-lint` are not run separately in Make or CI. This avoids duplicate work, divergent flags, and inconsistent findings. The consolidated Go gate covers `govet`, `modernize`, `gosec`, `staticcheck`, `goimports`, `gofumpt`, and `gci` through `.golangci.yml`.
 
-Go analysis targets pass the `e2e` build tag so files under `test/e2e/` are included without running E2E tests. Markdown linting remains repository-wide for Markdown files, excluding `plan/` drafts in Make targets.
+Go analysis targets pass every end-to-end build tag (`e2e,collectore2e,httpe2e,orbitlive,stdioe2e`, the Makefile's `GO_ANALYSIS_TAGS`) so every tagged suite under `test/e2e/` is analysed without being run; a suite added behind a new tag is invisible to `go vet` and `golangci-lint` until its tag is added to that list. Markdown linting remains repository-wide for Markdown files, excluding `plan/` drafts in Make targets.
 
 ## Quick Start
 
@@ -51,7 +51,7 @@ go run ./cmd/format_md_tables/
 go run ./cmd/format_md_tables/ --check
 ```
 
-The command scans `README.md` and `docs/` by default, skips fenced code blocks, preserves left/right/center alignment markers, and pads table columns for readable source Markdown. Use `--check` in review or CI contexts when you want a non-writing verification pass.
+The command scans `README.md`, `docs/` and `site/src/content/docs/` by default, skips fenced code blocks, preserves left/right/center alignment markers, and pads table columns for readable source Markdown. Use `--check` in review or CI contexts when you want a non-writing verification pass.
 
 ## Tool Installation
 
@@ -63,11 +63,11 @@ make install-tools
 
 This installs:
 
-| Tool          | Install command                                                            | Version |
-| ------------- | -------------------------------------------------------------------------- | ------- |
-| golangci-lint | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` | v2.11+  |
-| govulncheck   | `go install golang.org/x/vuln/cmd/govulncheck@latest`                      | v1.1+   |
-| gotestsum     | `go install gotest.tools/gotestsum@latest`                                 | latest  |
+| Tool          | Install command                                                            | Version                                                                                             |
+| ------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| golangci-lint | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` | v2.13.1 is what CI runs (`GOLANGCI_LINT_VERSION` in the Makefile); install that release to match it |
+| govulncheck   | `go install golang.org/x/vuln/cmd/govulncheck@latest`                      | the version the `tool` directive in `go.mod` names is what CI runs                                  |
+| gotestsum     | `go install gotest.tools/gotestsum@latest`                                 | latest                                                                                              |
 
 Verify installation:
 
@@ -132,14 +132,14 @@ gotestsum --version
 make golangci-lint
 golangci-lint config verify
 golangci-lint fmt --diff
-golangci-lint run --build-tags e2e ./...
+golangci-lint run --build-tags e2e,collectore2e,httpe2e,orbitlive,stdioe2e ./...
 ```
 
 The Make target performs these steps:
 
 1. Validate `.golangci.yml`.
 2. Check configured Go formatters with `golangci-lint fmt --diff`.
-3. Run configured linters with the `e2e` build tag.
+3. Run configured linters with every end-to-end build tag.
 
 Configured formatters:
 
@@ -163,7 +163,7 @@ Standalone `go vet`, `modernize`, `gosec`, `staticcheck`, `goimports`, and `gofm
 
 ```bash
 make govulncheck
-govulncheck -tags e2e ./...
+govulncheck -tags e2e,collectore2e,httpe2e,orbitlive,stdioe2e ./...
 ```
 
 It remains separate because it is a vulnerability database scanner, not a normal lint rule inside `golangci-lint`.
@@ -250,7 +250,7 @@ make sonar-status                # just print the latest gate (no re-scan)
 GitHub Actions uses the same separation as Make:
 
 - The `golangci-lint` job installs the pinned `golangci-lint` release through the official action and runs `make golangci-lint`, so CI and a developer's machine run the same three commands with the same version. Its per-package analysis cache is kept between runs.
-- The `govulncheck` job installs a pinned `govulncheck` and runs `make govulncheck`.
+- The `govulncheck` job installs the `govulncheck` named by the `tool` directive in `go.mod` (a bare `go install`, so the pin lives in one place) and runs `make govulncheck`.
 - The `Markdown` job runs `markdownlint-cli2` for Markdown and MDX content through the linter's own action, which bundles the tool and touches no registry.
 
 Separate jobs for `goimports`, `gofmt`, `go vet`, `modernize`, `gosec`, and `staticcheck` are intentionally omitted because `golangci-lint` already covers them with the repository configuration.

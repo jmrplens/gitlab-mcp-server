@@ -27,7 +27,7 @@
                 "-e",
                 "GITLAB_SAFE_MODE",
                 "-e",
-                "EMBEDDED_RESOURCES",
+                "GITLAB_MCP_EMBEDDED_RESOURCES",
                 "-e",
                 "GITLAB_MCP_EXCLUDE_TOOLS",
                 "-e",

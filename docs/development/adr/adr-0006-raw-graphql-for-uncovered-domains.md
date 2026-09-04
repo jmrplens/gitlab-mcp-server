@@ -57,7 +57,7 @@ However, several GitLab API domains are **only available via GraphQL** and have 
 
 #### Pattern 1: Tool handlers (5 domains)
 
-Used by `vulnerabilities`, `securityfindings`, `cicatalog`, `branchrules`, and `customemoji`. Related typed client-go GraphQL service packages include `securityattributes` and `securitycategories`. Each sub-package:
+Used by `vulnerabilities`, `securityfindings`, `cicatalog`, `branchrules`, and `customemoji`. Related typed client-go GraphQL service packages include `securityattributes` and `securitycategories`. [As of 2026-09 those two also call `GraphQL.Do()` directly: client-go ships typed wrappers for them, but the wrappers discard the response's top-level GraphQL errors, which is a recorded `KEEP` in `cmd/audit_1to1/internal/sdk/decisions.go`. `epicissues`, `epicnotes` and `epicdiscussions` joined the raw-GraphQL set through their ADR-0009 migration to Work Items, with the shared query helpers in `epicworkitems`.] Each sub-package:
 
 1. Defines GraphQL query/mutation strings as Go constants
 2. Defines typed response structs matching the expected JSON shape
@@ -104,7 +104,7 @@ All GraphQL tool handlers are tested using the same `httptest` mock infrastructu
 - Requires no real GitLab instance for unit tests
 - Validates query variable composition and response parsing
 - Tests error paths (API errors, mutation failures, malformed responses)
-- Maintains test consistency with the REST-only sub-packages (158 of 163) and hybrid domains such as vulnerabilities that use the same `httptest` mock pattern
+- Maintains test consistency with the sub-packages that issue no raw GraphQL (158 of the 168 domain sub-packages, as of 2026-09) and hybrid domains such as vulnerabilities that use the same `httptest` mock pattern
 
 ## Consequences
 

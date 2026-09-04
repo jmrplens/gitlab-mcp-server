@@ -120,9 +120,11 @@ tracker.Step(ctx, 3, 3, "Upload complete")
 | Tool                                | Steps | What Each Step Reports                               |
 | ----------------------------------- | ----: | ---------------------------------------------------- |
 | `gitlab_interactive_issue_create`   |     4 | Collect details → Optional fields → Confirm → Create |
-| `gitlab_interactive_mr_create`      |     4 | Collect details → Options → Confirm → Create         |
-| `gitlab_interactive_release_create` |     3 | Collect details → Confirm → Create                   |
-| `gitlab_interactive_project_create` |     4 | Collect details → Options → Confirm → Create         |
+| `gitlab_interactive_mr_create`      |     5 | Branches → Details → Options → Confirm → Create      |
+| `gitlab_interactive_release_create` |     4 | Details → Description → Confirm → Create             |
+| `gitlab_interactive_project_create` |     4 | Collect details → Settings → Confirm → Create        |
+
+Each wizard ends with `Done`, so the bar reaches 100% once the object exists rather than stopping one step short. Outside the wizards, the project upload action (`uploads`), the package publish actions (`packages`, byte-counted through `OnScale`) and the wait actions that poll GitLab until a pipeline or job settles (`waitpoll`) report progress as well.
 
 Progress is most valuable for **file uploads** (which stream large payloads) and **elicitation tools** (which require multiple rounds of user interaction).
 
@@ -182,13 +184,13 @@ A failed progress notification never affects the tool's result. If the client di
 
 ### Minimal API Surface
 
-Four methods: `IsActive()`, `Update()`, `Step()`, and `Done()`. The `Step` convenience method handles the 1-based to 0-based conversion, which is the pattern used in all tool handlers. `Done` sends a final `progress == total` notification when an operation completes.
+Five methods: `IsActive()`, `Update()`, `Step()`, `Done()` and `OnScale()`. The `Step` convenience method handles the 1-based to 0-based conversion, which is the pattern used in all tool handlers. `Done` sends a final `progress == total` notification when an operation completes. `OnScale` is for a handler that delegates: it hands the callee a view of the same counter so a sub-step's own numbers land inside the outer measure.
 
 ## Frequently Asked Questions
 
 ### Does every tool show progress?
 
-No. Only tools with multi-step or streaming operations use progress: file uploads and the 4 elicitation tools. Simple tools (e.g., `gitlab_branch_list`) complete too quickly within a single API call to benefit from progress.
+No. Only tools with multi-step, streaming or polling operations use progress: file uploads, package publishing, the wait actions, and the 4 elicitation tools. Simple tools (e.g., `gitlab_branch_list`) complete too quickly within a single API call to benefit from progress.
 
 ### What if my MCP client doesn't send a progress token?
 

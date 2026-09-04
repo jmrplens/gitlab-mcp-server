@@ -133,6 +133,13 @@ test-integration:
 	go test -v -tags integration -coverprofile=coverage.out $(PKGS)
 
 ## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN from .env)
+test-e2e: ensure-gotestsum
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	bash -o pipefail -c '$(GOTESTSUM) \
+	  --format testdox \
+	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
+	  -- -tags e2e -count=1 -timeout 300s ./test/e2e/suite/'
+
 # ensure-gotestsum installs gotestsum on demand, so the e2e targets work on
 # a fresh checkout without a separate install-tools step. The tool was an
 # unstated assumption of the developer machine before this — the first run

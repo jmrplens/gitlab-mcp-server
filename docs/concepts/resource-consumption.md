@@ -1,6 +1,6 @@
 ﻿# Resource Consumption
 
-This document provides memory and CPU estimates for gitlab-mcp-server in both stdio and HTTP modes, helping operators plan capacity for deployments.
+This document describes the memory and CPU cost of gitlab-mcp-server in both stdio and HTTP modes, helping operators plan capacity for deployments. The figures are measured, not estimated: they come from `make bench-resources` on one machine and one build, published with their charts in the [Resource benchmark](../reference/resource-benchmark.md). The shape of the numbers carries to other hosts; the absolute values will not.
 
 > **Diátaxis type**: Reference
 > **Audience**: ⚙️ Server administrators
@@ -12,76 +12,79 @@ This document provides memory and CPU estimates for gitlab-mcp-server in both st
 
 The gitlab-mcp-server binary is a statically compiled Go executable:
 
-| Metric                         | Value      |
-| ------------------------------ | ---------- |
-| Binary size (stripped)         | ~25 MB     |
-| Go runtime overhead at startup | ~15 MB RSS |
-| Initial heap after config load | ~20 MB     |
+| Metric                                       | Value                               |
+| -------------------------------------------- | ----------------------------------- |
+| Binary size (stripped release build)         | ~49 MB                              |
+| HTTP process idle, before any credential     | ~40 MiB RSS                         |
+| stdio process with one client, catalog built | 190 to 330 MiB RSS, by tool surface |
+
+Resident set is read from the kernel rather than from Go's heap accounting, because the resident set is what a container limit is measured against and the two differ by more than a factor of two.
 
 ## Stdio Mode
 
-In stdio mode, each AI client (VS Code, Cursor, Copilot CLI, OpenCode) spawns its own server process. The resource footprint is straightforward:
+In stdio mode, each AI client (VS Code, Cursor, Copilot CLI, OpenCode) spawns its own server process. The process starts building its tool catalog on a background goroutine as soon as it is executed, so there is no idle state: it reaches its working size within about two seconds, and the surface decides where in the range it lands.
 
-| Component                     | Memory     |
-| ----------------------------- | ---------- |
-| Go runtime + binary           | ~20 MB     |
-| Config + GitLab client        | ~2 MB      |
-| MCP server + registered tools | ~25 MB     |
-| Tool execution working memory | ~5 MB      |
-| **Total per process**         | **~50 MB** |
+| Tool surface | One process | Each further process |
+| ------------ | ----------: | -------------------: |
+| `dynamic`    |    ~211 MiB |             ~217 MiB |
+| `meta`       |    ~193 MiB |             ~196 MiB |
+| `individual` |    ~331 MiB |             ~296 MiB |
+
+Four stdio clients on one host cost 0.8 to 1.2 GiB together. `dynamic` is the largest per process despite registering two tools, because it builds a search index the other two surfaces do not.
 
 ## HTTP Mode
 
-In HTTP mode, a single process serves all clients. The base process uses ~50 MB (same as stdio). Each unique token adds a pool entry with its own MCP server and GitLab client.
+In HTTP mode, a single process serves all clients. Idle, before any credential has arrived, it holds about 40 MiB and no tool catalog at all. The first request from each distinct token builds one, so memory follows the number of live credentials rather than the number of sessions or requests.
 
 ### Per-Token Pool Entry Cost
 
-| Component                                                        | Approximate Size |
-| ---------------------------------------------------------------- | ---------------- |
-| `*mcp.Server` instance (struct + options + session map)          | ~40 KB           |
-| `*gitlabclient.Client` via `gl.NewClient()` (HTTP client + auth) | ~8 KB            |
-| Tool registrations (854/1073/1079 individual or 32/49/50 meta)   | ~80 KB           |
-| Resource registrations (45)                                      | ~8 KB            |
-| Prompt registrations (37)                                        | ~5 KB            |
-| **Total per unique token**                                       | **~130 KB**      |
+A pool entry is the whole catalog for that token: its MCP server, GitLab client, registered tools, resources and prompts.
+
+| Tool surface | Process with one credential | Each further credential |
+| ------------ | --------------------------: | ----------------------: |
+| `dynamic`    |                    ~219 MiB |                 ~71 MiB |
+| `meta`       |                    ~197 MiB |                 ~35 MiB |
+| `individual` |                    ~334 MiB |                 ~36 MiB |
+
+Memory per credential goes the other way from what the tool counts suggest: `individual` costs the least per additional credential despite registering about a thousand tools, because pooled entries share their tool schemas, while `dynamic` costs the most because every entry carries its own search index.
 
 ### Scaling in HTTP Mode
 
-| Unique Tokens     | Pool Memory | Total Process Memory | Notes                             |
-| ----------------- | ----------- | -------------------- | --------------------------------- |
-| 1                 | ~130 KB     | ~50 MB               | Equivalent to stdio               |
-| 10                | ~1.3 MB     | ~51 MB               | Minimal overhead                  |
-| 50                | ~6.5 MB     | ~57 MB               | Comfortable for a team            |
-| 100 (default max) | ~13 MB      | ~63 MB               | Default `--max-http-clients`      |
-| 500               | ~65 MB      | ~115 MB              | Requires `--max-http-clients=500` |
-| 1000              | ~130 MB     | ~180 MB              | Large deployment                  |
+| Live credentials  | Added by the pool | Total process memory                              | Notes                                                           |
+| ----------------- | ----------------- | ------------------------------------------------- | --------------------------------------------------------------- |
+| 1                 | 35 to 71 MiB      | ~200 to 335 MiB                                   | Equivalent to one stdio process                                 |
+| 8                 | 0.3 to 0.6 GiB    | 445 to 719 MiB at rest, 0.6 to 1.1 GiB under load | Measured, all eight calling at once for the peak                |
+| 20                | 0.7 to 1.4 GiB    | ~1 to 2 GiB                                       | A small team                                                    |
+| 100 (default max) | 3.5 to 7 GiB      | ~4 to 8 GiB                                       | Default `--max-http-clients`; a pool no small instance can hold |
+
+Budget roughly 100 MiB per credential expected to be live at once, on top of 128 MiB for the process, and read `--max-http-clients` as a memory setting rather than a concurrency one. `--pool-idle-timeout` (default 1h) reclaims entries nobody has used, so the live count is what matters, not how many tokens have ever connected; an entry rebuilt after reclamation pays the catalog build again, about 2 seconds on `dynamic` and `meta` and 4 to 5 seconds on `individual`.
 
 ### CPU Usage
 
 CPU usage depends on request throughput and active resource
 subscriptions, not pool size:
 
-| Scenario                        | CPU Impact                                                                       |
-| ------------------------------- | -------------------------------------------------------------------------------- |
-| Idle pool entries               | Zero — unless a still-connected session holds resource subscriptions (see below) |
-| Active MCP session (per client) | ~2 goroutines (read + write on transport)                                        |
-| Tool execution                  | 1 goroutine per concurrent tool call                                             |
-| GitLab API calls                | Blocked on network I/O, minimal CPU                                              |
+| Scenario                                         | CPU Impact                                                                       |
+| ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Idle pool entries                                | Zero — unless a still-connected session holds resource subscriptions (see below) |
+| Catalog build (first request of each credential) | About 2 seconds of one core on `dynamic` and `meta`, 4 to 5 on `individual`      |
+| Open session (`--stateless=false`)               | ~2 goroutines (read + write on transport)                                        |
+| Tool execution                                   | 1 goroutine per concurrent tool call                                             |
+| GitLab API calls                                 | Blocked on network I/O, minimal CPU                                              |
 
-100 active sessions ≈ 200 goroutines — negligible for the Go runtime.
+Under the default stateless transport a session lasts exactly one POST, so there is no per-client goroutine cost between requests.
 
 ### Goroutine Count
 
-| Component                        | Goroutines |
-| -------------------------------- | ---------- |
-| Go runtime (GC, scheduler, etc.) | ~5         |
-| HTTP server listener             | 1          |
-| Per active MCP session           | ~2         |
-| Per concurrent tool call         | 1          |
-
+| Component                                                         | Goroutines           |
+| ----------------------------------------------------------------- | -------------------- |
+| Go runtime plus server baseline (measured at rest on stdio)       | ~26 to 28            |
+| HTTP server listener                                              | 1                    |
+| Per open stateful session                                         | ~2                   |
+| Per concurrent tool call                                          | 1                    |
 | Per watched URI (subscriptions to the same URI share one watcher) | 1, max 10 per server |
 
-A server with 100 active sessions, 10 concurrent tool calls, and 10 watched URIs: ~230 goroutines total.
+An HTTP process holding eight credentials measured 52 to 75 goroutines at rest; add one per in-flight call and one per watched URI.
 
 ### Resource Subscription Watchers
 
@@ -108,13 +111,13 @@ kind of work this server performs without a request in flight:
 
 Understanding the terminology is important for capacity planning:
 
-| Term                  | Definition                                                           | Resource Impact                                                                |
-| --------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **Configured client** | User has the MCP server in their IDE config but hasn't sent requests | Zero — no session, no pool entry                                               |
-| **Connected client**  | Client has sent a POST and received a `Mcp-Session-Id`               | 1 session (~2 goroutines)                                                      |
-| **Active client**     | Connected client currently executing tool calls                      | Session + tool goroutines                                                      |
-| **Idle client**       | Connected but no recent requests                                     | Session goroutines, plus up to 10 watcher goroutines if it holds subscriptions |
-| **Unique token**      | Distinct GitLab PAT in the pool                                      | 1 pool entry (~130 KB)                                                         |
+| Term                  | Definition                                                                                                                                              | Resource Impact                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Configured client** | User has the MCP server in their IDE config but hasn't sent requests                                                                                    | Zero — no session, no pool entry                                                                |
+| **Connected client**  | Client has sent a POST; under the default stateless transport its session ends with the response, under `--stateless=false` it holds a `Mcp-Session-Id` | 1 pool entry for its token; a session (~2 goroutines) only in stateful mode                     |
+| **Active client**     | Connected client currently executing tool calls                                                                                                         | Pool entry + tool goroutines                                                                    |
+| **Idle client**       | Connected but no recent requests                                                                                                                        | Session goroutines in stateful mode, plus up to 10 watcher goroutines if it holds subscriptions |
+| **Unique token**      | Distinct GitLab PAT in the pool                                                                                                                         | 1 pool entry (35 to 71 MiB, by tool surface)                                                    |
 
 **Key insight**: Multiple sessions from the same token share one pool entry. A user with 3 IDE windows using the same token = 3 sessions, 1 pool entry.
 
@@ -122,7 +125,7 @@ Understanding the terminology is important for capacity planning:
 
 Memory growth comes from:
 
-1. **Unique tokens in pool** — each adds ~130 KB (bounded by `--max-http-clients`)
+1. **Unique tokens in pool** — each adds 35 to 71 MiB (bounded by `--max-http-clients`, reclaimed by `--pool-idle-timeout`)
 2. **Active MCP sessions** — minimal per-session overhead managed by the SDK
 3. **Tool execution** — temporary allocations during GitLab API calls (GC reclaims)
 4. **Large API responses** — paginated list results with many items
@@ -143,43 +146,44 @@ The server pool does NOT aggregate tokens — each client is independently rate-
 
 ## Capacity Planning Recommendations
 
+Size the pool from memory: about 100 MiB per credential live at once, plus 128 MiB for the process. `--session-timeout` only matters with `--stateless=false`.
+
 ### Small Team (5-20 developers)
 
 ```bash
 gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.example.com \
-  --max-http-clients=50 \
-  --session-timeout=30m \
+  --max-http-clients=20 \
   --http-addr=:8080
 ```
 
-- Memory: ~57 MB
-- CPU: Negligible
+- Memory: 1 to 2 GiB with every developer live at once
+- CPU: Negligible between requests; about 2 seconds of one core per catalog build
 
 ### Medium Team (20-100 developers)
 
 ```bash
 gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.example.com \
-  --max-http-clients=200 \
-  --session-timeout=1h \
+  --max-http-clients=100 \
   --http-addr=:8080
 ```
 
-- Memory: ~76 MB
+- Memory: 4 to 8 GiB at the pool bound; `--pool-idle-timeout` keeps the live count below it in practice
 - CPU: Minimal
 
 ### Large Deployment (100+ developers)
 
+Rather than one process with a thousand-entry pool, run several instances behind a balancer that routes on the credential (a hash of the bearer token), because the pool and the OAuth identity cache are per instance and a client that lands on a different instance rebuilds its entry there.
+
 ```bash
 gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.example.com \
-  --max-http-clients=1000 \
-  --session-timeout=1h \
+  --max-http-clients=100 \
   --http-addr=:8080
 ```
 
-- Memory: ~180 MB
+- Memory: 4 to 8 GiB per instance at the pool bound
 - CPU: Light — Go handles thousands of lightweight request handlers efficiently
 
 ---

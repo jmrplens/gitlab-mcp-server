@@ -102,11 +102,11 @@ The catalog-first runtime uses these model terms consistently:
   and owned actions.
 - `SurfaceKind`: an explicit classification for catalog and non-catalog
   surfaces. Valid values are `gitlab-action`, `meta-group`,
-  `dynamic-controller`, `runtime-utility`, `interactive-utility`,
-  and `server-maintenance`.
-- `SurfaceToolSpec`: the planned non-GitLab utility model for visible tools that
-  are not ordinary GitLab API actions, such as dynamic controllers,
-  interactive elicitation flows and server maintenance.
+  `dynamic-controller`, `runtime-utility` and `interactive-utility`.
+- `SurfaceToolSpec`: the metadata contract for visible tools that are not
+  ordinary GitLab API actions, such as the dynamic controllers
+  (`internal/tools/dynamic/surface_specs.go`), the interactive elicitation
+  flows and the server-maintenance tool (`internal/tools/surfaces`).
 - Compatibility alias: an action-level alias with `Alias`, `Target`, `Source`,
   `Searchable`, `Deprecated`, `RemovalVersion`, and `Reason`. These replace
   hardcoded action-specific Dynamic aliases as the owned metadata source.

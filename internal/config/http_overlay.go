@@ -55,6 +55,7 @@ type HTTPEnvOverlay struct {
 	PublicURL      *string
 	TrustedOrigins *string
 	OAuthCacheTTL  *time.Duration
+	OAuthClientUID *string
 
 	RateLimitRPS   *float64
 	RateLimitBurst *int
@@ -225,6 +226,13 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 			return err
 		}
 		o.OAuthCacheTTL = &auth.oauthCacheTTL
+	}
+	// Carried verbatim, as the flag's own value is: the flag layer splits the
+	// comma-separated list. Without this the documented variable was inert in
+	// the one mode where OAuth exists.
+	if envPresent("OAUTH_CLIENT_UID") {
+		value := TrimmedGetenv("OAUTH_CLIENT_UID")
+		o.OAuthClientUID = &value
 	}
 	if envPresent("RATE_LIMIT_RPS") {
 		value, err := parseFloatNonNegative(Getenv("RATE_LIMIT_RPS"), 0)

@@ -591,37 +591,58 @@ go mod verify
 golangci-lint fmt
 ```
 
-### Recommended Linter Configuration (.golangci.yml)
+### Linter Configuration (.golangci.yml, v2 schema)
+
+This project's `.golangci.yml` is a golangci-lint **v2** configuration: linters
+and formatters are separate top-level sections, per-linter settings live under
+`linters.settings`, and `gosimple` no longer exists as a separate linter (its
+checks are part of `staticcheck`). An abridged excerpt of the real file:
 
 ```yaml
+version: "2"
+
+run:
+  go: "1.27"
+  build-tags:
+    - e2e
+
 linters:
+  default: none
   enable:
-    - errcheck
-    - gosimple
     - govet
-    - ineffassign
     - staticcheck
+    - errcheck
+    - ineffassign
     - unused
-    - goimports
     - misspell
     - unconvert
     - unparam
+    - modernize
+  settings:
+    govet:
+      enable-all: true
+      settings:
+        shadow:
+          strict: true
+    staticcheck:
+      checks:
+        - "all"
+    errcheck:
+      check-type-assertions: true
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
 
 formatters:
-    enable:
-        - goimports
-        - gofumpt
-        - gci
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  govet:
-    check-shadowing: true
-
-issues:
-  exclude-use-default: false
+  enable:
+    - goimports
+    - gofumpt
+    - gci
 ```
+
+Run `make golangci-lint` (whole project) or `golangci-lint run --build-tags e2e ./internal/tools/{domain}/` (one package); `make analyze-fix` applies the formatters.
 
 ## Quick Reference: Go Idioms
 

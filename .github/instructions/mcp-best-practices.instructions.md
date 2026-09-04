@@ -11,7 +11,7 @@ Protocol-level guidelines for building high-quality MCP servers that enable LLMs
 
 ### Naming
 
-- **snake_case with service prefix**: `gitlab_create_issue`, `gitlab_list_projects`
+- **snake_case with service prefix, domain first**: `gitlab_issue_create`, `gitlab_project_list` (the catalog IDs are `issue.create`, `project.list`; the individual name is declared in the `ActionSpec`, not derived)
 - **Action-oriented verbs**: get, list, search, create, update, delete
 - **Specific names**: Avoid generic names that conflict with other MCP servers
 - **Descriptions must match behavior exactly**: Narrow, unambiguous descriptions
@@ -63,7 +63,7 @@ For list operations:
 - **Actionable messages**: Tell the LLM what went wrong AND what to try next
 - **Report tool errors in results**: Use `IsError: true` in `CallToolResult` for recoverable errors
 - **Don't expose internals**: Hide stack traces, internal paths, database details
-- **Wrap with context**: `fmt.Errorf("gitlab_list_projects: %w", err)`
+- **Wrap with context**: `toolutil.WrapErr("list projects", err)` for reads, `toolutil.WrapErrWithMessage`/`WrapErrWithHint` for writes (they classify the failure and keep GitLab's own message; see `internal/toolutil/errors.go`)
 - **Clean up resources**: Always release connections, files on errors
 
 ## Security

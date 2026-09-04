@@ -532,7 +532,7 @@ func describeGitLabResponse(glErr *gl.ErrorResponse) string {
 // error message (from ErrorResponse.Message) when available. This produces
 // richer errors like:
 //
-//	"fileCreate: bad request — {error: A file with this name already exists}: POST .../files: 400"
+//	"fileCreate: bad request (A file with this name already exists): POST .../files: 400"
 //
 // Use WrapErrWithMessage for mutating operations where the specific GitLab
 // error detail helps the LLM understand what went wrong. Use WrapErr for
@@ -549,7 +549,7 @@ func WrapErrWithMessage(operation string, err error) error {
 // WrapErrWithHint works like WrapErrWithMessage but appends an actionable hint
 // that tells the LLM what to do next. Example:
 //
-//	"branchDelete: bad request — Cannot delete: protected branch.
+//	"branchDelete: bad request (Cannot delete: protected branch).
 //	 Suggestion: use gitlab_branch_unprotect first, then retry deletion: <original>"
 //
 // The hint should be a concise suggestion starting with a verb (e.g., "use

@@ -9,8 +9,10 @@ Reference pages describe the product as it is — they don't teach workflows (se
 [Guides](../guides/README.md)) or explain rationale (see [Concepts](../concepts/README.md)).
 
 Several pages here are **generated** from the codebase (`tools/`, and the
-counts in `prompts`/`resources`) and validated in CI — treat them as
-authoritative and edit the source, not the Markdown.
+measurements block in `resource-benchmark.md`) and validated in CI — treat them
+as authoritative and edit the source, not the Markdown. The prompt and resource
+inventories are hand-maintained and checked against `internal/prompts` and
+`internal/resources` by review.
 
 > **Diátaxis type**: Reference · **Audience**: 👤🔧 All users & integrators
 

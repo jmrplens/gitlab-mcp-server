@@ -222,42 +222,23 @@ The branch **"nonexistent" in project 42** does not exist or is not accessible w
 - Verify the branch name is spelled correctly (case-sensitive)
 ```
 
-Not-found responses have `IsError: true` but include actionable hints so the AI assistant can self-correct or suggest alternatives. This pattern covers 27 "get" handlers across 21 domains.
+Not-found responses have `IsError: true` but include actionable hints so the AI assistant can self-correct or suggest alternatives. This pattern covers 19 "get" handlers across 19 domains (`toolutil.NotFoundResult` call sites under `internal/tools/`).
 
 ## Embedded Resources
 
-Selected `gitlab_*_get` tools attach an additional content block of type `resource` (`mcp.EmbeddedResource`) carrying the canonical MCP resource URI for the entity returned. This lets clients that only render `Content` blocks (and ignore `StructuredContent`) still surface a stable, dereferenceable identifier the user or LLM can pass to `resources/read`, follow-up tool calls, or UI deep-links.
+A get result can attach an additional content block of type `resource` (`mcp.EmbeddedResource`) carrying the canonical MCP resource URI for the entity returned. This lets clients that only render `Content` blocks (and ignore `StructuredContent`) still surface a stable, dereferenceable identifier the user or LLM can pass to `resources/read`, follow-up tool calls, or UI deep-links.
 
-Currently embedded by 22 `gitlab_*_get` handlers:
+One action embeds today, on every surface (`toolutil.EmbedResourceJSON` has a single call site, in the issue Markdown formatter):
 
-| Tool                         | Canonical URI                                                |
-| ---------------------------- | ------------------------------------------------------------ |
-| `gitlab_board_get`           | `gitlab://project/{project_id}/board/{board_id}`             |
-| `gitlab_branch_get`          | `gitlab://project/{project_id}/branch/{branch_name}`         |
-| `gitlab_commit_get`          | `gitlab://project/{project_id}/commit/{sha}`                 |
-| `gitlab_deploy_key_get`      | `gitlab://project/{project_id}/deploy_key/{key_id}`          |
-| `gitlab_deployment_get`      | `gitlab://project/{project_id}/deployment/{deployment_id}`   |
-| `gitlab_environment_get`     | `gitlab://project/{project_id}/environment/{environment_id}` |
-| `gitlab_feature_flag_get`    | `gitlab://project/{project_id}/feature_flag/{name}`          |
-| `gitlab_group_get`           | `gitlab://group/{group_id}`                                  |
-| `gitlab_group_label_get`     | `gitlab://group/{group_id}/label/{label_id}`                 |
-| `gitlab_group_milestone_get` | `gitlab://group/{group_id}/milestone/{milestone_iid}`        |
-| `gitlab_issue_get`           | `gitlab://project/{project_id}/issue/{issue_iid}`            |
-| `gitlab_job_get`             | `gitlab://project/{project_id}/job/{job_id}`                 |
-| `gitlab_label_get`           | `gitlab://project/{project_id}/label/{label_id}`             |
-| `gitlab_milestone_get`       | `gitlab://project/{project_id}/milestone/{milestone_iid}`    |
-| `gitlab_mr_get`              | `gitlab://project/{project_id}/mr/{merge_request_iid}`       |
-| `gitlab_pipeline_get`        | `gitlab://project/{project_id}/pipeline/{pipeline_id}`       |
-| `gitlab_project_get`         | `gitlab://project/{project_id}`                              |
-| `gitlab_project_snippet_get` | `gitlab://project/{project_id}/snippet/{snippet_id}`         |
-| `gitlab_release_get`         | `gitlab://project/{project_id}/release/{tag_name}`           |
-| `gitlab_snippet_get`         | `gitlab://snippet/{snippet_id}`                              |
-| `gitlab_tag_get`             | `gitlab://project/{project_id}/tag/{tag_name}`               |
-| `gitlab_wiki_get`            | `gitlab://project/{project_id}/wiki/{slug}`                  |
+| Action      | Canonical URI                                     |
+| ----------- | ------------------------------------------------- |
+| `issue.get` | `gitlab://project/{project_id}/issue/{issue_iid}` |
+
+Every other action's `ActionSpec` carries an embedded-resource policy (`none`, `optional` or `always`) that the catalog validates and projects but does not yet act on, so the get actions whose resources exist under `gitlab://` (project, group, merge request, pipeline, job, branch, tag, release, label, milestone, board, deployment, environment, feature flag, deploy key, snippet, wiki page) currently return no embedded block.
 
 The embedded resource carries `MIMEType: "application/json"` and a `Text` payload equal to the JSON-marshaled output struct — duplicating `StructuredContent` so simpler clients lose nothing. Not-found responses do **not** embed (the entity does not exist).
 
-This behaviour is enabled by default and can be disabled globally with `EMBEDDED_RESOURCES=false` (env var) or `--embedded-resources=false` (HTTP-mode flag) as a kill-switch for clients that don't tolerate duplicate content blocks.
+This behaviour is enabled by default and can be disabled globally with `GITLAB_MCP_EMBEDDED_RESOURCES=false` (env var, both transports) or `--embedded-resources=false` (HTTP-mode flag) as a kill-switch for clients that don't tolerate duplicate content blocks.
 
 ## Per-Route OutputSchema (Meta-Tools)
 

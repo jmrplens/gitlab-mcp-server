@@ -10,7 +10,9 @@ Accepted — 2026-08-25.
 (`event_webhook_types.go`) plus `ParseHook`, `ParseWebhook` and
 `ParseSystemhook` (`event_parsing.go`). This repository references none of
 them. It manages hooks as data — `gitlab_project_hook_*`,
-`gitlab_group_hook_*`, `gitlab_system_hook_*` create, list, edit and delete
+`gitlab_group_hook_*` and the system-hook tools (`gitlab_add_system_hook`,
+`gitlab_get_system_hook`, `gitlab_edit_system_hook`,
+`gitlab_delete_system_hook`, and so on) create, list, edit and delete
 them — but has never consumed a delivery.
 
 [ADR-0015](adr-0015-polled-resource-subscriptions.md) shipped

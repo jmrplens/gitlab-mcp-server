@@ -289,7 +289,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 | **Tools**         | Up to 1079 individual / 32–50 meta                                                                                                  |
 | **Resources**     | 45 (static + templates)                                                                                                             |
 | **Prompts**       | 37 templates                                                                                                                        |
-| **Completions**   | 17 argument types: projects, groups, users, branches, tags, MRs, issues, pipelines, jobs, labels, milestones, SHAs                  |
+| **Completions**   | 18 argument names: projects, groups, users, branches, tags, MRs, issues, pipelines, jobs, labels, milestones, SHAs                  |
 | **Server logs**   | Structured (text/JSON) to stderr — not the MCP `logging` capability, which is deprecated (SEP-2577) and deliberately not advertised |
 | **Progress**      | Tool execution progress reporting                                                                                                   |
 | **Elicitation**   | 4 interactive creation wizards                                                                                                      |
@@ -459,10 +459,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,072 |     227,752 |
-| Unit tests (`_test.go`)  |       639 |     369,435 |
+| Source (`.go`, non-test) |     1,072 |     227,756 |
+| Unit tests (`_test.go`)  |       639 |     369,458 |
 | End-to-end tests         |       226 |      61,190 |
-| **Total**                | **1,937** | **658,377** |
+| **Total**                | **1,937** | **658,404** |
 
 ### Functions
 
@@ -482,7 +482,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.62× more tests than code |
 | Average source file length         |                 ~212 lines |
 | Average test file length           |                 ~578 lines |
-| Comment lines in source            |  34,932 (~15.3% of source) |
+| Comment lines in source            |  34,933 (~15.3% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
@@ -507,15 +507,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                   |
 | ------------------- | -------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,407 lines      |
+| Longest source file | `cmd/server/main.go`. 4,410 lines      |
 | Longest test file   | `cmd/server/main_test.go`. 8,795 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,140 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,491 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,141 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,493 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

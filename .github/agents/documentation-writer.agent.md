@@ -154,7 +154,7 @@ Label each document with its quadrant in a comment or front matter to maintain c
    ```
 
 1. Fix any reported violations before considering the document complete
-1. The project uses `.markdownlint-cli2.jsonc` with these disabled rules: MD013 (line length), MD024 (duplicate headings), MD025 (single H1), MD033 (inline HTML for Mermaid), MD041 (first line heading), MD060 (native syntax)
+1. The project uses `.markdownlint-cli2.jsonc` with these disabled rules: MD010 (hard tabs), MD013 (line length), MD024 (duplicate headings), MD025 (single H1), MD033 (inline HTML for Mermaid), MD041 (first line heading), MD046 (code block style), MD060 (native syntax); `plan/` is ignored entirely
 1. Verify all Mermaid diagrams render correctly
 1. Verify parity: every public API, type, and configuration option is documented
 1. Validate all file references, cross-links, and external URLs
@@ -393,15 +393,15 @@ This project includes a user-facing documentation site built with [Astro Starlig
 
 ```text
 site/
-├── astro.config.mjs    # Navigation sidebar, i18n config
+├── astro.config.mjs    # Navigation sidebar (explicit slugs with es translations), i18n config
 ├── src/content/docs/
-│   ├── en/             # English docs (default locale)
-│   └── es/             # Spanish translations
+│   ├── *.mdx, */       # English docs: the Starlight `root` locale lives at this level
+│   └── es/             # Spanish translations, mirroring the English tree
 ```
 
 ### Key Rules
 
-- English (`en/`) is the source of truth — write English first, then translate to Spanish
+- English (the root of `src/content/docs/`, not an `en/` folder) is the source of truth — write English first, then translate to Spanish
 - Use Starlight MDX components: `<Aside>`, `<Tabs>`, `<Card>`, `<Steps>`, `<FileTree>`
 - Every `.mdx` file needs frontmatter with `title` and `description`
 - After changes, verify the build: `cd site && pnpm build`
@@ -410,6 +410,7 @@ site/
 ## Operating Rules
 
 - Treat source code as read-only truth; never modify source code
+- Never hand-edit generator-owned content: the README stats block, `docs/development/testing/testing.md`, the catalog tables in `docs/reference/tools/README.md`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Those come from the `cmd/gen_*` generators (`make update-all` runs them all)
 - Never include secrets, tokens, or internal URLs in documentation
 - Never use TBD/TODO as final documentation content
 - Always run `npx markdownlint-cli2 <file>` on every generated or modified document

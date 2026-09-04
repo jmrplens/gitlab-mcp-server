@@ -87,7 +87,7 @@ The server supports completions for both **prompt arguments** (used in MCP promp
 
 ## Supported Argument Types
 
-The server supports **17 argument types** across prompts and resources.
+The server supports **18 argument names** across prompts and resources (the `switch` in `completePromptArg`; resource templates complete the first four global and per-project identifiers only, see the [FAQ](#do-completions-work-for-resource-uris-too)).
 
 ### Global Completers
 
@@ -103,20 +103,21 @@ These completers search across the entire GitLab instance. They do not require a
 
 These completers require a `project_id` context, which is extracted from previously resolved arguments in the same request.
 
-| Argument                                   | Query Method                          | Example Input → Suggestions                            |
-| ------------------------------------------ | ------------------------------------- | ------------------------------------------------------ |
-| `branch`, `source_branch`, `target_branch` | List branches matching prefix         | `feat` → `feature/login`, `feature/signup`             |
-| `from`, `to`, `ref`                        | Branches + tags matching prefix       | `v1` → `v1.0.0`, `v1.1.7`, `v1-branch`                 |
-| `tag`                                      | List tags matching prefix             | `v1.1` → `v1.1.5`, `v1.1.6`, `v1.1.7`                  |
-| `merge_request_iid`                        | List open MRs, filter by IID prefix   | `1` → `15`, `14` (titles fetched separately by client) |
-| `issue_iid`                                | List open issues, filter by IID       | `3` → `33`, `34`                                       |
-| `pipeline_id`                              | Recent pipelines, filter by ID prefix | `415` → `41557`, `41556`                               |
-| `sha`                                      | Recent commits, filter by SHA prefix  | `ddc` → `ddcc2f13`                                     |
-| `label`                                    | Project labels matching prefix        | `type` → `type::bug`, `type::enhancement`              |
-| `milestone_id`                             | Milestones matching title             | `v1` → `1`, `2` (IDs; titles fetched separately)       |
-| `job_id`                                   | Jobs in a pipeline, filter by ID      | `10` → `100`, `101`                                    |
+| Argument                                   | Query Method                          | Example Input → Suggestions                               |
+| ------------------------------------------ | ------------------------------------- | --------------------------------------------------------- |
+| `branch`, `source_branch`, `target_branch` | List branches matching prefix         | `feat` → `feature/login`, `feature/signup`                |
+| `from`, `to`, `ref`                        | Branches + tags matching prefix       | `v1` → `v1.0.0`, `v1.1.7`, `v1-branch`                    |
+| `tag`                                      | List tags matching prefix             | `v1.1` → `v1.1.5`, `v1.1.6`, `v1.1.7`                     |
+| `merge_request_iid`                        | List open MRs, filter by IID prefix   | `1` → `15`, `14` (titles fetched separately by client)    |
+| `issue_iid`                                | List open issues, filter by IID       | `3` → `33`, `34`                                          |
+| `pipeline_id`                              | Recent pipelines, filter by ID prefix | `415` → `41557`, `41556`                                  |
+| `sha`                                      | Recent commits, filter by SHA prefix  | `ddc` → `ddcc2f13`                                        |
+| `label`                                    | Project labels matching prefix        | `type` → `type::bug`, `type::enhancement`                 |
+| `milestone_id`                             | Milestones matching title             | `v1` → `1`, `2` (IDs; titles fetched separately)          |
+| `milestone`                                | Milestone titles matching prefix      | `v1` → `v1.0`, `v1.1` (titles, for the milestone prompts) |
+| `job_id`                                   | Jobs in a pipeline, filter by ID      | `10` → `100`, `101`                                       |
 
-The `job_id` completer is special — it requires both `project_id` and `pipeline_id` to be resolved first.
+Two completers take a different context. `milestone` resolves against `project_id` when one is present and against `group_id` otherwise, so the group milestone prompts complete too. `job_id` requires both `project_id` and `pipeline_id` to be resolved first.
 
 ## Configuration
 

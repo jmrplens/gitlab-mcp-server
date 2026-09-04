@@ -115,7 +115,7 @@
           "format": "boolean"
         },
         {
-          "name": "EMBEDDED_RESOURCES",
+          "name": "GITLAB_MCP_EMBEDDED_RESOURCES",
           "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
           "isRequired": false,
           "default": "true",
@@ -260,7 +260,7 @@
           "format": "boolean"
         },
         {
-          "name": "EMBEDDED_RESOURCES",
+          "name": "GITLAB_MCP_EMBEDDED_RESOURCES",
           "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
           "isRequired": false,
           "default": "true",
@@ -407,7 +407,7 @@
           "format": "boolean"
         },
         {
-          "name": "EMBEDDED_RESOURCES",
+          "name": "GITLAB_MCP_EMBEDDED_RESOURCES",
           "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
           "isRequired": false,
           "default": "true",
@@ -555,7 +555,7 @@
           "format": "boolean"
         },
         {
-          "name": "EMBEDDED_RESOURCES",
+          "name": "GITLAB_MCP_EMBEDDED_RESOURCES",
           "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
           "isRequired": false,
           "default": "true",

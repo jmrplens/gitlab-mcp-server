@@ -65,7 +65,7 @@ For multi-file packages, each file gets a header describing its scope. The heade
 //   - gitlab_branch_list:       List branches with optional search
 //   - gitlab_branch_protect:    Protect a branch with access levels
 //   - gitlab_branch_unprotect:  Remove protection from a branch
-package tools
+package branches
 ```
 
 ### Pattern 3: Input Struct Documentation
@@ -73,29 +73,30 @@ package tools
 Input structs define MCP tool parameters. Document the struct purpose and each field's role:
 
 ```go
-// MRCreateInput defines parameters for creating a new merge request.
+// CreateInput defines parameters for creating a new merge request.
 // ProjectID identifies the target project, SourceBranch and TargetBranch
-// define the merge direction, and Title becomes the MR title.
-type MRCreateInput struct {
-    ProjectID    string `json:"project_id"    jsonschema:"required,description=Project ID or URL-encoded path"`
-    SourceBranch string `json:"source_branch" jsonschema:"required,description=Source branch name"`
-    TargetBranch string `json:"target_branch" jsonschema:"required,description=Target branch name"`
-    Title        string `json:"title"         jsonschema:"required,description=Title of the merge request"`
-    Description  string `json:"description"   jsonschema:"description=Detailed description (Markdown supported)"`
+// define the merge direction, and Title becomes the MR title. The package
+// name (mergerequests) carries the domain, so the type takes no MR prefix.
+type CreateInput struct {
+    ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
+    SourceBranch string               `json:"source_branch" jsonschema:"Source branch name,required"`
+    TargetBranch string               `json:"target_branch" jsonschema:"Target branch name,required"`
+    Title        string               `json:"title"         jsonschema:"Title of the merge request,required"`
+    Description  string               `json:"description,omitempty" jsonschema:"Detailed description (Markdown supported)"`
 }
 ```
 
 ### Pattern 4: Handler Function Documentation
 
-Handler functions follow the pattern `func toolName(ctx, client, input) (output, error)`:
+Handler functions follow the pattern `func Action(ctx, client, input) (output, error)`, exported so the domain's `ActionSpecs` can route to them:
 
 ```go
-// mrCreate creates a new merge request in the specified GitLab project.
+// Create creates a new merge request in the specified GitLab project.
 // It sets the title, description, source branch, and target branch from
 // the input parameters. Returns the created merge request details or an
 // error if the project is not found, the source branch does not exist,
 // or the GitLab API call fails.
-func mrCreate(ctx context.Context, client *gitlabclient.Client, in MRCreateInput) (MROutput, error) {
+func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 ```
 
 ### Pattern 5: Output Struct Documentation
@@ -103,9 +104,11 @@ func mrCreate(ctx context.Context, client *gitlabclient.Client, in MRCreateInput
 Output structs define the MCP tool response:
 
 ```go
-// MROutput represents the response from a merge request operation.
-// It contains the essential fields returned by the GitLab Merge Requests API.
-type MROutput struct {
+// Output represents a merge request as returned by the GitLab Merge
+// Requests API. It mirrors the SDK struct field for field (1:1 policy);
+// the excerpt below is abridged.
+type Output struct {
+    toolutil.HintableOutput
     IID          int    `json:"iid"`
     Title        string `json:"title"`
     State        string `json:"state"`
@@ -121,21 +124,25 @@ type MROutput struct {
 Internal helpers that transform data between API and MCP formats:
 
 ```go
-// mrToOutput converts a GitLab API [gl.MergeRequest] to the MCP tool
-// output format. It extracts the fields relevant for MCP consumers and
-// builds the author display name from the GitLab user record.
-func mrToOutput(mr *gl.MergeRequest) MROutput {
+// ToOutput converts a GitLab API [gl.MergeRequest] to the MCP tool
+// output format, mirroring every SDK field and surfacing the author,
+// assignees and references as full nested objects.
+func ToOutput(mr *gl.MergeRequest) Output {
 ```
 
-### Pattern 7: Registration Functions
+### Pattern 7: ActionSpecs Functions
 
-Functions that wire tools into the MCP server:
+The function that exposes a domain's handlers to every surface. There are no
+package-local `RegisterTools` functions: the catalog projects these specs into
+the meta, dynamic, and individual surfaces.
 
 ```go
-// RegisterBranchTools registers all branch-related MCP tools on the given
-// server. Each tool is configured with appropriate annotations indicating
-// whether the operation is read-only or destructive.
-func RegisterBranchTools(srv *server.MCPServer, client *gitlabclient.Client) {
+// ActionSpecs returns canonical specs for branch and protected branch
+// actions. The specs feed meta-tools, dynamic discovery, gitlab://tools
+// resources, audits, and individual tool projection (ADR-0004); each
+// entry names its individual tool and carries its read-only/destructive
+// classification.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 ```
 
 ### Pattern 8: Test File Documentation
@@ -148,7 +155,7 @@ func RegisterBranchTools(srv *server.MCPServer, client *gitlabclient.Client) {
 // Each test function creates a dedicated httptest server with a handler
 // that simulates the relevant GitLab API endpoint, then calls the tool
 // handler directly and asserts the output or error.
-package tools
+package branches
 ```
 
 ### Pattern 9: Individual Test Function Documentation
@@ -206,25 +213,30 @@ func TestBranchList_Scenarios(t *testing.T) {
 
 ### Pattern 11: Test Helper Documentation
 
+The shared helpers live in `internal/testutil`; a domain test file rarely defines
+its own. Their doc comments are the model for any local helper:
+
 ```go
-// newTestGitLabClient creates a [gitlabclient.Client] connected to an
+// NewTestClient creates a [gitlabclient.Client] connected to an
 // httptest server using the provided handler. The test server is
-// automatically stopped when the test completes via [testing.T.Cleanup].
-func newTestGitLabClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
-    t.Helper()
+// automatically stopped when the test completes via [testing.TB.Cleanup].
+func NewTestClient(tb testing.TB, handler http.Handler) *gitlabclient.Client {
+    tb.Helper()
 ```
 
 ### Pattern 12: Interface Documentation
 
 Document the contract, not the implementation. List the method set and explain the
-behavioral expectations:
+behavioral expectations (from `internal/subscriptions/manager.go`):
 
 ```go
-// ActionSpecProvider returns canonical action specs for one GitLab API domain.
-// Implementations provide route metadata consumed by meta-tools, dynamic
-// discovery, gitlab://tools resources, audits, and individual tool projection.
-type ActionSpecProvider interface {
-    ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec
+// Reader reads the current content of a resource URI. Implementations
+// return [ErrInaccessible] or [ErrRateLimited] where those apply; any other
+// error is treated as transient.
+type Reader interface {
+    // Read returns the current content of uri, or an error describing why
+    // it could not be read.
+    Read(ctx context.Context, uri string) ([]byte, error)
 }
 ```
 
@@ -347,5 +359,5 @@ This project (gitlab-mcp-server) has specific patterns to recognize:
 - **Tests use `httptest`** — mention the API endpoint being mocked and HTTP method
 - **Constants like endpoint paths** — document they are test fixtures for specific API routes
 - **`gitlabclient.Client`** wraps the GitLab API — reference it as `[gitlabclient.Client]`
-- **`toolutil` helpers** — reference using doc links: `[toolutil.WrapErr]`, `[toolutil.BuildPaginationResponse]`
+- **`toolutil` helpers** — reference using doc links: `[toolutil.WrapErr]`, `[toolutil.PaginationFromResponse]`, `[toolutil.ApplyListOptions]`
 - **Catalog registration** — ordinary GitLab actions flow through `ActionSpecs` and the canonical action catalog; package-level meta registration is historical compatibility context only

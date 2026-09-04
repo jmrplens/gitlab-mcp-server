@@ -183,19 +183,20 @@ visibility, err := flow.SelectOne(ctx, "visibility", "Select the project visibil
 
 ### Methods
 
-| Method                                          | Signature                       | Purpose                                        |
-| ----------------------------------------------- | ------------------------------- | ---------------------------------------------- |
-| `FromRequest(req)`                              | `(*mcp.CallToolRequest) Client` | Create client from tool request                |
-| `IsSupported()`                                 | `() bool`                       | Check if client has elicitation capability     |
-| `IsURLSupported()`                              | `() bool`                       | Check if client supports URL mode elicitation  |
-| `Confirm(ctx, message)`                         | `(...) (bool, error)`           | Ask a yes/no question                          |
-| `PromptText(ctx, message, field)`               | `(...) (string, error)`         | Request free-form text input                   |
-| `PromptNumber(ctx, message, field, min, max)`   | `(...) (float64, error)`        | Request numeric input with bounds              |
-| `SelectOne(ctx, message, options)`              | `(...) (string, error)`         | Single-choice selection from a list            |
-| `SelectOneInt(ctx, message, options)`           | `(...) (int, error)`            | Single-choice selection from an integer list   |
-| `SelectMulti(ctx, message, options, min, max)`  | `(...) ([]string, error)`       | Multi-choice selection with cardinality bounds |
-| `GatherData(ctx, message, schema)`              | `(...) (map[string]any, error)` | Request structured data via JSON Schema        |
-| `ElicitURL(ctx, gitlabBaseURL, targetURL, msg)` | `(...) error`                   | Open a GitLab URL in the client (URL mode)     |
+| Method                                          | Signature                       | Purpose                                                                                      |
+| ----------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `FromRequest(req)`                              | `(*mcp.CallToolRequest) Client` | Create client from tool request                                                              |
+| `IsSupported()`                                 | `() bool`                       | Check if client has elicitation capability                                                   |
+| `IsURLSupported()`                              | `() bool`                       | Check if client supports URL mode elicitation                                                |
+| `IsFormSupported()`                             | `() bool`                       | Check if client supports form mode elicitation, which every schema-driven prompt below needs |
+| `Confirm(ctx, message)`                         | `(...) (bool, error)`           | Ask a yes/no question                                                                        |
+| `PromptText(ctx, message, field)`               | `(...) (string, error)`         | Request free-form text input                                                                 |
+| `PromptNumber(ctx, message, field, min, max)`   | `(...) (float64, error)`        | Request numeric input with bounds                                                            |
+| `SelectOne(ctx, message, options)`              | `(...) (string, error)`         | Single-choice selection from a list                                                          |
+| `SelectOneInt(ctx, message, options)`           | `(...) (int, error)`            | Single-choice selection from an integer list                                                 |
+| `SelectMulti(ctx, message, options, min, max)`  | `(...) ([]string, error)`       | Multi-choice selection with cardinality bounds                                               |
+| `GatherData(ctx, message, schema)`              | `(...) (map[string]any, error)` | Request structured data via JSON Schema                                                      |
+| `ElicitURL(ctx, gitlabBaseURL, targetURL, msg)` | `(...) error`                   | Open a GitLab URL in the client (URL mode)                                                   |
 
 **Method selection guide:**
 
@@ -210,13 +211,15 @@ visibility, err := flow.SelectOne(ctx, "visibility", "Select the project visibil
 
 ### Error Types
 
-| Error                           | Meaning                                      | Tool Handler Action                                                                               |
-| ------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `ErrElicitationNotSupported`    | Client does not support elicitation          | Return informational message explaining the requirement                                           |
-| `ErrURLElicitationNotSupported` | Client does not support URL mode elicitation | Fall back to text-based workflow                                                                  |
-| `ErrInputPending`               | Multi round-trip answer not yet available    | Return `flow.InputRequiredResult()` (or `flow.PendingError()`) so the client can answer and retry |
-| `ErrDeclined`                   | User declined the elicitation request        | Return cancellation message via `CancelledResult`                                                 |
-| `ErrCancelled`                  | User cancelled the elicitation flow          | Return cancellation message via `CancelledResult`                                                 |
+| Error                            | Meaning                                         | Tool Handler Action                                                                               |
+| -------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ErrElicitationNotSupported`     | Client does not support elicitation             | Return informational message explaining the requirement                                           |
+| `ErrURLElicitationNotSupported`  | Client does not support URL mode elicitation    | Fall back to text-based workflow                                                                  |
+| `ErrFormElicitationNotSupported` | Client declared elicitation without form mode   | Return informational message explaining the requirement                                           |
+| `ErrMalformedAnswer`             | The answer did not satisfy the requested schema | Treat as a client fault; the value is never handed to the handler                                 |
+| `ErrInputPending`                | Multi round-trip answer not yet available       | Return `flow.InputRequiredResult()` (or `flow.PendingError()`) so the client can answer and retry |
+| `ErrDeclined`                    | User declined the elicitation request           | Return cancellation message via `CancelledResult`                                                 |
+| `ErrCancelled`                   | User cancelled the elicitation flow             | Return cancellation message via `CancelledResult`                                                 |
 
 ### Cancellation Helper
 
@@ -271,8 +274,8 @@ Every elicitation tool includes a final `Confirm` step before executing any writ
 |    3 | `PromptText` | Title                    |   Yes    |
 |    4 | `PromptText` | Description              |    No    |
 |    5 | `PromptText` | Labels (comma-separated) |    No    |
-|    6 | `Confirm`    | Squash commits?          |    —     |
-|    7 | `Confirm`    | Remove source branch?    |    —     |
+|    6 | `Confirm`    | Remove source branch?    |    —     |
+|    7 | `Confirm`    | Squash commits?          |    —     |
 |    8 | `Confirm`    | Create MR?               |    —     |
 
 ### `gitlab_interactive_release_create`

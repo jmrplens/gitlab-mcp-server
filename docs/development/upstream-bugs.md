@@ -69,7 +69,7 @@ readable without opening the tracker:
 | 1 | gitlab-org/gitlab | [403 carries no `WWW-Authenticate`](#403-responses-carry-no-www-authenticate-header) | No | No | No | No | Yes |
 | 2 | gitlab-org/gitlab | [No `resource_indicators_supported`](#no-resource_indicators_supported-in-authorization-server-metadata) | No | No | No | No | Yes |
 | 3 | client-go | [Panic unmarshalling an issue](#panic-unmarshalling-an-issue-with-no-id) | Yes | Yes | **Yes, v2.59.1** | Was yes | Retired |
-| 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes, open | No | No | Yes |
+| 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes | **Yes, `release-client-3.0` branch (untagged)** | No | Yes |
 | 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No | No | No | No | Yes |
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
@@ -81,13 +81,14 @@ readable without opening the tracker:
 | 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | No | No | No | No | None possible |
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | No | No | No | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | No | No | No | No | None taken |
-| 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | No | No | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
+| 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | No | No | No | No | Yes |
 
-States verified against the upstream trackers on 2026-08-29.
+States verified against the upstream trackers on 2026-09-05.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -156,7 +157,7 @@ MUST cannot be met by its named mechanism. Recorded as
 - **Merged**: **yes**, on 2026-08-25 into `main`, shipped in **v2.59.1**.
 - **Blocking**: it was. The panic took the process down rather than failing one
   call.
-- **Workaround**: retired. The dependency is pinned at v2.60.0 and the local
+- **Workaround**: retired. The dependency is pinned at v2.62.0 and the local
   guard is gone.
 
 Kept here as the record: this is what the round trip looks like when it works.
@@ -166,16 +167,16 @@ Kept here as the record: this is what the round trip looks like when it works.
 - **Reported**: yes.
 - **In review**: yes,
   [gitlab-org/api/client-go!2996](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2996),
-  **still open**, targeting `release-client-3.0`.
-- **Merged**: no. It is accepted for the v3 line, so it will not appear in any
-  v2 release.
+  targeting `release-client-3.0`.
+- **Merged**: **yes**, on 2026-09-02 into `release-client-3.0`. That branch
+  carries no tag yet, and it is the v3 line, so no v2 release will contain it.
 - **Blocking**: no.
 - **Workaround**: yes. `internal/tools/groupboards.UpdateGroupBoardList` issues
   the `PUT` directly instead of calling the wrapper. Retire it, and the
   `acceptedMissingMethods` entry in `cmd/audit_1to1/internal/actions/analyze.go`,
   once the client-go version this project depends on actually contains the fix,
-  not merely when the v3 bump happens. The MR is still open, so it may land in a
-  later v3 minor, or not at all; check the release before removing either.
+  not merely when the v3 bump happens: check that the v3 release being adopted
+  really descends from the merge before removing either.
 
 **What**: the group-level wrapper declares `[]*BoardList`, while GitLab returns
 the single updated list object, so the wrapper can never unmarshal a successful
@@ -607,8 +608,10 @@ markdown. We keep emitting both.
   still open.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes, the `GO-2026-5932` entry in the govulncheck allowlist.
-  Retire it when the PR merges.
+- **Workaround**: retired. It was the `GO-2026-5932` entry in the govulncheck
+  allowlist; removing the self-update subsystem removed the dependency, so the
+  advisory no longer reaches any binary and the allowlist is empty again. The
+  upstream PR stays worth merging for the module's other users.
 
 ### A receiving middleware cannot read the JSON-RPC request id
 

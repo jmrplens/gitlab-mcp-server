@@ -21,7 +21,7 @@
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.27.1                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.59.0       |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.62.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
 | Version       | 2.7.5                                               |
@@ -32,16 +32,16 @@
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | By instance tier: ~854 Free/CE; ~1007 Premium; ~1073 Ultimate (self-managed) / ~1079 on GitLab.com Ultimate with Orbit |
 | Catalog groups            | By instance tier: 28 Free/CE; 34 Premium; 45 Ultimate                                                       |
-| Meta-mode tools           | 32 base (Free/CE) / 49 self-managed Ultimate / 50 GitLab.com Ultimate (Orbit)                              |
+| Meta-mode tools           | 32 base (Free/CE) / 38 Premium / 49 self-managed Ultimate / 50 GitLab.com Ultimate (Orbit)                 |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
-| Completion argument types | 17                                                                                                           |
+| Completion argument types | 18                                                                                                           |
 | MCP Capabilities          | 4 (progress, elicitation, completions, resource subscriptions)                     |
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
-| Source files (tools)      | 764 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 367 test files under `internal/tools/`                                                                       |
-| Go packages               | 242 total; 177 under `internal/tools/...`                                                                    |
+| Source files (tools)      | 766 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 369 test files under `internal/tools/`                                                                       |
+| Go packages               | 246 total; 178 under `internal/tools/...` (the root package plus 177 domain sub-packages)                    |
 
 ### Orbit live tests
 
@@ -56,7 +56,8 @@ gitlab-mcp-server/
 │   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (R-INPUT/R-OUTPUT/R-ACTION/R-META + merge; -scope=sdk gates the service universe and the raw-GraphQL exemptions)
 │   ├── audit_catalog_first/     # Enforces catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Audits discovery metadata (aliases/usage/related/param-guidance/sibling-cluster; input-enum candidates) — META-001
-│   ├── audit_doc_coverage/      # Audits docs/tools/*.md vs canonical action catalog (DOC-002); reads doc-ownership.json
+│   ├── audit_doc_coverage/      # Audits docs/reference/tools/*.md vs canonical action catalog (DOC-002); reads doc-ownership.json
+│   ├── audit_doc_tool_names/    # Checks every `gitlab_*` name the docs mention against the names the server registers (make check-doc-tool-names)
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
 │   ├── audit_e2e_gaps/          # Reports catalog actions not exercised by the e2e suite (make audit-e2e-gaps)
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
@@ -71,6 +72,7 @@ gitlab-mcp-server/
 │   ├── audit_test_names/        # Audits test function naming compliance; -check-files gates test-file naming (make check-test-file-names)
 │   ├── audit_test_subtests/     # Audits case loops that assert without a t.Run subtest; -fix rewrites the unambiguous ones (make check-test-subtests)
 │   ├── audit_tokens/            # Audits token usage for model-facing surfaces (+ --compare-schemas sizing spike)
+│   ├── bench_resources/         # Measures what the server costs to run (CPU, memory) and draws the charts the docs publish (make bench-resources)
 │   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
 │   ├── audit_string_dupes/      # Finds duplicated string literals missing constants
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/
@@ -81,24 +83,34 @@ gitlab-mcp-server/
 │   ├── gen_lhm_manifest/        # Generates the capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
 │   ├── gen_stats/               # Generates README stats section from codebase metrics
-│   └── gen_testing_docs/        # Generates docs/development/testing/testing.md
+│   ├── gen_testing_docs/        # Generates docs/development/testing/testing.md
+│   └── internal/                # Helpers shared by the commands: apidocs (GitLab API doc fetcher), auditshared, docgen, mcpsurface (pinned surface introspection for generators)
 ├── internal/
-│   ├── config/                  # Configuration loading (.env, flags, env vars)
+│   ├── auditclient/             # GitLab clients for the command-line audit tools
+│   ├── cachehints/              # SEP-2549 cache hints (ttlMs/cacheScope) on MCP results
+│   ├── capguard/                # Keeps the methods answered in step with the capabilities declared
+│   ├── clientcompat/            # Per-client response compatibility profiles (GITLAB_MCP_CLIENT_COMPAT)
+│   ├── cmdutil/                 # Shared helpers for the repository commands (Must at the leaf)
+│   ├── config/                  # Configuration loading (dotenv files, flags, env vars, HTTP env overlay)
+│   ├── edition/                 # Licensing tier model (Free/Premium/Ultimate) used to gate tools
+│   ├── gatewaycompat/           # Description/title rewriting for strict MCP gateway validators
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
+│   ├── mcpotel/                 # OpenTelemetry instrumentation of MCP request handling (API only, no SDK)
 │   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
 │   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)
 │   ├── subscriptions/          # resources/subscribe: polled watchers, cadence, leases (ADR-0015)
+│   ├── telemetry/               # The one place that knows the OpenTelemetry SDK: exporters, identity policy, metric views
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 177 internal/tools packages
+│   │   ├── action_catalog.go    # Builds the canonical action catalog from domain ActionSpecs (pruneSchemaFieldsByTier)
+│   │   ├── catalog_filter.go    # FilterActionCatalog: read-only, token-scope and --exclude-tools filters, with what each removed
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/             # Low-token dynamic find/execute surface over catalog routes
+│   │   ├── dynamiccatalog/      # Build(): the dynamic catalog assembled the way the server assembles it (cmd/server and the e2e suite alike)
 │   │   ├── markdown.go          # Thin delegator to the type-based Markdown registry (toolutil.MarkdownForResult)
-│   │   ├── meta_tool.go          # Meta-tool registration: addMetaTool (DeriveAnnotations), addReadOnlyMetaTool, route wrappers
-│   │   ├── errors.go            # Error helpers (WrapErr, WrapErrWithMessage, WrapErrWithHint, ExtractGitLabMessage)
-│   │   ├── logging.go           # logToolCall helper
-│   │   ├── pagination.go        # Pagination type aliases
+│   │   ├── meta_tool.go         # Route wrappers (wrapAction, wrapVoidAction, routeAction) and the meta parameter-schema mode; AddMetaTool/AddReadOnlyMetaTool live in toolutil/meta_tool.go
 │   │   ├── branches/            # Branch & protected branch tools
 │   │   ├── cilint/              # CI lint tools
 │   │   ├── civariables/         # CI variable tools
@@ -143,21 +155,22 @@ gitlab-mcp-server/
 │   ├── completions/             # 17 argument completion types
 │   ├── progress/                # MCP progress notifications
 │   ├── elicitation/             # MCP elicitation capability
-├── docs/                        # Project documentation (Diátaxis framework)
-│   ├── adr/                     # Architectural Decision Records
-│   ├── tools/                   # Per-domain tool documentation
-│   ├── capabilities/            # MCP capability docs
-│   ├── examples/                # Usage examples
-│   ├── oauth-app-setup.md       # Creating GitLab OAuth applications for MCP clients
-│   └── ide-configuration.md     # Per-IDE MCP JSON configuration (stdio, HTTP legacy, OAuth)
+├── docs/                        # Project documentation (Diátaxis framework, audience-first)
+│   ├── getting-started.md       # First run
+│   ├── guides/                  # How-to: installation, IDE configuration, OAuth app setup, HTTP server mode, remote deployment, telemetry, client compatibility, examples/
+│   ├── reference/               # Reference: cli.md, configuration.md, env.md, output-format.md, resources.md, prompts.md, tools/ (per-domain), capabilities/, benchmarks/
+│   ├── concepts/                # Explanation: architecture, dynamic tools, meta-tools, error handling, GraphQL, security
+│   └── development/             # Contributor docs: adr/ (Architectural Decision Records), testing/ (generated), static analysis, cmd utilities, tool surfaces
 ├── test/e2e/                    # End-to-end integration tests
 │   ├── http/                    # HTTP transport module (`httpe2e`): cross-origin, preflight, auth modes, rate limiting, nginx layer. Needs no GitLab
 │   ├── stdio/                   # stdio transport module (`stdioe2e`): drives the real binary over pipes. Needs no GitLab
+│   ├── collector/               # OTLP collector acceptance module (`collectore2e` tag): a real receiver accepts what the server exports (make test-e2e-collector)
+│   ├── orbit/                   # `orbitlive`-gated live tests against GitLab.com's Knowledge Graph API
 │   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner + fixture service for Docker mode
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
-│   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait)
-│   └── suite/                   # Go test package (166 test files)
+│   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait, Bitbucket, EE activation)
+│   └── suite/                   # Go test package (172 test files)
 │       ├── setup_test.go        # MCP server/client setup, test helpers, shared state
 │       └── fixture_ce_test.go   # Self-contained GitLab resource builders (CE runtime)
 │       └── fixture_ee_test.go   # Self-contained GitLab resource builders (EE runtime)
@@ -166,8 +179,8 @@ gitlab-mcp-server/
 ├── .github/                     # AI assistance infrastructure
 │   ├── copilot-instructions.md  # GitHub Copilot context (auto-loaded by VS Code)
 │   ├── agents/                  # 7 specialized AI agents
-│   ├── skills/                  # 18 reusable skill templates
-│   └── instructions/            # 7 coding standard instruction files
+│   ├── skills/                  # 19 reusable skill templates
+│   └── instructions/            # 8 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
 └── VERSION                      # Semantic version (2.7.5)
 ```
@@ -198,7 +211,7 @@ rewrite across many files, and the result must be verified to build.
 7. For list formatters: add `toolutil.HintPreserveLinks` as the first hint in `WriteHints()` to instruct the LLM to preserve clickable links
 8. Add clickable `[text](url)` links in Markdown table columns where applicable (MRs, issues, pipelines, etc.)
 9. Meta-tools automatically get `next_steps` in JSON via `enrichWithHints()` — no extra work needed
-10. Update `docs/tools/{domain}.md` and `docs/reference/tools/README.md`
+10. Update `docs/reference/tools/{domain}.md` and `docs/reference/tools/README.md`
 11. After completing a test-focused tool implementation phase, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs` to refresh `docs/development/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
 
 See `docs/reference/output-format.md` for the complete response format specification.
@@ -221,7 +234,7 @@ Four error wrapping functions in `internal/toolutil/errors.go`, used across the 
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
 - `WrapErrWithHint(op, err, hint)` — when a specific corrective action is known (e.g., "use gitlab_branch_unprotect first"). Includes detail + actionable suggestion.
 - `WrapErrWithStatusHint(op, err, code, hint)` — combines `IsHTTPStatus` check + `WrapErrWithHint` in a single call. Use when the hint applies only to a specific HTTP status code; returns `WrapErrWithMessage` for all other codes.
-- `NotFoundResult(resource, identifier, hints...)` — for get handlers when `IsHTTPStatus(err, 404)`. Returns an informational `CallToolResult` with `IsError: true` and domain-specific hints instead of a Go error. Logged at INFO level. Applied to 27 get handlers across 21 domains. Defined in `internal/toolutil/not_found.go`.
+- `NotFoundResult(resource, identifier, hints...)` — for get handlers when `IsHTTPStatus(err, 404)`. Returns an informational `CallToolResult` with `IsError: true` and domain-specific hints instead of a Go error. Logged at INFO level. Used by the get handlers of 19 domains, each through a helper in its `markdown.go`. Defined in `internal/toolutil/not_found.go`.
 
 Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/concepts/error-handling.md).
 
@@ -408,6 +421,14 @@ driven by `make` targets, never beside another tool's variables in a shell).
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
 | `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
 | `GITLAB_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |
+| `GITLAB_IGNORE_SCOPES`   | No       | Skip PAT scope detection and register every tool the tier allows (`false` default). Flag `--ignore-scopes` |
+| `GITLAB_MCP_EMBEDDED_RESOURCES` | No | Embed the canonical `gitlab://` resource URI in `get`-style tool results (`true` default). Flag `--embedded-resources` |
+| `GITLAB_MCP_EXCLUDE_TOOLS` | No     | Comma-separated tool names removed from registration; they leave both the served surface and the withheld-action lists, since the operator asked for them not to exist. Flag `--exclude-tools` |
+| `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No | Largest local file an upload or file-read tool accepts: a byte count or a `KB`/`MB`/`GB` suffix (`2GB` default, 1 TB upper bound). Flag `--upload-max-file-size` |
+| `GITLAB_MCP_MAX_HTTP_CLIENTS` | No  | HTTP mode: maximum unique (token, GitLab URL) server entries kept in the pool (`100` default, upper bound 10000). Flag `--max-http-clients` |
+| `GITLAB_MCP_SESSION_TIMEOUT` | No   | HTTP mode: idle MCP session timeout, `--stateless=false` only (`30m` default, max 24h). Flag `--session-timeout` |
+| `GITLAB_MCP_SESSION_REVALIDATE_INTERVAL` | No | HTTP mode: token re-validation interval (`15m` default, `0` stops the periodic check, max 24h). Flag `--revalidate-interval` |
+| `YOLO_MODE` / `AUTOPILOT` | No      | Skip the confirmation prompt on destructive actions when truthy (`1`, `true`, `yes`). `YOLO_MODE` decides whenever it is set; `AUTOPILOT` is the alias consulted only when it is not, so an inherited `AUTOPILOT=true` can be overridden. `internal/toolutil.IsYOLOMode`; flag `--yolo-mode` |
 | `GITLAB_MCP_ALLOWED_UPLOAD_DIRS` | No | Extra directories a tool may READ a local file from (every `file_path` and `directory_path` input), separated by the OS path-list separator. The working directory (unless it is the filesystem root or the user's home directory, which are dropped as implicit roots) and the OS temp directory are always allowed; a path is canonicalized through symlinks before the check. `internal/toolutil.UploadDirAllowlistEnv` |
 | `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS` | No | Extra directories a tool may WRITE a downloaded file into (`output_path`), same syntax and same always-allowed roots. Checked twice, once before creating the parent directories and once after, so the second call resolves a parent that now exists. `internal/toolutil.DownloadDirAllowlistEnv` |
 | `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | No | Extra directories a project or group import archive may be read from, same syntax and same always-allowed roots. `internal/toolutil.ImportArchiveAllowlistEnv` |
@@ -422,14 +443,14 @@ driven by `make` targets, never beside another tool's variables in a shell).
 | `GITLAB_MCP_DRAIN_DELAY`            | No       | HTTP mode: after `SIGTERM`, keep the listener open and answer `/health` with `503 draining` (`Cache-Control: no-store`) for this long before closing it, so a balancer that polls `/health` removes the instance before the close (`0` default, max 5m). Set it to at least one probe interval. `/health` also carries `build` (closest release plus short commit, `.dirty` when the tree had changes; `cmd/server/health.go`) and `config_digest` (twelve hex over tool surface, capability surface, meta parameter schema, tier and whether it was pinned or is detected, scope detection, read-only, safe mode and excluded tools; a comparison fingerprint, not a secret) so the instances behind one balancer can be compared. Flag `--drain-delay` |
 | `GITLAB_MCP_RATE_LIMIT_RPS`         | No       | Per-server rate limit, in req/s, on every call that reaches GitLab (`tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get`) (`0` = disabled) |
 | `GITLAB_MCP_RATE_LIMIT_BURST`       | No       | Token-bucket burst size when RPS > 0 (`40` default)       |
-| `GITLAB_MCP_CLIENT_COMPAT`          | No       | Per-client response compatibility (`auto` default): Codex sessions get float `priority` in annotations rounded to 0/1; `off` disables. Read from the process environment in both stdio and HTTP modes (no flag equivalent). See `internal/clientcompat` and `docs/guides/client-compatibility.md` |
+| `GITLAB_MCP_CLIENT_COMPAT`          | No       | Per-client response compatibility (`auto` default): Codex sessions get float `priority` in annotations rounded to 0/1; `off` disables. Read from the process environment in both stdio and HTTP modes; the `--client-compat` flag writes the same variable. See `internal/clientcompat` and `docs/guides/client-compatibility.md` |
 | `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | No | Rewrite listed catalog text for strict MCP gateway validators: comma-separated `old=new` pairs applied in order to every listed description and title (backslash escapes `\,` `\=` `\\`). Covers tools (all surfaces, schema-embedded descriptions included), prompts, resources, and resource templates; never names, URIs, `pattern`, `const`, enum values, or tool-call payloads. Malformed values refuse startup. Flag `--description-substitutions`; both modes. The served surface itself stays pure ASCII with no semicolons (`make check-gateway-chars`); verify a config with `go run ./cmd/audit_gateway_chars/ -apply -check`. See `internal/gatewaycompat` and `docs/guides/client-compatibility.md` |
 | `GITLAB_MCP_TELEMETRY`   | No       | Export OpenTelemetry traces, metrics and logs over OTLP (`false` default). Off for privacy: telemetry goes to a collector the operator configures, never to the maintainer; the exporters' only default is their own `localhost`. Endpoint, credentials, sampling and batching all come from the standard `OTEL_EXPORTER_OTLP_*` variables the exporters read themselves. `OTEL_SDK_DISABLED=true` vetoes it regardless. Flag `--telemetry`. See `docs/guides/telemetry.md` |
 | `GITLAB_MCP_TELEMETRY_IDENTITY` | No | How much telemetry records about who made a call: `none` (default, records nobody), `pseudonymous` (a per-process HMAC digest that correlates one caller's calls without naming them), or `full` (`user.id` and `user.name`). Identity never reaches a metric under any policy. Flag `--telemetry-identity` |
 | `GITLAB_MCP_TELEMETRY_IDENTITY_KEY` | No | Secret the `pseudonymous` policy derives its pseudonymisation keys from (HKDF-SHA256, one key for callers and one for resource URIs). Empty (default) generates one per process, so a digest identifies a caller within one process and nowhere else. Set it when several replicas must agree, or when a distinct-user count has to survive a restart; it then never rotates here, because a key the operator supplied is theirs to rotate. Setting it makes the pseudonym a person pseudonym in EDPB terms, and the key is Article 4(5) "additional information": keep it away from wherever the telemetry lands, since GitLab user ids are small enough to enumerate against a known key. No flag on purpose: process arguments are readable through `/proc` by any local principal |
 | `GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION` | No | How long a **generated** pseudonymisation key lives, e.g. `24h`. Empty or `0` (default) keeps it for the life of the process; maximum 30 days. Ignored when `GITLAB_MCP_TELEMETRY_IDENTITY_KEY` is set, with a warning at startup. Off by default because replicas start at different moments and would rotate out of phase, churning a distinct-user count nobody asked to churn. Flag `--telemetry-identity-rotation` |
 | `GITLAB_MCP_TELEMETRY_TOOL_NAME` | No | Whether `gen_ai.tool.name` is a metric dimension: `auto` (default), `on` or `off`. Auto keeps it on the dynamic and meta surfaces and drops it on individual, where ~1079 tools would exhaust the SDK's 2000-series cardinality limit and collapse the long tail into one `otel.metric.overflow` bucket, first-come-wins under cumulative temporality. Implemented as a metric View, because filtering runs before the limit is counted. Flag `--telemetry-tool-name` |
-| `GITLAB_MCP_LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
+| `GITLAB_MCP_LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`). Flag `--log-level` |
 | `EVAL_SURFACE_ENTERPRISE` | No      | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus. Used by `make eval-surfaces-docker-enterprise*` targets |
 | `EVAL_SURFACE_CASE_SET`   | No      | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (Community Edition only), `all` (CE+Enterprise). Used by `make eval-surfaces-docker-enterprise-all` |
 | `EVAL_SURFACE_SERVER_MODE` | No     | `cmd/eval_mcp_surfaces`: protective server mode under evaluation — `default`, `read-only`, or `safe-mode`. Alias `SERVER_MODE=` on the Makefile target |
@@ -438,19 +459,23 @@ driven by `make` targets, never beside another tool's variables in a shell).
 
 None of the three `GITLAB_MCP_ALLOWED_*_DIRS` allow-lists applies in HTTP mode: a server reached over HTTP refuses every caller-supplied local path, since the caller has no files on the machine the server runs on and `content_base64` is the remote form. The transport is inferred from the process arguments in `internal/toolutil/file_utils.go`, so a deployment that never heard of this policy still gets the right answer.
 
-In **HTTP mode**, configuration comes from CLI flags instead of environment variables:
+In **HTTP mode**, configuration is resolved in three layers: an explicitly passed flag, then the environment variable with the same meaning (`internal/config/http_overlay.go` reads only the variables actually present, validated with the same parsers and bounds as stdio), then the built-in default. A variable exported without its flag is therefore honored, and an invalid value fails startup rather than falling back silently:
 
 | Flag                  | Default | Description                                              |
 | --------------------- | ------- | -------------------------------------------------------- |
-| `--gitlab-url`        | —       | GitLab instance URL. **Required in HTTP mode** unless `--allow-any-gitlab-url` is passed: a deployment that names no instance makes requests to whatever host a caller puts in `GITLAB-URL`, with whatever token that caller supplied. Repeatable/comma-separated: all are published in RFC 9728 `authorization_servers`, and `GITLAB-URL` then selects among them. With several published the header is **required** in both auth modes (400 without it), and a value outside the list is refused with 403 rather than ignored. The refusal names the published instances only in oauth mode, where RFC 9728 metadata already serves that same set unauthenticated; legacy mode publishes no metadata and rejects before the credential is judged, so it says to ask the operator rather than let any non-empty token enumerate the operator's hostnames |
+| `--gitlab-url`        | —       | GitLab instance URL. **Required in HTTP mode** unless `--allow-any-gitlab-url` is passed: a deployment that names no instance makes requests to whatever host a caller puts in `GITLAB-URL`, with whatever token that caller supplied. Repeatable/comma-separated: all are published in RFC 9728 `authorization_servers`, and `GITLAB-URL` then selects among them. With several published the header is **required** in both auth modes (400 without it), and a value outside the list is refused rather than ignored (400 from the legacy gate, 403 from the oauth bearer guard). The refusal names the published instances only in oauth mode, where RFC 9728 metadata already serves that same set unauthenticated; legacy mode publishes no metadata and rejects before the credential is judged, so it says to ask the operator rather than let any non-empty token enumerate the operator's hostnames |
 | `--allow-any-gitlab-url` | `false` | Start with no instance published, letting `GITLAB-URL` name any host. For a single-user local deployment where the operator is the caller; it warns at startup and must not be used on a listener anyone else can reach |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
 | `--meta-tools`        | `false` _(deprecated)_ | Legacy boolean tool selector, kept for compatibility and ignored when `--tool-surface` is set. Leave it unset for the default dynamic surface; use `--tool-surface=individual` when migrating an old `--meta-tools=false` config |
 | `--tool-surface`      | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
 | `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
+| `--meta-param-schema` | `opaque` | Meta-tool input-schema mode: `opaque`, `compact` or `full` (same setting as `GITLAB_MCP_META_PARAM_SCHEMA`) |
 | `--tier`              | _(empty)_ | Force licensing tier: `free`, `ce`, `premium`, or `ultimate`. When set, used verbatim with no license check; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`) |
 | `--read-only`         | `false` | Read-only mode: removes mutating operations per action; reads keep working |
 | `--safe-mode`         | `false` | Safe mode: intercepts mutating operations per action, returns preview |
+| `--embedded-resources` | `true` | Embed canonical MCP resource URIs in `get`-style tool results |
+| `--exclude-tools`     | _(empty)_ | Comma-separated tool names to exclude from registration |
+| `--ignore-scopes`     | `false` | Skip PAT scope detection and register all tools |
 | `--max-http-clients`  | `100`   | Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or concurrent requests |
 | `--session-timeout`   | `30m`   | Idle MCP session timeout; applies to `--stateless=false` only — under the default stateless transport each POST's session ends with its response |
 | `--http-idle-timeout` | `0` (disabled) | HTTP server idle connection timeout; `0` (default) disables idle closure so `--session-timeout` is the effective lifetime; set a positive duration to recycle idle connections sooner |
@@ -462,7 +487,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--tls-cert` / `--tls-key` | — | PEM certificate and key; serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither, loaded at startup, TLS 1.2 floor |
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--public-url`        | _(empty)_ | Externally reachable https origin; required with `--auth-mode=oauth` (RFC 9728 resource identifier and metadata-URL derivation) |
-| `--resource-documentation` | _(empty)_ | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application. Empty publishes this project's OAuth setup guide |
+| `--resource-documentation` | _(empty)_ | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application. Empty publishes this project's HTTP server mode page |
 | `--resource-policy-uri` | _(empty)_ | https URL published as RFC 9728 `resource_policy_uri`; your own page on what this deployment does with the data reached through it. Empty omits the field, which is the right default: a link to a page that does not exist would land on a consent screen |
 | `--resource-tos-uri` | _(empty)_ | https URL published as RFC 9728 `resource_tos_uri`; your own terms of service. Empty omits the field |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
@@ -484,6 +509,13 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 
 | Flag           | Default | Description                                                    |
 | -------------- | ------- | -------------------------------------------------------------- |
+| `--http`       | `false` | Serve HTTP instead of stdio |
+| `--transport`  | _(empty)_ | `stdio`, `http` or `auto`; empty defers to `--http`. `auto` serves HTTP only when stdin is `/dev/null` (a container started without `-i`) and stdio for the pipe every MCP client provides. `cmd/server/transport.go` |
+| `--env-file`   | _(empty)_ | Dotenv file to load besides `~/.gitlab-mcp-server.env`; the same setting as `GITLAB_MCP_ENV_FILE`, and wins over it |
+| `--tool-search` | _(empty)_ | Search tools by name/description and exit |
+| `--version`    | `false` | Print version and exit |
+| `--help` / `-h` | `false` | Curated help with flags, env vars and examples (both spellings give the same output) |
+| `--log-level`, `--client-compat`, `--upload-max-file-size`, `--yolo-mode`, `--description-substitutions` | _(empty)_ | Flags for settings whose only home used to be an environment variable. Each writes its variable (the `GITLAB_MCP_` spelling, or `YOLO_MODE`) before anything reads it, so there stays one reader per setting and an explicitly passed flag beats the environment. `GITLAB_TOKEN` deliberately has no flag: a token on a command line is readable through `ps` and shell history. `cmd/server/env_flags.go` |
 | `--shutdown`   | `false` | Terminate all running instances of this binary and exit. Used by external updaters (pe-agnostic-store) before replacing the binary on disk. |
 | `--probe`      | `false` | Ask the running instance's `/health` and exit 0 when it answers 200; the image's `HEALTHCHECK`. With no argument it finds the other instances of this binary (the same lookup as `--shutdown`), reads `--http-addr`, `--tls-cert`, `--transport` and `--http` off their command lines, and probes where they listen: another port, a unix socket, or HTTPS pinned to the certificate `--tls-cert` names (a given `https://` target takes the pin from the probe's own `--tls-cert`, and the standard verification without one). `--transport auto` is settled the way the server settled it, by reading the instance's file descriptor 0 from procfs; an instance serving stdio has nothing to probe and is reported healthy while it runs. A URL, `unix:<path>` or `host:port` after the flag probes that instead. Exit 1 when nothing answered, 2 for a target that does not parse. `cmd/server/probe.go` |
 
@@ -499,9 +531,10 @@ Instruction files in `.github/instructions/` are automatically applied when edit
 
 | Instruction                                        | Applies to | Purpose                                                                   |
 | -------------------------------------------------- | ---------- | ------------------------------------------------------------------------- |
-| `go.instructions.md`                               | `**/*.go`  | Idiomatic Go practices, naming, error handling, package rules             |
-| `go-mcp-server.instructions.md`                    | `**/*.go`  | MCP server patterns: tool registration, typed I/O, annotations, transport |
+| `go.instructions.md`                               | `**/*.go`, `**/go.mod`, `**/go.sum` | Idiomatic Go practices, naming, error handling, package rules             |
+| `go-mcp-server.instructions.md`                    | `**/*.go`, `**/go.mod`, `**/go.sum` | MCP server patterns: tool registration, typed I/O, annotations, transport |
 | `mcp-best-practices.instructions.md`               | `**/*.go`  | Protocol-level tool design, response formats, pagination, security        |
+| `test-goroutines.instructions.md`                  | `**/*_test.go` | The six-rule contract for assertions off the test goroutine (`make check-test-goroutines`) |
 | `security-and-owasp.instructions.md`               | `*`        | OWASP Top 10, input validation, secrets management, injection prevention  |
 | `code-review-generic.instructions.md`              | `**`       | Code review priorities (Critical/Important/Suggestion), checklist         |
 | `context-engineering.instructions.md`              | `**`       | Project structure principles for AI-readable code                         |
@@ -543,7 +576,7 @@ Agents are invoked explicitly for specific development tasks. Each agent has a f
 | ---------------- | ----------------------- | --------------------------------------------------------------------------------------------------------- |
 | **SE: Reviewer** | `se-reviewer.agent.md`  | Security review (OWASP Top 10, LLM security, Zero Trust) and architecture review (Well-Architected frameworks, ADRs). Two modes in one agent. |
 
-### Skills (18 Reusable Task Templates)
+### Skills (19 Reusable Task Templates)
 
 Skills are task templates that can be invoked by any agent or directly. They define structured workflows:
 
@@ -562,7 +595,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 | ------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | **Create Implementation Plan** | `create-implementation-plan/`           | Structured plan with phased tasks (TASK-001, etc.). Saves to `plan/`.                                  |
 | **Create ADR**                 | `create-architectural-decision-record/` | ADR with standardized format (POS-001, NEG-001, etc.). Saves to `docs/development/adr`.                           |
-| **Create Specification**       | `create-specification/`                 | Formal spec with requirements (REQ-001), acceptance criteria (Given-When-Then). Saves to `docs/spec/`. |
+| **Create Specification**       | `create-specification/`                 | Formal spec with requirements (REQ-001), acceptance criteria (Given-When-Then). Saves to `spec/`.      |
 
 #### Quality & Testing Skills
 
@@ -578,6 +611,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 | Skill                     | Directory                | Purpose                                                                                                           |
 | ------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | **Create MCP Evaluation** | `create-mcp-evaluation/` | Generate 10 Q&A pairs to benchmark MCP server quality. Multi-hop, read-only, verifiable answers.                  |
+| **Generate Release Notes** | `generate-release-notes/` | Categorized release notes between two Git refs (commits + merged MRs) for any GitLab project reachable through the server. |
 | **Git Commit**            | `git-commit/`            | Conventional commit with auto-detected type/scope from diff. Follows project's `feat:`/`fix:`/`docs:` convention. |
 
 #### Refactoring Skills
@@ -642,13 +676,21 @@ ADRs document key decisions in `docs/development/adr`:
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
 | ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (177 `internal/tools` packages; tools by tier: ~854 Free/CE, ~1007 Premium, ~1073 Ultimate self-managed, ~1079 GitLab.com Ultimate) |
+| ADR-0005 | Meta-tool consolidation into a compact domain catalog          | Accepted (refines ADR-0004; its runtime mechanics are superseded by the catalog-first architecture of ADR-0014) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
+| ADR-0008 | Universal user identity across transport modes                 | Accepted, partially unimplemented (stdio and HTTP OAuth populate it; HTTP legacy does not) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
+| ADR-0010 | No resource subscribe capability                               | Superseded by ADR-0015                        |
+| ADR-0011 | Low-token dynamic toolset mode                                 | Accepted (`gitlab_find_action` + `gitlab_execute_action`, the default surface) |
+| ADR-0012 | Action catalog package name                                    | Accepted                                      |
+| ADR-0013 | Documentation artifact boundaries                              | Accepted (what is generated, what is hand-written, and who owns each) |
+| ADR-0014 | Catalog-first runtime architecture                             | Accepted (every surface is projected from `ActionSpec`; `cmd/audit_catalog_first` enforces it) |
 | ADR-0015 | Polled resource subscriptions (supersedes ADR-0010)            | Accepted (26 subscribable kinds, 10 watchers/token, lease demotes rather than stops) |
 | ADR-0016 | No webhook ingestion                                           | Accepted (`Reader` seam unchanged; no inbound HTTP surface added) |
 | ADR-0017 | Pull-safe event sources surveyed and declined                  | Accepted (Events API, ActionCable, ETag probed live; polling stays the only freshness source; revisit triggers recorded) |
 | ADR-0018 | Authorization admits at the minimum scope; writes gated per action | Accepted (a read_api token is admitted and served a read-only surface; `tools/list` stays authenticated per the MCP authorization spec) |
+| ADR-0019 | Audience binding is unavailable at the authorization server    | Accepted (GitLab publishes no `resource_indicators_supported`; `--oauth-client-uid` is the "otherwise verify" alternative) |
 
 ### Modular tools sub-packages (ADR-0004)
 
@@ -667,8 +709,8 @@ Markdown formatters use a type-based registry in `internal/toolutil/md_registry.
 - `toolutil.RegisterMarkdown[T](fn)` — registers a formatter for output type `T`
 - `toolutil.RegisterMarkdownResult[T](fn)` — registers a formatter for `*mcp.CallToolResult` types
 - `toolutil.MarkdownForResult(result any)` — looks up and invokes the registered formatter by `reflect.Type`
-- `internal/tools/markdown.go` is a thin delegator (~19 lines) that calls `toolutil.MarkdownForResult`
-- ~266 formatters across 76 sub-packages, validated by `TestAllMarkdownFormattersRegistered`
+- `internal/tools/markdown.go` is a thin delegator (~16 lines) that calls `toolutil.MarkdownForResult`
+- ~564 registrations across 159 sub-packages, validated by `TestAllMarkdownFormattersRegistered`
 
 ### Dynamic toolset mode
 
@@ -682,7 +724,7 @@ Find combines canonical `domain.action` IDs, domain/action names, aliases, natur
 
 `GITLAB_TIER` controls access to GitLab Premium/Ultimate features in stdio mode (Enterprise tools are gated when the resolved tier is Premium or Ultimate). In HTTP mode, the `--tier` flag forces the tier; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`). The catalog effect is the same in individual and meta-tool modes.
 
-The tier affects tool registration (input/output schemas and tool lists) through `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go:138` — every registered action has its input schema pruned strictly (lower-tier clients never see higher-tier input fields, even though the SDK type still carries them) and its output schema pruned leniently (`lenientExtra=true`: higher-tier output fields are kept but omitted from the model-facing schema, so a Premium client reading an Ultimate response sees the data; an Ultimate client reading a Premium response does not). The 3-tier field-level gating is described per-field with `tier:"premium"` / `tier:"ultimate"` struct tags throughout `internal/tools/*/action_specs.go` and `internal/tools/*/shapes.go`.
+The tier affects tool registration (input/output schemas and tool lists) through `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go:154` — every registered action has its input schema pruned strictly (lower-tier clients never see higher-tier input fields, even though the SDK type still carries them) and its output schema pruned leniently (`lenientExtra=true`: higher-tier output fields are kept but omitted from the model-facing schema, so a Premium client reading an Ultimate response sees the data; an Ultimate client reading a Premium response does not). The 3-tier field-level gating is described per-field with `tier:"premium"` / `tier:"ultimate"` struct tags throughout `internal/tools/*/action_specs.go` and `internal/tools/*/shapes.go`.
 
 **Individual mode** (`GITLAB_MCP_TOOL_SURFACE=individual`; legacy `GITLAB_MCP_META_TOOLS=false`) — gates Enterprise/Premium actions through catalog metadata:
 
@@ -749,7 +791,7 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "A
 - **Tool not found**: Check the action's `ActionSpec`, catalog aggregation, `action_catalog.go`, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
 - **Meta-tools disabled**: legacy `GITLAB_MCP_META_TOOLS=false` maps to `GITLAB_MCP_TOOL_SURFACE=individual`; unset both to get the default dynamic surface, or set `GITLAB_MCP_TOOL_SURFACE=meta` explicitly when meta-tools are what you want
 - **Dynamic mode shows only two tools**: this is expected by default. Use `gitlab_find_action` and `gitlab_execute_action`; set `GITLAB_MCP_TOOL_SURFACE=meta` to use meta-tools.
-- **Pagination missing**: Ensure tool uses `buildPaginationResponse()` helper for list operations
+- **Pagination missing**: Ensure the list handler applies `toolutil.ApplyListOptions` to the request and fills its output with `toolutil.PaginationFromResponse` (plus `AdjustPagination` when the page was filtered locally)
 - **Test mocking**: All tests use `httptest.NewServer` — check URL routing in mock handler
 
 ### Running specific test domains
@@ -769,7 +811,7 @@ E2E tests run against a real GitLab instance using in-memory MCP transport (no n
 **Self-hosted mode** — requires a `.env` file with `GITLAB_URL` and `GITLAB_TOKEN` (user must have permissions to create/delete projects):
 
 ```bash
-# Run full E2E suite (three workflows: individual tools + meta-tools + dynamic tools)
+# Run full E2E suite (per-domain tests on the individual, meta and dynamic surfaces)
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 make test-e2e
 
@@ -789,11 +831,11 @@ go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
 ```
 
-The suite runs three sequential workflows:
+The suite is one test file per domain (172 files), each self-contained against the shared fixture from `setup_test.go`, in three families named by the surface they drive:
 
-- **TestFullWorkflow** (~174 subtests): exercises all individual tools through a complete project lifecycle (user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → elicitation → cleanup)
-- **TestMetaToolWorkflow** (~151 subtests): exercises the same operations through meta-tools plus 15 additional domains (wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji, labels, milestones)
-- **TestDynamicToolSurface**: exercises the default dynamic two-tool find/execute surface, including standalone project discovery, multi-intent discovery, and destructive-action confirmation guards. Run only this workflow in Docker mode after the Docker GitLab setup scripts complete:
+- **`TestIndividual_*`**: the individual surface (`gitlab_issue_list`-style tools) through each domain's lifecycle: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, elicitation, cleanup
+- **`TestMeta_*`**: the same operations through the meta-tools, plus the domains only reachable there (admin, epics, group extras, wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji); `TestEE_*` covers the Enterprise-only ones on an EE runtime
+- **`TestDynamicToolSurface_*`**: the default dynamic two-tool find/execute surface, including standalone project discovery, multi-intent discovery, and destructive-action confirmation guards. Run only this family in Docker mode after the Docker GitLab setup scripts complete:
 
 	```bash
 	E2E_MODE=docker \

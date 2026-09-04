@@ -67,11 +67,11 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>177 internal/tools packages<br/>(169 with action_specs.go)]
+        SPECS[domain ActionSpecs<br/>177 internal/tools packages<br/>(168 with action_specs.go)]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1073 self-managed / 1079 GitLab.com Premium/Ultimate tools]
-        META[meta projection<br/>32 base / 49 self-managed enterprise / 50 GitLab.com Premium/Ultimate tools]
+        IND[individual projection<br/>854 Free/CE / 1007 Premium / 1073 Ultimate / 1079 GitLab.com Ultimate tools]
+        META[meta projection<br/>32 base / 38 Premium / 49 Ultimate / 50 GitLab.com Ultimate tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
         ELIC[elicitation support<br/>4 interactive actions]
         RES[resources<br/>45 resource handlers]
@@ -129,10 +129,10 @@ The `main()` function supports two runtime modes:
 1. Parses CLI flags (`--http` is absent)
 2. Loads configuration from environment variables via `config.Load()`
 3. Creates an authenticated GitLab client via `gitlabclient.NewClient()`
-4. Validates GitLab connectivity with `client.Ping()`
+4. Validates GitLab connectivity with `client.Initialize()`, a direct probe of the version endpoint
 5. Creates a single MCP server via `mcp.NewServer()`
-6. Registers tools, resources, and prompts
-7. Starts `StdioTransport` and blocks until EOF or SIGINT/SIGTERM
+6. Connects the `StdioTransport` first, then registers tools, resources, and prompts behind a readiness gate, so `initialize` is answered while the catalog is still being built
+7. Blocks until EOF or SIGINT/SIGTERM
 
 **HTTP mode** (`--http` flag):
 
@@ -145,7 +145,7 @@ The `main()` function supports two runtime modes:
 
 ### Configuration (`internal/config`)
 
-Loads settings from environment variables, falling back to `~/.gitlab-mcp-server.env` and to the file `GITLAB_MCP_ENV_FILE` names (via `godotenv`); a `.env` in the working directory is deliberately not among them. Used by **stdio mode** to validate that `GITLAB_TOKEN` is present and to default `GITLAB_URL` to `https://gitlab.com` when omitted. HTTP mode uses CLI flags instead (see Transport Selection).
+Loads settings from environment variables, falling back to the file `GITLAB_MCP_ENV_FILE` names and then to `~/.gitlab-mcp-server.env` (via `godotenv`); a `.env` in the working directory is deliberately not among them. Used by **stdio mode** to validate that `GITLAB_TOKEN` is present and to default `GITLAB_URL` to `https://gitlab.com` when omitted. HTTP mode uses CLI flags instead (see Transport Selection).
 
 | Variable                          | Required | Default              | Description                                                                                                    |
 | --------------------------------- | -------- | -------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -163,31 +163,31 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 - Authentication via Personal Access Token
 - TLS configuration (skip verification for self-signed certificates)
-- Connectivity validation (`Ping()` calls the GitLab version endpoint)
+- Connectivity validation (`Initialize()` at startup and `Ping()` both call the GitLab version endpoint)
 - Exposes the underlying `*gl.Client` via `GL()` for tool handlers
 
 ### Tools (`internal/tools`)
 
-The largest package family — contains 1073 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1079 total in that catalog, organized across 177 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
+The largest package family — contains 1073 self-managed Ultimate MCP tool implementations (854 on Free/CE, 1007 on Premium), plus 6 GitLab.com-only Orbit handlers for 1079 total in the GitLab.com Ultimate catalog, organized across 177 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](../development/tool-surfaces-and-action-core.md).
 
 **Orchestration files** in `internal/tools/`:
 
-| File                | Purpose                                                                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `register.go`       | `RegisterAll()` — builds the canonical catalog and registers the individual tool projection                                                 |
-| `register_meta.go`  | `RegisterAllMeta()` — builds the canonical catalog and registers visible meta-tool groups plus approved standalone surfaces                 |
-| `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, the tool manifest, audits, and generators |
-| `meta_catalog.go`   | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog                                                    |
-| `actioncatalog/`    | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters                                                  |
-| `meta_tool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`                                                         |
-| `markdown.go`       | Thin `markdownForResult` delegator to the type-based Markdown registry                                                                      |
-| `pagination.go`     | Shared pagination type aliases                                                                                                              |
-| `errors.go`         | Error helpers (`wrapErr`, `handleGitLabError`)                                                                                              |
-| `logging.go`        | `logToolCall` helper                                                                                                                        |
+| File                | Purpose                                                                                                                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register.go`       | `RegisterAll()` — builds the canonical catalog and registers the individual tool projection                                                                                            |
+| `register_meta.go`  | `RegisterAllMeta()` — builds the canonical catalog and registers visible meta-tool groups plus approved standalone surfaces                                                            |
+| `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, the tool manifest, audits, and generators                                            |
+| `meta_catalog.go`   | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog                                                                                               |
+| `actioncatalog/`    | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters                                                                                             |
+| `meta_tool.go`      | Type aliases onto `toolutil` (`MetaToolInput`, `ActionRoute`, `ActionMap`), the `route`/`routeAction` adapters, and the process-wide meta parameter schema mode (`SetMetaParamSchema`) |
+| `markdown.go`       | Thin `markdownForResult` delegator to the type-based Markdown registry                                                                                                                 |
+| `catalog_filter.go` | `FilterActionCatalog()`: applies exclusions, token scopes, read-only and safe mode to a catalog and records what each removed                                                          |
+| `scope_filter.go`   | `MetaToolScopes` and the PAT scope filters for registered tools and catalogs                                                                                                           |
+| `safe_mode.go`      | Safe-mode preview wrappers for the individual surface                                                                                                                                  |
 
-**Representative `internal/tools` package groups** (176 packages total):
+**Representative `internal/tools` package groups** (177 packages total):
 
 | Category          | Representative packages                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------ |
@@ -213,7 +213,7 @@ Infrastructure shared by all tool sub-packages:
 | `meta_tool.go`     | `MetaToolInput`, `ActionRoute`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute`                                 |
 | `annotations.go`   | Tool annotations (`ReadAnnotations`, `DeleteAnnotations`) and content annotations (`ContentList`, `ContentDetail`, `ContentMutate`) |
 | `hints.go`         | Next-step hints: `WriteHints`, `ExtractHints`, `HintPreserveLinks`                                                                  |
-| `addtool.go`       | `AddTool` wrapper — suppresses structuredContent for individual tools                                                               |
+| `surface_tool.go`  | Registers an `ActionSpec` as a standalone visible tool (`SurfaceToolRegisterOptions`)                                               |
 | `markdown.go`      | `ToolResultWithMarkdown`, `FormatPagination`, emoji helpers                                                                         |
 | `errors.go`        | `ToolError`, `DetailedError`, `ErrorResultMarkdown`                                                                                 |
 | `confirm.go`       | `ConfirmDestructiveAction`, `IsYOLOMode`                                                                                            |
@@ -223,8 +223,8 @@ Infrastructure shared by all tool sub-packages:
 | `logging.go`       | `LogToolCallAll` structured logging helper                                                                                          |
 | `diff.go`          | Diff formatting utilities                                                                                                           |
 | `doc.go`           | Package documentation                                                                                                               |
-| `file_utils.go`    | File operation helpers (upload size validation, SHA-256)                                                                            |
-| `issue_report.go`  | Auto-generate GitLab issue reports on tool errors                                                                                   |
+| `file_utils.go`    | File operation helpers (upload size validation, SHA-256, directory allow-lists)                                                     |
+| `rate_limit.go`    | Token-bucket limiter shared by `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get`      |
 | `string_or_int.go` | Flexible JSON unmarshalling for string-or-int fields                                                                                |
 | `time_helpers.go`  | Time formatting and parsing utilities                                                                                               |
 
@@ -232,11 +232,12 @@ Infrastructure shared by all tool sub-packages:
 
 Manages a bounded pool of per-token+URL MCP server instances in HTTP mode. Each unique combination of GitLab Personal Access Token and GitLab instance URL gets its own isolated MCP server, GitLab client, and server configuration snapshot. The snapshot combines global process policy with detected token scopes and CE/EE edition for that specific entry.
 
-| File       | Purpose                                                                                                                                                                                                              |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pool.go`  | `ServerPool` with LRU eviction, `GetOrCreate()`, `Close()`                                                                                                                                                           |
-| `token.go` | `ExtractToken()` — reads token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers. `ResolveRequestOptions()` — accepts `GITLAB-URL` only in multi-instance mode and records ignored config-like request headers |
-| `doc.go`   | Package documentation                                                                                                                                                                                                |
+| File            | Purpose                                                                                                                                                                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pool.go`       | `ServerPool` with LRU eviction, `GetOrCreate()`, `GetOrCreateWithScopes()`, `Close()`; narrows an entry to read-only when its token cannot write                                                                             |
+| `token.go`      | `ExtractToken()` reads the token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers; `ResolveRequestOptionsFor()` resolves `GITLAB-URL` against the published instances and records ignored config-like request headers |
+| `rate_limit.go` | `AuthRateLimiter`: the per-address authentication failure budget                                                                                                                                                             |
+| `doc.go`        | Package documentation                                                                                                                                                                                                        |
 
 Key characteristics:
 
@@ -258,7 +259,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/meta_tool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 32 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 17 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`, while HTTP mode can force the tier with `--tier` or detect it per token+URL pool entry from the instance license (fallback `free`).
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 32 base GitLab/interactive tools total. Premium adds 6 inline meta-tools (38) and Ultimate 11 more, bringing the self-managed total to 49; GitLab.com also registers `gitlab_orbit` on Premium and Ultimate, bringing the GitLab.com Ultimate catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`, while HTTP mode can force the tier with `--tier` or detect it per token+URL pool entry from the instance license (fallback `free`).
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, the `gitlab://tools` manifest, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
@@ -347,53 +348,53 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 
 45 read-only MCP resources in the default dynamic/full surface, accessed by URI templates. Resources provide contextual data without modifying state:
 
-| Resource                       | URI                                          | Description                         |
-| ------------------------------ | -------------------------------------------- | ----------------------------------- |
-| Current User                   | `gitlab://user/current`                      | Authenticated user profile          |
-| Groups                         | `gitlab://groups`                            | Accessible groups list              |
-| Tool Manifest                  | `gitlab://tools`                             | Active surface tool/action manifest |
-| Tool Detail                    | `gitlab://tools/{id}`                        | Call shape and input schema by ID   |
-| Group                          | `gitlab://group/{id}`                        | Group details by ID                 |
-| Group Members                  | `gitlab://group/{id}/members`                | Group members with access levels    |
-| Group Projects                 | `gitlab://group/{id}/projects`               | Projects within a group             |
-| Project                        | `gitlab://project/{id}`                      | Project metadata                    |
-| Members                        | `gitlab://project/{id}/members`              | Project members with access levels  |
-| Issues                         | `gitlab://project/{id}/issues`               | Open issues for a project           |
-| Issue                          | `gitlab://project/{id}/issue/{iid}`          | Specific issue details              |
-| Latest Pipeline                | `gitlab://project/{id}/pipelines/latest`     | Most recent pipeline                |
-| Pipeline                       | `gitlab://project/{id}/pipeline/{pid}`       | Specific pipeline details           |
-| Pipeline Jobs                  | `gitlab://project/{id}/pipeline/{pid}/jobs`  | Jobs for a pipeline                 |
-| Labels                         | `gitlab://project/{id}/labels`               | Project labels                      |
-| Milestones                     | `gitlab://project/{id}/milestones`           | Project milestones                  |
-| Merge Request                  | `gitlab://project/{id}/mr/{iid}`             | MR details by IID                   |
-| Branches                       | `gitlab://project/{id}/branches`             | All branches                        |
-| Branch                         | `gitlab://project/{id}/branch/{name}`        | Single branch by name               |
-| Releases                       | `gitlab://project/{id}/releases`             | Project releases                    |
-| Release                        | `gitlab://project/{id}/release/{tag}`        | Single release by tag               |
-| Tags                           | `gitlab://project/{id}/tags`                 | Repository tags                     |
-| Tag                            | `gitlab://project/{id}/tag/{name}`           | Single repository tag               |
-| Commit                         | `gitlab://project/{id}/commit/{sha}`         | Single commit by SHA                |
-| File Blob                      | `gitlab://project/{id}/file/{ref}/{+path}`   | File contents at ref                |
-| Wiki Page                      | `gitlab://project/{id}/wiki/{slug}`          | Wiki page by slug                   |
-| Label                          | `gitlab://project/{id}/label/{label_id}`     | Single project label                |
-| Milestone                      | `gitlab://project/{id}/milestone/{iid}`      | Single project milestone            |
-| Board                          | `gitlab://project/{id}/board/{board_id}`     | Single issue board                  |
-| Deployment                     | `gitlab://project/{id}/deployment/{did}`     | Single deployment                   |
-| Environment                    | `gitlab://project/{id}/environment/{eid}`    | Single environment                  |
-| Job                            | `gitlab://project/{id}/job/{job_id}`         | Single CI/CD job                    |
-| Feature Flag                   | `gitlab://project/{id}/feature_flag/{name}`  | Single feature flag                 |
-| Deploy Key                     | `gitlab://project/{id}/deploy_key/{kid}`     | Single deploy key                   |
-| Project Snippet                | `gitlab://project/{id}/snippet/{sid}`        | Single project snippet              |
-| MR Notes                       | `gitlab://project/{id}/mr/{iid}/notes`       | Notes on a merge request            |
-| MR Discussions                 | `gitlab://project/{id}/mr/{iid}/discussions` | Discussion threads on a MR          |
-| Group Label                    | `gitlab://group/{id}/label/{label_id}`       | Single group label                  |
-| Group Milestone                | `gitlab://group/{id}/milestone/{iid}`        | Single group milestone              |
-| Snippet                        | `gitlab://snippet/{snippet_id}`              | Personal snippet                    |
-| Git Workflow Guide             | `gitlab://guides/git-workflow`               | Branching and commit best practices |
-| MR Hygiene Guide               | `gitlab://guides/merge-request-hygiene`      | MR sizing and review workflow       |
-| Conventional Commits Guide     | `gitlab://guides/conventional-commits`       | Commit message conventions          |
-| Code Review Guide              | `gitlab://guides/code-review`                | Code review checklist               |
-| Pipeline Troubleshooting Guide | `gitlab://guides/pipeline-troubleshooting`   | CI/CD debugging guide               |
+| Resource                       | URI                                                                | Description                         |
+| ------------------------------ | ------------------------------------------------------------------ | ----------------------------------- |
+| Current User                   | `gitlab://user/current`                                            | Authenticated user profile          |
+| Groups                         | `gitlab://groups`                                                  | Accessible groups list              |
+| Tool Manifest                  | `gitlab://tools`                                                   | Active surface tool/action manifest |
+| Tool Detail                    | `gitlab://tools/{id}`                                              | Call shape and input schema by ID   |
+| Group                          | `gitlab://group/{group_id}`                                        | Group details by ID                 |
+| Group Members                  | `gitlab://group/{group_id}/members`                                | Group members with access levels    |
+| Group Projects                 | `gitlab://group/{group_id}/projects`                               | Projects within a group             |
+| Project                        | `gitlab://project/{project_id}`                                    | Project metadata                    |
+| Members                        | `gitlab://project/{project_id}/members`                            | Project members with access levels  |
+| Issues                         | `gitlab://project/{project_id}/issues`                             | Open issues for a project           |
+| Issue                          | `gitlab://project/{project_id}/issue/{issue_iid}`                  | Specific issue details              |
+| Latest Pipeline                | `gitlab://project/{project_id}/pipelines/latest`                   | Most recent pipeline                |
+| Pipeline                       | `gitlab://project/{project_id}/pipeline/{pipeline_id}`             | Specific pipeline details           |
+| Pipeline Jobs                  | `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs`        | Jobs for a pipeline                 |
+| Labels                         | `gitlab://project/{project_id}/labels`                             | Project labels                      |
+| Milestones                     | `gitlab://project/{project_id}/milestones`                         | Project milestones                  |
+| Merge Request                  | `gitlab://project/{project_id}/mr/{merge_request_iid}`             | MR details by IID                   |
+| Branches                       | `gitlab://project/{project_id}/branches`                           | All branches                        |
+| Branch                         | `gitlab://project/{project_id}/branch/{branch}`                    | Single branch by name               |
+| Releases                       | `gitlab://project/{project_id}/releases`                           | Project releases                    |
+| Release                        | `gitlab://project/{project_id}/release/{tag_name}`                 | Single release by tag               |
+| Tags                           | `gitlab://project/{project_id}/tags`                               | Repository tags                     |
+| Tag                            | `gitlab://project/{project_id}/tag/{tag_name}`                     | Single repository tag               |
+| Commit                         | `gitlab://project/{project_id}/commit/{sha}`                       | Single commit by SHA                |
+| File Blob                      | `gitlab://project/{project_id}/file/{ref}/{+path}`                 | File contents at ref                |
+| Wiki Page                      | `gitlab://project/{project_id}/wiki/{slug}`                        | Wiki page by slug                   |
+| Label                          | `gitlab://project/{project_id}/label/{label_id}`                   | Single project label                |
+| Milestone                      | `gitlab://project/{project_id}/milestone/{milestone_iid}`          | Single project milestone            |
+| Board                          | `gitlab://project/{project_id}/board/{board_id}`                   | Single issue board                  |
+| Deployment                     | `gitlab://project/{project_id}/deployment/{deployment_id}`         | Single deployment                   |
+| Environment                    | `gitlab://project/{project_id}/environment/{environment_id}`       | Single environment                  |
+| Job                            | `gitlab://project/{project_id}/job/{job_id}`                       | Single CI/CD job                    |
+| Feature Flag                   | `gitlab://project/{project_id}/feature_flag/{name}`                | Single feature flag                 |
+| Deploy Key                     | `gitlab://project/{project_id}/deploy_key/{deploy_key_id}`         | Single deploy key                   |
+| Project Snippet                | `gitlab://project/{project_id}/snippet/{snippet_id}`               | Single project snippet              |
+| MR Notes                       | `gitlab://project/{project_id}/mr/{merge_request_iid}/notes`       | Notes on a merge request            |
+| MR Discussions                 | `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions` | Discussion threads on a MR          |
+| Group Label                    | `gitlab://group/{group_id}/label/{label_id}`                       | Single group label                  |
+| Group Milestone                | `gitlab://group/{group_id}/milestone/{milestone_iid}`              | Single group milestone              |
+| Snippet                        | `gitlab://snippet/{snippet_id}`                                    | Personal snippet                    |
+| Git Workflow Guide             | `gitlab://guides/git-workflow`                                     | Branching and commit best practices |
+| MR Hygiene Guide               | `gitlab://guides/merge-request-hygiene`                            | MR sizing and review workflow       |
+| Conventional Commits Guide     | `gitlab://guides/conventional-commits`                             | Commit message conventions          |
+| Code Review Guide              | `gitlab://guides/code-review`                                      | Code review checklist               |
+| Pipeline Troubleshooting Guide | `gitlab://guides/pipeline-troubleshooting`                         | CI/CD debugging guide               |
 
 ### Prompts (`internal/prompts`)
 
@@ -411,7 +412,7 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 | `compare_branches`          | Commit and file diff between two refs       |
 | `daily_standup`             | Standup summary from recent activity        |
 | `mr_risk_assessment`        | Risk scoring based on MR complexity         |
-| `user_workload`             | User activity and workload analysis         |
+| `team_member_workload`      | Workload summary for one team member        |
 | `user_stats`                | Contribution statistics for a user          |
 
 ## Capabilities
@@ -475,7 +476,7 @@ Destructive operations use `ConfirmDestructiveAction()` which implements a 4-ste
 1. **YOLO_MODE/AUTOPILOT** — if enabled via env var, skip confirmation
 2. **Explicit confirm param** — if `confirm: true` in params, proceed
 3. **MCP elicitation** — ask the user for confirmation interactively
-4. **Fallback** — if elicitation unsupported, proceed (backward compatible)
+4. **Fail closed** — if the client cannot prompt, return an error result asking to re-send with `confirm: true`
 
 ### Pattern 4: Dual Response Format
 
@@ -536,11 +537,11 @@ sequenceDiagram
     Config-->>Main: Config struct
     Main->>GL: Create GitLab client (GITLAB_TOKEN)
     GL-->>Main: Authenticated client
-    Main->>GL: Ping (connectivity check)
+    Main->>GL: Initialize (connectivity check)
     GL-->>Main: OK
     Main->>MCP: Create MCP server
-    Main->>MCP: Register tools/resources/prompts
     Main->>MCP: Start StdioTransport
+    Main->>MCP: Register tools/resources/prompts (readiness gate opens)
     Note over Main: Blocks until EOF or SIGINT/SIGTERM
 ```
 
@@ -567,24 +568,24 @@ sequenceDiagram
     Pool->>MCP: NewServer + register tools
     MCP-->>Pool: MCP server for this token
     Pool-->>HTTP: *mcp.Server
-    HTTP-->>Client: MCP session (Mcp-Session-Id header)
+    HTTP-->>Client: JSON-RPC response (stateless by default: no Mcp-Session-Id)
     Note over Pool: LRU eviction when max-http-clients reached
 ```
 
 ## Key Design Decisions
 
-| Decision                           | Rationale                                                                                                                                                         | ADR                                                                  |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Go with official MCP SDK           | Type safety, single binary, cross-compilation                                                                                                                     | —                                                                    |
-| Official GitLab client library     | Maintained by GitLab, complete API coverage                                                                                                                       | —                                                                    |
-| Modular tools sub-packages         | Domain isolation, independent testing, clean imports                                                                                                              | [ADR-0004](../development/adr/adr-0004-modular-tools-subpackages.md) |
-| Meta-tool consolidation (32/49/50) | Reduce tool count for LLM token efficiency; the Enterprise/Premium catalog adds 17 self-managed meta-tools, and GitLab.com adds the experimental Orbit one on top | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)   |
-| Struct-based I/O                   | Type safety + automatic JSON Schema generation                                                                                                                    | Go SDK convention                                                    |
-| Dual response format               | JSON for LLM tool-chaining + Markdown for display                                                                                                                 | See [Output Format](../reference/output-format.md)                   |
-| Content annotations                | Audience targeting + priority for display optimization                                                                                                            | See [Output Format](../reference/output-format.md)                   |
-| `next_steps` JSON enrichment       | Hints in structuredContent for JSON-only clients                                                                                                                  | See [Output Format](../reference/output-format.md)                   |
-| Tool annotations                   | readOnlyHint, destructiveHint for client safety hints                                                                                                             | MCP spec compliance                                                  |
-| YOLO_MODE for automation           | Skip confirmations in CI/scripted environments                                                                                                                    | —                                                                    |
+| Decision                              | Rationale                                                                                                                                                      | ADR                                                                  |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Go with official MCP SDK              | Type safety, single binary, cross-compilation                                                                                                                  | —                                                                    |
+| Official GitLab client library        | Maintained by GitLab, complete API coverage                                                                                                                    | —                                                                    |
+| Modular tools sub-packages            | Domain isolation, independent testing, clean imports                                                                                                           | [ADR-0004](../development/adr/adr-0004-modular-tools-subpackages.md) |
+| Meta-tool consolidation (32/38/49/50) | Reduce tool count for LLM token efficiency; Premium adds 6 and Ultimate 11 more self-managed meta-tools, and GitLab.com adds the experimental Orbit one on top | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)   |
+| Struct-based I/O                      | Type safety + automatic JSON Schema generation                                                                                                                 | Go SDK convention                                                    |
+| Dual response format                  | JSON for LLM tool-chaining + Markdown for display                                                                                                              | See [Output Format](../reference/output-format.md)                   |
+| Content annotations                   | Audience targeting + priority for display optimization                                                                                                         | See [Output Format](../reference/output-format.md)                   |
+| `next_steps` JSON enrichment          | Hints in structuredContent for JSON-only clients                                                                                                               | See [Output Format](../reference/output-format.md)                   |
+| Tool annotations                      | readOnlyHint, destructiveHint for client safety hints                                                                                                          | MCP spec compliance                                                  |
+| YOLO_MODE for automation              | Skip confirmations in CI/scripted environments                                                                                                                 | —                                                                    |
 
 ## Cross-Cutting Concerns
 

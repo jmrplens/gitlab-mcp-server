@@ -122,3 +122,4 @@ EOF
 - NEVER skip hooks (--no-verify) unless user asks
 - NEVER force push to main/master
 - If commit fails due to hooks, fix and create NEW commit (don't amend)
+- NEVER add AI attribution: no `Co-Authored-By:` trailer naming an assistant or tool, no "Generated with ..." footer, no session or transcript link. The message is about the change, not about how it was produced (project policy in `CLAUDE.md`; a squash merge turns the PR body into the commit message, so strip such footers there too)

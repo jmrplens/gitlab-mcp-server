@@ -304,7 +304,7 @@ func main() {
 	flag.DurationVar(&hcfg.drainDelay, "drain-delay", config.DefaultDrainDelay, "After SIGTERM, keep the listener open and answer /health with 503 draining for this long before closing it, so a balancer takes the instance out of rotation first (0 closes at once)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
-	flag.StringVar(&hcfg.resourceDocumentation, "resource-documentation", "", "https URL published as RFC 9728 resource_documentation; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's OAuth setup guide")
+	flag.StringVar(&hcfg.resourceDocumentation, "resource-documentation", "", "https URL published as RFC 9728 resource_documentation; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's HTTP server mode page")
 	flag.StringVar(&hcfg.resourcePolicyURI, "resource-policy-uri", "", "https URL published as RFC 9728 resource_policy_uri; point it at your own page describing what this deployment does with the data reached through it. Empty publishes no policy link")
 	flag.StringVar(&hcfg.resourceTermsURI, "resource-tos-uri", "", "https URL published as RFC 9728 resource_tos_uri; point it at your own terms of service. Empty publishes no terms link")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
@@ -312,7 +312,7 @@ func main() {
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP); believed only from the peers named in --trusted-proxies, which it requires")
 	flag.StringVar(&hcfg.trustedProxies, "trusted-proxies", "", "Comma-separated addresses or CIDR ranges of the reverse proxies whose --trusted-proxy-header is believed (e.g. 127.0.0.1,10.0.0.0/8); required with --trusted-proxy-header")
 	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
-	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-server tools/call rate limit in requests/second (0 disables it)")
+	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-server rate limit, in requests/second, on every call that reaches GitLab (0 disables it)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so nothing above the transport closes idle connections; set a positive duration to recycle idle connections sooner")
@@ -483,8 +483,9 @@ DESCRIPTION
 
 FLAGS
 
-  Grouped by what they configure. Every flag also reads its value from the
-  environment when it is not passed; see ENVIRONMENT VARIABLES below.
+  Grouped by what they configure. A flag with an environment variable below
+  reads its value from it when the flag is not passed; the transport and
+  listener flags have none. See ENVIRONMENT VARIABLES below.
 
  General
   -h, -help                 Show this help message
@@ -552,7 +553,7 @@ FLAGS
                             periodic check, but an entry whose credential is older than %s is still rebuilt,
                             which ends any stateful session on it)
   -resource-documentation string
-                            https URL published as RFC 9728 resource_documentation (default: this project's OAuth setup guide)
+                            https URL published as RFC 9728 resource_documentation (default: this project's HTTP server mode page)
   -resource-policy-uri string
                             https URL published as RFC 9728 resource_policy_uri (default: omitted)
   -resource-tos-uri string  https URL published as RFC 9728 resource_tos_uri (default: omitted)
@@ -563,7 +564,7 @@ FLAGS
   -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -drain-delay dur          After SIGTERM, answer /health with 503 draining for this long before closing the
                             listener, so a balancer takes the instance out first (default 0: close at once)
-  -rate-limit-rps float     Per-server tools/call rate limit (default 10; 0 disables it)
+  -rate-limit-rps float     Per-server rate limit on every call that reaches GitLab (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP); requires -trusted-proxies
@@ -601,11 +602,11 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_TIER                       Force licensing tier: free|ce|premium|ultimate; omit to detect from license
   GITLAB_READ_ONLY                  Expose only read-only tools: true/false (default false)
   GITLAB_SAFE_MODE                  Intercept mutating tools and return a preview (default false)
-  EMBEDDED_RESOURCES                Embed canonical MCP resource links in get_* results (default true)
+  GITLAB_MCP_EMBEDDED_RESOURCES     Embed canonical MCP resource links in get_* results (default true)
   GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names to exclude (default empty)
   GITLAB_IGNORE_SCOPES              Skip PAT scope detection: true/false (default false)
   GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Maximum upload/file size for upload tools (default 2GB)
-  GITLAB_MCP_RATE_LIMIT_RPS         Per-server tools/call rate limit (default 0, disabled)
+  GITLAB_MCP_RATE_LIMIT_RPS         Per-server rate limit on every call that reaches GitLab (default 0, disabled)
   GITLAB_MCP_RATE_LIMIT_BURST       Token-bucket burst size when the rate limit is on (default 40)
   GITLAB_MCP_STDIO_MAX_LINE_BYTES   Longest stdio message accepted, in bytes (default 4 MiB). Raise it
                                     only for a client that inlines large base64 payloads; a longer line
@@ -630,8 +631,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_LOG_LEVEL              Logging: debug/info/warn/error (default info)
 
 ENVIRONMENT VARIABLES (HTTP mode)
-  Every flag above also reads its value from the environment when the flag is
-  not passed. Precedence: an explicitly passed flag, then the environment,
+  Every HTTP flag that has a variable, above or below, reads it when the flag
+  is not passed. Precedence: an explicitly passed flag, then the environment,
   then the built-in default. The variables below have no stdio equivalent:
 
   GITLAB_MCP_AUTH_MODE              Authentication mode: legacy|oauth (default legacy)
@@ -642,13 +643,15 @@ ENVIRONMENT VARIABLES (HTTP mode)
                                     admitted (default: any)
   GITLAB_MCP_MAX_HTTP_CLIENTS       Maximum unique (token, GitLab URL) pool entries; not sessions
                                     (default 100)
-  SESSION_TIMEOUT                   Idle MCP session timeout; --stateless=false only (default 30m)
+  GITLAB_MCP_SESSION_TIMEOUT        Idle MCP session timeout; --stateless=false only (default 30m)
   GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
   GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long, both transports
                                     (default 65m, 0 disables)
   GITLAB_MCP_DRAIN_DELAY            After SIGTERM, answer /health with 503 draining this long before closing
                                     the listener (default 0)
-  SESSION_REVALIDATE_INTERVAL       Token re-validation interval (default 15m, 0 disables)
+  GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
+                                    Token re-validation interval (default 15m; 0 stops the periodic
+                                    check, an entry older than 1h is still rebuilt)
 
 JSON CONFIGURATION EXAMPLES
 
@@ -684,8 +687,8 @@ JSON CONFIGURATION EXAMPLES
   HTTP mode (single GitLab instance):
   gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:8080
 
-  HTTP mode (no fixed GitLab URL; clients send GITLAB-URL per request):
-  gitlab-mcp-server --http --http-addr=:8080
+  HTTP mode with no instance published (single-user only; clients send GITLAB-URL per request):
+  gitlab-mcp-server --http --allow-any-gitlab-url --http-addr=:8080
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
 		// In the order the grouped FLAGS block prints them: Transport, then
@@ -1743,7 +1746,7 @@ func newServerShell(
 	// budget notices.
 	toolutil.AttachArgumentLimits(server, toolutil.DefaultMaxArgumentDepth)
 
-	// Per-server tools/call rate limit. In HTTP mode each pooled
+	// Per-server rate limit on every call that reaches GitLab. In HTTP mode each pooled
 	// per-token-and-URL server entry gets its own bucket. In stdio mode the
 	// bucket is global to the process. Disabled when RateLimitRPS is 0, which
 	// is the stdio default; HTTP mode defaults to 10 rps with a burst of 40.

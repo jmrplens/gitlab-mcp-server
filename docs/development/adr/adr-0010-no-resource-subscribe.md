@@ -55,8 +55,9 @@ default behavior.
      "push when changed" semantics clients expect from the capability.
 
 3. **No demonstrated demand.** The current design supports re-querying via
-   tools (`gitlab_get_merge_request`, `gitlab_get_pipeline`, …) which the
-   LLM can invoke whenever it needs fresh state. No real-world client has
+   tools (`gitlab_get_merge_request`, `gitlab_get_pipeline`, …) [since
+   renamed `gitlab_mr_get` and `gitlab_pipeline_get` on the individual
+   surface] which the LLM can invoke whenever it needs fresh state. No real-world client has
    asked for resource subscriptions, and most MCP clients do not consume
    them today.
 

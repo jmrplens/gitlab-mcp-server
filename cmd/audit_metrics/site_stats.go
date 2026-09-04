@@ -47,9 +47,9 @@ const siteCapabilities = 4
 // the server supports. The completion handler dispatches argument types through
 // a switch in internal/completions rather than an enumerable registry, so this
 // value mirrors the canonical count documented in
-// docs/reference/capabilities/completions.md ("17 argument types"). It is pinned
+// docs/reference/capabilities/completions.md ("18 argument names"). It is pinned
 // by TestSiteStatsCompletionsMatchesDocs so it cannot silently drift.
-const siteCompletionArgTypes = 17
+const siteCompletionArgTypes = 18
 
 // siteStats is the single-sourced statistics payload written to
 // site/src/data/stats.json and imported by the documentation MDX pages.

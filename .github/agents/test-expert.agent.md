@@ -20,7 +20,7 @@ You are a Go Test Expert specializing in writing, analyzing, improving, and vali
 
 - Go `testing` package: `T`, `B`, `F` types, subtests with `t.Run()`, table-driven patterns
 - HTTP mocking with `net/http/httptest` for REST API clients
-- `testify/assert` and `testify/require` for expressive assertions
+- Standard-library assertions (`t.Errorf` / `t.Fatalf`); this project has no `testify` dependency, so do not introduce it
 - Coverage profiling: `go test -coverprofile`, `go tool cover -func`, `go tool cover -html`
 - Testing reference refresh at phase completion: `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs`, followed by `go run ./cmd/gen_testing_docs/ --check`
 - Race detection: `go test -race`
@@ -30,10 +30,10 @@ You are a Go Test Expert specializing in writing, analyzing, improving, and vali
 - Per-test context: `t.Context()` (Go 1.24+) — auto-cancelled when test ends
 - Temp directory: `t.Chdir()` (Go 1.24+) — cd to temp dir, restored on cleanup
 - Fake time: `testing/synctest` (Go 1.24+) — for timing-dependent tests without real sleeps
-- Deep comparison: `go-cmp` (`cmp.Diff()`) preferred over `reflect.DeepEqual`
+- Deep comparison with `reflect.DeepEqual` or field-by-field assertions (`go-cmp` is not a dependency of this project)
 - GitLab API response mocking (status codes, JSON payloads, pagination headers)
 - MCP tool handler testing (input validation, output assertions, error paths)
-- Test helper design (`newTestClient`, `respondJSON`, `respondJSONWithPagination`)
+- The shared helpers in `internal/testutil`: `NewTestClient(tb, handler)`, `RespondJSON`, `RespondJSONWithPagination` with `PaginationHeaders`, `AssertRequestMethod` / `AssertRequestPath` / `AssertQueryParam`, `ForbiddenHandler`, `CancelledCtx`, `CaptureSlog`
 
 ## Mandatory: Test Documentation
 
@@ -247,7 +247,7 @@ func TestListBranches(t *testing.T) {
     }{
         {
             name:       "returns branches with pagination metadata",
-            input:      ListInput{Project: "42"},
+            input:      ListInput{ProjectID: "42"},
             mockStatus: http.StatusOK,
             mockBody:   `[{"name":"main"},{"name":"develop"}]`,
             validate: func(t *testing.T, got ListOutput) {
@@ -261,7 +261,7 @@ func TestListBranches(t *testing.T) {
         },
         {
             name:       "returns error when project not found",
-            input:      ListInput{Project: "999"},
+            input:      ListInput{ProjectID: "999"},
             mockStatus: http.StatusNotFound,
             mockBody:   `{"message":"404 Project Not Found"}`,
             wantErr:    true,
@@ -270,11 +270,11 @@ func TestListBranches(t *testing.T) {
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-                respondJSON(w, tt.mockStatus, tt.mockBody)
+            client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
             }))
 
-            got, err := listBranches(context.Background(), client, tt.input)
+            got, err := List(context.Background(), client, tt.input)
             if (err != nil) != tt.wantErr {
                 t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
             }
@@ -289,12 +289,12 @@ func TestListBranches(t *testing.T) {
 ### Route-Aware Mocks
 
 ```go
-client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     switch {
     case r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42":
-        respondJSON(w, http.StatusOK, `{"id":42}`)
+        testutil.RespondJSON(w, http.StatusOK, `{"id":42}`)
     case r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/issues":
-        respondJSON(w, http.StatusCreated, `{"iid":1}`)
+        testutil.RespondJSON(w, http.StatusCreated, `{"iid":1}`)
     default:
         t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
         http.NotFound(w, r)
@@ -305,7 +305,7 @@ client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.
 ### Pagination Mocks
 
 ```go
-respondJSONWithPagination(w, http.StatusOK, `[{"id":1},{"id":2}]`, paginationHeaders{
+testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1},{"id":2}]`, testutil.PaginationHeaders{
     Page:       "1",
     PerPage:    "20",
     Total:      "50",
@@ -320,8 +320,8 @@ respondJSONWithPagination(w, http.StatusOK, `[{"id":1},{"id":2}]`, paginationHea
 // TestGetProject_CancelledContext verifies the handler returns an error
 // when the context is cancelled before the API call completes.
 func TestGetProject_CancelledContext(t *testing.T) {
-    client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        respondJSON(w, http.StatusOK, `{}`)
+    client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        testutil.RespondJSON(w, http.StatusOK, `{}`)
     }))
 
     ctx, cancel := context.WithCancel(context.Background())
@@ -374,13 +374,12 @@ func BenchmarkFormatMarkdown(b *testing.B) {
 
 When you need to verify Go testing patterns, check library APIs, or confirm best practices:
 
-1. **ALWAYS call `resolve-library-id` first** with the library name (e.g., "golang testify", "go net/http httptest")
+1. **ALWAYS call `resolve-library-id` first** with the library name (e.g., "go net/http httptest", "modelcontextprotocol go-sdk")
 2. **Then call `get-library-docs`** with the resolved library ID and a relevant topic
 3. Use the retrieved documentation to inform your test writing — never rely solely on training data
 
 ### When to Use Context7
 
-- Verifying `testify/assert` or `testify/require` assertion method signatures
 - Checking `httptest` patterns and `NewServer` / `NewRequest` APIs
 - Looking up the latest Go testing package features (e.g., `b.Loop()` in Go 1.24)
 - Confirming MCP SDK test patterns for `github.com/modelcontextprotocol/go-sdk`
@@ -469,3 +468,16 @@ goroutine and truncates the response. Follow the six-rule contract in
 `.github/instructions/test-goroutines.instructions.md` (t.Errorf + response +
 return, or record with atomics and assert on the test goroutine). Verify with
 `make check-test-goroutines`.
+
+## Case loops and file names (gated in CI)
+
+- Every case table runs under `t.Run`: a range over a slice or map literal that
+  asserts must open one subtest per case, named by the `name` field, the string
+  element, or the map key. `go run ./cmd/audit_test_subtests/ -fix` rewrites the
+  unambiguous shapes; `// sequential: <reason>` on the line above a loop declares
+  dependent steps rather than cases. `make check-test-subtests` gates it.
+- A `_test.go` file exists only under the name of a module it tests
+  (`branches.go` has `branches_test.go`, `merge_requests.go` has
+  `merge_requests_test.go`); `export_test.go`, build-constrained qualifiers and
+  external-package qualifiers are the codified exemptions.
+  `make check-test-file-names` gates it.

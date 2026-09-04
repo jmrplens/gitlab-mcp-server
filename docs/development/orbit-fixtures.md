@@ -27,6 +27,14 @@ return rows against any namespace that has at least:
 any namespace once the indexer has had time to scan the fixture
 content.
 
+`TestOrbitLiveGitLabCom_FeatureCoverage` exercises every documented
+query-DSL pattern at least once against the namespace: filter
+operators, multi-node traversals with relationships, aggregations with
+`group_by`/`sort`/`sum`/`max`/`avg`, `order_by`, virtual columns,
+cursor pagination and `options.dynamic_columns`. Each of its subtests
+is informational: it passes as long as the API accepts the query and
+returns a valid envelope, even with `row_count=0`.
+
 ## Reproducing the fixtures
 
 ```bash

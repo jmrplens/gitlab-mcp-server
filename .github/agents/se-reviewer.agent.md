@@ -287,7 +287,7 @@ Solution: Read replicas + caching + connection pooling
 
 ### Security Review Report
 
-Save to `docs/code-review/[date]-[component]-review.md`:
+Save to `dist/code-review/[date]-[component]-review.md` (`dist/` is gitignored) or post it in the pull request discussion. ADR-0013 keeps one-off review evidence out of `docs/`, which holds only durable reference material:
 
 ```markdown
 # Code Review: [Component]
@@ -303,7 +303,7 @@ Save to `docs/code-review/[date]-[component]-review.md`:
 
 ### Architecture Decision Record
 
-Save to `docs/adr/ADR-[number]-[title].md` when architecture decisions are made.
+Save to `docs/development/adr/adr-NNNN-[title-slug].md` (next sequential four-digit number) when architecture decisions are made; the `create-architectural-decision-record` skill carries the template.
 
 ### When to Create ADRs
 
@@ -326,7 +326,7 @@ Remember: Goal is enterprise-grade code that is secure, maintainable, and compli
 
 When reviewing a PR that touches the catalog or per-tool tier gating:
 
-- `internal/tools/action_catalog.go:138` calls `pruneSchemaFieldsByTier` once with `lenientExtra=false` (input schema) and once with `lenientExtra=true` (output schema). Confirm the asymmetry is intentional and documented at the call site.
-- Per-field gating uses struct tags `tier:"premium"` and `tier:"ultimate"` on `internal/tools/*/shapes.go` and `action_specs.go`. Confirm every new tier-tagged field is also reflected in the corresponding `tier:` alias field on the catalog route (see ADR-0011 for the field-tier model).
-- Action-level gating (whole tools gated behind `premium` or `ultimate`) is set via `ActionSpec.Compatibility.MinTier` / `MaxTier`. Cross-check against `cmd/audit_edition_tier` output — a tool marked Premium but with no `tier:` tag is almost certainly a bug.
+- `pruneSpecFieldsByTier` in `internal/tools/action_catalog.go` calls `pruneSchemaFieldsByTier` once with `lenientExtra=false` (input schema) and once with `lenientExtra=true` (output schema). Confirm the asymmetry is intentional and documented at the call site.
+- Per-field gating uses struct tags `tier:"premium"` and `tier:"ultimate"` on the input and output structs of `internal/tools/*/` (`shapes.go` and the handler files). `toolutil.FieldTiers` reads those tags by reflection, so there is no second place to declare a field's tier; confirm every new field that only exists at a higher tier carries the tag.
+- Action-level gating (whole actions withheld below `premium` or `ultimate`) is set via `ActionSpec.Edition` (empty means `free`), which `filterActionSpecGroupsByTier` compares with the resolved tier. Cross-check against `cmd/audit_edition_tier` output (`make audit-edition-tier`), which grounds each action's tier in GitLab's documentation.
 - `GITLAB_ENTERPRISE` is deprecated; new code must read `GITLAB_TIER` instead (HTTP mode `--tier` flag is the parallel path).

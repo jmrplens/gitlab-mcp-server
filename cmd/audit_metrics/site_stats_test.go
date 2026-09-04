@@ -232,7 +232,7 @@ func TestSiteStatsCompletionsMatchesDocs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read completions doc: %v", err)
 	}
-	want := "supports **" + strconv.Itoa(siteCompletionArgTypes) + " argument types**"
+	want := "supports **" + strconv.Itoa(siteCompletionArgTypes) + " argument names**"
 	if !strings.Contains(string(data), want) {
 		t.Errorf("docs do not contain %q; update siteCompletionArgTypes or the docs", want)
 	}

@@ -70,6 +70,7 @@ func applyOverlayStrings(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 	overlayString(hcfg, "auth-mode", &hcfg.authMode, o.AuthMode)
 	overlayString(hcfg, "public-url", &hcfg.publicURL, o.PublicURL)
 	overlayString(hcfg, "trusted-origins", &hcfg.trustedOrigins, o.TrustedOrigins)
+	overlayString(hcfg, "oauth-client-uid", &hcfg.oauthClientUID, o.OAuthClientUID)
 }
 
 func applyOverlayBools(hcfg *httpConfig, o *config.HTTPEnvOverlay) {

@@ -14,10 +14,13 @@ superseded_by: "ADR-0014 for catalog source and compatibility ownership"
 
 Status: Accepted.
 
+**Update (2026-09)**: the mode is the default. `config.DefaultToolSurface` is `dynamic`, so a configuration that sets neither `GITLAB_MCP_TOOL_SURFACE` nor the legacy `GITLAB_MCP_META_TOOLS` gets the two-tool surface; the "explicit configuration flag" below describes the rollout as it started. [ADR-0014](adr-0014-catalog-first-runtime-architecture.md) refined the catalog source the mode reads from.
+
 ## Context
 
 ADR-0005 consolidated the GitLab MCP meta-tool catalog from 68 tools to 32 base tools, with 48 self-managed
-Enterprise/Premium tools and 49 GitLab.com Enterprise/Premium tools when all gated capabilities are visible. This remains
+Enterprise/Premium tools and 49 GitLab.com Enterprise/Premium tools when all gated capabilities are visible [32/49/50 as of
+2026-09, after a further Enterprise group was added]. This remains
 the most compatible general-purpose mode and already reduces advertised tool-definition cost by about 89.5% versus the
 individual tool catalog.
 
@@ -124,6 +127,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 - **REF-001**: [ADR-0005: Meta-tool consolidation](adr-0005-meta-tool-consolidation.md)
 - **REF-002**: Local research artifacts under `plan/architecture-tool-surface-token-reduction-research-1.md` and
-  `plan/tool-surface-token-reduction-research/`.
+  `plan/tool-surface-token-reduction-research/` [`plan/` is ignored by git, so these are working notes on the author's
+  machine and are not in the repository].
 - **REF-003**: [Cloudflare Code Mode MCP](https://blog.cloudflare.com/code-mode-mcp/)
 - **REF-004**: [Speakeasy Dynamic Toolsets v2](https://www.speakeasy.com/blog/how-we-reduced-token-usage-by-100x-dynamic-toolsets-v2)
