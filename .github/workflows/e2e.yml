@@ -3,15 +3,24 @@
 # Runs the e2e suite against an ephemeral Docker-based GitLab CE instance.
 # Duration: ~15-20 min (GitLab boot ~5 min + tests ~5-10 min).
 #
-# Two ways in. Manually, from the "Use workflow from" dropdown, optionally with
-# a custom ref such as a fork pull request's merge SHA. And as a reusable
+# Three ways in. Manually, from the "Use workflow from" dropdown, optionally
+# with a custom ref such as a fork pull request's merge SHA. As a reusable
 # workflow, which is how the release pipeline runs its E2E gate: the job used
 # to be copied into release.yml line for line, so a fix to the harness landed
-# in one place and not the other.
+# in one place and not the other. And once a week on main, against the
+# current gitlab-ce:latest, because nothing else runs this suite between
+# releases: the first release rehearsal found three tests that had been
+# broken on main for weeks, one of them green on a copy of the server it was
+# meant to test (issue 474). The weekly run is not a required check; it is
+# the one place the suite meets a real GitLab while nobody is tagging.
 
 name: E2E Tests
 
 on:
+  schedule:
+    # Mondays, 05:17 UTC: off the hour, since GitHub delays runs that pile up
+    # on round times, and before the week's first pushes.
+    - cron: "17 5 * * 1"
   workflow_dispatch:
     inputs:
       ref:
