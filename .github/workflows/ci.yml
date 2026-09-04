@@ -184,6 +184,12 @@ jobs:
           cache-dependency-path: site/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: site
+      # Advisories already judged live in site/pnpm-workspace.yaml, under
+      # auditConfig.ignoreGhsas, each with the reason beside it. That is the
+      # only place pnpm reads them from: from v10 the settings moved out of
+      # package.json, and a `pnpm` field there is now ignored with a warning
+      # rather than an error, so an exception added to it looks applied and is
+      # not.
       - name: Audit docs dependencies
         run: pnpm audit --audit-level=high
         working-directory: site
