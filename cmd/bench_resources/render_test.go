@@ -249,3 +249,37 @@ func readFileForTest(t *testing.T, path string) string {
 	}
 	return string(data)
 }
+
+// TestWriteFile_UnreadablePath_IsAnErrorNotAChange verifies a read failure
+// that is not "the file is absent" is reported as itself.
+//
+// writeFile treated every os.ReadFile error as evidence that the file differs
+// from the content it was given, which it is not: a path that is a directory
+// answers EISDIR whatever the content is. Under -check that surfaced as a
+// stale-artifact report, sending a reader to regenerate a file that was never
+// the problem, and it did so without ever naming the real cause.
+func TestWriteFile_UnreadablePath_IsAnErrorNotAChange(t *testing.T) {
+	directory := t.TempDir()
+
+	changed, err := writeFile(directory, []byte("content"), true)
+	if err == nil {
+		t.Fatalf("writeFile(%s) = (%v, nil), want an error naming the path", directory, changed)
+	}
+	if !strings.Contains(err.Error(), directory) {
+		t.Errorf("error = %v, want it to name %s", err, directory)
+	}
+	if changed {
+		t.Error("writeFile reported a change it could not have observed")
+	}
+
+	// An absent file is still a change, which is what makes -check able to
+	// report a chart that was never written.
+	absent := filepath.Join(directory, "not-written-yet.svg")
+	changed, err = writeFile(absent, []byte("content"), true)
+	if err != nil {
+		t.Fatalf("writeFile on an absent path: %v", err)
+	}
+	if !changed {
+		t.Error("an absent file was not reported as a change")
+	}
+}

@@ -560,7 +560,7 @@ Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamañ
 | ------------------------------------- | -----------------: | ------------------------------------------------------------------ |
 | HTTP, en reposo, sin credenciales     |            ~40 MiB | El proceso no tiene ningún catálogo hasta que un token lo pide     |
 | HTTP, por credencial activa adicional |          35–71 MiB | Un catálogo por cada par token+URL distinto, en el pool            |
-| HTTP, ocho credenciales activas       |        445–719 MiB | Picos de 599 MiB a 1,16 GiB mientras las ocho llamaban             |
+| HTTP, ocho credenciales activas       |        445–719 MiB | Picos de 599 MiB a 1,14 GiB mientras las ocho llamaban             |
 | stdio, un proceso por cliente         |        190–330 MiB | Empieza a construir su catálogo enseguida, así que no tiene reposo |
 | Binario en disco                      |             ~55 MB | Binario estático único, sin dependencias de runtime                |
 
@@ -568,7 +568,7 @@ De aquí se derivan tres cosas.
 
 **La memoria sigue a las credenciales activas, no a las peticiones.** El pool mantiene una instancia del servidor MCP por cada par token+URL distinto, cada una con su propio catálogo, así que el pico de un despliegue sigue a cuánta gente lo usa a la vez. Un presupuesto práctico es de unos 100 MiB por credencial que esperes tener activa a la vez, más 128 MiB para el propio proceso. Con 512 MB vas holgado con unas pocas credenciales, y no es una cifra a la que aspirar con más: ocho credenciales concurrentes la superaron en todas las superficies medidas.
 
-**`--max-http-clients` es un ajuste de memoria.** Su valor por defecto de 100 entradas describe un pool mucho mayor de lo que cabe en una instancia pequeña, y `--session-timeout` (30m por defecto) junto con `--pool-idle-timeout` (1h por defecto) deciden cuánto tiempo conserva su memoria una entrada sin usar. Bájalos si vas justo de memoria y súbelos solo junto con más RAM.
+**`--max-http-clients` es un ajuste de memoria, y `--pool-idle-timeout` también.** El primero vale 100 entradas por defecto, un pool mucho mayor de lo que cabe en una instancia pequeña; el segundo (`1h` por defecto) decide cuánto tiempo conserva su catálogo una entrada sin usar. Esos dos son los que hay que bajar si vas justo de memoria, y subir solo junto con más RAM. `--session-timeout` no entra ahí, aunque lo parezca: acota una sesión MCP inactiva, solo se aplica con `--stateless=false` (con el transporte sin estado por defecto, una sesión termina con la respuesta a su propio POST) y terminar una sesión no libera la entrada del pool que hay detrás.
 
 **La superficie de herramientas cambia las respuestas más que la memoria.** Las tres construyen el mismo catálogo canónico de acciones, y por credencial la diferencia es de un factor de dos (`dynamic` es la que más cuesta, porque además construye un índice de búsqueda). Lo que la superficie decide de verdad es el tamaño de un `tools/list`: 12 KB, 584 KB y 3,1 MB para `dynamic`, `meta` e `individual`. Elige la superficie por coste de tokens y tiempo de respuesta, y el tamaño de instancia por concurrencia.
 

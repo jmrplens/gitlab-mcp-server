@@ -208,15 +208,25 @@ func logScale(minValue, maxValue float64) (axis scale, ticks []float64) {
 	if maxValue <= minValue || math.IsInf(maxValue, 0) || math.IsNaN(maxValue) {
 		maxValue = minValue * 10
 	}
-	lo := math.Pow(10, math.Floor(math.Log10(minValue)))
-	hi := math.Pow(10, math.Ceil(math.Log10(maxValue)))
-	if hi > lo*math.Pow(10, maxDecades) {
-		hi = lo * math.Pow(10, maxDecades)
+	// The walk is over exponents rather than over values. Multiplying a value
+	// by ten can fail to advance it: a subnormal minValue underflows
+	// math.Pow to zero, and zero times ten is zero, so the loop that clamping
+	// the inputs was supposed to bound would still append ticks until the
+	// process died. Counting decades cannot fail to advance.
+	//
+	// The exponents are clamped as well as the span, because float64 holds
+	// 10^308 and overflows at 10^309: a maximum near the largest float would
+	// otherwise put the ceiling at infinity and take every tick with it.
+	const maxExp = 308
+	loExp := min(max(math.Floor(math.Log10(minValue)), -maxExp), maxExp-1)
+	hiExp := min(max(math.Ceil(math.Log10(maxValue)), loExp+1), maxExp)
+	if hiExp > loExp+maxDecades {
+		hiExp = loExp + maxDecades
 	}
-	for v := lo; v <= hi*1.0001; v *= 10 {
-		ticks = append(ticks, v)
+	for exp := loExp; exp <= hiExp; exp++ {
+		ticks = append(ticks, math.Pow(10, exp))
 	}
-	return scale{lo: lo, hi: hi, log: true}, ticks
+	return scale{lo: math.Pow(10, loExp), hi: math.Pow(10, hiExp), log: true}, ticks
 }
 
 // niceStep rounds a step up to 1, 2 or 5 times a power of ten, so axis labels

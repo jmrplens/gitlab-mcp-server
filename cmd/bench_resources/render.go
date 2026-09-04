@@ -40,7 +40,7 @@ const themeCSS = "site/src/styles/theme.css"
 func renderAll(opts options, root string, run *Run) error {
 	palettes, err := loadPalettes(readFileString(resolve(root, themeCSS)))
 	if err != nil {
-		return err
+		return fmt.Errorf("read palettes from %s: %w", themeCSS, err)
 	}
 
 	english, spanish := englishLabels(), spanishLabels()
@@ -52,13 +52,13 @@ func renderAll(opts options, root string, run *Run) error {
 		dir := filepath.Join(resolve(root, opts.siteCharts), l.Code)
 		written, chartErr := writeCharts(dir, run, l, palettes, opts.check)
 		if chartErr != nil {
-			return chartErr
+			return fmt.Errorf("site charts (%s): %w", l.Code, chartErr)
 		}
 		changed = append(changed, relAll(root, written)...)
 	}
 	written, err := writeCharts(resolve(root, opts.docCharts), run, english, palettes, opts.check)
 	if err != nil {
-		return err
+		return fmt.Errorf("documentation charts: %w", err)
 	}
 	changed = append(changed, relAll(root, written)...)
 
@@ -74,7 +74,7 @@ func renderAll(opts options, root string, run *Run) error {
 	for _, section := range sections {
 		sectionChanged, sectionErr := writeSection(section.path, section.start, section.end, section.content, opts.check)
 		if sectionErr != nil {
-			return sectionErr
+			return fmt.Errorf("generated section in %s: %w", rel(root, section.path), sectionErr)
 		}
 		if sectionChanged {
 			changed = append(changed, rel(root, section.path))
@@ -128,8 +128,15 @@ func writeCharts(dir string, run *Run, l labels, palettes map[string]palette, ch
 // disk differs.
 func writeFile(path string, content []byte, check bool) (bool, error) {
 	existing, err := os.ReadFile(path) // #nosec G304 -- generated output paths, from this command's flags
-	if err == nil && bytes.Equal(existing, content) {
+	switch {
+	case err == nil && bytes.Equal(existing, content):
 		return false, nil
+	case err != nil && !os.IsNotExist(err):
+		// Any other read failure is not evidence about the file's contents.
+		// Treating it as one made -check report a stale artifact when the
+		// path was a directory or unreadable, which sends a reader to
+		// regenerate a file that was never the problem.
+		return false, fmt.Errorf("read %s: %w", path, err)
 	}
 	if check {
 		return true, nil
@@ -284,7 +291,7 @@ func latencyTable(run *Run, l labels) string {
 			rows = append(rows, []string{
 				scenarioLabel(s),
 				"`" + latency.Method + "`",
-				latency.Detail,
+				l.callDetail(latency.Detail),
 				ms(latency.P50),
 				ms(latency.P90),
 				ms(latency.P99),

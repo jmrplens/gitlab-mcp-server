@@ -186,7 +186,7 @@ Idle it holds about 40 MiB and no tool catalog at all. The first request from
 each distinct token builds one, and the resident set grows with every live
 credential: 35 MiB each on `meta`, 36 MiB on `individual` and 71 MiB on
 `dynamic`. Eight credentials landed between 445 and 719 MiB, peaking between
-599 MiB and 1.16 GiB while all eight were calling at once. Sizing follows
+599 MiB and 1.14 GiB while all eight were calling at once. Sizing follows
 directly: budget roughly 100 MiB per credential expected to be live at once on
 top of 128 MiB for the process, and read `--max-http-clients` as a memory
 setting rather than a concurrency one. Its default of 100 entries describes a

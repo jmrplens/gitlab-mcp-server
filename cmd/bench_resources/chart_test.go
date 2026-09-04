@@ -205,3 +205,50 @@ func TestXMLEscape_MarkupInLabels_IsNeutralized(t *testing.T) {
 		t.Errorf("xmlEscape did not escape the ampersand: %q", got)
 	}
 }
+
+// TestLogScale_ExtremeInputs_Terminates verifies the decade walk ends for
+// every input a partial record can carry.
+//
+// The walk used to advance by multiplying a value by ten, which does not
+// advance when the value is zero, and a subnormal minimum underflows the
+// decade floor to exactly zero. The loop then appended a tick per iteration
+// until the process died, so this test is written to hang rather than to fail
+// if that arithmetic comes back. It pins the ordinary case too, since a bound
+// that terminated by returning nothing would satisfy liveness alone.
+func TestLogScale_ExtremeInputs_Terminates(t *testing.T) {
+	cases := []struct {
+		name             string
+		minimum, maximum float64
+	}{
+		{"ordinary decades", 1, 1000},
+		{"subnormal minimum", 5e-324, 1000},
+		{"both subnormal", 5e-324, 5e-324},
+		{"infinite maximum", 1, math.Inf(1)},
+		{"infinite minimum", math.Inf(1), math.Inf(1)},
+		{"not a number", math.NaN(), math.NaN()},
+		{"maximum below minimum", 1000, 1},
+		{"zero minimum", 0, 10},
+		{"largest finite", math.MaxFloat64, math.MaxFloat64},
+		{"whole float range", 5e-324, math.MaxFloat64},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			axis, ticks := logScale(tc.minimum, tc.maximum)
+			if len(ticks) == 0 {
+				t.Fatalf("logScale(%v, %v) produced no ticks", tc.minimum, tc.maximum)
+			}
+			// Thirteen is the twelve-decade bound plus its closing tick.
+			if len(ticks) > 13 {
+				t.Errorf("logScale(%v, %v) produced %d ticks, want at most 13", tc.minimum, tc.maximum, len(ticks))
+			}
+			if axis.hi <= axis.lo {
+				t.Errorf("axis = [%v, %v], want a strictly increasing range", axis.lo, axis.hi)
+			}
+			for i, tick := range ticks {
+				if math.IsNaN(tick) || math.IsInf(tick, 0) {
+					t.Errorf("tick %d = %v, want a finite value", i, tick)
+				}
+			}
+		})
+	}
+}

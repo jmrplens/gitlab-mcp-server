@@ -4,7 +4,7 @@ description: "Lo que cuesta ejecutar el servidor, medido y no estimado: memoria 
 datePublished: "2026-09-04"
 faq:
   - q: "¿Cuánta memoria le doy al contenedor?"
-    a: "En modo HTTP dimensiona por **credenciales concurrentes, no por peticiones**. El proceso reposa cerca de 40 MiB sin ningún catálogo de herramientas, y a partir de ahí construye un catálogo por cada token distinto: cada credencial activa añadió entre 35 y 71 MiB según la superficie, y ocho de ellas llegaron a entre 445 y 719 MiB, con picos de hasta 1,16 GiB mientras las ocho llamaban a la vez. Con 512 MiB atiendes holgadamente a unas pocas credenciales; un despliegue que espere decenas necesita gigabytes, o un `--max-http-clients` más bajo. En modo stdio cada cliente tiene su propio proceso, de entre 190 y 330 MiB."
+    a: "En modo HTTP dimensiona por **credenciales concurrentes, no por peticiones**. El proceso reposa cerca de 40 MiB sin ningún catálogo de herramientas, y a partir de ahí construye un catálogo por cada token distinto: cada credencial activa añadió entre 35 y 71 MiB según la superficie, y ocho de ellas llegaron a entre 445 y 719 MiB, con picos de hasta 1,14 GiB mientras las ocho llamaban a la vez. Con 512 MiB atiendes holgadamente a unas pocas credenciales; un despliegue que espere decenas necesita gigabytes, o un `--max-http-clients` más bajo. En modo stdio cada cliente tiene su propio proceso, de entre 190 y 330 MiB."
   - q: "¿Por qué la primera llamada de un token nuevo tarda tanto?"
     a: "Está pagando el registro. El proceso responde a `/health` en unos 50 a 100 ms sin tener ningún catálogo; la primera petición de una credencial construye el suyo, y eso tardó unos 2 segundos en las superficies dynamic y meta, y entre 4 y 5 segundos en la superficie individual. Cualquier llamada posterior de esa credencial se sirve ya del catálogo construido. La espera vuelve cuando el pool recupera la entrada, lo que deciden `--pool-idle-timeout` y `--max-http-clients`."
   - q: "¿La superficie de herramientas cambia la memoria que necesita el servidor?"
@@ -25,7 +25,8 @@ ajustes que de verdad mueven esas cifras.
   proceso en reposo no tiene ningún catálogo de herramientas; cada token
   distinto construye el suyo en el pool.
 - **La primera llamada de cada credencial paga el registro**, y son segundos,
-  no milisegundos. Ninguna otra lo hace.
+  no milisegundos. Ninguna llamada posterior vuelve a pagarlo, aunque en
+  `individual` un `tools/list` en caliente sigue tardando segundos por sí solo.
 - **La superficie de herramientas apenas cambia la memoria y cambia por
   completo las respuestas**: un `tools/list` ocupa 12 KB en `dynamic` y 3,1 MB
   en `individual`.
@@ -99,30 +100,30 @@ Medido en AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx, 8 CPU lógicas, 61 GiB 
 
 | Escenario                 | Método           | Llamada                |  p50 |  p90 |  p99 |  Máx |
 | ------------------------- | ---------------- | ---------------------- | ---: | ---: | ---: | ---: |
-| stdio, dynamic            | `resources/list` | smallest listing       |  1.6 |  2.2 |  2.5 |  2.5 |
+| stdio, dynamic            | `resources/list` | el listado más pequeño |  1.6 |  2.2 |  2.5 |  2.5 |
 | stdio, dynamic            | `tools/call`     | gitlab_find_action     |   70 |   93 |   96 |   96 |
-| stdio, dynamic            | `tools/list`     | whole surface          |  4.6 |  5.4 |   11 |   11 |
-| stdio, meta               | `resources/list` | smallest listing       |  3.1 |  9.1 |   14 |   14 |
+| stdio, dynamic            | `tools/list`     | la superficie completa |  4.6 |  5.4 |   11 |   11 |
+| stdio, meta               | `resources/list` | el listado más pequeño |  3.1 |  9.1 |   14 |   14 |
 | stdio, meta               | `tools/call`     | gitlab_server (status) |  4.4 |  7.8 |  9.8 |  9.8 |
-| stdio, meta               | `tools/list`     | whole surface          |  105 |  137 |  142 |  142 |
-| stdio, individual         | `resources/list` | smallest listing       |  1.1 |  1.7 |  1.9 |  1.9 |
+| stdio, meta               | `tools/list`     | la superficie completa |  105 |  137 |  142 |  142 |
+| stdio, individual         | `resources/list` | el listado más pequeño |  1.1 |  1.7 |  1.9 |  1.9 |
 | stdio, individual         | `tools/call`     | gitlab_server_status   |  2.1 |  2.7 |  3.0 |  3.0 |
-| stdio, individual         | `tools/list`     | whole surface          |  907 |  998 | 1030 | 1030 |
-| stdio, dynamic, telemetry | `resources/list` | smallest listing       |  2.0 |  2.5 |  2.7 |  2.7 |
+| stdio, individual         | `tools/list`     | la superficie completa |  907 |  998 | 1030 | 1030 |
+| stdio, dynamic, telemetry | `resources/list` | el listado más pequeño |  2.0 |  2.5 |  2.7 |  2.7 |
 | stdio, dynamic, telemetry | `tools/call`     | gitlab_find_action     |   77 |  126 |  133 |  133 |
-| stdio, dynamic, telemetry | `tools/list`     | whole surface          |  7.0 |   13 |   30 |   30 |
-| http, dynamic             | `resources/list` | smallest listing       |  9.8 |   15 |   16 |   16 |
+| stdio, dynamic, telemetry | `tools/list`     | la superficie completa |  7.0 |   13 |   30 |   30 |
+| http, dynamic             | `resources/list` | el listado más pequeño |  9.8 |   15 |   16 |   16 |
 | http, dynamic             | `tools/call`     | gitlab_find_action     |  174 |  356 |  375 |  375 |
-| http, dynamic             | `tools/list`     | whole surface          |   14 |   15 |   17 |   17 |
-| http, meta                | `resources/list` | smallest listing       |  5.4 |  8.3 |   10 |   10 |
+| http, dynamic             | `tools/list`     | la superficie completa |   14 |   15 |   17 |   17 |
+| http, meta                | `resources/list` | el listado más pequeño |  5.4 |  8.3 |   10 |   10 |
 | http, meta                | `tools/call`     | gitlab_server (status) |   14 |   18 |   19 |   19 |
-| http, meta                | `tools/list`     | whole surface          |  222 |  330 |  361 |  361 |
-| http, individual          | `resources/list` | smallest listing       |  3.4 |  5.7 |  6.7 |  6.7 |
+| http, meta                | `tools/list`     | la superficie completa |  222 |  330 |  361 |  361 |
+| http, individual          | `resources/list` | el listado más pequeño |  3.4 |  5.7 |  6.7 |  6.7 |
 | http, individual          | `tools/call`     | gitlab_server_status   |  7.7 |  9.9 |   11 |   11 |
-| http, individual          | `tools/list`     | whole surface          | 2391 | 2879 | 2897 | 2897 |
-| http, dynamic, telemetry  | `resources/list` | smallest listing       |  6.1 |  9.1 |   11 |   11 |
+| http, individual          | `tools/list`     | la superficie completa | 2391 | 2879 | 2897 | 2897 |
+| http, dynamic, telemetry  | `resources/list` | el listado más pequeño |  6.1 |  9.1 |   11 |   11 |
 | http, dynamic, telemetry  | `tools/call`     | gitlab_find_action     |  159 |  330 |  340 |  340 |
-| http, dynamic, telemetry  | `tools/list`     | whole surface          |   24 |   39 |   49 |   49 |
+| http, dynamic, telemetry  | `tools/list`     | la superficie completa |   24 |   39 |   49 |   49 |
 
 {/*END BENCHMARK*/}
 

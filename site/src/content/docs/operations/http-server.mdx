@@ -560,7 +560,7 @@ Size the host from the HTTP server's resident set, not from the binary, and size
 | ------------------------------------ | -----------: | --------------------------------------------------------------- |
 | HTTP, idle, no credentials           |      ~40 MiB | The process holds no tool catalog until a token asks for one    |
 | HTTP, per additional live credential |    35–71 MiB | One catalog per distinct token+URL pair, in the pool            |
-| HTTP, eight live credentials         |  445–719 MiB | Peaks of 599 MiB to 1.16 GiB while all eight were calling       |
+| HTTP, eight live credentials         |  445–719 MiB | Peaks of 599 MiB to 1.14 GiB while all eight were calling       |
 | stdio, one process per client        |  190–330 MiB | It starts building its catalog at once, so it has no idle state |
 | Binary on disk                       |       ~55 MB | Single static binary, no runtime dependencies                   |
 
@@ -568,7 +568,7 @@ Two things follow from this.
 
 **Memory tracks live credentials, not requests.** The pool holds one MCP server instance per distinct token and GitLab URL, each with its own catalog, so a deployment's peak follows how many people are using it at once. A practical budget is about 100 MiB per credential you expect to be live simultaneously, on top of 128 MiB for the process itself. 512 MB is comfortable for a handful of credentials and is not a ceiling anyone should aim at with more: eight concurrent credentials exceeded it on every tool surface measured.
 
-**`--max-http-clients` is a memory setting.** Its default of 100 entries describes a pool far larger than a small instance can hold, and `--session-timeout` (default 30m) with `--pool-idle-timeout` (default 1h) decide how long an unused entry keeps its memory. Lower them if you are memory-constrained; raise them only alongside more RAM.
+**`--max-http-clients` is a memory setting, and so is `--pool-idle-timeout`.** The first defaults to 100 entries, a pool far larger than a small instance can hold; the second (default `1h`) decides how long an unused entry keeps its catalog. Those two are the pair to lower if you are memory-constrained, and to raise only alongside more RAM. `--session-timeout` is not part of it, despite sounding like it: it bounds an idle MCP session, it applies to `--stateless=false` only (under the default stateless transport a session ends with the response to its own POST), and ending a session does not release the pooled entry behind it.
 
 **The tool surface changes responses more than memory.** All three build the same canonical action catalog, and per credential the difference is a factor of two (`dynamic` costs the most, since it also builds a search index). What the surface really decides is the size of a `tools/list`: 12 KB, 584 KB and 3.1 MB for `dynamic`, `meta` and `individual`. Pick the surface for token cost and response time, and pick the instance size for concurrency.
 

@@ -6,6 +6,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestMatrixFor_FullRun_UsesThePublishedMatrix verifies a plain run measures
@@ -102,4 +103,45 @@ func TestProgressFunc_QuietUnlessAsked(t *testing.T) {
 
 	loud := progressFunc(true)
 	loud("nor this %d", 2)
+}
+
+// TestOptionsValidate_RejectsValuesThatWouldMeasureNothing verifies the two
+// flags that reach the measurement machinery are refused before it starts.
+//
+// Both used to be taken verbatim. A non-positive -sample-interval reached
+// time.NewTicker, which panics, several minutes into a run; a non-positive
+// -rounds produced a plan with no load rounds, whose zero-sample latencies
+// were then written over the published record. Rejecting them at the front
+// costs a line and saves a run.
+func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
+	const good = 100 * time.Millisecond
+	cases := []struct {
+		name    string
+		opts    options
+		wantErr string
+	}{
+		{"zero rounds", options{rounds: 0, sampleInterval: good}, "-rounds"},
+		{"negative rounds", options{rounds: -1, sampleInterval: good}, "-rounds"},
+		{"zero interval", options{rounds: 3, sampleInterval: 0}, "-sample-interval"},
+		{"negative interval", options{rounds: 3, sampleInterval: -time.Second}, "-sample-interval"},
+		{"both valid", options{rounds: 3, sampleInterval: good}, ""},
+		// A redraw reads the committed record and reaches neither a ticker
+		// nor a round, so refusing it over an unused flag would reject a
+		// legitimate command.
+		{"render ignores them", options{render: true}, ""},
+		{"check ignores them", options{check: true}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.validate()
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Errorf("validate() = %v, want no error", err)
+			case tc.wantErr != "" && err == nil:
+				t.Errorf("validate() = nil, want an error naming %s", tc.wantErr)
+			case tc.wantErr != "" && err != nil && !strings.Contains(err.Error(), tc.wantErr):
+				t.Errorf("validate() = %v, want it to name %s", err, tc.wantErr)
+			}
+		})
+	}
 }

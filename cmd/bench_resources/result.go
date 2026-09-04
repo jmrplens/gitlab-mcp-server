@@ -136,6 +136,19 @@ type RampPoint struct {
 //
 // Percentiles are per method rather than pooled: a run that averages a 12 KB
 // tools/list with a 3 MB one describes neither.
+// The descriptions this benchmark writes into Detail for a method that is not
+// a named tool. They are named here rather than written at the call site so
+// the set is enumerable: the Spanish page translates them, and a description
+// added without a translation prints English in a Spanish table.
+const (
+	detailSmallestListing = "smallest listing"
+	detailWholeSurface    = "whole surface"
+)
+
+// recordedCallDetails is every description above, for the tests that check a
+// page can render all of them.
+var recordedCallDetails = []string{detailSmallestListing, detailWholeSurface}
+
 type MethodLatency struct {
 	Method string  `json:"method"`
 	Detail string  `json:"detail,omitempty"`

@@ -87,8 +87,7 @@ func (r *runner) runScenario(ctx context.Context, plan scenarioPlan) (Scenario, 
 		return Scenario{}, rampErr
 	}
 
-	startupCPU := sampleCPU(sampler)
-	result.CPU.StartupSeconds = round(startupCPU)
+	startupCPU, startupCPUOK := sampleCPU(sampler)
 
 	sampler.resetPeak()
 	loadStarted := time.Now()
@@ -97,12 +96,14 @@ func (r *runner) runScenario(ctx context.Context, plan scenarioPlan) (Scenario, 
 	result.Notes = append(result.Notes, notes...)
 
 	result.Memory.PeakMiB = mibOf(sampler.peakRSS())
-	totalCPU := sampleCPU(sampler)
-	result.CPU.TotalSeconds = round(totalCPU)
-	result.CPU.LoadSeconds = round(totalCPU - startupCPU)
-	if loadWall > 0 {
-		result.CPU.LoadPercent = round((totalCPU - startupCPU) / loadWall.Seconds() * 100)
-	}
+	totalCPU, totalCPUOK := sampleCPU(sampler)
+	cpu, cpuNotes := cpuFigures(
+		cpuSample{seconds: startupCPU, ok: startupCPUOK},
+		cpuSample{seconds: totalCPU, ok: totalCPUOK},
+		loadWall,
+	)
+	result.CPU = cpu
+	result.Notes = append(result.Notes, cpuNotes...)
 
 	// The goroutine count is taken last because reading it kills the process:
 	// the shipped binary exposes no debug endpoint, so a traceback signal is
@@ -198,7 +199,7 @@ func (r *runner) load(ctx context.Context, conns []*clientConn, plan scenarioPla
 			// that revision removed both ping and initialize, so there is no
 			// method whose cost is purely the wire.
 			name:   "resources/list",
-			detail: "smallest listing",
+			detail: detailSmallestListing,
 			invoke: func(ctx context.Context, c *clientConn) error {
 				_, err := c.rpc.call(ctx, "resources/list", nil)
 				return err
@@ -217,7 +218,7 @@ func (r *runner) load(ctx context.Context, conns []*clientConn, plan scenarioPla
 		},
 		{
 			name:   "tools/list",
-			detail: "whole surface",
+			detail: detailWholeSurface,
 			invoke: func(ctx context.Context, c *clientConn) error {
 				_, err := c.rpc.call(ctx, "tools/list", nil)
 				return err
@@ -323,14 +324,56 @@ func settledRSS(s *sampler) uint64 {
 	return previous
 }
 
-// sampleCPU reads consumed processor time now, reporting zero when the
-// platform will not say.
-func sampleCPU(s *sampler) float64 {
+// cpuSample is one reading of consumed processor time, and whether the
+// platform gave one.
+type cpuSample struct {
+	seconds float64
+	ok      bool
+}
+
+// cpuFigures decides what a scenario can honestly publish about processor
+// time, and returns the notes explaining anything it left out.
+//
+// The load figures are a difference between two samples, so they are only
+// meaningful when both were answered and the second is not smaller than the
+// first. Publishing the subtraction regardless put negative seconds and
+// negative percentages into the committed record and drew them on the charts.
+func cpuFigures(startup, total cpuSample, loadWall time.Duration) (cpu CPU, notes []string) {
+	if startup.ok {
+		cpu.StartupSeconds = round(startup.seconds)
+	}
+	if total.ok {
+		cpu.TotalSeconds = round(total.seconds)
+	}
+	switch {
+	case !startup.ok || !total.ok:
+		return cpu, []string{"CPU time unavailable: the platform did not answer a sample"}
+	case total.seconds < startup.seconds:
+		// Consumed time is monotonic per process, but the sampler sums a set
+		// of them, so a client that exits between the two samples takes its
+		// time out of the total. Saying so beats publishing the difference.
+		return cpu, []string{"CPU load time unavailable: consumed time fell between samples"}
+	}
+	cpu.LoadSeconds = round(total.seconds - startup.seconds)
+	if loadWall > 0 {
+		cpu.LoadPercent = round((total.seconds - startup.seconds) / loadWall.Seconds() * 100)
+	}
+	return cpu, nil
+}
+
+// sampleCPU reads consumed processor time now, saying whether the platform
+// answered.
+//
+// The second return is the whole point. Reporting an unanswered sample as zero
+// makes it indistinguishable from an idle process, and the caller subtracts one
+// sample from another: an unanswered second sample against an answered first
+// one yields a negative figure, which was then published as the CPU cost.
+func sampleCPU(s *sampler) (seconds float64, ok bool) {
 	stat, err := s.current()
 	if err != nil {
-		return 0
+		return 0, false
 	}
-	return stat.cpuSeconds
+	return stat.cpuSeconds, true
 }
 
 // pids maps processes to their identifiers for the sampler.

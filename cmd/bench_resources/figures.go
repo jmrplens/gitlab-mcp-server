@@ -64,6 +64,22 @@ type labels struct {
 	SurfaceNote  string
 	FigureAlt    map[string]string
 	TableCaption map[string]string
+
+	// CallDetail translates the descriptions the record stores beside a
+	// method. The record itself stays English, because it is a project
+	// artifact and because the tool names in that same column
+	// (gitlab_find_action) are not words in any language; a description with
+	// no entry here is printed as recorded.
+	CallDetail map[string]string
+}
+
+// callDetail renders the description recorded beside a method, in this page's
+// language.
+func (l labels) callDetail(recorded string) string {
+	if translated, ok := l.CallDetail[recorded]; ok {
+		return translated
+	}
+	return recorded
 }
 
 // englishLabels is the wording of the English page and of the Markdown
@@ -103,6 +119,13 @@ func englishLabels() labels {
 			"Scenario", "Process ready", "First tools/list", "Warm tools/list (p50)", "tools/list payload",
 		},
 		LatencyHead: []string{"Scenario", "Method", "Call", "p50", "p90", "p99", "Max"},
+		// Stated rather than left empty, so the vocabulary a record may use
+		// is written down in one place and a new description added to the
+		// matrix without a translation is visible here.
+		CallDetail: map[string]string{
+			detailSmallestListing: "smallest listing",
+			detailWholeSurface:    "whole surface",
+		},
 		SurfaceNote: "Resident set in MiB, times in milliseconds.",
 		FigureAlt: map[string]string{
 			"memory":      "Grouped bars comparing resident memory across the dynamic, meta and individual surfaces on both transports.",
@@ -155,6 +178,10 @@ func spanishLabels() labels {
 			"Escenario", "Proceso listo", "Primer tools/list", "tools/list en caliente (p50)", "Tamaño de tools/list",
 		},
 		LatencyHead: []string{"Escenario", "Método", "Llamada", "p50", "p90", "p99", "Máx"},
+		CallDetail: map[string]string{
+			detailSmallestListing: "el listado más pequeño",
+			detailWholeSurface:    "la superficie completa",
+		},
 		SurfaceNote: "Conjunto residente en MiB, tiempos en milisegundos.",
 		FigureAlt: map[string]string{
 			"memory":      "Barras agrupadas que comparan la memoria residente de las superficies dynamic, meta e individual en ambos transportes.",
@@ -175,13 +202,24 @@ func spanishLabels() labels {
 var surfaceOrder = []string{surfaceDynamic, surfaceMeta, surfaceIndividual}
 
 // buildFigures assembles every figure for one language, in a fixed order.
+// A figure the record holds no measurements for is left out rather than
+// written empty, because an SVG with axes and no bars does not read as "not
+// measured", it reads as zero.
 func buildFigures(run *Run, l labels) []figure {
-	return []figure{
-		{Name: "memory", Render: func(p palette) string { return renderBars(p, memorySpec(run, l)) }},
-		{Name: "memory-ramp", Render: func(p palette) string { return renderLines(p, rampSpec(run, l)) }},
-		{Name: "startup", Render: func(p palette) string { return renderBars(p, startupSpec(run, l)) }},
-		{Name: "latency", Render: func(p palette) string { return renderBars(p, latencySpec(run, l)) }},
+	memory, ramp := memorySpec(run, l), rampSpec(run, l)
+	startup, latency := startupSpec(run, l), latencySpec(run, l)
+
+	var out []figure
+	add := func(name string, series int, render func(palette) string) {
+		if series > 0 {
+			out = append(out, figure{Name: name, Render: render})
+		}
 	}
+	add("memory", len(memory.Series), func(p palette) string { return renderBars(p, memory) })
+	add("memory-ramp", len(ramp.Series), func(p palette) string { return renderLines(p, ramp) })
+	add("startup", len(startup.Series), func(p palette) string { return renderBars(p, startup) })
+	add("latency", len(latency.Series), func(p palette) string { return renderBars(p, latency) })
+	return out
 }
 
 // presentSurfaces keeps the surfaces this record actually measured, so a
@@ -220,23 +258,40 @@ func memorySpec(run *Run, l labels) barSpec {
 	httpAll := barSeries{Label: l.MemoryHTTPAll}
 
 	credentials := 0
+	stdioComplete, httpComplete := true, true
 	for _, surface := range surfaces {
-		stdio, _ := baseScenario(run, transportStdio, surface)
+		stdio, stdioOK := baseScenario(run, transportStdio, surface)
+		stdioComplete = stdioComplete && stdioOK
 		stdioOne.Values = append(stdioOne.Values, stdio.Memory.OneClientMiB)
 
-		httpScenario, _ := baseScenario(run, transportHTTP, surface)
+		httpScenario, httpOK := baseScenario(run, transportHTTP, surface)
+		httpComplete = httpComplete && httpOK
 		httpOne.Values = append(httpOne.Values, httpScenario.Memory.OneClientMiB)
 		httpAll.Values = append(httpAll.Values, httpScenario.Memory.AllClientsMiB)
 		credentials = max(credentials, httpScenario.Clients)
 	}
 	httpAll.Label = fmt.Sprintf(l.MemoryHTTPAll, credentials)
 
+	// A record restricted to one transport still names every surface, so a
+	// series kept here regardless would draw a bar of zero for the transport
+	// nobody measured, labeled as though it had been measured. Notably it
+	// would read "HTTP, 0 credentials", which is a claim about the server
+	// rather than about the run. A missing measurement is missing; zero is a
+	// measurement.
+	var series []barSeries
+	if stdioComplete {
+		series = append(series, stdioOne)
+	}
+	if httpComplete {
+		series = append(series, httpOne, httpAll)
+	}
+
 	return barSpec{
 		Title:      l.MemoryTitle,
 		Subtitle:   l.MemorySubtitle,
 		YAxis:      l.MemoryY,
 		Categories: surfaces,
-		Series:     []barSeries{stdioOne, httpOne, httpAll},
+		Series:     series,
 		Format:     func(v float64) string { return fmt.Sprintf("%.0f", v) },
 		Threshold:  &thresholdLine{Value: 512, Label: l.MemoryThreshold},
 	}
@@ -276,8 +331,14 @@ func startupSpec(run *Run, l labels) barSpec {
 	ready := barSeries{Label: l.StartupReady}
 	cold := barSeries{Label: l.StartupCold}
 	warm := barSeries{Label: l.StartupWarm}
+	// Every category has to be measured for this figure to mean anything: the
+	// three bars are one surface's timings beside another's, so a surface
+	// filled in with zeros would read as a surface that starts instantly.
 	for _, surface := range surfaces {
-		scenario, _ := baseScenario(run, transportHTTP, surface)
+		scenario, ok := baseScenario(run, transportHTTP, surface)
+		if !ok {
+			return barSpec{}
+		}
 		ready.Values = append(ready.Values, scenario.Startup.ProcessReadyMs)
 		cold.Values = append(cold.Values, scenario.Startup.FirstListMs)
 		warm.Values = append(warm.Values, scenario.Startup.WarmListMs)

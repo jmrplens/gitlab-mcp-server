@@ -107,8 +107,32 @@ func parseFlags() options {
 	return opts
 }
 
+// validate refuses the flag values that would produce a record rather than an
+// error.
+//
+// Both are only checked for a run that measures. -render and -check read the
+// committed record and never reach a ticker or a round, so refusing them there
+// would reject a redraw over a number it does not use.
+func (o options) validate() error {
+	if o.render || o.check {
+		return nil
+	}
+	if o.rounds <= 0 {
+		return fmt.Errorf("-rounds must be positive, got %d", o.rounds)
+	}
+	// time.NewTicker panics below one nanosecond, and the value reaches it
+	// through measure and runScenario, several minutes of measurement later.
+	if o.sampleInterval <= 0 {
+		return fmt.Errorf("-sample-interval must be positive, got %s", o.sampleInterval)
+	}
+	return nil
+}
+
 // execute runs the command: measure unless asked not to, then render.
 func execute(opts options) error {
+	if err := opts.validate(); err != nil {
+		return err
+	}
 	root, err := mcpsurface.ProjectRoot()
 	if err != nil {
 		return err

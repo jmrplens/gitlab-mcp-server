@@ -74,7 +74,7 @@ func loadPalettes(css string) (map[string]palette, error) {
 	for _, scheme := range []string{schemeLight, schemeDark} {
 		p, err := paletteFromTheme(css, scheme)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s palette: %w", scheme, err)
 		}
 		out[scheme] = p
 	}

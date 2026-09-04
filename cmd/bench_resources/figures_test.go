@@ -252,3 +252,75 @@ func TestJoinNonEmpty_SkipsBlanks(t *testing.T) {
 		t.Errorf("joinNonEmpty of nothing = %q, want empty", got)
 	}
 }
+
+// TestFigures_StdioOnlyRecord_OmitsTheTransportItNeverMeasured verifies a
+// record holding one transport draws no series for the other.
+//
+// presentSurfaces admits such a record, and the specs used to discard the
+// second result of baseScenario and append the zero value of the Scenario it
+// did not find. The sizing figure then drew an HTTP bar of zero MiB labeled
+// "HTTP, 0 credentials", which states something about the server rather than
+// about the run, and the startup figure filled every surface with zeros, which
+// reads as a surface that starts instantly.
+func TestFigures_StdioOnlyRecord_OmitsTheTransportItNeverMeasured(t *testing.T) {
+	run := sampleRun()
+	var stdioOnly []Scenario
+	for _, scenario := range run.Scenarios {
+		if scenario.Transport == transportStdio {
+			stdioOnly = append(stdioOnly, scenario)
+		}
+	}
+	run.Scenarios = stdioOnly
+	l := englishLabels()
+
+	memory := memorySpec(run, l)
+	if len(memory.Series) != 1 {
+		t.Fatalf("sizing figure has %d series, want only the stdio one", len(memory.Series))
+	}
+	if memory.Series[0].Label != l.MemoryStdioOne {
+		t.Errorf("the surviving series is %q, want %q", memory.Series[0].Label, l.MemoryStdioOne)
+	}
+
+	// Both of these are drawn from HTTP alone, so neither has anything to say
+	// about this record.
+	if series := startupSpec(run, l).Series; len(series) != 0 {
+		t.Errorf("startup figure has %d series, want none", len(series))
+	}
+	if series := rampSpec(run, l).Series; len(series) != 0 {
+		t.Errorf("ramp figure has %d series, want none", len(series))
+	}
+
+	var drawn []string
+	for _, fig := range buildFigures(run, l) {
+		drawn = append(drawn, fig.Name)
+	}
+	if !reflect.DeepEqual(drawn, []string{"memory", "latency"}) {
+		t.Errorf("figures = %v, want only the two a stdio record can draw", drawn)
+	}
+}
+
+// TestCallDetail_TranslatesOnlyWhatItKnows verifies the Spanish page renders
+// the recorded call descriptions in Spanish and leaves tool names alone.
+//
+// The record stays English, because it is a project artifact and because the
+// same column carries tool names, which are not words in any language. The
+// Spanish latency table was printing "smallest listing" and "whole surface"
+// verbatim.
+func TestCallDetail_TranslatesOnlyWhatItKnows(t *testing.T) {
+	spanish := spanishLabels()
+	if got := spanish.callDetail("whole surface"); got != "la superficie completa" {
+		t.Errorf("callDetail(%q) = %q, want it translated", "whole surface", got)
+	}
+	if got := spanish.callDetail("gitlab_find_action"); got != "gitlab_find_action" {
+		t.Errorf("callDetail of a tool name = %q, want it unchanged", got)
+	}
+	// Every description the benchmark records has to be translatable in both
+	// bundles, or a page silently prints the other language.
+	for _, bundle := range []labels{englishLabels(), spanish} {
+		for _, detail := range recordedCallDetails {
+			if _, ok := bundle.CallDetail[detail]; !ok {
+				t.Errorf("the %s bundle has no wording for the recorded description %q", bundle.Code, detail)
+			}
+		}
+	}
+}

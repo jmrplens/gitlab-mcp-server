@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,613 |
-| Unit test functions                                   | 13,047 |
+| Total test functions                                  | 13,619 |
+| Unit test functions                                   | 13,053 |
 | E2E test functions                                    |    566 |
-| cmd test functions                                    |  2,121 |
+| cmd test functions                                    |  2,127 |
 | Test files (internal/)                                |    499 |
-| Test files (cmd/)                                     |    130 |
+| Test files (cmd/)                                     |    131 |
 | Test files (test/e2e/)                                |    221 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     21 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  97.8% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  97.0% |
 | Overall coverage (`go test ./internal/...`)           |  98.3% |
-| Average package coverage                              |  98.4% |
+| Average package coverage                              |  98.3% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,299 | 83.0% |
+| `TestFunc_Scenario` (2-part)           | 11,302 | 83.0% |
 | `TestFunc` (no underscore)             |    968 |  7.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,346 |  9.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,349 |  9.9% |
 
 ## Test Distribution
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            301 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          8,438 |        354 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            566 |        221 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,121 |        130 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,613** |    **850** |                                                                                                 |
+| cmd packages            |          2,127 |        131 | server entry point and developer command utilities                                              |
+| **Total**               |     **13,619** |    **851** |                                                                                                 |
 
 ### Core Packages
 
@@ -326,7 +326,7 @@
 | cmd/audit_test_names                           |    89.4% |
 | cmd/audit_test_subtests                        |    98.1% |
 | cmd/audit_tokens                               |    98.0% |
-| cmd/bench_resources                            |      n/a |
+| cmd/bench_resources                            |    53.7% |
 | cmd/eval_mcp_surfaces/internal/evalrun         |    88.9% |
 | cmd/eval_mcp_surfaces/internal/evaluator       |    93.6% |
 | cmd/eval_mcp_surfaces/internal/evaluator/cases |    99.6% |
@@ -556,6 +556,7 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
+- **cmd/bench_resources** (53.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (66.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1** (71.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (77.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
