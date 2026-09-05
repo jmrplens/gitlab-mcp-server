@@ -30,16 +30,16 @@ de Windows — sin Docker, Node.js ni Python.
 
 Los nombres de la primera columna son los que muestra el diálogo de instalación de Claude Desktop (salen del manifiesto de la extensión, que solo existe en inglés); entre paréntesis tienes su equivalente en esta documentación.
 
-| Ajuste                                                  | Obligatorio | Por defecto          | Variable de entorno       |
-| ------------------------------------------------------- | ----------- | -------------------- | ------------------------- |
-| GitLab URL (URL de GitLab)                              | Sí          | `https://gitlab.com` | `GITLAB_URL`              |
-| GitLab Personal Access Token (token de acceso personal) | Sí          | —                    | `GITLAB_TOKEN`            |
-| Tool surface (superficie de herramientas)               | No          | `dynamic`            | `GITLAB_MCP_TOOL_SURFACE` |
-| GitLab tier (tier de GitLab)                            | No          | autodetección        | `GITLAB_TIER`             |
-| Read-only mode (modo solo lectura)                      | No          | desactivado          | `GITLAB_READ_ONLY`        |
-| Safe mode (modo seguro)                                 | No          | desactivado          | `GITLAB_SAFE_MODE`        |
-| Skip TLS verification (omitir la verificación TLS)      | No          | desactivado          | `GITLAB_SKIP_TLS_VERIFY`  |
-| Log level (nivel de log)                                | No          | `info`               | `GITLAB_MCP_LOG_LEVEL`    |
+| Ajuste                                                  | Obligatorio | Por defecto          | Variable de entorno          |
+| ------------------------------------------------------- | ----------- | -------------------- | ---------------------------- |
+| GitLab URL (URL de GitLab)                              | Sí          | `https://gitlab.com` | `GITLAB_URL`                 |
+| GitLab Personal Access Token (token de acceso personal) | Sí          | —                    | `GITLAB_TOKEN`               |
+| Tool surface (superficie de herramientas)               | No          | `dynamic`            | `GITLAB_MCP_TOOL_SURFACE`    |
+| GitLab tier (tier de GitLab)                            | No          | autodetección        | `GITLAB_MCP_TIER`            |
+| Read-only mode (modo solo lectura)                      | No          | desactivado          | `GITLAB_MCP_READ_ONLY`       |
+| Safe mode (modo seguro)                                 | No          | desactivado          | `GITLAB_MCP_SAFE_MODE`       |
+| Skip TLS verification (omitir la verificación TLS)      | No          | desactivado          | `GITLAB_MCP_SKIP_TLS_VERIFY` |
+| Log level (nivel de log)                                | No          | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
 
 :::tip[Almacenamiento del token]
 Claude Desktop guarda el Personal Access Token en el llavero del sistema

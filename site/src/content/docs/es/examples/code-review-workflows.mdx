@@ -10,7 +10,7 @@ faq:
   - q: "¿Cómo encuentro hilos de revisión sin resolver en un merge request?"
     a: "Ejecuta `mr_review.discussion_list` para el MR (la acción `discussion_list` de `gitlab_mr_review` cuando `GITLAB_MCP_TOOL_SURFACE=meta`) y filtra los hilos devueltos por `resolved: false`. Las notas creadas con `mr_review.note_create` no son resolubles y nunca aparecen como pendientes, así que aquí solo salen las discusiones. Esta es la comprobación previa al merge cuando el proyecto exige resolver todos los hilos."
   - q: "¿Puede un asistente de IA aprobar y fusionar un merge request?"
-    a: "Sí, sujeto a los mismos permisos y salvaguardas que cualquier otra mutación. Aprobar es `merge_request.approve` y fusionar es `merge_request.merge` (las acciones `approve` y `merge` de `gitlab_merge_request` en la superficie meta). Ambas se clasifican como mutantes, así que no están disponibles con `GITLAB_READ_ONLY=true` y devuelven una previsualización con `GITLAB_SAFE_MODE=true`. GitLab sigue aplicando sus propias reglas de aprobación: un asistente no puede fusionar un MR que no cumpla las aprobaciones requeridas del proyecto."
+    a: "Sí, sujeto a los mismos permisos y salvaguardas que cualquier otra mutación. Aprobar es `merge_request.approve` y fusionar es `merge_request.merge` (las acciones `approve` y `merge` de `gitlab_merge_request` en la superficie meta). Ambas se clasifican como mutantes, así que no están disponibles con `GITLAB_MCP_READ_ONLY=true` y devuelven una previsualización con `GITLAB_MCP_SAFE_MODE=true`. GitLab sigue aplicando sus propias reglas de aprobación: un asistente no puede fusionar un MR que no cumpla las aprobaciones requeridas del proyecto."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";

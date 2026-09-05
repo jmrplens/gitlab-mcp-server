@@ -428,7 +428,7 @@ func TestReadOnly_RemovesMutationFromTheEnvironment(t *testing.T) {
 
 	env := baseEnv(gitlab.URL)
 	env["TOOL_SURFACE"] = "individual"
-	env["GITLAB_READ_ONLY"] = "true"
+	env["GITLAB_MCP_READ_ONLY"] = "true"
 	s := startSession(t, env)
 
 	got := s.call(t, request(1, "tools/list", ""))

@@ -1795,7 +1795,7 @@ Action guidance:
 - get: Fetch one CI/CD Catalog resource by its GID or by the full_path of the hosting project. Use after browsing the catalog when the prompt names a specific component project and you need its components, input parameters, README, and released versions to wire an include into a pipeline.
 - list: Browse the CI/CD Catalog of published component projects. Use search to match by name or description, scope to limit to your namespace (NAMESPACED) or the whole instance (ALL), and sort by name, latest release, or star count when the prompt asks for reusable pipeline components or templates to include.
 
-Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only. GraphQL endpoint. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403). The tool itself is always registered and is not gated by GITLAB_TIER.
+Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only. GraphQL endpoint. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403). The tool itself is always registered and is not gated by GITLAB_MCP_TIER.
 When to use: browse the Catalog to find reusable components, inspect a component's versions before pinning it in `include:component`, or audit which Catalog resources a publisher group exposes.
 NOT for: running pipelines or pipeline definitions (use gitlab_pipeline), built-in GitLab templates such as gitignore/Dockerfile/license (use gitlab_template), CI YAML linting (use gitlab_template action=lint).
 
@@ -2047,7 +2047,7 @@ Parameter guidance:
 - delete.id: custom_emoji_gid. Source: Global ID returned by list/create operations for delete.
 - list.group_path: scope_group. Source: GitLab full group path.
 
-Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403). The tool itself is always registered and is not gated by GITLAB_TIER.
+Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403). The tool itself is always registered and is not gated by GITLAB_MCP_TIER.
 When to use: list, add, or remove the custom emoji available to a group's projects (e.g. company logos, team mascots) used as reactions on issues/MRs/notes.
 NOT for: posting or removing a reaction on an issue/MR/snippet/commit/note (use the `emoji_issue_*` / `emoji_mr_*` / `emoji_snippet_*` actions on gitlab_issue, gitlab_merge_request, or gitlab_snippet), Unicode emoji (built-in, no action required), instance-level emoji (not supported by GitLab).
 
@@ -2816,9 +2816,9 @@ Import/Export:
 Releases:
 - release_list: group_id*, simple
 
-Premium+ behavior notes (GITLAB_TIER=premium): service_account_pat_create returns the cleartext token only ONCE. Store it immediately in a secure secrets manager and never log or echo it. service_account_delete and service_account_pat_revoke are irreversible.
+Premium+ behavior notes (GITLAB_MCP_TIER=premium): service_account_pat_create returns the cleartext token only ONCE. Store it immediately in a secure secrets manager and never log or echo it. service_account_delete and service_account_pat_revoke are irreversible.
 
-Epics (Premium+, GITLAB_TIER=premium. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):
+Epics (Premium+, GITLAB_MCP_TIER=premium. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):
 
 Epic discussions (epic_discussion_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.
 - epic_discussion_list / epic_discussion_get (+ discussion_id*)
@@ -4538,7 +4538,7 @@ Resource events (event_issue_*): project_id*, issue_iid* for all.
 - event_issue_iteration_list / event_issue_iteration_get (+ iteration_event_id*)
 - event_issue_weight_list
 
-Iterations (Premium+, requires GITLAB_TIER=premium):
+Iterations (Premium+, requires GITLAB_MCP_TIER=premium):
 - iteration_list_project: project_id*, state (opened, upcoming, current, closed, all), search, include_ancestors
 - iteration_list_group: group_id*, state, search, include_ancestors
 
@@ -6106,7 +6106,7 @@ Parameter guidance:
 - download.path: model_artifact_path. Source: Subdirectory path in the package where the artifact is stored.
 - download.project_id: scope_project. Source: Project ID or path that owns the model registry package.
 
-Download ML model package files from the GitLab Model Registry. Read-only: cannot publish or delete model versions through this tool. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403). The tool itself is always registered and is not gated by GITLAB_TIER.
+Download ML model package files from the GitLab Model Registry. Read-only: cannot publish or delete model versions through this tool. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403). The tool itself is always registered and is not gated by GITLAB_MCP_TIER.
 When to use: pull a model artifact (.pkl, .onnx, .safetensors, .bin, .gguf, etc.) attached to a registered model version, e.g. for inference, evaluation or vendoring into a build pipeline.
 NOT for: generic packages (use gitlab_package), container images (use gitlab_package registry_*), release attachments (use gitlab_release link_*), training jobs or experiment tracking, model publishing or versioning (not yet exposed through MCP).
 
@@ -7703,11 +7703,11 @@ Admin:
 
 See also: gitlab_repository (files/commits), gitlab_branch, gitlab_wiki, gitlab_issue, gitlab_merge_request, gitlab_discover_project (find project ID)
 
-Push Rules (Premium+, GITLAB_TIER=premium):
+Push Rules (Premium+, GITLAB_MCP_TIER=premium):
 - push_rule_get / push_rule_delete: project_id*
 - push_rule_add / push_rule_edit: project_id*, commit_message_regex, commit_message_negative_regex, branch_name_regex, author_email_regex, file_name_regex, max_file_size, deny_delete_tag, member_check, prevent_secrets, commit_committer_check, reject_unsigned_commits, reject_non_dco_commits
 
-Security Settings (Ultimate, GITLAB_TIER=ultimate):
+Security Settings (Ultimate, GITLAB_MCP_TIER=ultimate):
 - security_settings_get: project_id*
 - security_settings_update: project_id*, secret_push_protection_enabled*
 
@@ -11252,7 +11252,7 @@ Misc:
 - create_runner: runner_type*, group_id, project_id, description, paused, locked, run_untagged, tag_list, access_level, maximum_timeout, maintenance_note
 - delete_identity: user_id*, provider*
 
-Service Accounts (Premium+, GITLAB_TIER=premium):
+Service Accounts (Premium+, GITLAB_MCP_TIER=premium):
 - create_service_account: name, username, email
 - list_service_accounts: order_by, sort
 
@@ -11894,7 +11894,7 @@ Parameter guidance:
 
 CRUD project wiki pages and upload attachments to wikis. Delete is destructive and irreversible.
 When to use: read, write, or delete wiki pages of a project. Attach images or files referenced from wiki content.
-NOT for: repository files or commits (use gitlab_repository), code snippets (use gitlab_snippet), group-level wikis (Enterprise/Premium, use gitlab_group when GITLAB_TIER is premium or ultimate), issues or MR descriptions (use gitlab_issue / gitlab_merge_request).
+NOT for: repository files or commits (use gitlab_repository), code snippets (use gitlab_snippet), group-level wikis (Enterprise/Premium, use gitlab_group when GITLAB_MCP_TIER is premium or ultimate), issues or MR descriptions (use gitlab_issue / gitlab_merge_request).
 
 Returns:
 - get / create / update: {slug, title, format, content, encoding}.
@@ -11968,7 +11968,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 18 tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 18 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 

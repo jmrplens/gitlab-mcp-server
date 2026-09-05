@@ -87,7 +87,7 @@ Notes:
 Dry-run the current catalog without model calls:
 
 ```bash
-GITLAB_TIER=free timeout 180s go run ./cmd/eval_mcp_surfaces \
+GITLAB_MCP_TIER=free timeout 180s go run ./cmd/eval_mcp_surfaces \
   --dry-run \
   --repeat=1 \
   --out /tmp/eval-dry.md
@@ -154,7 +154,7 @@ go test ./internal/tools/dynamic/ -run TestDynamicSearchCorpus -count=1
 Prepare Docker fixtures:
 
 ```bash
-GITLAB_TIER=free timeout 600s go run ./cmd/eval_mcp_surfaces \
+GITLAB_MCP_TIER=free timeout 600s go run ./cmd/eval_mcp_surfaces \
   --backend=gitlab \
   --gitlab-env-file test/e2e/.env.docker \
   --prepare-fixtures \
@@ -165,7 +165,7 @@ GITLAB_TIER=free timeout 600s go run ./cmd/eval_mcp_surfaces \
 Execute validated model calls against Docker GitLab CE:
 
 ```bash
-GITLAB_TIER=free timeout 900s go run ./cmd/eval_mcp_surfaces \
+GITLAB_MCP_TIER=free timeout 900s go run ./cmd/eval_mcp_surfaces \
   --preset docker-read \
   --fixtures dist/evaluation/mcp-surfaces/e2e-fixtures.json \
   --task MS-014,MS-017,MS-020 \
@@ -175,7 +175,7 @@ GITLAB_TIER=free timeout 900s go run ./cmd/eval_mcp_surfaces \
 Exercise MCP resource, prompt, completion, and capability bridge access against Docker GitLab CE:
 
 ```bash
-GITLAB_TIER=free timeout 900s go run ./cmd/eval_mcp_surfaces \
+GITLAB_MCP_TIER=free timeout 900s go run ./cmd/eval_mcp_surfaces \
   --preset docker-capability-discovery \
   --tool-surface=dynamic \
   --fixtures dist/evaluation/mcp-surfaces/e2e-fixtures.json \
@@ -185,7 +185,7 @@ GITLAB_TIER=free timeout 900s go run ./cmd/eval_mcp_surfaces \
 Run the Enterprise schema-only batch:
 
 ```bash
-GITLAB_TIER=ultimate timeout 180s go run ./cmd/eval_mcp_surfaces \
+GITLAB_MCP_TIER=ultimate timeout 180s go run ./cmd/eval_mcp_surfaces \
   --preset schema-enterprise \
   --out dist/evaluation/mcp-surfaces/schema-enterprise.md
 ```

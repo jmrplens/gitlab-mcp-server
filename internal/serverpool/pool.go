@@ -825,7 +825,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	entryCfg.GitLabURL = gitlabURL
 
 	// Detect the tier from the instance license only when the operator did not
-	// pin it explicitly via --tier/GITLAB_TIER.
+	// pin it explicitly via --tier/GITLAB_MCP_TIER.
 	autoDetectTier := !p.cfg.TierExplicit
 	needScopes := !p.cfg.IgnoreScopes && knownScopes == nil
 	if autoDetectTier || needScopes {

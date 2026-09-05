@@ -10,7 +10,7 @@ faq:
   - q: "How do I tell the assistant which GitLab project to use?"
     a: "Pass the project path in `project_id`, in `group/project` form — for example `my-group/backend`. Numeric project IDs work too. If you are working inside a checked-out repository, the project discovery action maps the git remote URL to the right GitLab project so you do not have to state it at all: `discover_project.resolve` through `gitlab_execute_action` on the default surface, or the standalone `gitlab_discover_project` tool with `GITLAB_MCP_TOOL_SURFACE=meta` or `individual`."
   - q: "Will an AI assistant change my GitLab data without asking?"
-    a: "Not without a safeguard being turned off. Destructive actions require explicit confirmation before they execute, `GITLAB_READ_ONLY=true` removes every mutating action from the catalog entirely, and `GITLAB_SAFE_MODE=true` intercepts mutations and returns a JSON preview of what would happen instead of applying it. Read operations such as listing and searching are always safe."
+    a: "Not without a safeguard being turned off. Destructive actions require explicit confirmation before they execute, `GITLAB_MCP_READ_ONLY=true` removes every mutating action from the catalog entirely, and `GITLAB_MCP_SAFE_MODE=true` intercepts mutations and returns a JSON preview of what would happen instead of applying it. Read operations such as listing and searching are always safe."
 ---
 
 import FAQ from "../../../components/FAQ.astro";

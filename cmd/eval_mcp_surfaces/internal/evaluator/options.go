@@ -296,7 +296,7 @@ func normalizeEvalToolSurface(toolSurface string) (string, error) {
 }
 
 // Server modes the evaluator can apply to the catalog before a run, mirroring
-// GITLAB_READ_ONLY and GITLAB_SAFE_MODE.
+// GITLAB_MCP_READ_ONLY and GITLAB_MCP_SAFE_MODE.
 const (
 	// ServerModeDefault leaves the catalog untouched.
 	ServerModeDefault = "default"

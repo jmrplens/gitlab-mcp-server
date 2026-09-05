@@ -629,7 +629,7 @@ func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 	if skipTLSVerify {
 		return newBaseTransport(&tls.Config{
 			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates via GITLAB_SKIP_TLS_VERIFY
+			InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates via GITLAB_MCP_SKIP_TLS_VERIFY
 		})
 	}
 	return sharedBaseTransport()

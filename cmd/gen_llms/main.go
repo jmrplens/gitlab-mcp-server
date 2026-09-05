@@ -258,7 +258,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 
 	b.WriteString("Quick start:\n\n")
 	b.WriteString("1. Install it, or skip installing entirely. Every channel ships the same binary: `npx -y @jmrp.io/gitlab-mcp-server` (npm), `uvx jmrplens-gitlab-mcp-server` (PyPI; `pipx install` and `pip install` take the same name), `brew install jmrplens/tap/gitlab-mcp-server` (Homebrew), `winget install --id jmrplens.gitlab-mcp-server -e` (Windows), the `ghcr.io/jmrplens/gitlab-mcp-server` Docker image, the one-click `gitlab-mcp-server.mcpb` Claude Desktop extension, `/plugin install jmrplens/gitlab-mcp-server` as an Agent Plugin, or a binary from the Releases page. The hosted endpoint at https://mcp.jmrp.io/gitlab installs nothing at all\n")
-	b.WriteString("2. Create a GitLab personal access token with `api` scope. A `read_api` token is also admitted and is served a read-only surface; pair it with `GITLAB_READ_ONLY=true` when you want that explicitly\n")
+	b.WriteString("2. Create a GitLab personal access token with `api` scope. A `read_api` token is also admitted and is served a read-only surface; pair it with `GITLAB_MCP_READ_ONLY=true` when you want that explicitly\n")
 	b.WriteString("3. Add the server to your AI client's MCP configuration with that token in `GITLAB_TOKEN`\n\n")
 
 	b.WriteString("Installing for an AI assistant:\n\n")
@@ -291,12 +291,12 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 	b.WriteString("Configuration (environment variables, stdio mode). Settings this project defines are read as GITLAB_MCP_<NAME>; the older bare spellings still work and warn once at startup:\n\n")
 	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: `%s`; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
-	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
+	b.WriteString("- GITLAB_MCP_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
 	b.WriteString("- GITLAB_MCP_TOOL_SURFACE: Canonical catalog selector: dynamic (default), meta, individual\n")
 	b.WriteString("- GITLAB_MCP_CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)\n")
-	b.WriteString("- GITLAB_READ_ONLY: Remove mutating operations per action; reads keep working (default: false)\n")
-	b.WriteString("- GITLAB_SAFE_MODE: Answer a mutating action with a JSON preview naming it instead of running it; reads keep working (default: false). GITLAB_READ_ONLY takes precedence\n")
-	b.WriteString("- GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n")
+	b.WriteString("- GITLAB_MCP_READ_ONLY: Remove mutating operations per action; reads keep working (default: false)\n")
+	b.WriteString("- GITLAB_MCP_SAFE_MODE: Answer a mutating action with a JSON preview naming it instead of running it; reads keep working (default: false). GITLAB_MCP_READ_ONLY takes precedence\n")
+	b.WriteString("- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n")
 	b.WriteString("- GITLAB_MCP_LOG_LEVEL: debug, info (default), warn, error. Logs go to stderr; stdout carries nothing but JSON-RPC\n")
 	b.WriteString("- GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path\n")
 	b.WriteString("- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs\n\n")
@@ -705,7 +705,7 @@ func writeLLMSFullEnterpriseOnlyMetaTools(b *strings.Builder, catalog llmsCatalo
 		return
 	}
 	b.WriteString("## Enterprise-Only Meta-Tools\n\n")
-	fmt.Fprintf(b, "These %d tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
+	fmt.Fprintf(b, "These %d tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
 	for _, tool := range enterpriseOnly {
 		writeLLMSFullMetaTool(b, tool, catalog.MetaRoutes)
 	}

@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 func TestLoad_ValidConfig(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -140,11 +140,11 @@ func TestLoad_MissingToken(t *testing.T) {
 }
 
 // TestLoad_SkipTLSVerifyTrue verifies that [Load] correctly parses
-// GITLAB_SKIP_TLS_VERIFY="true" and sets [Config.SkipTLSVerify] to true.
+// GITLAB_MCP_SKIP_TLS_VERIFY="true" and sets [Config.SkipTLSVerify] to true.
 func TestLoad_SkipTLSVerifyTrue(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -156,15 +156,15 @@ func TestLoad_SkipTLSVerifyTrue(t *testing.T) {
 }
 
 // TestLoad_SkipTLSVerifyInvalid verifies that [Load] returns an error when
-// GITLAB_SKIP_TLS_VERIFY contains a non-boolean string.
+// GITLAB_MCP_SKIP_TLS_VERIFY contains a non-boolean string.
 func TestLoad_SkipTLSVerifyInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "notabool")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "notabool")
 
 	_, err := Load()
 	if err == nil {
-		t.Fatal("Load() expected error for invalid GITLAB_SKIP_TLS_VERIFY, got nil")
+		t.Fatal("Load() expected error for invalid GITLAB_MCP_SKIP_TLS_VERIFY, got nil")
 	}
 }
 
@@ -173,7 +173,7 @@ func TestLoad_SkipTLSVerifyInvalid(t *testing.T) {
 func TestLoad_MetaToolsInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("TOOL_SURFACE", "")
 	t.Setenv("META_TOOLS", "notabool")
 
@@ -826,14 +826,14 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 }
 
 // TestLoad_InvalidSkipTLS verifies that Load returns an error when
-// GITLAB_SKIP_TLS_VERIFY has an invalid boolean value.
+// GITLAB_MCP_SKIP_TLS_VERIFY has an invalid boolean value.
 func TestLoad_InvalidSkipTLS(t *testing.T) {
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "notabool")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "notabool")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	_, err := Load()
 	if err == nil {
-		t.Fatal("expected error for invalid GITLAB_SKIP_TLS_VERIFY")
+		t.Fatal("expected error for invalid GITLAB_MCP_SKIP_TLS_VERIFY")
 	}
 }
 
@@ -844,27 +844,27 @@ func TestLoad_InvalidMetaTools(t *testing.T) {
 	t.Setenv("TOOL_SURFACE", "")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for invalid META_TOOLS")
 	}
 }
 
-// TestLoad_InvalidTier verifies that Load returns an error when GITLAB_TIER
+// TestLoad_InvalidTier verifies that Load returns an error when GITLAB_MCP_TIER
 // holds an unrecognized value.
 func TestLoad_InvalidTier(t *testing.T) {
-	t.Setenv("GITLAB_TIER", "platinum")
+	t.Setenv("GITLAB_MCP_TIER", "platinum")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	_, err := Load()
 	if err == nil {
-		t.Fatal("expected error for invalid GITLAB_TIER")
+		t.Fatal("expected error for invalid GITLAB_MCP_TIER")
 	}
 }
 
-// TestLoad_TierResolution verifies that GITLAB_TIER resolves to the expected
+// TestLoad_TierResolution verifies that GITLAB_MCP_TIER resolves to the expected
 // tier and explicit flag, including the unset (detect) case.
 func TestLoad_TierResolution(t *testing.T) {
 	tests := []struct {
@@ -888,9 +888,9 @@ func TestLoad_TierResolution(t *testing.T) {
 			t.Setenv("GITLAB_TOKEN", "test")
 			t.Setenv("GITLAB_ENTERPRISE", "")
 			if tc.set {
-				t.Setenv("GITLAB_TIER", tc.value)
+				t.Setenv("GITLAB_MCP_TIER", tc.value)
 			} else {
-				t.Setenv("GITLAB_TIER", "")
+				t.Setenv("GITLAB_MCP_TIER", "")
 			}
 			cfg, err := Load()
 			if err != nil {
@@ -910,8 +910,8 @@ func TestLoad_TierResolution(t *testing.T) {
 }
 
 // TestLoad_DeprecatedEnterpriseEnv verifies the deprecated GITLAB_ENTERPRISE env
-// var is honored for back-compat when GITLAB_TIER is unset (true→ultimate,
-// false→free, both explicit), and that GITLAB_TIER takes precedence over it.
+// var is honored for back-compat when GITLAB_MCP_TIER is unset (true→ultimate,
+// false→free, both explicit), and that GITLAB_MCP_TIER takes precedence over it.
 func TestLoad_DeprecatedEnterpriseEnv(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -922,14 +922,14 @@ func TestLoad_DeprecatedEnterpriseEnv(t *testing.T) {
 	}{
 		{name: "enterprise true maps to ultimate", enterprise: "true", wantTier: edition.Ultimate, wantExplicit: true},
 		{name: "enterprise false maps to free", enterprise: "false", wantTier: edition.Free, wantExplicit: true},
-		{name: "GITLAB_TIER wins over enterprise", tier: "premium", enterprise: "true", wantTier: edition.Premium, wantExplicit: true},
+		{name: "GITLAB_MCP_TIER wins over enterprise", tier: "premium", enterprise: "true", wantTier: edition.Premium, wantExplicit: true},
 		{name: "both unset detects", wantTier: edition.Free, wantExplicit: false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 			t.Setenv("GITLAB_TOKEN", "test")
-			t.Setenv("GITLAB_TIER", tc.tier)
+			t.Setenv("GITLAB_MCP_TIER", tc.tier)
 			t.Setenv("GITLAB_ENTERPRISE", tc.enterprise)
 			cfg, err := Load()
 			if err != nil {
@@ -944,22 +944,22 @@ func TestLoad_DeprecatedEnterpriseEnv(t *testing.T) {
 		t.Error("LegacyEnterpriseEnvInUse(unset tier, enterprise set) should be true")
 	}
 	if LegacyEnterpriseEnvInUse("premium", "true") {
-		t.Error("LegacyEnterpriseEnvInUse should be false when GITLAB_TIER is set")
+		t.Error("LegacyEnterpriseEnvInUse should be false when GITLAB_MCP_TIER is set")
 	}
 }
 
 // TestLoad_InvalidReadOnly verifies that Load returns an error when
-// GITLAB_READ_ONLY has an invalid boolean value.
+// GITLAB_MCP_READ_ONLY has an invalid boolean value.
 func TestLoad_InvalidReadOnly(t *testing.T) {
-	t.Setenv("GITLAB_READ_ONLY", "notabool")
+	t.Setenv("GITLAB_MCP_READ_ONLY", "notabool")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("META_TOOLS", "true")
 	t.Setenv("GITLAB_ENTERPRISE", "false")
 	_, err := Load()
 	if err == nil {
-		t.Fatal("expected error for invalid GITLAB_READ_ONLY")
+		t.Fatal("expected error for invalid GITLAB_MCP_READ_ONLY")
 	}
 }
 
@@ -969,10 +969,10 @@ func TestLoad_InvalidUploadMaxFileSize(t *testing.T) {
 	t.Setenv("UPLOAD_MAX_FILE_SIZE", "notanumber")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("META_TOOLS", "true")
 	t.Setenv("GITLAB_ENTERPRISE", "false")
-	t.Setenv("GITLAB_READ_ONLY", "false")
+	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for invalid UPLOAD_MAX_FILE_SIZE")
@@ -984,10 +984,10 @@ func TestLoad_InvalidMaxHTTPClients(t *testing.T) {
 	t.Setenv("MAX_HTTP_CLIENTS", "abc")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("META_TOOLS", "true")
 	t.Setenv("GITLAB_ENTERPRISE", "false")
-	t.Setenv("GITLAB_READ_ONLY", "false")
+	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
 	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5242880")
 	_, err := Load()
 	if err == nil {
@@ -1000,10 +1000,10 @@ func TestLoad_InvalidSessionTimeout(t *testing.T) {
 	t.Setenv("SESSION_TIMEOUT", "notaduration")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("META_TOOLS", "true")
 	t.Setenv("GITLAB_ENTERPRISE", "false")
-	t.Setenv("GITLAB_READ_ONLY", "false")
+	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
 	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5242880")
 	t.Setenv("MAX_HTTP_CLIENTS", "100")
 	_, err := Load()
@@ -1165,19 +1165,19 @@ func TestLoad_OAuthCacheTTL(t *testing.T) {
 }
 
 // TestLoad_InvalidSafeMode verifies that Load returns an error when
-// GITLAB_SAFE_MODE has an invalid boolean value.
+// GITLAB_MCP_SAFE_MODE has an invalid boolean value.
 func TestLoad_InvalidSafeMode(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("META_TOOLS", "true")
 	t.Setenv("GITLAB_ENTERPRISE", "false")
-	t.Setenv("GITLAB_READ_ONLY", "false")
-	t.Setenv("GITLAB_SAFE_MODE", "notabool")
+	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
+	t.Setenv("GITLAB_MCP_SAFE_MODE", "notabool")
 
 	_, err := Load()
 	if err == nil {
-		t.Fatal("expected error for invalid GITLAB_SAFE_MODE")
+		t.Fatal("expected error for invalid GITLAB_MCP_SAFE_MODE")
 	}
 }
 
@@ -1285,20 +1285,20 @@ func TestParseFloatNonNegative_NonFinite(t *testing.T) {
 }
 
 // TestLoad_InvalidIgnoreScopes verifies that Load returns an error when
-// GITLAB_IGNORE_SCOPES has an invalid boolean value.
+// GITLAB_MCP_IGNORE_SCOPES has an invalid boolean value.
 func TestLoad_InvalidIgnoreScopes(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("META_TOOLS", "true")
 	t.Setenv("GITLAB_ENTERPRISE", "false")
-	t.Setenv("GITLAB_READ_ONLY", "false")
-	t.Setenv("GITLAB_SAFE_MODE", "false")
-	t.Setenv("GITLAB_IGNORE_SCOPES", "notabool")
+	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
+	t.Setenv("GITLAB_MCP_SAFE_MODE", "false")
+	t.Setenv("GITLAB_MCP_IGNORE_SCOPES", "notabool")
 
 	_, err := Load()
 	if err == nil {
-		t.Fatal("expected error for invalid GITLAB_IGNORE_SCOPES")
+		t.Fatal("expected error for invalid GITLAB_MCP_IGNORE_SCOPES")
 	}
 }
 

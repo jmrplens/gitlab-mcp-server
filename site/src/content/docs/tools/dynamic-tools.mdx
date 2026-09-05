@@ -8,7 +8,7 @@ faq:
   - q: "Why does dynamic mode show only two tools?"
     a: "Showing only two tools is intentional and expected in dynamic mode. Large MCP servers can spend a lot of context on tool discovery before the user asks anything; GitLab MCP Server can expose up to {{tools.gitlab_com}} individual operations on GitLab.com Enterprise/Premium with Orbit. Dynamic mode exposes that whole catalog through `gitlab_find_action` and `gitlab_execute_action`, so the initial `tools/list` stays tiny and the model's context budget is free for the conversation. The trade-off is one discovery call per task: the assistant should find an action before executing it."
   - q: "Are destructive actions still protected in dynamic mode?"
-    a: "Yes. Dynamic mode reuses the same safety model as meta-tools because both share the canonical action catalog. Destructive actions still require explicit confirmation unless the deployment has intentionally disabled prompts with `YOLO_MODE` or `AUTOPILOT`. Without confirmation, the server returns an error result instead of performing the action; to run it intentionally, pass `confirm: true` at the top level of the `gitlab_execute_action` arguments. Dynamic execution also validates parameters before dispatch and rejects unknown fields with repair guidance. For safer deployments, use `GITLAB_READ_ONLY=true` or `GITLAB_SAFE_MODE=true`."
+    a: "Yes. Dynamic mode reuses the same safety model as meta-tools because both share the canonical action catalog. Destructive actions still require explicit confirmation unless the deployment has intentionally disabled prompts with `GITLAB_MCP_YOLO_MODE` or `AUTOPILOT`. Without confirmation, the server returns an error result instead of performing the action; to run it intentionally, pass `confirm: true` at the top level of the `gitlab_execute_action` arguments. Dynamic execution also validates parameters before dispatch and rejects unknown fields with repair guidance. For safer deployments, use `GITLAB_MCP_READ_ONLY=true` or `GITLAB_MCP_SAFE_MODE=true`."
   - q: "How do I make dynamic mode use even less startup context?"
     a: "To minimize startup context, combine dynamic mode with the minimal capability surface by adding `GITLAB_MCP_CAPABILITY_SURFACE=minimal` (or `--capability-surface=minimal` in HTTP mode). Minimal keeps the tool manifest resources `gitlab://tools` and `gitlab://tools/{id}` and omits optional resources, prompts, and workflow guides. Dynamic mode still has full schema discovery because `gitlab_find_action` returns exact action schemas inline. Leave `GITLAB_MCP_META_PARAM_SCHEMA` at its default `opaque`, since it only affects meta-tool dispatcher schemas and has no effect on dynamic deployments."
   - q: "What is the dynamic toolset in GitLab MCP Server?"
@@ -223,7 +223,7 @@ Dynamic mode is built to be repairable. If a call returns `isError: true`, the a
 
 ## Are destructive actions still protected?
 
-Yes. Dynamic mode reuses the same safety model as meta-tools. Destructive actions still require explicit confirmation unless your deployment has intentionally disabled prompts with `YOLO_MODE` or `AUTOPILOT`.
+Yes. Dynamic mode reuses the same safety model as meta-tools. Destructive actions still require explicit confirmation unless your deployment has intentionally disabled prompts with `GITLAB_MCP_YOLO_MODE` or `AUTOPILOT`.
 
 ```json
 {
@@ -254,7 +254,7 @@ Without confirmation, the server returns an error result instead of deleting the
 
 Dynamic execution validates parameters before dispatch. Unknown fields, including unsupported security-sensitive fields such as `masked` or `protected` on pipeline schedule variables, are rejected with repair guidance instead of being silently removed.
 
-For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or `GITLAB_SAFE_MODE=true` to preview mutations without applying them.
+For safer deployments, use `GITLAB_MCP_READ_ONLY=true` to remove mutating actions or `GITLAB_MCP_SAFE_MODE=true` to preview mutations without applying them.
 
 ## Dynamic vs meta-tools
 

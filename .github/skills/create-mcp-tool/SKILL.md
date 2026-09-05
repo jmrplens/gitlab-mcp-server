@@ -196,7 +196,7 @@ Spec rules:
 - Set `IndividualTool` so `GITLAB_MCP_TOOL_SURFACE=individual` can project the visible per-action tool; the name is declared here, never derived, and new actions take the domain-first form (`gitlab_{domain}_{action}`).
 - Add compatibility aliases and parameter aliases through the approved `actioncompat` policy when historical names must keep working.
 - New domains must be added through the catalog aggregation/generation path, not by hand-adding root runtime registration calls.
-- Set `Edition` (`free` / `premium` / `ultimate`; empty means `free`) on each spec. In `internal/tools/action_catalog.go`, `filterActionSpecGroupsByTier` withholds an action whose edition exceeds the tier resolved from `GITLAB_TIER` / `--tier`, and `pruneSchemaFieldsByTier` removes the `tier:"..."`-tagged fields from the schemas.
+- Set `Edition` (`free` / `premium` / `ultimate`; empty means `free`) on each spec. In `internal/tools/action_catalog.go`, `filterActionSpecGroupsByTier` withholds an action whose edition exceeds the tier resolved from `GITLAB_MCP_TIER` / `--tier`, and `pruneSchemaFieldsByTier` removes the `tier:"..."`-tagged fields from the schemas.
 - Fill discovery metadata (`Aliases`, `Usage`, `ParameterGuidance`, `RelatedActions`) on every spec; `go run ./cmd/audit_discovery_completeness/` is the gate (`release.link_create_batch` is the gold standard).
 
 ## Step 4: Markdown Formatters

@@ -118,7 +118,7 @@ gitlab-mcp-server/
 
 - Stdio mode uses `GITLAB_URL`; HTTP mode requires `--gitlab-url` (one instance fixes it, several publish an allow-list the `GITLAB-URL` header selects from) unless `--allow-any-gitlab-url` is passed, which lets the header name any host and is meant for single-user local deployments only
 - Authentication via `GITLAB_TOKEN` (Personal Access Token); the token is read from the environment or a dotenv file (`~/.gitlab-mcp-server.env`, or the file `GITLAB_MCP_ENV_FILE` names), never from a working-directory `.env` and never from a flag
-- Self-signed TLS certificates: skip verification when `GITLAB_SKIP_TLS_VERIFY=true`
+- Self-signed TLS certificates: skip verification when `GITLAB_MCP_SKIP_TLS_VERIFY=true`
 - All API calls must respect `context.Context` for cancellation
 - Rate limiting awareness and retry logic
 
@@ -243,15 +243,15 @@ When creating a new release and uploading binaries to GitHub Releases:
 | ------------------------ | --------------------------------- | ------------------ |
 | `GITLAB_URL`             | GitLab instance URL. In HTTP mode it is `--gitlab-url`, required unless `--allow-any-gitlab-url` is passed; one value fixes the instance, several publish an allow-list the `GITLAB-URL` header must select from | `https://gitlab.example.com` |
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
-| `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
+| `GITLAB_MCP_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `GITLAB_MCP_META_TOOLS`             | Deprecated compatibility selector; prefer `GITLAB_MCP_TOOL_SURFACE` for new configs | _(unset)_          |
 | `GITLAB_MCP_TOOL_SURFACE`           | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; overrides legacy `GITLAB_MCP_META_TOOLS` | `dynamic` (default when unset) |
 | `GITLAB_MCP_CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
 | `GITLAB_MCP_META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~8.1x), or `full` (~18.0x). Independent of `GITLAB_MCP_META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
-| `GITLAB_READ_ONLY`       | Read-only mode: removes mutating operations per action; reads keep working on every surface | `false` (default)  |
-| `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating operations per action and returns a JSON preview | `false` (default)  |
-| `GITLAB_ENTERPRISE`      | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset (`true` → `ultimate`, `false` → `free`); logs a deprecation warning | `false` (default) |
-| `GITLAB_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
+| `GITLAB_MCP_READ_ONLY`       | Read-only mode: removes mutating operations per action; reads keep working on every surface | `false` (default)  |
+| `GITLAB_MCP_SAFE_MODE`       | Safe mode: intercepts mutating operations per action and returns a JSON preview | `false` (default)  |
+| `GITLAB_ENTERPRISE`      | **Deprecated** — use `GITLAB_MCP_TIER`. Honored for back-compat only when `GITLAB_MCP_TIER` is unset (`true` → `ultimate`, `false` → `free`); logs a deprecation warning | `false` (default) |
+| `GITLAB_MCP_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
 | `EVAL_SURFACE_ENTERPRISE` | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus | `false` (default)  |
 | `EVAL_SURFACE_CASE_SET`   | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (CE only), `all` (CE+Enterprise) | `ce` (default)     |
 | `EVAL_SURFACE_FIXTURE_SMOKE` | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) | `false` (default) |

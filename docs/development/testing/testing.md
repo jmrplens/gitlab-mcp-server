@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,764 |
-| Unit test functions                                   | 13,185 |
+| Total test functions                                  | 13,766 |
+| Unit test functions                                   | 13,187 |
 | E2E test functions                                    |    579 |
 | cmd test functions                                    |  2,228 |
 | Test files (internal/)                                |    503 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,407 | 82.9% |
+| `TestFunc_Scenario` (2-part)           | 11,408 | 82.9% |
 | `TestFunc` (no underscore)             |    968 |  7.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,389 | 10.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,390 | 10.1% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,205 |        134 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,207 |        134 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            308 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (176) |          8,444 |        355 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            579 |        229 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,228 |        139 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,764** |    **871** |                                                                                                 |
+| **Total**               |     **13,766** |    **871** |                                                                                                 |
 
 ### Core Packages
 
@@ -62,7 +62,7 @@
 | clientcompat  |        18 |      n/a | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                            |
 | cmdutil       |         8 |      n/a | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                          |
 | completions   |        96 |      n/a | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                           |
-| config        |        99 |      n/a | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
+| config        |       101 |      n/a | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
 | edition       |         5 |      n/a | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation   |       129 |      n/a | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
 | gatewaycompat |        19 |      n/a | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
@@ -77,7 +77,7 @@
 | telemetry     |       102 |      n/a | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        37 |      n/a | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       807 |      n/a | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,205** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**  | **2,207** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -651,7 +651,7 @@ make test-e2e-docker-enterprise
 
 The Enterprise target runs with the `e2e enterprise` build tags, so common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go` and remain in `make test-e2e-docker`, while Enterprise-specific fixture behavior can be tuned independently.
 
-The E2E harness also re-validates the GitLab tier at runtime by calling the License API (`GET /api/v4/license`). When an enterprise tier is requested (via `GITLAB_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, the session downgrades to CE and `*_ee_test.go` tests skip cleanly with a logged reason instead of failing outright. This keeps the suite safe against accidental CE/EE mismatches.
+The E2E harness also re-validates the GitLab tier at runtime by calling the License API (`GET /api/v4/license`). When an enterprise tier is requested (via `GITLAB_MCP_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, the session downgrades to CE and `*_ee_test.go` tests skip cleanly with a logged reason instead of failing outright. This keeps the suite safe against accidental CE/EE mismatches.
 
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 

@@ -9,11 +9,11 @@ chips:
 datePublished: "2026-04-21"
 faq:
   - q: "¿Cuál es la configuración mínima?"
-    a: "En modo stdio, un único `GITLAB_TOKEN` con el scope `api` basta para arrancar — cualquier otra variable es opcional y usa un valor predeterminado seguro. `GITLAB_URL` usa `https://gitlab.com` por defecto, así que solo la estableces al conectar a una instancia autogestionada. Para una configuración de solo lectura, usa un token `read_api`: el servidor le sirve por sí solo una superficie de solo lectura, y `GITLAB_READ_ONLY=true` hace lo mismo con un token `api`. En modo HTTP no se configura ningún token en el servidor; cada cliente envía el suyo en cada petición."
+    a: "En modo stdio, un único `GITLAB_TOKEN` con el scope `api` basta para arrancar — cualquier otra variable es opcional y usa un valor predeterminado seguro. `GITLAB_URL` usa `https://gitlab.com` por defecto, así que solo la estableces al conectar a una instancia autogestionada. Para una configuración de solo lectura, usa un token `read_api`: el servidor le sirve por sí solo una superficie de solo lectura, y `GITLAB_MCP_READ_ONLY=true` hace lo mismo con un token `api`. En modo HTTP no se configura ningún token en el servidor; cada cliente envía el suyo en cada petición."
   - q: "stdio vs HTTP — ¿qué modo uso?"
     a: "Usa el **modo stdio** (el predeterminado) para configuraciones locales de un solo usuario como integraciones con IDE (VS Code, Cursor, Claude Desktop); se configura mediante variables de entorno, más `~/.gitlab-mcp-server.env` o el archivo que nombre `GITLAB_MCP_ENV_FILE` para lo que el entorno no traiga. Usa el **modo HTTP** (`--http`) para despliegues compartidos o remotos como Docker o Kubernetes, donde la configuración usa flags de CLI y cada cliente se autentica con su propio token de GitLab en cada petición."
   - q: "¿Cómo apunto a una instancia de GitLab autogestionada?"
-    a: "Establece `GITLAB_URL` con la URL base de tu instancia, por ejemplo `GITLAB_URL=https://gitlab.example.com` (en modo HTTP, usa el flag `--gitlab-url`). Si la instancia usa un certificado autofirmado o de CA interna, establece también `GITLAB_SKIP_TLS_VERIFY=true` (o `--skip-tls-verify` en modo HTTP), pero solo en una red de confianza — desactiva la verificación de certificados para todas las conexiones a GitLab."
+    a: "Establece `GITLAB_URL` con la URL base de tu instancia, por ejemplo `GITLAB_URL=https://gitlab.example.com` (en modo HTTP, usa el flag `--gitlab-url`). Si la instancia usa un certificado autofirmado o de CA interna, establece también `GITLAB_MCP_SKIP_TLS_VERIFY=true` (o `--skip-tls-verify` en modo HTTP), pero solo en una red de confianza — desactiva la verificación de certificados para todas las conexiones a GitLab."
   - q: "¿Cómo elijo una superficie de herramientas (dynamic, meta o individual)?"
     a: "Establece la variable `GITLAB_MCP_TOOL_SURFACE` (o el flag `--tool-surface` en modo HTTP). `dynamic` es la predeterminada y la de menor consumo de tokens: expone `gitlab_find_action` y `gitlab_execute_action` mientras mantiene cada acción de GitLab accesible a través del catálogo canónico de acciones. Elige `meta` cuando un cliente prefiere despachadores consolidados por dominio con un parámetro `action`, e `individual` para registrar una herramienta MCP por cada operación de GitLab."
 ---
@@ -28,7 +28,7 @@ import Fact from "../../../components/docs/Fact.astro";
 - **El modo stdio lee variables de entorno** (más `~/.gitlab-mcp-server.env` y cualquier archivo que nombre `GITLAB_MCP_ENV_FILE`); **el modo HTTP lee flags de CLI**. Los nombres de las opciones se corresponden entre sí.
 - **Un `.env` en el directorio de trabajo no se lee.** Ese directorio viene del repositorio que abrió tu editor, así que su contenido lo eligió otra persona. Si existe uno, el arranque lo nombra en el log junto con las claves que pretendía definir.
 - **Solo `GITLAB_TOKEN` es siempre obligatorio.** `GITLAB_URL` usa `https://gitlab.com` por defecto, así que solo las instancias autogestionadas necesitan definirla.
-- **Tres interruptores gobiernan el comportamiento**: `GITLAB_MCP_TOOL_SURFACE` elige dinámico, meta o individual; `GITLAB_READ_ONLY` elimina toda operación de escritura; `GITLAB_SAFE_MODE` previsualiza las escrituras en lugar de ejecutarlas.
+- **Tres interruptores gobiernan el comportamiento**: `GITLAB_MCP_TOOL_SURFACE` elige dinámico, meta o individual; `GITLAB_MCP_READ_ONLY` elimina toda operación de escritura; `GITLAB_MCP_SAFE_MODE` previsualiza las escrituras en lugar de ejecutarlas.
 
 :::
 
@@ -58,13 +58,13 @@ ignora.
 
 Algunos nombres se mantienen sin prefijo a propósito:
 
-| Nombres                                                                                                                      | Por qué no se renombraron                                                                                                                             |
-| ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`, `GITLAB_TOKEN`                                                                                                 | Son la convención de GitLab. Toda configuración existente las define, y son las dos que más probablemente se escriban de memoria en un cliente        |
-| `GITLAB_SKIP_TLS_VERIFY`, `GITLAB_TIER`, `GITLAB_ENTERPRISE`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES` | Ya llevan el espacio de nombres `GITLAB_`. Un segundo prefijo rompería toda configuración existente sin proteger de nada                              |
-| `OTEL_*`                                                                                                                     | Pertenecen a la especificación de OpenTelemetry. Los exportadores leen esos nombres directamente y nunca verían una grafía prefijada                  |
-| `YOLO_MODE`, `AUTOPILOT`                                                                                                     | Convenciones que fija otra herramienta de agentes. Respetar el nombre que ya usa esa herramienta es justamente el motivo de leerlas                   |
-| `EVAL_SURFACE_*`                                                                                                             | Variables del evaluador de superficies, fijadas por objetivos `make` de este repositorio. Nunca aparecen junto a las de otra herramienta en una shell |
+| Nombres                                                                                                                                          | Por qué no se renombraron                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`, `GITLAB_TOKEN`                                                                                                                     | Son la convención de GitLab. Toda configuración existente las define, y son las dos que más probablemente se escriban de memoria en un cliente        |
+| `GITLAB_MCP_SKIP_TLS_VERIFY`, `GITLAB_MCP_TIER`, `GITLAB_ENTERPRISE`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_IGNORE_SCOPES` | Ya llevan el espacio de nombres `GITLAB_`. Un segundo prefijo rompería toda configuración existente sin proteger de nada                              |
+| `OTEL_*`                                                                                                                                         | Pertenecen a la especificación de OpenTelemetry. Los exportadores leen esos nombres directamente y nunca verían una grafía prefijada                  |
+| `GITLAB_MCP_YOLO_MODE`, `AUTOPILOT`                                                                                                              | Convenciones que fija otra herramienta de agentes. Respetar el nombre que ya usa esa herramienta es justamente el motivo de leerlas                   |
+| `EVAL_SURFACE_*`                                                                                                                                 | Variables del evaluador de superficies, fijadas por objetivos `make` de este repositorio. Nunca aparecen junto a las de otra herramienta en una shell |
 
 Las tablas siguientes siempre dan el nombre que hay que definir, así que
 léelo en lugar de deducirlo.
@@ -84,17 +84,17 @@ GitLab MCP Server requiere exactamente una variable para arrancar en modo stdio 
 | Variable                        | Predeterminado       | Descripción                                                                                                                                                                                                                                                                                                                                             |
 | ------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GITLAB_URL`                    | `https://gitlab.com` | URL base de la instancia GitLab. Establécela para instancias autogestionadas                                                                                                                                                                                                                                                                            |
-| `GITLAB_SKIP_TLS_VERIFY`        | `false`              | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                                                                                                                                                                  |
+| `GITLAB_MCP_SKIP_TLS_VERIFY`    | `false`              | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                                                                                                                                                                  |
 | `GITLAB_MCP_TOOL_SURFACE`       | `dynamic`            | Selector canónico del catálogo: `dynamic`, `meta` o `individual`                                                                                                                                                                                                                                                                                        |
 | `GITLAB_MCP_META_TOOLS`         | heredado             | Selector de compatibilidad deprecado. `true` mapea a `meta`, `false` mapea a `individual`, y los valores dynamic mapean al `GITLAB_MCP_TOOL_SURFACE` equivalente cuando `GITLAB_MCP_TOOL_SURFACE` no está definido                                                                                                                                      |
 | `GITLAB_MCP_CAPABILITY_SURFACE` | `full`               | Selector del catálogo de recursos y prompts: `full` conserva el catálogo completo; `minimal` mantiene el manifiesto `gitlab://tools`, y desactiva recursos opcionales, prompts, guías de flujo y [suscripciones a recursos](/gitlab-mcp-server/es/capabilities/subscriptions/)                                                                          |
 | `GITLAB_MCP_META_PARAM_SCHEMA`  | `opaque`             | Estrategia de esquema de entrada para meta-herramientas: `opaque` (por defecto), `compact` (8,1x el tamaño de `opaque`) o `full` (18,0x). Solo afecta a los esquemas de meta-herramientas en `tools/list`; mide las proporciones actuales con `go run ./cmd/audit_tokens --compare-schemas`                                                             |
-| `GITLAB_TIER`                   | _(autodetectado)_    | Selector de edición de GitLab: `free`/`ce`, `premium` o `ultimate`. Cuando se establece, se usa tal cual; cuando se omite, se detecta desde `GET /license` (por defecto `free`). El tier restringe las herramientas Enterprise/Premium y poda entradas de esquema por campo mediante `pruneSchemaFieldsByTier` (ver `internal/tools/action_catalog.go`) |
-| `GITLAB_READ_ONLY`              | `false`              | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                                                                                                                                                                                                                                                                            |
-| `GITLAB_SAFE_MODE`              | `false`              | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)                                                                                                                                                                                                                                                   |
+| `GITLAB_MCP_TIER`               | _(autodetectado)_    | Selector de edición de GitLab: `free`/`ce`, `premium` o `ultimate`. Cuando se establece, se usa tal cual; cuando se omite, se detecta desde `GET /license` (por defecto `free`). El tier restringe las herramientas Enterprise/Premium y poda entradas de esquema por campo mediante `pruneSchemaFieldsByTier` (ver `internal/tools/action_catalog.go`) |
+| `GITLAB_MCP_READ_ONLY`          | `false`              | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                                                                                                                                                                                                                                                                            |
+| `GITLAB_MCP_SAFE_MODE`          | `false`              | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)                                                                                                                                                                                                                                                   |
 | `GITLAB_MCP_EMBEDDED_RESOURCES` | `true`               | Incrustar la URI canónica del recurso MCP `gitlab://` en los resultados get que la llevan (veintidós acciones get, de proyectos y grupos a snippets y páginas wiki); usa `false` para clientes que no toleren bloques de contenido duplicados                                                                                                           |
 | `GITLAB_MCP_EXCLUDE_TOOLS`      | —                    | Nombres de herramienta, de grupo o IDs de acción separados por comas (ej., `gitlab_project_delete,gitlab_admin`); se excluyen de la superficie de herramientas y de los recursos y suscripciones que devuelven los mismos objetos, así que la retirada se sostiene en todas las vías de petición                                                        |
-| `GITLAB_IGNORE_SCOPES`          | `false`              | Omitir detección automática de scopes del PAT — registrar todas las herramientas sin importar los scopes                                                                                                                                                                                                                                                |
+| `GITLAB_MCP_IGNORE_SCOPES`      | `false`              | Omitir detección automática de scopes del PAT — registrar todas las herramientas sin importar los scopes                                                                                                                                                                                                                                                |
 | `GITLAB_MCP_LOG_LEVEL`          | `info`               | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`. El flag `--log-level` fija la misma variable y gana sobre ella                                                                                                                                                                                                                           |
 | `EVAL_SURFACE_ENTERPRISE`       | `false`              | `cmd/eval_mcp_surfaces`: ejecuta el conjunto de casos enterprise además del corpus base                                                                                                                                                                                                                                                                 |
 | `EVAL_SURFACE_CASE_SET`         | `ce`                 | `cmd/eval_mcp_surfaces`: selector del conjunto de casos — `ce` (solo CE) o `all` (CE+Enterprise)                                                                                                                                                                                                                                                        |
@@ -117,8 +117,8 @@ Para despliegues dinámicos donde los recursos y prompts dominan el contexto ini
 | `GITLAB_MCP_CLIENT_COMPAT`             | `auto`         | Compatibilidad de respuesta por cliente: las sesiones de Codex reciben las prioridades fraccionarias de las anotaciones redondeadas a 0/1; `off` la desactiva. Ambos transportes; el flag `--client-compat` fija la misma variable                                                                                                                                                                                                                              |
 | `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | vacío          | Reescribe descripciones y títulos listados para validadores estrictos de pasarelas MCP: pares `old=new` separados por comas y aplicados en orden (la barra invertida escapa `\,` `\=` `\\`); un valor mal formado impide el arranque. Ambos transportes; el flag `--description-substitutions` fija la misma variable                                                                                                                                           |
 | `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`      | `2GB`          | Límite de tamaño para las herramientas de subida y de ficheros, incluidas las lecturas raw (en streaming y detenidas al llegar al límite); admite sufijos `KB`/`MB`/`GB`, con techo de 1 TB. Ambos transportes; el flag `--upload-max-file-size` fija la misma variable                                                                                                                                                                                         |
-| `YOLO_MODE`                            | `false`        | Omitir confirmaciones de acciones destructivas (no recomendado). Un valor no vacío gana a `AUTOPILOT`; el flag `--yolo-mode` fija la misma variable                                                                                                                                                                                                                                                                                                             |
-| `AUTOPILOT`                            | `false`        | Igual que `YOLO_MODE`: omitir confirmaciones destructivas. No tiene flag propio                                                                                                                                                                                                                                                                                                                                                                                 |
+| `GITLAB_MCP_YOLO_MODE`                 | `false`        | Omitir confirmaciones de acciones destructivas (no recomendado). Un valor no vacío gana a `AUTOPILOT`; el flag `--yolo-mode` fija la misma variable                                                                                                                                                                                                                                                                                                             |
+| `AUTOPILOT`                            | `false`        | Igual que `GITLAB_MCP_YOLO_MODE`: omitir confirmaciones destructivas. No tiene flag propio                                                                                                                                                                                                                                                                                                                                                                      |
 | `GITLAB_MCP_ALLOWED_IMPORT_DIRS`       | —              | Directorios adicionales, separados por la lista de rutas del sistema operativo, permitidos para archivos locales de importación de proyectos/grupos                                                                                                                                                                                                                                                                                                             |
 | `GITLAB_MCP_ALLOWED_UPLOAD_DIRS`       | —              | Directorios adicionales, separados por la lista de rutas del sistema operativo, de los que una herramienta puede **leer** un archivo local (cualquier entrada `file_path` o `directory_path`). El directorio de trabajo (salvo que sea la raíz del sistema de archivos o el directorio personal del usuario, que se descartan como raíces implícitas) y el temporal del sistema se permiten siempre, y la ruta se resuelve antes a través de enlaces simbólicos |
 | `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`     | —              | Directorios adicionales, con la misma sintaxis y las mismas raíces siempre permitidas, en los que una herramienta puede **escribir** un archivo descargado (`output_path`)                                                                                                                                                                                                                                                                                      |
@@ -139,13 +139,13 @@ Escríbelo en `~/.gitlab-mcp-server.env`, o en cualquier ruta que después nombr
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Opcionales
-GITLAB_SKIP_TLS_VERIFY=false
+GITLAB_MCP_SKIP_TLS_VERIFY=false
 GITLAB_MCP_TOOL_SURFACE=dynamic
-GITLAB_TIER=free
-GITLAB_READ_ONLY=false
-GITLAB_SAFE_MODE=false
+GITLAB_MCP_TIER=free
+GITLAB_MCP_READ_ONLY=false
+GITLAB_MCP_SAFE_MODE=false
 GITLAB_MCP_EXCLUDE_TOOLS=
-GITLAB_IGNORE_SCOPES=false
+GITLAB_MCP_IGNORE_SCOPES=false
 GITLAB_MCP_LOG_LEVEL=info
 ```
 
@@ -372,7 +372,7 @@ En modo HTTP (`--http`), los ajustes se resuelven en tres capas, de mayor a meno
 | `--log-level`                 | _(vacío)_      | `debug`, `info` (el valor efectivo por defecto), `warn` o `error`. Fija `GITLAB_MCP_LOG_LEVEL`                                                                                                                                        |
 | `--client-compat`             | _(vacío)_      | `auto` (el valor efectivo por defecto) u `off`. Fija `GITLAB_MCP_CLIENT_COMPAT`                                                                                                                                                       |
 | `--upload-max-file-size`      | _(vacío)_      | Límite de tamaño para las herramientas de subida y de lectura de ficheros, con sufijos `KB`/`MB`/`GB` (`2GB` si no se indica). Fija `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`                                                                 |
-| `--yolo-mode`                 | _(vacío)_      | `true` omite la confirmación en las acciones destructivas. Fija `YOLO_MODE`                                                                                                                                                           |
+| `--yolo-mode`                 | _(vacío)_      | `true` omite la confirmación en las acciones destructivas. Fija `GITLAB_MCP_YOLO_MODE`                                                                                                                                                |
 | `--description-substitutions` | _(vacío)_      | Pares `old=new` separados por comas aplicados a toda descripción y título listados. Fija `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS`; un valor mal formado impide el arranque                                                              |
 | `--tool-search`               | _(vacío)_      | Busca herramientas registradas por nombre o descripción y sale; respeta `--tool-surface` y `--tier`                                                                                                                                   |
 | `--version`                   | `false`        | Imprimir la versión y el commit, y salir                                                                                                                                                                                              |
@@ -425,7 +425,7 @@ Cuando hay exactamente una `--gitlab-url` configurada es autoritativa, y los val
 Para instancias de GitLab con certificados TLS autofirmados:
 
 ```bash
-GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_MCP_SKIP_TLS_VERIFY=true
 ```
 
 :::caution
@@ -434,7 +434,7 @@ Usa esto solo en entornos de red confiables. Desactiva la verificación de certi
 
 ## Modo solo lectura
 
-Habilita `GITLAB_READ_ONLY=true` para restringir el servidor a operaciones de solo lectura. Todas las herramientas que crean, actualizan o eliminan recursos se desactivan. Esto es útil para:
+Habilita `GITLAB_MCP_READ_ONLY=true` para restringir el servidor a operaciones de solo lectura. Todas las herramientas que crean, actualizan o eliminan recursos se desactivan. Esto es útil para:
 
 - Entornos de auditoría y cumplimiento
 - Servidores compartidos donde los usuarios solo deben consultar datos
@@ -445,7 +445,7 @@ Habilita `GITLAB_READ_ONLY=true` para restringir el servidor a operaciones de so
 		todas las operaciones de lectura, en todas las superficies: list, get y
 		search siguen funcionando exactamente igual.
 	</Fact>
-	<Fact kind="requires">`GITLAB_READ_ONLY=true` en modo stdio, `--read-only` en modo HTTP.</Fact>
+	<Fact kind="requires">`GITLAB_MCP_READ_ONLY=true` en modo stdio, `--read-only` en modo HTTP.</Fact>
 	<Fact kind="notCovered">
 		todo lo que escribe: las acciones de crear, actualizar y borrar se
 		eliminan del catálogo por acción, así que en las superficies dinámica y
@@ -457,7 +457,7 @@ Habilita `GITLAB_READ_ONLY=true` para restringir el servidor a operaciones de so
 
 ## Modo seguro
 
-Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura y devolver una vista previa JSON estructurada de lo que se ejecutaría, sin realizar la operación. Las herramientas de solo lectura funcionan normalmente. Esto es útil para:
+Habilita `GITLAB_MCP_SAFE_MODE=true` para interceptar las herramientas de escritura y devolver una vista previa JSON estructurada de lo que se ejecutaría, sin realizar la operación. Las herramientas de solo lectura funcionan normalmente. Esto es útil para:
 
 - Revisar operaciones antes de ejecutarlas (dry-run)
 - Entornos de formación donde se quiere ver el comportamiento de las herramientas
@@ -470,7 +470,7 @@ Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura 
 		acción canónica (por ejemplo `issue.create`) y los parámetros que
 		enviaría; las lecturas se ejecutan con normalidad.
 	</Fact>
-	<Fact kind="requires">`GITLAB_SAFE_MODE=true` en modo stdio, `--safe-mode` en modo HTTP.</Fact>
+	<Fact kind="requires">`GITLAB_MCP_SAFE_MODE=true` en modo stdio, `--safe-mode` en modo HTTP.</Fact>
 	<Fact kind="notCovered">
 		escrituras reales: nada mutador llega a GitLab. La vista previa tampoco
 		es una validación — los errores del lado de GitLab (permisos,
@@ -481,7 +481,7 @@ Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura 
 Tanto el modo seguro como el de solo lectura actúan **por acción**, no por herramienta. En las superficies dinámica y meta una sola herramienta sirve muchas acciones —`gitlab_execute_action` enruta todo y `gitlab_issue` cubre por igual `list` y `create`—, así que la política se aplica sobre el catálogo de acciones subyacente. Las lecturas siguen funcionando en todas las superficies, y las vistas previas del modo seguro nombran la acción canónica (por ejemplo `issue.create`) en lugar de la herramienta despachadora.
 
 :::note
-Si `GITLAB_READ_ONLY=true` también está configurado, tiene precedencia — las herramientas de escritura se desactivan completamente en lugar de mostrar una vista previa.
+Si `GITLAB_MCP_READ_ONLY=true` también está configurado, tiene precedencia — las herramientas de escritura se desactivan completamente en lugar de mostrar una vista previa.
 :::
 
 <FAQ />

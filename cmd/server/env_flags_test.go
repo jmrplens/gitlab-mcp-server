@@ -102,16 +102,16 @@ func TestEnvBackedFlags_AnUnpassedFlagLeavesTheEnvironmentAlone(t *testing.T) {
 // wrong variable would pass every other test here and silently configure
 // something else.
 //
-// The spellings are mixed on purpose. YOLO_MODE stays bare because it is a
-// convention other agent tooling sets, and honoring the name that tooling
-// already uses is the whole reason this server reads it; everything else this
-// project defines carries the GITLAB_MCP_ prefix.
+// Every name carries the GITLAB_MCP_ prefix, YOLO_MODE included: the bare
+// spelling other agent tooling sets is still read as the old name of that
+// setting, but a flag writes the canonical one, so the variable it wrote is
+// the one every reader consults first.
 func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) {
 	want := map[string]string{
 		"log-level":                 "GITLAB_MCP_LOG_LEVEL",
 		"client-compat":             "GITLAB_MCP_CLIENT_COMPAT",
 		"upload-max-file-size":      "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
-		"yolo-mode":                 "YOLO_MODE",
+		"yolo-mode":                 "GITLAB_MCP_YOLO_MODE",
 		"description-substitutions": "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
 	}
 

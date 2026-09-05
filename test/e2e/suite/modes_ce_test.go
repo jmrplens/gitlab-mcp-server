@@ -1,8 +1,8 @@
 //go:build e2e && !enterprise
 
 // modes_ce_test.go verifies the two protective modes against a live GitLab
-// instance: read-only mode (GITLAB_READ_ONLY) must remove every mutating
-// operation while leaving reads working, and safe mode (GITLAB_SAFE_MODE) must
+// instance: read-only mode (GITLAB_MCP_READ_ONLY) must remove every mutating
+// operation while leaving reads working, and safe mode (GITLAB_MCP_SAFE_MODE) must
 // intercept mutating operations with a preview while leaving reads working.
 //
 // Both modes are covered on the individual surface and on the dynamic
@@ -59,7 +59,7 @@ func modeSafePreview(text string) (tools.SafeModePreview, bool) {
 	return preview, preview.Status == "blocked" && preview.Mode == "safe"
 }
 
-// TestReadOnlyMode exercises GITLAB_READ_ONLY against a live GitLab CE
+// TestReadOnlyMode exercises GITLAB_MCP_READ_ONLY against a live GitLab CE
 // instance on both the individual and dynamic surfaces.
 //
 // A project and an issue are created through the unrestricted individual
@@ -157,7 +157,7 @@ func TestReadOnlyMode(t *testing.T) {
 	})
 }
 
-// TestSafeModeDynamicSurface exercises GITLAB_SAFE_MODE on the dynamic
+// TestSafeModeDynamicSurface exercises GITLAB_MCP_SAFE_MODE on the dynamic
 // dispatcher surface against a live GitLab CE instance.
 //
 // Mutating actions must return a preview naming the canonical action, read

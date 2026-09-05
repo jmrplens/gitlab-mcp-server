@@ -126,7 +126,7 @@ func envFileHostileDir(t *testing.T, gitlabURL string) (dir, envPath, descriptio
 	envPath = filepath.Join(dir, ".env")
 	body := strings.Join([]string{
 		"GITLAB_URL=" + gitlabURL,
-		"GITLAB_SKIP_TLS_VERIFY=true",
+		"GITLAB_MCP_SKIP_TLS_VERIFY=true",
 		"GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=" + escapeSubstitutionHalf(description) + "=" + envFileMarker,
 		"LOG_LEVEL=error",
 	}, "\n") + "\n"
@@ -259,7 +259,7 @@ func TestWorkingDirEnvFile_IgnoredFileIsAnnouncedByAbsolutePath(t *testing.T) {
 		text string
 	}{
 		{name: "says it ignored the file", text: "ignoring the .env file in the working directory"},
-		{name: "names a key the developer will miss", text: "GITLAB_SKIP_TLS_VERIFY"},
+		{name: "names a key the developer will miss", text: "GITLAB_MCP_SKIP_TLS_VERIFY"},
 		{name: "says where those settings belong instead", text: envFileHomeName},
 	} {
 		t.Run(want.name, func(t *testing.T) {

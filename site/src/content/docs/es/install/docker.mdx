@@ -32,7 +32,7 @@ Los botones de un clic para VS Code, Cursor, LM Studio y Kiro del [Inicio rápid
 
 ### Variables de entorno
 
-En modo stdio cada ajuste es una variable de entorno, y cada una que uses necesita su propio `-e NOMBRE` para que Docker la copie dentro del contenedor. La lista que reenvía la configuración del plugin incluido es una buena plantilla: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_MCP_EMBEDDED_RESOURCES`, `GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`, `GITLAB_MCP_CLIENT_COMPAT` y `GITLAB_MCP_LOG_LEVEL`. Qué hace cada una está en la página de [Configuración](/gitlab-mcp-server/es/configuration/).
+En modo stdio cada ajuste es una variable de entorno, y cada una que uses necesita su propio `-e NOMBRE` para que Docker la copie dentro del contenedor. La lista que reenvía la configuración del plugin incluido es una buena plantilla: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_MCP_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_EMBEDDED_RESOURCES`, `GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_MCP_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`, `GITLAB_MCP_CLIENT_COMPAT` y `GITLAB_MCP_LOG_LEVEL`. Qué hace cada una está en la página de [Configuración](/gitlab-mcp-server/es/configuration/).
 
 :::note[Certificados autofirmados]
 El contenedor tiene su propio almacén de CA, así que un certificado en el que confía tu host sigue siendo desconocido dentro de él. Monta la CA y apunta `SSL_CERT_FILE` a ella:
@@ -43,7 +43,7 @@ docker run -i --rm -e GITLAB_TOKEN -e GITLAB_URL \
   ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-`GITLAB_SKIP_TLS_VERIFY=true` es la alternativa a lo bruto: desactiva la verificación de certificados para todas las peticiones a GitLab, y el modo OAuth la rechaza para una instancia que no sea loopback.
+`GITLAB_MCP_SKIP_TLS_VERIFY=true` es la alternativa a lo bruto: desactiva la verificación de certificados para todas las peticiones a GitLab, y el modo OAuth la rechaza para una instancia que no sea loopback.
 :::
 
 ## HTTP: la imagen como servicio

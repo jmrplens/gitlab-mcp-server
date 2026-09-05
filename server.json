@@ -51,7 +51,7 @@
           "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
         },
         {
-          "name": "GITLAB_SKIP_TLS_VERIFY",
+          "name": "GITLAB_MCP_SKIP_TLS_VERIFY",
           "description": "Skip TLS certificate verification for self-signed certs (default: false)",
           "isRequired": false,
           "default": "false",
@@ -90,7 +90,7 @@
           ]
         },
         {
-          "name": "GITLAB_TIER",
+          "name": "GITLAB_MCP_TIER",
           "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
           "choices": [
@@ -101,14 +101,14 @@
           ]
         },
         {
-          "name": "GITLAB_READ_ONLY",
+          "name": "GITLAB_MCP_READ_ONLY",
           "description": "Read-only mode: disables all mutating tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
-          "name": "GITLAB_SAFE_MODE",
+          "name": "GITLAB_MCP_SAFE_MODE",
           "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
           "isRequired": false,
           "default": "false",
@@ -128,7 +128,7 @@
           "placeholder": "gitlab_admin,gitlab_runner"
         },
         {
-          "name": "GITLAB_IGNORE_SCOPES",
+          "name": "GITLAB_MCP_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
           "default": "false",
@@ -196,7 +196,7 @@
           "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
         },
         {
-          "name": "GITLAB_SKIP_TLS_VERIFY",
+          "name": "GITLAB_MCP_SKIP_TLS_VERIFY",
           "description": "Skip TLS certificate verification for self-signed certs (default: false)",
           "isRequired": false,
           "default": "false",
@@ -235,7 +235,7 @@
           ]
         },
         {
-          "name": "GITLAB_TIER",
+          "name": "GITLAB_MCP_TIER",
           "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
           "choices": [
@@ -246,14 +246,14 @@
           ]
         },
         {
-          "name": "GITLAB_READ_ONLY",
+          "name": "GITLAB_MCP_READ_ONLY",
           "description": "Read-only mode: disables all mutating tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
-          "name": "GITLAB_SAFE_MODE",
+          "name": "GITLAB_MCP_SAFE_MODE",
           "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
           "isRequired": false,
           "default": "false",
@@ -273,7 +273,7 @@
           "placeholder": "gitlab_admin,gitlab_runner"
         },
         {
-          "name": "GITLAB_IGNORE_SCOPES",
+          "name": "GITLAB_MCP_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
           "default": "false",
@@ -343,7 +343,7 @@
           "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
         },
         {
-          "name": "GITLAB_SKIP_TLS_VERIFY",
+          "name": "GITLAB_MCP_SKIP_TLS_VERIFY",
           "description": "Skip TLS certificate verification for self-signed certs (default: false)",
           "isRequired": false,
           "default": "false",
@@ -382,7 +382,7 @@
           ]
         },
         {
-          "name": "GITLAB_TIER",
+          "name": "GITLAB_MCP_TIER",
           "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
           "choices": [
@@ -393,14 +393,14 @@
           ]
         },
         {
-          "name": "GITLAB_READ_ONLY",
+          "name": "GITLAB_MCP_READ_ONLY",
           "description": "Read-only mode: disables all mutating tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
-          "name": "GITLAB_SAFE_MODE",
+          "name": "GITLAB_MCP_SAFE_MODE",
           "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
           "isRequired": false,
           "default": "false",
@@ -420,7 +420,7 @@
           "placeholder": "gitlab_admin,gitlab_runner"
         },
         {
-          "name": "GITLAB_IGNORE_SCOPES",
+          "name": "GITLAB_MCP_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
           "default": "false",
@@ -491,7 +491,7 @@
           "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
         },
         {
-          "name": "GITLAB_SKIP_TLS_VERIFY",
+          "name": "GITLAB_MCP_SKIP_TLS_VERIFY",
           "description": "Skip TLS certificate verification for self-signed certs (default: false)",
           "isRequired": false,
           "default": "false",
@@ -530,7 +530,7 @@
           ]
         },
         {
-          "name": "GITLAB_TIER",
+          "name": "GITLAB_MCP_TIER",
           "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
           "choices": [
@@ -541,14 +541,14 @@
           ]
         },
         {
-          "name": "GITLAB_READ_ONLY",
+          "name": "GITLAB_MCP_READ_ONLY",
           "description": "Read-only mode: disables all mutating tools (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
-          "name": "GITLAB_SAFE_MODE",
+          "name": "GITLAB_MCP_SAFE_MODE",
           "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
           "isRequired": false,
           "default": "false",
@@ -568,7 +568,7 @@
           "placeholder": "gitlab_admin,gitlab_runner"
         },
         {
-          "name": "GITLAB_IGNORE_SCOPES",
+          "name": "GITLAB_MCP_IGNORE_SCOPES",
           "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
           "default": "false",

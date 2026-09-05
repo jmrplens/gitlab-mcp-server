@@ -59,21 +59,21 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#tier-gating",
             "name": "Gating por tier",
-            "description": "Registrar solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de GITLAB_TIER si está definido; si no, se detecta de la licencia de la instancia, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando.",
+            "description": "Registrar solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de GITLAB_MCP_TIER si está definido; si no, se detecta de la licencia de la instancia, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#safe-mode",
             "name": "Modo seguro",
-            "description": "Un ajuste de despliegue, GITLAB_SAFE_MODE=true, que intercepta cada llamada mutante y devuelve una previsualización JSON de lo que ocurriría en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones del catálogo en lugar de previsualizarlas.",
+            "description": "Un ajuste de despliegue, GITLAB_MCP_SAFE_MODE=true, que intercepta cada llamada mutante y devuelve una previsualización JSON de lo que ocurriría en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones del catálogo en lugar de previsualizarlas.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#read-only-mode",
             "name": "Modo solo lectura",
-            "description": "Un ajuste de despliegue, GITLAB_READ_ONLY=true, que omite del catálogo registrado toda acción mutante. El asistente no puede llamar a una operación de escritura porque no existe en su lista, lo que es una garantía más fuerte que rechazar la llamada al ejecutarla.",
+            "description": "Un ajuste de despliegue, GITLAB_MCP_READ_ONLY=true, que omite del catálogo registrado toda acción mutante. El asistente no puede llamar a una operación de escritura porque no existe en su lista, lo que es una garantía más fuerte que rechazar la llamada al ejecutarla.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
@@ -165,15 +165,15 @@ El **modo dinámico** es la superficie predeterminada, y expone solo `gitlab_fin
 
 ## Gating por tier
 
-El **gating por tier** registra solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de `GITLAB_TIER` si está definido; si no, se detecta de la licencia de la instancia, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando al cliente.
+El **gating por tier** registra solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de `GITLAB_MCP_TIER` si está definido; si no, se detecta de la licencia de la instancia, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando al cliente.
 
 ## Modo seguro
 
-**Modo seguro** (`GITLAB_SAFE_MODE=true`) intercepta cada llamada mutante y devuelve una previsualización JSON de lo que ocurriría, en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones por completo en lugar de previsualizarlas.
+**Modo seguro** (`GITLAB_MCP_SAFE_MODE=true`) intercepta cada llamada mutante y devuelve una previsualización JSON de lo que ocurriría, en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones por completo en lugar de previsualizarlas.
 
 ## Modo solo lectura
 
-El **modo solo lectura** (`GITLAB_READ_ONLY=true`) omite del catálogo registrado toda acción mutante. El asistente no puede llamar a una operación de escritura porque no existe en su lista — una garantía más fuerte que rechazar la llamada al ejecutarla.
+El **modo solo lectura** (`GITLAB_MCP_READ_ONLY=true`) omite del catálogo registrado toda acción mutante. El asistente no puede llamar a una operación de escritura porque no existe en su lista — una garantía más fuerte que rechazar la llamada al ejecutarla.
 
 ## Elicitación
 

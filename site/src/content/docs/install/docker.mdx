@@ -32,7 +32,7 @@ The one-click buttons for VS Code, Cursor, LM Studio and Kiro on the [Quick Star
 
 ### Environment variables
 
-In stdio mode every setting is an environment variable, and each one you use needs its own `-e NAME` so Docker copies it into the container. The list the bundled plugin configuration forwards is a good template: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_MCP_EMBEDDED_RESOURCES`, `GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`, `GITLAB_MCP_CLIENT_COMPAT` and `GITLAB_MCP_LOG_LEVEL`. What each one does is on the [Configuration](/gitlab-mcp-server/configuration/) page.
+In stdio mode every setting is an environment variable, and each one you use needs its own `-e NAME` so Docker copies it into the container. The list the bundled plugin configuration forwards is a good template: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_MCP_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_EMBEDDED_RESOURCES`, `GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_MCP_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`, `GITLAB_MCP_CLIENT_COMPAT` and `GITLAB_MCP_LOG_LEVEL`. What each one does is on the [Configuration](/gitlab-mcp-server/configuration/) page.
 
 :::note[Self-signed certificates]
 The container has its own CA store, so a certificate your host trusts is still unknown inside it. Mount the CA and point `SSL_CERT_FILE` at it:
@@ -43,7 +43,7 @@ docker run -i --rm -e GITLAB_TOKEN -e GITLAB_URL \
   ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-`GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative: it disables certificate verification for every GitLab request, and OAuth mode refuses it for a non-loopback instance.
+`GITLAB_MCP_SKIP_TLS_VERIFY=true` is the blunt alternative: it disables certificate verification for every GitLab request, and OAuth mode refuses it for a non-loopback instance.
 :::
 
 ## HTTP: the image as a service

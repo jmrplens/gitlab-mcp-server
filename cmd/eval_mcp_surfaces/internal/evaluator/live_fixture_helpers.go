@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -283,13 +284,13 @@ func liveGitLabHTTPClient() (*http.Client, error) {
 }
 
 func gitlabSkipTLSVerify() (bool, error) {
-	value := strings.TrimSpace(os.Getenv("GITLAB_SKIP_TLS_VERIFY"))
+	value := config.TrimmedGetenv("SKIP_TLS_VERIFY")
 	if value == "" {
 		return false, nil
 	}
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
-		return false, fmt.Errorf("invalid GITLAB_SKIP_TLS_VERIFY %q: %w", value, err)
+		return false, fmt.Errorf("invalid GITLAB_MCP_SKIP_TLS_VERIFY %q: %w", value, err)
 	}
 	return parsed, nil
 }

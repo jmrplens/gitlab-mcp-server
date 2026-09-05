@@ -754,7 +754,7 @@ func TestRun_GitLabPingFailure_StartsDegraded(t *testing.T) {
 	srv := newFailingGitLabServer(t, http.StatusForbidden)
 	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "true")
 
 	done := make(chan error, 1)
 	go func() { done <- run(nil) }()
@@ -913,7 +913,7 @@ func TestRunWithContext_PingFailure_StartsInDegradedMode(t *testing.T) {
 	srv := newFailingGitLabServer(t, http.StatusForbidden)
 	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "true")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -1184,12 +1184,12 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"GITLAB_TOKEN env", "GITLAB_TOKEN"},
 		{"META_TOOLS env", "META_TOOLS"},
 		{"META_PARAM_SCHEMA env", "META_PARAM_SCHEMA"},
-		{"GITLAB_SAFE_MODE env", "GITLAB_SAFE_MODE"},
+		{"GITLAB_MCP_SAFE_MODE env", "GITLAB_MCP_SAFE_MODE"},
 		{"EMBEDDED_RESOURCES env", "EMBEDDED_RESOURCES"},
 		{"UPLOAD_MAX_FILE_SIZE env", "UPLOAD_MAX_FILE_SIZE"},
 		{"RATE_LIMIT_RPS env", "RATE_LIMIT_RPS"},
 		{"RATE_LIMIT_BURST env", "RATE_LIMIT_BURST"},
-		{"YOLO_MODE env", "YOLO_MODE"},
+		{"GITLAB_MCP_YOLO_MODE env", "GITLAB_MCP_YOLO_MODE"},
 		{"json example", "mcp.json"},
 		{"opencode example", "OpenCode"},
 	}
@@ -7863,7 +7863,7 @@ func TestDeprecationWarnings_SayWhatToWriteInstead(t *testing.T) {
 		{
 			name: "the deprecated enterprise switch",
 			log:  func() { logLegacyEnterpriseEnvDeprecation("", "true") },
-			want: []string{"GITLAB_ENTERPRISE", "GITLAB_TIER"},
+			want: []string{"GITLAB_ENTERPRISE", "GITLAB_MCP_TIER"},
 		},
 		{
 			name:     "the tier variable alone says nothing",

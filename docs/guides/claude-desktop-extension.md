@@ -13,16 +13,16 @@ Docker, Node.js, or Python required.
    window). Claude shows an install dialog with the extension details.
 3. Fill in the settings:
 
-| Setting                      | Required | Default              | Maps to                   |
-| ---------------------------- | -------- | -------------------- | ------------------------- |
-| GitLab URL                   | Yes      | `https://gitlab.com` | `GITLAB_URL`              |
-| GitLab Personal Access Token | Yes      | —                    | `GITLAB_TOKEN`            |
-| Tool surface                 | No       | `dynamic`            | `GITLAB_MCP_TOOL_SURFACE` |
-| GitLab tier                  | No       | auto-detect          | `GITLAB_TIER`             |
-| Read-only mode               | No       | off                  | `GITLAB_READ_ONLY`        |
-| Safe mode                    | No       | off                  | `GITLAB_SAFE_MODE`        |
-| Skip TLS verification        | No       | off                  | `GITLAB_SKIP_TLS_VERIFY`  |
-| Log level                    | No       | `info`               | `GITLAB_MCP_LOG_LEVEL`    |
+| Setting                      | Required | Default              | Maps to                      |
+| ---------------------------- | -------- | -------------------- | ---------------------------- |
+| GitLab URL                   | Yes      | `https://gitlab.com` | `GITLAB_URL`                 |
+| GitLab Personal Access Token | Yes      | —                    | `GITLAB_TOKEN`               |
+| Tool surface                 | No       | `dynamic`            | `GITLAB_MCP_TOOL_SURFACE`    |
+| GitLab tier                  | No       | auto-detect          | `GITLAB_MCP_TIER`            |
+| Read-only mode               | No       | off                  | `GITLAB_MCP_READ_ONLY`       |
+| Safe mode                    | No       | off                  | `GITLAB_MCP_SAFE_MODE`       |
+| Skip TLS verification        | No       | off                  | `GITLAB_MCP_SKIP_TLS_VERIFY` |
+| Log level                    | No       | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
 
    The token is stored in the operating system keychain by Claude Desktop.
 

@@ -2104,10 +2104,10 @@ func TestMakeMetaHandler_DestructiveActionConfirmBypass(t *testing.T) {
 	}
 }
 
-// TestMakeMetaHandler_DestructiveActionYOLOMode verifies that YOLO_MODE
+// TestMakeMetaHandler_DestructiveActionYOLOMode verifies that GITLAB_MCP_YOLO_MODE
 // bypasses confirmation for destructive meta-tool actions.
 func TestMakeMetaHandler_DestructiveActionYOLOMode(t *testing.T) {
-	t.Setenv("YOLO_MODE", "true")
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 
 	called := false
 	routes := ActionMap{
@@ -2124,7 +2124,7 @@ func TestMakeMetaHandler_DestructiveActionYOLOMode(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !called {
-		t.Error("handler was not called — YOLO_MODE should bypass confirmation")
+		t.Error("handler was not called — GITLAB_MCP_YOLO_MODE should bypass confirmation")
 	}
 }
 
@@ -4360,6 +4360,7 @@ func TestCoerceSingleStringArraysForSchema_NonStringValue_Skipped(t *testing.T) 
 // destructive route is intercepted by the elicitation confirmation flow and
 // that a user decline cancels the action without invoking the handler.
 func TestMakeMetaHandler_DestructiveDeclined_ReturnsCancelled(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
 	t.Setenv("YOLO_MODE", "")
 	t.Setenv("AUTOPILOT", "")
 

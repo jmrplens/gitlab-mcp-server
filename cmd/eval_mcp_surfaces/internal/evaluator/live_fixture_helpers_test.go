@@ -88,12 +88,12 @@ func TestLiveAwardEmojiNames_ContainsFallbackCandidates(t *testing.T) {
 // TestLiveTargetURLHelpers_ValidateEnvAndEscaping verifies live target helpers
 // reject unsafe URLs and construct escaped GitLab endpoints deterministically.
 func TestLiveTargetURLHelpers_ValidateEnvAndEscaping(t *testing.T) {
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "")
 	client, err := liveGitLabHTTPClient()
 	if err != nil || client != http.DefaultClient {
 		t.Fatalf("liveGitLabHTTPClient(default) = %v, %v; want default client", client, err)
 	}
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "not-bool")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "not-bool")
 	_, invalidTLSErr := liveGitLabHTTPClient()
 	if invalidTLSErr == nil {
 		t.Fatal("liveGitLabHTTPClient(invalid bool) error = nil, want error")
@@ -136,7 +136,7 @@ func TestLiveRemoteMirrorTargetURL_EmbedsTokenAndProjectPath(t *testing.T) {
 
 // TestGitLabSkipTLSVerify_ParsesEnvironment verifies GitLabSkipTLSVerify parses environment.
 func TestGitLabSkipTLSVerify_ParsesEnvironment(t *testing.T) {
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "true")
 	got, err := gitlabSkipTLSVerify()
 	if err != nil {
 		t.Fatalf("gitlabSkipTLSVerify() error = %v", err)
@@ -145,7 +145,7 @@ func TestGitLabSkipTLSVerify_ParsesEnvironment(t *testing.T) {
 		t.Fatal("gitlabSkipTLSVerify() = false, want true")
 	}
 
-	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "not-bool")
+	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "not-bool")
 	if _, parseErr := gitlabSkipTLSVerify(); parseErr == nil {
 		t.Fatal("gitlabSkipTLSVerify() error = nil, want invalid bool error")
 	}
@@ -618,7 +618,7 @@ func TestLiveGitLabHTTPClient_HonorsSkipTLSVerify(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("GITLAB_SKIP_TLS_VERIFY", tc.value)
+			t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", tc.value)
 			client, err := liveGitLabHTTPClient()
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("liveGitLabHTTPClient() error = %v, want error = %t", err, tc.wantErr)

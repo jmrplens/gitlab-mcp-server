@@ -4,6 +4,7 @@ package toolutil
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -47,28 +48,46 @@ func TestIsTruthy(t *testing.T) {
 	}
 }
 
-// TestIsYOLOMode verifies that [IsYOLOMode] returns true when either
-// YOLO_MODE or AUTOPILOT environment variables are set to a truthy value.
+// TestIsYOLOMode verifies the three spellings [IsYOLOMode] consults and their
+// precedence: GITLAB_MCP_YOLO_MODE is the setting, YOLO_MODE its old spelling,
+// and AUTOPILOT the alias other agent tooling sets, consulted only when
+// neither of ours is set, so an inherited AUTOPILOT=true can be overridden.
 func TestIsYOLOMode(t *testing.T) {
 	tests := []struct {
 		name      string
+		prefixed  string
 		yolo      string
 		autopilot string
 		want      bool
 	}{
-		{"neither set", "", "", false},
-		{"YOLO_MODE=true", "true", "", true},
-		{"YOLO_MODE=1", "1", "", true},
-		{"AUTOPILOT=true", "", "true", true},
-		{"AUTOPILOT=yes", "", "yes", true},
-		{"both set", "true", "true", true},
-		{"YOLO_MODE=false", "false", "", false},
-		{"AUTOPILOT=0", "", "0", false},
+		{"nothing set", "", "", "", false},
+		{"YOLO_MODE=true", "", "true", "", true},
+		{"YOLO_MODE=1", "", "1", "", true},
+		{"AUTOPILOT=true", "", "", "true", true},
+		{"AUTOPILOT=yes", "", "", "yes", true},
+		{"old spelling and alias both set", "", "true", "true", true},
+		{"YOLO_MODE=false", "", "false", "", false},
+		{"AUTOPILOT=0", "", "", "0", false},
+		{"GITLAB_MCP_YOLO_MODE=true", "true", "", "", true},
+		{"GITLAB_MCP_YOLO_MODE=false beats an inherited AUTOPILOT=true", "false", "", "true", false},
+		{"GITLAB_MCP_YOLO_MODE=false beats the old YOLO_MODE=true", "false", "true", "", false},
+		{"YOLO_MODE=false beats an inherited AUTOPILOT=true", "", "false", "true", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("YOLO_MODE", tt.yolo)
-			t.Setenv("AUTOPILOT", tt.autopilot)
+			// An empty case means the variable is absent, not present and
+			// empty: the prefixed spelling wins whenever it is present, so
+			// leaving it set to "" would hide the old spelling behind it.
+			for name, value := range map[string]string{
+				"GITLAB_MCP_YOLO_MODE": tt.prefixed,
+				"YOLO_MODE":            tt.yolo,
+				"AUTOPILOT":            tt.autopilot,
+			} {
+				t.Setenv(name, value)
+				if value == "" {
+					os.Unsetenv(name)
+				}
+			}
 
 			if got := IsYOLOMode(); got != tt.want {
 				t.Errorf("IsYOLOMode() = %v, want %v", got, tt.want)
@@ -732,21 +751,37 @@ func TestConfirmDestructiveAction_ProtocolFaultsAreJSONRPCErrors(t *testing.T) {
 
 // TestIsYOLOMode_TheFlagOverridesTheInheritedAlias pins the precedence a review
 // caught backwards: with AUTOPILOT=true inherited from the environment,
-// --yolo-mode=false writes YOLO_MODE=false and that has to win. ORing the two
-// variables meant the most specific instruction lost to an inherited one, and
-// a destructive-action bypass that cannot be turned off is a safety setting in
-// name only.
+// --yolo-mode=false writes GITLAB_MCP_YOLO_MODE=false and that has to win.
+// ORing the two variables meant the most specific instruction lost to an
+// inherited one, and a destructive-action bypass that cannot be turned off is
+// a safety setting in name only. The old bare spelling decides the same way,
+// because it is the same setting under its previous name.
 func TestIsYOLOMode_TheFlagOverridesTheInheritedAlias(t *testing.T) {
-	t.Setenv("AUTOPILOT", "true")
-	t.Setenv("YOLO_MODE", "false")
+	for _, name := range []string{"GITLAB_MCP_YOLO_MODE", "YOLO_MODE"} {
+		t.Run(name, func(t *testing.T) {
+			// Claim both spellings through t.Setenv so the cleanup restores
+			// them, then remove them: a present-but-empty prefixed name is
+			// still the name that decides, which is not the case under test.
+			for _, spelling := range []string{"GITLAB_MCP_YOLO_MODE", "YOLO_MODE"} {
+				t.Setenv(spelling, "")
+				if err := os.Unsetenv(spelling); err != nil {
+					t.Fatalf("unsetting %s: %v", spelling, err)
+				}
+			}
+			t.Setenv("AUTOPILOT", "true")
+			t.Setenv(name, "false")
 
-	if IsYOLOMode() {
-		t.Error("YOLO_MODE=false lost to an inherited AUTOPILOT=true; the specific name must decide when set")
-	}
+			if IsYOLOMode() {
+				t.Errorf("%s=false lost to an inherited AUTOPILOT=true; the specific name must decide when set", name)
+			}
 
-	t.Setenv("YOLO_MODE", "")
-	if !IsYOLOMode() {
-		t.Error("with YOLO_MODE unset, the AUTOPILOT alias must still work")
+			if err := os.Unsetenv(name); err != nil {
+				t.Fatalf("unsetting %s: %v", name, err)
+			}
+			if !IsYOLOMode() {
+				t.Errorf("with %s unset, the AUTOPILOT alias must still work", name)
+			}
+		})
 	}
 }
 

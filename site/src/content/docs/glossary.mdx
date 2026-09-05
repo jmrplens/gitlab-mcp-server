@@ -59,21 +59,21 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#tier-gating",
             "name": "Tier gating",
-            "description": "Registering only the actions and schema fields the connected GitLab licence supports. The tier is taken from GITLAB_TIER when set, otherwise detected from the instance licence, falling back to Free. Input schemas are pruned strictly so a lower tier never sees higher-tier fields; output schemas are pruned leniently so data still comes through.",
+            "description": "Registering only the actions and schema fields the connected GitLab licence supports. The tier is taken from GITLAB_MCP_TIER when set, otherwise detected from the instance licence, falling back to Free. Input schemas are pruned strictly so a lower tier never sees higher-tier fields; output schemas are pruned leniently so data still comes through.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#safe-mode",
             "name": "Safe mode",
-            "description": "A deployment setting, GITLAB_SAFE_MODE=true, that intercepts every mutating tool call and returns a JSON preview of what would happen instead of performing it. Distinct from read-only mode, which removes mutating operations from the catalog entirely rather than previewing them.",
+            "description": "A deployment setting, GITLAB_MCP_SAFE_MODE=true, that intercepts every mutating tool call and returns a JSON preview of what would happen instead of performing it. Distinct from read-only mode, which removes mutating operations from the catalog entirely rather than previewing them.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#read-only-mode",
             "name": "Read-only mode",
-            "description": "A deployment setting, GITLAB_READ_ONLY=true, that omits every mutating action from the registered catalog. The assistant cannot call a write operation because no such tool exists in its list, which is a stronger guarantee than declining the call at execution time.",
+            "description": "A deployment setting, GITLAB_MCP_READ_ONLY=true, that omits every mutating action from the registered catalog. The assistant cannot call a write operation because no such tool exists in its list, which is a stronger guarantee than declining the call at execution time.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -165,15 +165,15 @@ A **meta-tool** is a domain-level MCP tool that groups related operations behind
 
 ## Tier gating
 
-**Tier gating** registers only the actions and schema fields the connected GitLab licence supports. The tier comes from `GITLAB_TIER` when set, otherwise it is detected from the instance licence, falling back to Free. Input schemas are pruned strictly, so a lower tier never sees higher-tier fields; output schemas are pruned leniently, so data still reaches the client.
+**Tier gating** registers only the actions and schema fields the connected GitLab licence supports. The tier comes from `GITLAB_MCP_TIER` when set, otherwise it is detected from the instance licence, falling back to Free. Input schemas are pruned strictly, so a lower tier never sees higher-tier fields; output schemas are pruned leniently, so data still reaches the client.
 
 ## Safe mode
 
-**Safe mode** (`GITLAB_SAFE_MODE=true`) intercepts every mutating tool call and returns a JSON preview of what would happen, instead of performing it. It is distinct from read-only mode, which removes the operations altogether rather than previewing them.
+**Safe mode** (`GITLAB_MCP_SAFE_MODE=true`) intercepts every mutating tool call and returns a JSON preview of what would happen, instead of performing it. It is distinct from read-only mode, which removes the operations altogether rather than previewing them.
 
 ## Read-only mode
 
-**Read-only mode** (`GITLAB_READ_ONLY=true`) omits every mutating action from the registered catalog. The assistant cannot call a write operation because no such tool exists in its list — a stronger guarantee than declining the call at execution time.
+**Read-only mode** (`GITLAB_MCP_READ_ONLY=true`) omits every mutating action from the registered catalog. The assistant cannot call a write operation because no such tool exists in its list — a stronger guarantee than declining the call at execution time.
 
 ## Elicitation
 

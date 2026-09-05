@@ -360,7 +360,7 @@ For the complete tool reference, see [Tools Overview](/gitlab-mcp-server/tools/o
 | ----------------------------------------------- | --------------------------------------------------------------- |
 | `not found` / permission denied                 | Verify binary downloaded for correct platform, run `chmod +x`   |
 | `401 Unauthorized`                              | Check `MCP_PAT` variable is set and token not expired           |
-| `x509: certificate signed by unknown authority` | Set `GITLAB_SKIP_TLS_VERIFY=true`                               |
+| `x509: certificate signed by unknown authority` | Set `GITLAB_MCP_SKIP_TLS_VERIFY=true`                           |
 | Timeout on large responses                      | Add `per_page` argument to limit results                        |
 | mcp-cli provider errors                         | Verify API key variables, check `pip install --upgrade mcp-cli` |
 

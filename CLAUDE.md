@@ -396,21 +396,25 @@ spellings, prefer the prefixed one, and record the fallback so `cmd/server`
 can warn once at startup. A new setting is added to `prefixedNames` there and
 read through those helpers, never through `os.Getenv`.
 
-Names deliberately left bare, because reading them through the helper is safe
-but prefixing them is not: `GITLAB_URL` and `GITLAB_TOKEN` (GitLab's own
-convention, and what an assistant writes from memory into a client config),
-the `GITLAB_`-prefixed switches such as `GITLAB_TIER` and `GITLAB_READ_ONLY`
-(already namespaced, so a second prefix churns every configuration for
-nothing), every `OTEL_*` variable (owned by the OpenTelemetry specification and
-read by the exporters themselves), `YOLO_MODE` and `AUTOPILOT` (conventions
-other agent tooling sets), and the evaluator's `EVAL_SURFACE_*` (developer-only,
-driven by `make` targets, never beside another tool's variables in a shell).
+Every variable this server defines carries the prefix, with no exception for
+a name that already began with `GITLAB_`: the switches that did (`GITLAB_TIER`,
+`GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES`,
+`GITLAB_SKIP_TLS_VERIFY`) and `YOLO_MODE` were renamed in 2.8.0, and the old
+spellings keep working until v3 with the same startup warning, resolved through
+`config.LegacyEnvName`. Only three groups stay bare, because prefixing them
+would be wrong rather than churn: `GITLAB_URL` and `GITLAB_TOKEN` (GitLab's own
+convention, and what a user already has in the environment, so they are never
+spelled twice), every `OTEL_*` variable (owned by the OpenTelemetry
+specification and read by the exporters themselves), and `AUTOPILOT` (a
+convention other agent tooling sets, honored as an alias of
+`GITLAB_MCP_YOLO_MODE` and never warned about). The evaluator's `EVAL_SURFACE_*`
+are developer-only, driven by `make` targets, and out of scope.
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
 | `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode it is `--gitlab-url`, which is **required** unless `--allow-any-gitlab-url` is passed, and the count decides the header's meaning: none (with the escape hatch) lets `GITLAB-URL` select freely per request, and a request that omits it is refused rather than resolved to `https://gitlab.com`; exactly one fixes the instance and the header is ignored; several publish an allow-list among which the header is required, since choosing for the caller would send their token to an instance they never named. A comma-separated value spells the list |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
-| `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
+| `GITLAB_MCP_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `GITLAB_MCP_ENV_FILE`    | No       | One dotenv file to load besides `~/.gitlab-mcp-server.env`, resolved **once** from the process environment before any loaded file could rewrite it, so a file this server loads cannot nominate another. Precedence, highest first: the process environment, this file, the home file. A working-directory `.env` is not loaded at all, only found and named at WARN with the keys it wanted to set. Give an absolute path: a relative one follows the client into every workspace it opens, which is the load this replaced, and startup says so. `internal/config.EnvFileVar`; the `--env-file` flag sets the same thing and wins over it |
 | `GITLAB_MCP_STDIO_MAX_LINE_BYTES` | No | Longest stdio message assembled, in bytes (default 4 MiB, matching the SDK's own HTTP body default so both transports refuse the same messages). A longer line is refused and answered rather than accumulated. A value that is missing, unparseable or non-positive warns and keeps the default, because a mistyped number should not take the client down with the server. `cmd/server.stdioMaxLineBytesEnv` |
 | `GITLAB_MCP_MAX_LISTEN_STREAMS` | No | Concurrent `subscriptions/listen` streams one credential may hold open (default 64; `0` removes the per-credential ceiling). A second ceiling of 512 per process is deliberately not configurable: the per-credential one multiplies by however many tokens a caller holds, so only the process-wide one bounds the process. `MaxWatchers` does not cover this, since a listen asking only for list-changed notifications creates no watcher. Both transports. `cmd/server.maxListenStreamsEnv` |
@@ -418,21 +422,21 @@ driven by `make` targets, never beside another tool's variables in a shell).
 | `GITLAB_MCP_TOOL_SURFACE`           | No       | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; default is `dynamic` when unset, unless legacy `GITLAB_MCP_META_TOOLS` is explicitly set |
 | `GITLAB_MCP_CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps the surface-aware `gitlab://tools` manifest |
 | `GITLAB_MCP_META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~8.1x), or `full` (~18.0x). Independent of `GITLAB_MCP_META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
-| `GITLAB_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
-| `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
-| `GITLAB_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |
-| `GITLAB_IGNORE_SCOPES`   | No       | Skip PAT scope detection and register every tool the tier allows (`false` default). Flag `--ignore-scopes` |
+| `GITLAB_MCP_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
+| `GITLAB_MCP_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
+| `GITLAB_MCP_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |
+| `GITLAB_MCP_IGNORE_SCOPES`   | No       | Skip PAT scope detection and register every tool the tier allows (`false` default). Flag `--ignore-scopes` |
 | `GITLAB_MCP_EMBEDDED_RESOURCES` | No | Embed the canonical `gitlab://` resource URI in `get`-style tool results (`true` default). Flag `--embedded-resources` |
 | `GITLAB_MCP_EXCLUDE_TOOLS` | No     | Comma-separated tool names removed from registration; they leave both the served surface and the withheld-action lists, since the operator asked for them not to exist. Flag `--exclude-tools` |
 | `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No | Largest local file an upload or file-read tool accepts: a byte count or a `KB`/`MB`/`GB` suffix (`2GB` default, 1 TB upper bound). Flag `--upload-max-file-size` |
 | `GITLAB_MCP_MAX_HTTP_CLIENTS` | No  | HTTP mode: maximum unique (token, GitLab URL) server entries kept in the pool (`100` default, upper bound 10000). Flag `--max-http-clients` |
 | `GITLAB_MCP_SESSION_TIMEOUT` | No   | HTTP mode: idle MCP session timeout, `--stateless=false` only (`30m` default, max 24h). Flag `--session-timeout` |
 | `GITLAB_MCP_SESSION_REVALIDATE_INTERVAL` | No | HTTP mode: token re-validation interval (`15m` default, `0` stops the periodic check, max 24h). Flag `--revalidate-interval` |
-| `YOLO_MODE` / `AUTOPILOT` | No      | Skip the confirmation prompt on destructive actions when truthy (`1`, `true`, `yes`). `YOLO_MODE` decides whenever it is set; `AUTOPILOT` is the alias consulted only when it is not, so an inherited `AUTOPILOT=true` can be overridden. `internal/toolutil.IsYOLOMode`; flag `--yolo-mode` |
+| `GITLAB_MCP_YOLO_MODE` / `AUTOPILOT` | No      | Skip the confirmation prompt on destructive actions when truthy (`1`, `true`, `yes`). `GITLAB_MCP_YOLO_MODE` decides whenever it is set; `AUTOPILOT` is the alias consulted only when it is not, so an inherited `AUTOPILOT=true` can be overridden. `internal/toolutil.IsYOLOMode`; flag `--yolo-mode` |
 | `GITLAB_MCP_ALLOWED_UPLOAD_DIRS` | No | Extra directories a tool may READ a local file from (every `file_path` and `directory_path` input), separated by the OS path-list separator. The working directory (unless it is the filesystem root or the user's home directory, which are dropped as implicit roots) and the OS temp directory are always allowed; a path is canonicalized through symlinks before the check. `internal/toolutil.UploadDirAllowlistEnv` |
 | `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS` | No | Extra directories a tool may WRITE a downloaded file into (`output_path`), same syntax and same always-allowed roots. Checked twice, once before creating the parent directories and once after, so the second call resolves a parent that now exists. `internal/toolutil.DownloadDirAllowlistEnv` |
 | `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | No | Extra directories a project or group import archive may be read from, same syntax and same always-allowed roots. `internal/toolutil.ImportArchiveAllowlistEnv` |
-| `GITLAB_ENTERPRISE`      | No       | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Logs a deprecation warning |
+| `GITLAB_ENTERPRISE`      | No       | **Deprecated** — use `GITLAB_MCP_TIER`. Honored for back-compat only when `GITLAB_MCP_TIER` is unset: `true` → `ultimate`, `false` → `free`. Logs a deprecation warning |
 | `GITLAB_MCP_AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `GITLAB_MCP_PUBLIC_URL`             | No       | Externally reachable https origin; required with `GITLAB_MCP_AUTH_MODE=oauth` (RFC 9728 resource identifier; flag `--public-url`) |
 | `GITLAB_MCP_TRUSTED_ORIGINS`        | No       | Comma-separated absolute origins allowed to make cross-origin browser requests; `*` accepts any origin and disables the protection; empty adds none, though a configured `GITLAB_MCP_PUBLIC_URL` origin is trusted regardless (flag `--trusted-origins`) |
@@ -515,7 +519,7 @@ In **HTTP mode**, configuration is resolved in three layers: an explicitly passe
 | `--tool-search` | _(empty)_ | Search tools by name/description and exit |
 | `--version`    | `false` | Print version and exit |
 | `--help` / `-h` | `false` | Curated help with flags, env vars and examples (both spellings give the same output) |
-| `--log-level`, `--client-compat`, `--upload-max-file-size`, `--yolo-mode`, `--description-substitutions` | _(empty)_ | Flags for settings whose only home used to be an environment variable. Each writes its variable (the `GITLAB_MCP_` spelling, or `YOLO_MODE`) before anything reads it, so there stays one reader per setting and an explicitly passed flag beats the environment. `GITLAB_TOKEN` deliberately has no flag: a token on a command line is readable through `ps` and shell history. `cmd/server/env_flags.go` |
+| `--log-level`, `--client-compat`, `--upload-max-file-size`, `--yolo-mode`, `--description-substitutions` | _(empty)_ | Flags for settings whose only home used to be an environment variable. Each writes its variable (the `GITLAB_MCP_` spelling, or `GITLAB_MCP_YOLO_MODE`) before anything reads it, so there stays one reader per setting and an explicitly passed flag beats the environment. `GITLAB_TOKEN` deliberately has no flag: a token on a command line is readable through `ps` and shell history. `cmd/server/env_flags.go` |
 | `--shutdown`   | `false` | Terminate all running instances of this binary and exit. Used by external updaters (pe-agnostic-store) before replacing the binary on disk. |
 | `--probe`      | `false` | Ask the running instance's `/health` and exit 0 when it answers 200; the image's `HEALTHCHECK`. With no argument it finds the other instances of this binary (the same lookup as `--shutdown`), reads `--http-addr`, `--tls-cert`, `--transport` and `--http` off their command lines, and probes where they listen: another port, a unix socket, or HTTPS pinned to the certificate `--tls-cert` names (a given `https://` target takes the pin from the probe's own `--tls-cert`, and the standard verification without one). `--transport auto` is settled the way the server settled it, by reading the instance's file descriptor 0 from procfs; an instance serving stdio has nothing to probe and is reported healthy while it runs. A URL, `unix:<path>` or `host:port` after the flag probes that instead. Exit 1 when nothing answered, 2 for a target that does not parse. `cmd/server/probe.go` |
 
@@ -722,7 +726,7 @@ Find combines canonical `domain.action` IDs, domain/action names, aliases, natur
 
 ### Enterprise tool gating
 
-`GITLAB_TIER` controls access to GitLab Premium/Ultimate features in stdio mode (Enterprise tools are gated when the resolved tier is Premium or Ultimate). In HTTP mode, the `--tier` flag forces the tier; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`). The catalog effect is the same in individual and meta-tool modes.
+`GITLAB_MCP_TIER` controls access to GitLab Premium/Ultimate features in stdio mode (Enterprise tools are gated when the resolved tier is Premium or Ultimate). In HTTP mode, the `--tier` flag forces the tier; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`). The catalog effect is the same in individual and meta-tool modes.
 
 The tier affects tool registration (input/output schemas and tool lists) through `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go:154` — every registered action has its input schema pruned strictly (lower-tier clients never see higher-tier input fields, even though the SDK type still carries them) and its output schema pruned leniently (`lenientExtra=true`: higher-tier output fields are kept but omitted from the model-facing schema, so a Premium client reading an Ultimate response sees the data; an Ultimate client reading a Premium response does not). The 3-tier field-level gating is described per-field with `tier:"premium"` / `tier:"ultimate"` struct tags throughout `internal/tools/*/action_specs.go` and `internal/tools/*/shapes.go`.
 
@@ -787,7 +791,7 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "A
 
 ### Common issues
 
-- **TLS errors**: Set `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs
+- **TLS errors**: Set `GITLAB_MCP_SKIP_TLS_VERIFY=true` for self-signed certs
 - **Tool not found**: Check the action's `ActionSpec`, catalog aggregation, `action_catalog.go`, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
 - **Meta-tools disabled**: legacy `GITLAB_MCP_META_TOOLS=false` maps to `GITLAB_MCP_TOOL_SURFACE=individual`; unset both to get the default dynamic surface, or set `GITLAB_MCP_TOOL_SURFACE=meta` explicitly when meta-tools are what you want
 - **Dynamic mode shows only two tools**: this is expected by default. Use `gitlab_find_action` and `gitlab_execute_action`; set `GITLAB_MCP_TOOL_SURFACE=meta` to use meta-tools.

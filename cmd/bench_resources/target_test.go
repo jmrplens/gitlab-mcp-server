@@ -70,16 +70,25 @@ func TestConfigFreeEnviron_DropsEverythingThisServerReads(t *testing.T) {
 		}
 	})
 
-	// The bare names are the ones nobody would think to strip by hand, so
-	// check the whole list rather than the one spelled out above.
-	for _, bare := range config.PrefixedEnvNames() {
-		t.Run("drops the bare "+bare, func(t *testing.T) {
-			t.Setenv(bare, "set-by-the-developer")
-			if _, ok := envValue(configFreeEnviron(), bare); ok {
-				t.Errorf("the bare spelling %s survived", bare)
+	// The old spellings are the ones nobody would think to strip by hand, so
+	// check the whole list rather than the one spelled out above; for the
+	// settings that already carried GITLAB_, the old spelling is that name
+	// and not the bare suffix.
+	for _, name := range config.PrefixedEnvNames() {
+		old := config.LegacyEnvName(name)
+		t.Run("drops the old spelling "+old, func(t *testing.T) {
+			t.Setenv(old, "set-by-the-developer")
+			if _, ok := envValue(configFreeEnviron(), old); ok {
+				t.Errorf("the old spelling %s survived", old)
 			}
 		})
 	}
+	t.Run("drops AUTOPILOT, the alias other tooling sets", func(t *testing.T) {
+		t.Setenv("AUTOPILOT", "true")
+		if _, ok := envValue(configFreeEnviron(), "AUTOPILOT"); ok {
+			t.Error("AUTOPILOT survived; it would switch the measured process into yolo mode")
+		}
+	})
 }
 
 // TestChildEnv_StdioScenario_ConfiguresTheProcessItself verifies a stdio

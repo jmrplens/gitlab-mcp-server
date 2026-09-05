@@ -2257,7 +2257,7 @@ func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap
 //
 // Destructive actions (delete, remove, revoke, unprotect, etc.) are automatically
 // intercepted with a user confirmation prompt via MCP elicitation before execution.
-// Confirmation can be bypassed with YOLO_MODE/AUTOPILOT env vars or by passing
+// Confirmation can be bypassed with GITLAB_MCP_YOLO_MODE/AUTOPILOT env vars or by passing
 // "confirm": true in the action params.
 func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResultFunc) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
 	if formatResult == nil {

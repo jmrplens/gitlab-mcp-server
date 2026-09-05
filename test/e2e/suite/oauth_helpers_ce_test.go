@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // e2eOAuthConfig holds the configuration needed by OAuth-related E2E tests.
@@ -42,7 +44,7 @@ func loadE2EConfig(t *testing.T) e2eOAuthConfig {
 	return e2eOAuthConfig{
 		gitlabURL: gitlabURL,
 		token:     token,
-		skipTLS:   strings.EqualFold(os.Getenv("GITLAB_SKIP_TLS_VERIFY"), "true"),
+		skipTLS:   strings.EqualFold(config.Getenv("SKIP_TLS_VERIFY"), "true"),
 	}
 }
 

@@ -276,7 +276,7 @@ func TestResolveRequestOptions_ServerManagedHeadersIgnoredWithoutDefault(t *test
 	if options.GitLabURL != "https://gitlab.example.com" {
 		t.Fatalf("GitLabURL = %q, want %q", options.GitLabURL, "https://gitlab.example.com")
 	}
-	want := []string{"META_PARAM_SCHEMA", "GITLAB_SAFE_MODE", "RATE_LIMIT_BURST"}
+	want := []string{"META_PARAM_SCHEMA", "GITLAB_MCP_SAFE_MODE", "RATE_LIMIT_BURST"}
 	if !slicesEqual(options.IgnoredOptionsCopy(), want) {
 		t.Fatalf("IgnoredOptions = %v, want %v", options.IgnoredOptionsCopy(), want)
 	}

@@ -7,11 +7,11 @@ services:
       - "8080:8080"
     environment:
       - GITLAB_URL=${GITLAB_URL:-}
-      - GITLAB_SKIP_TLS_VERIFY=${GITLAB_SKIP_TLS_VERIFY:-false}
+      - GITLAB_MCP_SKIP_TLS_VERIFY=${GITLAB_MCP_SKIP_TLS_VERIFY:-false}
       - GITLAB_MCP_TOOL_SURFACE=${GITLAB_MCP_TOOL_SURFACE:-dynamic}
-      - GITLAB_TIER=${GITLAB_TIER:-}
-      - GITLAB_READ_ONLY=${GITLAB_READ_ONLY:-false}
-      - GITLAB_SAFE_MODE=${GITLAB_SAFE_MODE:-false}
+      - GITLAB_MCP_TIER=${GITLAB_MCP_TIER:-}
+      - GITLAB_MCP_READ_ONLY=${GITLAB_MCP_READ_ONLY:-false}
+      - GITLAB_MCP_SAFE_MODE=${GITLAB_MCP_SAFE_MODE:-false}
       - GITLAB_MCP_LOG_LEVEL=${GITLAB_MCP_LOG_LEVEL:-info}
     command:
       - "--http"
@@ -22,10 +22,10 @@ services:
       # several comma-separated and let the GITLAB-URL header select among them.
       - "--gitlab-url=${GITLAB_URL:?set GITLAB_URL in .env: the server refuses to start without an instance allow-list}"
       - "--tool-surface=${GITLAB_MCP_TOOL_SURFACE:-dynamic}"
-      - "--tier=${GITLAB_TIER:-}"
-      - "--skip-tls-verify=${GITLAB_SKIP_TLS_VERIFY:-false}"
-      - "--read-only=${GITLAB_READ_ONLY:-false}"
-      - "--safe-mode=${GITLAB_SAFE_MODE:-false}"
+      - "--tier=${GITLAB_MCP_TIER:-}"
+      - "--skip-tls-verify=${GITLAB_MCP_SKIP_TLS_VERIFY:-false}"
+      - "--read-only=${GITLAB_MCP_READ_ONLY:-false}"
+      - "--safe-mode=${GITLAB_MCP_SAFE_MODE:-false}"
     deploy:
       resources:
         limits:

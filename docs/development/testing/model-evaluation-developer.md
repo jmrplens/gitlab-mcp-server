@@ -75,7 +75,7 @@ The evaluator reads model provider keys from environment variables:
 | Qwen      | `QWEN_API_KEY`                       |
 
 Docker mode also needs `test/e2e/.env.docker`, created by the E2E provisioning
-scripts. Enterprise Docker mode additionally needs `GITLAB_TIER=ultimate` (or `premium`)
+scripts. Enterprise Docker mode additionally needs `GITLAB_MCP_TIER=ultimate` (or `premium`)
 for the evaluator and the server it embeds, the EE image, `GITLAB_ENTERPRISE=true`
 for `setup-gitlab.sh` (the only enterprise switch that script reads), and
 `ENTERPRISE_LICENSE` supplied through the shell or the repository `.env` file. Never print or commit `.env`, `.env.docker`, provider keys,

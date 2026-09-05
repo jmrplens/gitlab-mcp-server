@@ -15,7 +15,7 @@ import (
 //
 // Each of these is consumed somewhere that reads the process environment and
 // nothing else: parseLogLevel takes config.Getenv("LOG_LEVEL"),
-// clientcompat.Enabled reads CLIENT_COMPAT, toolutil.IsYOLOMode reads YOLO_MODE
+// clientcompat.Enabled reads CLIENT_COMPAT, toolutil.IsYOLOMode reads GITLAB_MCP_YOLO_MODE
 // and AUTOPILOT, and the upload limit is read per request inside the tools that
 // enforce it. Threading a flag value to each of those would mean four new
 // parameters through four unrelated call paths, and it would create a second
@@ -64,7 +64,7 @@ var envBackedFlags = []struct {
 	},
 	{
 		flagName: "yolo-mode",
-		envName:  "YOLO_MODE",
+		envName:  config.EnvPrefix + "YOLO_MODE",
 		usage:    "Skip the confirmation prompt on destructive actions: true or false",
 	},
 	{

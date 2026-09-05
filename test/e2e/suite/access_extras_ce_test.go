@@ -25,6 +25,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploytokens"
@@ -41,7 +42,7 @@ func accessExtrasStartSession(t *testing.T, label, token string) *mcp.ClientSess
 	t.Helper()
 	baseURL := os.Getenv("GITLAB_URL")
 	requireTruef(t, baseURL != "", "GITLAB_URL must be set to start an extra MCP session")
-	skipTLS := strings.EqualFold(os.Getenv("GITLAB_SKIP_TLS_VERIFY"), "true")
+	skipTLS := strings.EqualFold(config.Getenv("SKIP_TLS_VERIFY"), "true")
 	client, err := gitlabclient.NewClientWithToken(baseURL, token, skipTLS)
 	requireNoError(t, err, "create GitLab client for extra session "+label)
 	// Elicitation options: destructive tools (e.g. token self-revoke) fail

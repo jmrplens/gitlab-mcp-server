@@ -10,7 +10,7 @@ faq:
   - q: "What is the canonical action catalog?"
     a: "The canonical action catalog is the single internal definition of every ordinary GitLab operation. All three visible tool surfaces — meta-tools, individual tools, and the dynamic find/execute tools — are projections of this catalog, so they share identical schemas, read-only filtering, destructive-action confirmations, safe-mode previews, scope filtering, and Markdown formatting. Catalog entries are tier-aware: each action is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it, and premium or ultimate-only actions are pruned when the resolved tier is lower."
   - q: "How does GitLab MCP Server keep my GitLab token secure?"
-    a: "GitLab MCP Server never stores tokens server-side. In stdio mode the token exists only in the process environment and never leaves the local machine. In HTTP mode each user's session is isolated in the server pool by token and URL. All GitLab API calls use HTTPS by default, with opt-in skipping for self-signed certificates, and the server is stateless — no data is persisted between requests. Read-only mode (`GITLAB_READ_ONLY=true`) disables every mutating operation."
+    a: "GitLab MCP Server never stores tokens server-side. In stdio mode the token exists only in the process environment and never leaves the local machine. In HTTP mode each user's session is isolated in the server pool by token and URL. All GitLab API calls use HTTPS by default, with opt-in skipping for self-signed certificates, and the server is stateless — no data is persisted between requests. Read-only mode (`GITLAB_MCP_READ_ONLY=true`) disables every mutating operation."
 ---
 
 import stats from "../../data/stats.json";
@@ -133,7 +133,7 @@ Because all surfaces share the same catalog entry, schemas, read-only filtering,
 
 ### Tier-gating
 
-Catalog entries are also tier-aware: each action and input/output schema is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it. When a server is built (at startup in stdio mode, per token+URL pool entry in HTTP mode) the tier is resolved (`GITLAB_TIER` / `--tier`, or auto-detection via `GET /license`, falling back to `free`), the catalog filter drops premium/ultimate-only actions above it, and `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`) prunes the per-field schema entries that are gated by edition. This keeps meta-tools, individual tools, and the dynamic surface consistent: a Premium-only action is hidden everywhere once the tier resolves to `free`.
+Catalog entries are also tier-aware: each action and input/output schema is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it. When a server is built (at startup in stdio mode, per token+URL pool entry in HTTP mode) the tier is resolved (`GITLAB_MCP_TIER` / `--tier`, or auto-detection via `GET /license`, falling back to `free`), the catalog filter drops premium/ultimate-only actions above it, and `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`) prunes the per-field schema entries that are gated by edition. This keeps meta-tools, individual tools, and the dynamic surface consistent: a Premium-only action is hidden everywhere once the tier resolves to `free`.
 
 ```mermaid
 graph LR
@@ -264,7 +264,7 @@ This dual format ensures the AI can make follow-up decisions while presenting cl
 
 - **No server-side token storage** — In stdio mode, the token exists only in the process environment
 - **Per-session isolation** — In HTTP mode, each user's session is isolated in the server pool
-- **Read-only mode** — Disable all writes with `GITLAB_READ_ONLY=true`
+- **Read-only mode** — Disable all writes with `GITLAB_MCP_READ_ONLY=true`
 - **TLS by default** — All GitLab API calls use HTTPS (with opt-in skip for self-signed certs)
 - **No data persistence** — The server is stateless; no data is stored between requests
 

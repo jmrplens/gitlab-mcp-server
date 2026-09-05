@@ -58,7 +58,7 @@ Inspects the error chain and returns a diagnostic message:
 | Connection refused   | "GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running" |
 | DNS failure          | "GitLab server hostname could not be resolved (DNS error). Check GITLAB_URL"                            |
 | Timeout              | "Request to GitLab timed out. The server may be overloaded or unreachable"                              |
-| TLS/SSL              | "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_SKIP_TLS_VERIFY=true"          |
+| TLS/SSL              | "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true"      |
 | URL error            | "network error reaching GitLab (\<op\>)"                                                                |
 | Other                | "unexpected error"                                                                                      |
 
@@ -255,7 +255,7 @@ Used in `milestones`, `branches`, `mergerequests`, and other domains where LLMs 
 
 Before executing destructive operations (delete, force-push), handlers use the confirmation flow in `confirm.go`:
 
-1. **YOLO_MODE / AUTOPILOT** env var set → skip confirmation
+1. **GITLAB_MCP_YOLO_MODE / AUTOPILOT** env var set → skip confirmation
 2. **Explicit `confirm: true`** in params → proceed
 3. **MCP elicitation supported** → ask user interactively via `ConfirmAction()`; a decline or cancel returns `CancelledResult`
 4. **No confirmation mechanism** → fail closed: return an `IsError` result asking the caller to re-send with `confirm: true` once the user has approved

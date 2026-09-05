@@ -155,12 +155,12 @@ Docker stdio variant:
         "-e",
         "GITLAB_TOKEN",
         "-e",
-        "GITLAB_SKIP_TLS_VERIFY",
+        "GITLAB_MCP_SKIP_TLS_VERIFY",
         "ghcr.io/jmrplens/gitlab-mcp-server:latest"
       ],
       "env": {
         "GITLAB_TOKEN": "${input:gitlab-token}",
-        "GITLAB_SKIP_TLS_VERIFY": "false"
+        "GITLAB_MCP_SKIP_TLS_VERIFY": "false"
       }
     }
   },

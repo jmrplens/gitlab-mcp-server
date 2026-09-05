@@ -402,7 +402,7 @@ func newCatalogSession(client *gitlabclient.Client, toolSurface, serverMode stri
 
 // applyEvalServerMode applies the protective server mode to the catalog the
 // evaluated model will see, using the same catalog transforms the server
-// applies for GITLAB_READ_ONLY and GITLAB_SAFE_MODE. Both act per action, so
+// applies for GITLAB_MCP_READ_ONLY and GITLAB_MCP_SAFE_MODE. Both act per action, so
 // evaluating them means evaluating a different catalog, not a different client.
 func applyEvalServerMode(catalog *actioncatalog.Catalog, serverMode string) *actioncatalog.Catalog {
 	switch serverMode {
