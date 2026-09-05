@@ -113,6 +113,7 @@ func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) 
 		"upload-max-file-size":      "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
 		"yolo-mode":                 "GITLAB_MCP_YOLO_MODE",
 		"description-substitutions": "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
+		"pprof-addr":                "GITLAB_MCP_PPROF_ADDR",
 	}
 
 	got := make(map[string]string, len(envBackedFlags))

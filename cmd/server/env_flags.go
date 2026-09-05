@@ -72,6 +72,11 @@ var envBackedFlags = []struct {
 		envName:  "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
 		usage:    "Rewrite listed descriptions and titles for strict gateway validators: comma-separated old=new pairs (escape with backslash)",
 	},
+	{
+		flagName: "pprof-addr",
+		envName:  config.EnvPrefix + "PPROF_ADDR",
+		usage:    "Serve Go's profiling handlers (net/http/pprof) on this loopback address, e.g. 127.0.0.1:6060; empty serves nothing. Refused unless the host is loopback",
+	},
 }
 
 // registerEnvBackedFlags declares the flags. Call before flag.Parse.

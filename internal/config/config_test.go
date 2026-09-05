@@ -1890,3 +1890,154 @@ func loadedSetting(cfg *Config, field string) string {
 		return "<unknown field " + field + ">"
 	}
 }
+
+// TestParseTierFlag_MirrorsTheEnvironmentParser verifies the exported flag
+// parser HTTP mode uses gives the same three answers the environment parser
+// does: unset means detect, a known name is explicit, and anything else is
+// refused naming the accepted values.
+func TestParseTierFlag_MirrorsTheEnvironmentParser(t *testing.T) {
+	cases := []struct {
+		name         string
+		value        string
+		wantTier     edition.Tier
+		wantExplicit bool
+		wantErr      bool
+	}{
+		{name: "unset detects", value: "", wantTier: edition.Free},
+		{name: "blank detects", value: "   ", wantTier: edition.Free},
+		{name: "premium is explicit", value: "premium", wantTier: edition.Premium, wantExplicit: true},
+		{name: "ce is free and explicit", value: "ce", wantTier: edition.Free, wantExplicit: true},
+		{name: "unknown is refused", value: "platinum", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tier, explicit, err := ParseTierFlag(tc.value)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("ParseTierFlag(%q) accepted a tier that does not exist", tc.value)
+				}
+				if !strings.Contains(err.Error(), "premium") {
+					t.Errorf("error %q does not list the accepted values", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseTierFlag(%q): %v", tc.value, err)
+			}
+			if tier != tc.wantTier || explicit != tc.wantExplicit {
+				t.Errorf("ParseTierFlag(%q) = (%v, %v), want (%v, %v)", tc.value, tier, explicit, tc.wantTier, tc.wantExplicit)
+			}
+		})
+	}
+}
+
+// TestIsLoopbackGitLabURL_NamesOnlyThisMachine verifies the loopback test
+// the cleartext exemptions rest on: the three spellings of this machine are
+// loopback, a public host and an unparseable value are not.
+func TestIsLoopbackGitLabURL_NamesOnlyThisMachine(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "localhost", raw: "http://localhost:8080", want: true},
+		{name: "ipv4 loopback", raw: "http://127.0.0.1", want: true},
+		{name: "ipv6 loopback", raw: "http://[::1]:3000/api", want: true},
+		{name: "public host", raw: "https://gitlab.example.com", want: false},
+		{name: "no host", raw: "gitlab.example.com", want: false},
+		{name: "unparseable", raw: "http://[::1", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsLoopbackGitLabURL(tc.raw); got != tc.want {
+				t.Errorf("IsLoopbackGitLabURL(%q) = %v, want %v", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestValidateOAuthGitLabURL_RequiresHTTPSOffTheMachine verifies bearer tokens
+// are never forwarded in cleartext to an instance elsewhere: https anywhere
+// passes, http passes only on loopback, and a value with no host is refused
+// as not being a URL at all.
+func TestValidateOAuthGitLabURL_RequiresHTTPSOffTheMachine(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		wantErr string
+	}{
+		{name: "https", raw: "https://gitlab.example.com"},
+		{name: "http on loopback", raw: "http://127.0.0.1:8929"},
+		{name: "http elsewhere", raw: "http://gitlab.example.com", wantErr: "cleartext"},
+		{name: "not a url", raw: "gitlab.example.com", wantErr: "not an absolute URL"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateOAuthGitLabURL(tc.raw)
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Errorf("ValidateOAuthGitLabURL(%q) = %v, want it accepted", tc.raw, err)
+			case tc.wantErr != "" && err == nil:
+				t.Errorf("ValidateOAuthGitLabURL(%q) accepted a URL that puts a token on the wire", tc.raw)
+			case tc.wantErr != "" && !strings.Contains(err.Error(), tc.wantErr):
+				t.Errorf("error %q does not say %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidatePublicURL_ExportedPathAndTheNonURL verifies the exported
+// wrapper the HTTP flag path calls reaches the same checks as the loader,
+// including the one a value with no host trips: it is refused as not being
+// an absolute URL rather than passing because it has no fragment or slash.
+func TestValidatePublicURL_ExportedPathAndTheNonURL(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		wantErr string
+	}{
+		{name: "accepted", raw: "https://mcp.example.com"},
+		{name: "no host", raw: "mcp.example.com", wantErr: "not an absolute URL"},
+		{name: "unparseable", raw: "https://[::1", wantErr: "not an absolute URL"},
+		{name: "empty", raw: "", wantErr: "requires --public-url"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidatePublicURL(tc.raw)
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Errorf("ValidatePublicURL(%q) = %v, want it accepted", tc.raw, err)
+			case tc.wantErr != "" && err == nil:
+				t.Errorf("ValidatePublicURL(%q) accepted an unusable identifier", tc.raw)
+			case tc.wantErr != "" && !strings.Contains(err.Error(), tc.wantErr):
+				t.Errorf("error %q does not say %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestLoad_ActionTimeoutAndDrainDelayInvalid verifies the two limits parsed
+// last in the limit block refuse a value outside their range through Load,
+// which is the path a deployment actually takes.
+func TestLoad_ActionTimeoutAndDrainDelayInvalid(t *testing.T) {
+	cases := []struct {
+		name  string
+		env   string
+		value string
+	}{
+		{name: "action timeout above its maximum", env: "ACTION_TIMEOUT", value: "48h"},
+		{name: "action timeout unparseable", env: "ACTION_TIMEOUT", value: "soon"},
+		{name: "drain delay above its maximum", env: "DRAIN_DELAY", value: "1h"},
+		{name: "drain delay unparseable", env: "DRAIN_DELAY", value: "later"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv(EnvPrefix+tc.env, tc.value)
+			if _, err := Load(); err == nil {
+				t.Errorf("Load() accepted %s=%q", EnvPrefix+tc.env, tc.value)
+			}
+		})
+	}
+}
