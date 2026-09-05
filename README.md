@@ -315,7 +315,11 @@ The published model-evaluation set covers 596 task attempts and 2220 expected MC
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <details>
-<summary>Enterprise meta &amp; dynamic evaluation results</summary>
+<summary>Meta-tools and Enterprise evaluation results</summary>
+
+<!-- START MODEL EVAL META SUMMARY -->
+No CE meta-tools run has been published yet: `make eval-surfaces-docker SURFACE=meta` followed by `--publish-docs` fills this block.
+<!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
 Current published result: **Docker Enterprise meta 20260527**.
@@ -460,9 +464,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |     1,072 |     227,759 |
-| Unit tests (`_test.go`)  |       639 |     369,458 |
+| Unit tests (`_test.go`)  |       639 |     369,490 |
 | End-to-end tests         |       226 |      61,190 |
-| **Total**                | **1,937** | **658,407** |
+| **Total**                | **1,937** | **658,439** |
 
 ### Functions
 
@@ -471,8 +475,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  8,519 |
 | . Exported (public)             |  2,804 |
 | . Unexported (private)          |  5,715 |
-| Unit test functions (`TestXxx`) | 13,138 |
-| Subtests (`t.Run(...)`)         |  4,897 |
+| Unit test functions (`TestXxx`) | 13,139 |
+| Subtests (`t.Run(...)`)         |  4,898 |
 | End-to-end test functions       |    577 |
 
 ### Ratios worth noting
@@ -489,7 +493,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 7,141 |
+| `if err != nil` checks             | 7,143 |
 | `defer` statements                 | 1,206 |
 | `struct` types defined             | 2,888 |
 | `//nolint` suppressions            |   280 |

@@ -1328,3 +1328,35 @@ func TestFirstPositive_ReturnsFirstPositiveOrZero(t *testing.T) {
 		t.Fatalf("firstPositive(non-positive) = %d, want 0", got)
 	}
 }
+
+// TestPublishDocSections_HaveAHomeInTheCommittedDocuments pins that every
+// section the publisher knows has both of its marker pairs in the committed
+// documents. A CE meta-tools run used to reach applyManagedBlock after a
+// two-hour evaluation only to find no block to publish into; a section with
+// no home now fails here in a second instead.
+func TestPublishDocSections_HaveAHomeInTheCommittedDocuments(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..")
+	results, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(defaultPublishResultsDoc))) // #nosec G304 -- fixed in-repo path
+	if err != nil {
+		t.Fatalf("read %s: %v", defaultPublishResultsDoc, err)
+	}
+	readme, err := os.ReadFile(filepath.Join(root, defaultPublishReadme)) // #nosec G304 -- fixed in-repo path
+	if err != nil {
+		t.Fatalf("read %s: %v", defaultPublishReadme, err)
+	}
+	for _, key := range []string{publishSectionMeta, publishSectionDynamic, publishSectionEnterpriseMeta, publishSectionEnterpriseDynamic} {
+		t.Run(key, func(t *testing.T) {
+			section := publishDocSectionForKey(key)
+			for _, marker := range []string{section.ResultsStartMarker, section.ResultsEndMarker} {
+				if !strings.Contains(string(results), marker) {
+					t.Errorf("%s has no %s marker for the %q section", defaultPublishResultsDoc, marker, key)
+				}
+			}
+			for _, marker := range []string{section.SummaryStartMarker, section.SummaryEndMarker} {
+				if !strings.Contains(string(readme), marker) {
+					t.Errorf("%s has no %s marker for the %q section", defaultPublishReadme, marker, key)
+				}
+			}
+		})
+	}
+}
