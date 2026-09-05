@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
-
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
@@ -130,10 +128,13 @@ func TestEvaluatePackage_NormalizesEcosystemCase(t *testing.T) {
 	}
 }
 
-// TestEvaluatePackage_EveryEcosystemIsAccepted verifies that all eleven
-// documented ecosystems pass validation. client-go v2.61.0 widened the enum
-// from four values, and a stale copy of the list here would silently refuse
-// the seven that were added.
+// TestEvaluatePackage_EveryEcosystemIsAccepted verifies that every ecosystem
+// the schema offers passes the handler's validation, so a model can never pick
+// a value from the schema that the handler then refuses. Whether the list
+// matches client-go's constants is no longer pinned here by naming each one:
+// the 1:1 audit's enum rule (make audit-1to1-enums) reads the constants off
+// the SDK and holds the served schema to them, so a twelfth constant upstream
+// fails that gate instead of passing a hand-written list.
 func TestEvaluatePackage_EveryEcosystemIsAccepted(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"outcome":"allowed","reason":null}`)
@@ -150,33 +151,6 @@ func TestEvaluatePackage_EveryEcosystemIsAccepted(t *testing.T) {
 				t.Errorf("EvaluatePackage() error = %v", err)
 			}
 		})
-	}
-}
-
-// TestEcosystems_MatchClientGoConstants verifies the exposed enum is exactly
-// the set client-go declares, so a future widening upstream cannot leave this
-// server offering a subset.
-func TestEcosystems_MatchClientGoConstants(t *testing.T) {
-	want := map[string]bool{
-		string(gitlab.DependencyFirewallEcosystemCargo):    true,
-		string(gitlab.DependencyFirewallEcosystemComposer): true,
-		string(gitlab.DependencyFirewallEcosystemConan):    true,
-		string(gitlab.DependencyFirewallEcosystemGem):      true,
-		string(gitlab.DependencyFirewallEcosystemGolang):   true,
-		string(gitlab.DependencyFirewallEcosystemMaven):    true,
-		string(gitlab.DependencyFirewallEcosystemNPM):      true,
-		string(gitlab.DependencyFirewallEcosystemNuGet):    true,
-		string(gitlab.DependencyFirewallEcosystemPub):      true,
-		string(gitlab.DependencyFirewallEcosystemPyPI):     true,
-		string(gitlab.DependencyFirewallEcosystemSwift):    true,
-	}
-	if len(Ecosystems) != len(want) {
-		t.Fatalf("len(Ecosystems) = %d, want %d", len(Ecosystems), len(want))
-	}
-	for _, ecosystem := range Ecosystems {
-		if !want[ecosystem] {
-			t.Errorf("Ecosystems has %q, which client-go does not declare", ecosystem)
-		}
 	}
 }
 

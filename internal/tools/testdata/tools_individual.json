@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30",
           "type": "integer"
         },
         "group_id": {
@@ -81,7 +81,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer)",
+          "description": "Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30",
           "type": "integer"
         },
         "project_id": {
@@ -7150,11 +7150,12 @@
           ]
         },
         "merge_access_level": {
-          "description": "Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer.",
+          "description": "Access level for merge: 0=No access, 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). Use an integer.",
           "enum": [
             0,
             30,
-            40
+            40,
+            60
           ],
           "type": "integer"
         },
@@ -7163,16 +7164,22 @@
           "type": "string"
         },
         "push_access_level": {
-          "description": "Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer.",
+          "description": "Access level for push: 0=No access, 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). Use an integer.",
           "enum": [
             0,
             30,
-            40
+            40,
+            60
           ],
           "type": "integer"
         },
         "unprotect_access_level": {
-          "description": "Access level allowed to unprotect (0=No access 30=Developer 40=Maintainer)",
+          "description": "Access level allowed to unprotect: 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). 0 (No access) is not valid here. Use an integer.",
+          "enum": [
+            30,
+            40,
+            60
+          ],
           "type": "integer"
         }
       },
@@ -11359,7 +11366,7 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)",
+          "description": "Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "items": {
             "type": "integer"
           },
@@ -12759,7 +12766,7 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid)",
+          "description": "Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid",
           "type": "integer"
         },
         "description": {
@@ -13275,7 +13282,7 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid)",
+          "description": "Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid",
           "type": "integer"
         },
         "description": {
@@ -20882,7 +20889,6 @@
         "status": {
           "description": "Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment",
           "enum": [
-            "created",
             "running",
             "success",
             "failed",
@@ -21695,7 +21701,8 @@
             "running",
             "success",
             "failed",
-            "canceled"
+            "canceled",
+            "blocked"
           ],
           "type": "string"
         },
@@ -22111,14 +22118,12 @@
           "type": "string"
         },
         "status": {
-          "description": "New deployment status: created or running or success or failed or canceled",
+          "description": "New deployment status: running or success or failed or canceled",
           "enum": [
-            "created",
             "running",
             "success",
             "failed",
-            "canceled",
-            "blocked"
+            "canceled"
           ],
           "type": "string"
         }
@@ -42184,8 +42189,14 @@
         "sort": {
           "description": "Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc",
           "enum": [
-            "asc",
-            "desc"
+            "created_asc",
+            "created_desc",
+            "expires_asc",
+            "expires_desc",
+            "last_used_asc",
+            "last_used_desc",
+            "name_asc",
+            "name_desc"
           ],
           "type": "string"
         },
@@ -45761,7 +45772,8 @@
           "enum": [
             "noone",
             "maintainer",
-            "developer"
+            "developer",
+            "administrator"
           ],
           "type": "string"
         },
@@ -49781,7 +49793,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "email": {
@@ -50008,7 +50020,7 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level the invitation grants (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -51834,7 +51846,7 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -52966,7 +52978,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "expires_at": {
@@ -53216,7 +53228,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)",
           "type": "integer"
         },
         "expires_at": {
@@ -55413,7 +55425,7 @@
           "type": "boolean"
         },
         "min_access_level": {
-          "description": "Limit to projects where the caller has at least this access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -56251,7 +56263,7 @@
           "type": "string"
         },
         "merge_access_level": {
-          "description": "Merge access level",
+          "description": "Merge access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)",
           "type": [
             "null",
             "integer"
@@ -56269,7 +56281,7 @@
           ]
         },
         "unprotect_access_level": {
-          "description": "Unprotect access level",
+          "description": "Unprotect access level (30=Developer, 40=Maintainer, 60=Admin on GitLab Self-Managed). 0 (No access) is not valid here",
           "type": [
             "null",
             "integer"
@@ -58834,7 +58846,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)",
+          "description": "Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "group_id": {
@@ -61117,7 +61129,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level granted to the shared group (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Access level granted to the shared group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner)",
           "type": "integer"
         },
         "group_id": {
@@ -61198,7 +61210,7 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Limit to projects where the caller has at least this access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -61415,7 +61427,7 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level the share grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level the share grants (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -63928,7 +63940,8 @@
           "enum": [
             "noone",
             "maintainer",
-            "developer"
+            "developer",
+            "administrator"
           ],
           "type": "string"
         },
@@ -90014,7 +90027,7 @@
           "type": "string"
         },
         "scope": {
-          "description": "Filter by job status: created, pending, running, failed, success, canceled, skipped, waiting_for_resource, manual",
+          "description": "Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled",
           "items": {
             "type": "string"
           },
@@ -90522,7 +90535,7 @@
           "type": "string"
         },
         "scope": {
-          "description": "Filter by job status: created, pending, running, failed, success, canceled, skipped, manual",
+          "description": "Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled",
           "items": {
             "type": "string"
           },
@@ -90894,7 +90907,7 @@
           "type": "string"
         },
         "scope": {
-          "description": "Filter by job status: created, pending, running, failed, success, canceled, skipped, waiting_for_resource, manual",
+          "description": "Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled",
           "items": {
             "type": "string"
           },
@@ -108925,13 +108938,14 @@
         "target_type": {
           "description": "Filter by event target type",
           "enum": [
-            "Issue",
-            "Milestone",
-            "MergeRequest",
-            "Note",
-            "Project",
-            "Snippet",
-            "User"
+            "issue",
+            "milestone",
+            "merge_request",
+            "note",
+            "project",
+            "snippet",
+            "user",
+            "epic"
           ],
           "type": "string"
         },
@@ -140629,8 +140643,14 @@
         "sort": {
           "description": "Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc",
           "enum": [
-            "asc",
-            "desc"
+            "created_asc",
+            "created_desc",
+            "expires_asc",
+            "expires_desc",
+            "last_used_asc",
+            "last_used_desc",
+            "name_asc",
+            "name_desc"
           ],
           "type": "string"
         },
@@ -146681,10 +146701,16 @@
           "type": "string"
         },
         "sort": {
-          "description": "Sort order: asc or desc",
+          "description": "Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc",
           "enum": [
-            "asc",
-            "desc"
+            "created_asc",
+            "created_desc",
+            "expires_asc",
+            "expires_desc",
+            "last_used_asc",
+            "last_used_desc",
+            "name_asc",
+            "name_desc"
           ],
           "type": "string"
         },
@@ -150295,11 +150321,12 @@
           ]
         },
         "resource_group_default_process_mode": {
-          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
+          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, newest_first, or newest_ready_first.",
           "enum": [
             "unordered",
             "oldest_first",
-            "newest_first"
+            "newest_first",
+            "newest_ready_first"
           ],
           "type": "string"
         },
@@ -151795,11 +151822,12 @@
           ]
         },
         "resource_group_default_process_mode": {
-          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
+          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, newest_first, or newest_ready_first.",
           "enum": [
             "unordered",
             "oldest_first",
-            "newest_first"
+            "newest_first",
+            "newest_ready_first"
           ],
           "type": "string"
         },
@@ -157902,7 +157930,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "email": {
@@ -164944,7 +164972,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "expires_at": {
@@ -165226,7 +165254,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "expires_at": {
@@ -168260,7 +168288,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares",
+          "description": "Access level for the group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner)",
           "type": "integer"
         },
         "group_id": {
@@ -173685,11 +173713,12 @@
           ]
         },
         "resource_group_default_process_mode": {
-          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
+          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, newest_first, or newest_ready_first.",
           "enum": [
             "unordered",
             "oldest_first",
-            "newest_first"
+            "newest_first",
+            "newest_ready_first"
           ],
           "type": "string"
         },
@@ -203319,7 +203348,7 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target",
+          "description": "Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "items": {
             "type": "integer"
           },

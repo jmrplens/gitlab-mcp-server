@@ -4,11 +4,28 @@
 package sdk
 
 import (
+	"go/types"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 )
+
+// TestCollectSDKServices_NoClientStruct_Fails verifies the enumeration refuses
+// a package that declares no Client struct instead of returning an empty
+// universe that would audit as clean. The loader-backed cases cannot reach
+// this branch, because such a package never resolves as the client-go root.
+func TestCollectSDKServices_NoClientStruct_Fails(t *testing.T) {
+	pkg := types.NewPackage(shared.ClientGoPkgPath+"/v2", "gitlab")
+	services, err := collectSDKServices(pkg)
+	if err == nil || !strings.Contains(err.Error(), "Client struct not found") {
+		t.Fatalf("collectSDKServices = %v, want a not-found error", err)
+	}
+	if services != nil {
+		t.Errorf("services = %+v, want none", services)
+	}
+}
 
 // TestAdjudicateServices_Statuses_PreferCallsOverDeclarations verifies the
 // order the three statuses are decided in: a call wins over a declaration

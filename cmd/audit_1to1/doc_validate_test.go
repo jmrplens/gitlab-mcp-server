@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,22 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
+
+// TestRunValidateDocs_MarshalFailure_IsReported reaches the encoding branch
+// of the validation report through the seam, all the way from main so the
+// fatal path carries the encoder's message.
+func TestRunValidateDocs_MarshalFailure_IsReported(t *testing.T) {
+	original := marshalIndent
+	t.Cleanup(func() { marshalIndent = original })
+	marshalIndent = func(any, string, string) ([]byte, error) { return nil, errors.New("boom") }
+
+	messages := captureFatal(t)
+	resetFlags(t, "-validate-docs", "-offline", "-output", filepath.Join(t.TempDir(), "docs.json"))
+	main()
+	if len(*messages) != 1 || !strings.Contains((*messages)[0], "marshal validation report: boom") {
+		t.Errorf("fatal messages = %v, want the marshal failure", *messages)
+	}
+}
 
 // TestScanDocCitations verifies the source scan finds the doc/api areas cited in
 // the adjudication tables (the citations live in comments, so the scan keeps the

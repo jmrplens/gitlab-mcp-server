@@ -476,6 +476,10 @@ type reportSummary struct {
 	TypeMismatches      int `json:"type_mismatches"`
 }
 
+// marshalIndent is the JSON encoder, a variable so a test can reach the
+// encoding failure branch that a report of strings and ints never produces.
+var marshalIndent = json.MarshalIndent
+
 // Run builds the report for the given repository root and returns it as
 // indented JSON (with a trailing newline). gapsOnly filters to entries with at
 // least one finding, matching the original -gaps-only flag.
@@ -484,7 +488,7 @@ func Run(root string, gapsOnly bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	content, err := json.MarshalIndent(rep, "", "  ")
+	content, err := marshalIndent(rep, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshal report: %w", err)
 	}
@@ -516,9 +520,55 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	}, nil
 }
 
-func analyzePackage(pkg *packages.Package) (packageReport, bool) {
-	inputPairs := map[[2]string]structPair{}
-	outputPairs := map[[2]string]structPair{}
+// Pair is one (MCP struct, SDK struct) pairing the field diff runs over,
+// exported for the enum rule, which walks the same pairs and asks a different
+// question of their fields: not whether a field exists on both sides, but
+// whether the values a client-go enum type declares are the values we offer.
+type Pair struct {
+	// Kind is "input" (an MCP input struct against the SDK Options struct its
+	// handler constructs) or "output" (an MCP output struct against the SDK
+	// result struct its converter reads).
+	Kind string
+	// MCPName and MCPType are the MCP-side struct.
+	MCPName string
+	MCPType *types.Struct
+	// MCPNamed is the named type behind MCPName once an alias is unwrapped.
+	// For a local struct it lives in the tool package; for an alias such as
+	// `type Output = toolutil.MergeRequestOutput` it is the target type, in
+	// the target's package, which is the identity reflect reports for it.
+	MCPNamed *types.Named
+	// SDKName and SDKType are the client-go struct, the name qualified with
+	// the last segment of its package path.
+	SDKName string
+	SDKType *types.Struct
+	// SDKURLTags is true for an Options struct, whose fields are named by
+	// their url tag first and json tag second.
+	SDKURLTags bool
+}
+
+// CollectPairs returns every pairing analyzePackage diffs for one tool
+// package, phantom inputs already dropped, inputs before outputs and each in
+// (MCP name, SDK name) order.
+func CollectPairs(pkg *packages.Package) []Pair {
+	inputPairs, outputPairs := discoverPairs(pkg)
+	out := make([]Pair, 0, len(inputPairs)+len(outputPairs))
+	for _, pair := range sortedPairs(inputPairs) {
+		if disjointPhantomInput(pair, inputPairs) {
+			continue
+		}
+		out = append(out, pair.exported("input"))
+	}
+	for _, pair := range sortedPairs(outputPairs) {
+		out = append(out, pair.exported("output"))
+	}
+	return out
+}
+
+// discoverPairs walks every function declaration of pkg and records the
+// converter-derived output pairs and the handler-derived input pairs.
+func discoverPairs(pkg *packages.Package) (inputPairs, outputPairs map[[2]string]structPair) {
+	inputPairs = map[[2]string]structPair{}
+	outputPairs = map[[2]string]structPair{}
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
@@ -529,6 +579,11 @@ func analyzePackage(pkg *packages.Package) (packageReport, bool) {
 			collectHandlerInputs(pkg, fn, inputPairs)
 		}
 	}
+	return inputPairs, outputPairs
+}
+
+func analyzePackage(pkg *packages.Package) (packageReport, bool) {
+	inputPairs, outputPairs := discoverPairs(pkg)
 	if len(inputPairs) == 0 && len(outputPairs) == 0 {
 		return packageReport{}, false
 	}
@@ -598,7 +653,7 @@ func outputGroups(pairs map[[2]string]structPair) []outputGroup {
 // diffOutputGroup diffs one MCP output type against the UNION of every SDK
 // result struct paired to it. A json tag is MISSING only when absent from the
 // union of all paired SDK fields, and EXTRA only when absent from the union
-// (after normalizeSDKTag + envelope carve-out + accepted-rename allowlist). A
+// (after shared.NormalizeSDKTag + envelope carve-out + accepted-rename allowlist). A
 // TypeMismatch is reported for a tag only when the MCP type is incompatible with
 // the SDK type in EVERY pairing that carries that tag, so a field that is
 // compatible in at least one pairing is not double-flagged.
@@ -631,7 +686,7 @@ func diffOutputGroup(pkg string, group outputGroup) gap {
 	for _, tag := range tags {
 		mcpType, present := mcpFields[tag]
 		if !present {
-			if alt, ok := mcpFields[normalizeSDKTag(tag)]; ok {
+			if alt, ok := mcpFields[shared.NormalizeSDKTag(tag)]; ok {
 				mcpType, present = alt, true
 			}
 		}
@@ -677,12 +732,23 @@ func appendGapIfAny(pr *packageReport, g gap) {
 
 // structPair links an MCP struct with the SDK struct it must mirror.
 type structPair struct {
-	mcpName string
-	mcpType *types.Struct
-	sdkName string
-	sdkType *types.Struct
+	mcpName  string
+	mcpType  *types.Struct
+	mcpNamed *types.Named
+	sdkName  string
+	sdkType  *types.Struct
 	// tag preference for the SDK side: url first for Options, json for results.
 	sdkURLTags bool
+}
+
+// exported renders the pair in its exported form.
+func (p structPair) exported(kind string) Pair {
+	return Pair{
+		Kind:    kind,
+		MCPName: p.mcpName, MCPType: p.mcpType, MCPNamed: p.mcpNamed,
+		SDKName: p.sdkName, SDKType: p.sdkType,
+		SDKURLTags: p.sdkURLTags,
+	}
 }
 
 func sortedPairs(pairs map[[2]string]structPair) []structPair {
@@ -707,7 +773,7 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	}
 	resultExpr := fn.Type.Results.List[0].Type
 	resultType := pkg.TypesInfo.TypeOf(resultExpr)
-	mcpStruct, mcpName, ok := localOrAliasNamedStruct(pkg, resultExpr, resultType)
+	mcpNamed, mcpStruct, mcpName, ok := localOrAliasNamedStruct(pkg, resultExpr, resultType)
 	if !ok {
 		return
 	}
@@ -749,7 +815,7 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	}
 	key := [2]string{mcpName, sdkNamed.Obj().Name()}
 	out[key] = structPair{
-		mcpName: mcpName, mcpType: mcpStruct,
+		mcpName: mcpName, mcpType: mcpStruct, mcpNamed: mcpNamed,
 		sdkName: sdkTypeName(sdkNamed), sdkType: sdkStruct, sdkURLTags: false,
 	}
 }
@@ -775,7 +841,7 @@ func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]st
 		}
 		key := [2]string{mcpNamed.Obj().Name(), named.Obj().Name()}
 		out[key] = structPair{
-			mcpName: mcpNamed.Obj().Name(), mcpType: mcpStruct,
+			mcpName: mcpNamed.Obj().Name(), mcpType: mcpStruct, mcpNamed: mcpNamed,
 			sdkName: sdkTypeName(named), sdkType: st, sdkURLTags: true,
 		}
 		return true
@@ -822,7 +888,7 @@ func diffPair(pkg, kind string, pair structPair) gap {
 		if !present {
 			// SDK url tags use array/negation notation (iids[], not[author_id])
 			// that maps to snake_case MCP json names (iids, not_author_id).
-			if alt, ok := mcpFields[normalizeSDKTag(tag)]; ok {
+			if alt, ok := mcpFields[shared.NormalizeSDKTag(tag)]; ok {
 				mcpType, present = alt, true
 			}
 		}
@@ -861,7 +927,7 @@ func inputPairTags(pair structPair) (mcp, sdk map[string]struct{}) {
 	}
 	for tag := range flattenFields(pair.sdkType, sdkKeys) {
 		if tag != "" && tag != "-" {
-			sdk[normalizeSDKTag(tag)] = struct{}{}
+			sdk[shared.NormalizeSDKTag(tag)] = struct{}{}
 		}
 	}
 	return mcp, sdk
@@ -919,13 +985,13 @@ func disjointPhantomInput(pair structPair, all map[[2]string]structPair) bool {
 
 // extraOutputFields reports MCP output json tags with no SDK result counterpart:
 // invented output scalars the 1:1 rule forbids (R-OUTPUT-EXTRA). An MCP tag is
-// extra when it is neither a key of sdkFields nor the normalizeSDKTag image of
+// extra when it is neither a key of sdkFields nor the shared.NormalizeSDKTag image of
 // any SDK key, is not the MCP-envelope carve-out, is not the "-" sentinel, and
 // is not an allowlisted deliberate rename (per the 1:1 data-fidelity policy).
 func extraOutputFields(pkg, mcpType string, mcpFields, sdkFields map[string]string) []extraField {
 	sdkNorm := make(map[string]struct{}, len(sdkFields))
 	for sdkTag := range sdkFields {
-		sdkNorm[normalizeSDKTag(sdkTag)] = struct{}{}
+		sdkNorm[shared.NormalizeSDKTag(sdkTag)] = struct{}{}
 	}
 	tags := make([]string, 0, len(mcpFields))
 	for tag := range mcpFields {
@@ -979,7 +1045,7 @@ func flattenInto(st *types.Struct, tagKeys []string, out map[string]string, dept
 	for i := range st.NumFields() {
 		field := st.Field(i)
 		raw := reflect.StructTag(st.Tag(i))
-		tagName := tagValue(raw, tagKeys)
+		tagName := shared.TagName(raw, tagKeys)
 		if field.Embedded() && tagName == "" {
 			if embedded, ok := structUnder(field.Type()); ok {
 				flattenInto(embedded, tagKeys, out, depth+1)
@@ -993,48 +1059,6 @@ func flattenInto(st *types.Struct, tagKeys []string, out map[string]string, dept
 			out[tagName] = types.TypeString(field.Type(), shortQualifier)
 		}
 	}
-}
-
-// normalizeSDKTag maps a client-go url-tag name to the snake_case json name the
-// MCP inputs use: trailing array notation ("iids[]" → "iids") and bracket
-// negation notation ("not[author_id]" → "not_author_id").
-func normalizeSDKTag(tag string) string {
-	tag = strings.TrimSuffix(tag, "[]")
-	tag = strings.ReplaceAll(tag, "[", "_")
-	tag = strings.ReplaceAll(tag, "]", "")
-	// GraphQL-backed SDK structs tag fields in camelCase (createdAt, targetBranch)
-	// where the MCP output uses the project's snake_case convention. This runs only
-	// in the fallback path (after an exact-tag match fails), so it can only ADD a
-	// match (camelCase SDK tag <-> snake_case MCP tag), never break an exact one.
-	return camelToSnake(tag)
-}
-
-// camelToSnake lowercases a camelCase identifier with underscore separators
-// (createdAt -> created_at). A snake_case input is returned unchanged (no uppercase).
-func camelToSnake(s string) string {
-	var b strings.Builder
-	for i, r := range s {
-		if r >= 'A' && r <= 'Z' {
-			if i > 0 {
-				b.WriteByte('_')
-			}
-			r += 'a' - 'A'
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
-}
-
-func tagValue(raw reflect.StructTag, keys []string) string {
-	for _, key := range keys {
-		if value, ok := raw.Lookup(key); ok {
-			name, _, _ := strings.Cut(value, ",")
-			if name != "" {
-				return name
-			}
-		}
-	}
-	return ""
 }
 
 // typesCompatible reports whether an MCP field type acceptably represents an
@@ -1113,18 +1137,18 @@ func localNamedStruct(pkg *packages.Package, t types.Type) (*types.Named, *types
 //
 // resultExpr is the AST result-type expression (used to detect the alias);
 // resultType is its resolved go/types type (the alias target).
-func localOrAliasNamedStruct(pkg *packages.Package, resultExpr ast.Expr, resultType types.Type) (*types.Struct, string, bool) {
+func localOrAliasNamedStruct(pkg *packages.Package, resultExpr ast.Expr, resultType types.Type) (*types.Named, *types.Struct, string, bool) {
 	if named, st, ok := localNamedStruct(pkg, resultType); ok {
-		return st, named.Obj().Name(), true
+		return named, st, named.Obj().Name(), true
 	}
 	ident := identForExpr(resultExpr)
 	if ident == nil {
-		return nil, "", false
+		return nil, nil, "", false
 	}
 	aliasObj, isTypeName := pkg.TypesInfo.Uses[ident].(*types.TypeName)
 	if !isTypeName || !aliasObj.IsAlias() ||
 		aliasObj.Pkg() == nil || aliasObj.Pkg().Path() != pkg.PkgPath {
-		return nil, "", false
+		return nil, nil, "", false
 	}
 	// Go materializes type aliases as *types.Alias; unwrap to the target named
 	// struct (e.g. Output -> toolutil.MergeRequestOutput) before reading fields.
@@ -1136,11 +1160,14 @@ func localOrAliasNamedStruct(pkg *packages.Package, resultExpr ast.Expr, resultT
 	if ptr, isPtr := target.(*types.Pointer); isPtr {
 		target = ptr.Elem()
 	}
-	_, st, ok := derefNamedStruct(types.Unalias(target))
+	named, st, ok := derefNamedStruct(types.Unalias(target))
 	if !ok {
-		return nil, "", false
+		return nil, nil, "", false
 	}
-	return st, aliasObj.Name(), true
+	// The alias keeps its local name for the report, and the target type
+	// travels beside it: a rule that has to meet reflect on the same identity
+	// (the enum rule's catalog index) keys on the target, not on the alias.
+	return named, st, aliasObj.Name(), true
 }
 
 // identForExpr returns the identifier naming the type in a result expression,

@@ -517,15 +517,20 @@ func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverr
 			}),
 		}
 	case "gitlab_list_user_contribution_events":
-		// Docs: https://docs.gitlab.com/ee/api/events.html#list-a-user-contribution-events
+		// Docs: https://docs.gitlab.com/api/events/#list-a-users-contribution-events
 		// SDK: ListContributionEventsOptions.Action *EventTypeValue,
-		// ListContributionEventsOptions.TargetType *EventTargetTypeValue (types.go)
+		// ListContributionEventsOptions.TargetType *EventTargetTypeValue (types.go).
+		// The filter takes the lower-case snake_case spellings the doc lists
+		// (issue, merge_request, ...), which are also client-go's constants;
+		// the CamelCase forms are how the RESPONSE spells target_type, and a
+		// filter written that way matches nothing. epic (GitLab 17.3) and
+		// approved are documented but have no client-go constant yet.
 		return []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("action",
 				"created", "updated", "closed", "reopened", "pushed", "commented",
 				"merged", "joined", "left", "destroyed", "expired", "approved"),
 			toolutil.SchemaEnumOverride("target_type",
-				"Issue", "Milestone", "MergeRequest", "Note", "Project", "Snippet", "User"),
+				"issue", "milestone", "merge_request", "note", "project", "snippet", "user", "epic"),
 		}
 	case "gitlab_list_service_accounts":
 		// Docs: https://docs.gitlab.com/api/service_accounts/#list-all-instance-service-accounts

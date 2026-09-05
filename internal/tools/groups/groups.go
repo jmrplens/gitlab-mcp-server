@@ -25,7 +25,7 @@ type ListInput struct {
 	WithCustomAttributes bool              `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
 	CustomAttributes     map[string]string `json:"custom_attributes,omitempty" jsonschema:"Filter groups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response"`
 	SkipGroups           []int64           `json:"skip_groups,omitempty"           jsonschema:"Group IDs to exclude from results"`
-	MinAccessLevel       int               `json:"min_access_level,omitempty"      jsonschema:"Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	MinAccessLevel       int               `json:"min_access_level,omitempty"      jsonschema:"Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
 	RepositoryStorage    string            `json:"repository_storage,omitempty"    jsonschema:"Filter by repository storage shard (administrators only)"`
 	Active               *bool             `json:"active,omitempty"                jsonschema:"Filter by active (true) or inactive/archived (false) groups"`
 	Archived             *bool             `json:"archived,omitempty"              jsonschema:"Limit to archived groups (true) or non-archived (false)"`
@@ -1035,7 +1035,7 @@ type ListProjectsInput struct {
 	IncludeSubGroups         bool                 `json:"include_subgroups,omitempty" jsonschema:"Include projects in subgroups"`
 	WithShared               *bool                `json:"with_shared,omitempty"     jsonschema:"Include shared projects"`
 	Active                   *bool                `json:"active,omitempty"          jsonschema:"Filter by active (true) or inactive/archived (false) projects"`
-	MinAccessLevel           int                  `json:"min_access_level,omitempty" jsonschema:"Limit to projects where the caller has at least this access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	MinAccessLevel           int                  `json:"min_access_level,omitempty" jsonschema:"Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
 	Topic                    string               `json:"topic,omitempty"           jsonschema:"Filter projects by topic"`
 	WithCustomAttributes     bool                 `json:"with_custom_attributes,omitempty"     jsonschema:"Include custom attributes in the response"`
 	WithIssuesEnabled        *bool                `json:"with_issues_enabled,omitempty"        jsonschema:"Limit to projects with issues enabled"`
@@ -1493,7 +1493,7 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 type SharedWithListInput struct {
 	GroupID              toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
 	Search               string               `json:"search,omitempty"         jsonschema:"Filter shared groups by name or path"`
-	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the share grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the share grants (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
 	Visibility           string               `json:"visibility,omitempty"     jsonschema:"Filter by visibility (public, internal, private)"`
 	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Order shared groups by field: name, path, id, or similarity (similarity only applies with search). Default is name"`
 	Sort                 string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
@@ -1560,7 +1560,7 @@ func SharedWithList(ctx context.Context, client *gitlabclient.Client, input Shar
 type InvitedListInput struct {
 	GroupID              toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
 	Search               string               `json:"search,omitempty"         jsonschema:"Filter invited groups by name or path"`
-	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the invitation grants (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
 	Relation             []string             `json:"relation,omitempty"       jsonschema:"Filter by relation (direct, inherited)"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
 	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Column to order invited groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored"`

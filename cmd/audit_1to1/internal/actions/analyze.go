@@ -45,6 +45,10 @@ type reportSummary struct {
 	MissingMethods   int `json:"missing_methods"`
 }
 
+// marshalIndent is the JSON encoder, a variable so a test can reach the
+// encoding failure branch that a report of strings and ints never produces.
+var marshalIndent = json.MarshalIndent
+
 // Run builds the report for the given repository root and returns it as
 // indented JSON (with a trailing newline). gapsOnly filters to entries with at
 // least one finding, matching the original -gaps-only flag.
@@ -53,7 +57,7 @@ func Run(root string, gapsOnly bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	content, err := json.MarshalIndent(rep, "", "  ")
+	content, err := marshalIndent(rep, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshal report: %w", err)
 	}

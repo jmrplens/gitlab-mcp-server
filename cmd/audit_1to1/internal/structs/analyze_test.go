@@ -2,6 +2,8 @@ package structs
 
 import (
 	"encoding/json"
+	"errors"
+	"go/ast"
 	"go/token"
 	"go/types"
 	"path/filepath"
@@ -10,9 +12,65 @@ import (
 	"sync"
 	"testing"
 
+	"golang.org/x/tools/go/packages"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
+
+// TestRun_MarshalFailure_IsReported reaches the encoding branch through the
+// seam, since a report of strings and ints never fails to encode on its own.
+func TestRun_MarshalFailure_IsReported(t *testing.T) {
+	original := marshalIndent
+	t.Cleanup(func() { marshalIndent = original })
+	marshalIndent = func(any, string, string) ([]byte, error) { return nil, errors.New("boom") }
+
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	if _, err = Run(root, true); err == nil || !strings.Contains(err.Error(), "marshal report: boom") {
+		t.Fatalf("Run = %v, want the marshal failure", err)
+	}
+}
+
+// TestHandlerShapes_WithoutBodyOrParams_AreSkipped verifies the two guards on
+// a handler declaration: one with no body records no input pair, and one
+// whose parameter list is absent (a shape the parser never produces, since it
+// always attaches an empty list) has no input struct.
+func TestHandlerShapes_WithoutBodyOrParams_AreSkipped(t *testing.T) {
+	pkg := &packages.Package{PkgPath: "example.com/x/internal/tools/p"}
+	bodyless := &ast.FuncDecl{Name: ast.NewIdent("Handle"), Type: &ast.FuncType{Params: &ast.FieldList{}}}
+	pairs := map[[2]string]structPair{}
+	collectHandlerInputs(pkg, bodyless, pairs)
+	if len(pairs) != 0 {
+		t.Errorf("a bodyless handler recorded %d pairs, want none", len(pairs))
+	}
+
+	noParams := &ast.FuncDecl{Name: ast.NewIdent("Handle"), Type: &ast.FuncType{}}
+	if _, _, ok := handlerInputStruct(pkg, noParams); ok {
+		t.Error("a declaration without a parameter list reported an input struct")
+	}
+}
+
+// TestLocalOrAliasNamedStruct_AliasOfNonStruct_IsNotAPair verifies a
+// converter whose result is a local alias of a non-struct type (a slice,
+// say) is not paired: the alias is followed, finds no struct, and the
+// converter is dropped rather than mis-paired.
+func TestLocalOrAliasNamedStruct_AliasOfNonStruct_IsNotAPair(t *testing.T) {
+	const pkgPath = "example.com/x/internal/tools/p"
+	localPkg := types.NewPackage(pkgPath, "p")
+	aliasObj := types.NewTypeName(0, localPkg, "Output", nil)
+	alias := types.NewAlias(aliasObj, types.NewSlice(types.Typ[types.String]))
+	ident := ast.NewIdent("Output")
+	pkg := &packages.Package{
+		PkgPath:   pkgPath,
+		TypesInfo: &types.Info{Uses: map[*ast.Ident]types.Object{ident: aliasObj}},
+	}
+	if named, _, name, ok := localOrAliasNamedStruct(pkg, ident, alias); ok || name != "" || named != nil {
+		t.Errorf("localOrAliasNamedStruct = %v/%q/%v, want no pair for an alias of a slice", named, name, ok)
+	}
+}
 
 // structField is a synthetic (json-tag, Go scalar type) field used to build the
 // minimal *types.Struct values the union/disjoint helpers operate on, without
@@ -117,24 +175,6 @@ func TestTypesCompatible_AcceptsKnownProjections(t *testing.T) {
 	}
 }
 
-// TestTagValue_PrefersFirstKeyAndStripsOptions verifies tag selection across the
-// preferred key order and the stripping of ",omitempty" style suffixes.
-func TestTagValue_PrefersFirstKeyAndStripsOptions(t *testing.T) {
-	raw := reflect.StructTag(`url:"search,omitempty" json:"search_query,omitempty"`)
-	if got := tagValue(raw, []string{"url", "json"}); got != "search" {
-		t.Errorf("tagValue url-first = %q, want %q", got, "search")
-	}
-	if got := tagValue(raw, []string{"json"}); got != "search_query" {
-		t.Errorf("tagValue json = %q, want %q", got, "search_query")
-	}
-	if got := tagValue(reflect.StructTag(`json:"-"`), []string{"json"}); got != "-" {
-		t.Errorf("tagValue dash = %q, want %q", got, "-")
-	}
-	if got := tagValue(reflect.StructTag(``), []string{"json"}); got != "" {
-		t.Errorf("tagValue empty = %q, want %q", got, "")
-	}
-}
-
 // TestPathHelpers verifies the package-name extraction helpers.
 func TestPathHelpers(t *testing.T) {
 	if got := lastPathSegment("gitlab.com/gitlab-org/api/client-go/v2"); got != "v2" {
@@ -225,6 +265,79 @@ func TestBuildReport_Deterministic(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("buildReport is not deterministic across runs")
 	}
+}
+
+// TestCollectPairs_Repository_ListsThePairsTheDiffRunsOver verifies the
+// exported pair listing the enum rule builds on: for every package it yields
+// exactly the input pairs analyzePackage keeps (phantoms dropped) followed by
+// its output pairs, each carrying its kind, both struct sides and the SDK
+// tag preference, in a deterministic order.
+func TestCollectPairs_Repository_ListsThePairsTheDiffRunsOver(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	pkgs, err := shared.LoadToolPackages(root)
+	if err != nil {
+		t.Fatalf("load packages: %v", err)
+	}
+	// Determinism is judged on the pairs' identities: a Pair carries go/types
+	// values, which are not what two runs have to agree on and which the
+	// deepequalerrors vet check refuses to compare.
+	identities := func(pairs []Pair) []string {
+		out := make([]string, 0, len(pairs))
+		for _, pair := range pairs {
+			out = append(out, pair.Kind+" "+pair.MCPName+" "+pair.SDKName)
+		}
+		return out
+	}
+	checked := 0
+	for _, pkg := range pkgs {
+		pr, ok := analyzePackage(pkg)
+		if !ok {
+			continue
+		}
+		checked++
+		pairs := CollectPairs(pkg)
+		inputs, outputs := countPairKinds(t, pr.Package, pairs)
+		if inputs != pr.InputPairs || outputs != pr.OutputPairs {
+			t.Errorf("%s: CollectPairs = %d inputs / %d outputs, analyzePackage = %d / %d", pr.Package, inputs, outputs, pr.InputPairs, pr.OutputPairs)
+		}
+		if again := CollectPairs(pkg); !reflect.DeepEqual(identities(pairs), identities(again)) {
+			t.Errorf("%s: CollectPairs is not deterministic", pr.Package)
+		}
+	}
+	if checked < 50 {
+		t.Fatalf("checked %d packages, want the resolver to attribute pairs across the tree", checked)
+	}
+}
+
+// countPairKinds checks each pair's shape and returns how many inputs and
+// outputs a package's listing carries, reporting an output that precedes an
+// input, a pair of the wrong tag preference, or an incomplete pair.
+func countPairKinds(t *testing.T, pkgName string, pairs []Pair) (inputs, outputs int) {
+	t.Helper()
+	for i, pair := range pairs {
+		switch {
+		case pair.Kind == "input" && outputs > 0:
+			t.Errorf("%s: input pair %s after an output pair", pkgName, pair.MCPName)
+		case pair.Kind == "input" && !pair.SDKURLTags:
+			t.Errorf("%s: input pair %s does not prefer url tags", pkgName, pair.MCPName)
+		case pair.Kind == "output" && pair.SDKURLTags:
+			t.Errorf("%s: output pair %s prefers url tags", pkgName, pair.MCPName)
+		case pair.Kind != "input" && pair.Kind != "output":
+			t.Errorf("%s: pair %d has kind %q", pkgName, i, pair.Kind)
+		}
+		if pair.Kind == "input" {
+			inputs++
+		} else {
+			outputs++
+		}
+		if pair.MCPType == nil || pair.SDKType == nil || pair.MCPName == "" || pair.SDKName == "" {
+			t.Errorf("%s: pair %d is incomplete: %+v", pkgName, i, pair)
+		}
+	}
+	return inputs, outputs
 }
 
 // TestExtraOutputFields_FlagsInventedScalars verifies R-OUTPUT-EXTRA detection:

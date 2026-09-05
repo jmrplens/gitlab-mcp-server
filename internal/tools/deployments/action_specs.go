@@ -72,9 +72,12 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Aliases = []string{"list deployments", "show deployment history", "find deployments"}
 		options.RelatedActions = []string{actionDeploymentGet, "environment.list", "pipeline.get"}
 		options.IndividualTool.Description = "List deployments in a project with environment, status, and date filters plus offset or keyset pagination. Returns: matching deployments with ref, sha, status, user, environment, and deployable (CI job) objects, and pagination metadata. See also: gitlab_deployment_get, gitlab_environment_list, gitlab_pipeline_get."
+		// doc/api/deployments.md "List project deployments": the status
+		// filter also takes blocked, which client-go's DeploymentStatusValue
+		// has no constant for; the handler forwards the string as is.
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("status", map[string]any{
-				"enum": []any{"created", "running", "success", "failed", "canceled"},
+				"enum": []any{"created", "running", "success", "failed", "canceled", "blocked"},
 			}),
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{
 				"enum": []any{"id", "iid", "created_at", "updated_at", "finished_at", "ref"},
@@ -96,9 +99,12 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Aliases = []string{"create deployment", "start deployment", "new deployment"}
 		options.RelatedActions = []string{"environment.get", actionDeploymentList, actionDeploymentUpdate}
 		options.IndividualTool.Description = "Create a deployment record for an environment at a given ref and sha with an initial status. Returns: the created deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_environment_get, gitlab_deployment_list, gitlab_deployment_update."
+		// doc/api/deployments.md "Create a deployment": the initial status is
+		// one of running, success, failed or canceled; created is a state a
+		// deployment can be read in, not one it can be created in.
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("status", map[string]any{
-				"enum": []any{"created", "running", "success", "failed", "canceled"},
+				"enum": []any{"running", "success", "failed", "canceled"},
 			}),
 		}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -117,13 +123,16 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 			},
 		}
 	case "deployment_update":
-		options.Usage = "Update an existing deployment's status (created, running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes."
+		options.Usage = "Update an existing deployment's status (running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes."
 		options.Aliases = []string{"update deployment status", "set deployment status", "transition deployment"}
 		options.RelatedActions = []string{actionDeploymentGet, actionDeploymentList, "deployment.approve_or_reject"}
 		options.IndividualTool.Description = "Update a deployment's status by deployment_id within a project. Returns: the updated deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_deployment_get, gitlab_deployment_list, gitlab_deployment_approve_or_reject."
+		// doc/api/deployments.md "Update a deployment": the new status is one
+		// of running, success, failed or canceled. created and blocked are
+		// states a deployment is read in (and filtered by), not set to.
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("status", map[string]any{
-				"enum": []any{"created", "running", "success", "failed", "canceled", "blocked"},
+				"enum": []any{"running", "success", "failed", "canceled"},
 			}),
 		}
 	case "deployment_delete":

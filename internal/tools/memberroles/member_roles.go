@@ -28,7 +28,7 @@ type ListGroupInput struct {
 // permission-only [Permissions] fragment.
 type CreateInstanceInput struct {
 	Name            string `json:"name"              jsonschema:"Name of the custom role,required"`
-	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid),required"`
+	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid,required"`
 	Description     string `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
 }
@@ -37,7 +37,7 @@ type CreateInstanceInput struct {
 type CreateGroupInput struct {
 	GroupID         toolutil.StringOrInt `json:"group_id"          jsonschema:"Group ID or URL-encoded path,required"`
 	Name            string               `json:"name"              jsonschema:"Name of the custom role,required"`
-	BaseAccessLevel int                  `json:"base_access_level" jsonschema:"Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid),required"`
+	BaseAccessLevel int                  `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid,required"`
 	Description     string               `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
 }

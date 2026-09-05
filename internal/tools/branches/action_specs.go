@@ -160,7 +160,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 
 func branchProtectOptions(options toolutil.ActionSpecOptions) toolutil.ActionSpecOptions {
 	options.Tags = append(options.Tags, "protected_branch", "access_level")
-	options.Usage = "Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer."
+	options.Usage = "Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, 40 means Maintainer, and 60 means Admin (GitLab Self-Managed only)."
 	options.Aliases = []string{"protect branch", "add branch protection", "lock branch"}
 	options.RelatedActions = []string{actionBranchUnprotect, actionBranchGetProtected, actionBranchUpdateProtected}
 	options.IndividualTool.Description = "Protect a branch or wildcard with push/merge/unprotect access levels and optional fine-grained allowed_to_push/merge/unprotect entries. Returns: the protected rule with its access-level arrays. Idempotent: returns the existing rule when the branch is already protected. See also: gitlab_branch_unprotect, gitlab_protected_branch_get, gitlab_protected_branch_update."
@@ -168,9 +168,12 @@ func branchProtectOptions(options toolutil.ActionSpecOptions) toolutil.ActionSpe
 		"push_access_level":  branchProtectionAccessLevelGuidance("push"),
 		"merge_access_level": branchProtectionAccessLevelGuidance("merge"),
 	}
+	// doc/api/protected_branches.md "Valid access levels": 0 (push and merge
+	// only, not valid for unprotect), 30, 40 and 60 (GitLab Self-Managed only).
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-		branchProtectionAccessLevelSchema("push_access_level", "Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer."),
-		branchProtectionAccessLevelSchema("merge_access_level", "Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer."),
+		branchProtectionAccessLevelSchema("push_access_level", "Access level for push: 0=No access, 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). Use an integer.", 0, 30, 40, 60),
+		branchProtectionAccessLevelSchema("merge_access_level", "Access level for merge: 0=No access, 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). Use an integer.", 0, 30, 40, 60),
+		branchProtectionAccessLevelSchema("unprotect_access_level", "Access level allowed to unprotect: 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). 0 (No access) is not valid here. Use an integer.", 30, 40, 60),
 	}
 	return options
 }
@@ -178,16 +181,22 @@ func branchProtectOptions(options toolutil.ActionSpecOptions) toolutil.ActionSpe
 func branchProtectionAccessLevelGuidance(operation string) toolutil.ParameterGuidance {
 	return toolutil.ParameterGuidance{
 		SemanticRole: "branch_protection_" + operation + "_access_level",
-		ValueSource:  "Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.",
+		ValueSource:  "Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer, 60 for Admin on GitLab Self-Managed.",
 		CommonConfusions: []string{
 			"Do not send labels such as maintainer or developers when an integer is possible.",
 		},
 	}
 }
 
-func branchProtectionAccessLevelSchema(name, description string) toolutil.InputSchemaOverride {
+// branchProtectionAccessLevelSchema declares one protection level parameter
+// as a closed integer enum of the given levels, with its description.
+func branchProtectionAccessLevelSchema(name, description string, levels ...int) toolutil.InputSchemaOverride {
+	enum := make([]any, 0, len(levels))
+	for _, level := range levels {
+		enum = append(enum, level)
+	}
 	return toolutil.SchemaPropertyOverride(name, map[string]any{
 		"description": description,
-		"enum":        []any{0, 30, 40},
+		"enum":        enum,
 	})
 }

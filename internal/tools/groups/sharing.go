@@ -21,7 +21,7 @@ import (
 type ShareGroupInput struct {
 	GroupID       toolutil.StringOrInt `json:"group_id"      jsonschema:"Group ID or URL-encoded path of the group being shared,required"`
 	SharedGroupID int64                `json:"shared_group_id" jsonschema:"ID of the group to share with,required"`
-	GroupAccess   int                  `json:"group_access"  jsonschema:"Access level granted to the shared group (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner),required"`
+	GroupAccess   int                  `json:"group_access"  jsonschema:"Access level granted to the shared group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner),required"`
 	ExpiresAt     string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the share (YYYY-MM-DD)"`
 	MemberRoleID  *int64               `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to grant (Ultimate)"`
 }
@@ -134,7 +134,7 @@ func UnshareGroupFromGroup(ctx context.Context, client *gitlabclient.Client, inp
 type ListSharedProjectsInput struct {
 	GroupID                  toolutil.StringOrInt `json:"group_id"                  jsonschema:"Group ID or URL-encoded path,required"`
 	Archived                 *bool                `json:"archived,omitempty"        jsonschema:"Filter archived projects"`
-	MinAccessLevel           int                  `json:"min_access_level,omitempty" jsonschema:"Limit to projects where the caller has at least this access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	MinAccessLevel           int                  `json:"min_access_level,omitempty" jsonschema:"Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
 	OrderBy                  string               `json:"order_by,omitempty"        jsonschema:"Order by field: id, name, path, created_at, updated_at, star_count, or last_activity_at. Default is created_at"`
 	Search                   string               `json:"search,omitempty"          jsonschema:"Filter projects by name"`
 	Simple                   *bool                `json:"simple,omitempty"          jsonschema:"Return limited fields"`

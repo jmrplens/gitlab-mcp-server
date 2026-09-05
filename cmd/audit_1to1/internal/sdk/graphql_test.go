@@ -12,8 +12,26 @@ import (
 	"slices"
 	"testing"
 
+	"golang.org/x/tools/go/packages"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 )
+
+// TestCollectGraphQLSites_BodylessDeclaration_IsSkipped verifies a function
+// declared without a body (an assembly-backed declaration) is passed over
+// rather than inspected, since it has no expressions to type.
+func TestCollectGraphQLSites_BodylessDeclaration_IsSkipped(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "asm.go", "package p\n\nfunc external() int\n", 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	pkg := &packages.Package{PkgPath: "example.com/x/internal/tools/p", Fset: fset, Syntax: []*ast.File{file}}
+	graphQL := types.NewNamed(types.NewTypeName(0, nil, "GraphQLInterface", nil), types.NewInterfaceType(nil, nil), nil)
+	if sites := collectGraphQLSites([]*packages.Package{pkg}, graphQL); len(sites) != 0 {
+		t.Errorf("sites = %+v, want none from a bodyless declaration", sites)
+	}
+}
 
 // declFrom parses a snippet and returns its last function declaration, so the
 // naming cases read as the Go they are about even when a receiver type has to

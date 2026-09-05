@@ -1645,7 +1645,7 @@ Action guidance:
 - get_protected: Get one protected branch (or wildcard rule) by project_id and branch_name. Use to inspect current push/merge/unprotect access levels before updating or unprotecting.
 - list: List repository branches for one project with optional search and pagination. Use this before branch-level operations and when selecting refs for compare/MR flows.
 - list_protected: List protected branches (and wildcard rules) for one project with optional search and pagination. Use to audit branch protection coverage before changing rules.
-- protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer.
+- protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, 40 means Maintainer, and 60 means Admin (GitLab Self-Managed only).
 - rule_list: Audit a project's aggregated branch protection rules in one call: each rule's matched branch pattern, default/protected flags, matching branch count, allow-force-push and code-owner-approval settings, approval rules, and external status checks. Use this when reviewing branch protection posture across a project. For the protected-branch REST records (allowed-to-push/merge access levels) use branch.list_protected or branch.get_protected instead.
 - unprotect: Remove protection from a branch by project_id and branch_name. Use before deleting a protected branch or when relaxing branch protection rules. Idempotent: succeeds when the branch is already unprotected.
 - update_protected: Update an existing protected branch rule by project_id and branch_name. Use to change allow-force-push, CODEOWNERS approval, rename the rule, or replace fine-grained push/merge/unprotect access entries.
@@ -1660,9 +1660,9 @@ Parameter guidance:
 - get_protected.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - list.project_id: scope_project. Source: Project numeric ID or full path containing branches.
 - list_protected.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- protect.merge_access_level: branch_protection_merge_access_level. Source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer. Avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- protect.merge_access_level: branch_protection_merge_access_level. Source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer, 60 for Admin on GitLab Self-Managed. Avoid: Do not send labels such as maintainer or developers when an integer is possible.
 - protect.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- protect.push_access_level: branch_protection_push_access_level. Source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer. Avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- protect.push_access_level: branch_protection_push_access_level. Source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer, 60 for Admin on GitLab Self-Managed. Avoid: Do not send labels such as maintainer or developers when an integer is possible.
 - rule_list.project_path: scope_project. Source: Full project path used by GraphQL branch rule query.
 - unprotect.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - update_protected.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -1684,7 +1684,7 @@ Param conventions: * = required. All actions need project_id* (numeric or url-en
 - get / delete: project_id*, branch_name*
 - list: project_id*, search, page, per_page
 - delete_merged: project_id*. Deletes all merged branches except default/protected
-- protect: project_id*, branch_name*, push_access_level (0/30/40), merge_access_level (0/30/40), allow_force_push (bool)
+- protect: project_id*, branch_name*, push_access_level (0/30/40/60), merge_access_level (0/30/40/60), allow_force_push (bool)
 - unprotect: project_id*, branch_name*
 - list_protected: project_id*
 - get_protected: project_id*, branch_name*
@@ -2128,7 +2128,7 @@ Action guidance:
 - deployment_get: Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata.
 - deployment_list: Lists deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions.
 - deployment_merge_requests: List the merge requests associated with a specific deployment in a project environment. Use this when the prompt asks which MRs were included, shipped, or rolled out by a known deployment_id, not to list deployments or to list merge requests directly.
-- deployment_update: Update an existing deployment's status (created, running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes.
+- deployment_update: Update an existing deployment's status (running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes.
 - freeze_create: Create a deploy freeze period for a project. Returns: the created freeze period with id, freeze_start/freeze_end cron expressions, and cron_timezone.
 - freeze_delete: Delete a deploy freeze period. Returns: no content on success (HTTP 204).
 - freeze_get: Get a specific deploy freeze period. Returns: the freeze period's id, freeze_start/freeze_end cron expressions, cron_timezone, and created/updated timestamps.
@@ -2204,7 +2204,7 @@ Freeze periods (cron expressions):
 Deployments (immutable history records):
 - deployment_list: project_id*, order_by, sort, environment, status, page, per_page
 - deployment_get / deployment_delete: project_id*, deployment_id*
-- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status (created/running/success/failed/canceled)
+- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status (running/success/failed/canceled)
 - deployment_update: project_id*, deployment_id*, status*
 - deployment_approve_or_reject: project_id*, deployment_id*, status* (approved/rejected), comment
 - deployment_merge_requests: project_id*, deployment_id*, state, order_by, sort, page, per_page

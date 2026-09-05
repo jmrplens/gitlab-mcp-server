@@ -3,15 +3,213 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/enums"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
+
+// captureFatal replaces fatalf with a recorder and returns the messages it
+// received, so a fatal path can be asserted on instead of exiting the test
+// binary.
+func captureFatal(t *testing.T) *[]string {
+	t.Helper()
+	original := fatalf
+	t.Cleanup(func() { fatalf = original })
+	var messages []string
+	fatalf = func(message string, args ...any) {
+		messages = append(messages, strings.TrimSpace(fmt.Sprintf(message, args...)))
+	}
+	return &messages
+}
+
+// resetFlags gives main a fresh flag set and the given arguments, restoring
+// both afterwards, so main can be called more than once in one process.
+func resetFlags(t *testing.T, args ...string) {
+	t.Helper()
+	originalArgs, originalFlags := os.Args, flag.CommandLine
+	t.Cleanup(func() {
+		os.Args, flag.CommandLine = originalArgs, originalFlags
+	})
+	os.Args = append([]string{"audit_1to1"}, args...)
+	flag.CommandLine = flag.NewFlagSet("audit_1to1", flag.ContinueOnError)
+}
+
+// TestMain_Arguments_DispatchToTheModeAndReportFatalErrors runs main itself:
+// a single-scope audit writes its report and exits normally, an invalid scope
+// reaches the fatal path with the parse error, and -validate-docs in offline
+// mode with nothing cached reaches the fatal path with the stale citations.
+func TestMain_Arguments_DispatchToTheModeAndReportFatalErrors(t *testing.T) {
+	cases := []struct {
+		name      string
+		args      func(t *testing.T) []string
+		wantFatal string
+	}{
+		{
+			name: "metadata_scope_writes_its_report",
+			args: func(t *testing.T) []string {
+				t.Helper()
+				return []string{"-scope=metadata", "-gaps-only", "-output", filepath.Join(t.TempDir(), "metadata.json")}
+			},
+		},
+		{
+			name:      "invalid_scope_is_fatal",
+			args:      func(*testing.T) []string { return []string{"-scope=bogus"} },
+			wantFatal: `invalid scope "bogus"`,
+		},
+		{
+			name: "validate_docs_offline_without_a_cache_is_fatal",
+			args: func(t *testing.T) []string {
+				t.Helper()
+				return []string{"-validate-docs", "-offline", "-output", filepath.Join(t.TempDir(), "docs.json")}
+			},
+			wantFatal: "stale doc/api citations found",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			messages := captureFatal(t)
+			resetFlags(t, tc.args(t)...)
+			main()
+			switch {
+			case tc.wantFatal == "" && len(*messages) != 0:
+				t.Errorf("main reported %v, want a clean exit", *messages)
+			case tc.wantFatal != "" && (len(*messages) != 1 || !strings.Contains((*messages)[0], tc.wantFatal)):
+				t.Errorf("main reported %v, want one fatal message containing %q", *messages, tc.wantFatal)
+			}
+		})
+	}
+}
+
+// TestRunValidateDocsMode_MissingRoot_IsFatal verifies the mode stops at a
+// repository root it cannot find, before building a fetcher against it.
+func TestRunValidateDocsMode_MissingRoot_IsFatal(t *testing.T) {
+	messages := captureFatal(t)
+	original := repositoryRoot
+	t.Cleanup(func() { repositoryRoot = original })
+	repositoryRoot = func(string) (string, error) { return "", errors.New("no go.mod above here") }
+
+	runValidateDocsMode(filepath.Join(t.TempDir(), "docs.json"), false, true, 0)
+	if len(*messages) != 1 || !strings.Contains((*messages)[0], "find repository root: no go.mod above here") {
+		t.Errorf("fatal messages = %v, want the root error", *messages)
+	}
+}
+
+// TestRun_AnalyzerFailures_AreNamedByStream verifies each seam-reachable
+// failure of the merged run and the single-scope run surfaces with the name
+// of the stream that failed, and that a gate reporting findings fails the run
+// after the report was written.
+func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
+	boom := errors.New("boom")
+	cases := []struct {
+		name    string
+		scope   string
+		arrange func(t *testing.T)
+		wantErr string
+	}{
+		{
+			name: "merged_root_missing", scope: "all",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := repositoryRoot
+				t.Cleanup(func() { repositoryRoot = original })
+				repositoryRoot = func(string) (string, error) { return "", boom }
+			},
+			wantErr: "find repository root: boom",
+		},
+		{
+			name: "single_root_missing", scope: "structs",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := repositoryRoot
+				t.Cleanup(func() { repositoryRoot = original })
+				repositoryRoot = func(string) (string, error) { return "", boom }
+			},
+			wantErr: "find repository root: boom",
+		},
+		{
+			name: "struct_stream_fails", scope: "all",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := structsRun
+				t.Cleanup(func() { structsRun = original })
+				structsRun = func(string, bool) ([]byte, error) { return nil, boom }
+			},
+			wantErr: "struct report: boom",
+		},
+		{
+			name: "action_stream_fails", scope: "all",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				originalStructs, originalActions := structsRun, actionsRun
+				t.Cleanup(func() { structsRun, actionsRun = originalStructs, originalActions })
+				structsRun = func(string, bool) ([]byte, error) { return []byte(`{"packages":[]}`), nil }
+				actionsRun = func(string, bool) ([]byte, error) { return nil, boom }
+			},
+			wantErr: "action report: boom",
+		},
+		{
+			name: "enum_stream_fails", scope: "all",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				originalStructs, originalActions, originalEnums := structsRun, actionsRun, enumsRun
+				t.Cleanup(func() { structsRun, actionsRun, enumsRun = originalStructs, originalActions, originalEnums })
+				structsRun = func(string, bool) ([]byte, error) { return []byte(`{"packages":[]}`), nil }
+				actionsRun = func(string, bool) ([]byte, error) { return []byte(`{"services":[]}`), nil }
+				enumsRun = func(string, bool) ([]byte, bool, error) { return nil, false, boom }
+			},
+			wantErr: "enum report: boom",
+		},
+		{
+			name: "sdk_gate_reports_findings", scope: "sdk",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := sdkRun
+				t.Cleanup(func() { sdkRun = original })
+				sdkRun = func(string, bool) ([]byte, bool, error) { return []byte("{}\n"), false, nil }
+			},
+			wantErr: "SDK parity findings",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.arrange(t)
+			err := run(tc.scope, true, filepath.Join(t.TempDir(), "out.json"))
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("run(%q) error = %v, want it to contain %q", tc.scope, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestRunSingle_EnumScope_ReturnsTheGateVerdict verifies the enums scope is
+// dispatched to the enum rule and its verdict is what the run reports, through
+// the seam so the case does not depend on the tree being clean.
+func TestRunSingle_EnumScope_ReturnsTheGateVerdict(t *testing.T) {
+	original := enumsRun
+	t.Cleanup(func() { enumsRun = original })
+	enumsRun = func(_ string, gapsOnly bool) ([]byte, bool, error) {
+		if !gapsOnly {
+			t.Errorf("enums.Run gapsOnly = false, want the flag passed through")
+		}
+		return []byte("{}\n"), false, nil
+	}
+	content, clean, err := runSingle("enums", true)
+	if err != nil || clean || string(content) != "{}\n" {
+		t.Fatalf("runSingle(enums) = %q/%v/%v, want the seam's report and verdict", content, clean, err)
+	}
+	if _, isReport := any(enums.Report{}).(enums.Report); !isReport {
+		t.Fatal("enums.Report is not the type the real scope marshals")
+	}
+}
 
 // TestParseScope covers the happy and error paths of -scope parsing in one
 // table: explicit/keyword/empty expansion to all three, single scope,
@@ -25,13 +223,14 @@ func TestParseScope(t *testing.T) {
 		wantErr   bool
 		errSubstr string // required error substring when wantErr; "" to skip
 	}{
-		{name: "explicit all three", input: "structs,actions,metadata", wantCount: 3},
-		{name: "keyword all expands", input: "all", wantCount: 3},
-		{name: "empty expands to all", input: "", wantCount: 3},
+		{name: "explicit all four", input: "structs,actions,metadata,enums", wantCount: 4},
+		{name: "keyword all expands", input: "all", wantCount: 4},
+		{name: "empty expands to all", input: "", wantCount: 4},
 		{name: "single scope", input: "structs", wantCount: 1, wantFirst: "structs"},
 		{name: "sdk scope", input: "sdk", wantCount: 1, wantFirst: "sdk"},
+		{name: "enums scope", input: "enums", wantCount: 1, wantFirst: "enums"},
 		{name: "deduplicates repeats", input: "structs,structs,actions,actions", wantCount: 2},
-		{name: "trims whitespace", input: " structs , actions , metadata ", wantCount: 3},
+		{name: "trims whitespace", input: " structs , actions , metadata , enums ", wantCount: 4},
 		{name: "rejects unknown token", input: "structs,unknown", wantErr: true, errSubstr: "unknown"},
 		{name: "rejects garbage word", input: "foo", wantErr: true},
 		{name: "rejects mixed garbage", input: "structs,bar", wantErr: true},
@@ -78,19 +277,20 @@ func TestRunSingle_UnknownScope(t *testing.T) {
 	}
 }
 
-// TestIsMergedScope_Combinations_MatchOnlyTheTrio verifies the merged backlog
-// runs for exactly the three candidate streams. Adding the sdk scope made the
-// old "three entries means all of them" test wrong: structs,actions,sdk also
-// has three entries and must not be merged.
-func TestIsMergedScope_Combinations_MatchOnlyTheTrio(t *testing.T) {
+// TestIsMergedScope_Combinations_MatchOnlyTheMergedSet verifies the merged
+// backlog runs for exactly the four merged streams. Adding the sdk scope made
+// a count-based test wrong: structs,actions,metadata,sdk also has four
+// entries and must not be merged.
+func TestIsMergedScope_Combinations_MatchOnlyTheMergedSet(t *testing.T) {
 	cases := []struct {
 		name   string
 		scopes []string
 		want   bool
 	}{
-		{name: "the_trio", scopes: []string{"actions", "metadata", "structs"}, want: true},
-		{name: "trio_with_sdk_substituted", scopes: []string{"actions", "sdk", "structs"}, want: false},
-		{name: "all_four", scopes: []string{"actions", "metadata", "sdk", "structs"}, want: false},
+		{name: "the_merged_set", scopes: []string{"actions", "enums", "metadata", "structs"}, want: true},
+		{name: "old_trio_without_enums", scopes: []string{"actions", "metadata", "structs"}, want: false},
+		{name: "set_with_sdk_substituted", scopes: []string{"actions", "metadata", "sdk", "structs"}, want: false},
+		{name: "all_five", scopes: []string{"actions", "enums", "metadata", "sdk", "structs"}, want: false},
 		{name: "single", scopes: []string{"sdk"}, want: false},
 		{name: "empty", scopes: nil, want: false},
 	}
@@ -201,7 +401,8 @@ func TestRun_ScopeSelection_RejectsUnsupportedScopes(t *testing.T) {
 	}{
 		{name: "unknown_scope", scope: "bogus", wantErr: `invalid scope "bogus"`},
 		{name: "two_scopes", scope: "structs,actions", wantErr: "other combinations are not supported"},
-		{name: "three_scopes_that_are_not_the_trio", scope: "structs,actions,sdk", wantErr: "other combinations are not supported"},
+		{name: "the_old_trio_without_enums", scope: "structs,actions,metadata", wantErr: "other combinations are not supported"},
+		{name: "four_scopes_that_are_not_the_merged_set", scope: "structs,actions,metadata,sdk", wantErr: "other combinations are not supported"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -213,12 +414,14 @@ func TestRun_ScopeSelection_RejectsUnsupportedScopes(t *testing.T) {
 	}
 }
 
-// TestRun_EachScope_WritesItsReportShape runs the three single-scope
-// reports and the merged backlog through the seam against the real tree and
-// checks each lands in its file in the analyzer's native shape: the struct
-// report names the client-go path, the action report lists services, the
-// metadata report lists packages, and the merged backlog carries the note
-// and the per-stream summary. A write failure surfaces as such.
+// TestRun_EachScope_WritesItsReportShape runs the single-scope reports and
+// the merged backlog through the seam against the real tree and checks each
+// lands in its file in the analyzer's native shape: the struct report names
+// the client-go path, the action report lists services, the metadata report
+// lists packages, the enum report lists packages under the client-go path,
+// the sdk report carries the enum fields beside its services, and the merged
+// backlog carries the note and the per-stream summary. A write failure
+// surfaces as such.
 func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 	dir := t.TempDir()
 	cases := []struct {
@@ -229,7 +432,8 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 		{name: "metadata", scope: "metadata", wantKeys: []string{"schema_version", "summary", "packages"}},
 		{name: "structs", scope: "structs", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
 		{name: "actions", scope: "actions", wantKeys: []string{"schema_version", "client_go_path", "summary", "services"}},
-		{name: "sdk", scope: "sdk", wantKeys: []string{"schema_version", "client_go_path", "summary", "services", "graphql_operations"}},
+		{name: "enums", scope: "enums", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
+		{name: "sdk", scope: "sdk", wantKeys: []string{"schema_version", "client_go_path", "summary", "services", "graphql_operations", "enum_fields"}},
 		{name: "merged", scope: "all", wantKeys: []string{"schema_version", "note", "summary", "packages"}},
 	}
 	for _, tc := range cases {
@@ -253,7 +457,7 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 	t.Run("merged_summary_carries_every_stream", func(t *testing.T) {
 		doc := readJSONFile(t, filepath.Join(dir, "all.json"))
 		summary, _ := doc["summary"].(map[string]any)
-		for _, key := range []string{"struct_missing_input", "action_missing_methods", "meta_generic_usage"} {
+		for _, key := range []string{"struct_missing_input", "action_missing_methods", "meta_generic_usage", "enum_missing_values", "enum_extra_values"} {
 			t.Run(key, func(t *testing.T) {
 				if _, ok := summary[key]; !ok {
 					t.Errorf("merged summary lacks %q (keys %v)", key, keysOf(summary))

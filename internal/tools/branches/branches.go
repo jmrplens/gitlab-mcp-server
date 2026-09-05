@@ -62,9 +62,9 @@ type ListOutput struct {
 type ProtectInput struct {
 	ProjectID                 toolutil.StringOrInt    `json:"project_id"                          jsonschema:"Project ID or URL-encoded path,required"`
 	BranchName                string                  `json:"branch_name"                         jsonschema:"Branch name or wildcard (e.g. 'main' or 'release/*'),required"`
-	PushAccessLevel           int                     `json:"push_access_level,omitempty"         jsonschema:"Access level for push (0=No access 30=Developer 40=Maintainer)"`
-	MergeAccessLevel          int                     `json:"merge_access_level,omitempty"        jsonschema:"Access level for merge (0=No access 30=Developer 40=Maintainer)"`
-	UnprotectAccessLevel      int                     `json:"unprotect_access_level,omitempty"    jsonschema:"Access level allowed to unprotect (0=No access 30=Developer 40=Maintainer)"`
+	PushAccessLevel           int                     `json:"push_access_level,omitempty"         jsonschema:"Access level for push (0=No access 30=Developer 40=Maintainer 60=Admin on GitLab Self-Managed)"`
+	MergeAccessLevel          int                     `json:"merge_access_level,omitempty"        jsonschema:"Access level for merge (0=No access 30=Developer 40=Maintainer 60=Admin on GitLab Self-Managed)"`
+	UnprotectAccessLevel      int                     `json:"unprotect_access_level,omitempty"    jsonschema:"Access level allowed to unprotect (30=Developer 40=Maintainer 60=Admin on GitLab Self-Managed). 0 (No access) is not valid here"`
 	AllowForcePush            *bool                   `json:"allow_force_push,omitempty"          jsonschema:"Allow force push to this branch"`
 	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Fine-grained push access entries (by user, group, deploy key, or access level)"`
 	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Fine-grained merge access entries (by user, group, deploy key, or access level)"`

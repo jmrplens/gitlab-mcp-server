@@ -22,6 +22,12 @@ const hintVerifyJobID = "verify job_id with gitlab_job_list"
 // response cannot exceed roughly 100 KB.
 const maxTraceBytes = 100 * 1024
 
+// readFull is the trace body reader, a variable so a test can reach the read
+// failure branch: client-go hands [Trace] an in-memory *bytes.Reader, which
+// never fails with anything but an end of file, and the check is kept for
+// the day the wrapper streams the body instead.
+var readFull = io.ReadFull
+
 // Operation and formatter constants shared by the jobs package.
 const (
 	toolJobTrace = "jobTrace"
@@ -95,7 +101,7 @@ func rawJobsOutput(jobs []*jobAPI, resp *gl.Response) ListOutput {
 type ListInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
 	PipelineID     int64                `json:"pipeline_id"              jsonschema:"Pipeline ID to list jobs for,required"`
-	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, running, failed, success, canceled, skipped, waiting_for_resource, manual"`
+	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled"`
 	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried jobs in the response"`
 	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
 	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`
@@ -246,7 +252,7 @@ func Trace(ctx context.Context, client *gitlabclient.Client, input TraceInput) (
 	}
 
 	buf := make([]byte, maxTraceBytes+1)
-	n, err := io.ReadFull(reader, buf)
+	n, err := readFull(reader, buf)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return TraceOutput{}, toolutil.WrapErrWithMessage(toolJobTrace, err)
 	}
@@ -400,7 +406,7 @@ const maxArtifactBytes = 1 * 1024 * 1024
 // ListProjectInput defines parameters for listing all jobs in a project.
 type ListProjectInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
-	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, running, failed, success, canceled, skipped, waiting_for_resource, manual"`
+	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled"`
 	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried jobs in the response"`
 	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
 	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`
@@ -441,7 +447,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 type BridgeListInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
 	PipelineID     int64                `json:"pipeline_id" jsonschema:"Pipeline ID to list bridge jobs for,required"`
-	Scope          []string             `json:"scope,omitempty" jsonschema:"Filter by job status: created, pending, running, failed, success, canceled, skipped, manual"`
+	Scope          []string             `json:"scope,omitempty" jsonschema:"Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled"`
 	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried bridge jobs in the response"`
 	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
 	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`

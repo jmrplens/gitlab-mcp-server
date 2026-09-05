@@ -9,7 +9,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,7 +62,7 @@ func runValidateDocs(ctx context.Context, root string, fetcher *apidocs.Fetcher)
 		}
 	}
 
-	out, err := json.MarshalIndent(rep, "", "  ")
+	out, err := marshalIndent(rep, "", "  ")
 	if err != nil {
 		return nil, false, fmt.Errorf("marshal validation report: %w", err)
 	}

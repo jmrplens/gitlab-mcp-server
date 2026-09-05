@@ -56,7 +56,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
 	DeploymentID int                  `json:"deployment_id"  jsonschema:"Deployment ID,required"`
-	Status       string               `json:"status"         jsonschema:"New deployment status: created or running or success or failed or canceled,required"`
+	Status       string               `json:"status"         jsonschema:"New deployment status: running or success or failed or canceled,required"`
 }
 
 // DeleteInput contains parameters for deleting a deployment.

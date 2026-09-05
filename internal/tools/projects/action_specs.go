@@ -730,9 +730,11 @@ var projectSettingsEnumOverrides = []toolutil.InputSchemaOverride{
 		"enum":        []any{"enabled", "disabled"},
 		"description": "Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.",
 	}),
+	// doc/api/resource_groups.md lists the four process modes; client-go's
+	// ResourceGroupProcessMode declares the same four.
 	toolutil.SchemaPropertyOverride("resource_group_default_process_mode", map[string]any{
-		"enum":        []any{"unordered", "oldest_first", "newest_first"},
-		"description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
+		"enum":        []any{"unordered", "oldest_first", "newest_first", "newest_ready_first"},
+		"description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, newest_first, or newest_ready_first.",
 	}),
 	// dap_powered was removed as an input in GitLab 19.4; it can still be read
 	// back from projects configured before then, so the output keeps it.

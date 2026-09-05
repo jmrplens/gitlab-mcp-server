@@ -141,7 +141,7 @@ type CreateInput struct {
 	StartsAt           string  `json:"starts_at,omitempty" jsonschema:"Start time in ISO 8601 format"`
 	EndsAt             string  `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
 	Font               string  `json:"font,omitempty" jsonschema:"Font for the message"`
-	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)"`
+	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
 	TargetPath         string  `json:"target_path,omitempty" jsonschema:"Target path to show message on"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
@@ -199,7 +199,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	m, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_create", err, http.StatusBadRequest,
-			"broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; starts_at < ends_at; access levels: 5/10/15/20/25/30/40/50/60 (Minimal/Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner/Admin where supported)")
+			"broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; starts_at < ends_at; access levels: 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner)")
 	}
 	return CreateOutput{Message: toItem(m)}, nil
 }
@@ -213,7 +213,7 @@ type UpdateInput struct {
 	StartsAt           string  `json:"starts_at,omitempty" jsonschema:"Start time in ISO 8601 format"`
 	EndsAt             string  `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
 	Font               string  `json:"font,omitempty" jsonschema:"Font for the message"`
-	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target"`
+	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
 	TargetPath         string  `json:"target_path,omitempty" jsonschema:"Target path to show message on"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
