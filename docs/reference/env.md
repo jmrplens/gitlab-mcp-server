@@ -210,7 +210,7 @@ In HTTP mode, configuration resolves in three layers, highest first:
 
 Passing a flag whose value happens to equal the default still counts as choosing it, so the environment cannot override it. See [CLI Reference](cli.md) for the full flag list.
 
-The rows marked *(none)* in the flag column have no environment counterpart at all, the transport and listener flags in particular. A deployment that configures everything else through the environment must still pass those on the command line. The rows marked *(none)* in the variable column are the reverse: settings that exist only in the environment, either because the flag would put a secret on a command line or because they bound a transport rather than configure it.
+The rows marked *(none)* in the variable column are flags with no environment counterpart at all, the transport and listener flags in particular. A deployment that configures everything else through the environment must still pass those on the command line. The rows marked *(none)* in the flag column are the reverse: settings that exist only in the environment, because the flag would put a secret on a command line.
 
 Nothing in this table is reachable from a request. Clients control only their GitLab token and the `GITLAB-URL` header, and what that header may do follows how many instances the deployment published: with none it selects the instance freely; with exactly one it is ignored and logged, because that instance is authoritative; with several it selects among them, and a value naming anything else is refused rather than quietly served the default. Every other configuration header is ignored and reported in the `ignored_options` log field. See [Configuration Precedence](../guides/http-server-mode.md#configuration-precedence).
 

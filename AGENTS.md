@@ -193,8 +193,9 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
 1. `make release` — GoReleaser snapshot, flattens `dist/` to GitHub asset names.
 2. **Release link names must be exact filenames** (e.g.
    `checksums.txt.asc`, `gitlab-mcp-server-linux-amd64`). Never add
-   descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches
-   asset names exactly and will fail with decorated names.
+   descriptive suffixes like `(GPG signature)` — the Homebrew formula,
+   winget, the installers and `scripts/fetch-release-assets.sh` look
+   assets up by exact name and will not find a decorated one.
 3. Push the tag; CI publishes the GitHub Release and the Docker image.
 4. The public hosted endpoint `https://mcp.jmrp.io/gitlab` is deployed out of
    band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host —
@@ -207,7 +208,7 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
   `--tool-surface=meta` (HTTP) when they want the 33/49/50-tool catalog.
 - **`.tmp-kg-fixtures/` and `.tmp-token-audit/`** are working dirs for
   the fixture and token-audit scripts. Safe to ignore.
-- **`go-selfupdate` asset names** — see the release section above.
+- **Release asset names are looked up verbatim** — see the release section above.
 - **Coverage minimum 80%** is enforced in CI; locally
   `go test -coverprofile=coverage.out ./cmd/... ./internal/...` then
   `go tool cover -func=coverage.out` reports totals.

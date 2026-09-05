@@ -168,7 +168,7 @@ Every test MUST have a detailed doc comment explaining:
 4. **Why**: The business rule or edge case this test protects
 
 ```go
-// TestBranchCreate_Success verifies that branchCreate creates a branch
+// TestBranchCreate_Success verifies that Create creates a branch
 // when the GitLab API returns HTTP 201 Created.
 //
 // The test mocks POST /projects/:id/repository/branches to return a
@@ -181,7 +181,7 @@ func TestBranchCreate_Success(t *testing.T) {
 Error scenario:
 
 ```go
-// TestBranchCreate_ProjectNotFound verifies that branchCreate returns an
+// TestBranchCreate_ProjectNotFound verifies that Create returns an
 // error when the target project does not exist in GitLab.
 //
 // The mock returns HTTP 404 with a GitLab error body. The test asserts

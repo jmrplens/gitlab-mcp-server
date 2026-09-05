@@ -223,7 +223,7 @@ func TestSiteStatsCapabilitiesMatchesDocs(t *testing.T) {
 	}
 }
 
-// TestSiteStatsCompletionsMatchesDocs pins siteCompletionArgTypes to the count
+// TestSiteStatsCompletionsMatchesDocs pins siteCompletionArgNames to the count
 // documented in docs/reference/capabilities/completions.md so the published
 // number cannot silently drift from the canonical capability reference.
 func TestSiteStatsCompletionsMatchesDocs(t *testing.T) {
@@ -232,8 +232,8 @@ func TestSiteStatsCompletionsMatchesDocs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read completions doc: %v", err)
 	}
-	want := "supports **" + strconv.Itoa(siteCompletionArgTypes) + " argument names**"
+	want := "supports **" + strconv.Itoa(siteCompletionArgNames) + " argument names**"
 	if !strings.Contains(string(data), want) {
-		t.Errorf("docs do not contain %q; update siteCompletionArgTypes or the docs", want)
+		t.Errorf("docs do not contain %q; update siteCompletionArgNames or the docs", want)
 	}
 }

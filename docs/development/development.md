@@ -59,7 +59,7 @@ gitlab-mcp-server/
 ├── internal/
 │   ├── config/                  # Environment variable loading and validation
 │   ├── gitlab/                  # GitLab API client wrapper with TLS support
-│   ├── completions/             # Autocomplete handler for 17 argument types
+│   ├── completions/             # Autocomplete handler for 18 argument names
 │   ├── progress/                # Progress notification tracker
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)

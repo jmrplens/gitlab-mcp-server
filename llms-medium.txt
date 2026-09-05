@@ -1625,7 +1625,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1079 tools, one per operation
 
 - **URI Template**: `gitlab://project/{project_id}/commit/{sha}`
 - **MIME**: application/json
-- **Description**: Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions/deletions).
+- **Description**: Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions, deletions and their total).
 
 ### deploy_key
 

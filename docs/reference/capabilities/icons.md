@@ -547,17 +547,17 @@ picture for the server and for one of its tools.
 
 Icon integrity is validated by 9 unit tests in [`internal/toolutil/icons_test.go`](../../../internal/toolutil/icons_test.go):
 
-| Test                                | Validates                                                                                                  |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `TestAllIcons_ThreeEntries`         | Every icon has exactly 3 entries (SVG + WebP light + WebP dark)                                            |
-| `TestAllIcons_ValidDataURI`         | Every entry's Source starts with the matching `data:<MIMEType>;base64,`                                    |
-| `TestAllIcons_CorrectMIMEType`      | Entry 0 is `image/svg+xml`; entries 1–2 are `image/webp`                                                   |
-| `TestAllIcons_NonEmpty`             | No entry's Source is empty                                                                                 |
-| `TestAllIcons_DecodesToSVG`         | The SVG entry's base64 payload decodes to a `<svg>...</svg>` document                                      |
-| `TestAllIcons_SizesAny`             | The SVG entry's `Sizes` field equals `["any"]` (scalable)                                                  |
-| `TestAllIcons_WebPFallbackTheme`    | WebP entries declare `Theme` `light`/`dark` and `Sizes: ["16x16"]`                                         |
-| `TestAllIcons_WebPFallbackDecodes`  | WebP payloads decode to a real 16×16 image via `golang.org/x/image/webp`                                   |
-| `TestWebpIcon_PanicsOnMissingAsset` | A name with no generated WebP pair panics at build time instead of shipping an icon with two empty entries |
+| Test                                | Validates                                                                                                                  |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `TestAllIcons_ThreeEntries`         | Every icon has exactly 3 entries (SVG + WebP light + WebP dark)                                                            |
+| `TestAllIcons_ValidDataURI`         | Every entry's Source starts with the matching `data:<MIMEType>;base64,`                                                    |
+| `TestAllIcons_CorrectMIMEType`      | Entry 0 is `image/svg+xml`; entries 1–2 are `image/webp`                                                                   |
+| `TestAllIcons_NonEmpty`             | No entry's Source is empty                                                                                                 |
+| `TestAllIcons_DecodesToSVG`         | The SVG entry's base64 payload decodes to a `<svg>...</svg>` document                                                      |
+| `TestAllIcons_SizesAny`             | The SVG entry's `Sizes` field equals `["any"]` (scalable)                                                                  |
+| `TestAllIcons_WebPFallbackTheme`    | WebP entries declare `Theme` `light`/`dark` and `Sizes: ["16x16"]`                                                         |
+| `TestAllIcons_WebPFallbackDecodes`  | WebP payloads decode to a real 16×16 image via `golang.org/x/image/webp`                                                   |
+| `TestWebpIcon_PanicsOnMissingAsset` | A name with no generated WebP pair panics during package initialization instead of shipping an icon with two empty entries |
 
 ## Security Considerations
 

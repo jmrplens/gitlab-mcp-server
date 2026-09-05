@@ -36,12 +36,12 @@
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
-| Completion argument types | 18                                                                                                           |
+| Completion argument names | 18                                                                                                           |
 | MCP Capabilities          | 4 (progress, elicitation, completions, resource subscriptions)                     |
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 766 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 369 test files under `internal/tools/`                                                                       |
-| Go packages               | 246 total; 178 under `internal/tools/...` (the root package plus 177 domain sub-packages)                    |
+| Go packages               | 246 in the main module (`go list ./...`); the README's 252 also counts the e2e modules. 178 under `internal/tools/...` (the root package plus 177 domain sub-packages) |
 
 ### Orbit live tests
 
@@ -327,7 +327,7 @@ For targeted debugging, append `PRESET=...` to any evaluator target to run a sin
 When creating a new release and uploading binaries to GitHub Releases:
 
 1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names). In CI, GoReleaser creates the GitHub release **as a draft** and a dedicated staging step copies each binary from its per-target subdirectory to `dist/<release-asset-name>` (driven by `dist/artifacts.json`) — the npm steps read those paths. The draft is published (`gh release edit --draft=false`) only after the `.mcpb` is attached and every artifact is attested with `actions/attest-build-provenance`, so `go-selfupdate` never observes a partial release. Each release also ships one SPDX SBOM per binary (`<asset>.sbom.json`, listed in `checksums.txt` before cosign signs it as `checksums.txt.sigstore.json`).
-2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.sigstore.json`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches asset names exactly and will fail to find files with decorated names
+2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.sigstore.json`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — the Homebrew formula, winget, the installers and `scripts/fetch-release-assets.sh` look assets up by exact name and will not find a decorated one
 3. The tag-triggered release workflow also publishes derived artifacts automatically:
    - `gitlab-mcp-server-darwin-all` — macOS universal (fat) binary from GoReleaser `universal_binaries`
    - `gitlab-mcp-server.mcpb` — Claude Desktop extension built by `scripts/build-mcpb.sh` from `mcpb/manifest.json` (validate with `make check-mcpb`, build locally with `make mcpb`)
@@ -806,7 +806,7 @@ go test ./internal/prompts/ -count=1 -v                    # Prompts
 
 ### Running E2E tests
 
-E2E tests run against a real GitLab instance using in-memory MCP transport (no network). Two modes are supported:
+E2E tests run against a real GitLab instance; only the MCP transport between the test client and the server is in memory, and every tool call still reaches the configured GitLab over the network. Two modes are supported:
 
 **Self-hosted mode** — requires a `.env` file with `GITLAB_URL` and `GITLAB_TOKEN` (user must have permissions to create/delete projects):
 

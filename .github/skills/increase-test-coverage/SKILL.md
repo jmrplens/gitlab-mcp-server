@@ -242,9 +242,13 @@ When testing POST/PUT operations, validate the request:
 client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
         t.Errorf("method = %s, want POST", r.Method)
+        http.Error(w, "unexpected method", http.StatusBadRequest)
+        return
     }
     if r.URL.Path != "/api/v4/projects/42/issues" {
         t.Errorf("path = %s, want /api/v4/projects/42/issues", r.URL.Path)
+        http.Error(w, "unexpected path", http.StatusBadRequest)
+        return
     }
     testutil.RespondJSON(w, http.StatusCreated, `{...}`)
 }))

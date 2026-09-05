@@ -63,11 +63,11 @@ make install-tools
 
 This installs:
 
-| Tool          | Install command                                                            | Version                                                                                             |
-| ------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| golangci-lint | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` | v2.13.1 is what CI runs (`GOLANGCI_LINT_VERSION` in the Makefile); install that release to match it |
-| govulncheck   | `go install golang.org/x/vuln/cmd/govulncheck@latest`                      | the version the `tool` directive in `go.mod` names is what CI runs                                  |
-| gotestsum     | `go install gotest.tools/gotestsum@latest`                                 | latest                                                                                              |
+| Tool          | Install command                                                             | Version                                                                                                                                  |
+| ------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| golangci-lint | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1` | v2.13.1 is what CI runs (`GOLANGCI_LINT_VERSION` in the Makefile); a newer release may report findings CI does not, or miss ones it does |
+| govulncheck   | `go install golang.org/x/vuln/cmd/govulncheck@<version>`                    | the version the `tool` directive in `go.mod` names is what CI runs; install that one, or run `go tool govulncheck` and let Go resolve it |
+| gotestsum     | `go install gotest.tools/gotestsum@latest`                                  | latest                                                                                                                                   |
 
 Verify installation:
 

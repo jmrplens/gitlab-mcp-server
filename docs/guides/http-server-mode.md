@@ -27,7 +27,7 @@ By default, gitlab-mcp-server runs in **stdio mode** — each AI client (VS Code
 
 ## Starting the HTTP Server
 
-HTTP mode is configured via CLI flags; every flag also reads its value from the environment when it is not passed, and the flag wins (see [Configuration Precedence](#configuration-precedence)). The instance is not optional: `--gitlab-url` names the GitLab this deployment serves, and a start without one is refused unless `--allow-any-gitlab-url` is passed:
+HTTP mode is configured via CLI flags; every flag that has an environment counterpart also reads its value from it when the flag is not passed, and the flag wins (see [Configuration Precedence](#configuration-precedence)). The transport and listener flags have no counterpart and are passed on the command line only. The instance is not optional: `--gitlab-url` names the GitLab this deployment serves, and a start without one is refused unless `--allow-any-gitlab-url` is passed:
 
 ```bash
 # Single GitLab.com instance (all clients use the same instance; replace for self-managed GitLab)

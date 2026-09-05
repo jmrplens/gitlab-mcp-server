@@ -71,6 +71,9 @@ description: "Brief description for SEO and search"
 chips:
   - text: "One short fact"
 datePublished: "YYYY-MM-DD"
+faq:
+  - q: "A question a reader of this page asks?"
+    a: "Its answer, in one or two sentences; the site renders the list where the page places <FAQ />."
 ---
 ```
 

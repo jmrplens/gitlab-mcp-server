@@ -63,7 +63,7 @@ Compare the result against the domain mapping table in this skill. For any file 
 1. **Check client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` to understand the canonical struct fields and API contracts for that domain
 2. **Check `client.GL().{Service}.*` calls** in the source file → determines the sub-package name
 3. **Check `action_specs.go` and catalog aggregation** → determines canonical runtime surface status
-4. **Check `docs/tools/{domain}.md`** IF it exists → supplementary user-facing context
+4. **Check the `docs/reference/tools/` page that owns the domain** IF one exists (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages) → supplementary user-facing context
 
 The sub-package name must align with the client-go service name, not with our file naming.
 

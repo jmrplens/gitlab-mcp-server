@@ -43,13 +43,13 @@ import (
 // count went stale when the fourth capability shipped.
 const siteCapabilities = 4
 
-// siteCompletionArgTypes is the number of distinct completion argument types
+// siteCompletionArgNames is the number of distinct completion argument types
 // the server supports. The completion handler dispatches argument types through
 // a switch in internal/completions rather than an enumerable registry, so this
 // value mirrors the canonical count documented in
 // docs/reference/capabilities/completions.md ("18 argument names"). It is pinned
 // by TestSiteStatsCompletionsMatchesDocs so it cannot silently drift.
-const siteCompletionArgTypes = 18
+const siteCompletionArgNames = 18
 
 // siteStats is the single-sourced statistics payload written to
 // site/src/data/stats.json and imported by the documentation MDX pages.
@@ -120,7 +120,7 @@ func generateSiteStats(client, gitLabComClient *gitlabclient.Client) (siteStats,
 		CatalogGroups:  siteCatalogGroupsFor(client),
 		Resources:      sumResources(client),
 		Prompts:        countPrompts(client),
-		Completions:    siteCompletionArgTypes,
+		Completions:    siteCompletionArgNames,
 		Capabilities:   siteCapabilities,
 		ToolPackages:   countToolPackages(),
 	}, nil

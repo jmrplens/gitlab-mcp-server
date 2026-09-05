@@ -127,11 +127,11 @@ Provide domain-specific icons on all tools, resources, and prompts for visual id
 
 ### Elicitation
 
-Tools can request user input via `server.Elicit()` for confirmation of destructive actions or collecting missing parameters.
+Tools request user input through the session, `req.Session.Elicit(ctx, &mcp.ElicitParams{...})`, for confirmation of destructive actions or to collect missing parameters; the multi-step flows live in `internal/elicitation`. See the elicitation section of `go-mcp-server.instructions.md` for the pattern.
 
 ### Completions
 
-Provide argument autocompletion for tool parameters using `mcp.AddCompletionProvider()`. Register completions for arguments that have a finite, discoverable set of values (project IDs, branch names, user names).
+Provide argument autocompletion through one `ServerOptions.CompletionHandler`, which serves every `completion/complete` request and dispatches on the argument name (`internal/completions`). Complete arguments that have a finite, discoverable set of values (project IDs, branch names, user names).
 
 ### Discovery and Meta-Tools
 

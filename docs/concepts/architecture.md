@@ -76,7 +76,7 @@ graph TD
         ELIC[elicitation support<br/>4 interactive actions]
         RES[resources<br/>45 resource handlers]
         PROMPTS[prompts<br/>37 prompt handlers]
-        COMP[completions<br/>17 completion types]
+        COMP[completions<br/>18 argument names]
         PROG[progress<br/>Progress notifications]
         ELICIT[elicitation<br/>User input client]
         ICN[icons<br/>50 domain icons + brand mark]

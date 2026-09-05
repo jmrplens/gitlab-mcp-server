@@ -178,7 +178,7 @@ Eleven more arrive with Ultimate:
 
 ### Consolidation Decision
 
-ADR-0005 records the historical consolidation from many standalone meta-tools to the current domain-oriented taxonomy. The stable architecture described here is the current contract: broad visible domain tools, Enterprise/Premium gating for premium groups, and GitLab.com-only gating for `gitlab_orbit`.
+ADR-0005 records the historical consolidation from many standalone meta-tools to the current domain-oriented taxonomy. The stable architecture described here is the current contract: broad visible domain tools, Premium and Ultimate gating for the tiered groups, and GitLab.com-only gating for `gitlab_orbit`.
 
 The consolidated surface reduces:
 
@@ -326,7 +326,7 @@ Meta-tools advertise a deliberately compact input schema by default (`GITLAB_MCP
 
    For example, `gitlab://tools/gitlab_merge_request.create` returns the call shape and JSON Schema for the `create` action's `params`. The `gitlab://tools` manifest enumerates every visible meta-tool action in the active server configuration.
 
-   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`):
+   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`). `visible_tool_count` is one more than the 32 tools listed above because `gitlab_server`, which sits outside the catalog counts, has actions of its own and so appears in the manifest:
 
    ```json
    {
