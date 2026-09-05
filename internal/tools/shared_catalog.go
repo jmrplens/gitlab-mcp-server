@@ -13,18 +13,27 @@
 // The key is everything that shapes the surface other than the credential:
 // the tier, the instance class (GitLab.com carries the Orbit actions), whether
 // the maintenance group is included, and, for the filtered surfaces, the
-// operator's exclusions, the token's scopes, read-only mode with its cause,
-// and safe mode. The key space is bounded by configuration: every one of those
-// is either a deployment setting or one of a handful of values GitLab can
-// answer, so the cache holds a few catalogs for the life of the process and is
-// never evicted.
+// operator's exclusions, the scopes of the token that can change the catalog,
+// read-only mode with its cause, and safe mode.
+//
+// None of the caches here evicts, and neither do the three that key on a
+// catalog pointer (the dynamic registry shape, the tool manifest snapshot and
+// the call identifier), so the key space has to be bounded by configuration
+// rather than by a caller. Every component above is either a deployment
+// setting or one of a handful of values GitLab can answer, and the scope
+// component is canonicalized by [catalogRelevantScopes] for that reason: a
+// caller can mint personal access tokens with arbitrary scope subsets, and
+// keying on the raw list would let each of those pin a catalog, a registry
+// shape and a manifest snapshot for the life of the process.
+//
+// Eviction is not the answer and must not be added to [sharedCatalogs]: the
+// three caches above name a catalog by its address, so recycling one would
+// serve the previous catalog's shape, manifest and identifier under it.
 
 package tools
 
 import (
 	"fmt"
-	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,14 +122,21 @@ func BaseCatalogKey(tier edition.Tier, dotcom, includeMCP bool) string {
 
 // CatalogFilterKey names the narrowing [FilterActionCatalog] applies from a
 // server configuration, so two servers narrowed the same way share one
-// filtered catalog. The scopes are sorted because GitLab lists a token's
-// scopes in no order this cares about, and a nil list is told apart from an
-// empty one because the scope filter treats them differently.
+// filtered catalog.
+//
+// The scope component is not the token's scope list but the part of it the
+// filter can act on, canonicalized by [catalogRelevantScopes]: sorted, because
+// GitLab lists a token's scopes in no order this cares about, deduplicated,
+// and reduced to the scopes [MetaToolScopes] requires, because those are the
+// only ones that change the result. Everything else a token carries would add
+// keys to a cache that never evicts, at the choosing of whoever minted the
+// token. A nil list is still told apart from an empty one, because the scope
+// filter treats the two differently: nil means detection was unavailable.
 func CatalogFilterKey(cfg *config.ServerConfig) string {
-	scopes := slices.Clone(cfg.TokenScopes)
-	sort.Strings(scopes)
 	return fmt.Sprintf("exclude=%s|scopes=%s|scopesKnown=%t|readonly=%t|readonlyFromScope=%t|safe=%t",
-		strings.Join(cfg.ExcludeTools, ","), strings.Join(scopes, ","), cfg.TokenScopes != nil,
+		strings.Join(cfg.ExcludeTools, ","),
+		strings.Join(catalogRelevantScopes(cfg.TokenScopes), ","),
+		cfg.TokenScopes != nil,
 		cfg.ReadOnly, cfg.ReadOnlyFromTokenScope, cfg.SafeMode)
 }
 

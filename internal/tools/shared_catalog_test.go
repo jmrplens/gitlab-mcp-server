@@ -193,8 +193,9 @@ func TestUnboundClient_AnswersTheInstanceClassAndRefusesRequests(t *testing.T) {
 
 // TestCatalogKeys_NameEverythingThatShapesTheCatalog verifies the two key
 // builders: the base key carries tier, instance class and the maintenance
-// group; the filter key carries the exclusions, the scopes sorted, whether
-// the scopes were detected at all, and the three mode switches.
+// group; the filter key carries the exclusions, the scopes that can change the
+// catalog (sorted and deduplicated), whether the scopes were detected at all,
+// and the three mode switches.
 func TestCatalogKeys_NameEverythingThatShapesTheCatalog(t *testing.T) {
 	t.Parallel()
 
@@ -216,15 +217,20 @@ func TestCatalogKeys_NameEverythingThatShapesTheCatalog(t *testing.T) {
 			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readonlyFromScope=false|safe=false",
 		},
 		{
-			name: "scopes are sorted and the switches named",
+			name: "scopes the filter cannot act on leave no trace",
+			cfg:  config.ServerConfig{TokenScopes: []string{"read_api", "api", "k8s_proxy", "ai_features"}},
+			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readonlyFromScope=false|safe=false",
+		},
+		{
+			name: "the scopes that shape the catalog are kept, sorted and deduplicated, and the switches named",
 			cfg: config.ServerConfig{
 				ExcludeTools:           []string{"gitlab_admin", "issue.delete"},
-				TokenScopes:            []string{"read_api", "api"},
+				TokenScopes:            []string{"sudo", "api", "admin_mode", "read_api", "admin_mode"},
 				ReadOnly:               true,
 				ReadOnlyFromTokenScope: true,
 				SafeMode:               true,
 			},
-			want: "exclude=gitlab_admin,issue.delete|scopes=api,read_api|scopesKnown=true|readonly=true|readonlyFromScope=true|safe=true",
+			want: "exclude=gitlab_admin,issue.delete|scopes=admin_mode|scopesKnown=true|readonly=true|readonlyFromScope=true|safe=true",
 		},
 	}
 	for _, tc := range cases {
@@ -234,6 +240,88 @@ func TestCatalogKeys_NameEverythingThatShapesTheCatalog(t *testing.T) {
 				t.Errorf("CatalogFilterKey() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestCatalogFilterKey_ScopeComponentIsBoundedByTheFilter is the bound on a
+// cache that never evicts. The scopes of a token are chosen by whoever minted
+// it, and a user can mint personal access tokens with arbitrary scope subsets,
+// so the key may carry only the scopes the filter can act on: every scope
+// [MetaToolScopes] requires reaches it, and no other scope does.
+//
+// Driven from MetaToolScopes rather than from a written-out list, so an entry
+// added there is covered here without an edit.
+func TestCatalogFilterKey_ScopeComponentIsBoundedByTheFilter(t *testing.T) {
+	t.Parallel()
+
+	required := map[string]struct{}{}
+	for _, scopes := range MetaToolScopes {
+		for _, scope := range scopes {
+			required[scope] = struct{}{}
+		}
+	}
+	if len(required) == 0 {
+		t.Fatal("MetaToolScopes requires no scope at all, so this test proves nothing")
+	}
+	for scope := range required {
+		t.Run("kept: "+scope, func(t *testing.T) {
+			t.Parallel()
+			cfg := config.ServerConfig{TokenScopes: []string{scope}}
+			if got := CatalogFilterKey(&cfg); !strings.Contains(got, "|scopes="+scope+"|") {
+				t.Errorf("CatalogFilterKey() = %q, want the required scope %q in it", got, scope)
+			}
+		})
+	}
+	// The scopes GitLab can issue that MetaToolScopes never asks about. Each
+	// must leave the key exactly as an empty scope list leaves it.
+	for _, scope := range []string{"api", "read_api", "read_user", "read_repository", "write_repository", "read_registry", "write_registry", "create_runner", "manage_runner", "ai_features", "k8s_proxy", "sudo"} {
+		if _, isRequired := required[scope]; isRequired {
+			continue
+		}
+		t.Run("dropped: "+scope, func(t *testing.T) {
+			t.Parallel()
+			carried := config.ServerConfig{TokenScopes: []string{scope}}
+			empty := config.ServerConfig{TokenScopes: []string{}}
+			if got, want := CatalogFilterKey(&carried), CatalogFilterKey(&empty); got != want {
+				t.Errorf("CatalogFilterKey() with %q = %q, want the key of a token carrying no scope the filter reads, %q", scope, got, want)
+			}
+		})
+	}
+}
+
+// TestSharedMetaCatalog_ScopeSubsetsDoNotEachPinACatalog is the same bound
+// through the cache itself: two credentials whose scope lists differ only in
+// scopes the filter never reads get one catalog, while a credential missing an
+// admin_mode-gated scope gets its own.
+func TestSharedMetaCatalog_ScopeSubsetsDoNotEachPinACatalog(t *testing.T) {
+	client := testutil.NewTestClient(t, healthyGitLab())
+	admin := &config.ServerConfig{Tier: edition.Free, ExcludeTools: []string{"scopes-" + t.Name()}, TokenScopes: []string{"api", "admin_mode"}}
+	adminPlusNoise := &config.ServerConfig{Tier: edition.Free, ExcludeTools: []string{"scopes-" + t.Name()}, TokenScopes: []string{"read_api", "k8s_proxy", "admin_mode", "ai_features"}}
+	plain := &config.ServerConfig{Tier: edition.Free, ExcludeTools: []string{"scopes-" + t.Name()}, TokenScopes: []string{"api"}}
+
+	first, _, err := SharedMetaCatalog(client, admin)
+	if err != nil {
+		t.Fatalf("SharedMetaCatalog(admin) error = %v", err)
+	}
+	second, _, err := SharedMetaCatalog(client, adminPlusNoise)
+	if err != nil {
+		t.Fatalf("SharedMetaCatalog(admin plus unread scopes) error = %v", err)
+	}
+	if first.SharedOrigin() != second.SharedOrigin() {
+		t.Error("two scope lists differing only in scopes the filter never reads pinned two catalogs")
+	}
+	third, _, err := SharedMetaCatalog(client, plain)
+	if err != nil {
+		t.Fatalf("SharedMetaCatalog(no admin_mode) error = %v", err)
+	}
+	if third.SharedOrigin() == first.SharedOrigin() {
+		t.Error("a credential without admin_mode shared the catalog of one that has it")
+	}
+	if _, kept := first.Action("admin.settings_get"); !kept {
+		t.Fatal("admin.settings_get is absent from the admin_mode catalog, so the removal below proves nothing")
+	}
+	if _, kept := third.Action("admin.settings_get"); kept {
+		t.Error("the admin group survived a token with no admin_mode")
 	}
 }
 
@@ -305,10 +393,17 @@ func TestSharedIndividualCatalog_TwoServersListOneCatalogUnchanged(t *testing.T)
 	}
 	before := schemaDigests(t, catalogA)
 
-	options := IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true, SchemaCacheKey: "individual|" + cfg.Tier.String()}
+	// A cache key of its own for each server, and neither is the key the
+	// server uses in production. compiledSchema returns the compiled schema
+	// cached under a key without ever reading the map it was handed, so two
+	// registrations under one key would compare the first server's compiled
+	// schema against itself: the comparison below would hold even if the
+	// second caller had been handed stale or wrongly pruned maps. Distinct
+	// keys make each server compile its own catalog's maps, which is what the
+	// listing is supposed to be comparing.
 	serverA, serverB := newListingServer(), newListingServer()
-	RegisterIndividualCatalogTools(serverA, catalogA, options)
-	RegisterIndividualCatalogTools(serverB, catalogB, options)
+	RegisterIndividualCatalogTools(serverA, catalogA, individualOptionsWithSchemaKey(t, "A"))
+	RegisterIndividualCatalogTools(serverB, catalogB, individualOptionsWithSchemaKey(t, "B"))
 	listA, listB := listedTools(t, serverA), listedTools(t, serverB)
 	if !bytes.Equal(listA, listB) {
 		t.Fatal("the two servers list different tools from one shared catalog")
@@ -439,16 +534,74 @@ func TestSharedCatalogs_BuildFailuresAreReportedWithTheirStep(t *testing.T) {
 	}
 }
 
-// TestDomainPackages_ReplaceHandlersOnlyThroughTheRebindHelpers is the source
-// guard behind [toolutil.ValidateRouteBinding]: no package under
-// internal/tools assigns Route.Handler directly, because a handler replaced
-// that way would be dropped the moment a shared catalog rebinds the route.
-// The helpers that change a handler and its binder together live in toolutil.
-func TestDomainPackages_ReplaceHandlersOnlyThroughTheRebindHelpers(t *testing.T) {
+// TestDomainPackages_LeaveSharedRouteStateAlone is the source guard over
+// everything a route carries that is now shared by every server in the
+// process. No package under internal/tools may:
+//
+//   - assign Route.Handler directly, because a handler replaced that way is
+//     dropped the moment a shared catalog rebinds the route (the helpers that
+//     change a handler and its binder together live in toolutil), or
+//   - write into a route's ParameterGuidance map or either of its schema maps,
+//     because the catalog those belong to is built once per configuration and
+//     handed to every credential's server: one write reaches all of them, and
+//     no test of the writing package can see it.
+//
+// A whole-field assignment is not an offence and is not matched: a route is a
+// value, so replacing a field replaces it on a copy. Only an indexed write and
+// a delete reach through to the map itself.
+//
+// It is a text guard, so it reads the names a route is usually held under
+// rather than resolving types. That is enough for what it is for: keeping the
+// habit visible at review time on the roughly 770 files where the mistake
+// would be silent.
+func TestDomainPackages_LeaveSharedRouteStateAlone(t *testing.T) {
 	t.Parallel()
 
-	assignment := regexp.MustCompile(`\.Handler\s*=[^=]`)
-	var offenders []string
+	forbidden := []struct {
+		what     string
+		pattern  *regexp.Regexp
+		remedy   string
+		offences []string
+		allowed  []string
+	}{
+		{
+			what:     "Route.Handler is assigned directly",
+			pattern:  regexp.MustCompile(`\.Handler\s*=[^=]`),
+			remedy:   "use ActionRoute.WrapHandler or ActionRoute.WithBoundHandler so the binder changes with it",
+			offences: []string{"route.Handler = wrapped", "action.Route.Handler=wrapped"},
+			allowed:  []string{"if route.Handler == nil {", "Handler: wrapped,"},
+		},
+		{
+			what:     "a route's ParameterGuidance is written into",
+			pattern:  regexp.MustCompile(`(?i)\broute\.ParameterGuidance\s*\[[^\]]*\]\s*=[^=]|(?i)\bdelete\(\s*[\w.]*route\.ParameterGuidance\b`),
+			remedy:   "build the guidance the spec is given instead; the route's map is shared with every server in the process",
+			offences: []string{`route.ParameterGuidance["project_id"] = guidance`, `action.Route.ParameterGuidance["ref"]=g`, "delete(spec.Route.ParameterGuidance, key)"},
+			allowed:  []string{`options.ParameterGuidance["project_id"] = guidance`, `if g, ok := route.ParameterGuidance["project_id"]; ok {`, "route.ParameterGuidance = merged"},
+		},
+		{
+			what:     "a route's schema map is written into",
+			pattern:  regexp.MustCompile(`(?i)\broute\.(Input|Output)Schema\s*\[[^\]]*\]\s*=[^=]|(?i)\bdelete\(\s*[\w.]*route\.(Input|Output)Schema\b`),
+			remedy:   "copy it with toolutil.CloneSchemaMap first; the route's schemas are frozen and shared with every server in the process",
+			offences: []string{`route.InputSchema["required"] = names`, `entry.Route.OutputSchema["type"]="object"`, "delete(route.InputSchema, \"required\")"},
+			allowed:  []string{`schema["required"] = names`, `if props, ok := route.InputSchema["properties"]; ok {`, "route.OutputSchema = cloned"},
+		},
+	}
+	// A text guard is only worth what it matches, so each pattern is held to
+	// the shapes it must refuse and the shapes it must leave alone.
+	for _, rule := range forbidden {
+		for _, offence := range rule.offences {
+			if !rule.pattern.MatchString(offence) {
+				t.Errorf("the guard for %q does not match %q", rule.what, offence)
+			}
+		}
+		for _, allowed := range rule.allowed {
+			if rule.pattern.MatchString(allowed) {
+				t.Errorf("the guard for %q wrongly matches %q", rule.what, allowed)
+			}
+		}
+	}
+
+	offenders := make(map[string][]string)
 	tree := os.DirFS(".")
 	err := fs.WalkDir(tree, ".", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -461,16 +614,31 @@ func TestDomainPackages_ReplaceHandlersOnlyThroughTheRebindHelpers(t *testing.T)
 		if readErr != nil {
 			return readErr
 		}
-		if assignment.Match(source) {
-			offenders = append(offenders, path)
+		for _, rule := range forbidden {
+			if rule.pattern.Match(source) {
+				offenders[rule.what] = append(offenders[rule.what], path)
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("walking the package tree: %v", err)
 	}
-	if len(offenders) > 0 {
-		t.Errorf("Route.Handler is assigned directly in %v; use ActionRoute.WrapHandler or ActionRoute.WithBoundHandler so the binder changes with it", offenders)
+	for _, rule := range forbidden {
+		if files := offenders[rule.what]; len(files) > 0 {
+			t.Errorf("%s in %v; %s", rule.what, files, rule.remedy)
+		}
+	}
+}
+
+// individualOptionsWithSchemaKey returns the individual registration options
+// with a compiled-schema cache key private to one test and one server, so a
+// cache hit can never stand in for the schema maps a comparison is about.
+func individualOptionsWithSchemaKey(t *testing.T, server string) IndividualCatalogRegisterOptions {
+	t.Helper()
+	return IndividualCatalogRegisterOptions{
+		IncludeStandaloneUtilities: true,
+		SchemaCacheKey:             "individual|" + t.Name() + "|" + server,
 	}
 }
 

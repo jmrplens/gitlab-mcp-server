@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -144,6 +145,39 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 		)
 	}
 	return filtered, nil
+}
+
+// catalogRelevantScopes returns the part of a token's scope list that can
+// change what [FilterScopeFilteredCatalog] removes: the sorted, deduplicated
+// intersection of tokenScopes with the union of every scope [MetaToolScopes]
+// requires. A token's other scopes are invisible to the filter, so two tokens
+// differing only in those narrow the catalog identically.
+//
+// This exists for [CatalogFilterKey], which names a shared catalog. Keying
+// that cache on the whole scope list would let a caller mint personal access
+// tokens with arbitrary scope subsets and pin one catalog per subset for the
+// life of the process. Derived from MetaToolScopes rather than written out, so
+// a scope added to a requirement there widens the key with it and cannot be
+// forgotten here.
+func catalogRelevantScopes(tokenScopes []string) []string {
+	required := make(map[string]struct{}, len(MetaToolScopes))
+	for _, scopes := range MetaToolScopes {
+		for _, scope := range scopes {
+			required[scope] = struct{}{}
+		}
+	}
+	relevant := make(map[string]struct{}, len(required))
+	for _, scope := range tokenScopes {
+		if _, matters := required[scope]; matters {
+			relevant[scope] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(relevant))
+	for scope := range relevant {
+		out = append(out, scope)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // buildScopeSet returns a set of token scope strings for O(1) membership
