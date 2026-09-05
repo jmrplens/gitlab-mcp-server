@@ -9,15 +9,17 @@ Accepted (2026-09-05).
 In HTTP mode the pool built one `mcp.Server` per credential, so the resident
 set of the process was a straight line in the number of pooled credentials.
 The [resource benchmark](../../reference/resource-benchmark.md) measured the slope
-at 133 MiB per credential on the dynamic surface, 78 on meta and 107 on
+at 130.9 MiB per credential on the dynamic surface, 63.5 on meta and 90.8 on
 individual, and the series ran out of a 16 GiB budget at 100 to 200
 credentials.
 
 The step before this one froze the catalog and its schemas and shared them per
 configuration: one catalog built with a credential-less client
 (`gitlabclient.NewUnboundClient`), handlers rebuilt per client through
-`ActionRoute.Bind`. That took the slope to 6.6, 7.6 and 27.7 MiB per credential.
-The full analysis is in [Resource hot spots](../resource-hot-spots.md).
+`ActionRoute.Bind`. That took the slope to 4.10, 5.44 and 11.28 MiB per
+credential. Both sets of figures are the ones
+[Resource hot spots](../resource-hot-spots.md) publishes, which carries the full
+analysis, the host they were measured on and the commits they were measured at.
 
 What was left was the `mcp.Server` itself, and it is irreducible while there is
 one per credential: the SDK's tool table with an entry and a closure per
