@@ -11,6 +11,7 @@
 package httpe2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -30,13 +31,19 @@ const heapCredentials = 20
 // heapGrowthBudget is how much the live heap may grow between the first
 // credential and the twentieth.
 //
-// The figure to compare it against is the one the benchmark measured for the
-// arrangement this replaced: with a registered surface per credential, the live
-// heap grew by about 3 MB per credential on the dynamic surface, so nineteen
-// more would have added something near 57 MB. What remains per credential is a
-// GitLab client, a rate-limit bucket, a counter and a watcher set. The budget
-// sits between the two with room for the allocation noise of twenty sessions.
-const heapGrowthBudget = 32 << 20
+// It is set from the two figures this test sits between, both measured on this
+// same harness rather than taken from the analysis page. On this branch the
+// growth over 1 to 20 credentials is under 0.2 MiB, on both surfaces and
+// repeatably. On the parent commit, where the server is built per credential,
+// the same run grows 8.1 MiB on the dynamic surface and 27.6 MiB on individual.
+// Two mebibytes is therefore ten times what the shared server costs and four
+// times under the smaller of the two regressions, which is what makes a revert
+// of the change this guards fail here rather than ship green.
+//
+// The earlier budget was 32 MiB, chosen against a per-credential figure quoted
+// from an alternatives table rather than measured, and it passed on the parent
+// commit on every surface: the test asserted nothing at all.
+const heapGrowthBudget = 2 << 20
 
 // TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials pins the
 // target of ADR-0020.
@@ -48,40 +55,55 @@ const heapGrowthBudget = 32 << 20
 // being removed is the SDK's tool table, the bound catalog descriptors and the
 // closures that dispatch, none of which a unit test allocates.
 //
+// It runs on both ends of the surface range on purpose. The dynamic surface is
+// the default and registers two tools, so it is the weakest signal this test
+// can be given: the parent commit grows 8.1 MiB there against a 2 MiB budget.
+// The individual surface registers a tool per action, which is where a server
+// per credential costs the most and where the same run grows 27.6 MiB. A
+// regression that somehow stayed inside the budget on dynamic has nowhere to
+// hide on individual.
+//
 // The heap is read through --pprof-addr, which the binary serves on loopback
 // only, with ?gc=1 so each reading is of the live set rather than of whatever
 // had not been collected yet.
 func TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials(t *testing.T) {
-	gitlab := startFakeGitLabServingAProject(t)
-	pprofAddr := fmt.Sprintf("127.0.0.1:%d", freePort(t))
-	srv := startServer(t, nil,
-		"--gitlab-url="+gitlab.URL,
-		"--pprof-addr="+pprofAddr,
-	)
+	surfaces := []string{"dynamic", "individual"}
 
-	driveCredential(t, srv, "glpat-heap-1")
-	first := liveHeapBytes(t, pprofAddr)
+	for _, surface := range surfaces {
+		t.Run(surface, func(t *testing.T) {
+			gitlab := startFakeGitLabServingAProject(t)
+			pprofAddr := fmt.Sprintf("127.0.0.1:%d", freePort(t))
+			srv := startServer(t, nil,
+				"--gitlab-url="+gitlab.URL,
+				"--tool-surface="+surface,
+				"--pprof-addr="+pprofAddr,
+			)
 
-	for i := 2; i <= heapCredentials; i++ {
-		driveCredential(t, srv, "glpat-heap-"+strconv.Itoa(i))
-	}
-	last := liveHeapBytes(t, pprofAddr)
+			driveCredential(t, srv, "glpat-heap-1")
+			first := liveHeapBytes(t, pprofAddr)
 
-	// One shape for every credential is the structural claim; the heap figure
-	// is its consequence. Asserting both means a failure says which of the two
-	// went wrong.
-	if builds := countShapeBuilds(srv.logs()); builds != 1 {
-		t.Errorf("the server built %d configuration shapes for %d credentials of one configuration, want 1",
-			builds, heapCredentials)
-	}
+			for i := 2; i <= heapCredentials; i++ {
+				driveCredential(t, srv, "glpat-heap-"+strconv.Itoa(i))
+			}
+			last := liveHeapBytes(t, pprofAddr)
 
-	growth := int64(last) - int64(first)
-	t.Logf("live heap: %d bytes at 1 credential, %d at %d, growth %d bytes (%.1f MiB)",
-		first, last, heapCredentials, growth, float64(growth)/(1<<20))
-	if growth > heapGrowthBudget {
-		t.Errorf("the live heap grew by %.1f MiB between 1 and %d credentials, budget %.1f MiB: "+
-			"a registered surface is being built per credential again",
-			float64(growth)/(1<<20), heapCredentials, float64(heapGrowthBudget)/(1<<20))
+			// One shape for every credential is the structural claim; the heap
+			// figure is its consequence. Asserting both means a failure says
+			// which of the two went wrong.
+			if builds := countShapeBuilds(srv.logs()); builds != 1 {
+				t.Errorf("the server built %d configuration shapes for %d credentials of one configuration, want 1",
+					builds, heapCredentials)
+			}
+
+			growth := int64(last) - int64(first)
+			t.Logf("live heap on %s: %d bytes at 1 credential, %d at %d, growth %d bytes (%.1f MiB)",
+				surface, first, last, heapCredentials, growth, float64(growth)/(1<<20))
+			if growth > heapGrowthBudget {
+				t.Errorf("the live heap grew by %.1f MiB between 1 and %d credentials on the %s surface, "+
+					"budget %.1f MiB: a registered surface is being built per credential again",
+					float64(growth)/(1<<20), heapCredentials, surface, float64(heapGrowthBudget)/(1<<20))
+			}
+		})
 	}
 }
 
@@ -102,14 +124,61 @@ func driveCredential(t *testing.T, srv *server, token string) {
 	if resp.status != http.StatusOK {
 		t.Fatalf("driving %s: status %d, body %s", token, resp.status, resp.body)
 	}
-	if strings.Contains(resp.body, `"error"`) {
-		t.Fatalf("driving %s: %s", token, resp.body)
+	if rpcErr := jsonRPCErrorIn(resp.body); rpcErr != "" {
+		t.Fatalf("driving %s: %s", token, rpcErr)
 	}
+}
+
+// jsonRPCErrorIn returns the error member of a JSON-RPC response, or "" when
+// the response carries none.
+//
+// The envelope is decoded rather than searched for the word. A tools/list body
+// on the individual surface contains "error" five times as ordinary catalog
+// text — an enum value and a property name among them — so a substring probe
+// aborts every run on that surface with a failure that is not there. It was
+// what kept this test from being run on the surface where its signal is
+// strongest.
+//
+// The body arrives either as a bare JSON object or as SSE frames, so the
+// decode is per line and a line that is not an envelope is skipped rather than
+// reported: this is a probe for a refusal, not a parser.
+func jsonRPCErrorIn(body string) string {
+	for line := range strings.SplitSeq(body, "\n") {
+		payload := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "data: "))
+		if !strings.HasPrefix(payload, "{") {
+			continue
+		}
+		var envelope struct {
+			Error json.RawMessage `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(payload), &envelope); err != nil {
+			continue
+		}
+		if len(envelope.Error) > 0 && string(envelope.Error) != "null" {
+			return string(envelope.Error)
+		}
+	}
+	return ""
 }
 
 // liveHeapBytes reads HeapAlloc from the profiling handlers, after a
 // collection, so the figure is the live set rather than the allocation history.
+//
+// Two collections rather than one. The first reading of a process that has just
+// registered a catalog still counts what that registration left behind for one
+// more cycle — finalizers, the profile's own buffers, the response still on the
+// wire — and on the individual surface that was worth several mebibytes, which
+// is the same order as the budget this test asserts. Reading twice makes both
+// ends of the comparison a settled heap.
 func liveHeapBytes(t *testing.T, pprofAddr string) uint64 {
+	t.Helper()
+
+	_ = readHeapAlloc(t, pprofAddr)
+	return readHeapAlloc(t, pprofAddr)
+}
+
+// readHeapAlloc performs one collection and returns the live heap it reports.
+func readHeapAlloc(t *testing.T, pprofAddr string) uint64 {
 	t.Helper()
 
 	url := "http://" + pprofAddr + "/debug/pprof/heap?gc=1&debug=1"
