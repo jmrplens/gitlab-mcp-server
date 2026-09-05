@@ -120,8 +120,8 @@ func loadOverlaySurface(o *HTTPEnvOverlay) error {
 		}
 		o.MetaParamSchema = &value
 	}
-	if envPresent("GITLAB_TIER") || envPresent("GITLAB_ENTERPRISE") {
-		tier, explicit, err := resolveTierEnv(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
+	if envPresent("TIER") || envPresent("GITLAB_ENTERPRISE") {
+		tier, explicit, err := resolveTierEnv(Getenv("TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 		if err != nil {
 			return err
 		}
@@ -139,18 +139,18 @@ func loadOverlayBooleans(o *HTTPEnvOverlay) error {
 		name   string
 		target **bool
 	}{
-		{"GITLAB_SKIP_TLS_VERIFY", &o.SkipTLSVerify},
-		{"GITLAB_READ_ONLY", &o.ReadOnly},
-		{"GITLAB_SAFE_MODE", &o.SafeMode},
+		{"SKIP_TLS_VERIFY", &o.SkipTLSVerify},
+		{"READ_ONLY", &o.ReadOnly},
+		{"SAFE_MODE", &o.SafeMode},
 		{"EMBEDDED_RESOURCES", &o.EmbeddedResources},
-		{"GITLAB_IGNORE_SCOPES", &o.IgnoreScopes},
+		{"IGNORE_SCOPES", &o.IgnoreScopes},
 	} {
 		if !envPresent(b.name) {
 			continue
 		}
 		value, err := parseBool(Getenv(b.name), false)
 		if err != nil {
-			return fmt.Errorf("invalid %s value: %w", b.name, err)
+			return fmt.Errorf("invalid %s%s value: %w", EnvPrefix, b.name, err)
 		}
 		*b.target = &value
 	}

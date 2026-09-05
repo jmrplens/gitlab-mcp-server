@@ -124,11 +124,17 @@ func childEnv(plan scenarioPlan, stubURL, otlpURL string, stdio bool) []string {
 // configFreeEnviron is the process environment with every variable that
 // configures this server removed.
 //
-// The list of generic names comes from the config package rather than being
-// restated, so a setting added there is stripped here without anybody
-// remembering to.
+// The old spellings come from the config package rather than being restated,
+// so a setting added there is stripped here without anybody remembering to.
+// The prefixed spellings fall under the GITLAB_ rule; AUTOPILOT is the one
+// name read that carries neither prefix, as the alias other agent tooling
+// sets for the yolo mode.
 func configFreeEnviron() []string {
-	generic := config.PrefixedEnvNames()
+	legacy := make([]string, 0, len(config.PrefixedEnvNames())+1)
+	for _, name := range config.PrefixedEnvNames() {
+		legacy = append(legacy, config.LegacyEnvName(name))
+	}
+	legacy = append(legacy, "AUTOPILOT")
 	kept := make([]string, 0, len(os.Environ()))
 	for _, entry := range os.Environ() {
 		name, _, ok := strings.Cut(entry, "=")
@@ -136,7 +142,7 @@ func configFreeEnviron() []string {
 			continue
 		}
 		if strings.HasPrefix(name, "GITLAB_") || strings.HasPrefix(name, "OTEL_") ||
-			slices.Contains(generic, name) {
+			slices.Contains(legacy, name) {
 			continue
 		}
 		kept = append(kept, entry)

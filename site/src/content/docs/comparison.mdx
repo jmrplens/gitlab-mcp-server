@@ -52,7 +52,7 @@ So "works without paying" is **not** a reason to choose this project over the of
 
 - You need an operation the curated set does not expose. It covers {stats.tools.free} operations on Community Edition, rising to {stats.tools.gitlab_com} on GitLab.com, against roughly two dozen — releases, tags, environments, deploy keys, protected branches, package registry, runners, wikis, snippets, milestones, and so on.
 - You cannot enable GitLab Duo or beta features on the instance, whether by policy or because it is an older self-managed deployment.
-- You want the assistant constrained. `GITLAB_READ_ONLY=true` removes every mutating operation from the catalog, and `GITLAB_SAFE_MODE=true` returns a preview of a mutation instead of performing it.
+- You want the assistant constrained. `GITLAB_MCP_READ_ONLY=true` removes every mutating operation from the catalog, and `GITLAB_MCP_SAFE_MODE=true` returns a preview of a mutation instead of performing it.
 - You want no runtime dependency — a single static Go binary rather than a Node.js process.
 
 **Consider another community server** such as `zereight/gitlab-mcp` when you are already comfortable running Node.js and its roughly 216 tools cover your workflows. It is the most widely adopted community option by a wide margin, and its coverage is substantial — the practical differences from this project are the runtime dependency, the absence of read-only and safe modes, and that it registers its tools individually rather than behind a low-token discovery surface.

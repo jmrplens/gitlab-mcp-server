@@ -246,7 +246,7 @@ def run_handshake(script, version, tmp, label):
              "GITLAB_TOKEN": "glpat-validate-pypi", "GITLAB_MCP_LOG_LEVEL": "error",
              # The fake URL is unreachable by design; skipping scope
              # detection avoids its retry loop in the handshake path.
-             "GITLAB_IGNORE_SCOPES": "true"},
+             "GITLAB_MCP_IGNORE_SCOPES": "true"},
     )
     # stdin stays open while the response is read: closing it signals
     # shutdown to a stdio MCP server, and a server told to shut down before

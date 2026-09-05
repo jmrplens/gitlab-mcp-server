@@ -214,8 +214,8 @@ client. The relevant policies are:
 - Enterprise/Premium and GitLab.com-only catalog selection.
 - `ExcludeTools` configuration.
 - Token-scope filtering.
-- `GITLAB_READ_ONLY` / `--read-only` filtering.
-- `GITLAB_SAFE_MODE` / `--safe-mode` previews.
+- `GITLAB_MCP_READ_ONLY` / `--read-only` filtering.
+- `GITLAB_MCP_SAFE_MODE` / `--safe-mode` previews.
 - Capability surface selection for resources and prompts.
 
 Dynamic mode builds a filtered catalog before constructing the dynamic registry,

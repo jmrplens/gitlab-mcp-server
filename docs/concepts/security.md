@@ -184,7 +184,7 @@ Two properties are deliberate:
 ## TLS
 
 - All GitLab API communication uses HTTPS by default
-- A self-signed certificate **on the GitLab side**: install the CA in the system trust store, or set `SSL_CERT_FILE` to a CA bundle. `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, for development only, and `--auth-mode=oauth` refuses it outright for a non-loopback instance
+- A self-signed certificate **on the GitLab side**: install the CA in the system trust store, or set `SSL_CERT_FILE` to a CA bundle. `GITLAB_MCP_SKIP_TLS_VERIFY=true` is the blunt alternative, for development only, and `--auth-mode=oauth` refuses it outright for a non-loopback instance
 - **Serving HTTPS**: in HTTP mode, `--tls-cert` and `--tls-key` terminate TLS on the listener itself. It is both or neither — a certificate without its key is a deployment that thinks it is encrypting and is not, so the server refuses to start. The pair is loaded at startup too, which turns a wrong path into a startup error naming the file instead of a handshake failure nobody sees until a client reports it. TLS 1.2 is the floor, and 1.3 is used with any client that offers it
 - **Or remove the hop instead of encrypting it**: for a reverse proxy on the same machine, `--http-addr=/run/gitlab-mcp.sock` binds a unix socket rather than a TCP port, with `--http-socket-mode` (default `0660`, owner and group only) deciding who may connect. There is no network segment left to read and no certificate to issue or rotate
 - Production deployments should use valid TLS certificates, whether this server presents them or a proxy in front of it does
@@ -204,7 +204,7 @@ All tool handlers validate inputs before making API calls:
 
 Operations that modify or delete data use a confirmation flow (see [Error Handling](error-handling.md)):
 
-1. **YOLO_MODE / AUTOPILOT** — Environment variable bypass for automated pipelines
+1. **GITLAB_MCP_YOLO_MODE / AUTOPILOT** — Environment variable bypass for automated pipelines
 2. **Explicit confirm parameter** — `"confirm": true` in tool input
 3. **MCP elicitation** — Interactive user confirmation when supported by the client
 4. **Fail-safe** — If no confirmation mechanism is available, the operation is cancelled
@@ -213,10 +213,10 @@ Operations that modify or delete data use a confirmation flow (see [Error Handli
 
 Two opt-in modes narrow what the server can do to a GitLab instance, independently of the token's own permissions:
 
-| Mode      | Variable                                | Effect                                                                                                                                                                                                 |
-| --------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Read-only | `GITLAB_READ_ONLY=true` (`--read-only`) | Mutating operations are removed from the catalog. Attempting one is refused: the dynamic surface names it as withheld by the operator (or by the token's scope), a meta-tool reports an unknown action |
-| Safe mode | `GITLAB_SAFE_MODE=true` (`--safe-mode`) | Mutating operations stay visible but return a JSON preview (`{"status":"blocked","mode":"safe","tool":"<action>",...}`) instead of executing                                                           |
+| Mode      | Variable                                    | Effect                                                                                                                                                                                                 |
+| --------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Read-only | `GITLAB_MCP_READ_ONLY=true` (`--read-only`) | Mutating operations are removed from the catalog. Attempting one is refused: the dynamic surface names it as withheld by the operator (or by the token's scope), a meta-tool reports an unknown action |
+| Safe mode | `GITLAB_MCP_SAFE_MODE=true` (`--safe-mode`) | Mutating operations stay visible but return a JSON preview (`{"status":"blocked","mode":"safe","tool":"<action>",...}`) instead of executing                                                           |
 
 Both policies are enforced **per action**, not per tool. This matters because two of the three tool surfaces expose dispatcher tools that cover many actions at once: a meta-tool such as `gitlab_issue` serves `list` and `create` alike, and the dynamic surface routes every action through `gitlab_execute_action`. Classifying those tools as mutating and removing or intercepting them whole would take their read operations down with them, leaving the server unable to read anything in either mode.
 
@@ -301,9 +301,9 @@ The server automatically detects the scopes of the Personal Access Token (PAT) a
 
 - **Detection**: Uses the GitLab `GET /personal_access_tokens/self` endpoint
 - **Graceful degradation**: If scope detection fails (e.g. older GitLab versions), all tools remain registered
-- **Opt-out**: Set `GITLAB_IGNORE_SCOPES=true` or `--ignore-scopes` to skip detection
+- **Opt-out**: Set `GITLAB_MCP_IGNORE_SCOPES=true` or `--ignore-scopes` to skip detection
 - **Scope map**: Defined in `internal/tools/scope_filter.go` (`MetaToolScopes`)
-- **Both transports narrow further**: a token that carries no write scope is served the read-only catalog, exactly as if `--read-only` or `GITLAB_READ_ONLY` had been set for it, once at startup on stdio and per pool entry in HTTP mode (in both auth modes). The narrowing is per token, so in HTTP mode one client's `read_api` token cannot narrow another client's `api` token. Unknown scopes (detection failed, or `--ignore-scopes`) count as write-capable — a wrong "no" would silently remove tools, while a wrong "yes" simply surfaces as GitLab's own 403 on the call that tried to write
+- **Both transports narrow further**: a token that carries no write scope is served the read-only catalog, exactly as if `--read-only` or `GITLAB_MCP_READ_ONLY` had been set for it, once at startup on stdio and per pool entry in HTTP mode (in both auth modes). The narrowing is per token, so in HTTP mode one client's `read_api` token cannot narrow another client's `api` token. Unknown scopes (detection failed, or `--ignore-scopes`) count as write-capable — a wrong "no" would silently remove tools, while a wrong "yes" simply surfaces as GitLab's own 403 on the call that tried to write
 
 Tools requiring `admin_mode` (e.g. `gitlab_admin`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope.
 

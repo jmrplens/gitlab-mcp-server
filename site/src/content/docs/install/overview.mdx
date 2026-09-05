@@ -6,7 +6,7 @@ datePublished: "2026-09-01"
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-GitLab MCP Server is one self-contained Go binary. Every channel on this page delivers that same binary, or a container that wraps it, and the same `gitlab-mcp-server` command, so the choice is about what you already have on the machine and how you want upgrades to arrive, not about features. Whatever you pick, the server needs one value to run: a GitLab personal access token in `GITLAB_TOKEN` (`api` scope; a `read_api` token also works, paired with `GITLAB_READ_ONLY=true` so the tool surface matches it, since over stdio the server does not narrow the surface to the token's scope; only HTTP mode and the hosted endpoint do that on their own). `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance.
+GitLab MCP Server is one self-contained Go binary. Every channel on this page delivers that same binary, or a container that wraps it, and the same `gitlab-mcp-server` command, so the choice is about what you already have on the machine and how you want upgrades to arrive, not about features. Whatever you pick, the server needs one value to run: a GitLab personal access token in `GITLAB_TOKEN` (`api` scope; a `read_api` token also works, paired with `GITLAB_MCP_READ_ONLY=true` so the tool surface matches it, since over stdio the server does not narrow the surface to the token's scope; only HTTP mode and the hosted endpoint do that on their own). `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance.
 
 ## Pick a channel
 

@@ -10,7 +10,7 @@ faq:
   - q: "How do I find unresolved review threads on a merge request?"
     a: "Run `mr_review.discussion_list` for the MR (the `discussion_list` action of `gitlab_mr_review` when `GITLAB_MCP_TOOL_SURFACE=meta`), then filter the returned threads for `resolved: false`. Notes created with `mr_review.note_create` are not resolvable and never appear as outstanding items, so only discussions show up here. This is the check to run before merging when the project requires all threads resolved."
   - q: "Can an AI assistant approve and merge a merge request?"
-    a: "Yes, subject to the same permissions and safeguards as any other mutation. Approval is `merge_request.approve` and merging is `merge_request.merge` (the `approve` and `merge` actions of `gitlab_merge_request` on the meta surface). Both are classified as mutating, so they are unavailable under `GITLAB_READ_ONLY=true` and return a preview instead of executing under `GITLAB_SAFE_MODE=true`. GitLab still enforces its own approval rules — an assistant cannot merge an MR that has not met the project's required approvals."
+    a: "Yes, subject to the same permissions and safeguards as any other mutation. Approval is `merge_request.approve` and merging is `merge_request.merge` (the `approve` and `merge` actions of `gitlab_merge_request` on the meta surface). Both are classified as mutating, so they are unavailable under `GITLAB_MCP_READ_ONLY=true` and return a preview instead of executing under `GITLAB_MCP_SAFE_MODE=true`. GitLab still enforces its own approval rules — an assistant cannot merge an MR that has not met the project's required approvals."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";

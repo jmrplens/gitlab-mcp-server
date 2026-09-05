@@ -301,7 +301,7 @@ For manual step-by-step execution, see [Docker Mode](../../test/e2e/README.md#do
 ```env
 GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-your-token
-GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_MCP_SKIP_TLS_VERIFY=true
 ```
 
 #### E2E Test Structure
@@ -497,7 +497,7 @@ Install the Go extension and add to `.vscode/mcp.json`:
       "env": {
         "GITLAB_URL": "https://your-gitlab",
         "GITLAB_TOKEN": "glpat-your-token",
-        "GITLAB_SKIP_TLS_VERIFY": "true",
+        "GITLAB_MCP_SKIP_TLS_VERIFY": "true",
         "GITLAB_MCP_TOOL_SURFACE": "meta"
       }
     }

@@ -360,7 +360,7 @@ Para la referencia completa de herramientas, consulta [Resumen de herramientas](
 | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `not found` / permiso denegado                  | Verifica que el binario se descargó para la plataforma correcta, ejecuta `chmod +x` |
 | `401 Unauthorized`                              | Comprueba que la variable `MCP_PAT` está configurada y el token no ha expirado      |
-| `x509: certificate signed by unknown authority` | Configura `GITLAB_SKIP_TLS_VERIFY=true`                                             |
+| `x509: certificate signed by unknown authority` | Configura `GITLAB_MCP_SKIP_TLS_VERIFY=true`                                         |
 | Timeout en respuestas grandes                   | Añade argumento `per_page` para limitar resultados                                  |
 | Errores de proveedor en mcp-cli                 | Verifica las variables de API key, prueba `pip install --upgrade mcp-cli`           |
 

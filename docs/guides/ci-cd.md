@@ -561,13 +561,13 @@ chmod +x gitlab-mcp-server
 x509: certificate signed by unknown authority
 ```
 
-Set `GITLAB_SKIP_TLS_VERIFY=true` in your pipeline variables:
+Set `GITLAB_MCP_SKIP_TLS_VERIFY=true` in your pipeline variables:
 
 ```yaml
 variables:
   GITLAB_URL: https://gitlab.internal.example.com
   GITLAB_TOKEN: ${MCP_PAT}
-  GITLAB_SKIP_TLS_VERIFY: "true"
+  GITLAB_MCP_SKIP_TLS_VERIFY: "true"
 ```
 
 ### Timeout on Large Responses

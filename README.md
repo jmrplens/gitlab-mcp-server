@@ -137,7 +137,7 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 Clients that launch servers with `npx` need no install at all — point them at
 `npx -y @jmrp.io/gitlab-mcp-server`.
 
-Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and, for a self-signed certificate, mount the CA and set `--env SSL_CERT_FILE=/path/to/ca-bundle.crt`; `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, and OAuth mode refuses it for a non-loopback instance).
+Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and, for a self-signed certificate, mount the CA and set `--env SSL_CERT_FILE=/path/to/ca-bundle.crt`; `GITLAB_MCP_SKIP_TLS_VERIFY=true` is the blunt alternative, and OAuth mode refuses it for a non-loopback instance).
 
 ### Run it once to check the install
 
@@ -259,7 +259,7 @@ The server can present GitLab in three shapes, controlled by `GITLAB_MCP_TOOL_SU
 | **Meta-tools** (`meta`)       | 32 base / 49 Ultimate / 50 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
 | **Individual** (`individual`) | ~854 Free/CE · ~1007 Premium · 1073–1079 Ultimate | One MCP tool per GitLab operation; needs a large context window. |
 
-Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `GITLAB_MCP_CAPABILITY_SURFACE=minimal`.
+Tool counts scale with your GitLab edition (`GITLAB_MCP_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `GITLAB_MCP_CAPABILITY_SURFACE=minimal`.
 
 ### Token Footprint
 
@@ -267,7 +267,7 @@ Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose 
 
 Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `GITLAB_MCP_META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
 
-**Default configuration**: with `GITLAB_MCP_TOOL_SURFACE` unset or `GITLAB_MCP_TOOL_SURFACE=dynamic`, `GITLAB_MCP_CAPABILITY_SURFACE=full`, `GITLAB_MCP_META_TOOLS` unset, `GITLAB_MCP_META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `GITLAB_MCP_TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `GITLAB_MCP_TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
+**Default configuration**: with `GITLAB_MCP_TOOL_SURFACE` unset or `GITLAB_MCP_TOOL_SURFACE=dynamic`, `GITLAB_MCP_CAPABILITY_SURFACE=full`, `GITLAB_MCP_META_TOOLS` unset, `GITLAB_MCP_META_PARAM_SCHEMA=opaque`, and `GITLAB_MCP_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `GITLAB_MCP_TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `GITLAB_MCP_TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
 
 | Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
@@ -278,7 +278,7 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 | `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,077 | n/a                            |              1,501 |         8,835 |       10,336 |
 | `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,077 | n/a                            |              1,501 |           170 |        1,671 |
 
-Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
+Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_MCP_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
 <!-- END TOKEN FOOTPRINT -->
 
@@ -382,7 +382,7 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 <details>
 <summary><strong>Does it work with self-hosted GitLab?</strong></summary>
 
-Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio mode uses `https://gitlab.com`. Self-signed TLS certificates are supported by installing the CA in the system trust store or pointing `SSL_CERT_FILE` at a bundle; `GITLAB_SKIP_TLS_VERIFY=true` skips verification instead, and `--auth-mode=oauth` refuses it for a non-loopback instance.
+Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio mode uses `https://gitlab.com`. Self-signed TLS certificates are supported by installing the CA in the system trust store or pointing `SSL_CERT_FILE` at a bundle; `GITLAB_MCP_SKIP_TLS_VERIFY=true` skips verification instead, and `--auth-mode=oauth` refuses it for a non-loopback instance.
 </details>
 
 <details>
@@ -398,15 +398,15 @@ See <a href="PRIVACY.md">PRIVACY.md</a> for the full data-flow statement, and <a
 <details>
 <summary><strong>Can I use it in read-only mode?</strong></summary>
 
-Yes. Set `GITLAB_READ_ONLY=true` to disable all mutating tools (create, update, delete). Only read operations will be available.
+Yes. Set `GITLAB_MCP_READ_ONLY=true` to disable all mutating tools (create, update, delete). Only read operations will be available.
 
-Alternatively, set `GITLAB_SAFE_MODE=true` for a dry-run mode: mutating tools remain visible but return a structured JSON preview instead of executing. Useful for auditing, training, or reviewing what an AI assistant would do.
+Alternatively, set `GITLAB_MCP_SAFE_MODE=true` for a dry-run mode: mutating tools remain visible but return a structured JSON preview instead of executing. Useful for auditing, training, or reviewing what an AI assistant would do.
 </details>
 
 <details>
 <summary><strong>What GitLab editions are supported?</strong></summary>
 
-Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate` in stdio mode to enable additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.); leave it unset to detect the tier from the instance license (fallback `free`). In HTTP mode, `--tier` can force the tier, otherwise it is detected per token+URL pool entry from the license.
+Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate` in stdio mode to enable additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.); leave it unset to detect the tier from the instance license (fallback `free`). In HTTP mode, `--tier` can force the tier, otherwise it is detected per token+URL pool entry from the license.
 </details>
 
 <details>
@@ -463,20 +463,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,137 |     228,346 |
-| Unit tests (`_test.go`)  |       642 |     370,933 |
-| End-to-end tests         |       235 |      61,621 |
-| **Total**                | **2,014** | **660,900** |
+| Source (`.go`, non-test) |     1,137 |     228,390 |
+| Unit tests (`_test.go`)  |       642 |     371,094 |
+| End-to-end tests         |       235 |      61,624 |
+| **Total**                | **2,014** | **661,108** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,535 |
-| . Exported (public)             |  2,809 |
+| Source functions                |  8,536 |
+| . Exported (public)             |  2,810 |
 | . Unexported (private)          |  5,726 |
-| Unit test functions (`TestXxx`) | 13,185 |
-| Subtests (`t.Run(...)`)         |  4,929 |
+| Unit test functions (`TestXxx`) | 13,187 |
+| Subtests (`t.Run(...)`)         |  4,933 |
 | End-to-end test functions       |    579 |
 
 ### Ratios worth noting
@@ -486,7 +486,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.62× more tests than code |
 | Average source file length         |                 ~201 lines |
 | Average test file length           |                 ~578 lines |
-| Comment lines in source            |  35,075 (~15.4% of source) |
+| Comment lines in source            |  35,090 (~15.4% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
@@ -518,8 +518,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,151 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,525 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,152 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,527 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

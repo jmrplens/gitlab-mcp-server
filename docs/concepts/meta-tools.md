@@ -10,7 +10,7 @@ In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **32 ba
 
 The `gitlab_server` meta-tool (actions `status` and `health_check`) is registered separately for server diagnostics and is not included in the 32/49/50 GitLab action catalog counts.
 
-Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license (fallback `free`).
+Stdio mode enables the Enterprise/Premium catalog with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license (fallback `free`).
 
 `gitlab_orbit` is additionally gated to `https://gitlab.com`.
 
@@ -310,7 +310,7 @@ See [Output Format](../reference/output-format.md) for the complete response for
 }
 ```
 
-If the MCP client supports elicitation, the server will ask for user confirmation before executing destructive actions. If the client cannot prompt (no elicitation capability), the call fails closed with an error asking to re-send with `"confirm": true`. Set `YOLO_MODE=true` or `AUTOPILOT=true` to skip confirmation.
+If the MCP client supports elicitation, the server will ask for user confirmation before executing destructive actions. If the client cannot prompt (no elicitation capability), the call fails closed with an error asking to re-send with `"confirm": true`. Set `GITLAB_MCP_YOLO_MODE=true` or `AUTOPILOT=true` to skip confirmation.
 
 ---
 

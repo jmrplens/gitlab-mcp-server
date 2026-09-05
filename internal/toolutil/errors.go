@@ -77,7 +77,7 @@ func ClassifyError(err error) string {
 		return "Request to GitLab timed out. The server may be overloaded or unreachable"
 	}
 	if isTLSError(err) {
-		return "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_SKIP_TLS_VERIFY=true"
+		return "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true"
 	}
 
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {

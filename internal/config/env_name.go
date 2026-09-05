@@ -18,17 +18,18 @@ import (
 const EnvPrefix = "GITLAB_MCP_"
 
 // prefixedNames are the variables that gained EnvPrefix in 2.8.0 and still
-// answer to their old name. The unprefixed spelling is removed in v3, which is
-// the release that renumbers anyway when client-go does.
+// answer to their old name. The old spelling is removed in v3, which is the
+// release that renumbers anyway when client-go does.
 //
-// Two names are deliberately absent. GITLAB_URL and GITLAB_TOKEN stay bare:
-// they are GitLab's own convention, every existing configuration sets them, and
-// they are the two an assistant is most likely to write from memory into a
-// client configuration. Prefixing them would break far more than it protects.
-//
-// OTEL_* is absent for a stronger reason: those names belong to the
-// OpenTelemetry specification and the exporters read them directly, so a
-// prefixed spelling would simply not be seen.
+// Every variable this server defines is on this list; the rule has no
+// exception for a name that already began with GITLAB_. Two names stay bare
+// on purpose: GITLAB_URL and GITLAB_TOKEN are GitLab's own convention, every
+// existing configuration sets them, and a user who already has them in the
+// environment must not have to spell them twice. OTEL_* stays bare for a
+// stronger reason: those names belong to the OpenTelemetry specification and
+// the exporters read them directly, so a prefixed spelling would not be seen.
+// AUTOPILOT is not ours either; it is a convention other agent tooling sets,
+// consulted as an alias of YOLO_MODE and never warned about.
 var prefixedNames = []string{
 	"ACTION_TIMEOUT",
 	"AUTH_MODE",
@@ -37,6 +38,7 @@ var prefixedNames = []string{
 	"DRAIN_DELAY",
 	"EMBEDDED_RESOURCES",
 	"EXCLUDE_TOOLS",
+	"IGNORE_SCOPES",
 	"LOG_LEVEL",
 	"MAX_HTTP_CLIENTS",
 	"META_PARAM_SCHEMA",
@@ -47,11 +49,38 @@ var prefixedNames = []string{
 	"PUBLIC_URL",
 	"RATE_LIMIT_BURST",
 	"RATE_LIMIT_RPS",
+	"READ_ONLY",
+	"SAFE_MODE",
 	"SESSION_REVALIDATE_INTERVAL",
 	"SESSION_TIMEOUT",
+	"SKIP_TLS_VERIFY",
+	"TIER",
 	"TOOL_SURFACE",
 	"TRUSTED_ORIGINS",
 	"UPLOAD_MAX_FILE_SIZE",
+	"YOLO_MODE",
+}
+
+// legacyNames spells the old name of the settings whose old name was not the
+// bare suffix. The first batch dropped a generic name to a prefixed one
+// (TOOL_SURFACE to GITLAB_MCP_TOOL_SURFACE); these carried a GITLAB_ of their
+// own, and the fallback has to look for that spelling rather than for TIER.
+var legacyNames = map[string]string{
+	"IGNORE_SCOPES":   "GITLAB_IGNORE_SCOPES",
+	"READ_ONLY":       "GITLAB_READ_ONLY",
+	"SAFE_MODE":       "GITLAB_SAFE_MODE",
+	"SKIP_TLS_VERIFY": "GITLAB_SKIP_TLS_VERIFY",
+	"TIER":            "GITLAB_TIER",
+}
+
+// LegacyEnvName returns the spelling a setting answered to before it gained
+// EnvPrefix: the bare suffix for most, a GITLAB_-prefixed name for the ones
+// that already had one.
+func LegacyEnvName(name string) string {
+	if legacy, ok := legacyNames[name]; ok {
+		return legacy
+	}
+	return name
 }
 
 // deprecatedEnvUses records, once per unprefixed name actually read, that the
@@ -75,7 +104,7 @@ func Getenv(name string) string {
 	}
 
 	prefixed, prefixedSet := os.LookupEnv(EnvPrefix + name)
-	legacy, legacySet := os.LookupEnv(name)
+	legacy, legacySet := os.LookupEnv(LegacyEnvName(name))
 
 	switch {
 	case prefixedSet && legacySet:
@@ -116,12 +145,13 @@ func DeprecatedEnvWarnings() []string {
 	warnings := make([]string, 0, len(names))
 	for _, name := range names {
 		kind, _ := deprecatedEnvUses.Load(name)
+		legacy := LegacyEnvName(name)
 		if kind == bothSet {
-			warnings = append(warnings, "both "+EnvPrefix+name+" and "+name+
-				" are set; "+EnvPrefix+name+" is being used and "+name+" is ignored")
+			warnings = append(warnings, "both "+EnvPrefix+name+" and "+legacy+
+				" are set; "+EnvPrefix+name+" is being used and "+legacy+" is ignored")
 			continue
 		}
-		warnings = append(warnings, name+" is deprecated and will be removed in v3; rename it to "+EnvPrefix+name)
+		warnings = append(warnings, legacy+" is deprecated and will be removed in v3; rename it to "+EnvPrefix+name)
 	}
 	return warnings
 }

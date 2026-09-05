@@ -10,18 +10,21 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 )
 
 // IsYOLOMode returns true when destructive action confirmation should be
-// skipped entirely. Checks the YOLO_MODE and AUTOPILOT environment variables.
-// Any truthy value (1, true, yes — case-insensitive) enables the mode.
+// skipped entirely. It reads GITLAB_MCP_YOLO_MODE (or its old spelling
+// YOLO_MODE, warned about at startup like every other renamed setting) and
+// falls back to AUTOPILOT, a convention other agent tooling sets. Any truthy
+// value (1, true, yes — case-insensitive) enables the mode.
 func IsYOLOMode() bool {
 	// The specific name decides when it is set at all, and the alias is only
 	// consulted when it is not. ORing the two meant an inherited AUTOPILOT=true
 	// could not be overridden by --yolo-mode=false, and the most specific
 	// instruction losing to an inherited one is precedence backwards.
-	if value := os.Getenv("YOLO_MODE"); strings.TrimSpace(value) != "" {
+	if value := config.Getenv("YOLO_MODE"); strings.TrimSpace(value) != "" {
 		return isTruthy(value)
 	}
 	return isTruthy(os.Getenv("AUTOPILOT"))
@@ -40,7 +43,7 @@ func isTruthy(s string) bool {
 // ConfirmDestructiveAction checks whether a destructive action should proceed.
 // The confirmation flow is:
 //
-//  1. YOLO_MODE / AUTOPILOT env var → skip confirmation entirely
+//  1. GITLAB_MCP_YOLO_MODE / AUTOPILOT env var → skip confirmation entirely
 //  2. Explicit "confirm": true in params → skip confirmation
 //  3. MCP elicitation supported → ask user interactively
 //  4. Elicitation unsupported and no confirm param → fail closed: return an

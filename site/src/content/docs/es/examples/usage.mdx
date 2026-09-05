@@ -10,7 +10,7 @@ faq:
   - q: "¿Cómo le indico al asistente qué proyecto de GitLab usar?"
     a: "Pasa la ruta del proyecto en `project_id`, con la forma `grupo/proyecto` — por ejemplo `mi-grupo/backend`. Los IDs numéricos también funcionan. Si trabajas dentro de un repositorio clonado, la acción de descubrimiento de proyecto traduce la URL del remoto git al proyecto correcto de GitLab, así que no necesitas indicarlo: `discover_project.resolve` mediante `gitlab_execute_action` en la superficie predeterminada, o la herramienta independiente `gitlab_discover_project` con `GITLAB_MCP_TOOL_SURFACE=meta` o `individual`."
   - q: "¿Un asistente de IA puede modificar mis datos de GitLab sin preguntar?"
-    a: "No sin desactivar antes alguna salvaguarda. Las acciones destructivas exigen confirmación explícita antes de ejecutarse, `GITLAB_READ_ONLY=true` elimina del catálogo todas las acciones de escritura, y `GITLAB_SAFE_MODE=true` intercepta las mutaciones y devuelve una previsualización JSON de lo que ocurriría en vez de aplicarlo. Las operaciones de lectura, como listar y buscar, son siempre seguras."
+    a: "No sin desactivar antes alguna salvaguarda. Las acciones destructivas exigen confirmación explícita antes de ejecutarse, `GITLAB_MCP_READ_ONLY=true` elimina del catálogo todas las acciones de escritura, y `GITLAB_MCP_SAFE_MODE=true` intercepta las mutaciones y devuelve una previsualización JSON de lo que ocurriría en vez de aplicarlo. Las operaciones de lectura, como listar y buscar, son siempre seguras."
 ---
 
 import FAQ from "../../../../components/FAQ.astro";

@@ -79,8 +79,8 @@ That shape is what determines whether something counts as a vulnerability here.
 - **Cross-tenant leakage in HTTP mode.** Any path by which one bearer token
   observes another's GitLab client, cached identity, tier, or tool results, or by
   which pool eviction serves a session the wrong client.
-- **Privilege escalation past the configured mode.** `GITLAB_READ_ONLY=true` and
-  `GITLAB_SAFE_MODE=true` are enforcement, not hints. A mutating call that
+- **Privilege escalation past the configured mode.** `GITLAB_MCP_READ_ONLY=true` and
+  `GITLAB_MCP_SAFE_MODE=true` are enforcement, not hints. A mutating call that
   executes despite either flag is a vulnerability, including through the dynamic
   `gitlab_execute_action` surface.
 - **Path traversal on file operations.** Upload and file-content tools take
@@ -103,7 +103,7 @@ under *Out of scope* below.
 - Authentication and authorization handling (token storage, OAuth flows, HTTP session isolation).
 - Input validation in MCP tool handlers.
 - Path handling for file uploads and downloads.
-- TLS configuration handling and `GITLAB_SKIP_TLS_VERIFY` semantics.
+- TLS configuration handling and `GITLAB_MCP_SKIP_TLS_VERIFY` semantics.
 - Error messages and logs that could leak credentials or sensitive metadata.
 - Released binaries and Docker images published from this repository.
 
@@ -236,13 +236,13 @@ from a model that may have read attacker-influenced content.
 ### TLS Configuration
 
 - TLS certificate verification is enabled by default.
-- Self-signed certificates can be accepted via `GITLAB_SKIP_TLS_VERIFY=true`.
+- Self-signed certificates can be accepted via `GITLAB_MCP_SKIP_TLS_VERIFY=true`.
 - This setting should **only** be used in trusted internal networks.
 
 ### Read-Only and Safe Modes
 
-- Set `GITLAB_READ_ONLY=true` to disable all mutating tools (create, update, delete). Only read-only tools (list, get, search) are registered.
-- Set `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a JSON preview instead of executing the change.
+- Set `GITLAB_MCP_READ_ONLY=true` to disable all mutating tools (create, update, delete). Only read-only tools (list, get, search) are registered.
+- Set `GITLAB_MCP_SAFE_MODE=true` to intercept mutating tools and return a JSON preview instead of executing the change.
 - Both flags provide additional protection for sensitive GitLab instances.
 
 ### Input Validation
@@ -278,7 +278,7 @@ from a model that may have read attacker-influenced content.
 3. **Enable TLS** between the MCP server and GitLab instance in production.
 4. **Keep the `.env` file permissions restrictive** (`chmod 600` on Unix systems).
 5. **Run the server with least privilege** so `file_path` uploads cannot read sensitive files (or use `content_base64`).
-6. **Use read-only or safe mode** (`GITLAB_READ_ONLY=true` or `GITLAB_SAFE_MODE=true`) when mutation is not needed or must be reviewed.
+6. **Use read-only or safe mode** (`GITLAB_MCP_READ_ONLY=true` or `GITLAB_MCP_SAFE_MODE=true`) when mutation is not needed or must be reviewed.
 7. **Monitor token usage** via GitLab's admin panel.
 8. **Rotate tokens periodically** according to your organization's policy.
 9. **In HTTP mode**, restrict network access to trusted clients only and consider running behind a TLS-terminating reverse proxy.

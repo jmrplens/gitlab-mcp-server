@@ -138,7 +138,7 @@ After a global install, use the command instead:
 ```
 
 `GITLAB_TOKEN` is the only required value: a personal access token with the
-`api` scope (`read_api` also works; pair it with `GITLAB_READ_ONLY=true`, since over stdio the server does not narrow the tool surface to the token's scope).
+`api` scope (`read_api` also works; pair it with `GITLAB_MCP_READ_ONLY=true`, since over stdio the server does not narrow the tool surface to the token's scope).
 `GITLAB_URL` defaults to `https://gitlab.com`; add it to `env` only for a
 self-managed instance. A client that does not inherit your shell's PATH may
 need the full path to the command; `which gitlab-mcp-server` (or

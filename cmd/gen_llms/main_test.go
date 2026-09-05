@@ -307,7 +307,7 @@ func TestRun_WritesLLMSFullTxt(t *testing.T) {
 			"**Action Output Schemas:**\n\n<details><summary>list</summary>\n\n```json\n" +
 			`{"properties":{"issues":{"type":"array"}},"type":"object"}` + "\n```\n\n</details>\n\n",
 		"### gitlab_project\n\nManage projects.\n\n\n## Enterprise-Only Meta-Tools\n\n" +
-			"These 2 tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). " +
+			"These 2 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license). " +
 			"GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.\n\n" +
 			"### gitlab_epic\n\n**Epics**\n\nManage epics.\n\n\n**Action Output Schemas:**\n\n<details><summary>list</summary>",
 		"### gitlab_orbit\n\nQuery the Knowledge Graph.\n\n\n## Individual Tools\n\n" +

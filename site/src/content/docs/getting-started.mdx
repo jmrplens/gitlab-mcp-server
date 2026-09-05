@@ -51,27 +51,27 @@ head:
             "@type": "HowToStep",
             "position": 3,
             "name": "Register the server with your MCP client",
-            "text": "Put GITLAB_TOKEN in ~/.gitlab-mcp-server.env, which the server reads for values it does not already have in its environment, then register the server without naming the token. For Claude Code the whole step is claude mcp add gitlab -- gitlab-mcp-server. For a self-managed instance add GITLAB_URL to the same file, plus GITLAB_SKIP_TLS_VERIFY=true for self-signed certificates. Docker is the one exception: a container has its own filesystem and never reads that file, so export GITLAB_TOKEN where you launch the client and let the -e GITLAB_TOKEN in the docker run command forward it.",
+            "text": "Put GITLAB_TOKEN in ~/.gitlab-mcp-server.env, which the server reads for values it does not already have in its environment, then register the server without naming the token. For Claude Code the whole step is claude mcp add gitlab -- gitlab-mcp-server. For a self-managed instance add GITLAB_URL to the same file, plus GITLAB_MCP_SKIP_TLS_VERIFY=true for self-signed certificates. Docker is the one exception: a container has its own filesystem and never reads that file, so export GITLAB_TOKEN where you launch the client and let the -e GITLAB_TOKEN in the docker run command forward it.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#manual-configuration"
           },
           {
             "@type": "HowToStep",
             "position": 4,
             "name": "Verify the setup",
-            "text": "Open your AI client and ask \"Who am I on GitLab?\". The server returns your GitLab user profile, confirming the connection works. If you get connection errors, check that GITLAB_URL is correct and reachable, that the token carries the api scope, and that self-signed certificates are handled with GITLAB_SKIP_TLS_VERIFY=true.",
+            "text": "Open your AI client and ask \"Who am I on GitLab?\". The server returns your GitLab user profile, confirming the connection works. If you get connection errors, check that GITLAB_URL is correct and reachable, that the token carries the api scope, and that self-signed certificates are handled with GITLAB_MCP_SKIP_TLS_VERIFY=true.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#verify-the-setup"
           }
         ]
       }
 faq:
   - q: "What GitLab token scope does GitLab MCP Server need?"
-    a: "GitLab MCP Server needs a Personal Access Token with the api scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the read_api scope: the server detects the scope at startup and serves only the read actions, and GITLAB_READ_ONLY=true does the same for a token that could write. Create tokens under GitLab, then Preferences, then Access Tokens."
+    a: "GitLab MCP Server needs a Personal Access Token with the api scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the read_api scope: the server detects the scope at startup and serves only the read actions, and GITLAB_MCP_READ_ONLY=true does the same for a token that could write. Create tokens under GitLab, then Preferences, then Access Tokens."
   - q: "How do I connect GitLab MCP Server to a self-managed GitLab instance?"
-    a: "Point GITLAB_URL at your instance, for example GITLAB_URL=https://gitlab.example.com. GITLAB_URL defaults to https://gitlab.com, so you set it only for self-managed Community or Enterprise Edition instances. If the instance uses a self-signed or internal CA certificate, also set GITLAB_SKIP_TLS_VERIFY=true to bypass certificate verification on a trusted network."
+    a: "Point GITLAB_URL at your instance, for example GITLAB_URL=https://gitlab.example.com. GITLAB_URL defaults to https://gitlab.com, so you set it only for self-managed Community or Enterprise Edition instances. If the instance uses a self-signed or internal CA certificate, also set GITLAB_MCP_SKIP_TLS_VERIFY=true to bypass certificate verification on a trusted network."
   - q: "Which tool mode does GitLab MCP Server use by default?"
     a: "By default GitLab MCP Server runs in dynamic mode, which exposes only two tools — gitlab_find_action and gitlab_execute_action — to keep the AI client's context small while still reaching every GitLab operation. Set GITLAB_MCP_TOOL_SURFACE=meta for consolidated domain-level meta-tools, or GITLAB_MCP_TOOL_SURFACE=individual for one tool per operation."
   - q: "Why does my AI client fail to connect to GitLab MCP Server?"
-    a: "A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that GITLAB_URL is correct and reachable from your machine, that the token carries the api scope (or read_api in read-only mode) and has not expired, and that self-signed certificates are handled by setting GITLAB_SKIP_TLS_VERIFY=true."
+    a: "A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that GITLAB_URL is correct and reachable from your machine, that the token carries the api scope (or read_api in read-only mode) and has not expired, and that self-signed certificates are handled by setting GITLAB_MCP_SKIP_TLS_VERIFY=true."
 ---
 
 import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
@@ -105,7 +105,7 @@ Before you begin, make sure you have:
 3. Copy the token — you'll need it for configuration
 
 :::tip
-For read-only setups, use a token with the `read_api` scope: the server detects the scope at startup and serves only the read actions, on stdio as in HTTP mode. `GITLAB_READ_ONLY=true` does the same for a token that could write.
+For read-only setups, use a token with the `read_api` scope: the server detects the scope at startup and serves only the read actions, on stdio as in HTTP mode. `GITLAB_MCP_READ_ONLY=true` does the same for a token that could write.
 :::
 
 ## Quick install
@@ -242,7 +242,7 @@ Homebrew, winget and the PowerShell installer put the same binary on your PATH; 
   />
 </CardGrid>
 
-Self-managed GitLab? Add `GITLAB_URL=https://gitlab.example.com` to the same file (and `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs), one `KEY=value` per line.
+Self-managed GitLab? Add `GITLAB_URL=https://gitlab.example.com` to the same file (and `GITLAB_MCP_SKIP_TLS_VERIFY=true` for self-signed certs), one `KEY=value` per line.
 
 ### Try it without installing anything (hosted endpoint)
 
@@ -600,7 +600,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 Many self-hosted instances use self-signed or internal CA certificates. If you see `x509: certificate signed by unknown authority` errors, add:
 
 ```bash title="~/.gitlab-mcp-server.env"
-GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_MCP_SKIP_TLS_VERIFY=true
 ```
 
 :::caution
@@ -643,13 +643,13 @@ HTTP connections transmit tokens in plaintext. Only use HTTP for local developme
 ```bash title="~/.gitlab-mcp-server.env"
 GITLAB_URL=https://gitlab.internal.company.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_MCP_SKIP_TLS_VERIFY=true
 ```
 
 </TabItem>
 </Tabs>
 
-Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-exclusive features like DORA metrics, epics, and vulnerability management, set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode or use `--tier=premium`/`--tier=ultimate` in HTTP mode. When unset, the tier is detected from `GET /license` (fallback `free`). The legacy boolean `GITLAB_ENTERPRISE=true` environment variable is still honored in stdio mode for compatibility but is deprecated; HTTP mode reads `--tier` only, and there is no `--enterprise` flag. See [Configuration](/gitlab-mcp-server/configuration/) for all available options.
+Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-exclusive features like DORA metrics, epics, and vulnerability management, set `GITLAB_MCP_TIER=premium` (or `GITLAB_MCP_TIER=ultimate`) in stdio mode or use `--tier=premium`/`--tier=ultimate` in HTTP mode. When unset, the tier is detected from `GET /license` (fallback `free`). The legacy boolean `GITLAB_ENTERPRISE=true` environment variable is still honored in stdio mode for compatibility but is deprecated; HTTP mode reads `--tier` only, and there is no `--enterprise` flag. See [Configuration](/gitlab-mcp-server/configuration/) for all available options.
 
 ## Verify the setup
 
@@ -676,7 +676,7 @@ If you get connection errors, check:
 
 - The `GITLAB_URL` is correct and reachable from your machine
 - The token has the `api` scope
-- For self-signed certificates, set `GITLAB_SKIP_TLS_VERIFY=true`
+- For self-signed certificates, set `GITLAB_MCP_SKIP_TLS_VERIFY=true`
 
 :::
 

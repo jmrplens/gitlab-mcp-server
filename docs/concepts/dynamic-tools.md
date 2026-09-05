@@ -262,9 +262,9 @@ Without confirmation, destructive execution returns `isError: true` with guidanc
 
 For safer deployments:
 
-- Set `GITLAB_READ_ONLY=true` to remove mutating actions at startup.
-- Set `GITLAB_SAFE_MODE=true` to return previews for mutating actions instead of executing them.
-- Keep `YOLO_MODE=false` and `AUTOPILOT=false` unless the deployment is fully trusted.
+- Set `GITLAB_MCP_READ_ONLY=true` to remove mutating actions at startup.
+- Set `GITLAB_MCP_SAFE_MODE=true` to return previews for mutating actions instead of executing them.
+- Keep `GITLAB_MCP_YOLO_MODE=false` and `AUTOPILOT=false` unless the deployment is fully trusted.
 
 ## Architecture
 
@@ -329,7 +329,7 @@ These values are internal tuning constants, not runtime configuration flags. Cha
 
 The goal is not to make the model guess blindly. The model should use find to shortlist actions and fetch exact schemas, then execute.
 
-Find returns only actions visible to the current server instance. Enterprise gating, GitLab.com-only routing, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, excluded tools, and token-scope filtering are applied before the dynamic registry is exposed.
+Find returns only actions visible to the current server instance. Enterprise gating, GitLab.com-only routing, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, excluded tools, and token-scope filtering are applied before the dynamic registry is exposed.
 
 ### Metadata Guidance
 
@@ -405,14 +405,14 @@ Use `dynamic` for production-like low-token configuration.
 
 ## Troubleshooting
 
-| Symptom                                 | Cause                                                      | Fix                                                                                                    |
-| --------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Only two tools appear                   | Dynamic mode is enabled                                    | This is expected. Use `gitlab_find_action` to discover actions and schemas                             |
-| Find returns many broad list actions    | Query is too generic                                       | Include the domain, resource, verb, and filter terms, such as `merge request list open authored by me` |
-| Execute says the action is unknown      | The model invented an action ID or the action was excluded | Find again and execute the canonical action ID from the result                                         |
-| Execute rejects parameters              | Params do not match the found schema                       | Call `gitlab_find_action` for that action and retry with the exact field names and types               |
-| Destructive action returns an error     | Confirmation is missing or policy blocks mutation          | Add top-level `confirm:true` only when intentional, or check `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` |
-| Resources and prompts still use context | Capability surface is still full                           | Set `GITLAB_MCP_CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                          |
+| Symptom                                 | Cause                                                      | Fix                                                                                                            |
+| --------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Only two tools appear                   | Dynamic mode is enabled                                    | This is expected. Use `gitlab_find_action` to discover actions and schemas                                     |
+| Find returns many broad list actions    | Query is too generic                                       | Include the domain, resource, verb, and filter terms, such as `merge request list open authored by me`         |
+| Execute says the action is unknown      | The model invented an action ID or the action was excluded | Find again and execute the canonical action ID from the result                                                 |
+| Execute rejects parameters              | Params do not match the found schema                       | Call `gitlab_find_action` for that action and retry with the exact field names and types                       |
+| Destructive action returns an error     | Confirmation is missing or policy blocks mutation          | Add top-level `confirm:true` only when intentional, or check `GITLAB_MCP_READ_ONLY` and `GITLAB_MCP_SAFE_MODE` |
+| Resources and prompts still use context | Capability surface is still full                           | Set `GITLAB_MCP_CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                  |
 
 ## See Also
 

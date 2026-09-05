@@ -24,7 +24,7 @@ type SafeModePreview struct {
 }
 
 // SafeModeHint is the operator-facing hint attached to every safe-mode preview.
-const SafeModeHint = "Set GITLAB_SAFE_MODE=false to execute this operation"
+const SafeModeHint = "Set GITLAB_MCP_SAFE_MODE=false to execute this operation"
 
 // NewSafeModePreview builds a preview for name, marshaling params defensively:
 // when params cannot be marshaled the preview still reports the blocked

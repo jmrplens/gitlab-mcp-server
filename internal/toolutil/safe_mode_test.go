@@ -43,7 +43,7 @@ func TestNewSafeModePreview_ParamsThatCannotBeEncoded_StillReportTheBlock(t *tes
 			if string(preview.Params) != tt.wantParams {
 				t.Errorf("params = %s, want %s", preview.Params, tt.wantParams)
 			}
-			if !strings.Contains(preview.Hint, "GITLAB_SAFE_MODE") {
+			if !strings.Contains(preview.Hint, "GITLAB_MCP_SAFE_MODE") {
 				t.Errorf("hint = %q, want it to say how to turn safe mode off", preview.Hint)
 			}
 		})

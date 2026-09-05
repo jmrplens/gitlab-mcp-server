@@ -10,7 +10,7 @@ faq:
   - q: "¿Cuál es la diferencia entre los modos de transporte stdio y HTTP?"
     a: "El modo stdio es el predeterminado para configuraciones de un solo usuario: el cliente de IA inicia el servidor como proceso hijo y se comunica por stdin/stdout usando JSON-RPC, con el token suministrado como variable de entorno que nunca sale de la máquina local. El modo HTTP atiende a múltiples usuarios desde un único proceso, aislando la sesión de cada usuario por token y URL en un pool LRU con límites de sesión y tiempos de espera configurables. Ambos modos exponen las mismas herramientas y llaman a las mismas APIs de GitLab; solo se diferencian en cómo se conecta el cliente de IA."
   - q: "¿Cómo mantiene GitLab MCP Server seguro mi token de GitLab?"
-    a: "GitLab MCP Server nunca almacena tokens en el servidor. En modo stdio el token existe solo en el entorno del proceso y nunca sale de la máquina local. En modo HTTP la sesión de cada usuario está aislada en el pool del servidor por token y URL. Todas las llamadas a la API de GitLab usan HTTPS por defecto, con la opción de omitirlo para certificados autofirmados, y el servidor no tiene estado — no se almacenan datos entre peticiones. El modo solo lectura (`GITLAB_READ_ONLY=true`) desactiva toda operación de escritura."
+    a: "GitLab MCP Server nunca almacena tokens en el servidor. En modo stdio el token existe solo en el entorno del proceso y nunca sale de la máquina local. En modo HTTP la sesión de cada usuario está aislada en el pool del servidor por token y URL. Todas las llamadas a la API de GitLab usan HTTPS por defecto, con la opción de omitirlo para certificados autofirmados, y el servidor no tiene estado — no se almacenan datos entre peticiones. El modo solo lectura (`GITLAB_MCP_READ_ONLY=true`) desactiva toda operación de escritura."
 ---
 
 import stats from "../../../data/stats.json";
@@ -133,7 +133,7 @@ Como todas las superficies comparten la misma entrada del catálogo, los schemas
 
 ### Gating por nivel (tier)
 
-Las entradas del catálogo también son conscientes del nivel: cada acción y cada schema de entrada/salida se etiqueta con la edición de GitLab más baja (`free`, `premium` o `ultimate`) que la expone. Cuando se construye un servidor (al arrancar en modo stdio, por entrada token+URL del pool en modo HTTP) se resuelve el nivel (`GITLAB_TIER` / `--tier`, o autodetección vía `GET /license`, con `free` como valor de respaldo), el filtro del catálogo descarta las acciones exclusivas de premium/ultimate por encima de él, y `pruneSchemaFieldsByTier` (en `internal/tools/action_catalog.go`) poda las entradas de schema por campo que estén restringidas por edición. Esto mantiene coherentes las meta-herramientas, las herramientas individuales y la superficie dinámica: una acción exclusiva de Premium se oculta en todas partes en cuanto el nivel se resuelve a `free`.
+Las entradas del catálogo también son conscientes del nivel: cada acción y cada schema de entrada/salida se etiqueta con la edición de GitLab más baja (`free`, `premium` o `ultimate`) que la expone. Cuando se construye un servidor (al arrancar en modo stdio, por entrada token+URL del pool en modo HTTP) se resuelve el nivel (`GITLAB_MCP_TIER` / `--tier`, o autodetección vía `GET /license`, con `free` como valor de respaldo), el filtro del catálogo descarta las acciones exclusivas de premium/ultimate por encima de él, y `pruneSchemaFieldsByTier` (en `internal/tools/action_catalog.go`) poda las entradas de schema por campo que estén restringidas por edición. Esto mantiene coherentes las meta-herramientas, las herramientas individuales y la superficie dinámica: una acción exclusiva de Premium se oculta en todas partes en cuanto el nivel se resuelve a `free`.
 
 ```mermaid
 graph LR
@@ -268,7 +268,7 @@ Este formato dual asegura que la IA pueda tomar decisiones de seguimiento mientr
 
 - **Sin almacenamiento de tokens en el servidor** — En modo stdio, el token existe solo en el entorno del proceso
 - **Aislamiento por sesión** — En modo HTTP, la sesión de cada usuario está aislada en el pool del servidor
-- **Modo solo lectura** — Desactiva todas las escrituras con `GITLAB_READ_ONLY=true`
+- **Modo solo lectura** — Desactiva todas las escrituras con `GITLAB_MCP_READ_ONLY=true`
 - **TLS por defecto** — Todas las llamadas a la API de GitLab usan HTTPS (con opción de omitir para certificados autofirmados)
 - **Sin persistencia de datos** — El servidor no tiene estado; no se almacenan datos entre peticiones
 

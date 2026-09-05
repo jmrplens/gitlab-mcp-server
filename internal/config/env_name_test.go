@@ -153,6 +153,96 @@ func TestDeprecatedEnvWarnings_ReportWhatWasRead(t *testing.T) {
 
 // TestPrefixedEnvNames_IsACopy verifies that a caller cannot reorder or empty
 // the list the whole migration is driven from.
+// TestLegacyEnvName_SpellsTheOldNameOfEachSetting pins the two shapes an old
+// name takes: the bare suffix for the settings that were generic, and the
+// GITLAB_-prefixed name for the switches that already carried one and were
+// renamed in 2.8.0 so that every variable of this server starts alike.
+func TestLegacyEnvName_SpellsTheOldNameOfEachSetting(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "TOOL_SURFACE", want: "TOOL_SURFACE"},
+		{name: "LOG_LEVEL", want: "LOG_LEVEL"},
+		{name: "TIER", want: "GITLAB_TIER"},
+		{name: "READ_ONLY", want: "GITLAB_READ_ONLY"},
+		{name: "SAFE_MODE", want: "GITLAB_SAFE_MODE"},
+		{name: "IGNORE_SCOPES", want: "GITLAB_IGNORE_SCOPES"},
+		{name: "SKIP_TLS_VERIFY", want: "GITLAB_SKIP_TLS_VERIFY"},
+		{name: "YOLO_MODE", want: "YOLO_MODE"},
+		{name: "NOT_A_SETTING", want: "NOT_A_SETTING"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := LegacyEnvName(tt.name); got != tt.want {
+				t.Errorf("LegacyEnvName(%q) = %q, want %q", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGetenv_RenamedGitLabSwitch_FallsBackToItsOldSpelling verifies the
+// renamed switches through the whole path: the old GITLAB_TIER is read when
+// only it is set, the prefixed name wins when both are, and the warning names
+// the spelling the operator actually used rather than the bare suffix, since
+// "TIER is deprecated" would send them looking for a variable they never set.
+func TestGetenv_RenamedGitLabSwitch_FallsBackToItsOldSpelling(t *testing.T) {
+	tests := []struct {
+		name        string
+		old, new    string
+		want        string
+		wantWarning string
+	}{
+		{
+			name: "only the old spelling set", old: "premium", new: "",
+			want:        "premium",
+			wantWarning: "GITLAB_TIER is deprecated and will be removed in v3; rename it to GITLAB_MCP_TIER",
+		},
+		{
+			name: "both set, the prefixed one wins", old: "premium", new: "ultimate",
+			want:        "ultimate",
+			wantWarning: "both GITLAB_MCP_TIER and GITLAB_TIER are set; GITLAB_MCP_TIER is being used and GITLAB_TIER is ignored",
+		},
+		{
+			name: "only the prefixed one set", old: "", new: "free",
+			want:        "free",
+			wantWarning: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetDeprecatedEnvUses()
+			t.Cleanup(resetDeprecatedEnvUses)
+			t.Setenv("GITLAB_TIER", "")
+			t.Setenv("GITLAB_MCP_TIER", "")
+			os.Unsetenv("GITLAB_TIER")
+			os.Unsetenv("GITLAB_MCP_TIER")
+			if tt.old != "" {
+				t.Setenv("GITLAB_TIER", tt.old)
+			}
+			if tt.new != "" {
+				t.Setenv("GITLAB_MCP_TIER", tt.new)
+			}
+			if got := Getenv("TIER"); got != tt.want {
+				t.Errorf("Getenv(TIER) = %q, want %q", got, tt.want)
+			}
+			warnings := strings.Join(DeprecatedEnvWarnings(), "\n")
+			if tt.wantWarning == "" {
+				if warnings != "" {
+					t.Errorf("warnings = %q, want none", warnings)
+				}
+				return
+			}
+			if !strings.Contains(warnings, tt.wantWarning) {
+				t.Errorf("warnings = %q, want %q", warnings, tt.wantWarning)
+			}
+			if strings.Contains(warnings, "TIER is deprecated") && !strings.Contains(warnings, "GITLAB_TIER is deprecated") {
+				t.Errorf("the warning names the bare suffix, which the operator never set: %q", warnings)
+			}
+		})
+	}
+}
+
 func TestPrefixedEnvNames_IsACopy(t *testing.T) {
 	names := PrefixedEnvNames()
 	if len(names) == 0 {
@@ -184,9 +274,14 @@ func TestPrefixedEnvNames_NoCallerReadsThemThroughOsGetenv(t *testing.T) {
 
 	for _, name := range PrefixedEnvNames() {
 		t.Run(name, func(t *testing.T) {
-			needle := `os.Getenv("` + name + `")`
+			// Every spelling: a reader left on the old GITLAB_TIER is as
+			// wrong as one left on the bare TOOL_SURFACE, and one that reads
+			// the prefixed name directly ignores the old one the same way.
+			bare := `os.Getenv("` + name + `")`
+			legacy := `os.Getenv("` + LegacyEnvName(name) + `")`
+			prefixed := `os.Getenv("` + EnvPrefix + name + `")`
 			for path, body := range sources {
-				if !strings.Contains(body, needle) {
+				if !strings.Contains(body, bare) && !strings.Contains(body, legacy) && !strings.Contains(body, prefixed) {
 					continue
 				}
 				rel, relErr := filepath.Rel(root, path)
@@ -194,7 +289,7 @@ func TestPrefixedEnvNames_NoCallerReadsThemThroughOsGetenv(t *testing.T) {
 					rel = path
 				}
 				t.Errorf("%s reads %s through os.Getenv; use Getenv or TrimmedGetenv "+
-					"so the %s spelling is honored", rel, name, EnvPrefix+name)
+					"so both spellings are honored", rel, EnvPrefix+name)
 			}
 		})
 	}
@@ -213,7 +308,10 @@ func TestPrefixedEnvNames_NoCallerReadsThemThroughOsGetenv(t *testing.T) {
 func moduleGoSources(t *testing.T, root string) map[string]string {
 	t.Helper()
 
-	skip := map[string]bool{".git": true, "node_modules": true, "site": true, "test": true, "dist": true}
+	// .claude holds agent worktrees, which are other checkouts of this
+	// repository at other commits; scanning them would report a reader that
+	// was converted here and not there.
+	skip := map[string]bool{".git": true, ".claude": true, "node_modules": true, "site": true, "test": true, "dist": true}
 
 	var paths []string
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {

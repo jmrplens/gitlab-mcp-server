@@ -165,7 +165,7 @@ func presentVariableCases() []presentVariableCase {
 		},
 		{
 			name: "an explicit tier is pinned",
-			env:  map[string]string{"GITLAB_TIER": "ultimate"},
+			env:  map[string]string{"GITLAB_MCP_TIER": "ultimate"},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				if o.Tier == nil || *o.Tier != edition.Ultimate || !o.TierExplicit {
@@ -194,11 +194,11 @@ func presentVariableCases() []presentVariableCase {
 		{
 			name: "booleans",
 			env: map[string]string{
-				"GITLAB_SKIP_TLS_VERIFY": "true",
-				"GITLAB_READ_ONLY":       "true",
-				"GITLAB_SAFE_MODE":       "true",
-				"EMBEDDED_RESOURCES":     "false",
-				"GITLAB_IGNORE_SCOPES":   "true",
+				"GITLAB_MCP_SKIP_TLS_VERIFY": "true",
+				"GITLAB_MCP_READ_ONLY":       "true",
+				"GITLAB_MCP_SAFE_MODE":       "true",
+				"EMBEDDED_RESOURCES":         "false",
+				"GITLAB_MCP_IGNORE_SCOPES":   "true",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -299,10 +299,17 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"META_TOOLS", "bogus", "META_TOOLS"},
 		{"CAPABILITY_SURFACE", "bogus", "CAPABILITY_SURFACE"},
 		{"META_PARAM_SCHEMA", "bogus", "META_PARAM_SCHEMA"},
-		{"GITLAB_TIER", "bogus", "GITLAB_TIER"},
+		// The renamed switches, under both spellings: the message names the
+		// canonical variable either way, since that is the one to fix.
+		{"GITLAB_TIER", "bogus", "GITLAB_MCP_TIER"},
+		{"GITLAB_MCP_TIER", "bogus", "GITLAB_MCP_TIER"},
 		{"GITLAB_ENTERPRISE", "bogus", "GITLAB_ENTERPRISE"},
-		{"GITLAB_SKIP_TLS_VERIFY", "bogus", "GITLAB_SKIP_TLS_VERIFY"},
-		{"GITLAB_READ_ONLY", "bogus", "GITLAB_READ_ONLY"},
+		{"GITLAB_SKIP_TLS_VERIFY", "bogus", "GITLAB_MCP_SKIP_TLS_VERIFY"},
+		{"GITLAB_MCP_SKIP_TLS_VERIFY", "bogus", "GITLAB_MCP_SKIP_TLS_VERIFY"},
+		{"GITLAB_READ_ONLY", "bogus", "GITLAB_MCP_READ_ONLY"},
+		{"GITLAB_MCP_READ_ONLY", "bogus", "GITLAB_MCP_READ_ONLY"},
+		{"GITLAB_MCP_SAFE_MODE", "bogus", "GITLAB_MCP_SAFE_MODE"},
+		{"GITLAB_MCP_IGNORE_SCOPES", "bogus", "GITLAB_MCP_IGNORE_SCOPES"},
 		{"MAX_HTTP_CLIENTS", "bogus", "MAX_HTTP_CLIENTS"},
 		{"SESSION_TIMEOUT", "bogus", "SESSION_TIMEOUT"},
 		{"POOL_IDLE_TIMEOUT", "bogus", "POOL_IDLE_TIMEOUT"},

@@ -52,7 +52,7 @@ Así que «funciona sin pagar» **no** es una razón para elegir este proyecto f
 
 - Necesitas una operación que el conjunto curado no expone. Cubre {stats.tools.free} operaciones en Community Edition, y hasta {stats.tools.gitlab_com} en GitLab.com, frente a unas dos docenas: releases, tags, entornos, deploy keys, ramas protegidas, registro de paquetes, runners, wikis, snippets, milestones, etc.
 - No puedes activar GitLab Duo ni las funciones beta en la instancia, sea por política o por tratarse de un despliegue autoalojado antiguo.
-- Quieres limitar al asistente. `GITLAB_READ_ONLY=true` elimina del catálogo toda operación de escritura, y `GITLAB_SAFE_MODE=true` devuelve una previsualización de la mutación en vez de ejecutarla.
+- Quieres limitar al asistente. `GITLAB_MCP_READ_ONLY=true` elimina del catálogo toda operación de escritura, y `GITLAB_MCP_SAFE_MODE=true` devuelve una previsualización de la mutación en vez de ejecutarla.
 - No quieres dependencias de runtime: un único binario Go estático en lugar de un proceso Node.js.
 
 **Considera otro servidor de la comunidad** como `zereight/gitlab-mcp` si ya te resulta cómodo ejecutar Node.js y sus aproximadamente 216 herramientas cubren tus flujos. Es con diferencia la opción comunitaria más adoptada y su cobertura es amplia; las diferencias prácticas con este proyecto son la dependencia de runtime, la ausencia de modos de solo lectura y safe mode, y que registra sus herramientas de forma individual en lugar de tras una superficie de descubrimiento de bajo consumo.

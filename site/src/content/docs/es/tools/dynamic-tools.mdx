@@ -10,7 +10,7 @@ faq:
   - q: "¿Por qué el modo dinámico muestra solo dos herramientas?"
     a: "Mostrar solo dos herramientas es intencionado y esperado en el modo dinámico. Los servidores MCP grandes pueden gastar mucho contexto en descubrimiento de herramientas antes de que el usuario pida nada; GitLab MCP Server puede exponer hasta {{tools.gitlab_com}} operaciones individuales en GitLab.com Enterprise/Premium con Orbit. El modo dinámico expone ese catálogo completo mediante `gitlab_find_action` y `gitlab_execute_action`, así que el `tools/list` inicial se mantiene mínimo y el presupuesto de contexto del modelo queda libre para la conversación. El compromiso es una llamada de descubrimiento por tarea: el asistente debe encontrar una acción antes de ejecutarla."
   - q: "¿Las acciones destructivas siguen protegidas en el modo dinámico?"
-    a: "Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas porque ambos comparten el catálogo canónico de acciones. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `YOLO_MODE` o `AUTOPILOT`. Sin confirmación, el servidor devuelve un resultado de error en lugar de realizar la acción; para ejecutarla intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_action`. La ejecución dinámica también valida los parámetros antes de despachar y rechaza campos desconocidos con guía de reparación. Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` o `GITLAB_SAFE_MODE=true`."
+    a: "Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas porque ambos comparten el catálogo canónico de acciones. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `GITLAB_MCP_YOLO_MODE` o `AUTOPILOT`. Sin confirmación, el servidor devuelve un resultado de error en lugar de realizar la acción; para ejecutarla intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_action`. La ejecución dinámica también valida los parámetros antes de despachar y rechaza campos desconocidos con guía de reparación. Para despliegues más seguros, usa `GITLAB_MCP_READ_ONLY=true` o `GITLAB_MCP_SAFE_MODE=true`."
   - q: "¿Cómo hago que el modo dinámico use aún menos contexto de inicio?"
     a: "Para minimizar el contexto de inicio, combina el modo dinámico con la superficie mínima de capacidades añadiendo `GITLAB_MCP_CAPABILITY_SURFACE=minimal` (o `--capability-surface=minimal` en modo HTTP). Minimal mantiene los recursos de manifiesto de herramientas `gitlab://tools` y `gitlab://tools/{id}` y omite recursos opcionales, prompts y guías de flujo. El modo dinámico conserva el descubrimiento completo de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. Deja `GITLAB_MCP_META_PARAM_SCHEMA` en su valor predeterminado `opaque`, ya que solo afecta a los schemas de las meta-herramientas y no tiene efecto en despliegues dinámicos."
   - q: "¿Cómo ordena los resultados gitlab_find_action?"
@@ -223,7 +223,7 @@ El modo dinámico está diseñado para poder repararse. Si una llamada devuelve 
 
 ## ¿Las acciones destructivas siguen protegidas?
 
-Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `YOLO_MODE` o `AUTOPILOT`.
+Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `GITLAB_MCP_YOLO_MODE` o `AUTOPILOT`.
 
 ```json
 {
@@ -254,7 +254,7 @@ Sin confirmación, el servidor devuelve un resultado de error en lugar de elimin
 
 La ejecución dinámica valida los parámetros antes de despachar. Los campos desconocidos, incluidos campos sensibles no soportados como `masked` o `protected` en variables de pipeline schedules, se rechazan con guía de reparación en lugar de eliminarse silenciosamente.
 
-Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar acciones mutantes o `GITLAB_SAFE_MODE=true` para previsualizar mutaciones sin aplicarlas.
+Para despliegues más seguros, usa `GITLAB_MCP_READ_ONLY=true` para eliminar acciones mutantes o `GITLAB_MCP_SAFE_MODE=true` para previsualizar mutaciones sin aplicarlas.
 
 ## Dinámico vs meta-herramientas
 

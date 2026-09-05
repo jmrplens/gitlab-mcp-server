@@ -151,10 +151,10 @@ Loads settings from environment variables, falling back to the file `GITLAB_MCP_
 | --------------------------------- | -------- | -------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `GITLAB_URL`                      | No       | `https://gitlab.com` | GitLab instance base URL                                                                                       |
 | `GITLAB_TOKEN`                    | Stdio    | —                    | Personal Access Token with `api` scope                                                                         |
-| `GITLAB_SKIP_TLS_VERIFY`          | No       | `false`              | Skip TLS certificate verification                                                                              |
+| `GITLAB_MCP_SKIP_TLS_VERIFY`      | No       | `false`              | Skip TLS certificate verification                                                                              |
 | `GITLAB_MCP_TOOL_SURFACE`         | No       | `dynamic`            | Canonical tool catalog selector (`dynamic`, `meta`, `individual`)                                              |
 | `GITLAB_MCP_META_TOOLS`           | No       | —                    | Deprecated compatibility selector mapped to `GITLAB_MCP_TOOL_SURFACE` when `GITLAB_MCP_TOOL_SURFACE` is absent |
-| `YOLO_MODE`                       | No       | `false`              | Skip destructive action confirmations                                                                          |
+| `GITLAB_MCP_YOLO_MODE`            | No       | `false`              | Skip destructive action confirmations                                                                          |
 | `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No       | `2GB`                | Maximum allowed upload file size                                                                               |
 
 ### GitLab Client (`internal/gitlab`)
@@ -259,7 +259,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/meta_tool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 32 base GitLab/interactive tools total. Premium adds 6 inline meta-tools (38) and Ultimate 11 more, bringing the self-managed total to 49; GitLab.com also registers `gitlab_orbit` on Premium and Ultimate, bringing the GitLab.com Ultimate catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`, while HTTP mode can force the tier with `--tier` or detect it per token+URL pool entry from the instance license (fallback `free`).
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 32 base GitLab/interactive tools total. Premium adds 6 inline meta-tools (38) and Ultimate 11 more, bringing the self-managed total to 49; GitLab.com also registers `gitlab_orbit` on Premium and Ultimate, bringing the GitLab.com Ultimate catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`, while HTTP mode can force the tier with `--tier` or detect it per token+URL pool entry from the instance license (fallback `free`).
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, the `gitlab://tools` manifest, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
@@ -473,7 +473,7 @@ graph TD
 
 Destructive operations use `ConfirmDestructiveAction()` which implements a 4-step confirmation flow:
 
-1. **YOLO_MODE/AUTOPILOT** — if enabled via env var, skip confirmation
+1. **GITLAB_MCP_YOLO_MODE/AUTOPILOT** — if enabled via env var, skip confirmation
 2. **Explicit confirm param** — if `confirm: true` in params, proceed
 3. **MCP elicitation** — ask the user for confirmation interactively
 4. **Fail closed** — if the client cannot prompt, return an error result asking to re-send with `confirm: true`
@@ -585,7 +585,7 @@ sequenceDiagram
 | Content annotations                   | Audience targeting + priority for display optimization                                                                                                         | See [Output Format](../reference/output-format.md)                   |
 | `next_steps` JSON enrichment          | Hints in structuredContent for JSON-only clients                                                                                                               | See [Output Format](../reference/output-format.md)                   |
 | Tool annotations                      | readOnlyHint, destructiveHint for client safety hints                                                                                                          | MCP spec compliance                                                  |
-| YOLO_MODE for automation              | Skip confirmations in CI/scripted environments                                                                                                                 | —                                                                    |
+| GITLAB_MCP_YOLO_MODE for automation   | Skip confirmations in CI/scripted environments                                                                                                                 | —                                                                    |
 
 ## Cross-Cutting Concerns
 
@@ -621,7 +621,7 @@ Collection **resources** are a different case, and the difference is in the prot
 - TLS verification enabled by default; skip only via explicit configuration
 - `context.Context` propagated for cancellation and timeouts
 - Tool annotations declare destructive operations for client-side safety
-- Destructive action confirmation via elicitation or YOLO_MODE env var
+- Destructive action confirmation via elicitation or GITLAB_MCP_YOLO_MODE env var
 
 ---
 

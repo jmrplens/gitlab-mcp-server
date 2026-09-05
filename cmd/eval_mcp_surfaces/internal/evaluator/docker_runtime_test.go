@@ -5,6 +5,7 @@
 package evaluator
 
 import (
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -86,15 +87,15 @@ func TestDockerComposeCommand_UsesDefaultsAndOverrides(t *testing.T) {
 //
 // The test clears the GITLAB_IMAGE and EVAL_DOCKER_GITLAB_IMAGE environment
 // variables, runs dockerRuntimeEnv for the docker-enterprise-read preset, and
-// asserts the joined env output contains GITLAB_TIER=ultimate (the evaluated
-// server reads GITLAB_TIER now), GITLAB_IMAGE=gitlab/gitlab-ee:latest, and the
+// asserts the joined env output contains GITLAB_MCP_TIER=ultimate (the evaluated
+// server reads GITLAB_MCP_TIER now), GITLAB_IMAGE=gitlab/gitlab-ee:latest, and the
 // documented Docker Compose file. This protects Enterprise presets from
 // regressing to the CE image.
 func TestDockerRuntimeEnv_EnterpriseImageDefault(t *testing.T) {
 	t.Setenv("GITLAB_IMAGE", "")
 	t.Setenv("EVAL_DOCKER_GITLAB_IMAGE", "")
 	env := strings.Join(dockerRuntimeEnv(options{Preset: presetDockerEnterpriseRead, Edition: editionEnterprise}), "\n")
-	for _, want := range []string{"GITLAB_TIER=ultimate", "GITLAB_IMAGE=gitlab/gitlab-ee:latest", "E2E_DOCKER_COMPOSE_FILE=test/e2e/docker-compose.yml"} {
+	for _, want := range []string{"GITLAB_MCP_TIER=ultimate", "GITLAB_IMAGE=gitlab/gitlab-ee:latest", "E2E_DOCKER_COMPOSE_FILE=test/e2e/docker-compose.yml"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(env, want) {
 				t.Fatalf("dockerRuntimeEnv() = %q, want %q", env, want)
@@ -185,8 +186,9 @@ func TestDockerEnterpriseRuntime_DetectsEditionPresetAndEnvironment(t *testing.T
 	}{
 		{name: "edition flag", opts: options{Edition: editionEnterprise}, want: true},
 		{name: "enterprise preset", opts: options{Preset: presetDockerEnterpriseRead}, want: true},
-		{name: "tier ultimate", env: map[string]string{"GITLAB_TIER": "ultimate"}, want: true},
-		{name: "tier free", env: map[string]string{"GITLAB_TIER": "free"}, want: false},
+		{name: "tier ultimate", env: map[string]string{"GITLAB_MCP_TIER": "ultimate"}, want: true},
+		{name: "tier free", env: map[string]string{"GITLAB_MCP_TIER": "free"}, want: false},
+		{name: "tier ultimate under the old spelling", env: map[string]string{"GITLAB_TIER": "ultimate"}, want: true},
 		{name: "legacy enterprise toggle", env: map[string]string{"GITLAB_ENTERPRISE": "true"}, want: true},
 		{name: "ee image", env: map[string]string{"GITLAB_IMAGE": "gitlab/gitlab-ee:latest"}, want: true},
 		{name: "eval ee image", env: map[string]string{"EVAL_DOCKER_GITLAB_IMAGE": "gitlab/gitlab-ee:16"}, want: true},
@@ -194,8 +196,17 @@ func TestDockerEnterpriseRuntime_DetectsEditionPresetAndEnvironment(t *testing.T
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, key := range []string{"GITLAB_TIER", "GITLAB_ENTERPRISE", "GITLAB_IMAGE", "EVAL_DOCKER_GITLAB_IMAGE"} {
+			for _, key := range []string{"GITLAB_MCP_TIER", "GITLAB_TIER", "GITLAB_ENTERPRISE", "GITLAB_IMAGE", "EVAL_DOCKER_GITLAB_IMAGE"} {
+				// t.Setenv registers the restore; a key the case leaves out is
+				// then removed rather than left present and empty, because a
+				// present GITLAB_MCP_TIER, even empty, is the spelling that
+				// decides and would hide the old one the legacy case sets.
 				t.Setenv(key, tc.env[key])
+				if tc.env[key] == "" {
+					if err := os.Unsetenv(key); err != nil {
+						t.Fatalf("unsetting %s: %v", key, err)
+					}
+				}
 			}
 			if got := dockerEnterpriseRuntime(tc.opts); got != tc.want {
 				t.Fatalf("dockerEnterpriseRuntime() = %t, want %t", got, tc.want)

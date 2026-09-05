@@ -159,7 +159,7 @@ type Config struct {
 	// When TierExplicit is false it holds the conservative default
 	// (edition.Free); callers detect the real tier from the instance license.
 	Tier edition.Tier
-	// TierExplicit reports whether the tier was set explicitly via GITLAB_TIER
+	// TierExplicit reports whether the tier was set explicitly via GITLAB_MCP_TIER
 	// (stdio) or --tier (HTTP). When true, no instance license check is
 	// performed and Tier is used verbatim. When false, the tier is detected
 	// per instance, falling back to edition.Free.
@@ -398,7 +398,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	tier, tierExplicit, err := resolveTierEnv(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
+	tier, tierExplicit, err := resolveTierEnv(Getenv("TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 	if err != nil {
 		return nil, err
 	}
@@ -501,25 +501,25 @@ type authEnv struct {
 func loadBooleanEnv() (booleanEnv, error) {
 	values := booleanEnv{}
 	var err error
-	if values.skipTLS, err = parseEnvBool("GITLAB_SKIP_TLS_VERIFY", false); err != nil {
+	if values.skipTLS, err = parseEnvBool("SKIP_TLS_VERIFY", false); err != nil {
 		return booleanEnv{}, err
 	}
-	if values.readOnly, err = parseEnvBool("GITLAB_READ_ONLY", false); err != nil {
+	if values.readOnly, err = parseEnvBool("READ_ONLY", false); err != nil {
 		return booleanEnv{}, err
 	}
-	if values.safeMode, err = parseEnvBool("GITLAB_SAFE_MODE", false); err != nil {
+	if values.safeMode, err = parseEnvBool("SAFE_MODE", false); err != nil {
 		return booleanEnv{}, err
 	}
 	if values.embeddedResources, err = parseEnvBool("EMBEDDED_RESOURCES", true); err != nil {
 		return booleanEnv{}, err
 	}
-	if values.ignoreScopes, err = parseEnvBool("GITLAB_IGNORE_SCOPES", false); err != nil {
+	if values.ignoreScopes, err = parseEnvBool("IGNORE_SCOPES", false); err != nil {
 		return booleanEnv{}, err
 	}
 	return values, nil
 }
 
-// parseTierEnv resolves the GITLAB_TIER value into a tier and an "explicit"
+// parseTierEnv resolves the GITLAB_MCP_TIER value into a tier and an "explicit"
 // flag. An empty value yields (edition.Free, false) so the caller knows to
 // detect the tier from the instance license. A non-empty value must be one of
 // free/ce/premium/ultimate (case-insensitive); it yields (tier, true), meaning
@@ -531,17 +531,18 @@ func parseTierEnv(value string) (tier edition.Tier, explicit bool, err error) {
 	parsed, ok := edition.ParseTier(value)
 	if !ok {
 		return edition.Free, false, fmt.Errorf(
-			"invalid GITLAB_TIER value: expected free, ce, premium, or ultimate, got %q", value,
+			"invalid %sTIER value: expected free, ce, premium, or ultimate, got %q", EnvPrefix, value,
 		)
 	}
 	return parsed, true, nil
 }
 
-// resolveTierEnv resolves the effective tier from GITLAB_TIER and the DEPRECATED
-// GITLAB_ENTERPRISE env vars. GITLAB_TIER wins. When GITLAB_TIER is unset, the
-// deprecated GITLAB_ENTERPRISE is honored for back-compat with existing configs:
-// true → ultimate, false → free (both explicit, so no license check). When neither
-// is set, returns (edition.Free, false) so the caller detects from the license.
+// resolveTierEnv resolves the effective tier from GITLAB_MCP_TIER (or its old
+// spelling GITLAB_MCP_TIER) and the DEPRECATED GITLAB_ENTERPRISE env vars. The tier
+// wins. When it is unset, the deprecated GITLAB_ENTERPRISE is honored for
+// back-compat with existing configs: true → ultimate, false → free (both
+// explicit, so no license check). When neither is set, returns
+// (edition.Free, false) so the caller detects from the license.
 func resolveTierEnv(tierValue, enterpriseValue string) (tier edition.Tier, explicit bool, err error) {
 	tier, explicit, err = parseTierEnv(tierValue)
 	if err != nil || explicit {
@@ -563,8 +564,9 @@ func resolveTierEnv(tierValue, enterpriseValue string) (tier edition.Tier, expli
 }
 
 // LegacyEnterpriseEnvInUse reports whether the DEPRECATED GITLAB_ENTERPRISE env
-// var is the active tier source (GITLAB_TIER unset, GITLAB_ENTERPRISE set), so the
-// caller can emit a one-time deprecation warning pointing users to GITLAB_TIER.
+// var is the active tier source (the tier unset, GITLAB_ENTERPRISE set), so the
+// caller can emit a one-time deprecation warning pointing users to
+// GITLAB_MCP_TIER.
 func LegacyEnterpriseEnvInUse(tierValue, enterpriseValue string) bool {
 	return strings.TrimSpace(tierValue) == "" && strings.TrimSpace(enterpriseValue) != ""
 }
@@ -579,7 +581,7 @@ func ParseTierFlag(value string) (tier edition.Tier, explicit bool, err error) {
 func parseEnvBool(name string, defaultValue bool) (bool, error) {
 	value, err := parseBool(Getenv(name), defaultValue)
 	if err != nil {
-		return false, fmt.Errorf("invalid %s value: %w", name, err)
+		return false, fmt.Errorf("invalid %s%s value: %w", EnvPrefix, name, err)
 	}
 	return value, nil
 }

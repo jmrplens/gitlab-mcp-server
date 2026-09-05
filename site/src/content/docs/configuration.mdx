@@ -9,11 +9,11 @@ chips:
 datePublished: "2026-04-21"
 faq:
   - q: "What is the minimum configuration?"
-    a: "In stdio mode, a single `GITLAB_TOKEN` with the `api` scope is enough to start — every other variable is optional and defaults to a safe value. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only when connecting to a self-managed instance. For a read-only setup, use a `read_api` token: the server serves it a read-only surface on its own, and `GITLAB_READ_ONLY=true` does the same for an `api` token. In HTTP mode, no token is configured on the server at all; each client sends its own token with every request."
+    a: "In stdio mode, a single `GITLAB_TOKEN` with the `api` scope is enough to start — every other variable is optional and defaults to a safe value. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only when connecting to a self-managed instance. For a read-only setup, use a `read_api` token: the server serves it a read-only surface on its own, and `GITLAB_MCP_READ_ONLY=true` does the same for an `api` token. In HTTP mode, no token is configured on the server at all; each client sends its own token with every request."
   - q: "stdio vs HTTP — which mode do I use?"
     a: "Use **stdio mode** (the default) for local, single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables, plus `~/.gitlab-mcp-server.env` or a file named in `GITLAB_MCP_ENV_FILE` for what the environment does not carry. Use **HTTP mode** (`--http`) for shared or remote deployments such as Docker or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request."
   - q: "How do I point at a self-managed GitLab instance?"
-    a: "Set `GITLAB_URL` to your instance base URL, for example `GITLAB_URL=https://gitlab.example.com` (in HTTP mode, use the `--gitlab-url` flag instead). If the instance uses a self-signed or internal CA certificate, also set `GITLAB_SKIP_TLS_VERIFY=true` (or `--skip-tls-verify` in HTTP mode), but only on a trusted network — it disables certificate verification for all connections to GitLab."
+    a: "Set `GITLAB_URL` to your instance base URL, for example `GITLAB_URL=https://gitlab.example.com` (in HTTP mode, use the `--gitlab-url` flag instead). If the instance uses a self-signed or internal CA certificate, also set `GITLAB_MCP_SKIP_TLS_VERIFY=true` (or `--skip-tls-verify` in HTTP mode), but only on a trusted network — it disables certificate verification for all connections to GitLab."
   - q: "How do I pick a tool surface (dynamic, meta, or individual)?"
     a: "Set the `GITLAB_MCP_TOOL_SURFACE` variable (or the `--tool-surface` flag in HTTP mode). `dynamic` is the default and lowest-token catalog: it exposes `gitlab_find_action` and `gitlab_execute_action` while keeping every GitLab action reachable through the canonical action catalog. Choose `meta` when a client prefers consolidated domain dispatchers with an `action` parameter, and `individual` to register one MCP tool per GitLab operation."
 ---
@@ -28,7 +28,7 @@ import Fact from "../../components/docs/Fact.astro";
 - **stdio mode reads environment variables** (plus `~/.gitlab-mcp-server.env`, and any file `GITLAB_MCP_ENV_FILE` names); **HTTP mode reads CLI flags**. The option names mirror each other.
 - **A `.env` in the working directory is not read.** That directory comes from whatever repository your editor opened, so its contents were chosen by someone else. One that exists is named in the startup log with the keys it wanted to set.
 - **Only `GITLAB_TOKEN` is always required.** `GITLAB_URL` defaults to `https://gitlab.com`, so self-managed instances are the only ones that must set it.
-- **Three switches shape behaviour**: `GITLAB_MCP_TOOL_SURFACE` picks dynamic, meta or individual; `GITLAB_READ_ONLY` removes every write operation; `GITLAB_SAFE_MODE` previews writes instead of performing them.
+- **Three switches shape behaviour**: `GITLAB_MCP_TOOL_SURFACE` picks dynamic, meta or individual; `GITLAB_MCP_READ_ONLY` removes every write operation; `GITLAB_MCP_SAFE_MODE` previews writes instead of performing them.
 
 :::
 
@@ -57,13 +57,13 @@ prefixed one wins, and a warning at startup names the one being ignored.
 
 Some names stay bare on purpose:
 
-| Names                                                                                                                        | Why they were not renamed                                                                                                                               |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`, `GITLAB_TOKEN`                                                                                                 | GitLab's own convention. Every existing configuration sets them, and they are the two most likely to be written into a client configuration from memory |
-| `GITLAB_SKIP_TLS_VERIFY`, `GITLAB_TIER`, `GITLAB_ENTERPRISE`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES` | Already namespaced by `GITLAB_`. A second prefix would churn every existing configuration and protect against nothing                                   |
-| `OTEL_*`                                                                                                                     | Owned by the OpenTelemetry specification. The exporters read those names themselves and would never see a prefixed spelling                             |
-| `YOLO_MODE`, `AUTOPILOT`                                                                                                     | Conventions other agent tooling sets. Honoring the name another tool already uses is the entire point of reading them                                   |
-| `EVAL_SURFACE_*`                                                                                                             | The surface evaluator's own variables, set by `make` targets in this repository. They never appear beside another tool's variables in a user's shell    |
+| Names                                                                                                                                            | Why they were not renamed                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`, `GITLAB_TOKEN`                                                                                                                     | GitLab's own convention. Every existing configuration sets them, and they are the two most likely to be written into a client configuration from memory |
+| `GITLAB_MCP_SKIP_TLS_VERIFY`, `GITLAB_MCP_TIER`, `GITLAB_ENTERPRISE`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_IGNORE_SCOPES` | Already namespaced by `GITLAB_`. A second prefix would churn every existing configuration and protect against nothing                                   |
+| `OTEL_*`                                                                                                                                         | Owned by the OpenTelemetry specification. The exporters read those names themselves and would never see a prefixed spelling                             |
+| `GITLAB_MCP_YOLO_MODE`, `AUTOPILOT`                                                                                                              | Conventions other agent tooling sets. Honoring the name another tool already uses is the entire point of reading them                                   |
+| `EVAL_SURFACE_*`                                                                                                                                 | The surface evaluator's own variables, set by `make` targets in this repository. They never appear beside another tool's variables in a user's shell    |
 
 The tables below always give the name to set, so read the name rather than
 deriving it.
@@ -83,17 +83,17 @@ GitLab MCP Server requires exactly one variable to start in stdio mode — the r
 | Variable                        | Default              | Description                                                                                                                                                                                                                                                                                         |
 | ------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GITLAB_URL`                    | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances                                                                                                                                                                                                                                       |
-| `GITLAB_SKIP_TLS_VERIFY`        | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                                                                             |
+| `GITLAB_MCP_SKIP_TLS_VERIFY`    | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                                                                             |
 | `GITLAB_MCP_TOOL_SURFACE`       | `dynamic`            | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                                                                                                                                                                                                 |
 | `GITLAB_MCP_META_TOOLS`         | legacy               | Deprecated compatibility selector. `true` maps to `meta`, `false` maps to `individual`, and dynamic values map to the matching `GITLAB_MCP_TOOL_SURFACE` value when `GITLAB_MCP_TOOL_SURFACE` is absent                                                                                             |
 | `GITLAB_MCP_CAPABILITY_SURFACE` | `full`               | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps the `gitlab://tools` manifest, and disables optional resources, prompts, workflow guides, and [resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/)                                     |
 | `GITLAB_MCP_META_PARAM_SCHEMA`  | `opaque`             | Meta-tool input-schema strategy: `opaque` (default), `compact` (8.1x the opaque schema), or `full` (18.0x). Applies to meta-tool `tools/list` schemas only; measure the current ratios with `go run ./cmd/audit_tokens --compare-schemas`                                                           |
-| `GITLAB_TIER`                   | _(auto-detect)_      | GitLab edition selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools and prunes per-field schema entries via `pruneSchemaFieldsByTier` (see `internal/tools/action_catalog.go`) |
-| `GITLAB_READ_ONLY`              | `false`              | Disable all mutating tools (create, update, delete)                                                                                                                                                                                                                                                 |
-| `GITLAB_SAFE_MODE`              | `false`              | Return structured JSON preview instead of executing mutating tools (dry-run mode)                                                                                                                                                                                                                   |
+| `GITLAB_MCP_TIER`               | _(auto-detect)_      | GitLab edition selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools and prunes per-field schema entries via `pruneSchemaFieldsByTier` (see `internal/tools/action_catalog.go`) |
+| `GITLAB_MCP_READ_ONLY`          | `false`              | Disable all mutating tools (create, update, delete)                                                                                                                                                                                                                                                 |
+| `GITLAB_MCP_SAFE_MODE`          | `false`              | Return structured JSON preview instead of executing mutating tools (dry-run mode)                                                                                                                                                                                                                   |
 | `GITLAB_MCP_EMBEDDED_RESOURCES` | `true`               | Embed the canonical `gitlab://` MCP resource URI in the get results that carry one (twenty-two get actions, from projects and groups to snippets and wiki pages); set `false` for clients that do not tolerate duplicate content blocks                                                             |
 | `GITLAB_MCP_EXCLUDE_TOOLS`      | —                    | Comma-separated tool names, group names or action IDs (e.g., `gitlab_project_delete,gitlab_admin`), excluded from the tool surface and from the resources and subscriptions that return the same objects, so the removal holds on every request path                                                |
-| `GITLAB_IGNORE_SCOPES`          | `false`              | Skip automatic PAT scope detection — register all tools regardless of token scopes                                                                                                                                                                                                                  |
+| `GITLAB_MCP_IGNORE_SCOPES`      | `false`              | Skip automatic PAT scope detection — register all tools regardless of token scopes                                                                                                                                                                                                                  |
 | `GITLAB_MCP_LOG_LEVEL`          | `info`               | Log verbosity: `debug`, `info`, `warn`, `error`. The `--log-level` flag sets the same variable and wins over it                                                                                                                                                                                     |
 | `EVAL_SURFACE_ENTERPRISE`       | `false`              | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus                                                                                                                                                                                                                      |
 | `EVAL_SURFACE_CASE_SET`         | `ce`                 | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (CE only) or `all` (CE+Enterprise)                                                                                                                                                                                                                |
@@ -116,8 +116,8 @@ For deployments using the dynamic tool surface where resources and prompts domin
 | `GITLAB_MCP_CLIENT_COMPAT`             | `auto`  | Per-client response compatibility: Codex sessions get fractional annotation priorities rounded to 0/1; `off` disables. Both transports; the `--client-compat` flag sets the same variable                                                                                                                                                                  |
 | `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | empty   | Rewrite listed descriptions and titles for strict MCP gateway validators: comma-separated `old=new` pairs applied in order (backslash escapes `\,` `\=` `\\`); malformed values refuse startup. Both transports; the `--description-substitutions` flag sets the same variable                                                                             |
 | `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`      | `2GB`   | Size cap for upload and file tools, including raw file reads (streamed and stopped at the limit); supports `KB`/`MB`/`GB` suffixes, 1 TB ceiling. Both transports; the `--upload-max-file-size` flag sets the same variable                                                                                                                                |
-| `YOLO_MODE`                            | `false` | Skip destructive action confirmations (not recommended). A non-empty value wins over `AUTOPILOT`; the `--yolo-mode` flag sets the same variable                                                                                                                                                                                                            |
-| `AUTOPILOT`                            | `false` | Same as `YOLO_MODE` — skip destructive confirmations. No flag of its own                                                                                                                                                                                                                                                                                   |
+| `GITLAB_MCP_YOLO_MODE`                 | `false` | Skip destructive action confirmations (not recommended). A non-empty value wins over `AUTOPILOT`; the `--yolo-mode` flag sets the same variable                                                                                                                                                                                                            |
+| `AUTOPILOT`                            | `false` | Same as `GITLAB_MCP_YOLO_MODE` — skip destructive confirmations. No flag of its own                                                                                                                                                                                                                                                                        |
 | `GITLAB_MCP_ALLOWED_IMPORT_DIRS`       | —       | Additional OS path-list-separated directories allowed for local project/group import archives                                                                                                                                                                                                                                                              |
 | `GITLAB_MCP_ALLOWED_UPLOAD_DIRS`       | —       | Additional OS path-list-separated directories a tool may **read** a local file from (every `file_path` and `directory_path` input). The working directory (unless it is the filesystem root or the user's home directory, which are dropped as implicit roots) and the OS temp directory are always allowed, and a path is resolved through symlinks first |
 | `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`     | —       | Additional OS path-list-separated directories a tool may **write** a downloaded file into (`output_path`). Same syntax and same always-allowed roots                                                                                                                                                                                                       |
@@ -138,13 +138,13 @@ Write it to `~/.gitlab-mcp-server.env`, or to any path you then name in `GITLAB_
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Optional
-GITLAB_SKIP_TLS_VERIFY=false
+GITLAB_MCP_SKIP_TLS_VERIFY=false
 GITLAB_MCP_TOOL_SURFACE=dynamic
-GITLAB_TIER=free
-GITLAB_READ_ONLY=false
-GITLAB_SAFE_MODE=false
+GITLAB_MCP_TIER=free
+GITLAB_MCP_READ_ONLY=false
+GITLAB_MCP_SAFE_MODE=false
 GITLAB_MCP_EXCLUDE_TOOLS=
-GITLAB_IGNORE_SCOPES=false
+GITLAB_MCP_IGNORE_SCOPES=false
 GITLAB_MCP_LOG_LEVEL=info
 ```
 
@@ -371,7 +371,7 @@ In HTTP mode (`--http`), settings resolve in three layers, highest first: a CLI 
 | `--log-level`                 | _(empty)_ | `debug`, `info` (the effective default), `warn` or `error`. Sets `GITLAB_MCP_LOG_LEVEL`                                                                                                                           |
 | `--client-compat`             | _(empty)_ | `auto` (the effective default) or `off`. Sets `GITLAB_MCP_CLIENT_COMPAT`                                                                                                                                          |
 | `--upload-max-file-size`      | _(empty)_ | Size cap for upload and file-read tools, `KB`/`MB`/`GB` suffixes accepted (`2GB` when unset). Sets `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`                                                                              |
-| `--yolo-mode`                 | _(empty)_ | `true` skips the confirmation prompt on destructive actions. Sets `YOLO_MODE`                                                                                                                                     |
+| `--yolo-mode`                 | _(empty)_ | `true` skips the confirmation prompt on destructive actions. Sets `GITLAB_MCP_YOLO_MODE`                                                                                                                          |
 | `--description-substitutions` | _(empty)_ | Comma-separated `old=new` pairs applied to every listed description and title. Sets `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS`; a malformed value refuses startup                                                     |
 | `--tool-search`               | _(empty)_ | Search registered tools by name or description, then exit; honors `--tool-surface` and `--tier`                                                                                                                   |
 | `--version`                   | `false`   | Print the version and commit, then exit                                                                                                                                                                           |
@@ -424,7 +424,7 @@ When exactly one `--gitlab-url` is configured it is authoritative, and client-pr
 For GitLab instances with self-signed TLS certificates:
 
 ```bash
-GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_MCP_SKIP_TLS_VERIFY=true
 ```
 
 :::caution
@@ -433,7 +433,7 @@ Only use this in trusted network environments. It disables certificate verificat
 
 ## Read-only mode
 
-Enable `GITLAB_READ_ONLY=true` to restrict the server to read-only operations. All tools that create, update, or delete resources are disabled. This is useful for:
+Enable `GITLAB_MCP_READ_ONLY=true` to restrict the server to read-only operations. All tools that create, update, or delete resources are disabled. This is useful for:
 
 - Audit and compliance environments
 - Shared servers where users should only query data
@@ -444,7 +444,7 @@ Enable `GITLAB_READ_ONLY=true` to restrict the server to read-only operations. A
 		every read operation, on every surface: list, get and search keep
 		working exactly as before.
 	</Fact>
-	<Fact kind="requires">`GITLAB_READ_ONLY=true` in stdio mode, `--read-only` in HTTP mode.</Fact>
+	<Fact kind="requires">`GITLAB_MCP_READ_ONLY=true` in stdio mode, `--read-only` in HTTP mode.</Fact>
 	<Fact kind="notCovered">
 		anything that writes: create, update and delete actions are removed
 		from the catalog per action, so on the dynamic and meta surfaces they
@@ -455,7 +455,7 @@ Enable `GITLAB_READ_ONLY=true` to restrict the server to read-only operations. A
 
 ## Safe mode
 
-Enable `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a structured JSON preview of what would be executed, without actually performing the operation. Read-only tools work normally. This is useful for:
+Enable `GITLAB_MCP_SAFE_MODE=true` to intercept mutating tools and return a structured JSON preview of what would be executed, without actually performing the operation. Read-only tools work normally. This is useful for:
 
 - Reviewing operations before execution (dry-run)
 - Training environments where you want to see tool behavior
@@ -468,7 +468,7 @@ Enable `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a structur
 		`issue.create`) and the parameters it would send; reads execute
 		normally.
 	</Fact>
-	<Fact kind="requires">`GITLAB_SAFE_MODE=true` in stdio mode, `--safe-mode` in HTTP mode.</Fact>
+	<Fact kind="requires">`GITLAB_MCP_SAFE_MODE=true` in stdio mode, `--safe-mode` in HTTP mode.</Fact>
 	<Fact kind="notCovered">
 		actual writes: nothing mutating reaches GitLab. The preview is not a
 		validation either — GitLab-side errors (permissions, conflicts) only
@@ -479,7 +479,7 @@ Enable `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a structur
 Both safe mode and read-only act **per action**, not per tool. On the dynamic and meta surfaces a single tool serves many actions — `gitlab_execute_action` routes everything, and `gitlab_issue` covers `list` and `create` alike — so the policy is applied to the underlying action catalog. Reads keep working on every surface, and safe-mode previews name the canonical action (for example `issue.create`) rather than the dispatcher tool.
 
 :::note
-If `GITLAB_READ_ONLY=true` is also set, it takes precedence — mutating operations are removed entirely rather than previewed.
+If `GITLAB_MCP_READ_ONLY=true` is also set, it takes precedence — mutating operations are removed entirely rather than previewed.
 :::
 
 <FAQ />

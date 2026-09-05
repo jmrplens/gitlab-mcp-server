@@ -48,7 +48,7 @@ func TestTokenScope_ReadAPITokenIsServedTheReadOnlySurface(t *testing.T) {
 	}{
 		{name: "read_api", scopes: []string{"read_api"}, wantCreate: false, wantLog: true},
 		{name: "api", scopes: []string{"api"}, wantCreate: true},
-		{name: "read_api with scope detection ignored", scopes: []string{"read_api"}, env: map[string]string{"GITLAB_IGNORE_SCOPES": "true"}, wantCreate: true},
+		{name: "read_api with scope detection ignored", scopes: []string{"read_api"}, env: map[string]string{"GITLAB_MCP_IGNORE_SCOPES": "true"}, wantCreate: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

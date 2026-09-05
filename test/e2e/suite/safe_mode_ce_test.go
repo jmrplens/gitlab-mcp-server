@@ -13,7 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 )
 
-// TestSafeMode exercises the GITLAB_SAFE_MODE feature through the safe-mode
+// TestSafeMode exercises the GITLAB_MCP_SAFE_MODE feature through the safe-mode
 // session against a live GitLab CE instance.
 //
 // The test creates a real project via the individual session (not the

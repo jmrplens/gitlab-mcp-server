@@ -100,20 +100,20 @@ type resourceSnapshot struct {
 func TestMain(m *testing.M) {
 	configureE2EStartupEnvironment()
 
-	requestedTier, _ := edition.ParseTier(os.Getenv("GITLAB_TIER"))
+	requestedTier, _ := edition.ParseTier(config.Getenv("TIER"))
 	// The Docker e2e harness toggles EE fixtures via GITLAB_ENTERPRISE; honor it
 	// as a legacy alias for requesting the enterprise tier.
 	envEnterprise := requestedTier.IsEnterprise() ||
 		strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
 	glClient := mustE2EGitLabClient()
-	// Detect the actual GitLab tier from the instance license. The GITLAB_TIER
+	// Detect the actual GitLab tier from the instance license. The GITLAB_MCP_TIER
 	// env var is the *requested* mode, but the real tier is what controls
 	// whether EE features work end-to-end. When the env asks for EE but GitLab
 	// reports CE/Free, downgrade so EE tests skip rather than fail with 404s on
 	// protected envs, epics, etc.
 	enterprise := envEnterprise && glClient.DetectTier(context.Background()).IsEnterprise()
 	if envEnterprise && !enterprise {
-		log.Printf("e2e: GITLAB_TIER requested enterprise but GitLab license reports free; running EE tests as CE")
+		log.Printf("e2e: GITLAB_MCP_TIER requested enterprise but GitLab license reports free; running EE tests as CE")
 	}
 	username := mustE2EUsername(glClient)
 	runtime := startE2ERuntime(glClient, enterprise)
@@ -236,7 +236,7 @@ const (
 )
 
 // configureReadOnlyE2EServer registers the individual surface restricted to
-// read-only tools, mirroring GITLAB_READ_ONLY=true in stdio mode.
+// read-only tools, mirroring GITLAB_MCP_READ_ONLY=true in stdio mode.
 func configureReadOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
 		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))

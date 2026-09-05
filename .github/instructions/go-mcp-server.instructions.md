@@ -36,7 +36,7 @@ Use snake_case with a service prefix to avoid conflicts when multiple MCP server
 
 For ordinary GitLab API actions in this repository, add or update domain-local `ActionSpecs` and handlers. Do not add package-local `RegisterTools` functions or ad hoc `mcp.AddTool` calls; shared projection layers consume the canonical action catalog for meta-tools, dynamic find/execute, `gitlab://tools`, audits, docs, and individual tool registration.
 
-Each `ActionSpec` declares a minimum edition (`free`, `premium`, or `ultimate`). Edition gating flows through `GITLAB_TIER` / `--tier` and `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`, which removes premium/ultimate-only actions and prunes per-field schema entries once the active tier resolves. Set the lowest edition that exposes the endpoint correctly and add tier hints in `ParameterGuidance` when a field is edition-gated. Run `go run ./cmd/audit_discovery_completeness/` to confirm each new action has aliases, usage, parameter guidance, and related actions.
+Each `ActionSpec` declares a minimum edition (`free`, `premium`, or `ultimate`). Edition gating flows through `GITLAB_MCP_TIER` / `--tier` and `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`, which removes premium/ultimate-only actions and prunes per-field schema entries once the active tier resolves. Set the lowest edition that exposes the endpoint correctly and add tier hints in `ParameterGuidance` when a field is edition-gated. Run `go run ./cmd/audit_discovery_completeness/` to confirm each new action has aliases, usage, parameter guidance, and related actions.
 
 For shared projection code or standalone surfaces that intentionally register SDK tools directly, use `mcp.AddTool` with struct-based input and output for type safety:
 
@@ -535,7 +535,7 @@ mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in
 
 ### Elicitation (User Input)
 
-Request user input during tool execution. The request goes to the session, not the server, and `RequestedSchema` is a JSON Schema object (`map[string]any`); in this repository go through `internal/elicitation`, which also handles clients that declared no elicitation capability and the destructive-action confirmation that `YOLO_MODE` skips:
+Request user input during tool execution. The request goes to the session, not the server, and `RequestedSchema` is a JSON Schema object (`map[string]any`); in this repository go through `internal/elicitation`, which also handles clients that declared no elicitation capability and the destructive-action confirmation that `GITLAB_MCP_YOLO_MODE` skips:
 
 ```go
 result, err := req.Session.Elicit(ctx, &mcp.ElicitParams{

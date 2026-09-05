@@ -563,18 +563,18 @@ ENVIRONMENT VARIABLES (stdio mode)
 
   GITLAB_URL                        GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN                      Personal Access Token (glpat-...)
-  GITLAB_SKIP_TLS_VERIFY            Skip TLS verification: true/false (default false)
+  GITLAB_MCP_SKIP_TLS_VERIFY        Skip TLS verification: true/false (default false)
   GITLAB_MCP_TOOL_SURFACE           Canonical tool surface: dynamic|meta|individual (default dynamic)
   GITLAB_MCP_META_TOOLS             Deprecated legacy selector: true|false|dynamic; ignored when
                                     GITLAB_MCP_TOOL_SURFACE is set
   GITLAB_MCP_CAPABILITY_SURFACE     Resource/prompt surface: full|minimal (default full)
   GITLAB_MCP_META_PARAM_SCHEMA      Meta-tool input schema: opaque|compact|full (default opaque)
-  GITLAB_TIER                       Force licensing tier: free|ce|premium|ultimate; omit to detect from license
-  GITLAB_READ_ONLY                  Expose only read-only tools: true/false (default false)
-  GITLAB_SAFE_MODE                  Intercept mutating tools and return a preview (default false)
+  GITLAB_MCP_TIER                   Force licensing tier: free|ce|premium|ultimate; omit to detect from license
+  GITLAB_MCP_READ_ONLY              Expose only read-only tools: true/false (default false)
+  GITLAB_MCP_SAFE_MODE              Intercept mutating tools and return a preview (default false)
   GITLAB_MCP_EMBEDDED_RESOURCES     Embed canonical MCP resource links in get_* results (default true)
   GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names to exclude (default empty)
-  GITLAB_IGNORE_SCOPES              Skip PAT scope detection: true/false (default false)
+  GITLAB_MCP_IGNORE_SCOPES          Skip PAT scope detection: true/false (default false)
   GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Maximum upload/file size for upload tools (default 2GB)
   GITLAB_MCP_RATE_LIMIT_RPS         Per-server rate limit on every call that reaches GitLab (default 0, disabled)
   GITLAB_MCP_RATE_LIMIT_BURST       Token-bucket burst size when the rate limit is on (default 40)
@@ -583,7 +583,7 @@ ENVIRONMENT VARIABLES (stdio mode)
                                     is refused, not buffered
   GITLAB_MCP_MAX_LISTEN_STREAMS     Concurrent subscriptions/listen streams one credential may hold open
                                     (default 64; 0 disables the per-credential ceiling). Both transports
-  YOLO_MODE                         Skip destructive action confirmation prompts (default false)
+  GITLAB_MCP_YOLO_MODE              Skip destructive action confirmation prompts (default false)
   GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS
                                     Rewrite listed descriptions and titles for strict gateway validators:
                                     comma-separated old=new pairs, backslash escapes \, \= \\ (default empty)
@@ -634,8 +634,8 @@ JSON CONFIGURATION EXAMPLES
         "env": {
           "GITLAB_URL": "https://gitlab.example.com",
           "GITLAB_TOKEN": "glpat-your-token",
-          "GITLAB_SKIP_TLS_VERIFY": "true",
-		  "GITLAB_MCP_TOOL_SURFACE": "dynamic"
+          "GITLAB_MCP_SKIP_TLS_VERIFY": "true",
+          "GITLAB_MCP_TOOL_SURFACE": "dynamic"
         }
       }
     }
@@ -1225,7 +1225,7 @@ func runStdio(ctx context.Context) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 	logLegacyMetaToolsDeprecation(config.Getenv("TOOL_SURFACE"), config.Getenv("META_TOOLS"))
-	logLegacyEnterpriseEnvDeprecation(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
+	logLegacyEnterpriseEnvDeprecation(config.Getenv("TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
 	toolutil.SetActionTimeout(cfg.ActionTimeout)
@@ -1343,7 +1343,7 @@ func prepareStdioCatalog(
 	}
 
 	// Resolve the licensing tier. When the operator pinned it explicitly via
-	// GITLAB_TIER, use it verbatim (no license check). Otherwise detect it from
+	// GITLAB_MCP_TIER, use it verbatim (no license check). Otherwise detect it from
 	// the instance license, falling back to Free.
 	if cfg.TierExplicit || !client.IsInitialized() {
 		client.SetTier(cfg.Tier)
@@ -3263,16 +3263,16 @@ func logDeprecatedEnvNames() {
 }
 
 // logLegacyEnterpriseEnvDeprecation warns when the deprecated GITLAB_ENTERPRISE
-// env var is the active tier source (GITLAB_TIER unset), pointing users to
-// GITLAB_TIER. GITLAB_ENTERPRISE=true maps to GITLAB_TIER=ultimate, false to free.
+// env var is the active tier source (GITLAB_MCP_TIER unset), pointing users to
+// GITLAB_MCP_TIER. GITLAB_ENTERPRISE=true maps to GITLAB_MCP_TIER=ultimate, false to free.
 func logLegacyEnterpriseEnvDeprecation(tierValue, enterpriseValue string) {
 	if !config.LegacyEnterpriseEnvInUse(tierValue, enterpriseValue) {
 		return
 	}
 	slog.Warn(
-		"GITLAB_ENTERPRISE is deprecated; use GITLAB_TIER (free/premium/ultimate) instead",
+		"GITLAB_ENTERPRISE is deprecated; use GITLAB_MCP_TIER (free/premium/ultimate) instead",
 		"legacy_selector", "GITLAB_ENTERPRISE",
-		"replacement", "GITLAB_TIER=ultimate (was true) or GITLAB_TIER=free (was false)",
+		"replacement", "GITLAB_MCP_TIER=ultimate (was true) or GITLAB_MCP_TIER=free (was false)",
 	)
 }
 
