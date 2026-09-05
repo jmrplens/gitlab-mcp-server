@@ -248,11 +248,16 @@ func TestSharedServer_TwoCredentialsOnOneURIEachSeeOnlyTheirOwnWatcher(t *testin
 	busy := openListen(t, srv, busyToken, uri, 1)
 	idle := openListen(t, srv, idleToken, uri, 2)
 
-	if _, seen, ok := busy.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second); !ok {
-		t.Fatalf("the busy tenant's listen was never acknowledged; frames: %v", seen)
+	// Every frame either tenant is handed is kept, because the last check here
+	// is about what was written on the wire and a frame read off the channel by
+	// one assertion is gone for the next.
+	_, busyFrames, busyAcked := busy.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second)
+	if !busyAcked {
+		t.Fatalf("the busy tenant's listen was never acknowledged; frames: %v", busyFrames)
 	}
-	if _, seen, ok := idle.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second); !ok {
-		t.Fatalf("the idle tenant's listen was never acknowledged; frames: %v", seen)
+	_, idleFrames, idleAcked := idle.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second)
+	if !idleAcked {
+		t.Fatalf("the idle tenant's listen was never acknowledged; frames: %v", idleFrames)
 	}
 
 	// One build for both credentials is the whole point of the change, and it
@@ -265,9 +270,10 @@ func TestSharedServer_TwoCredentialsOnOneURIEachSeeOnlyTheirOwnWatcher(t *testin
 	// The polling cadence is the shipped one (15s between reads), so this
 	// waits out a poll rather than pretending it can be hurried.
 	update, seen, ok := busy.awaitFrame(t, "notifications/resources/updated", 90*time.Second)
+	busyFrames = append(busyFrames, seen...)
 	if !ok {
 		t.Fatalf("the busy tenant never received an update for a resource that changes on every read; frames: %v\nserver output:\n%s",
-			seen, srv.logs())
+			busyFrames, srv.logs())
 	}
 	if !strings.Contains(update, uri) {
 		t.Errorf("the update names a different resource:\n%s", update)
@@ -276,10 +282,16 @@ func TestSharedServer_TwoCredentialsOnOneURIEachSeeOnlyTheirOwnWatcher(t *testin
 		t.Errorf("the update carries no watch state, which every notification this server sends does:\n%s", update)
 	}
 
+	// Drained once and added to what the acknowledgement wait already took. A
+	// second drain returns an empty slice, since the frames are read off a
+	// channel, so a check that drains again iterates nothing and passes
+	// whatever the idle tenant had actually received.
+	idleFrames = append(idleFrames, idle.drain()...)
+
 	// Whatever the idle tenant received, none of it may be a resource update:
 	// its own resource never changed, so an update on this stream is somebody
 	// else's.
-	for _, frame := range idle.drain() {
+	for _, frame := range idleFrames {
 		if strings.Contains(frame, "notifications/resources/updated") {
 			t.Errorf("the idle tenant received a resource update it could not have generated:\n%s", frame)
 		}
@@ -288,8 +300,11 @@ func TestSharedServer_TwoCredentialsOnOneURIEachSeeOnlyTheirOwnWatcher(t *testin
 	// The owner tag is internal. It is read by the sending middleware and
 	// removed from the clone that is written, so no frame on any stream may
 	// carry it.
-	for name, frames := range map[string][]string{"busy": seen, "idle": idle.drain()} {
+	for name, frames := range map[string][]string{"busy": busyFrames, "idle": idleFrames} {
 		t.Run(name, func(t *testing.T) {
+			if len(frames) == 0 {
+				t.Fatalf("the %s tenant delivered no frames at all, so this proves nothing about the private tag", name)
+			}
 			for _, frame := range frames {
 				if strings.Contains(frame, "io.github.jmrplens/watch-owner") {
 					t.Errorf("the %s tenant's frame carries the private owner tag:\n%s", name, frame)
@@ -326,6 +341,13 @@ func TestSharedServer_ARevokedCredentialReceivesNothing(t *testing.T) {
 	}
 	if _, seen, ok := busy.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second); !ok {
 		t.Fatalf("the first tenant's listen was never acknowledged; frames: %v", seen)
+	}
+
+	// The same check its sibling makes, and for the same reason: two servers
+	// would keep these credentials apart by construction, so without this the
+	// test would pass vacuously if the two ever hashed to different shapes.
+	if builds := countShapeBuilds(srv.logs()); builds != 1 {
+		t.Errorf("the server built %d configuration shapes for two credentials of one configuration, want 1", builds)
 	}
 
 	// Access goes away after the subscription is established, which is the
