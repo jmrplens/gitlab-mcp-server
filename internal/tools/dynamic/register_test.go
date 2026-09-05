@@ -4,6 +4,7 @@ package dynamic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -6178,4 +6179,83 @@ func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing
 			t.Errorf("Execute() error text = %q, want the unknown-action message when nothing was withheld", text)
 		}
 	})
+}
+
+// TestRegistryShapeFor_SharedCatalogReusesOneShape verifies the split the
+// pool relies on: every registry built over one shared catalog takes the one
+// shape cached for that catalog's origin, a registry built with extra
+// aliases or over a catalog nobody shared builds its own, and the handlers
+// are built per registry over the bound catalog rather than the origin.
+func TestRegistryShapeFor_SharedCatalogReusesOneShape(t *testing.T) {
+	shared, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	if shared.SharedOrigin() == nil {
+		t.Fatal("BuildActionCatalog() returned a catalog with no shared origin")
+	}
+	first := registryShapeFor(shared, nil)
+	second := registryShapeFor(shared.SharedOrigin().BindTo(nil), nil)
+	if first != second {
+		t.Fatal("two catalogs bound from one origin got two shapes, want one")
+	}
+	if withAliases := registryShapeFor(shared, actionAliases()); withAliases == first {
+		t.Fatal("a registry with extra aliases took the cached shape, want its own")
+	}
+	private := actioncatalog.FromActionMaps(map[string]toolutil.ActionMap{
+		"gitlab_project": {"get": toolutil.Route(func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil })},
+	})
+	firstPrivate := registryShapeFor(private, nil)
+	secondPrivate := registryShapeFor(private, nil)
+	if firstPrivate == secondPrivate {
+		t.Fatal("a catalog nobody shared got a cached shape")
+	}
+
+	registryA := NewRegistryFromCatalog(shared)
+	registryB := NewRegistryFromCatalog(shared.SharedOrigin().BindTo(nil))
+	if len(registryA.entries) != len(registryB.entries) || len(registryA.handlers) != len(registryB.handlers) || len(registryA.handlers) == 0 {
+		t.Fatalf("registries over one origin differ: %d/%d entries, %d/%d handlers", len(registryA.entries), len(registryB.entries), len(registryA.handlers), len(registryB.handlers))
+	}
+	if &registryA.entries[0] != &registryB.entries[0] {
+		t.Fatal("the two registries hold separate entry slices, want the shared shape's")
+	}
+}
+
+// TestFindAndExecuteInputSchemas_AreSharedAndFallBackWhenDerivationFails
+// verifies the two schemas every dynamic server registers are one shared
+// pointer each and match what the SDK derives itself, and that a derivation
+// failure leaves the field nil for the SDK to fill.
+func TestFindAndExecuteInputSchemas_AreSharedAndFallBackWhenDerivationFails(t *testing.T) {
+	findSchema := findInputSchema()
+	if !toolutil.SchemaShared(findSchema) || findSchema != findInputSchema() {
+		t.Error("the find input schema is not one shared pointer")
+	}
+	executeSchema := executeActionInputSchema()
+	if !toolutil.SchemaShared(executeSchema) || executeSchema != executeActionInputSchema() {
+		t.Error("the execute input schema is not one shared pointer")
+	}
+	want, err := jsonschema.For[FindInput](nil)
+	if err != nil {
+		t.Fatalf("jsonschema.For[FindInput]() error = %v", err)
+	}
+	wantJSON, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("encoding the SDK's find schema: %v", err)
+	}
+	gotJSON, err := json.Marshal(findSchema)
+	if err != nil {
+		t.Fatalf("encoding the shared find schema: %v", err)
+	}
+	if string(wantJSON) != string(gotJSON) {
+		t.Errorf("find input schema = %s, want the SDK's own derivation %s", gotJSON, wantJSON)
+	}
+
+	forced := errors.New("forced derivation failure")
+	originalFind, originalExecute := findSchemaFor, executeSchemaFor
+	t.Cleanup(func() { findSchemaFor, executeSchemaFor = originalFind, originalExecute })
+	findSchemaFor = func(*jsonschema.ForOptions) (*jsonschema.Schema, error) { return nil, forced }
+	executeSchemaFor = func(*jsonschema.ForOptions) (*jsonschema.Schema, error) { return nil, forced }
+	if buildFindInputSchema() != nil || buildExecuteActionInputSchema() != nil {
+		t.Error("a failed derivation returned a schema, want nil so the SDK derives its own")
+	}
 }
