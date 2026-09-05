@@ -44,6 +44,13 @@ type Client struct {
 	// only valid as Bearer), false sends PRIVATE-TOKEN (PAT clients).
 	bearerAuth bool
 
+	// unbound marks the credential-less client from [NewUnboundClient], which
+	// refuses every request. Handlers on a shared server capture it and resolve
+	// the caller's own through [Client.For], so a handler that still holds this
+	// one is a request nothing could attribute to a credential. See
+	// [Client.IsUnbound].
+	unbound bool
+
 	// Connection resilience: lazy initialization with rate-limited recovery.
 	healthURL    string       // Direct API URL for health checks (bypasses SDK)
 	token        string       // Token for health check authentication

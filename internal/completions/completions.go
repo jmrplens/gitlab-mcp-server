@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // SPEC: MCP 2025-11-25 "completion/complete" requires `values` to be
@@ -53,6 +54,18 @@ func (h *Handler) clientFor(ctx context.Context) *gitlabclient.Client {
 // It returns empty results on errors to avoid blocking the client.
 func (h *Handler) Complete(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 	if req.Params.Ref == nil {
+		return emptyResult(), nil
+	}
+	if h.clientFor(ctx).IsUnbound() {
+		// Still an empty result, because the contract is that autocomplete is
+		// never blocked and an IDE has nothing useful to do with a failure
+		// here. But it is said out loud, at a level an operator sees by
+		// default: every other cause of an empty completion is a GitLab hiccup
+		// that fixes itself, while this one is a wiring defect on this side
+		// that never will, and it presents as an editor with no suggestions,
+		// forever, with nothing on the wire and nothing in the log.
+		slog.WarnContext(ctx, "completion: "+toolutil.UnattributedRequestMessage,
+			"ref", req.Params.Ref.Type, "argument", req.Params.Argument.Name)
 		return emptyResult(), nil
 	}
 

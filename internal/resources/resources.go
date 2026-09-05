@@ -474,7 +474,7 @@ func wrapErr(msg string, err error) error {
 // the returned index, so it cannot be read and cannot be subscribed to either.
 func Register(server *mcp.Server, client *gitlabclient.Client, opts ...RegisterOptions) HandlerIndex {
 	rec := &recorder{server: server, index: make(HandlerIndex)}
-	registerAll(registrarFor(rec, opts), client)
+	registerAll(attributed(registrarFor(rec, opts), client), client)
 	return rec.index
 }
 

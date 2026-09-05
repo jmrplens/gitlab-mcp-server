@@ -10,6 +10,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // registrar is the subset of *mcp.Server that resource registration uses.
@@ -106,7 +107,7 @@ func (r *indexRegistrar) AddResourceTemplate(template *mcp.ResourceTemplate, han
 // resource left in it would still be subscribable and still poll GitLab.
 func NewHandlerIndex(client *gitlabclient.Client, opts ...RegisterOptions) HandlerIndex {
 	r := &indexRegistrar{index: make(HandlerIndex)}
-	registerAll(registrarFor(r, opts), client)
+	registerAll(attributed(registrarFor(r, opts), client), client)
 	return r.index
 }
 
@@ -138,4 +139,52 @@ func (index HandlerIndex) Read(ctx context.Context, uriTemplate, uri string) ([]
 		return []byte(first.Text), nil
 	}
 	return first.Blob, nil
+}
+
+// attributedRegistrar refuses a read this server could not attribute to a
+// credential, before the handler runs.
+//
+// On a server shared by a configuration shape the client captured at
+// registration is the credential-less one, and each handler resolves the
+// caller's own from the request context. A read that arrives with none would
+// otherwise reach GitLab through a transport that refuses everything, and
+// nineteen of these handlers answer any failure with mcp.ResourceNotFoundError:
+// the caller was told the resource does not exist or their token cannot see it,
+// which is neither true nor something they can act on. It is a wiring defect on
+// this side, and it is answered here so that every handler says the same thing
+// about it rather than each swallowing it in its own way.
+//
+// One wrapper covers all of them, present and future, which matters more than
+// the nineteen: a resource added later inherits the refusal without having to
+// remember it.
+//
+// On stdio, and in every test that registers a real client, the captured client
+// is a real one and this never fires.
+type attributedRegistrar struct {
+	inner registrar
+	base  *gitlabclient.Client
+}
+
+func (r *attributedRegistrar) AddResource(resource *mcp.Resource, handler mcp.ResourceHandler) {
+	r.inner.AddResource(resource, r.guard(handler))
+}
+
+func (r *attributedRegistrar) AddResourceTemplate(template *mcp.ResourceTemplate, handler mcp.ResourceHandler) {
+	r.inner.AddResourceTemplate(template, r.guard(handler))
+}
+
+// guard wraps one handler with the credential check.
+func (r *attributedRegistrar) guard(handler mcp.ResourceHandler) mcp.ResourceHandler {
+	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		if r.base.For(ctx).IsUnbound() {
+			return nil, toolutil.UnattributedRequestError()
+		}
+		return handler(ctx, req)
+	}
+}
+
+// attributed wraps inner so every handler registered through it refuses an
+// unattributed read. See [attributedRegistrar].
+func attributed(inner registrar, base *gitlabclient.Client) registrar {
+	return &attributedRegistrar{inner: inner, base: base}
 }

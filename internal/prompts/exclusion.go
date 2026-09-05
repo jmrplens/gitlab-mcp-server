@@ -1,9 +1,13 @@
 package prompts
 
 import (
+	"context"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // registrar is the subset of *mcp.Server that prompt registration uses.
@@ -188,4 +192,38 @@ func excludedPromptNames(opts []RegisterOptions) map[string]struct{} {
 		}
 	}
 	return excluded
+}
+
+// attributedRegistrar refuses a prompt this server could not attribute to a
+// credential, before the handler runs.
+//
+// Every handler here resolves the caller's client from the request context,
+// because one server is shared by every credential of a configuration shape and
+// the client captured at registration is the credential-less one. A prompts/get
+// arriving with none would otherwise run the whole handler against a transport
+// that refuses everything and report whatever GitLab error each helper happened
+// to produce, none of which is what went wrong. The refusal says the one true
+// thing instead, in the same words the tool and resource surfaces use.
+//
+// It wraps the registrar rather than [addPrompt] so that the check is stated
+// once for all 37, including the ones that read several endpoints and would
+// otherwise fail differently depending on which read came first.
+type attributedRegistrar struct {
+	inner registrar
+	base  *gitlabclient.Client
+}
+
+func (r *attributedRegistrar) AddPrompt(prompt *mcp.Prompt, handler mcp.PromptHandler) {
+	r.inner.AddPrompt(prompt, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		if r.base.For(ctx).IsUnbound() {
+			return nil, toolutil.UnattributedRequestError()
+		}
+		return handler(ctx, req)
+	})
+}
+
+// attributed wraps inner so every prompt registered through it refuses an
+// unattributed request. See [attributedRegistrar].
+func attributed(inner registrar, base *gitlabclient.Client) registrar {
+	return &attributedRegistrar{inner: inner, base: base}
 }

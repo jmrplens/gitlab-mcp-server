@@ -12,9 +12,41 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
+
+// UnattributedRequestMessage is what a caller is told when this server could
+// not decide which credential a request belongs to.
+//
+// It says what happened and asks for a report, because nothing the caller sent
+// is wrong and nothing they can change will help: on a server shared by a
+// configuration shape every handler resolves the caller's client from the
+// request, and a handler that resolved none has run without one. The wording
+// matches the refusal the subscription path already gives for the same cause,
+// so an operator meeting both sees one fact rather than two symptoms.
+//
+// What it deliberately does not say is "not found" or "your token lacks
+// access". Both were what a caller used to see, and both send someone to check
+// permissions that are perfectly fine.
+const UnattributedRequestMessage = "this request could not be attributed to a credential and was not sent to GitLab; " +
+	"retry, and report it if it persists"
+
+// UnattributedRequestError is [UnattributedRequestMessage] as a JSON-RPC
+// internal error, for the surfaces that answer with an error value rather than
+// a classified string.
+//
+// Internal rather than invalid-request for the reason the message gives: the
+// request was well formed and this server failed to route it.
+func UnattributedRequestError() error {
+	return &jsonrpc.Error{
+		Code:    jsonrpc.CodeInternalError,
+		Message: UnattributedRequestMessage,
+	}
+}
 
 // ToolError represents a structured error from a tool handler.
 type ToolError struct {
@@ -58,6 +90,16 @@ func ClassifyError(err error) string {
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "the request exceeded its deadline and was canceled"
+	}
+
+	// The request never reached GitLab, because this server could not say which
+	// credential it belonged to. Checked here rather than left to the network
+	// branches below, which would otherwise describe it as a host being
+	// unreachable and name the synthetic host the shared catalog is registered
+	// against, sending an operator to check DNS for a hostname that does not
+	// exist.
+	if errors.Is(err, gitlabclient.ErrUnboundClient) {
+		return UnattributedRequestMessage
 	}
 
 	// GitLab API returned an HTTP error response

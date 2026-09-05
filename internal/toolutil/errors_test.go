@@ -17,7 +17,10 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
 const (
@@ -1657,5 +1660,69 @@ func TestExtractGitLabMessage_BoundsAndFlattensTheMessage(t *testing.T) {
 				t.Errorf("ExtractGitLabMessage() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestClassifyError_UnboundClient_SaysTheRequestWasNeverSent covers the failure
+// that is not GitLab's.
+//
+// On a server shared by a configuration shape the handlers capture a
+// credential-less client and resolve the caller's own from the request, so a
+// request that arrived without one fails inside this process and never reaches
+// an instance. Classified by the network branches it would be reported as a host
+// being unreachable, naming the synthetic host the shared catalog is registered
+// against or gitlab.com on the dotcom shape: an operator sent to check DNS and a
+// user told their instance is down.
+//
+// The wrapped case is the real one. Every such failure arrives through the
+// client's transport, so it reaches this function inside a *url.Error, whose
+// branch is what used to answer.
+func TestClassifyError_UnboundClient_SaysTheRequestWasNeverSent(t *testing.T) {
+	tests := map[string]error{
+		"the error itself": gitlabclient.ErrUnboundClient,
+		"as the transport reports it": &url.Error{
+			Op:  "Get",
+			URL: "https://gitlab.invalid/api/v4/projects",
+			Err: gitlabclient.ErrUnboundClient,
+		},
+		"wrapped again by a handler": fmt.Errorf("list projects: %w", &url.Error{
+			Op:  "Get",
+			URL: "https://gitlab.invalid/api/v4/projects",
+			Err: gitlabclient.ErrUnboundClient,
+		}),
+	}
+
+	for name, err := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := ClassifyError(err)
+
+			if got != UnattributedRequestMessage {
+				t.Errorf("ClassifyError = %q, want %q", got, UnattributedRequestMessage)
+			}
+			if strings.Contains(got, "gitlab.invalid") || strings.Contains(strings.ToLower(got), "unreachable") {
+				t.Errorf("the classification blames GitLab for a request that never left this process: %q", got)
+			}
+		})
+	}
+}
+
+// TestUnattributedRequestError_IsAnInternalError covers the coded form the
+// resource and prompt surfaces answer with.
+//
+// Internal rather than invalid-request because nothing the caller sent is wrong:
+// a plain error would reach the client as code 0, which generic clients render
+// as "unknown error".
+func TestUnattributedRequestError_IsAnInternalError(t *testing.T) {
+	err := UnattributedRequestError()
+
+	var coded *jsonrpc.Error
+	if !errors.As(err, &coded) {
+		t.Fatalf("UnattributedRequestError() = %T, want an error carrying a JSON-RPC code", err)
+	}
+	if coded.Code != jsonrpc.CodeInternalError {
+		t.Errorf("code = %d, want %d", coded.Code, jsonrpc.CodeInternalError)
+	}
+	if !strings.Contains(err.Error(), UnattributedRequestMessage) {
+		t.Errorf("error = %q, want it to carry %q", err, UnattributedRequestMessage)
 	}
 }

@@ -76,7 +76,7 @@ func mrIIDArg() *mcp.PromptArgument {
 // none registers all 37, which is what a deployment that excludes nothing
 // wants and what every existing caller gets unchanged.
 func Register(server *mcp.Server, client *gitlabclient.Client, opts ...RegisterOptions) {
-	registerAll(registrarFor(server, opts), client)
+	registerAll(attributed(registrarFor(server, opts), client), client)
 }
 
 // registerAll performs every prompt registration against the given registrar.
