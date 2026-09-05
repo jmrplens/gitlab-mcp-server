@@ -5,6 +5,7 @@
 // the site page are all rendered from it, and nothing re-measures to draw a
 // picture. That is what makes a chart re-renderable on a machine that never
 // ran the benchmark, and what makes -check possible at all.
+
 package main
 
 import (
@@ -158,6 +159,10 @@ const (
 	methodToolsList     = "tools/list"
 )
 
+// MethodLatency is the latency distribution of one MCP method over a run:
+// the percentiles and maximum, in milliseconds, of Count timed calls. Detail
+// distinguishes calls to the same method that are not comparable, such as a
+// tool call that reaches GitLab from one answered locally.
 type MethodLatency struct {
 	Method string  `json:"method"`
 	Detail string  `json:"detail,omitempty"`

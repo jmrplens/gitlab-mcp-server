@@ -1,4 +1,4 @@
-// Package testutil: legacy_client.go provides a minimal hand-rolled MCP
+// legacy_client.go provides a minimal hand-rolled MCP
 // client that performs the legacy initialize handshake at protocol version
 // 2025-11-25 and serves server-initiated elicitation/create requests.
 //
@@ -8,6 +8,7 @@
 // (SEP-2322 forbids server-initiated requests from that version on). Tests
 // that exercise the synchronous path deterministically connect this fake
 // client instead of a real one.
+
 package testutil
 
 import (

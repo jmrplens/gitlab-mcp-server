@@ -4,6 +4,7 @@
 // doc is the 1:1 ground truth, so a citation pointing at a doc that no longer
 // exists (renamed/removed upstream) silently invalidates an adjudication — this
 // gate surfaces it.
+
 package main
 
 import (

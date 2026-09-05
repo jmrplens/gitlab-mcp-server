@@ -6,6 +6,7 @@
 // number of clients: the first two. What does a client wait for, and where
 // does that wait actually live: the third. What does a request cost once
 // everything is warm: the fourth.
+
 package main
 
 import (

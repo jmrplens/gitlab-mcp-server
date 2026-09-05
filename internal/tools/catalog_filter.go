@@ -9,6 +9,7 @@
 // withheld write with "unknown action" while the shipped binary answered
 // "exists but is not available". A test that builds its own copy of the thing
 // under test is testing the copy; both now call this.
+
 package tools
 
 import (

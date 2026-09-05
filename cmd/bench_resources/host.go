@@ -5,6 +5,7 @@
 // What must never happen is a number published with no machine attached, which
 // is why the fields are gathered here rather than typed into the documentation
 // by hand.
+
 package main
 
 import (

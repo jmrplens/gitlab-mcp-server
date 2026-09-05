@@ -8,6 +8,7 @@
 // the stacks, the binary's mapped text and everything the scavenger has not
 // returned yet. Those numbers differ by a factor of two or more, and only one
 // of them gets a process OOM-killed.
+
 package main
 
 import (

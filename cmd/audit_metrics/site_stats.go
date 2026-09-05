@@ -14,6 +14,7 @@
 //   - catalog_groups.*  catalog group count per tier (IncludeMCP)
 //   - resources/prompts registered MCP resource and prompt counts
 //   - tool_packages     Go package directories under internal/tools
+
 package main
 
 import (

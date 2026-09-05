@@ -1,5 +1,6 @@
-// Package elicitation: state.go signs and binds the opaque RequestState that
+// state.go signs and binds the opaque RequestState that
 // carries a multi round-trip flow's accumulated answers between rounds.
+
 package elicitation
 
 import (

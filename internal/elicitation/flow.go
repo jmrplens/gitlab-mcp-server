@@ -1,4 +1,4 @@
-// Package elicitation: flow.go implements the multi round-trip request
+// flow.go implements the multi round-trip request
 // (MRTR, SEP-2322) elicitation flow required by MCP protocol version
 // 2026-07-28, where server-initiated elicitation/create requests are
 // forbidden while serving a tool call. A Flow transparently selects the
@@ -11,6 +11,7 @@
 //     opaque RequestState so multi-step flows survive handler re-invocation.
 //   - Older sessions fall back to the synchronous [Client] path, which
 //     issues elicitation/create requests directly.
+
 package elicitation
 
 import (

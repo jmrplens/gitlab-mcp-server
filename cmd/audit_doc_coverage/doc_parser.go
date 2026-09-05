@@ -15,6 +15,7 @@
 // in any of these positions within the file. Tier badge parsing is
 // best-effort and looks for the canonical "Premium"/"Ultimate" tokens
 // near each heading.
+
 package main
 
 import (

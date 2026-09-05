@@ -1,5 +1,6 @@
 // rpc_code.go classifies errors with the JSON-RPC codes the MCP specification
 // names, so a client can tell what it is expected to do about a failure.
+
 package toolutil
 
 import (
@@ -25,8 +26,12 @@ type CodedError struct {
 	code  int64
 }
 
+// Error renders the cause alone: the code is for the transport, not the
+// reader.
 func (e *CodedError) Error() string { return e.cause.Error() }
 
+// Unwrap exposes the cause first and the code second, in the order the type
+// documentation explains.
 func (e *CodedError) Unwrap() []error {
 	return []error{e.cause, &jsonrpc.Error{Code: e.code}}
 }

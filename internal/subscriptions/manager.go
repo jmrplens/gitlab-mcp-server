@@ -712,6 +712,16 @@ func (m *Manager[S]) Renew(uri string) bool {
 	return ok
 }
 
+// Lease returns how long a subscription is polled at full speed before it slows
+// down.
+//
+// Callers that hold a subscription open by some means other than request
+// traffic need this to renew it in time; guessing an interval would either
+// waste work or miss the deadline after the option is changed.
+func (m *Manager[S]) Lease() time.Duration {
+	return m.opts.Lease
+}
+
 // RenewAll extends the lease on every watch one subscriber holds, and
 // reports how many of them that revived from a demoted state.
 //
@@ -723,17 +733,6 @@ func (m *Manager[S]) Renew(uri string) bool {
 // during exactly the wait its subscriber cared about. Renewing every watch
 // on the manager would be wrong in the other direction: one busy session
 // would keep another session's abandoned watches at full speed forever.
-
-// Lease returns how long a subscription is polled at full speed before it slows
-// down.
-//
-// Callers that hold a subscription open by some means other than request
-// traffic need this to renew it in time; guessing an interval would either
-// waste work or miss the deadline after the option is changed.
-func (m *Manager[S]) Lease() time.Duration {
-	return m.opts.Lease
-}
-
 func (m *Manager[S]) RenewAll(subscriber S) int {
 	m.mu.Lock()
 	revived := make([]*watcher[S], 0, len(m.watchers))

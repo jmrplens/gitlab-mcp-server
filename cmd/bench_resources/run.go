@@ -6,6 +6,7 @@
 // parallel. Collapsing those phases would produce one resident-set number that
 // answers none of the three questions an operator asks: what does it cost
 // idle, what does one more client cost, and what does it peak at.
+
 package main
 
 import (

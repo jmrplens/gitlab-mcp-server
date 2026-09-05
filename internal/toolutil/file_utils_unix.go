@@ -3,6 +3,7 @@
 // file_utils_unix.go opens caller-supplied local paths without following a
 // symlink at the leaf, which is the containment the surrounding checks in
 // file_utils.go describe but cannot enforce on their own.
+
 package toolutil
 
 import (

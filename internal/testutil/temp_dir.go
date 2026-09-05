@@ -1,5 +1,6 @@
 // temp_dir.go isolates the process temporary directory for a test, on every
 // platform rather than only on the one the test was written on.
+
 package testutil
 
 import (

@@ -1,6 +1,4 @@
-// Package main implements the audit_doc_coverage command.
-//
-// audit_doc_coverage reports per-doc-file gaps between
+// Command audit_doc_coverage reports per-doc-file gaps between
 // docs/reference/tools/<doc>.md and the canonical action catalog. It produces
 // plan/docs-tools-backlog.json (gitignored) listing, per file:
 //

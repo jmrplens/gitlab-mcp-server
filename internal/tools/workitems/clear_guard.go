@@ -1,6 +1,7 @@
 // clear_guard.go guards the work item update paths that silently discard data:
 // an explicit empty assignee or CRM contact list replaces the current one with
 // nothing.
+
 package workitems
 
 import (

@@ -7,6 +7,7 @@
 // and there is no umask and no fchmod to apply. Saying so out loud is the
 // honest behaviour — quietly accepting the flag would let an operator believe
 // a restriction is in force that the platform never applied.
+
 package main
 
 import (

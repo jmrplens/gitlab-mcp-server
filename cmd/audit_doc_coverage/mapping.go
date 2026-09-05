@@ -6,6 +6,7 @@
 // that must be split off their owning group. Both cases are
 // enumerated explicitly here so the auditor's main logic stays
 // table-driven and the special cases are reviewable in one place.
+
 package main
 
 import (

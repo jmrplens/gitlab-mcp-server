@@ -7,6 +7,7 @@
 // "which one is it", and none of them holds a GitLab token to ask with. What
 // it answers is therefore chosen to give away nothing a caller could use: no
 // counters, no configuration, no GitLab round-trip.
+
 package main
 
 import (

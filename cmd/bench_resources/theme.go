@@ -9,6 +9,7 @@
 // Two colors are not in the stylesheet and are stated here, each with the
 // reason it has to be: the palette carries one accent and one indicator, and a
 // three-series chart needs a third hue that is neither.
+
 package main
 
 import (

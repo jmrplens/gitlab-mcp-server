@@ -21,6 +21,7 @@
 //
 // test/e2e is exempt as a tree: its files have no source modules to be named
 // after.
+
 package main
 
 import (

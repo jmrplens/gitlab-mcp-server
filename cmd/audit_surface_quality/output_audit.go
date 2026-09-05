@@ -1,4 +1,5 @@
 // Output-quality audit functions (formerly audit_output).
+
 package main
 
 import (

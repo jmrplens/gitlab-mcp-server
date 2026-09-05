@@ -306,6 +306,8 @@ type UnnamedInstanceError struct {
 	Allowed []string
 }
 
+// Error implements the [error] interface. The message names no instance, for
+// the reason given on the type.
 func (e *UnnamedInstanceError) Error() string {
 	return "this deployment serves several GitLab instances, so the " +
 		RequestOptionGitLabURL + " header must name the one this request is for"
@@ -325,6 +327,8 @@ type DisallowedGitLabURLError struct {
 	Allowed []string
 }
 
+// Error implements the [error] interface. It lists the published instances
+// and never the rejected value, which is caller-controlled text.
 func (e *DisallowedGitLabURLError) Error() string {
 	return "the GITLAB-URL header names an instance this deployment does not serve; allowed: " +
 		strings.Join(e.Allowed, ", ")

@@ -7,6 +7,7 @@
 // trusted; the palette has to be the site's own; and a log axis, a threshold
 // rule and value labels on the bars are all things a general-purpose library
 // makes harder than two hundred lines of arithmetic does.
+
 package main
 
 import (

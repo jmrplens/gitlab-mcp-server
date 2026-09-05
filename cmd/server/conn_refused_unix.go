@@ -2,6 +2,7 @@
 
 // conn_refused_unix.go answers "did the kernel say nothing is listening?" on the
 // platforms where that answer is ECONNREFUSED and nothing else.
+
 package main
 
 import (

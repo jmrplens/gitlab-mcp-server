@@ -20,6 +20,7 @@
 // Waiting, not answering early. A client that receives an empty tools/list and
 // does not act on notifications/tools/list_changed concludes the server has no
 // tools, which is a worse failure than a short wait and far harder to diagnose.
+
 package main
 
 import (
