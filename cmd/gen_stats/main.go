@@ -48,15 +48,32 @@ const (
 	scannerBufSize = 512 * 1024
 )
 
+// Seams over os.Exit and run, so a test can observe the exit code runMain
+// returns and drive both of its branches without regenerating the real README
+// or ending the test process.
+var (
+	osExit   = os.Exit
+	runStats = run
+)
+
 // main regenerates the README stats section and exits non-zero on failure.
 // With --check it verifies the section is current without writing.
 func main() {
-	check := flag.Bool("check", false, "verify README stats section is current without writing")
-	flag.Parse()
-	if err := run(*check); err != nil {
+	osExit(runMain(os.Args))
+}
+
+// runMain parses the flags and dispatches to run, returning the process exit
+// code. It takes its arguments explicitly, the way run takes its options, so a
+// test can drive every exit path.
+func runMain(args []string) int {
+	fs := flag.NewFlagSet(args[0], flag.ExitOnError)
+	check := fs.Bool("check", false, "verify README stats section is current without writing")
+	fs.Parse(args[1:]) //nolint:errcheck // ExitOnError handles parse failures
+	if err := runStats(*check); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 // run collects repository statistics and replaces the README stats section.
@@ -356,17 +373,25 @@ func scanGoDecls(path string, isE2E, isTest bool, s *repoStats) error {
 				continue
 			}
 			for _, spec := range d.Specs {
-				ts, ok := spec.(*ast.TypeSpec)
-				if !ok {
-					continue
-				}
-				if _, isStruct := ts.Type.(*ast.StructType); isStruct {
-					s.StructTypes++
-				}
+				countStructType(spec, s)
 			}
 		}
 	}
 	return nil
+}
+
+// countStructType increments the struct counter when spec declares a struct
+// type. The specs of a type declaration are always TypeSpecs, so the assertion
+// is a guard rather than a filter; it is a function of its own only so a test
+// can drive that guard with a spec that is not one.
+func countStructType(spec ast.Spec, s *repoStats) {
+	ts, ok := spec.(*ast.TypeSpec)
+	if !ok {
+		return
+	}
+	if _, isStruct := ts.Type.(*ast.StructType); isStruct {
+		s.StructTypes++
+	}
 }
 
 func updateFunctionStats(name string, isE2E, isTest bool, s *repoStats) {
@@ -469,6 +494,16 @@ func classifyDep(line string, direct, indirect *int) {
 	}
 }
 
+// roundedAverage is lines per file rounded to the nearest whole line, and 0
+// when there are no files. Integer division would truncate, and the README
+// presents the figure as an approximation, so 577.96 has to read ~578.
+func roundedAverage(lines, files int) int {
+	if files <= 0 {
+		return 0
+	}
+	return (lines + files/2) / files
+}
+
 // renderStats builds the Markdown tables for the <!-- START STATS --> section.
 func renderStats(s *repoStats) string {
 	totalFiles := s.SourceFiles + s.UnitTestFiles + s.E2ETestFiles
@@ -483,14 +518,8 @@ func renderStats(s *repoStats) string {
 	if srcFuncs > 0 {
 		testPerFunc = float64(s.TestFuncs) / float64(srcFuncs)
 	}
-	avgSrc := 0
-	if s.SourceFiles > 0 {
-		avgSrc = s.SourceLines / s.SourceFiles
-	}
-	avgTest := 0
-	if s.UnitTestFiles > 0 {
-		avgTest = s.UnitTestLines / s.UnitTestFiles
-	}
+	avgSrc := roundedAverage(s.SourceLines, s.SourceFiles)
+	avgTest := roundedAverage(s.UnitTestLines, s.UnitTestFiles)
 	commentPct := 0.0
 	if s.SourceLines > 0 {
 		commentPct = float64(s.CommentLines) / float64(s.SourceLines) * 100

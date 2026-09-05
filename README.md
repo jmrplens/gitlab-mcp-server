@@ -315,7 +315,11 @@ The published model-evaluation set covers 596 task attempts and 2220 expected MC
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <details>
-<summary>Enterprise meta &amp; dynamic evaluation results</summary>
+<summary>Meta-tools and Enterprise evaluation results</summary>
+
+<!-- START MODEL EVAL META SUMMARY -->
+No CE meta-tools run has been published yet: `make eval-surfaces-docker SURFACE=meta` followed by `--publish-docs` fills this block.
+<!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
 Current published result: **Docker Enterprise meta 20260527**.
@@ -459,20 +463,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,072 |     227,759 |
-| Unit tests (`_test.go`)  |       639 |     369,458 |
+| Source (`.go`, non-test) |     1,072 |     227,788 |
+| Unit tests (`_test.go`)  |       639 |     369,591 |
 | End-to-end tests         |       226 |      61,190 |
-| **Total**                | **1,937** | **658,407** |
+| **Total**                | **1,937** | **658,569** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,519 |
+| Source functions                |  8,522 |
 | . Exported (public)             |  2,804 |
-| . Unexported (private)          |  5,715 |
-| Unit test functions (`TestXxx`) | 13,138 |
-| Subtests (`t.Run(...)`)         |  4,897 |
+| . Unexported (private)          |  5,718 |
+| Unit test functions (`TestXxx`) | 13,143 |
+| Subtests (`t.Run(...)`)         |  4,899 |
 | End-to-end test functions       |    577 |
 
 ### Ratios worth noting
@@ -482,17 +486,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.62× more tests than code |
 | Average source file length         |                 ~212 lines |
 | Average test file length           |                 ~578 lines |
-| Comment lines in source            |  34,936 (~15.3% of source) |
+| Comment lines in source            |  34,949 (~15.3% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 7,141 |
+| `if err != nil` checks             | 7,143 |
 | `defer` statements                 | 1,206 |
 | `struct` types defined             | 2,888 |
-| `//nolint` suppressions            |   280 |
+| `//nolint` suppressions            |   281 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
