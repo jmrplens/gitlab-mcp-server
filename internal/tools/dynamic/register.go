@@ -488,8 +488,10 @@ type registryShape struct {
 	searchIndex      searchIndex
 }
 
-// registryShapes holds one shape per shared catalog.
-var registryShapes sync.Map // *actioncatalog.Catalog -> *registryShape
+// registryShapes holds one shape per shared catalog. Single-flight, so a
+// startup burst of servers for one configuration indexes the catalog once
+// rather than once each and discards all but one of the results.
+var registryShapes toolutil.OnceMap[*actioncatalog.Catalog, *registryShape]
 
 // registryShapeFor returns the shape of catalog, from the cache when the
 // catalog has a shared origin and no extra aliases were supplied, and built
@@ -501,13 +503,9 @@ func registryShapeFor(catalog *actioncatalog.Catalog, aliases []actionAlias) *re
 	if origin == nil || len(aliases) > 0 {
 		return buildRegistryShape(catalog, aliases)
 	}
-	if cached, ok := registryShapes.Load(origin); ok {
-		shape, _ := cached.(*registryShape)
-		return shape
-	}
-	actual, _ := registryShapes.LoadOrStore(origin, buildRegistryShape(origin, nil))
-	shape, _ := actual.(*registryShape)
-	return shape
+	return registryShapes.Load(origin, func() *registryShape {
+		return buildRegistryShape(origin, nil)
+	})
 }
 
 // buildRegistryShape indexes every action of catalog for search and lookup.
@@ -2133,6 +2131,16 @@ func normalizedLimit(limit int) int {
 	return limit
 }
 
+// describeEntry renders one action as a find or describe result.
+//
+// The two schemas are handed out as they are, not copied. Both are frozen:
+// the input schema is the process-shared derivation [dynamicInputSchema]
+// returns, and the output schema belongs to the route of a catalog shared by
+// every server in the process. A shallow copy of either would read as
+// ownership while aliasing every nested node, so a write one level down would
+// still reach every pooled server; the honest form is to share the map and say
+// that nothing may write into it. A caller that needs to mutate one copies it
+// with [toolutil.CloneSchemaMap].
 func describeEntry(entry actionEntry) ActionDescription {
 	inputSchema := dynamicInputSchema(entry)
 	return ActionDescription{
@@ -2147,7 +2155,7 @@ func describeEntry(entry actionEntry) ActionDescription {
 		RelatedActions: relatedActionsForEntry(entry),
 		ParamGuidance:  cloneParameterGuidance(entry.Route.ParameterGuidance),
 		InputSchema:    inputSchema,
-		OutputSchema:   maps.Clone(entry.Route.OutputSchema),
+		OutputSchema:   entry.Route.OutputSchema,
 		Example:        exampleFor(entry, inputSchema),
 	}
 }
