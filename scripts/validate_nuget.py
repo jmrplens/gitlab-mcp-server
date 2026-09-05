@@ -175,6 +175,13 @@ def check_metadata(metadata, name, pkg_id, version, package_types, problems):
     for element in ("authors", "description", "license"):
         if metadata.find(NUSPEC_NS + element) is None:
             problems.append("{}: nuspec lacks <{}>".format(name, element))
+    # nuget.org rejects a license expression whose <licenseUrl> is missing or
+    # points anywhere but the expression's own page; the push is a 400 that
+    # nothing before it reports.
+    license_url = nuspec_text(metadata, "licenseUrl")
+    if license_url != "https://licenses.nuget.org/MIT":
+        problems.append("{}: nuspec licenseUrl is {!r}, want 'https://licenses.nuget.org/MIT' beside the MIT expression".format(
+            name, license_url))
 
 
 def check_declared_file(zf, metadata, name, element, problems):

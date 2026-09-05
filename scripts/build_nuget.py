@@ -128,6 +128,11 @@ def nuspec(pkg_id, version, description, package_types, readme=True, icon=False)
         "    <authors>{authors}</authors>\n"
         "    <description>{description}</description>\n"
         '    <license type="expression">MIT</license>\n'
+        # nuget.org refuses a package whose license is an expression unless the
+        # deprecated <licenseUrl> also points at that expression's page, "to
+        # provide a better experience for older clients" (the 400 names
+        # https://aka.ms/invalidNuGetLicenseUrl). The first push of 2.7.5 hit it.
+        "    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>\n"
         "    <projectUrl>https://jmrp.io/docs/gitlab-mcp-server/</projectUrl>\n"
         '    <repository type="git" url="https://github.com/jmrplens/gitlab-mcp-server" />\n'
         "{optional}"

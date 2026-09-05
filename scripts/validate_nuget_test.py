@@ -233,6 +233,15 @@ class ValidateNugetTest(PackedFixture):
             doc["version"] = "0.0.1"
             repack(self.package(), {".mcp/server.json": json.dumps(doc)})
 
+        def license_url_dropped():
+            # The push of 2.7.5 was refused with a 400 for exactly this: an MIT
+            # expression whose <licenseUrl> is missing. Nothing before the push
+            # reported it, so the validator has to.
+            with zipfile.ZipFile(self.package()) as zf:
+                nuspec = zf.read("gitlab-mcp-server.nuspec").decode()
+            nuspec = nuspec.replace("    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>\n", "")
+            repack(self.package(), {"gitlab-mcp-server.nuspec": nuspec})
+
         def leftover_file():
             with open(os.path.join(self.out, "notes.txt"), "w", encoding="utf-8") as fh:
                 fh.write("scratch\n")
@@ -260,6 +269,7 @@ class ValidateNugetTest(PackedFixture):
             ("the token is glued to a longer name", glued_token, "ownership token"),
             ("the pointer forgets a runtime identifier", pointer_forgets_a_rid, "RuntimeIdentifierPackages"),
             (".mcp/server.json carries another version", stale_server_json, ".mcp/server.json carries version"),
+            ("the license expression lost its licenseUrl", license_url_dropped, "licenseUrl"),
             ("a stray file sits beside the packages", leftover_file, "would try to push"),
             ("the build skipped verification", unverified_build, "--allow-unverified"),
             ("the executable bit was lost", executable_bit_lost, "executable bit"),
