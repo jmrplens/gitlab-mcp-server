@@ -185,9 +185,16 @@ func TestSharedSchemaIdentity_NamesRegisteredSchemasOnly(t *testing.T) {
 	}
 }
 
-// TestParameterGuidanceIdentity_EmptyMapsAreOneName verifies nil and empty
-// guidance name the same thing, and two distinct non-empty maps do not.
-func TestParameterGuidanceIdentity_EmptyMapsAreOneName(t *testing.T) {
+// TestParameterGuidanceIdentity_NamesContentNotAddress verifies the property
+// the memo key depends on: nil and empty guidance name the same thing, two
+// maps with the same content name the same thing however they were built, and
+// any change to a field, to a confusion or to the parameter a field belongs to
+// changes the name.
+//
+// Content and not address is what makes the name safe to put in a memo entry
+// that outlives the map: an address can be handed out again to a different
+// map, and the entry would then serve the wrong guidance.
+func TestParameterGuidanceIdentity_NamesContentNotAddress(t *testing.T) {
 	t.Parallel()
 
 	if got := ParameterGuidanceIdentity(nil); got != "" {
@@ -196,14 +203,38 @@ func TestParameterGuidanceIdentity_EmptyMapsAreOneName(t *testing.T) {
 	if got := ParameterGuidanceIdentity(map[string]ParameterGuidance{}); got != "" {
 		t.Errorf("ParameterGuidanceIdentity(empty) = %q, want empty", got)
 	}
-	first := map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}}
-	second := map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}}
-	name := ParameterGuidanceIdentity(first)
-	if name == "" || name != ParameterGuidanceIdentity(first) {
-		t.Error("ParameterGuidanceIdentity(map) is not a stable non-empty name")
+
+	guidance := func() map[string]ParameterGuidance {
+		return map[string]ParameterGuidance{
+			"project_id": {SemanticRole: "scope_project", ValueSource: "gitlab_project", ExampleBinding: "42", CommonConfusions: []string{"group_id", "name"}},
+			"branch":     {SemanticRole: "ref"},
+		}
 	}
-	if name == ParameterGuidanceIdentity(second) {
-		t.Error("ParameterGuidanceIdentity() named two distinct maps alike")
+	name := ParameterGuidanceIdentity(guidance())
+	if name == "" || name != ParameterGuidanceIdentity(guidance()) {
+		t.Fatalf("ParameterGuidanceIdentity() = %q, want one stable non-empty name for equal content", name)
+	}
+
+	cases := map[string]func(map[string]ParameterGuidance){
+		"a changed semantic role": func(g map[string]ParameterGuidance) { g["branch"] = ParameterGuidance{SemanticRole: "sha"} },
+		"a changed value source":  func(g map[string]ParameterGuidance) { g["branch"] = ParameterGuidance{ValueSource: "ref"} },
+		"a changed example":       func(g map[string]ParameterGuidance) { g["branch"] = ParameterGuidance{ExampleBinding: "main"} },
+		"a changed confusion": func(g map[string]ParameterGuidance) {
+			g["branch"] = ParameterGuidance{CommonConfusions: []string{"tag"}}
+		},
+		"a renamed parameter":      func(g map[string]ParameterGuidance) { g["ref"] = g["branch"]; delete(g, "branch") },
+		"an extra parameter":       func(g map[string]ParameterGuidance) { g["state"] = ParameterGuidance{} },
+		"a parameter that is gone": func(g map[string]ParameterGuidance) { delete(g, "branch") },
+	}
+	for label, edit := range cases {
+		t.Run(label, func(t *testing.T) {
+			t.Parallel()
+			edited := guidance()
+			edit(edited)
+			if got := ParameterGuidanceIdentity(edited); got == name {
+				t.Errorf("ParameterGuidanceIdentity() named %s the same as the original", label)
+			}
+		})
 	}
 }
 

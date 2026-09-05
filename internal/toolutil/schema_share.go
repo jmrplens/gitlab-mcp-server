@@ -1,8 +1,12 @@
 package toolutil
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -108,17 +112,44 @@ func SharedSchemaIdentity(schema any) (string, bool) {
 	return fmt.Sprintf("%p", identity), true
 }
 
-// ParameterGuidanceIdentity names a guidance map by address, for a transform
-// key whose output depends on the guidance as well as on the schema. The map
-// is referenced by the route that owns it, so it lives as long as that route;
-// a transform of a shared schema is only memoized when the route is part of a
-// shared catalog, which is what keeps the guidance alive too. Nil and empty
-// maps name the same thing, since a transform treats them alike.
+// ParameterGuidanceIdentity names a guidance map by its content, for a
+// transform key whose output depends on the guidance as well as on the
+// schema. Nil and empty maps name the same thing, since a transform treats
+// them alike.
+//
+// By content and not by address, which was the other way to close the same
+// hole. [DeriveSchema] memoizes on the identity of the input schema, and every
+// typed route's input schema is shared, so a route from a catalog nobody
+// retained still writes a memo entry that lives for the process. An address in
+// that key would be the address of a guidance map that does not: once the
+// catalog is collected the allocator may hand the address out again, and the
+// next map at it would be served the previous route's guidance. Pinning the
+// guidance of every catalog marked shared would close it for the routes
+// somebody remembered to pin and leave the rest keyed on a transient address;
+// a digest cannot be forgotten, holds nothing alive, and lets two routes that
+// spell the same guidance share one derivation.
+//
+// The cost is a hash of a few short strings per lookup, against the schema
+// clone the memo saves.
 func ParameterGuidanceIdentity(guidance map[string]ParameterGuidance) string {
 	if len(guidance) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%p", reflect.ValueOf(guidance).UnsafePointer())
+	names := make([]string, 0, len(guidance))
+	for name := range guidance {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	var canonical strings.Builder
+	for _, name := range names {
+		entry := guidance[name]
+		// Every field quoted, so that no shifting of characters from one
+		// field into the next can spell the same canonical form twice.
+		canonical.WriteString(fmt.Sprintf("%q=%q|%q|%q|%q;",
+			name, entry.SemanticRole, entry.ValueSource, entry.ExampleBinding, entry.CommonConfusions))
+	}
+	digest := sha256.Sum256([]byte(canonical.String()))
+	return hex.EncodeToString(digest[:])
 }
 
 // DeriveSchema returns transform applied to schema, where derive builds the
