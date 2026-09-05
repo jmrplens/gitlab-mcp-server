@@ -133,13 +133,48 @@ func leasedPolling(lease, slow time.Duration) serverOption {
 // long they take.
 func waitForPolls(t *testing.T, b *pipelineBackend, n int64) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	waitForPollsWithin(t, b, n, 5*time.Second)
+}
+
+// waitForPollsWithin is waitForPolls with the deadline chosen by the test,
+// for the cases where the deadline is the assertion: a watch still at its
+// base period reaches n within milliseconds, and one demoted to the slow
+// interval cannot reach it before a deadline of a few seconds, so the
+// deadline separates the two outcomes without measuring how fast the machine
+// is. A count that a fixed sleep was supposed to reach did measure it, and
+// on a slow runner two reads landed where three were expected.
+func waitForPollsWithin(t *testing.T, b *pipelineBackend, n int64, within time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(within)
 	for b.hits.Load() < n {
 		if time.Now().After(deadline) {
-			t.Fatalf("GitLab was polled %d times in 5s, want at least %d", b.hits.Load(), n)
+			t.Fatalf("GitLab was polled %d times in %v, want at least %d", b.hits.Load(), within, n)
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
+}
+
+// settledCount returns a backend counter once it has not moved for a full
+// quiet span, so a read already in flight when a watcher was stopped has
+// landed before the test starts counting, rather than a moment after the
+// sample was taken. The counter is passed in because the backend keeps two,
+// every request and the reads it answered, and a test must settle the one it
+// then compares. A count that keeps moving until the deadline is a watcher
+// that never stopped, and is reported as that.
+func settledCount(t *testing.T, count func() int64, quiet time.Duration) int64 {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	last, since := count(), time.Now()
+	for time.Since(since) < quiet {
+		if time.Now().After(deadline) {
+			t.Fatalf("GitLab requests kept arriving for 5s (%d so far); the watcher never stopped", count())
+		}
+		time.Sleep(2 * time.Millisecond)
+		if now := count(); now != last {
+			last, since = now, time.Now()
+		}
+	}
+	return last
 }
 
 // TestCreateServer_SubscribeCapability_FollowsCapabilitySurface verifies
@@ -224,9 +259,11 @@ func TestSubscribe_UnreadableURI_StartsNoWatcher(t *testing.T) {
 		t.Errorf("watchers = %d after a refused subscribe, want 0", manager.Len())
 	}
 
-	// The refusal cost one read; what must not happen is a second one.
-	settled := backend.calls()
-	time.Sleep(200 * time.Millisecond)
+	// The refusal cost one read; what must not happen is a second one. The
+	// count is sampled once it has stopped moving, so the read the refusal
+	// itself made cannot land between the sample and the check.
+	settled := settledCount(t, backend.calls, 100*time.Millisecond)
+	time.Sleep(200 * time.Millisecond) // ten or more poll periods
 	if got := backend.calls(); got != settled {
 		t.Errorf("GitLab calls went %d -> %d after a refused subscribe; a watcher outlived the refusal", settled, got)
 	}
@@ -325,9 +362,8 @@ func TestSubscribe_Unsubscribe_StopsPolling(t *testing.T) {
 		t.Fatalf("Unsubscribe: %v", err)
 	}
 	// A read already in flight when the watcher was cancelled may still
-	// land, so let things settle before sampling the count.
-	time.Sleep(50 * time.Millisecond)
-	before := backend.hits.Load()
+	// land, so the count is sampled once it has stopped moving.
+	before := settledCount(t, backend.hits.Load, 100*time.Millisecond)
 	time.Sleep(200 * time.Millisecond) // ten or more poll periods
 
 	if after := backend.hits.Load(); after != before {
@@ -361,9 +397,9 @@ func TestSubscribe_SessionEnds_WatcherStops(t *testing.T) {
 	if closeErr := session.Close(); closeErr != nil {
 		t.Fatalf("session close: %v", closeErr)
 	}
-	// A read already in flight may still land after the session ends.
-	time.Sleep(50 * time.Millisecond)
-	before := backend.calls()
+	// A read already in flight may still land after the session ends, so
+	// the count is sampled once it has stopped moving.
+	before := settledCount(t, backend.calls, 100*time.Millisecond)
 	time.Sleep(200 * time.Millisecond) // ten or more poll periods
 
 	if after := backend.calls(); after != before {
@@ -534,14 +570,17 @@ func TestSubscribe_IdleSession_KeepsWatchingWhileItsStreamIsOpen(t *testing.T) {
 	}
 	waitForPolls(t, backend, 3)
 
-	// Several leases of silence on a session that sends nothing else.
+	// Several leases of silence on a session that sends nothing else. The
+	// baseline counts reads of the watched pipeline only, the same counter
+	// the wait below watches, so nothing but polling can move it.
 	time.Sleep(lease + slow/4)
-	afterLease := backend.calls()
-	time.Sleep(300 * time.Millisecond)
+	afterLease := backend.hits.Load()
 
-	if grew := backend.calls() - afterLease; grew < 3 {
-		t.Errorf("GitLab was called %d more times while the stream was open, want the watch still at full speed", grew)
-	}
+	// Three more reads at the base period arrive within milliseconds; a
+	// watch demoted to the slow interval would need three of those, seconds
+	// apart, so the deadline separates the two outcomes without measuring
+	// how fast the machine is.
+	waitForPollsWithin(t, backend, afterLease+3, slow/2)
 }
 
 // TestSubscribe_ActiveSession_WatcherStaysFast verifies any traffic on the
@@ -596,12 +635,22 @@ func TestSubscribe_ActiveSession_WatcherStaysFast(t *testing.T) {
 		}
 	}
 	busy(8) // four lease periods
-	stillActive := backend.calls()
-	busy(8)
+	stillActive := backend.hits.Load()
 
-	if grew := backend.calls() - stillActive; grew < 3 {
-		t.Errorf("GitLab was called %d more times %v after the lease would have run out; "+
-			"activity on the session did not renew the watch", grew, 4*lease)
+	// Keep the session busy while waiting for three more reads of the
+	// watched pipeline. At the base period they arrive within milliseconds;
+	// a watch demoted to the slow interval would need seconds, so the
+	// deadline is the assertion and the machine's speed is not. Only reads
+	// of the pipeline count: the busy traffic itself reaches GitLab, and
+	// counting it would let the renewal calls stand in for the polling they
+	// are supposed to keep alive.
+	deadline := time.Now().Add(slow / 2)
+	for backend.hits.Load()-stillActive < 3 {
+		if time.Now().After(deadline) {
+			t.Fatalf("the pipeline was read %d more times in %v after the lease would have run out; "+
+				"activity on the session did not renew the watch", backend.hits.Load()-stillActive, slow/2)
+		}
+		busy(1)
 	}
 }
 
@@ -1652,10 +1701,14 @@ func TestSessionBridge_ALegacySubscribeStillFollowsTheLease(t *testing.T) {
 		t.Fatalf("Subscribe: %v", err)
 	}
 
-	time.Sleep(600 * time.Millisecond)
-
-	if demoted := runtime.manager.DemotedCount(); demoted == 0 {
-		t.Error("a silent legacy subscription was never demoted; the lease no longer applies to anything")
+	// A silent lease of 100ms runs out well inside the budget; a watch that
+	// is never demoted is what the deadline reports.
+	deadline := time.Now().Add(5 * time.Second)
+	for runtime.manager.DemotedCount() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("a silent legacy subscription was never demoted; the lease no longer applies to anything")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
