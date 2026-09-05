@@ -72,7 +72,7 @@ gitlab-mcp-server/
 │   ├── audit_test_names/        # Audits test function naming compliance; -check-files gates test-file naming (make check-test-file-names)
 │   ├── audit_test_subtests/     # Audits case loops that assert without a t.Run subtest; -fix rewrites the unambiguous ones (make check-test-subtests)
 │   ├── audit_tokens/            # Audits token usage for model-facing surfaces (+ --compare-schemas sizing spike)
-│   ├── bench_resources/         # Measures what the server costs to run (CPU, memory) and draws the charts the docs publish (make bench-resources)
+│   ├── bench_resources/         # Measures what the server costs to run (CPU, memory) and draws the charts the docs publish (make bench-resources); the concurrency series steps one HTTP process up to a thousand credentials, profiling it through --pprof-addr, and -no-render measures on a host with no checkout
 │   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
 │   ├── audit_string_dupes/      # Finds duplicated string literals missing constants
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/

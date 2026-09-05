@@ -3,6 +3,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -96,6 +99,107 @@ func TestHostInfo_Describe_FollowsTheLanguage(t *testing.T) {
 	}
 	if !strings.Contains(spanish, spanishLabels().HostCPUs) {
 		t.Errorf("the Spanish description does not use its own wording: %q", spanish)
+	}
+}
+
+// TestParseCPUModel_SkipsLinesWithoutAKey verifies a line with no separator
+// is passed over rather than read as a model with an empty name.
+func TestParseCPUModel_SkipsLinesWithoutAKey(t *testing.T) {
+	if got := parseCPUModel("bogus line\nmodel name\t: Real CPU\n"); got != "Real CPU" {
+		t.Errorf("parseCPUModel = %q, want the model after the bogus line", got)
+	}
+}
+
+// fakeSysctl puts a sysctl on the PATH that answers the two questions the
+// macOS branches ask, with the memory size the test wants, and returns the
+// directory so PATH can be narrowed to it.
+func fakeSysctl(t *testing.T, memsize string) string {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$2\" in\n  machdep.cpu.brand_string) echo 'Fake M9';;\n  hw.memsize) echo '" + memsize + "';;\nesac\n"
+	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+	if err := os.WriteFile(filepath.Join(dir, "sysctl"), []byte(script), 0o700); err != nil { //#nosec G306 -- a script the test must execute
+		t.Fatalf("write the fake sysctl: %v", err)
+	}
+	return dir
+}
+
+// TestHostFacts_OtherPlatforms walks the branches only another operating
+// system takes, by declaring that system on this one: macOS asks sysctl,
+// which is stood in for here, and every other platform admits it knows
+// nothing. The uname fallback is reached by taking uname off the PATH.
+func TestHostFacts_OtherPlatforms(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a shell script cannot stand in for sysctl on Windows")
+	}
+	previous := runtimeGOOS
+	t.Cleanup(func() { runtimeGOOS = previous })
+
+	t.Run("macOS with a sysctl that answers", func(t *testing.T) {
+		runtimeGOOS = "darwin"
+		t.Setenv("PATH", fakeSysctl(t, "17179869184"))
+		if got := cpuModel(); got != "Fake M9" {
+			t.Errorf("cpuModel = %q, want what sysctl said", got)
+		}
+		if got := totalMemoryGiB(); got != 16 {
+			t.Errorf("totalMemoryGiB = %v, want 16 from the 17179869184 bytes sysctl reported", got)
+		}
+		if got := availableMemoryMiB(); got != 0 {
+			t.Errorf("availableMemoryMiB = %v on a platform with no MemAvailable, want 0", got)
+		}
+		if got := kernelRelease(); got != "unknown" {
+			t.Errorf("kernelRelease = %q with no uname on the PATH, want unknown", got)
+		}
+	})
+
+	t.Run("macOS with a sysctl that answers nonsense", func(t *testing.T) {
+		runtimeGOOS = "darwin"
+		t.Setenv("PATH", fakeSysctl(t, "lots"))
+		if got := totalMemoryGiB(); got != 0 {
+			t.Errorf("totalMemoryGiB = %v from an unparseable sysctl, want 0", got)
+		}
+	})
+
+	t.Run("a platform with no source at all", func(t *testing.T) {
+		runtimeGOOS = "plan9"
+		t.Setenv("PATH", t.TempDir())
+		if got := cpuModel(); got != "unknown" {
+			t.Errorf("cpuModel = %q, want unknown", got)
+		}
+		if got := totalMemoryGiB(); got != 0 {
+			t.Errorf("totalMemoryGiB = %v, want 0", got)
+		}
+	})
+
+	t.Run("linux reads available memory", func(t *testing.T) {
+		runtimeGOOS = "linux"
+		got := availableMemoryMiB()
+		if runtime.GOOS == "linux" && got <= 0 {
+			t.Errorf("availableMemoryMiB = %v on Linux, want what /proc/meminfo says", got)
+		}
+	})
+}
+
+// TestParseMeminfoKiB_ReadsTheNamedField verifies each field is read by its
+// own name, since MemTotal and MemAvailable sit lines apart in the same file
+// and mean different things to the budget.
+func TestParseMeminfoKiB_ReadsTheNamedField(t *testing.T) {
+	meminfo := "MemTotal:       63729784 kB\nMemFree:         1104924 kB\nMemAvailable:   25729000 kB\nBroken: x kB\n"
+	cases := []struct {
+		field string
+		want  float64
+	}{
+		{field: "MemTotal:", want: 63729784},
+		{field: "MemAvailable:", want: 25729000},
+		{field: "Broken:", want: 0},
+		{field: "Missing:", want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.field, func(t *testing.T) {
+			if got := parseMeminfoKiB(meminfo, tc.field); got != tc.want {
+				t.Errorf("parseMeminfoKiB(%s) = %v, want %v", tc.field, got, tc.want)
+			}
+		})
 	}
 }
 

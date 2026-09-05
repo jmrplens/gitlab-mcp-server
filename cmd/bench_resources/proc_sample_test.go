@@ -9,7 +9,11 @@
 package main
 
 import (
+	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -263,6 +267,197 @@ func TestSampleRSS_NoProcesses_ReportsZero(t *testing.T) {
 	if got := sampleRSS(s); got != 0 {
 		t.Errorf("sampleRSS = %d, want 0 when there is nothing to sample", got)
 	}
+}
+
+// TestTicksFromGetconf_FallsBackToUserHZ verifies the divisor every CPU
+// figure is scaled by comes from getconf when it answers, and is the value
+// every Linux this runs on has when getconf is missing, silent, or wrong.
+func TestTicksFromGetconf_FallsBackToUserHZ(t *testing.T) {
+	cases := []struct {
+		name string
+		out  string
+		err  error
+		want float64
+	}{
+		{name: "answered", out: "250\n", want: 250},
+		{name: "getconf missing", err: errors.New("not found"), want: 100},
+		{name: "not a number", out: "lots", want: 100},
+		{name: "zero", out: "0", want: 100},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ticksFromGetconf([]byte(tc.out), tc.err); got != tc.want {
+				t.Errorf("ticksFromGetconf = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestReadProcStat_PSFallback_ReadsTheProcessOrFails walks the ps path every
+// platform but Linux takes, by declaring another platform on a Linux that
+// has the same ps: this process is read, a process that does not exist is
+// reported.
+func TestReadProcStat_PSFallback_ReadsTheProcessOrFails(t *testing.T) {
+	if _, err := exec.LookPath("ps"); err != nil {
+		t.Skipf("no ps to fall back to: %v", err)
+	}
+	previous := runtimeGOOS
+	runtimeGOOS = "darwin"
+	t.Cleanup(func() { runtimeGOOS = previous })
+
+	got, err := readProcStat(t.Context(), os.Getpid())
+	if err != nil {
+		t.Fatalf("readProcStat through ps: %v", err)
+	}
+	if got.rssBytes == 0 {
+		t.Error("ps reported a resident set of zero for this process")
+	}
+	if _, missingErr := readProcStat(t.Context(), 2147483647); missingErr == nil || !strings.Contains(missingErr.Error(), "ps for pid") {
+		t.Errorf("readProcStat of a process that does not exist = %v, want the ps failure", missingErr)
+	}
+}
+
+// TestReadProcStat_ProcessFilesOfATest lays out a process directory the way
+// the kernel does and reads it through the Linux path, whatever the platform:
+// a whole process, one with a readable status beside an unparseable stat,
+// which a live kernel never produces, and one with no files at all.
+func TestReadProcStat_ProcessFilesOfATest(t *testing.T) {
+	root := t.TempDir()
+	write := func(pid int, name, content string) {
+		t.Helper()
+		dir := filepath.Join(root, strconv.Itoa(pid))
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatalf("create %s: %v", dir, err)
+		}
+		//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatalf("write %s/%s: %v", dir, name, err)
+		}
+	}
+	status := "Name:\tserver\nVmRSS:\t  2048 kB\n"
+	stat := "1 (server) S 0 1 1 0 -1 4194560 0 0 0 0 300 100 0 0 20 0 1 0 1 0 0\n"
+	write(1, "status", status)
+	write(1, "stat", stat)
+	write(2, "status", status)
+	write(2, "stat", "garbage")
+
+	previousRoot, previousGOOS := procRoot, runtimeGOOS
+	procRoot, runtimeGOOS = root, "linux"
+	t.Cleanup(func() { procRoot, runtimeGOOS = previousRoot, previousGOOS })
+
+	got, err := readProcStat(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("readProcStat(1): %v", err)
+	}
+	if got.rssBytes != 2048*1024 || got.cpuSeconds != 400/clockTicks {
+		t.Errorf("readProcStat(1) = %+v, want 2 MiB and 400 ticks", got)
+	}
+	if _, statErr := readProcStat(t.Context(), 2); statErr == nil || !strings.Contains(statErr.Error(), "stat line") {
+		t.Errorf("readProcStat(2) = %v, want the stat parse failure", statErr)
+	}
+	if _, absentErr := readProcStat(t.Context(), 3); absentErr == nil || !strings.Contains(absentErr.Error(), "VmRSS") {
+		t.Errorf("readProcStat(3) = %v, want the missing status reported", absentErr)
+	}
+}
+
+// TestParsers_RemainingMalformedFields covers the last two fields the
+// parsers refuse: a stime that is not a number, and a day count that is not.
+func TestParsers_RemainingMalformedFields(t *testing.T) {
+	if _, err := parseProcStatCPU("12345 (server) S 1 2 3 4 -1 0 0 0 0 0 1000 x 0 0 20 0 14 0"); err == nil || !strings.Contains(err.Error(), "stime") {
+		t.Errorf("parseProcStatCPU with a bad stime = %v", err)
+	}
+	if _, err := parsePSTime("x-01:00:00"); err == nil || !strings.Contains(err.Error(), "days") {
+		t.Errorf("parsePSTime with bad days = %v", err)
+	}
+}
+
+// TestSampler_ProcessThatDoesNotExist_CountsAFailure verifies a sample over
+// a process the kernel does not know is a failure rather than a zero, that
+// the mean is zero until something was sampled, and that a process gone
+// between two samples is skipped rather than failing the whole sample.
+func TestSampler_ProcessThatDoesNotExist_CountsAFailure(t *testing.T) {
+	absent := 2147483647
+	s := newSampler(t.Context(), 10*time.Millisecond, func() []int { return []int{absent} })
+	if got := s.meanRSS(); got != 0 {
+		t.Errorf("meanRSS before any sample = %d, want 0", got)
+	}
+	s.observe()
+	s.mu.Lock()
+	failures := s.failures
+	s.mu.Unlock()
+	if failures != 1 {
+		t.Errorf("failures = %d after sampling a process that does not exist, want 1", failures)
+	}
+	if _, err := s.current(); err == nil {
+		t.Error("current reported a measurement for a process that does not exist")
+	}
+
+	self := os.Getpid()
+	mixed := newSampler(t.Context(), 10*time.Millisecond, func() []int { return []int{absent, self} })
+	stat, err := mixed.current()
+	if err != nil {
+		t.Skipf("this platform does not report process statistics: %v", err)
+	}
+	if stat.rssBytes == 0 {
+		t.Error("the process that exists was not counted beside the one that does not")
+	}
+	mixed.observe()
+	if mixed.meanRSS() == 0 {
+		t.Error("meanRSS is zero after a sample that read a live process")
+	}
+}
+
+// TestDumpGoroutines_EveryFailure covers the ways the traceback cannot be
+// counted: no process, a process already gone, one that does not exit in
+// time, and one that exits without printing a traceback.
+func TestDumpGoroutines_EveryFailure(t *testing.T) {
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skipf("no sleep binary to stand in for a process: %v", err)
+	}
+
+	t.Run("no process", func(t *testing.T) {
+		if _, dumpErr := dumpGoroutines(nil, func() {}, func() string { return "" }); dumpErr == nil {
+			t.Error("dumpGoroutines accepted a nil process")
+		}
+	})
+
+	t.Run("already gone", func(t *testing.T) {
+		cmd := exec.CommandContext(t.Context(), "true")
+		if runErr := cmd.Run(); runErr != nil {
+			t.Fatalf("run true: %v", runErr)
+		}
+		if _, dumpErr := dumpGoroutines(cmd.Process, func() {}, func() string { return "" }); dumpErr == nil || !strings.Contains(dumpErr.Error(), "signal") {
+			t.Errorf("dumpGoroutines on a finished process = %v, want the signal failure", dumpErr)
+		}
+	})
+
+	t.Run("does not exit in time", func(t *testing.T) {
+		previous := dumpWait
+		dumpWait = 20 * time.Millisecond
+		t.Cleanup(func() { dumpWait = previous })
+		cmd := exec.CommandContext(t.Context(), sleep, "30")
+		if startErr := cmd.Start(); startErr != nil {
+			t.Fatalf("start sleep: %v", startErr)
+		}
+		release := make(chan struct{})
+		t.Cleanup(func() { close(release); _ = cmd.Wait() })
+		_, dumpErr := dumpGoroutines(cmd.Process, func() { <-release }, func() string { return "" })
+		if dumpErr == nil || !strings.Contains(dumpErr.Error(), "did not exit") {
+			t.Errorf("dumpGoroutines with a wait that never returns = %v, want the timeout", dumpErr)
+		}
+	})
+
+	t.Run("no traceback", func(t *testing.T) {
+		cmd := exec.CommandContext(t.Context(), sleep, "30")
+		if startErr := cmd.Start(); startErr != nil {
+			t.Fatalf("start sleep: %v", startErr)
+		}
+		_, dumpErr := dumpGoroutines(cmd.Process, func() { _ = cmd.Wait() }, func() string { return "" })
+		if dumpErr == nil || !strings.Contains(dumpErr.Error(), "no goroutines") {
+			t.Errorf("dumpGoroutines on a process that prints none = %v, want the empty traceback reported", dumpErr)
+		}
+	})
 }
 
 // TestSettledRSS_StableProcess_ReturnsAReading verifies the settle loop

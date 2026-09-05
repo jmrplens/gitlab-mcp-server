@@ -36,6 +36,20 @@ import (
 // the pool keys on token and instance URL.
 const benchToken = "bench-token-" //#nosec G101 -- not a credential, a stand-in the stub instance accepts
 
+// Seams a test drives the slow failure paths through: the wait for /health,
+// which is a minute against a binary that never serves it, and the port
+// reservation, whose failures the kernel does not produce on demand.
+var (
+	healthWait  = 60 * time.Second
+	reservePort = func(ctx context.Context) (net.Listener, error) {
+		return (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	}
+	// wirePipes attaches a fresh command's pipes, which cannot fail on a
+	// command nothing else has touched; the seam lets a test see the client
+	// that failure would have left behind.
+	wirePipes = commandProcess
+)
+
 // clientConn is one connected MCP client.
 type clientConn struct {
 	rpc rpcClient
@@ -64,6 +78,33 @@ type target interface {
 	serverInfo() ServerInfo
 	// close stops everything, whether or not goroutines was called.
 	close()
+}
+
+// procWait reaps one process exactly once, however many callers ask, and
+// lets every caller wait for the same outcome.
+//
+// exec.Cmd.Wait is not safe to call twice while the first call is still in
+// flight: the goroutines copying the child's output report to the first
+// caller over a channel, and a second caller waits on that channel forever.
+// Two callers is exactly what a target has, the traceback dump and close,
+// and the second used to hang whenever the first was still waiting on a
+// process that had not exited within the dump's own bound.
+type procWait struct {
+	once sync.Once
+	done chan struct{}
+}
+
+// wait blocks until the process has been reaped, by this call or an earlier
+// one.
+func (w *procWait) wait(cmd *exec.Cmd) {
+	w.once.Do(func() {
+		w.done = make(chan struct{})
+		go func() {
+			_ = cmd.Wait()
+			close(w.done)
+		}()
+	})
+	<-w.done
 }
 
 // lockedBuffer collects a child's two output streams while it still runs.
@@ -130,13 +171,20 @@ func childEnv(plan scenarioPlan, stubURL, otlpURL string, stdio bool) []string {
 // name read that carries neither prefix, as the alias other agent tooling
 // sets for the yolo mode.
 func configFreeEnviron() []string {
+	return withoutConfig(os.Environ())
+}
+
+// withoutConfig filters one environment list, so the rule can be tested on a
+// list of the test's own, including the entry without an "=" that execve
+// permits and os.Environ never hands a Go program in practice.
+func withoutConfig(environ []string) []string {
 	legacy := make([]string, 0, len(config.PrefixedEnvNames())+1)
 	for _, name := range config.PrefixedEnvNames() {
 		legacy = append(legacy, config.LegacyEnvName(name))
 	}
 	legacy = append(legacy, "AUTOPILOT")
-	kept := make([]string, 0, len(os.Environ()))
-	for _, entry := range os.Environ() {
+	kept := make([]string, 0, len(environ))
+	for _, entry := range environ {
 		name, _, ok := strings.Cut(entry, "=")
 		if !ok {
 			continue
@@ -156,12 +204,19 @@ type httpTarget struct {
 	plan    scenarioPlan
 	stubURL string
 	otlpURL string
+	// pprofAddr, when set, is the loopback address the server is told to
+	// serve its profiling handlers on; the series reads its profiles and
+	// goroutine counts there. maxClients, when positive, sizes the pool so
+	// that no credential of a series is evicted between its steps.
+	pprofAddr  string
+	maxClients int
 
 	addr   string
 	cmd    *exec.Cmd
 	output *lockedBuffer
 	cancel context.CancelFunc
 	info   ServerInfo
+	reap   procWait
 }
 
 // start launches the process and waits for /health.
@@ -186,6 +241,12 @@ func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
 	}
 	if t.plan.Telemetry {
 		args = append(args, "--telemetry")
+	}
+	if t.pprofAddr != "" {
+		args = append(args, "--pprof-addr="+t.pprofAddr)
+	}
+	if t.maxClients > 0 {
+		args = append(args, "--max-http-clients="+strconv.Itoa(t.maxClients))
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -213,7 +274,7 @@ func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
 // waitHealthy polls /health until the process answers, and reads the build it
 // reports while it is there.
 func (t *httpTarget) waitHealthy(ctx context.Context) (ServerInfo, error) {
-	deadline := time.Now().Add(60 * time.Second)
+	deadline := time.Now().Add(healthWait)
 	client := &http.Client{Timeout: 5 * time.Second}
 	for time.Now().Before(deadline) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+t.addr+"/health", http.NoBody)
@@ -253,7 +314,7 @@ func (t *httpTarget) goroutines() (int, error) {
 	if t.cmd == nil || t.cmd.Process == nil {
 		return 0, errors.New("no server process")
 	}
-	return dumpGoroutines(t.cmd.Process, func() { _ = t.cmd.Wait() }, t.output.String)
+	return dumpGoroutines(t.cmd.Process, func() { t.reap.wait(t.cmd) }, t.output.String)
 }
 
 // serverInfo returns the build /health reported.
@@ -265,7 +326,7 @@ func (t *httpTarget) close() {
 		t.cancel()
 	}
 	if t.cmd != nil {
-		_ = t.cmd.Wait()
+		t.reap.wait(t.cmd)
 	}
 }
 
@@ -280,6 +341,7 @@ type stdioTarget struct {
 	cmds    []*exec.Cmd
 	outputs []*lockedBuffer
 	cancels []context.CancelFunc
+	reaps   []*procWait
 }
 
 // start is a no-op: on stdio nothing exists until a client spawns it, and that
@@ -298,7 +360,7 @@ func (t *stdioTarget) addClient(ctx context.Context, index int) (*clientConn, ti
 	cmd.Env = childEnv(t.plan, t.stubURL, t.otlpURL, true)
 	cmd.Stderr = output
 
-	stdin, stdout, pipeErr := commandProcess(cmd)
+	stdin, stdout, pipeErr := wirePipes(cmd)
 	if pipeErr != nil {
 		cancel()
 		return nil, 0, pipeErr
@@ -316,6 +378,7 @@ func (t *stdioTarget) addClient(ctx context.Context, index int) (*clientConn, ti
 	t.cmds = append(t.cmds, cmd)
 	t.outputs = append(t.outputs, output)
 	t.cancels = append(t.cancels, cancel)
+	t.reaps = append(t.reaps, &procWait{})
 	t.mu.Unlock()
 
 	return &clientConn{rpc: client, label: "process " + strconv.Itoa(index)}, elapsed, nil
@@ -346,11 +409,11 @@ func (t *stdioTarget) goroutines() (int, error) {
 	if len(t.cmds) == 0 {
 		return 0, errors.New("no server processes")
 	}
-	cmd, output := t.cmds[0], t.outputs[0]
+	cmd, output, reap := t.cmds[0], t.outputs[0], t.reaps[0]
 	if cmd.Process == nil {
 		return 0, errors.New("first server process never started")
 	}
-	return dumpGoroutines(cmd.Process, func() { _ = cmd.Wait() }, output.String)
+	return dumpGoroutines(cmd.Process, func() { reap.wait(cmd) }, output.String)
 }
 
 // serverInfo is empty: stdio publishes no health document, and the version is
@@ -364,8 +427,8 @@ func (t *stdioTarget) close() {
 	for _, cancel := range t.cancels {
 		cancel()
 	}
-	for _, cmd := range t.cmds {
-		_ = cmd.Wait()
+	for i, cmd := range t.cmds {
+		t.reaps[i].wait(cmd)
 	}
 }
 
@@ -373,8 +436,7 @@ func (t *stdioTarget) close() {
 // process remains, which is why start waits for health rather than assuming
 // the port is ours the moment we ask.
 func freePort(ctx context.Context) (int, error) {
-	var listenConfig net.ListenConfig
-	listener, err := listenConfig.Listen(ctx, "tcp", "127.0.0.1:0")
+	listener, err := reservePort(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("reserve a port: %w", err)
 	}

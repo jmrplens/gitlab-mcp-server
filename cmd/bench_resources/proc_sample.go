@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +32,13 @@ var clockTicks = func() float64 {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "getconf", "CLK_TCK").Output()
+	return ticksFromGetconf(out, err)
+}()
+
+// ticksFromGetconf reads USER_HZ out of getconf's answer, falling back to
+// the value every Linux this runs on has when getconf is missing, silent or
+// unparseable.
+func ticksFromGetconf(out []byte, err error) float64 {
 	if err != nil {
 		return 100
 	}
@@ -41,7 +47,13 @@ var clockTicks = func() float64 {
 		return 100
 	}
 	return value
-}()
+}
+
+// procRoot is where the kernel's process files are read from. A variable so
+// a test can lay out a process directory of its own, including the one
+// shape a live kernel never produces: a readable status beside an
+// unreadable stat.
+var procRoot = "/proc"
 
 // procStat is one observation of one process.
 type procStat struct {
@@ -57,12 +69,12 @@ type procStat struct {
 // benchmark that refuses to run is worse than one that publishes latency
 // without memory.
 func readProcStat(ctx context.Context, pid int) (procStat, error) {
-	if runtime.GOOS == "linux" {
-		rss, err := parseProcStatusRSS(readFileString(fmt.Sprintf("/proc/%d/status", pid)))
+	if runtimeGOOS == "linux" {
+		rss, err := parseProcStatusRSS(readFileString(fmt.Sprintf("%s/%d/status", procRoot, pid)))
 		if err != nil {
 			return procStat{}, err
 		}
-		cpu, cpuErr := parseProcStatCPU(readFileString(fmt.Sprintf("/proc/%d/stat", pid)))
+		cpu, cpuErr := parseProcStatCPU(readFileString(fmt.Sprintf("%s/%d/stat", procRoot, pid)))
 		if cpuErr != nil {
 			return procStat{}, cpuErr
 		}
@@ -193,6 +205,11 @@ type sampler struct {
 	mu       sync.Mutex
 	peak     uint64
 	failures int
+	// sum and count accumulate the samples of the current window, for the
+	// mean the series publishes beside the peak: a step's mean is what the
+	// process weighs while serving, its peak what a limit has to survive.
+	sum   uint64
+	count int
 
 	stopCh   chan struct{}
 	doneCh   chan struct{}
@@ -254,7 +271,20 @@ func (s *sampler) observe() {
 	if current.rssBytes > s.peak {
 		s.peak = current.rssBytes
 	}
+	s.sum += current.rssBytes
+	s.count++
 	s.mu.Unlock()
+}
+
+// meanRSS reports the average resident set over the samples of the current
+// window, zero when nothing was sampled.
+func (s *sampler) meanRSS() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.count == 0 {
+		return 0
+	}
+	return s.sum / uint64(s.count) //#nosec G115 -- count is a positive sample count
 }
 
 // current sums every tracked process right now.
@@ -298,11 +328,14 @@ func (s *sampler) peakRSS() uint64 {
 	return s.peak
 }
 
-// resetPeak forgets the peak, which separates the load phase from the startup
-// phase that preceded it.
+// resetPeak opens a new window: it forgets the peak and the mean's samples,
+// which separates the load phase from the startup phase that preceded it,
+// and one series step from the one before.
 func (s *sampler) resetPeak() {
 	s.mu.Lock()
 	s.peak = 0
+	s.sum = 0
+	s.count = 0
 	s.mu.Unlock()
 	s.observe()
 }
@@ -314,6 +347,11 @@ func (s *sampler) resetPeak() {
 // by design, so it is sent once, at the end of a scenario, after every
 // measurement that needs the process alive.
 const goroutineDumpSignal = syscall.SIGQUIT
+
+// dumpWait bounds the wait for a signaled process to exit. A variable so a
+// test can drive the timeout without a process that ignores the signal for
+// ten seconds.
+var dumpWait = 10 * time.Second
 
 // countGoroutines counts the goroutines in a runtime traceback.
 //
@@ -357,7 +395,7 @@ func dumpGoroutines(proc *os.Process, wait func(), stderr func() string) (int, e
 	}()
 	select {
 	case <-done:
-	case <-time.After(10 * time.Second):
+	case <-time.After(dumpWait):
 		return 0, errors.New("process did not exit after the traceback signal")
 	}
 	count := countGoroutines(stderr())

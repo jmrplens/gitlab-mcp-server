@@ -12,12 +12,16 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
@@ -409,6 +413,187 @@ func TestStdioTarget_EveryClientIsItsOwnProcess(t *testing.T) {
 		t.Error("the dumped process still answered")
 	}
 	tgt.close()
+}
+
+// TestWithoutConfig_DropsAnEntryWithNoEquals covers the entry execve permits
+// and os.Environ never hands a Go program: a name with no value at all is
+// dropped rather than passed on to the measured process.
+func TestWithoutConfig_DropsAnEntryWithNoEquals(t *testing.T) {
+	got := withoutConfig([]string{"KEEP=1", "NOEQUALS", "GITLAB_TOKEN=x"})
+	if len(got) != 1 || got[0] != "KEEP=1" {
+		t.Errorf("withoutConfig = %v, want only KEEP=1", got)
+	}
+}
+
+// fakeListener is a reserved port whose address and close are whatever the
+// test says, for the two freePort failures the kernel never produces.
+type fakeListener struct {
+	net.Listener
+	addr     net.Addr
+	closeErr error
+}
+
+func (f fakeListener) Addr() net.Addr { return f.addr }
+func (f fakeListener) Close() error   { return f.closeErr }
+
+// TestFreePort_ReservationFailures covers the port reservation's three
+// failures through its seam: nothing could be bound, the listener is not a
+// TCP one, and releasing it fails.
+func TestFreePort_ReservationFailures(t *testing.T) {
+	cases := []struct {
+		name    string
+		reserve func(context.Context) (net.Listener, error)
+		want    string
+	}{
+		{
+			name:    "cannot bind",
+			reserve: func(context.Context) (net.Listener, error) { return nil, errors.New("no ports") },
+			want:    "reserve a port",
+		},
+		{
+			name: "not a tcp listener",
+			reserve: func(context.Context) (net.Listener, error) {
+				return fakeListener{addr: &net.UnixAddr{Name: "/tmp/x.sock", Net: "unix"}}, nil
+			},
+			want: "not a TCP address",
+		},
+		{
+			name: "cannot release",
+			reserve: func(context.Context) (net.Listener, error) {
+				return fakeListener{addr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 4242}, closeErr: errors.New("stuck")}, nil
+			},
+			want: "release the reserved port",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			previous := reservePort
+			reservePort = tc.reserve
+			t.Cleanup(func() { reservePort = previous })
+			_, err := freePort(t.Context())
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("freePort = %v, want an error saying %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestHTTPTarget_StartFailures covers the two ways start fails after the exec
+// succeeds or before it: no port to reserve, and a process that runs but
+// never answers /health, which is reported with its output attached after
+// the wait, shortened here from the minute a real run allows.
+func TestHTTPTarget_StartFailures(t *testing.T) {
+	t.Run("no port", func(t *testing.T) {
+		previous := reservePort
+		reservePort = func(context.Context) (net.Listener, error) { return nil, errors.New("no ports") }
+		t.Cleanup(func() { reservePort = previous })
+		tgt := &httpTarget{binary: standinBinary(t), plan: standinPlan(transportHTTP), stubURL: "http://127.0.0.1:1"}
+		if _, err := tgt.start(t.Context()); err == nil || !strings.Contains(err.Error(), "reserve a port") {
+			t.Errorf("start = %v, want the reservation failure", err)
+		}
+	})
+
+	t.Run("never healthy", func(t *testing.T) {
+		mute, err := exec.LookPath("true")
+		if err != nil {
+			t.Skipf("no true binary to stand in for a server that serves nothing: %v", err)
+		}
+		previous := healthWait
+		healthWait = 300 * time.Millisecond
+		t.Cleanup(func() { healthWait = previous })
+		tgt := &httpTarget{binary: mute, plan: standinPlan(transportHTTP), stubURL: "http://127.0.0.1:1"}
+		_, err = tgt.start(t.Context())
+		if err == nil || !strings.Contains(err.Error(), "never became healthy") {
+			t.Errorf("start = %v, want the health timeout", err)
+		}
+		if procs := tgt.processes(); len(procs) != 1 {
+			t.Errorf("%d processes after a failed start, want the one that was reaped", len(procs))
+		}
+	})
+
+	t.Run("address that is not a url", func(t *testing.T) {
+		tgt := &httpTarget{addr: "bad host", output: &lockedBuffer{}}
+		if _, err := tgt.waitHealthy(t.Context()); err == nil || !strings.Contains(err.Error(), "build health request") {
+			t.Errorf("waitHealthy = %v, want the request failure", err)
+		}
+	})
+}
+
+// TestStdioTarget_Goroutines_ProcessNeverStarted covers the guard on a
+// recorded command with no process behind it, which the target never
+// records itself and a test can put there.
+func TestStdioTarget_Goroutines_ProcessNeverStarted(t *testing.T) {
+	tgt := &stdioTarget{
+		cmds: []*exec.Cmd{exec.CommandContext(t.Context(), "true")}, outputs: []*lockedBuffer{{}}, reaps: []*procWait{{}},
+	}
+	if _, err := tgt.goroutines(); err == nil || !strings.Contains(err.Error(), "never started") {
+		t.Errorf("goroutines = %v, want the never-started refusal", err)
+	}
+}
+
+// TestProcWait_SecondCallerWaitsForTheFirst pins the defect the single-flight
+// reap exists for: two callers of exec.Cmd.Wait on one process, the second
+// arriving while the first is still blocked, must both return once the
+// process is gone. The bare second Wait blocked forever on the channel the
+// output-copying goroutines report to the first caller over, which is what
+// hung a scenario whose traceback dump had timed out.
+func TestProcWait_SecondCallerWaitsForTheFirst(t *testing.T) {
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skipf("no sleep binary to stand in for a process: %v", err)
+	}
+	cmd := exec.CommandContext(t.Context(), sleep, "30")
+	cmd.Stdout = &lockedBuffer{} // a copying goroutine, which is what makes the second Wait block
+	if startErr := cmd.Start(); startErr != nil {
+		t.Fatalf("start sleep: %v", startErr)
+	}
+
+	var reap procWait
+	first := make(chan struct{})
+	go func() {
+		reap.wait(cmd)
+		close(first)
+	}()
+	second := make(chan struct{})
+	go func() {
+		time.Sleep(20 * time.Millisecond) // arrive while the first is blocked
+		reap.wait(cmd)
+		close(second)
+	}()
+
+	time.Sleep(60 * time.Millisecond)
+	if killErr := cmd.Process.Kill(); killErr != nil {
+		t.Fatalf("kill sleep: %v", killErr)
+	}
+	for name, done := range map[string]chan struct{}{"first": first, "second": second} {
+		t.Run(name, func(t *testing.T) {
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Errorf("the %s caller never returned after the process died", name)
+			}
+		})
+	}
+	// And a caller arriving after the reap is complete returns at once.
+	reap.wait(cmd)
+}
+
+// TestStdioTarget_PipeFailure_LeavesNoProcess drives the pipe wiring to
+// fail through its seam, which a fresh command never does on its own, and
+// checks the client is refused before any process exists.
+func TestStdioTarget_PipeFailure_LeavesNoProcess(t *testing.T) {
+	previous := wirePipes
+	wirePipes = func(*exec.Cmd) (io.WriteCloser, io.Reader, error) { return nil, nil, errors.New("no pipes") }
+	t.Cleanup(func() { wirePipes = previous })
+
+	tgt := &stdioTarget{binary: standinBinary(t), plan: standinPlan(transportStdio), stubURL: "http://127.0.0.1:1"}
+	_, _, err := tgt.addClient(t.Context(), 0)
+	if err == nil || !strings.Contains(err.Error(), "no pipes") {
+		t.Errorf("addClient = %v, want the pipe failure", err)
+	}
+	if procs := tgt.processes(); len(procs) != 0 {
+		t.Errorf("%d processes recorded for a client whose pipes failed", len(procs))
+	}
 }
 
 // TestStdioTarget_ExecFailure_NamesTheClient checks a client whose process

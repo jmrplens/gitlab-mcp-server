@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -179,14 +180,18 @@ func TestSampleCPU_NoProcesses_SaysSo(t *testing.T) {
 }
 
 // countingConn is a client connection that records how often it was called
-// and answers with whatever the test wants.
+// and answers with whatever the test wants, after a delay when one is set.
 type countingConn struct {
 	calls atomic.Int64
 	err   error
+	delay time.Duration
 }
 
 func (c *countingConn) call(context.Context, string, map[string]any) ([]byte, error) {
 	c.calls.Add(1)
+	if c.delay > 0 {
+		time.Sleep(c.delay)
+	}
 	return nil, c.err
 }
 
@@ -502,6 +507,100 @@ func TestRunScenario_Stdio_TimesTheSpawnAndPublishesNoIdleFigure(t *testing.T) {
 	}
 	if r.serverInfo.Version != "" {
 		t.Errorf("stdio reported server info %+v, want none", r.serverInfo)
+	}
+}
+
+// TestRunScenario_Refusals covers the ways a scenario fails before it has
+// anything to publish: a surface with no tool call, an HTTP server that
+// cannot start, and a stdio client whose process cannot start.
+func TestRunScenario_Refusals(t *testing.T) {
+	cases := []struct {
+		name string
+		plan scenarioPlan
+		want string
+	}{
+		{
+			name: "unknown surface",
+			plan: scenarioPlan{ID: "x", Transport: transportHTTP, Surface: "nonsense", Clients: 1, Parallel: 1, Rounds: 1},
+			want: "unknown surface",
+		},
+		{
+			name: "http server cannot start",
+			plan: scenarioPlan{ID: "x", Transport: transportHTTP, Surface: surfaceDynamic, Clients: 1, Parallel: 1, Rounds: 1},
+			want: "start server",
+		},
+		{
+			name: "stdio process cannot start",
+			plan: scenarioPlan{ID: "x", Transport: transportStdio, Surface: surfaceDynamic, Clients: 1, Parallel: 1, Rounds: 1},
+			want: "start stdio server 0",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := standinRunner(t)
+			r.binary = filepath.Join(t.TempDir(), "absent")
+			_, err := r.runScenario(t.Context(), tc.plan)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("runScenario = %v, want an error saying %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestRunScenario_GoroutineDumpTimesOut_IsNoted lowers the wait for the
+// traceback to nothing, so the process cannot have exited by the time it is
+// checked, and verifies the scenario still completes with a note in place
+// of the count.
+func TestRunScenario_GoroutineDumpTimesOut_IsNoted(t *testing.T) {
+	previous := dumpWait
+	dumpWait = time.Nanosecond
+	t.Cleanup(func() { dumpWait = previous })
+
+	r := standinRunner(t)
+	scenario, err := r.runScenario(t.Context(), httpPlan(1))
+	if err != nil {
+		t.Fatalf("runScenario: %v", err)
+	}
+	if scenario.Goroutines != 0 {
+		t.Errorf("goroutines = %d, want none counted", scenario.Goroutines)
+	}
+	if !strings.Contains(strings.Join(scenario.Notes, "\n"), "goroutine count unavailable") {
+		t.Errorf("notes %v do not say the count was unavailable", scenario.Notes)
+	}
+}
+
+// TestSettledRSS_NeverSettles_ReturnsAtTheCeiling lowers the settle ceiling
+// and feeds the loop a resident set that alternates between two values, so
+// no two consecutive samples agree, and checks it returns the last reading
+// rather than looping.
+func TestSettledRSS_NeverSettles_ReturnsAtTheCeiling(t *testing.T) {
+	previous := settleCeiling
+	settleCeiling = 150 * time.Millisecond
+	t.Cleanup(func() { settleCeiling = previous })
+
+	self := os.Getpid()
+	var toggle atomic.Bool
+	s := newSampler(t.Context(), 5*time.Millisecond, func() []int {
+		// One process, then the same process counted twice: the sum doubles
+		// on every other sample.
+		if toggle.Load() {
+			toggle.Store(false)
+			return []int{self, self}
+		}
+		toggle.Store(true)
+		return []int{self}
+	})
+	if _, err := s.current(); err != nil {
+		t.Skipf("this platform does not report process statistics: %v", err)
+	}
+
+	started := time.Now()
+	got := settledRSS(s)
+	if got == 0 {
+		t.Error("settledRSS returned zero at the ceiling instead of the last reading")
+	}
+	if elapsed := time.Since(started); elapsed < settleCeiling {
+		t.Errorf("settled in %s on a process that never settles", elapsed)
 	}
 }
 

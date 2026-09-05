@@ -108,6 +108,11 @@ func TestPaletteFromTheme_MissingOrIndirect_ReturnsError(t *testing.T) {
 			want: "no",
 		},
 		{
+			name: "block never closed",
+			css:  ":root,\n::backdrop {\n\t--gm-mark: #fff;\n",
+			want: "not closed",
+		},
+		{
 			name: "token removed",
 			css:  strings.Replace(testCSS, "--gm-mark: #a78bfa;", "", 1),
 			want: "declares no --gm-mark",
