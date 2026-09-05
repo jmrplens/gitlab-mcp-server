@@ -18,6 +18,27 @@ import (
 
 const helperReportsWhetherTemplate = "%s reports whether %s."
 
+// Seams over collectDocInsertions, the two doc generators, and the source
+// write, so a test can drive the defensive branches a real parse and a
+// filesystem the tests own, running as root, never reach: an insertion whose
+// line range falls outside the file, a generator that yields an empty comment,
+// and a write that cannot land. writeSource wraps its own defaultWriteSource
+// rather than aliasing os.WriteFile directly, so the CLI path processFile feeds
+// it does not reach a bare os.WriteFile sink through the seam.
+var (
+	collectInsertions = collectDocInsertions
+	genFuncDoc        = generateFuncDoc
+	genTypeDoc        = generateTypeDoc
+	writeSource       = defaultWriteSource
+)
+
+// defaultWriteSource is the production value of the writeSource seam: it writes
+// the rewritten file at owner-only permissions.
+func defaultWriteSource(path string, data []byte) error {
+	// #nosec G304,G703 -- path is a developer CLI argument naming a local file.
+	return os.WriteFile(path, data, 0o600)
+}
+
 // insertion describes one doc-comment edit to splice into a source file.
 //
 // startLine and endLine are 1-based line numbers in the original file;
@@ -116,7 +137,7 @@ func processFile(path string) error {
 	pkgName := node.Name.Name
 	isTest := strings.HasSuffix(cleanPath, "_test.go")
 
-	insertions := collectDocInsertions(fset, node, pkgName, isTest)
+	insertions := collectInsertions(fset, node, pkgName, isTest)
 
 	if len(insertions) == 0 {
 		return nil
@@ -149,7 +170,7 @@ func processFile(path string) error {
 		return nil
 	}
 
-	if err = os.WriteFile(cleanPath, []byte(result), 0o600); err != nil { //#nosec G703 -- CLI tool, paths from args
+	if err = writeSource(cleanPath, []byte(result)); err != nil {
 		return fmt.Errorf("write %s: %w", cleanPath, err)
 	}
 	fmt.Printf("documented %s (%d symbols)\n", cleanPath, len(insertions))
@@ -175,7 +196,7 @@ func funcDocInsertion(fset *token.FileSet, decl *ast.FuncDecl, pkgName string, i
 	if reusableDoc(decl.Doc) || decl.Name.Name == "init" {
 		return insertion{}, false
 	}
-	comment := generateFuncDoc(decl, pkgName, isTest)
+	comment := genFuncDoc(decl, pkgName, isTest)
 	if comment == "" {
 		return insertion{}, false
 	}
@@ -204,7 +225,7 @@ func typeSpecDocInsertion(fset *token.FileSet, decl *ast.GenDecl, spec *ast.Type
 	if decl.Tok != token.TYPE || reusableSpecDoc(spec.Doc, decl.Doc) {
 		return insertion{}, false
 	}
-	comment := generateTypeDoc(spec, pkgName)
+	comment := genTypeDoc(spec, pkgName)
 	if comment == "" {
 		return insertion{}, false
 	}

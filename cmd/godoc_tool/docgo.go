@@ -22,6 +22,16 @@ import (
 // and the audit reports every other.
 const packageDocFile = "doc.go"
 
+// Seams over the standard library, so a test can drive the failure branches
+// that a filesystem the tests own, and run as root, never produces on its own:
+// a walk that reports an error, a format of bytes that were just parsed, and a
+// write that cannot land.
+var (
+	walkDir      = filepath.WalkDir
+	formatSource = format.Source
+	writeFile    = os.WriteFile
+)
+
 // movePackageDocs applies movePackageDoc to a directory and everything below
 // it, or to the directory of a file. Hidden directories, testdata and vendor
 // trees are skipped, since none of them holds a package of this repository.
@@ -35,7 +45,7 @@ func movePackageDocs(path string) error {
 		return movePackageDoc(filepath.Dir(cleanPath))
 	}
 	var errs []error
-	walkErr := filepath.WalkDir(cleanPath, func(p string, d fs.DirEntry, walkErr error) error {
+	walkErr := walkDir(cleanPath, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -116,12 +126,12 @@ func (h *packageDocHolder) moveToDocGo(dir string) error {
 	}
 
 	docGo := append(append([]byte{}, h.src[docStart:docEnd]...), []byte("\npackage "+h.file.Name.Name+"\n")...)
-	docGo, err := format.Source(docGo)
+	docGo, err := formatSource(docGo)
 	if err != nil {
 		return fmt.Errorf("format doc.go for %s: %w", dir, err)
 	}
 	remaining := append(append([]byte{}, h.src[:docStart]...), h.src[pkgStart:]...)
-	remaining, err = format.Source(remaining)
+	remaining, err = formatSource(remaining)
 	if err != nil {
 		return fmt.Errorf("format %s without its package comment: %w", h.path, err)
 	}
@@ -131,10 +141,10 @@ func (h *packageDocHolder) moveToDocGo(dir string) error {
 		fmt.Printf("// dry-run: would move the package comment of %s from %s into %s\n", h.file.Name.Name, filepath.Base(h.path), docPath)
 		return nil
 	}
-	if writeErr := os.WriteFile(docPath, docGo, 0o600); writeErr != nil { //#nosec G703 -- CLI tool, paths from args
+	if writeErr := writeFile(docPath, docGo, 0o600); writeErr != nil {
 		return fmt.Errorf("write %s: %w", docPath, writeErr)
 	}
-	if writeErr := os.WriteFile(h.path, remaining, 0o600); writeErr != nil { //#nosec G703 -- CLI tool, paths from args
+	if writeErr := writeFile(h.path, remaining, 0o600); writeErr != nil {
 		return fmt.Errorf("write %s: %w", h.path, writeErr)
 	}
 	fmt.Printf("moved the package comment of %s from %s into %s\n", h.file.Name.Name, filepath.Base(h.path), docPath)
