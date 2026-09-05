@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,957 |
-| Unit test functions                                   | 13,375 |
+| Total test functions                                  | 14,007 |
+| Unit test functions                                   | 13,425 |
 | E2E test functions                                    |    582 |
-| cmd test functions                                    |  2,408 |
-| Test files (internal/)                                |    503 |
+| cmd test functions                                    |  2,409 |
+| Test files (internal/)                                |    506 |
 | Test files (cmd/)                                     |    146 |
 | Test files (test/e2e/)                                |    229 |
 | Tool sub-packages tested                              |    176 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,478 | 82.2% |
-| `TestFunc` (no underscore)             |    968 |  6.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,511 | 10.8% |
+| `TestFunc_Scenario` (2-part)           | 11,522 | 82.3% |
+| `TestFunc` (no underscore)             |    967 |  6.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,518 | 10.8% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,214 |        134 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            308 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (176) |          8,445 |        355 | domain-specific GitLab tool handlers                                                            |
+| Core packages           |          2,241 |        136 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            322 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (176) |          8,453 |        355 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            582 |        229 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,408 |        146 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,957** |    **878** |                                                                                                 |
+| cmd packages            |          2,409 |        146 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,007** |    **881** |                                                                                                 |
 
 ### Core Packages
 
@@ -66,18 +66,18 @@
 | edition       |         5 |      n/a | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation   |       129 |      n/a | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
 | gatewaycompat |        19 |      n/a | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
-| gitlab        |        73 |      n/a | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
+| gitlab        |        75 |      n/a | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
 | mcpotel       |        76 |      n/a | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
 | oauth         |        72 |      n/a | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
 | progress      |        17 |      n/a | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
 | prompts       |       275 |      n/a | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
-| resources     |       180 |      n/a | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
+| resources     |       182 |      n/a | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
 | serverpool    |        93 |      n/a | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                                                                    |
 | subscriptions |        90 |      n/a | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |      n/a | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        37 |      n/a | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       807 |      n/a | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,214** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       830 |      n/a | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,241** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -88,7 +88,7 @@
 | mergerequests     |   242 |      n/a |    30 |
 | issues            |   223 |      n/a |    21 |
 | users             |   210 |      n/a |    38 |
-| dynamic           |   162 |      n/a |     2 |
+| dynamic           |   164 |      n/a |     2 |
 | jobs              |   151 |      n/a |    17 |
 | packages          |   131 |      n/a |     9 |
 | search            |   118 |      n/a |    10 |
@@ -118,7 +118,7 @@
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |      n/a |         8 |
 | accesstokens            |        97 |          2 |      n/a |        18 |
-| actioncatalog           |        40 |          5 |      n/a |         0 |
+| actioncatalog           |        44 |          5 |      n/a |         0 |
 | actioncompat            |        44 |          2 |      n/a |         1 |
 | adminspecs              |         6 |          1 |      n/a |        92 |
 | alertmanagement         |        29 |          2 |      n/a |         4 |
@@ -156,8 +156,8 @@
 | deploytokens            |        68 |          2 |      n/a |         9 |
 | dockerfiletemplates     |        15 |          1 |      n/a |         2 |
 | dorametrics             |        11 |          2 |      n/a |         2 |
-| dynamic                 |       162 |          8 |      n/a |         2 |
-| dynamiccatalog          |         3 |          1 |      n/a |         0 |
+| dynamic                 |       164 |          8 |      n/a |         2 |
+| dynamiccatalog          |         5 |          1 |      n/a |         0 |
 | elicitationtools        |        65 |          2 |      n/a |         4 |
 | enterpriseusers         |        35 |          3 |      n/a |         4 |
 | environments            |        56 |          2 |      n/a |         6 |
@@ -292,7 +292,7 @@
 | wikis                   |        61 |          2 |      n/a |         6 |
 | workitems               |        95 |          3 |      n/a |         6 |
 | workitemsavedviews      |        50 |          4 |      n/a |         7 |
-| **Total**               | **8,445** |    **355** |          | **1,175** |
+| **Total**               | **8,453** |    **355** |          | **1,175** |
 
 </details>
 

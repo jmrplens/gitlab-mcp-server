@@ -379,6 +379,11 @@ caveat: the per-credential difference is real, and at 130 MiB against 63 MiB
 in the series it is a factor of two, but it stays small beside the difference
 the surface makes to the response sizes.
 
+Where the per-credential memory went, and what was changed so that most of it
+is now shared between credentials, is worked through in
+[Resource Hot Spots](../development/resource-hot-spots.md), from the heap and
+CPU profiles the concurrency series writes.
+
 ## What this does not measure
 
 - **A real GitLab.** Every tool call answered here is answered on loopback, so
