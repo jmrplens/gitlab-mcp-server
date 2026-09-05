@@ -50,6 +50,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -189,6 +190,7 @@ type httpConfig struct {
 	revalidateInterval    time.Duration
 	poolIdleTimeout       time.Duration
 	actionTimeout         time.Duration
+	drainDelay            time.Duration
 	authMode              string
 	publicURL             string
 	resourceDocumentation string
@@ -299,6 +301,7 @@ func main() {
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval; 0 stops the periodic check, but an entry whose credential is older than "+serverpool.DefaultMaxCredentialAge.String()+" is still rebuilt")
 	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL server entry after this long unused (0 to disable)")
 	flag.DurationVar(&hcfg.actionTimeout, "action-timeout", config.DefaultActionTimeout, "Cancel an action still running after this long (0 to disable)")
+	flag.DurationVar(&hcfg.drainDelay, "drain-delay", config.DefaultDrainDelay, "After SIGTERM, keep the listener open and answer /health with 503 draining for this long before closing it, so a balancer takes the instance out of rotation first (0 closes at once)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
 	flag.StringVar(&hcfg.resourceDocumentation, "resource-documentation", "", "https URL published as RFC 9728 resource_documentation; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's OAuth setup guide")
@@ -558,6 +561,8 @@ FLAGS
   -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
   -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
   -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
+  -drain-delay dur          After SIGTERM, answer /health with 503 draining for this long before closing the
+                            listener, so a balancer takes the instance out first (default 0: close at once)
   -rate-limit-rps float     Per-server tools/call rate limit (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
@@ -641,6 +646,8 @@ ENVIRONMENT VARIABLES (HTTP mode)
   GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
   GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long, both transports
                                     (default 65m, 0 disables)
+  GITLAB_MCP_DRAIN_DELAY            After SIGTERM, answer /health with 503 draining this long before closing
+                                    the listener (default 0)
   SESSION_REVALIDATE_INTERVAL       Token re-validation interval (default 15m, 0 disables)
 
 JSON CONFIGURATION EXAMPLES
@@ -997,6 +1004,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		RevalidateInterval:    hcfg.revalidateInterval,
 		PoolIdleTimeout:       hcfg.poolIdleTimeout,
 		ActionTimeout:         hcfg.actionTimeout,
+		DrainDelay:            hcfg.drainDelay,
 		Stateless:             hcfg.stateless,
 		JSONResponse:          hcfg.jsonResponse,
 		MaxRequestBodyBytes:   hcfg.maxRequestBodyBytes,
@@ -1200,6 +1208,9 @@ func validateHTTPDurationConfig(cfg *config.Config) error {
 	}
 	if cfg.ActionTimeout < 0 || cfg.ActionTimeout > config.MaxActionTimeout {
 		return fmt.Errorf("--action-timeout %s is outside 0 (disabled) to %s", cfg.ActionTimeout, config.MaxActionTimeout)
+	}
+	if cfg.DrainDelay < 0 || cfg.DrainDelay > config.MaxDrainDelay {
+		return fmt.Errorf("--drain-delay %s is outside 0 to %s", cfg.DrainDelay, config.MaxDrainDelay)
 	}
 	return nil
 }
@@ -2403,8 +2414,11 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		"json_response", cfg.JSONResponse,
 		"trusted_proxy_header", cfg.TrustedProxyHeader,
 		"trusted_proxies", cfg.TrustedProxies,
+		"drain_delay", cfg.DrainDelay,
 		"version", version,
 		"commit", commit,
+		"build", buildIdentifier(version, commit),
+		"config_digest", configDigest(cfg),
 	)
 
 	if !cfg.Stateless {
@@ -2518,8 +2532,13 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// Mounting only the MCP endpoint there left such a deployment answering
 	// 404 for its own health check, server card and RFC 9728 document — the
 	// three things an operator and a scanner reach for first.
+	// Set once shutdown is requested, so /health answers 503 draining while
+	// the listener is still open. Per listener, not per process: see
+	// announceDraining.
+	var draining atomic.Bool
+	healthEndpoint := healthHandler(configDigest(cfg), &draining)
 	for _, path := range publicPaths(cfg, "/health") {
-		mux.HandleFunc("GET "+path, healthHandler)
+		mux.HandleFunc("GET "+path, healthEndpoint)
 	}
 	cardPreflight := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(headerAllowOrigin, "*")
@@ -2622,7 +2641,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	select {
 	case <-ctx.Done():
-		slog.InfoContext(ctx, "HTTP server shutdown requested")
+		announceDraining(ctx, &draining, cfg.DrainDelay)
 		return shutdownHTTPServer(ctx, httpServer)
 	case err := <-serverErr:
 		return fmt.Errorf("mcp server error (http): %w", err)
@@ -3211,26 +3230,6 @@ func startPeriodicCleanup(ctx context.Context, cleanup func()) {
 // deterministic without a mutable package-level clock.
 var processStartTime = time.Now()
 
-// healthResponse is the JSON body returned by the /health endpoint.
-//
-// Liveness is reported two ways on purpose. StartedAt is the stable fact: it
-// does not change between probes, so a monitor can cache it, deduplicate it,
-// and detect a restart by noticing it moved — the same reason Prometheus
-// exposes process_start_time_seconds rather than an uptime counter.
-// UptimeSeconds is the derived convenience value, in the unit the IETF health
-// check draft uses for it ("observedUnit": "s").
-type healthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-	// StartedAt is the process start instant in RFC 3339, matching how this
-	// project renders timestamps everywhere else.
-	StartedAt string `json:"started_at"`
-	// UptimeSeconds is whole seconds since StartedAt. Sub-second precision
-	// would be noise on an endpoint polled at probe intervals.
-	UptimeSeconds int64 `json:"uptime_seconds"`
-}
-
 // logIgnoredRequestOptions reports request-scoped configuration headers that
 // were intentionally ignored because the server was started with fixed CLI
 // configuration. The token is reduced to a masked suffix before logging.
@@ -3759,32 +3758,6 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 	})
 }
 
-// healthHandler responds with HTTP 200 and a JSON body for container healthchecks
-// and load-balancer probes. It does not require authentication.
-func healthHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set(hdrContentType, mimeJSON)
-	_ = json.NewEncoder(w).Encode(newHealthResponse(processStartTime, time.Now())) //nolint:errchkjson // healthcheck: client write errors are non-actionable
-}
-
-// newHealthResponse builds the /health body for a start instant observed at
-// now. Both instants are parameters so the uptime arithmetic can be tested
-// without mutating a package-level clock from concurrent tests.
-func newHealthResponse(startedAt, now time.Time) healthResponse {
-	// Truncating instead of rounding keeps uptime from reporting a second that
-	// has not fully elapsed. The clamp guards a caller that observes an instant
-	// before the start; time.Now within one process cannot, because its
-	// monotonic reading never goes backwards.
-	uptime := int64(now.Sub(startedAt).Seconds())
-	uptime = max(uptime, 0)
-	return healthResponse{
-		Status:        "ok",
-		Version:       version,
-		Commit:        commit,
-		StartedAt:     startedAt.UTC().Format(time.RFC3339),
-		UptimeSeconds: uptime,
-	}
-}
-
 // serverCardSubscriptions describes the subscription surface, or nil when this
 // deployment does not offer one.
 //
@@ -4122,7 +4095,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 // serveStdio starts the MCP server using stdio transport.
 // It blocks until the context is canceled or an error occurs.
 func serveStdio(ctx context.Context, server *mcp.Server) error {
-	slog.InfoContext(ctx, "starting MCP server", "transport", "stdio", "version", version, "commit", commit)
+	slog.InfoContext(ctx, "starting MCP server", "transport", "stdio", "version", version, "commit", commit, "build", buildIdentifier(version, commit))
 	// An IOTransport over filtered stdin rather than mcp.StdioTransport, which
 	// wraps os.Stdin directly: the SDK's read loop treats a message it cannot
 	// parse like a closed pipe and ends the session, so one malformed line

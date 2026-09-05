@@ -75,6 +75,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--oauth-cache-ttl`        | `15m`          | OAuth token identity cache TTL (range: 1m–2h)                                                                                                                                                                                                                                               |
 | `--oauth-client-uid`       | _(empty)_      | Comma-separated GitLab OAuth application uids whose tokens are admitted. Empty admits any credential the instance accepts; setting it also refuses personal access tokens, which belong to no application                                                                                   |
 | `--action-timeout`         | `65m`          | Cancel an action still running after this long; `0` disables it (upper bound: 24h). Falls back to `GITLAB_MCP_ACTION_TIMEOUT`                                                                                                                                                               |
+| `--drain-delay`            | `0`            | After `SIGTERM`, keep the listener open and answer `/health` with `503 draining` for this long before closing it, so a balancer that polls `/health` removes the instance before the close (upper bound: 5m); `0` closes at once. Falls back to `GITLAB_MCP_DRAIN_DELAY`                    |
 | `--pool-idle-timeout`      | `1h`           | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h)                                                                                                                                          |
 | `--revalidate-interval`    | `15m`          | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                                                                             |
 | `--rate-limit-rps`         | `10`           | Per-server rate limit, in req/s, on every call that reaches GitLab: `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get` (`0` disables it); on by default because an HTTP deployment is shared                                                      |
@@ -587,14 +588,20 @@ curl -s http://localhost:8080/health
 ```json
 {
   "status": "ok",
-  "version": "2.6.6",
+  "version": "2.8.0",
   "commit": "a6561ff7",
+  "build": "2.8.0+a6561ff",
+  "config_digest": "9f2a7c41e0b3",
   "started_at": "2026-08-22T09:14:03Z",
   "uptime_seconds": 1209600
 }
 ```
 
 `started_at` is the process start instant (RFC 3339, UTC) and `uptime_seconds` is whole seconds since then. Both are reported because they do different jobs: `started_at` is byte-identical across probes, so a monitor can cache it and spot a restart by noticing it moved, while `uptime_seconds` is the value you read at a glance.
+
+`build` is the one label to display: the release the build is closest to plus the short commit it was built from, with `.dirty` when the tree had uncommitted changes, so a release binary and a build from `main` report the same shape where `version` alone gives one a plain number and the other a Go pseudo-version. `config_digest` is twelve hex characters over the settings that decide what a client sees (tool surface, capability surface, meta parameter schema, tier and whether it was pinned or is detected per credential, scope detection, read-only, safe mode and the excluded tools): every instance behind one balancer must report the same one, or one of them serves a different catalog and nothing else detects that. It is a fingerprint for comparison, not a secret: the settings it covers are few and public, so whoever can read it can also work out which combination produced it.
+
+Once shutdown has been requested the same endpoint answers `503` with `"status": "draining"` and `Cache-Control: no-store`. By default the listener closes right after, so set `--drain-delay` (`GITLAB_MCP_DRAIN_DELAY`) to at least one probe interval when a balancer polls `/health`: the listener then stays open that long answering `503`, the balancer removes the instance, and only then do the in-flight requests get their drain.
 
 `/health` reports only that the process is up — it performs no GitLab round-trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
 

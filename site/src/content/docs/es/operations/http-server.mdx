@@ -75,6 +75,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--oauth-cache-ttl`        | `15m`             | TTL de caché de identidad de token OAuth (rango: 1m–2h)                                                                                                                                                                                                                                                                                     |
 | `--oauth-client-uid`       | _(vacío)_         | uids de aplicaciones OAuth de GitLab, separados por comas, cuyos tokens se admiten. Vacío admite cualquier credencial que acepte la instancia; ponerlo rechaza también los tokens de acceso personal, que no pertenecen a ninguna aplicación                                                                                                |
 | `--action-timeout`         | `65m`             | Cancela una acción que siga en marcha tras este tiempo; `0` lo desactiva (límite: 24h). Toma su valor de `GITLAB_MCP_ACTION_TIMEOUT` si no se pasa                                                                                                                                                                                          |
+| `--drain-delay`            | `0`               | Tras `SIGTERM`, mantiene el listener abierto y responde `/health` con `503 draining` durante este tiempo antes de cerrarlo, para que un balanceador que sondea `/health` retire la instancia antes del cierre (límite: 5m); `0` cierra al instante. Toma su valor de `GITLAB_MCP_DRAIN_DELAY` si no se pasa                                 |
 | `--pool-idle-timeout`      | `1h`              | Recupera una entrada del pool (token + URL de GitLab) tras este tiempo sin usarse; `0` mantiene las entradas hasta que el límite de tamaño del pool las expulse (límite: 24h)                                                                                                                                                               |
 | `--revalidate-interval`    | `15m`             | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                                                                                                                                                                                                                                       |
 | `--rate-limit-rps`         | `10`              | Límite de tasa por servidor, en req/s, sobre toda llamada que llega a GitLab: `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get` (`0` lo desactiva); activo por defecto porque un despliegue HTTP es compartido                                                                                   |
@@ -587,14 +588,20 @@ curl -s http://localhost:8080/health
 ```json
 {
   "status": "ok",
-  "version": "2.6.6",
+  "version": "2.8.0",
   "commit": "a6561ff7",
+  "build": "2.8.0+a6561ff",
+  "config_digest": "9f2a7c41e0b3",
   "started_at": "2026-08-22T09:14:03Z",
   "uptime_seconds": 1209600
 }
 ```
 
 `started_at` es el instante de arranque del proceso (RFC 3339, UTC) y `uptime_seconds` son los segundos enteros transcurridos desde entonces. Se publican ambos porque hacen cosas distintas: `started_at` es idéntico byte a byte entre sondas, así que un monitor puede cachearlo y detectar un reinicio al ver que cambió, mientras que `uptime_seconds` es el valor que se lee de un vistazo.
+
+`build` es la etiqueta que conviene mostrar: la release más cercana a la compilación más el commit corto del que se construyó, con `.dirty` cuando el árbol tenía cambios sin confirmar, de modo que un binario de release y una compilación desde `main` publican la misma forma, mientras que `version` a secas da a uno un número liso y al otro una pseudo-versión de Go. `config_digest` son doce caracteres hexadecimales sobre los ajustes que deciden lo que ve un cliente (superficie de herramientas, superficie de capacidades, esquema de parámetros de las meta-herramientas, tier y si se fijó o se detecta por credencial, detección de ámbitos del token, solo lectura, modo seguro y herramientas excluidas): todas las instancias detrás de un balanceador deben publicar el mismo, o una de ellas sirve un catálogo distinto y nada más lo detecta. Es una huella para comparar, no un secreto: los ajustes que cubre son pocos y públicos, así que quien pueda leerla puede deducir qué combinación la produjo.
+
+Una vez solicitada la parada, el mismo endpoint responde `503` con `"status": "draining"` y `Cache-Control: no-store`. Por defecto el listener se cierra justo después, así que fija `--drain-delay` (`GITLAB_MCP_DRAIN_DELAY`) en al menos un intervalo de sondeo cuando un balanceador consulte `/health`: el listener se mantiene abierto ese tiempo respondiendo `503`, el balanceador retira la instancia y solo entonces las peticiones en curso reciben su drenaje.
 
 `/health` solo informa de que el proceso está en marcha — no hace ninguna llamada a GitLab. Para verificar la conectividad de extremo a extremo de un token concreto, llama a un método MCP autenticado:
 
