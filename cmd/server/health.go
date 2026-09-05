@@ -185,9 +185,16 @@ func shortCommit(commit string) string {
 // them, or one misconfigured node serves a different catalog to whichever
 // clients reach it, and nothing else detects that.
 //
-// The digest is of the values, not a hash of anything secret: none of these
-// is one, and none is recoverable from twelve hex characters. Order-free
-// where the setting is a set.
+// The tier enters twice: its value, and whether it was pinned or is detected
+// per credential, since a node pinned to free and a node detecting the tier
+// hold the same Tier and serve different catalogs to a Premium token. Scope
+// detection is a setting for the same reason: skipping it registers every
+// tool for a read_api token that would otherwise get the read-only surface.
+//
+// The digest is a fingerprint for comparison, not a secret. The settings it
+// covers are few and public, so whoever reads it can work out which
+// combination produced it; nothing here is a credential. Order-free where
+// the setting is a set.
 func configDigest(cfg *config.Config) string {
 	if cfg == nil {
 		return ""
@@ -199,6 +206,8 @@ func configDigest(cfg *config.Config) string {
 		"capability_surface=" + cfg.CapabilitySurface,
 		"meta_param_schema=" + cfg.MetaParamSchema,
 		"tier=" + cfg.Tier.String(),
+		"tier_explicit=" + strconv.FormatBool(cfg.TierExplicit),
+		"ignore_scopes=" + strconv.FormatBool(cfg.IgnoreScopes),
 		"read_only=" + strconv.FormatBool(cfg.ReadOnly),
 		"safe_mode=" + strconv.FormatBool(cfg.SafeMode),
 		"exclude_tools=" + strings.Join(excluded, ","),

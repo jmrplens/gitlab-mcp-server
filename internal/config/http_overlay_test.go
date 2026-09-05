@@ -232,6 +232,16 @@ func presentVariableCases() []presentVariableCase {
 			},
 		},
 		{
+			name: "an explicit zero drain delay closes the listener at once",
+			env: map[string]string{
+				"DRAIN_DELAY": "0",
+			},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertDur(t, "DrainDelay", o.DrainDelay, 0)
+			},
+		},
+		{
 			name: "auth and rate limiting",
 			env: map[string]string{
 				"AUTH_MODE":        "oauth",

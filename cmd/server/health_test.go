@@ -84,6 +84,8 @@ func TestConfigDigest_AgreesOnlyWhenTheServedSurfaceWouldAgree(t *testing.T) {
 		{name: "another tool surface", mutate: func(c *config.Config) { c.ToolSurface = "meta" }, same: false},
 		{name: "another capability surface", mutate: func(c *config.Config) { c.CapabilitySurface = "minimal" }, same: false},
 		{name: "another parameter schema", mutate: func(c *config.Config) { c.MetaParamSchema = "full" }, same: false},
+		{name: "a pinned tier instead of a detected one", mutate: func(c *config.Config) { c.TierExplicit = true }, same: false},
+		{name: "scope detection skipped", mutate: func(c *config.Config) { c.IgnoreScopes = true }, same: false},
 		{name: "read-only", mutate: func(c *config.Config) { c.ReadOnly = true }, same: false},
 		{name: "safe mode", mutate: func(c *config.Config) { c.SafeMode = true }, same: false},
 		{name: "one more exclusion", mutate: func(c *config.Config) { c.ExcludeTools = append(c.ExcludeTools, "c") }, same: false},
