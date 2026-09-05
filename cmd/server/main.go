@@ -188,6 +188,7 @@ type httpConfig struct {
 	sessionTimeout        time.Duration
 	revalidateInterval    time.Duration
 	poolIdleTimeout       time.Duration
+	actionTimeout         time.Duration
 	authMode              string
 	publicURL             string
 	resourceDocumentation string
@@ -266,6 +267,7 @@ func main() {
 	var showVersion bool
 	var shutdownPeers bool
 	var probeHealth bool
+	var envFile string
 	var useHTTP bool
 	var transport string
 	var toolSearch string
@@ -275,6 +277,7 @@ func main() {
 	flag.BoolVar(&shutdownPeers, "shutdown", false, "Terminate all running instances and exit")
 	flag.BoolVar(&probeHealth, "probe", false, "Ask the running instance's /health and exit 0 when it answers (the container HEALTHCHECK); reads the listener off that instance's flags, or probes the URL, unix:<path> or host:port given after the flag, an https one pinned to --tls-cert when that is given too")
 	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
+	flag.StringVar(&envFile, "env-file", "", "Dotenv file to load besides ~/.gitlab-mcp-server.env; the same setting as GITLAB_MCP_ENV_FILE, and wins over it")
 	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
 	flag.StringVar(&transport, "transport", "", "Transport to serve: stdio, http, or auto. Empty defers to --http. auto serves HTTP only when stdin is "+os.DevNull+", which is what a container started without -i gives, and stdio for the pipe every MCP client provides")
@@ -295,6 +298,7 @@ func main() {
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval; 0 stops the periodic check, but an entry whose credential is older than "+serverpool.DefaultMaxCredentialAge.String()+" is still rebuilt")
 	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL server entry after this long unused (0 to disable)")
+	flag.DurationVar(&hcfg.actionTimeout, "action-timeout", config.DefaultActionTimeout, "Cancel an action still running after this long (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
 	flag.StringVar(&hcfg.resourceDocumentation, "resource-documentation", "", "https URL published as RFC 9728 resource_documentation; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's OAuth setup guide")
@@ -340,6 +344,13 @@ func main() {
 	flag.BoolVar(&showHelp, "help", false, "Show full help with flags, env vars, and examples")
 
 	flag.Parse()
+	if envFile != "" {
+		// The flag is the same setting as GITLAB_MCP_ENV_FILE and wins over
+		// it, the way every flag typed on the command line wins over its
+		// variable. Set before anything resolves the variable: the loader
+		// reads it once per process, on its first use.
+		_ = os.Setenv(config.EnvFileVar, envFile)
+	}
 	applyEnvBackedFlags()
 
 	// Before applyLocalFilesystemPolicy, which asks what transport this
@@ -476,6 +487,8 @@ FLAGS
   -h, -help                 Show this help message
   -version                  Print version and exit
   -shutdown                 Terminate all running instances and exit
+  -env-file path            Dotenv file to load besides ~/.gitlab-mcp-server.env; the same setting as
+                            GITLAB_MCP_ENV_FILE, and wins over it
   -probe [target]           Ask the running instance's /health and exit 0 when it answers (the container
                             HEALTHCHECK). The listener is read off that instance's own flags, a TLS one
                             pinned to its -tls-cert; a URL, unix:<path> or host:port after the flag
@@ -544,6 +557,7 @@ FLAGS
  Limits and pooling (HTTP mode)
   -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
   -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
+  -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -rate-limit-rps float     Per-server tools/call rate limit (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
@@ -625,6 +639,8 @@ ENVIRONMENT VARIABLES (HTTP mode)
                                     (default 100)
   SESSION_TIMEOUT                   Idle MCP session timeout; --stateless=false only (default 30m)
   GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
+  GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long, both transports
+                                    (default 65m, 0 disables)
   SESSION_REVALIDATE_INTERVAL       Token re-validation interval (default 15m, 0 disables)
 
 JSON CONFIGURATION EXAMPLES
@@ -843,6 +859,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
+	toolutil.SetActionTimeout(cfg.ActionTimeout)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
 	logDeprecatedEnvNames()
@@ -979,6 +996,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		SessionTimeout:        hcfg.sessionTimeout,
 		RevalidateInterval:    hcfg.revalidateInterval,
 		PoolIdleTimeout:       hcfg.poolIdleTimeout,
+		ActionTimeout:         hcfg.actionTimeout,
 		Stateless:             hcfg.stateless,
 		JSONResponse:          hcfg.jsonResponse,
 		MaxRequestBodyBytes:   hcfg.maxRequestBodyBytes,
@@ -1180,6 +1198,9 @@ func validateHTTPDurationConfig(cfg *config.Config) error {
 	if cfg.PoolIdleTimeout > config.MaxPoolIdleTimeout {
 		return fmt.Errorf("--pool-idle-timeout %s exceeds maximum of %s", cfg.PoolIdleTimeout, config.MaxPoolIdleTimeout)
 	}
+	if cfg.ActionTimeout < 0 || cfg.ActionTimeout > config.MaxActionTimeout {
+		return fmt.Errorf("--action-timeout %s is outside 0 (disabled) to %s", cfg.ActionTimeout, config.MaxActionTimeout)
+	}
 	return nil
 }
 
@@ -1223,6 +1244,7 @@ func runStdio(ctx context.Context) error {
 	logLegacyEnterpriseEnvDeprecation(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
+	toolutil.SetActionTimeout(cfg.ActionTimeout)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
 	client, err := gitlabclient.NewClient(cfg)

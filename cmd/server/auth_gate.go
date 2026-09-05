@@ -411,7 +411,7 @@ func (g *mcpServerGate) checkSessionOwnership(r *http.Request, server *mcp.Serve
 	}
 	owned, found := g.sessionTags.Load(server)
 	if !found || owned != presented {
-		slog.WarnContext(r.Context(), "request rejected: session ID does not belong to the presented credential")
+		refusalLog.log(r.Context(), slog.LevelWarn, "request rejected: session ID does not belong to the presented credential")
 		return sessionOwnershipFailure()
 	}
 	return nil
@@ -432,7 +432,11 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	source := transportSource(r)
 
 	if g.blockedByBudget(ip, source) {
-		slog.WarnContext(r.Context(), "request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
+		// Named apart from the bearer guard's line: the throttle keys on the
+		// message, and one gate's window must not swallow the other's first
+		// report. The source is what spent the budget; behind a proxy the ip
+		// is often whoever arrived next.
+		refusalLog.log(r.Context(), slog.LevelWarn, "request blocked: too many authentication failures (legacy auth mode)", "ip", ip, "source", source) //#nosec G706 -- slog structured args are not interpolated
 		return nil, &gateFailure{
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
@@ -444,7 +448,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	token := g.extractCredential(r)
 	if token == "" {
 		g.chargeFailure(ip, source)
-		slog.InfoContext(r.Context(), "request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
@@ -454,7 +458,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	}
 
 	if err := requireExplicitInstance(r, g.gitlabURLs); err != nil {
-		slog.InfoContext(r.Context(), "request rejected: no instance selected on a multi-instance deployment",
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: no instance selected on a multi-instance deployment",
 			"instances", len(g.gitlabURLs))
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
@@ -472,14 +476,14 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		// told to send the header rather than to go and find the operator, and
 		// logged at INFO because nothing here is the deployment's fault.
 		if errors.Is(err, serverpool.ErrMissingGitLabURL) {
-			slog.InfoContext(r.Context(), "request rejected: no instance selected and none is published")
+			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: no instance selected and none is published")
 			return nil, &gateFailure{
 				status:  http.StatusBadRequest,
 				code:    errCodeInvalidRequest,
 				message: capitalizeFirst(err.Error()) + ".",
 			}
 		}
-		slog.ErrorContext(r.Context(), "request rejected: invalid GITLAB-URL header", "error", err)
+		refusalLog.log(r.Context(), slog.LevelError, "request rejected: invalid GITLAB-URL header", "error", err)
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
 			code:    errCodeInvalidRequest,
@@ -495,7 +499,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		// limiter — this is the path that stops a stream of invented tokens
 		// from churning the pool.
 		g.chargeFailure(ip, source)
-		slog.InfoContext(r.Context(), "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,

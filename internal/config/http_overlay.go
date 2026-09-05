@@ -47,6 +47,7 @@ type HTTPEnvOverlay struct {
 	SessionTimeout     *time.Duration
 	PoolIdleTimeout    *time.Duration
 	RevalidateInterval *time.Duration
+	ActionTimeout      *time.Duration
 
 	AuthMode       *string
 	PublicURL      *string
@@ -172,6 +173,7 @@ func loadOverlayLimits(o *HTTPEnvOverlay) error {
 		{"SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout, false, &o.SessionTimeout},
 		{"POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout, true, &o.PoolIdleTimeout},
 		{"SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval, true, &o.RevalidateInterval},
+		{"ACTION_TIMEOUT", DefaultActionTimeout, MaxActionTimeout, true, &o.ActionTimeout},
 	}
 	for _, d := range durations {
 		if !envPresent(d.name) {

@@ -365,8 +365,11 @@ govulncheck ./...
 
 ## Rate Limiting Model
 
-The server ships a token-bucket rate limiter that gates `tools/call`
-invocations. It exists to protect operators against runaway agents and noisy
+The server ships a token-bucket rate limiter that gates every call that reaches
+GitLab with the caller's credential: `tools/call`, `resources/read`,
+`resources/subscribe`, `subscriptions/listen` and `prompts/get` draw on one
+bucket, since a limit that metered tool calls alone left the other doors open to
+the same upstream. It exists to protect operators against runaway agents and noisy
 clients, not to replace upstream throttling: GitLab itself remains the canonical
 rate-limit authority.
 
@@ -414,17 +417,29 @@ limiter scoped to **one MCP server instance**:
 
 ### Behavior on excess
 
-When the bucket is empty the middleware short-circuits the call and returns a
-`CallToolResult` with `IsError: true` and a human-readable hint:
+When the bucket is empty the middleware short-circuits the call before any
+handler runs. The refusal takes the shape the method can carry. A `tools/call`
+is answered with a `CallToolResult` with `IsError: true` and a human-readable
+hint:
 
 ```text
 Rate limit exceeded for `gitlab_mr_list`. Wait a moment and retry, or raise --rate-limit-rps if this is sustained traffic.
 ```
 
-The error is returned as a tool result (not a JSON-RPC error) so the LLM can
-parse it and decide whether to back off, batch differently, or surface the
-problem to the user. `tools/list`, `resources/*`, and `prompts/*` are **not**
-gated.
+A tool result rather than a JSON-RPC error, so the LLM can parse it and decide
+whether to back off, batch differently, or surface the problem to the user. A
+`resources/read`, `resources/subscribe`, `subscriptions/listen` or
+`prompts/get` has no error flag in its result, so it is refused with a JSON-RPC
+error carrying code `-42900`, the code that mirrors HTTP 429 on the transport
+gates, and a message naming the method:
+
+```text
+rate limit exceeded for resources/read; retry after a short backoff
+```
+
+All five draw on the same bucket, since each reaches GitLab with the caller's
+credential. `tools/list`, `resources/list`, `prompts/list`, `initialize` and
+the other methods the server answers from its own catalog are **not** gated.
 
 ### Defense-in-depth
 

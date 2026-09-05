@@ -32,7 +32,7 @@ func FormatMarkdown(p Output) string {
 	fmt.Fprintf(&b, toolutil.FmtMdVisibility, p.Visibility)
 	fmt.Fprintf(&b, "- **Default Branch**: %s\n", p.DefaultBranch)
 	if p.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, p.Description)
+		toolutil.WriteDescription(&b, p.Description)
 	}
 	if p.Namespace != nil && p.Namespace.FullPath != "" {
 		fmt.Fprintf(&b, "- **Namespace**: %s\n", p.Namespace.FullPath)

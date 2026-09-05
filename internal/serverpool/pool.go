@@ -39,6 +39,11 @@ type poolEntry struct {
 	createdAt     time.Time
 	lastValidated time.Time
 	lastUsed      time.Time
+	// rejected is set the moment GitLab answers 401 to a call on this entry,
+	// before the eviction that follows has taken the lock, so a request that
+	// finds the entry in between rebuilds instead of reusing a credential
+	// GitLab has already refused.
+	rejected atomic.Bool
 }
 
 // UserIdentity is the GitLab user a pooled credential belongs to.
@@ -130,22 +135,30 @@ type Metrics struct {
 	// StaleCredentialEvictions counts entries dropped because their
 	// credential had not been checked within [DefaultMaxCredentialAge].
 	StaleCredentialEvictions atomic.Int64
+	// RejectedCredentialEvictions counts entries dropped because GitLab
+	// answered a call made with their credential with 401: the token was
+	// revoked or expired while the entry was live, and the first refused
+	// data call is the signal rather than the next periodic check.
+	RejectedCredentialEvictions atomic.Int64
 }
 
 // Snapshot is a point-in-time copy of pool [Metrics] plus current state.
 // Safe for JSON serialization and cross-goroutine use.
 type Snapshot struct {
-	Hits                     int64     `json:"hits"`
-	Misses                   int64     `json:"misses"`
-	Evictions                int64     `json:"evictions"`
-	IdleEvictions            int64     `json:"idle_evictions"`
-	RevalidationsFailed      int64     `json:"revalidations_failed"`
-	RevalidationsSucceeded   int64     `json:"revalidations_succeeded"`
-	RevalidationsTransient   int64     `json:"revalidations_transient"`
-	StaleCredentialEvictions int64     `json:"stale_credential_evictions"`
-	CurrentSize              int       `json:"current_size"`
-	MaxSize                  int       `json:"max_size"`
-	CreatedAt                time.Time `json:"created_at"`
+	Hits                     int64 `json:"hits"`
+	Misses                   int64 `json:"misses"`
+	Evictions                int64 `json:"evictions"`
+	IdleEvictions            int64 `json:"idle_evictions"`
+	RevalidationsFailed      int64 `json:"revalidations_failed"`
+	RevalidationsSucceeded   int64 `json:"revalidations_succeeded"`
+	RevalidationsTransient   int64 `json:"revalidations_transient"`
+	StaleCredentialEvictions int64 `json:"stale_credential_evictions"`
+	// RejectedCredentialEvictions counts entries dropped on a 401 from a
+	// call made with their credential.
+	RejectedCredentialEvictions int64     `json:"rejected_credential_evictions"`
+	CurrentSize                 int       `json:"current_size"`
+	MaxSize                     int       `json:"max_size"`
+	CreatedAt                   time.Time `json:"created_at"`
 }
 
 // ServerPool maintains a bounded set of [*mcp.Server] instances keyed by
@@ -366,9 +379,17 @@ func (p *ServerPool) GetOrCreateWithScopes(token, gitlabURL string, scopes []str
 	// Read under the same lock that guards the field: lastValidated is
 	// written by the revalidation goroutine.
 	stale := ok && p.maxCredentialAge > 0 && time.Since(cached.lastValidated) > p.maxCredentialAge
+	rejected := ok && cached.rejected.Load()
 	p.mu.RUnlock()
 
 	switch {
+	case ok && rejected:
+		// GitLab refused this entry's credential on a call and the eviction
+		// that follows has not taken the lock yet. Dropping it here, rather
+		// than serving it once more, sends this request down the slow path,
+		// which rebuilds and re-verifies; the pending eviction then finds
+		// nothing under the key and does nothing.
+		p.dropRejectedEntry(key, cached)
 	case ok && stale:
 		// The credential behind this entry has not been checked with GitLab
 		// inside the ceiling, so the entry stops being an answer. Dropping it
@@ -478,12 +499,72 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 		return nil, errors.New("creating MCP server for pool: factory returned no server")
 	}
 
-	return &poolEntry{
+	entry := &poolEntry{
 		server:       server,
 		client:       client,
 		serverConfig: entryCfg,
 		identity:     resolveIdentity(p.lifetime(), client),
-	}, nil
+	}
+	// The first data call GitLab refuses is the revocation signal. Without
+	// this, a token revoked while its entry was live kept being served until
+	// the periodic re-check, up to an hour, and every call in between was
+	// relayed and refused one by one.
+	//
+	// Off the calling goroutine, because that goroutine may hold the pool's
+	// lock: the revalidation sweep verifies credentials under it, and a 401
+	// there would otherwise wait on the sweep for a lock the sweep holds.
+	// The call fires once per client, so this is one goroutine per revoked
+	// credential, never per request.
+	// The mark is synchronous and the drop is not: between the two, a
+	// request racing for the same key sees the mark on the fast path and
+	// rebuilds rather than reusing the refused credential.
+	key := sessionKey(token, gitlabURL)
+	client.SetOnUnauthorized(func() {
+		entry.rejected.Store(true)
+		go p.evictRejectedCredential(key, entry)
+	})
+	return entry, nil
+}
+
+// evictRejectedCredential drops entry, if it is still the one under key: a
+// concurrent request may already have rebuilt the key, and that entry's
+// credential has just been verified.
+func (p *ServerPool) evictRejectedCredential(key string, entry *poolEntry) {
+	// On a goroutine of its own, behind the same recover the sweeps run
+	// behind: dropping the entry calls back into code the pool does not own,
+	// and a panic there must not take the process with it. The lock is
+	// released by a defer for the same reason, so the panic cannot leave it
+	// held.
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("server pool: eviction of a rejected credential panicked", "panic", r)
+		}
+	}()
+	gitlabURL, size, dropped := p.dropRejectedEntry(key, entry)
+	if !dropped {
+		return
+	}
+	slog.Info("server pool: gitlab rejected the credential on a call, dropping the entry",
+		"gitlab_url", gitlabURL,
+		"pool_size", size)
+}
+
+// dropRejectedEntry removes entry under the lock, if it is still the one
+// under key, and reports what to log about it.
+func (p *ServerPool) dropRejectedEntry(key string, entry *poolEntry) (gitlabURL string, size int, dropped bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	current, ok := p.entries[key]
+	if !ok || current != entry {
+		return "", 0, false
+	}
+	gitlabURL, _ = poolEntryConfigLogValues(entry)
+	if entry.element != nil {
+		p.lru.Remove(entry.element)
+	}
+	p.metrics.RejectedCredentialEvictions.Add(1)
+	p.dropEntry(key)
+	return gitlabURL, len(p.entries), true
 }
 
 // resolveIdentity looks up the GitLab user behind a pooled credential.
@@ -820,17 +901,18 @@ func (p *ServerPool) Stats() Snapshot {
 	p.mu.RUnlock()
 
 	return Snapshot{
-		Hits:                     p.metrics.Hits.Load(),
-		Misses:                   p.metrics.Misses.Load(),
-		Evictions:                p.metrics.Evictions.Load(),
-		IdleEvictions:            p.metrics.IdleEvictions.Load(),
-		RevalidationsFailed:      p.metrics.RevalidationsFailed.Load(),
-		RevalidationsSucceeded:   p.metrics.RevalidationsSucceeded.Load(),
-		RevalidationsTransient:   p.metrics.RevalidationsTransient.Load(),
-		StaleCredentialEvictions: p.metrics.StaleCredentialEvictions.Load(),
-		CurrentSize:              size,
-		MaxSize:                  p.maxSize,
-		CreatedAt:                p.createdAt,
+		Hits:                        p.metrics.Hits.Load(),
+		Misses:                      p.metrics.Misses.Load(),
+		Evictions:                   p.metrics.Evictions.Load(),
+		IdleEvictions:               p.metrics.IdleEvictions.Load(),
+		RevalidationsFailed:         p.metrics.RevalidationsFailed.Load(),
+		RevalidationsSucceeded:      p.metrics.RevalidationsSucceeded.Load(),
+		RevalidationsTransient:      p.metrics.RevalidationsTransient.Load(),
+		StaleCredentialEvictions:    p.metrics.StaleCredentialEvictions.Load(),
+		RejectedCredentialEvictions: p.metrics.RejectedCredentialEvictions.Load(),
+		CurrentSize:                 size,
+		MaxSize:                     p.maxSize,
+		CreatedAt:                   p.createdAt,
 	}
 }
 

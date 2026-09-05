@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/time/rate"
 
@@ -64,6 +65,22 @@ const defaultThrottleWindow = 10 * time.Second
 // name a refusal is logged under when the call was refused before the tool it
 // names could be read.
 const methodToolsCall = "tools/call"
+
+// The other methods that reach GitLab with the caller's credential. They
+// share tools/call's bucket, because to GitLab a read is a read whichever
+// MCP method asked for it, and a limit that metered one door left the other
+// three open.
+const (
+	methodResourcesRead       = "resources/read"
+	methodResourcesSubscribe  = "resources/subscribe"
+	methodSubscriptionsListen = "subscriptions/listen"
+	methodPromptsGet          = "prompts/get"
+)
+
+// rateLimitedErrorCode is the JSON-RPC code a refused resource or prompt
+// request carries. It mirrors HTTP 429 the way the transport gates' code
+// does, so a client sees one number for "come back later" on both layers.
+const rateLimitedErrorCode = -42900
 
 // NewRateLimiter builds a RateLimiter with the given rate (requests per
 // second) and burst (maximum concurrent tokens in the bucket). Returns nil
@@ -149,19 +166,26 @@ func (r *RateLimiter) allow() bool {
 // same one or none at all.
 const completionBurstFactor = 10
 
-// AttachRateLimit registers a receiving middleware that gates `tools/call` and
-// `completion/complete` when their buckets are empty.
+// AttachRateLimit registers a receiving middleware that gates every method
+// that reaches GitLab with the caller's credential, and `completion/complete`,
+// when their buckets are empty.
 //
-// The two are gated differently because they fail differently. A refused tool
-// call is reported as an MCP tool error result (IsError: true) rather than a
-// JSON-RPC error, so the model receives a structured, retryable diagnostic and
-// the agent loop can back off. A refused completion returns an empty completion
-// instead: the documented contract for this surface is that autocomplete is
-// never blocked, and an error in a completion popup is worse than no
-// suggestions.
+// `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`
+// and `prompts/get` draw on one bucket: each is a request to GitLab on the
+// caller's behalf, and a limit that metered tool calls alone left the other
+// doors open to the same upstream. They are refused differently because they
+// fail differently. A refused tool call is reported as an MCP tool error
+// result (IsError: true) rather than a JSON-RPC error, so the model receives a
+// structured, retryable diagnostic and the agent loop can back off. A refused
+// resource or prompt request is a JSON-RPC error carrying the code that
+// mirrors HTTP 429, since those results have no error flag of their own. A
+// refused completion returns an empty completion instead: the documented
+// contract for this surface is that autocomplete is never blocked, and an
+// error in a completion popup is worse than no suggestions.
 //
-// Every other method (initialize, tools/list, resources/*, prompts/*) bypasses
-// the limiter. If limiter is nil, this function is a no-op.
+// Every other method (initialize, tools/list, resources/list, prompts/list)
+// bypasses the limiter: none of them reaches GitLab. If limiter is nil, this
+// function is a no-op.
 func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 	if server == nil || limiter == nil {
 		return
@@ -175,6 +199,11 @@ func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 					result := rateLimitedResult(req)
 					limiter.reportRefusal(ctx, extractToolName(req))
 					return result, nil
+				}
+			case methodResourcesRead, methodResourcesSubscribe, methodSubscriptionsListen, methodPromptsGet:
+				if !limiter.allow() {
+					limiter.reportRefusal(ctx, method)
+					return nil, rateLimitedError(method)
 				}
 			case "completion/complete":
 				if !completions.allow() {
@@ -195,6 +224,16 @@ func (r *RateLimiter) scaled(factor int) *RateLimiter {
 	}
 	return &RateLimiter{
 		limiter: rate.NewLimiter(r.limiter.Limit()*rate.Limit(factor), r.limiter.Burst()*factor),
+	}
+}
+
+// rateLimitedError is the refusal for a method whose result carries no error
+// flag: a JSON-RPC error with the 429-mirroring code, and a message that says
+// what to do.
+func rateLimitedError(method string) error {
+	return &jsonrpc.Error{
+		Code:    rateLimitedErrorCode,
+		Message: fmt.Sprintf("rate limit exceeded for %s; retry after a short backoff", method),
 	}
 }
 

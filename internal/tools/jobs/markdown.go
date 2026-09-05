@@ -85,9 +85,7 @@ func FormatTraceMarkdown(t TraceOutput) string {
 	if t.Truncated {
 		b.WriteString(toolutil.EmojiWarning + " *Trace truncated at 100KB.*\n\n")
 	}
-	b.WriteString("```\n")
-	b.WriteString(t.Trace)
-	b.WriteString(fmtCodeFenceEnd)
+	b.WriteString(toolutil.MarkdownFencedBlock("", t.Trace))
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_job_get` to see job details",
@@ -156,9 +154,9 @@ func FormatSingleArtifactMarkdown(out SingleArtifactOutput) string {
 	if out.Truncated {
 		b.WriteString("- " + toolutil.EmojiWarning + " **Truncated**: content exceeds 1MB limit\n")
 	}
-	b.WriteString(fmtCodeFenceEnd)
-	b.WriteString(out.Content)
-	b.WriteString(fmtCodeFenceEnd)
+	// The fence is sized to the content: an artifact that contains a fence
+	// marker of its own must not close the block early.
+	b.WriteString("\n" + toolutil.MarkdownFencedBlock("", out.Content))
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_job_artifacts` to download the full artifacts archive",

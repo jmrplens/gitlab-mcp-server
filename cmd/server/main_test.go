@@ -7300,6 +7300,16 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			},
 			wantErr: "proxy.internal",
 		},
+		{
+			name:    "an action timeout past its maximum",
+			mutate:  func(c *config.Config) { c.ActionTimeout = config.MaxActionTimeout + time.Hour },
+			wantErr: "action-timeout",
+		},
+		{
+			name:    "a negative action timeout",
+			mutate:  func(c *config.Config) { c.ActionTimeout = -time.Second },
+			wantErr: "action-timeout",
+		},
 	}
 
 	for _, tt := range tests {

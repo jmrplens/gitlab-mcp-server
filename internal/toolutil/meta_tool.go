@@ -2021,6 +2021,8 @@ func WrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Conte
 		if err != nil {
 			return nil, err
 		}
+		ctx, cancel := withActionDeadline(ctx)
+		defer cancel()
 		return fn(ctx, client, input)
 	}
 }
@@ -2045,6 +2047,8 @@ func WrapActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx co
 		if err != nil {
 			return nil, err
 		}
+		ctx, cancel := withActionDeadline(ctx)
+		defer cancel()
 		return fn(ctx, RequestFromContext(ctx), client, input)
 	}
 }

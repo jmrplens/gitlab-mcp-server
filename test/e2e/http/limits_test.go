@@ -39,8 +39,8 @@ func listTools(t *testing.T, srv *server) string {
 	return got.body
 }
 
-// rateLimitedCall makes one tools/call, which is the only method the limiter
-// gates.
+// rateLimitedCall makes one tools/call, the method whose refusal the limiter
+// reports as a tool result rather than a JSON-RPC error.
 func rateLimitedCall(t *testing.T, srv *server) response {
 	t.Helper()
 	return srv.do(t, request{
@@ -326,6 +326,69 @@ func TestLimit_RateLimitRPS(t *testing.T) {
 			t.Errorf("HTTP mode started with no rate limit; the default is 10 rps, burst 40:\n%s", srv.logs())
 		}
 	})
+}
+
+// TestLimit_RateLimitCoversTheSubscriptionMethods verifies, on the wire, that
+// resources/subscribe and subscriptions/listen draw on the bucket a tools/call
+// spends, and are refused with the JSON-RPC code that mirrors HTTP 429 once it
+// is empty. The unit test cannot show either: the SDK's client discards a
+// subscribe response, and a listen is a request it leaves open.
+//
+// Both are refused by the limiter before the handler that would otherwise
+// answer them, so the refusal is what comes back even on a stateless
+// deployment, where resources/subscribe is refused for a different reason one
+// layer further in. The legacy method is sent as a 2025-11-25 request on
+// purpose: under protocol 2026-07-28 the SDK answers it itself, as a method
+// the revision removed, before any middleware runs.
+func TestLimit_RateLimitCoversTheSubscriptionMethods(t *testing.T) {
+	gitlab := acceptingGitLab(t)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--rate-limit-rps=0.001",
+		"--rate-limit-burst=1",
+	)
+
+	// One token in the bucket, spent by a tool call. A refill of one per
+	// thousand seconds keeps it empty for the rest of the test.
+	if body := rateLimitedCall(t, srv).body; strings.Contains(body, "-42900") {
+		t.Fatalf("the first call was refused; the bucket should hold one token: %s", truncate(body))
+	}
+
+	cases := []struct {
+		method   string
+		protocol string
+		body     string
+	}{
+		{
+			method:   "resources/subscribe",
+			protocol: "2025-11-25",
+			body:     `{"jsonrpc":"2.0","id":2,"method":"resources/subscribe","params":{"uri":"gitlab://projects/1"}}`,
+		},
+		{
+			method:   "subscriptions/listen",
+			protocol: "2026-07-28",
+			body:     shutdownListenBody(3),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method, func(t *testing.T) {
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp",
+				body: tc.body,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":        "glpat-x",
+					"MCP-Protocol-Version": tc.protocol,
+					"Mcp-Method":           tc.method,
+				},
+			})
+			if !strings.Contains(got.body, "-42900") || !strings.Contains(strings.ToLower(got.body), "rate limit") {
+				t.Fatalf("%s with an empty bucket was not refused by the limiter (status %d): %s", tc.method, got.status, truncate(got.body))
+			}
+			if !strings.Contains(got.body, tc.method) {
+				t.Errorf("the refusal does not name %s: %s", tc.method, truncate(got.body))
+			}
+		})
+	}
 }
 
 // TestLimit_RateLimitRefusalIsVisible verifies that a throttled deployment says

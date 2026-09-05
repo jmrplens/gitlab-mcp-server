@@ -42,6 +42,7 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"SessionTimeout":     overlay.SessionTimeout == nil,
 		"PoolIdleTimeout":    overlay.PoolIdleTimeout == nil,
 		"RevalidateInterval": overlay.RevalidateInterval == nil,
+		"ActionTimeout":      overlay.ActionTimeout == nil,
 		"AuthMode":           overlay.AuthMode == nil,
 		"PublicURL":          overlay.PublicURL == nil,
 		"TrustedOrigins":     overlay.TrustedOrigins == nil,
@@ -202,6 +203,7 @@ func presentVariableCases() []presentVariableCase {
 				"SESSION_TIMEOUT":             "10m",
 				"POOL_IDLE_TIMEOUT":           "6h",
 				"SESSION_REVALIDATE_INTERVAL": "5m",
+				"ACTION_TIMEOUT":              "20m",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -211,6 +213,7 @@ func presentVariableCases() []presentVariableCase {
 				assertDur(t, "SessionTimeout", o.SessionTimeout, 10*time.Minute)
 				assertDur(t, "PoolIdleTimeout", o.PoolIdleTimeout, 6*time.Hour)
 				assertDur(t, "RevalidateInterval", o.RevalidateInterval, 5*time.Minute)
+				assertDur(t, "ActionTimeout", o.ActionTimeout, 20*time.Minute)
 			},
 		},
 		{
@@ -283,6 +286,8 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"RATE_LIMIT_RPS", "bogus", "RATE_LIMIT_RPS"},
 		{"RATE_LIMIT_BURST", "bogus", "RATE_LIMIT_BURST"},
 		{"POOL_IDLE_TIMEOUT", "48h", "exceeds maximum"},
+		{"ACTION_TIMEOUT", "bogus", "ACTION_TIMEOUT"},
+		{"ACTION_TIMEOUT", "48h", "exceeds maximum"},
 	}
 
 	for _, tt := range tests {
@@ -346,15 +351,23 @@ func clearOverlayEnv(t *testing.T) {
 		"GITLAB_READ_ONLY", "GITLAB_SAFE_MODE", "EMBEDDED_RESOURCES",
 		"GITLAB_IGNORE_SCOPES", "EXCLUDE_TOOLS", "MAX_HTTP_CLIENTS",
 		"SESSION_TIMEOUT", "POOL_IDLE_TIMEOUT", "SESSION_REVALIDATE_INTERVAL",
+		"ACTION_TIMEOUT",
 		"AUTH_MODE", "PUBLIC_URL", "TRUSTED_ORIGINS", "OAUTH_CACHE_TTL",
 		"RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 	} {
 		// t.Setenv registers the restore; unsetting afterwards makes the
 		// variable genuinely absent rather than present-and-empty, which is
 		// the state these tests claim to exercise.
-		t.Setenv(name, "")
-		if err := os.Unsetenv(name); err != nil {
-			t.Fatalf("unset %s: %v", name, err)
+		//
+		// Both spellings: the prefixed one wins when both are set, so a
+		// GITLAB_MCP_* value exported by the developer would override the
+		// bare-name fixture a case sets and fail it for a reason outside the
+		// test.
+		for _, spelling := range []string{name, EnvPrefix + name} {
+			t.Setenv(spelling, "")
+			if err := os.Unsetenv(spelling); err != nil {
+				t.Fatalf("unset %s: %v", spelling, err)
+			}
 		}
 	}
 }

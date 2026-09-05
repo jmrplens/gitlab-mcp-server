@@ -17,7 +17,7 @@ func FormatMarkdown(out ResolveOutput) string {
 	fmt.Fprintf(&b, toolutil.FmtMdURL, out.WebURL)
 	fmt.Fprintf(&b, "- **Default Branch**: %s\n", out.DefaultBranch)
 	if out.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, out.Description)
+		toolutil.WriteDescription(&b, out.Description)
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdVisibility, out.Visibility)
 	fmt.Fprintf(&b, "\nUse `project_id: %d` or `project_id: \"%s\"` for subsequent operations.\n", out.ID, out.PathWithNamespace)

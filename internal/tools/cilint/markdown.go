@@ -43,12 +43,8 @@ func FormatOutputMarkdown(v Output) string {
 		b.WriteString("\n")
 	}
 	if v.MergedYaml != "" {
-		b.WriteString("### Merged YAML\n\n```yaml\n")
-		b.WriteString(v.MergedYaml)
-		if !strings.HasSuffix(v.MergedYaml, "\n") {
-			b.WriteByte('\n')
-		}
-		b.WriteString("```\n")
+		b.WriteString("### Merged YAML\n\n")
+		b.WriteString(toolutil.MarkdownFencedBlock("yaml", v.MergedYaml))
 	}
 	toolutil.WriteHints(&b, "Fix reported errors and warnings before committing your CI configuration")
 	return b.String()

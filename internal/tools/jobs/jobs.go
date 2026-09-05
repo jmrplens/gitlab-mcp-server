@@ -24,8 +24,7 @@ const maxTraceBytes = 100 * 1024
 
 // Operation and formatter constants shared by the jobs package.
 const (
-	toolJobTrace    = "jobTrace"
-	fmtCodeFenceEnd = "\n```\n"
+	toolJobTrace = "jobTrace"
 )
 
 // applyScope maps the input scope status strings onto the SDK

@@ -75,6 +75,138 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// TestGetOrCreate_A401OnACallDropsTheEntry verifies the first data call
+// GitLab refuses drops the entry, so the next request re-verifies the
+// credential instead of being served a revoked token until the periodic
+// check notices, which could be an hour later. The signal is the 401 itself,
+// seen by the client's own transport, so every tool, resource and prompt
+// call counts and no text is matched.
+func TestGetOrCreate_A401OnACallDropsTheEntry(t *testing.T) {
+	var revoked atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if revoked.Load() {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
+			return
+		}
+		_, _ = w.Write([]byte("[]"))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	pool := New(testConfig(srv.URL), testFactory())
+	if _, err := pool.GetOrCreate("glpat-live", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	pool.mu.RLock()
+	entry := pool.entries[sessionKey("glpat-live", srv.URL)]
+	pool.mu.RUnlock()
+	if entry == nil {
+		t.Fatal("no entry after GetOrCreate")
+	}
+
+	// A call GitLab answers changes nothing.
+	if _, _, err := entry.client.GL().Projects.ListProjects(nil); err != nil {
+		t.Fatalf("a call before revocation failed: %v", err)
+	}
+	if got := pool.Size(); got != 1 {
+		t.Fatalf("pool size = %d after an answered call, want 1", got)
+	}
+
+	// The token is revoked: the next call is refused, and the entry with it.
+	// The drop runs off the calling goroutine, so it is waited for rather
+	// than read straight after the call.
+	revoked.Store(true)
+	if _, _, err := entry.client.GL().Projects.ListProjects(nil); err == nil {
+		t.Fatal("the call after revocation succeeded, so the stub did not refuse it")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for pool.Size() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("pool size = %d five seconds after a 401 on a call, want 0: the entry outlived its credential", pool.Size())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
+		t.Errorf("RejectedCredentialEvictions = %d, want 1", got)
+	}
+
+	// The next request rebuilds, which is the re-verification. The old
+	// client's later refusals fire nothing: the hook is once per client.
+	revoked.Store(false)
+	if _, err := pool.GetOrCreate("glpat-live", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate after the drop: %v", err)
+	}
+	revoked.Store(true)
+	_, _, _ = entry.client.GL().Projects.ListProjects(nil)
+	time.Sleep(50 * time.Millisecond)
+	if got := pool.Size(); got != 1 {
+		t.Errorf("pool size = %d after the old client's second 401, want the rebuilt entry kept", got)
+	}
+	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
+		t.Errorf("RejectedCredentialEvictions = %d after the old client's second 401, want still 1", got)
+	}
+}
+
+// TestGetOrCreate_ARejectedEntryIsRebuiltBeforeTheEvictionLands verifies the
+// window between GitLab's 401 and the eviction it schedules: the entry is
+// marked rejected on the calling goroutine, and a request that finds the mark
+// rebuilds instead of reusing the refused credential. The eviction runs on a
+// goroutine of its own, so without the mark a request in that window was
+// served the entry GitLab had just refused.
+func TestGetOrCreate_ARejectedEntryIsRebuiltBeforeTheEvictionLands(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+
+	pool := New(testConfig(srv.URL), testFactory())
+	first, err := pool.GetOrCreate("glpat-live", srv.URL)
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	key := sessionKey("glpat-live", srv.URL)
+	pool.mu.RLock()
+	entry := pool.entries[key]
+	pool.mu.RUnlock()
+	if entry == nil {
+		t.Fatal("no entry after GetOrCreate")
+	}
+
+	// The mark alone, with the eviction that would follow it still pending.
+	entry.rejected.Store(true)
+	second, err := pool.GetOrCreate("glpat-live", srv.URL)
+	if err != nil {
+		t.Fatalf("GetOrCreate after the mark: %v", err)
+	}
+	if second == first {
+		t.Fatal("the request that found the rejected mark was served the refused entry")
+	}
+	if got := pool.Size(); got != 1 {
+		t.Errorf("pool size = %d after the rebuild, want 1", got)
+	}
+	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
+		t.Errorf("RejectedCredentialEvictions = %d, want 1: the rebuild is the eviction", got)
+	}
+
+	// The pending eviction finds another entry under the key and leaves the
+	// rebuilt one alone.
+	pool.evictRejectedCredential(key, entry)
+	if got := pool.Size(); got != 1 {
+		t.Errorf("pool size = %d after the late eviction, want the rebuilt entry kept", got)
+	}
+	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
+		t.Errorf("RejectedCredentialEvictions = %d after the late eviction, want still 1", got)
+	}
+}
+
 // TestGetOrCreate_EmptyToken verifies that GetOrCreate rejects empty tokens
 // to prevent all unauthenticated callers from sharing a single server entry.
 func TestGetOrCreate_EmptyToken(t *testing.T) {

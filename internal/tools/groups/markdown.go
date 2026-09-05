@@ -34,7 +34,7 @@ func FormatOutputMarkdown(g Output) string {
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdVisibility, g.Visibility)
 	if g.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, g.Description)
+		toolutil.WriteDescription(&b, g.Description)
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdURL, g.WebURL)
 	if g.ParentID != 0 {
@@ -147,7 +147,7 @@ func FormatHookMarkdown(h HookOutput) string {
 		fmt.Fprintf(&b, toolutil.FmtMdName, h.Name)
 	}
 	if h.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, h.Description)
+		toolutil.WriteDescription(&b, h.Description)
 	}
 	fmt.Fprintf(&b, "- **Group ID**: %d\n", h.GroupID)
 	fmt.Fprintf(&b, "- **SSL Verification**: %v\n", h.EnableSSLVerification)

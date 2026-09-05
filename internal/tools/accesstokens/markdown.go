@@ -13,7 +13,7 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&b, "## Access Token #%d\n\n", out.ID)
 	fmt.Fprintf(&b, toolutil.FmtMdName, out.Name)
 	if out.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, out.Description)
+		toolutil.WriteDescription(&b, out.Description)
 	}
 	fmt.Fprintf(&b, "- **Active**: %t\n", out.Active)
 	fmt.Fprintf(&b, "- **Revoked**: %t\n", out.Revoked)

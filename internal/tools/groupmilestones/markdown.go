@@ -17,7 +17,7 @@ func FormatMarkdown(v Output) string {
 	fmt.Fprintf(&b, "- **Group**: %d\n", v.GroupID)
 	fmt.Fprintf(&b, toolutil.FmtMdState, v.State)
 	if v.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, v.Description)
+		toolutil.WriteDescription(&b, v.Description)
 	}
 	if v.StartDate != "" {
 		fmt.Fprintf(&b, "- **Start Date**: %s\n", toolutil.FormatTime(v.StartDate))

@@ -777,6 +777,10 @@ func TestBearerGuard_BlockedByTheFleetBudget_NamesTheTransportSource(t *testing.
 	previous := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	// The line is throttled per message: a sibling test that spent a budget
+	// inside the last minute would otherwise have the write, and this test
+	// nothing to read.
+	forgetRefusalLines()
 
 	g := newProxiedGuard(okVerifier(oauth.ScopeAPI))
 	// A tiny fleet budget, so the lockout is reached without five hundred
