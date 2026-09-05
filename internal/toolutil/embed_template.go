@@ -17,23 +17,27 @@ const resourceURIScheme = "gitlab://"
 
 // ResourceTemplateVariables returns the names of the {variables} in a URI
 // template, in order of appearance, without the RFC 6570 "+" reserved-expansion
-// prefix. An unterminated brace ends the scan.
-func ResourceTemplateVariables(template string) []string {
+// prefix. A brace that never closes, or a pair with nothing between them, is an
+// error rather than the end of the scan: ExpandResourceURI answers such a
+// template by embedding nothing, and a declaration that validation had let
+// through would fail that quietly on every call.
+func ResourceTemplateVariables(template string) ([]string, error) {
 	var names []string
 	rest := template
 	for {
 		open := strings.IndexByte(rest, '{')
 		if open == -1 {
-			return names
+			return names, nil
 		}
 		closing := strings.IndexByte(rest[open:], '}')
 		if closing == -1 {
-			return names
+			return nil, fmt.Errorf("resource template %q has an unterminated variable at %q", template, rest[open:])
 		}
 		name := strings.TrimPrefix(rest[open+1:open+closing], "+")
-		if name != "" {
-			names = append(names, name)
+		if name == "" {
+			return nil, fmt.Errorf("resource template %q has a variable with no name", template)
 		}
+		names = append(names, name)
 		rest = rest[open+closing+1:]
 	}
 }
@@ -161,7 +165,10 @@ func validateEmbeddedResource(spec ActionSpec) error {
 	if !strings.HasPrefix(template, resourceURIScheme) {
 		return fmt.Errorf("action spec %q embedded resource %q is not a %s URI", spec.Name, template, resourceURIScheme)
 	}
-	variables := ResourceTemplateVariables(template)
+	variables, err := ResourceTemplateVariables(template)
+	if err != nil {
+		return fmt.Errorf("action spec %q: %w", spec.Name, err)
+	}
 	if len(variables) == 0 {
 		return nil
 	}

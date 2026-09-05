@@ -47,12 +47,46 @@ func TestExpandResourceURI_FillsTheTemplateFromTheParameters(t *testing.T) {
 // validator uses, including the reserved-expansion prefix it strips.
 func TestResourceTemplateVariables_ListsTheNames(t *testing.T) {
 	t.Parallel()
-	got := ResourceTemplateVariables("gitlab://project/{project_id}/file/{ref}/{+path}")
+	got, err := ResourceTemplateVariables("gitlab://project/{project_id}/file/{ref}/{+path}")
+	if err != nil {
+		t.Fatalf("ResourceTemplateVariables() error = %v", err)
+	}
 	if strings.Join(got, ",") != "project_id,ref,path" {
 		t.Errorf("variables = %v", got)
 	}
-	if constant := ResourceTemplateVariables("gitlab://user/current"); constant != nil {
+	constant, err := ResourceTemplateVariables("gitlab://user/current")
+	if err != nil {
+		t.Fatalf("ResourceTemplateVariables() error = %v for a constant template", err)
+	}
+	if constant != nil {
 		t.Errorf("variables of a constant template = %v, want none", constant)
+	}
+}
+
+// TestResourceTemplateVariables_RefusesMalformedBraces pins that a template
+// the expander could never fill is an error at scan time, since the expander
+// answers it by embedding nothing and a declaration that reached it would
+// fail silently on every call.
+func TestResourceTemplateVariables_RefusesMalformedBraces(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		template string
+		wantErr  string
+	}{
+		{name: "a brace that never closes", template: "gitlab://project/{project_id", wantErr: "unterminated variable"},
+		{name: "a second variable left open", template: "gitlab://project/{project_id}/issue/{issue_iid", wantErr: "unterminated variable"},
+		{name: "a pair with nothing between", template: "gitlab://project/{}", wantErr: "no name"},
+		{name: "a reserved prefix and nothing else", template: "gitlab://project/{+}", wantErr: "no name"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			names, err := ResourceTemplateVariables(tt.template)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ResourceTemplateVariables(%q) = %v, %v; want an error containing %q", tt.template, names, err, tt.wantErr)
+			}
+		})
 	}
 }
 
@@ -134,6 +168,8 @@ func TestValidateEmbeddedResource_RefusesDeclarationsThatCannotWork(t *testing.T
 		{name: "another scheme", spec: spec(ActionSpecEmbeddedAlways, "https://gitlab.com/{project_id}"), wantErr: "not a gitlab:// URI"},
 		{name: "a variable the action does not accept", spec: spec(ActionSpecEmbeddedAlways, "gitlab://project/{project_id}/mr/{merge_request_iid}"), wantErr: `parameter "merge_request_iid"`},
 		{name: "no schema to check against", spec: ActionSpec{Name: "get", EmbeddedResourcePolicy: ActionSpecEmbeddedAlways, EmbeddedResource: "gitlab://project/{anything}"}},
+		{name: "a brace that never closes", spec: spec(ActionSpecEmbeddedAlways, "gitlab://project/{project_id"), wantErr: "unterminated variable"},
+		{name: "a variable with no name", spec: spec(ActionSpecEmbeddedAlways, "gitlab://project/{}"), wantErr: "no name"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
