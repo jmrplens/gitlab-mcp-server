@@ -557,6 +557,87 @@ func TestBearerGuard_RecipientRefusals(t *testing.T) {
 	}
 }
 
+// TestBearerGuard_UnacceptedRecipient_NamesTheDocumentationPage pins the RFC
+// 6750 error_uri on the one refusal whose remedy lives on a web page.
+//
+// The message tells the holder to obtain a token from the application the
+// operator published and to read the resource documentation for which one. It
+// used to say the documentation was "named in the WWW-Authenticate challenge",
+// which named only resource_metadata: a document the holder had to fetch to
+// find the page. error_uri is RFC 6750's parameter for exactly this, "a URI
+// identifying a human-readable web page with information about the error".
+//
+// Three properties are checked. The fresh refusal carries it; the refusal
+// answered from the rejected-token cache carries it too, since the second
+// request is the one a person retrying actually reads; and a guard given no
+// page emits no error_uri rather than an empty one.
+func TestBearerGuard_UnacceptedRecipient_NamesTheDocumentationPage(t *testing.T) {
+	// Not parallel: the two attempts below are one sequence, and the second
+	// only means something after the first has populated the cache.
+	const page = "https://ops.example.com/our-oauth-app"
+	var calls atomic.Int32
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		calls.Add(1)
+		return nil, refusedRecipient()
+	})
+	g.documentationURL = page
+
+	// sequential: the second attempt is only meaningful after the first has
+	// populated the rejected-token cache.
+	for _, attempt := range []string{"fresh", "answered from the rejected-token cache"} {
+		t.Run(attempt, func(t *testing.T) {
+			assertRecipientRefusalNamesPage(t, g.check(guardRequest(t, "gloas-other-app")), page)
+		})
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("verifier called %d times for two attempts; the second must be answered from the rejected-token cache", got)
+	}
+}
+
+// TestBearerGuard_UnacceptedRecipient_WithoutAPageEmitsNoErrorURI is the other
+// half: a guard given no documentation page emits no error_uri rather than an
+// empty one, which a client would try to open.
+func TestBearerGuard_UnacceptedRecipient_WithoutAPageEmitsNoErrorURI(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, refusedRecipient()
+	})
+	failure := g.check(guardRequest(t, "gloas-other-app"))
+	if failure == nil || failure.status != http.StatusUnauthorized {
+		t.Fatalf("want 401, got %+v", failure)
+	}
+	if challenge := failure.header.Get(headerWWWAuthenticate); strings.Contains(challenge, "error_uri") {
+		t.Errorf("challenge %q carries an error_uri with no page to point at", challenge)
+	}
+}
+
+// refusedRecipient is the verifier error for a token minted for an application
+// the deployment does not admit.
+func refusedRecipient() error {
+	return fmt.Errorf("token was issued to another OAuth application: %w", oauth.ErrUnacceptedRecipient)
+}
+
+// assertRecipientRefusalNamesPage checks the shape of the unaccepted-recipient
+// 401: the RFC 6750 error code, the error_uri naming page, and a message that
+// says where the page is named.
+func assertRecipientRefusalNamesPage(t *testing.T, failure *gateFailure, page string) {
+	t.Helper()
+	if failure == nil || failure.status != http.StatusUnauthorized {
+		t.Fatalf("want 401, got %+v", failure)
+	}
+	challenge := failure.header.Get(headerWWWAuthenticate)
+	if !strings.Contains(challenge, `error_uri="`+page+`"`) {
+		t.Errorf("challenge %q does not name the documentation page as error_uri", challenge)
+	}
+	if !strings.Contains(challenge, `error="invalid_token"`) {
+		t.Errorf("challenge %q lost the RFC 6750 error code", challenge)
+	}
+	if !strings.Contains(failure.message, "error_uri") {
+		t.Errorf("message %q does not tell the holder where the page is named", failure.message)
+	}
+}
+
 // assertRefusalWording checks that a refusal says what is true of it and does
 // not say what is true of a different one.
 func assertRefusalWording(t *testing.T, failure *gateFailure, want, unwanted string) {

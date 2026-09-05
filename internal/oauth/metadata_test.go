@@ -183,6 +183,54 @@ func TestNewProtectedResourceHandler_ResourceDocumentationIsConfigurable(t *test
 	}
 }
 
+// TestResourceLinks_DocumentationURL_IsWhatTheDocumentPublishes pins the one
+// resolution of resource_documentation that both the metadata document and the
+// recipient refusal's error_uri read from.
+//
+// The two used to be able to disagree: the handler resolved the default inline,
+// and a second caller wanting the same page would have had to repeat that. A
+// refusal that says "see the resource documentation" while naming a different
+// page than the document does is worse than naming none.
+func TestResourceLinks_DocumentationURL_IsWhatTheDocumentPublishes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		links ResourceLinks
+		want  string
+	}{
+		{name: "empty resolves to the project page", links: ResourceLinks{}, want: DefaultResourceDocumentation},
+		{name: "an operator page is returned verbatim", links: ResourceLinks{Documentation: "https://ops.example.com/our-oauth-app"}, want: "https://ops.example.com/our-oauth-app"},
+		{name: "the other links do not affect it", links: ResourceLinks{Policy: "https://ops.example.com/privacy", TermsOfService: "https://ops.example.com/terms"}, want: DefaultResourceDocumentation},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tt.links.DocumentationURL(); got != tt.want {
+				t.Errorf("DocumentationURL() = %q, want %q", got, tt.want)
+			}
+
+			// The document must publish the same value, or the accessor is
+			// not the single resolution it claims to be.
+			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp",
+				[]string{"https://gitlab.example.com"}, []string{ScopeAPI}, tt.links)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", nil))
+			var document struct {
+				ResourceDocumentation string `json:"resource_documentation"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&document); err != nil {
+				t.Fatalf("decode metadata: %v", err)
+			}
+			if document.ResourceDocumentation != tt.want {
+				t.Errorf("resource_documentation = %q, want %q: the document and the accessor disagree", document.ResourceDocumentation, tt.want)
+			}
+		})
+	}
+}
+
 // TestProtectedResourceHandler_OptionalLinksAreOmittedUnlessNamed pins how the
 // two optional RFC 9728 URL fields behave.
 //

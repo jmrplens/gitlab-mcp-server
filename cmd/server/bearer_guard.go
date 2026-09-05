@@ -82,6 +82,12 @@ type bearerGuard struct {
 	// metadataURL is the RFC 9728 protected-resource metadata URL every
 	// challenge points at.
 	metadataURL string
+	// documentationURL is the page the metadata document publishes as
+	// resource_documentation, named again as the RFC 6750 error_uri of the
+	// one refusal whose remedy is on that page rather than in the protocol:
+	// a token from an OAuth application this deployment does not admit.
+	// Empty emits no error_uri.
+	documentationURL string
 	// resolveInstance reports which published GitLab instance a request
 	// selected, or an error when it named one this deployment does not
 	// serve. Nil means "one fixed instance", the single-instance case.
@@ -365,15 +371,30 @@ func (g *bearerGuard) classify(err error, ip, source, instance, token string) *g
 // Nothing else does: GitLab rejected nothing, so a description claiming the
 // token is expired or revoked would send its holder to reauthorize and come
 // back with the same credential.
+//
+// This is the one challenge that carries error_uri, RFC 6750's "URI identifying
+// a human-readable web page with information about the error". Every other
+// refusal has an in-band remedy (authorize, reauthorize, ask for the named
+// scope, wait); this one's remedy is to obtain a token from the application the
+// operator published, which is what the resource documentation describes and
+// what RFC 9728 offers no field for beyond that page. The message used to say
+// "see the resource documentation named in the WWW-Authenticate challenge"
+// while the challenge named only resource_metadata, a document the holder had
+// to fetch to find the page; now the challenge names the page itself, and it is
+// the same page the metadata document publishes.
 func (g *bearerGuard) unacceptedRecipientFailure() *gateFailure {
+	params := []string{
+		"error", "invalid_token",
+		"error_description", "the token was not issued to an OAuth application this deployment admits",
+	}
+	if g.documentationURL != "" {
+		params = append(params, "error_uri", g.documentationURL)
+	}
 	return &gateFailure{
 		status:  http.StatusUnauthorized,
 		code:    errCodeUnauthorized,
-		message: "This token is valid for the GitLab instance, but it was not issued to an OAuth application this deployment admits. Obtain a token from the application the operator published; see the resource documentation named in the WWW-Authenticate challenge.",
-		header: newHeader(headerWWWAuthenticate, g.challenge(
-			"error", "invalid_token",
-			"error_description", "the token was not issued to an OAuth application this deployment admits",
-		)),
+		message: "This token is valid for the GitLab instance, but it was not issued to an OAuth application this deployment admits. Obtain a token from the application the operator published; see the resource documentation, named as error_uri in the WWW-Authenticate challenge and as resource_documentation in the protected-resource metadata.",
+		header:  newHeader(headerWWWAuthenticate, g.challenge(params...)),
 	}
 }
 

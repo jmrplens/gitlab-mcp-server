@@ -3109,6 +3109,14 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		slog.InfoContext(ctx, "admitting only tokens issued to the pinned OAuth applications; personal access tokens are refused",
 			"applications", len(cfg.OAuthClientUIDs))
 	}
+	// Resolved once and handed to both the metadata document and the guard, so
+	// the page the document publishes as resource_documentation and the page
+	// the recipient refusal names as error_uri cannot be two different pages.
+	links := oauth.ResourceLinks{
+		Documentation:  cfg.ResourceDocumentation,
+		Policy:         cfg.ResourcePolicyURI,
+		TermsOfService: cfg.ResourceTermsURI,
+	}
 	guard := &bearerGuard{
 		verify:             verifier,
 		resolveInstance:    resolveInstance,
@@ -3119,6 +3127,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
 		metadataURL:        resourceMetadataURL,
+		documentationURL:   links.DocumentationURL(),
 		// The door asks only for what every action needs. Whether a
 		// particular action may write is settled per action, against the
 		// surface the pool built for this token's real authority.
@@ -3126,11 +3135,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		advertisedScope: requiredScope,
 	}
 	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{oauth.MinimumScope}})
-	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode), oauth.ResourceLinks{
-		Documentation:  cfg.ResourceDocumentation,
-		Policy:         cfg.ResourcePolicyURI,
-		TermsOfService: cfg.ResourceTermsURI,
-	})
+	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode), links)
 	// One path, the one RFC 9728 §3 derives from this deployment's resource
 	// identifier and the one the challenge above advertises, so the document
 	// answers where a client looks for it and nowhere else. What was here
