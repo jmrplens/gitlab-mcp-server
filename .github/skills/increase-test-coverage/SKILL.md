@@ -1,13 +1,13 @@
 ---
 name: increase-test-coverage
-description: 'Increase Go test coverage to 90%+ using a Research → Plan → Implement pipeline. Analyzes coverage gaps, generates table-driven tests with httptest mocks, and validates results with go test -coverprofile. Designed for Go MCP server projects using the official go-sdk and gitlab.com/gitlab-org/api/client-go/v2.'
+description: 'Increase Go test coverage to 100% per touched package using a Research → Plan → Implement pipeline, with seams for the branches real input cannot reach. Analyzes coverage gaps, generates table-driven tests with httptest mocks, and validates results with go test -coverprofile. Designed for Go MCP server projects using the official go-sdk and gitlab.com/gitlab-org/api/client-go/v2.'
 ---
 
 # Increase Test Coverage
 
 ## Primary Directive
 
-Systematically increase Go test coverage to **90%+ per package** using a structured Research → Plan → Implement pipeline. Generate comprehensive, buildable, passing tests that follow project conventions and use proper mocks for external dependencies.
+Systematically increase Go test coverage to **100% per touched package**, preexisting code included, using a structured Research → Plan → Implement pipeline; every function that stays below 100% is named in the report with its reason. Generate comprehensive, buildable, passing tests that follow project conventions and use proper mocks for external dependencies.
 
 All tests must:
 
@@ -74,7 +74,7 @@ Review the HTML report to visually identify uncovered code blocks.
 For each package, analyze:
 
 1. **Uncovered functions** — Functions with 0% coverage (highest priority)
-2. **Partially covered functions** — Functions below 90% (error paths, edge cases)
+2. **Partially covered functions** — Functions below 100% (error paths, edge cases, defensive branches)
 3. **Untested branches** — Conditional logic where only one branch is covered
 4. **Error handling paths** — `if err != nil` blocks that are never tested
 5. **Edge cases** — Boundary conditions, nil inputs, empty slices, zero values
@@ -115,23 +115,23 @@ Rank packages by coverage gap impact:
 
 | Priority | Criteria |
 |----------|----------|
-| P0 — Critical | Core business logic with 0% coverage |
+| P0 — Critical | Core business logic with 0% coverage, `main()` included |
 | P1 — High | Tool handlers, resource handlers below 80% |
-| P2 — Medium | Helper functions, config loading below 90% |
-| P3 — Low | Already above 90%, minor edge cases |
+| P2 — Medium | Helper functions, config loading below 100%: error paths and edge cases |
+| P3 — Last | The remaining defensive branches: real inputs where one exists, seams where none does |
 
 ### Step 2: Group into Phases
 
 Divide work into **2-5 phases**, each targeting a specific package or functional area:
 
 ```text
-Phase 1: [package] — Current: X% → Target: 90%+
+Phase 1: [package] — Current: X% → Target: 100%
   - TestFunctionA_HappyPath
   - TestFunctionA_ErrorCase
   - TestFunctionA_EdgeCase_EmptyInput
   ...
 
-Phase 2: [package] — Current: X% → Target: 90%+
+Phase 2: [package] — Current: X% → Target: 100%
   ...
 ```
 
@@ -308,11 +308,11 @@ After each phase, update progress:
 
 ```text
 Package             Before    After     Target    Status
-internal/tools      72%       91%       90%       ✅ Done
-internal/gitlab     65%       —         90%       🔄 In Progress
-internal/config     80%       —         90%       ⏳ Pending
-internal/resources  70%       —         90%       ⏳ Pending
-internal/prompts    68%       —         90%       ⏳ Pending
+internal/tools      72%       100%      100%      ✅ Done
+internal/gitlab     65%       —         100%      🔄 In Progress
+internal/config     80%       —         100%      ⏳ Pending
+internal/resources  70%       —         100%      ⏳ Pending
+internal/prompts    68%       —         100%      ⏳ Pending
 ```
 
 ### Step 5: Final Validation
@@ -321,8 +321,8 @@ After all phases complete:
 
 1. Run full test suite: `go test -race -coverprofile=coverage.out ./...`
 2. Generate final coverage report: `go tool cover -func=coverage.out`
-3. Verify every package meets 90%+ target
-4. Run quality checks: `make golangci-lint`
+3. Verify every touched package is at 100%, or name each function below it with its reason
+4. Run quality checks: `make golangci-lint`, `make check-test-subtests`, `make check-test-goroutines`, `make check-test-file-names`
 5. Refresh `docs/development/testing/testing.md`: `go run ./cmd/gen_testing_docs/`
 6. Verify the generated testing reference: `go run ./cmd/gen_testing_docs/ --check`
 7. Lint the generated testing reference: `npx markdownlint-cli2 docs/development/testing/testing.md`
@@ -368,15 +368,72 @@ After all phases complete:
 
 ## Coverage Targets
 
-| Package | Minimum Target | Stretch Goal |
-|---------|---------------|-------------|
-| `internal/tools` | 90% | 95% |
-| `internal/resources` | 90% | 95% |
-| `internal/prompts` | 90% | 95% |
-| `internal/gitlab` | 90% | 95% |
-| `internal/config` | 90% | 95% |
-| `cmd/server` | 80% | 90% |
-| **Overall** | **90%** | **95%** |
+The house rule: a package touched by a change is driven to **100% statement coverage**, preexisting code included. Every function that stays below 100% is named in the report with the reason, and "defensive branch" is not a reason until a seam has been tried.
+
+| Scope | Target |
+|-------|--------|
+| Every package the change touches | 100% |
+| The repository as a whole (the CI gate) | 90% minimum; a floor, never the goal |
+
+### Reaching the last branches
+
+- **Real inputs first.** A crafted fixture, a specific declaration shape, a file that does not parse, a broken symlink: prefer any of these over a seam.
+- **Seams for what a real input cannot reach.** A package-level function variable defaulting to the standard-library call, overridden in the test and restored with `t.Cleanup`:
+
+  ```go
+  var (
+      walkDir      = filepath.WalkDir
+      formatSource = format.Source
+      writeFile    = os.WriteFile
+  )
+  ```
+
+  Established in `cmd/godoc_tool/docgo.go` and `cmd/gen_stats/main.go`. Each seam carries a short doc comment naming the branch it exists for. Wrap a helper rather than aliasing `os.WriteFile` directly when gosec's taint analysis would otherwise re-home a finding onto a test file.
+- **Tests run as root.** Permission bits make nothing fail. A read that must fail even for root uses a broken symlink (`os.Symlink` to a missing target); a write that must fail goes through a seam.
+- **`main()` is covered, not exempt.** Extract `runMain(args []string, stdout, stderr io.Writer) int`, make `main()` the one line `osExit(runMain(os.Args, os.Stdout, os.Stderr))` with `var osExit = os.Exit`, and assert every exit code and message. Replace `os.Args` in the test so the flag set parses no test flags.
+- **Never lift the number by other means.** No weakened assertions, no `//nolint`, no coverage pragmas, no branches deleted to make the figure. A provably dead branch is removed as a code change with its own justification, or made reachable by extracting it into a function a test can call directly.
+
+## Case Completeness: Conditions and Mutants
+
+Statement coverage says a line ran. It does not say a decision was taken both ways, and it does not say a test would notice the decision changing. Measured on this repository: `cmd/gen_stats` at 100% statement coverage still had ten conditions that were only ever true or only ever false, and five mutants no test reached. Go's own coverage cannot see either, because a compound `if a && b` is one block to it. Three steps close the gap, and a changed package passes all three before the work is done.
+
+### 1. Derive the cases before writing them
+
+For every decision in the changed code, write the case table first, then the tests that fill it:
+
+- **A simple condition** (`if n > 0`): one case true, one false, and for a comparison the boundary itself and both neighbours (`0`, `1`, `-1`).
+- **A compound condition** (`a && b`, `a || b`, `!a`, and their nestings): the MC/DC minimal set, N+1 cases for N conditions, each condition flipping the outcome on its own while the others hold. For `a && b`: (T,T) is the true case, (F,T) and (T,F) each falsify it through one condition. For `a || b`: (F,F) is the false case, (T,F) and (F,T) each satisfy it through one condition. Longer chains compose the same way, and short-circuit order decides which operand is even evaluated.
+- **Every `if err != nil`**: one case where the error happens, driven by a real failure (a fixture that does not parse, a broken symlink, a refused connection, a cancelled context) or by a seam.
+- **Every `switch` and type switch**: one case per arm and one for the default, including an arm no real input reaches, which is extracted into a function a test can call directly.
+- **Loops**: zero iterations, one, several; and each `continue`, `break` and early `return` inside.
+- **Inputs**: empty, whitespace, the boundary length, unicode, the maximum, nil and the zero value; first, middle, last and empty pages; the context cancelled before and during the call.
+
+### 2. Measure the conditions with gobco
+
+[gobco](https://github.com/rillig/gobco) instruments every boolean condition, `&&`, `||` and `!` operands included, and reports the ones never evaluated both ways:
+
+```bash
+make coverage-conditions PKG=./cmd/gen_stats
+# Condition coverage: 156/166
+# main.go:177:7: condition "lines > s.LargestTestLines" was 9 times true but never false
+# main.go:355:17: condition "isE2E" was 29 times false but never true
+```
+
+Every reported line is a missing case from the table in step 1. The target is nothing reported. A condition that genuinely cannot take the other value is dead code: remove it as a code change, or extract it so a test can reach it; do not leave it as an accepted exception. gobco does not report a function never called at all (statement coverage does) and does not instrument `select`.
+
+### 3. Prove the cases with mutation testing
+
+A case can execute a decision and still not check it. [gremlins](https://github.com/go-gremlins/gremlins) rewrites one operator at a time (`>` to `>=`, `==` to `!=`, `&&` to `||`, `+` to `-`, `-x` to `x`, `i++` to `i--`) and reruns the tests; a mutant that survives is a decision no assertion pins:
+
+```bash
+make coverage-mutants PKG=./cmd/gen_stats
+# Killed: 108, Lived: 0, Not covered: 12
+# Test efficacy: 100.00%   Mutator coverage: 90.00%
+```
+
+The gate on a changed package is **Lived: 0 and Not covered: 0**. A lived mutant is fixed by strengthening the assertion that should have caught it, never by excluding the mutant. The not-covered mutants sit on the same lines gobco reports, so step 2 usually clears them. The target turns on `INVERT_LOGICAL` (`&&` to `||`, off by gremlins' default), which is the operator that proves each operand of a compound condition matters on its own; `GREMLINS_FLAGS` passes anything else, such as `-S l` to print only the lived mutants or `-E` to exclude generated files.
+
+Both tools run through `go run` with the version pinned in the Makefile; `go install github.com/rillig/gobco@v1.3.4` and `go install github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0` keep them on the path for repeated use. Neither runs in CI: they are the last two steps of the coverage work on a package, and their results go in the pull request beside the coverage figure.
 
 ---
 
