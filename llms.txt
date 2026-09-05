@@ -8,7 +8,7 @@ a default 2-tool dynamic find/execute surface, 45 resources, 37 prompts, and 4 M
 
 Quick start:
 
-1. Install it, or skip installing entirely. Every channel ships the same binary: `npx -y @jmrp.io/gitlab-mcp-server` (npm), `uvx jmrplens-gitlab-mcp-server` (PyPI; `pipx install` and `pip install` take the same name), `brew install jmrplens/tap/gitlab-mcp-server` (Homebrew), `winget install --id jmrplens.gitlab-mcp-server -e` (Windows), the `ghcr.io/jmrplens/gitlab-mcp-server` Docker image, the one-click `gitlab-mcp-server.mcpb` Claude Desktop extension, `/plugin install jmrplens/gitlab-mcp-server` as an Agent Plugin, or a binary from the Releases page. The hosted endpoint at https://mcp.jmrp.io/gitlab installs nothing at all
+1. Install it, or skip installing entirely. Every channel ships the same binary: `npx -y @jmrp.io/gitlab-mcp-server` (npm), `uvx jmrplens-gitlab-mcp-server` (PyPI; `pipx install` and `pip install` take the same name), `dnx gitlab-mcp-server` (NuGet, .NET 10 SDK; `dotnet tool install -g` takes the same name), `brew install jmrplens/tap/gitlab-mcp-server` (Homebrew), `winget install --id jmrplens.gitlab-mcp-server -e` (Windows), the `ghcr.io/jmrplens/gitlab-mcp-server` Docker image, the one-click `gitlab-mcp-server.mcpb` Claude Desktop extension, `/plugin install jmrplens/gitlab-mcp-server` as an Agent Plugin, or a binary from the Releases page. The hosted endpoint at https://mcp.jmrp.io/gitlab installs nothing at all
 2. Create a GitLab personal access token with `api` scope. A `read_api` token is also admitted and is served a read-only surface; pair it with `GITLAB_MCP_READ_ONLY=true` when you want that explicitly
 3. Add the server to your AI client's MCP configuration with that token in `GITLAB_TOKEN`
 
@@ -30,7 +30,7 @@ The config schema differs by client. Most use a `mcpServers` key: Claude Desktop
 }
 ```
 
-Without Docker: use `npx` as `command` with `args` `["-y", "@jmrp.io/gitlab-mcp-server"]`, or `uvx` with `args` `["jmrplens-gitlab-mcp-server"]`, keeping the same `env`. Both fetch a prebuilt binary for the platform and need no Node or Python project of their own.
+Without Docker: use `npx` as `command` with `args` `["-y", "@jmrp.io/gitlab-mcp-server"]`, `uvx` with `args` `["jmrplens-gitlab-mcp-server"]`, or `dnx` (the .NET 10 SDK's tool runner) with `args` `["gitlab-mcp-server"]`, keeping the same `env`. All three fetch a prebuilt binary for the platform and need no Node, Python or .NET project of their own; arguments meant for the server go after `--` with `dnx`.
 
 Native binary instead: download the release asset for the user's OS and architecture (`gitlab-mcp-server-<os>-<arch>`, with `.exe` on Windows) from the Releases page, then use its path as `command` with no `args` and the same `env`.
 

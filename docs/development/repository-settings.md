@@ -35,7 +35,10 @@ That trade is not worth taking for two items that change roughly never, so the
 checks below are run by hand.
 
 The one exception is release immutability, which is visible in the public
-release metadata and is already checked (see below).
+release metadata and is already checked (see below). The NuGet.org trusted
+publishing policy at the end of this page is not a GitHub setting at all, but it
+is recorded here for the same reason: it lives outside the repository, the
+release depends on it, and no gate can see it.
 
 ## SC-04: enable immutable releases
 
@@ -44,8 +47,9 @@ release metadata and is already checked (see below).
 
 **Why.** Every other artifact this project publishes is pinned by a hash or by
 an immutable registry version: the `.mcpb` bundle by `fileSha256` in
-`server.json`, the container image by `@sha256:` digest, npm and PyPI by version
-(both registries forbid republishing one). The GitHub Release is the exception.
+`server.json`, the container image by `@sha256:` digest, npm, PyPI and NuGet by
+version (all three registries forbid republishing one). The GitHub Release is
+the exception.
 Without this setting, anyone holding `contents: write` can replace a published
 binary **and** `checksums.txt` together, and both installers accept the
 consistent pair. The cosign signature over `checksums.txt` is what travels to a
@@ -126,6 +130,60 @@ bypass but would also make every release wait on a second human action, in a job
 that runs after the artifacts are already published, to commit a version number
 the release itself determined. The bypass with the credentialed push isolated in
 its own job, which is what `release.yml` does today, is the better trade.
+
+## NuGet.org trusted publishing policy
+
+**What to set.** On nuget.org, under the username menu, **Trusted Publishing**:
+one policy that lets the release workflow push the NuGet distribution with no
+stored credential.
+
+**Why.** `release.yml`'s `nuget` job holds `id-token: write` and exchanges its
+OIDC token for a one-hour nuget.org API key through the `NuGet/login` action,
+then pushes the seven packages with `dotnet nuget push --skip-duplicate`. The
+exchange succeeds only when the token's claims match a policy on the account
+that owns the packages, so the policy is what stands between "any workflow in
+any repository" and "this workflow file, in this repository, running under the
+`release` environment". No repository secret is involved: `make publish-nuget`
+with an API key in `NUGET_API_KEY` is the only tokened path, for an
+out-of-band push from a maintainer machine.
+
+**Current state.** Satisfied. The policy exists and is **Active**, with the
+repository and owner ids locked in (the repository is public, so nuget.org
+resolved them at creation). Its fields, recorded here because nothing in the
+repository can read them back:
+
+| Field            | Value                                  |
+| ---------------- | -------------------------------------- |
+| Package owner    | `jmrplens`                             |
+| Scope            | Push new packages and package versions |
+| Package glob     | `gitlab-mcp-server*`                   |
+| Publisher        | GitHub Actions                         |
+| Repository owner | `jmrplens`                             |
+| Repository       | `gitlab-mcp-server`                    |
+| Workflow file    | `release.yml`                          |
+| Environment      | `release`                              |
+
+The glob covers the pointer package `gitlab-mcp-server` and the six
+runtime-identifier packages `gitlab-mcp-server.<rid>`, and the "push new
+packages" scope is what lets the first release create the seven ids: unlike
+npm and PyPI, no bootstrap publish with a token is needed. The workflow's
+`NuGet/login` step names the nuget.org profile (`jmrplens`) as its `user`
+input; that is the account the policy belongs to, not a secret.
+
+**How to check.** There is no API for it; open nuget.org, the username menu,
+Trusted Publishing, and confirm the policy is listed as Active with the fields
+above. A release rehearsal (`gh workflow run release.yml --ref <branch>`)
+exercises the exchange without pushing: the `NuGet login` step of the `nuget`
+job fails when the policy no longer matches the identity the job presents.
+
+**Caveat.** A policy nuget.org cannot bind to repository and owner ids at
+creation starts as **temporarily active for 7 days** and lapses if no publish
+happens in that window; if the policy ever shows that state, restart the
+window from the same page before the release, and the first successful push
+makes it permanent.
+
+**What tells you it drifted.** The `nuget` job of the next release fails at
+its login step, before any push, and nothing else in the release is affected.
 
 ## Checking all of it at once
 

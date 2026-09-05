@@ -37,7 +37,7 @@ The description winget prints is package metadata carried forward between submis
 
 ## Version lag versus GitHub Releases
 
-Publishing to winget is a pull request. The release workflow opens one against microsoft/winget-pkgs with the new manifests (through winget-releaser, right after the GitHub release is out), and Microsoft's validation pipeline and moderators check and merge it. Until that merge, `winget upgrade` does not know the new version, even though the GitHub Release, Homebrew, npm, PyPI and the container images already have it. That submission step is also allowed to fail without failing the release, so a version can miss winget entirely: 2.7.2 never landed there, while 2.7.5, the current release, is published. If you need a version winget does not have yet, the [install script or a direct download](/gitlab-mcp-server/install/binary/) gets it right away; just do not keep both copies on PATH.
+Publishing to winget is a pull request. The release workflow opens one against microsoft/winget-pkgs with the new manifests (through winget-releaser, right after the GitHub release is out), and Microsoft's validation pipeline and moderators check and merge it. Until that merge, `winget upgrade` does not know the new version, even though the GitHub Release, Homebrew, npm, PyPI, NuGet and the container images already have it. That submission step is also allowed to fail without failing the release, so a version can miss winget entirely: 2.7.2 never landed there, while 2.7.5, the current release, is published. If you need a version winget does not have yet, the [install script or a direct download](/gitlab-mcp-server/install/binary/) gets it right away; just do not keep both copies on PATH.
 
 ## Configure your client
 

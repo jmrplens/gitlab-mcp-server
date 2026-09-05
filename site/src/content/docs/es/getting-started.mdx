@@ -1,6 +1,6 @@
 ---
 title: Primeros pasos
-description: Instala y configura GitLab MCP Server en menos de cinco minutos — con Docker, binario nativo, npm o PyPI — para VS Code, Claude, Cursor y otros clientes MCP.
+description: Instala y configura GitLab MCP Server en menos de cinco minutos — con Docker, binario nativo, npm, PyPI o NuGet — para VS Code, Claude, Cursor y otros clientes MCP.
 chips:
   - text: Sin instalación con Docker
   - text: Cualquier cliente MCP
@@ -44,7 +44,7 @@ head:
             "@type": "HowToStep",
             "position": 2,
             "name": "Instalar el servidor",
-            "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que guarda el token en el llavero del sistema. Los lanzadores de npm (npx) y PyPI (uvx) lo ejecutan sin un paso de instalación aparte. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
+            "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que guarda el token en el llavero del sistema. Los lanzadores de npm (npx), PyPI (uvx) y NuGet (dnx) lo ejecutan sin un paso de instalación aparte. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#instalación-rápida"
           },
           {
@@ -80,7 +80,7 @@ import stats from "../../../data/stats.json";
 
 :::tip[De un vistazo]
 
-- **Nueve formas de instalarlo**: un binario nativo (descarga directa o el script de instalación), Homebrew, winget, Docker, el lanzador de npm, las wheels de PyPI, la extensión para Claude Desktop, los Agent Plugins o el endpoint alojado. [Elige una vía](/gitlab-mcp-server/es/install/overview/).
+- **Diez formas de instalarlo**: un binario nativo (descarga directa o el script de instalación), Homebrew, winget, Docker, el lanzador de npm, las wheels de PyPI, la herramienta de NuGet, la extensión para Claude Desktop, los Agent Plugins o el endpoint alojado. [Elige una vía](/gitlab-mcp-server/es/install/overview/).
 - **La configuración mínima es un solo valor**: un token de acceso personal de GitLab con scope `api` en `GITLAB_TOKEN`. Define `GITLAB_URL` solo para instancias autogestionadas.
 - **La superficie predeterminada es el modo dinámico**: tu cliente ve dos herramientas, y con ellas alcanza cualquier operación de GitLab bajo demanda.
 
@@ -209,6 +209,34 @@ uvx jmrplens-gitlab-mcp-server
   title="PyPI, uvx y pipx"
   href="/gitlab-mcp-server/es/install/pypi/"
   description="Instalación con pipx y pip, los dos comandos instalados, por qué el nombre lleva prefijo, actualización y desinstalación"
+/>
+
+### NuGet / dnx (cualquier plataforma)
+
+Publicado en NuGet.org como [`gitlab-mcp-server`](https://www.nuget.org/packages/gitlab-mcp-server), una herramienta .NET con la disposición que el SDK de .NET 10 usa para las herramientas que distribuyen un ejecutable nativo: un paquete puntero nombra un paquete por identificador de runtime, cada uno con el mismo binario, y el SDK lo ejecuta directamente. Necesita el SDK de .NET 10 o superior, y no se ejecuta código .NET una vez arranca el servidor. Los paquetes de Linux necesitan glibc; en sistemas musl como Alpine, usa la imagen Docker en su lugar.
+
+```bash
+dnx gitlab-mcp-server
+```
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "dnx",
+      "args": ["gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
+Los argumentos destinados al servidor van después de `--` (`dnx gitlab-mcp-server -- --version`), porque `dnx` lee sus propias opciones en cualquier posición de la línea; y `dnx` instala la herramienta sin preguntar cuando su entrada estándar no es una terminal, que es como la arranca un cliente, así que la configuración no necesita ningún flag adicional.
+
+<LinkCard
+  title="NuGet y dnx"
+  href="/gitlab-mcp-server/es/install/nuget/"
+  description="dnx y dotnet tool install, los siete paquetes, las dos costumbres de dnx, actualización y desinstalación"
 />
 
 ### Instalador de una línea (binario nativo)

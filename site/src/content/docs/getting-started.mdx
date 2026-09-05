@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: Install and configure GitLab MCP Server in under five minutes — via Docker, native binary, npm, or PyPI — for VS Code, Claude, Cursor, and other MCP clients.
+description: Install and configure GitLab MCP Server in under five minutes — via Docker, native binary, npm, PyPI or NuGet — for VS Code, Claude, Cursor, and other MCP clients.
 chips:
   - text: Zero-install with Docker
   - text: Any MCP client
@@ -44,7 +44,7 @@ head:
             "@type": "HowToStep",
             "position": 2,
             "name": "Install the server",
-            "text": "Pick one install path. The one-click buttons register a Docker-based server that auto-pulls the image on first run. The one-line installer places the native binary on your PATH via Homebrew, winget, or a shell script. Claude Desktop has a native .mcpb extension that stores the token in the OS keychain. npm (npx) and PyPI (uvx) launchers run it with no separate install step. You can also download the binary for your platform from GitHub Releases.",
+            "text": "Pick one install path. The one-click buttons register a Docker-based server that auto-pulls the image on first run. The one-line installer places the native binary on your PATH via Homebrew, winget, or a shell script. Claude Desktop has a native .mcpb extension that stores the token in the OS keychain. The npm (npx), PyPI (uvx) and NuGet (dnx) launchers run it with no separate install step. You can also download the binary for your platform from GitHub Releases.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#quick-install"
           },
           {
@@ -80,7 +80,7 @@ import FAQ from "../../components/FAQ.astro";
 
 :::tip[At a glance]
 
-- **Nine ways to install**: a native binary (direct download or the install script), Homebrew, winget, Docker, the npm launcher, the PyPI wheels, the Claude Desktop extension, Agent Plugins, or the hosted endpoint. [Choose a path](/gitlab-mcp-server/install/overview/).
+- **Ten ways to install**: a native binary (direct download or the install script), Homebrew, winget, Docker, the npm launcher, the PyPI wheels, the NuGet tool, the Claude Desktop extension, Agent Plugins, or the hosted endpoint. [Choose a path](/gitlab-mcp-server/install/overview/).
 - **The minimum configuration is one value** — a GitLab personal access token with `api` scope in `GITLAB_TOKEN`. Set `GITLAB_URL` only for self-managed instances.
 - **The default surface is dynamic mode**: your client sees two tools, and they reach every GitLab operation on demand.
 
@@ -208,6 +208,34 @@ uvx jmrplens-gitlab-mcp-server
   title="PyPI, uvx and pipx"
   href="/gitlab-mcp-server/install/pypi/"
   description="pipx and pip installs, the two installed commands, why the name carries a prefix, updating and uninstalling"
+/>
+
+### NuGet / dnx (any platform)
+
+Published on NuGet.org as [`gitlab-mcp-server`](https://www.nuget.org/packages/gitlab-mcp-server), a .NET tool in the layout the .NET 10 SDK uses for tools that ship a native executable: a pointer package names one package per runtime identifier, each carrying the same binary, and the SDK runs it directly. It needs the .NET 10 SDK or newer, and no .NET code runs once the server is up. The Linux packages need glibc; on musl systems such as Alpine, use the Docker image instead.
+
+```bash
+dnx gitlab-mcp-server
+```
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "dnx",
+      "args": ["gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
+Arguments meant for the server go after `--` (`dnx gitlab-mcp-server -- --version`), because `dnx` reads its own options anywhere on the line; and `dnx` installs the tool without asking when its standard input is not a terminal, which is how a client starts it, so the configuration needs no extra flag.
+
+<LinkCard
+  title="NuGet and dnx"
+  href="/gitlab-mcp-server/install/nuget/"
+  description="dnx and dotnet tool install, the seven packages, the two dnx habits, updating and uninstalling"
 />
 
 ### One-line installer (native binary)
