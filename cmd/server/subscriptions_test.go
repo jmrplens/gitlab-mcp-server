@@ -965,6 +965,124 @@ func TestSubscriptionShape_Handlers_ARequestBoundToNoCredential_IsRefused(t *tes
 	}
 }
 
+// TestServerNotifier_ResourceUpdated_TagsWhatTheFilterReads drives the notifier
+// the way a watcher does, through a real server, and asserts the tag is on the
+// params that reach the sending middleware.
+//
+// The unit test below calls watchMeta directly, which is the one thing that
+// cannot go wrong here: the notifier has a method of that name and the package
+// has a function of that name, and the difference between them is the owner tag.
+// Calling the package function from ResourceUpdated compiles, passes every
+// cmd/server test, and produces exactly the failure ADR-0020 records from the
+// first implementation of this: every notification from a pooled entry sent and
+// then dropped by the filter for want of a tag, with the server logging that it
+// had sent them.
+//
+// So this drives ResourceUpdated instead, with both middlewares installed in the
+// order the real wiring installs them, and asserts on both ends: the params the
+// filter is handed carry the owner, and the client on the other side of the
+// filter actually receives the notification.
+func TestServerNotifier_ResourceUpdated_TagsWhatTheFilterReads(t *testing.T) {
+	const owner = "owner-mine"
+	const uri = "gitlab://project/42/pipeline/99"
+
+	// The pipeline never changes, so the server's own watcher stays silent and
+	// the only notification on the wire is the one this test sends.
+	_, gitlab := newPipelineBackend(t, "running")
+	server := subscriptionTestServer(t, gitlab.URL, config.CapabilitySurfaceFull, fastPolling())
+
+	sessions := newSessionOwners()
+	server.AddSendingMiddleware(sessions.sendingMiddleware)
+	// Added after the filter, so it wraps it and sees the params before the
+	// owner key is stripped for the wire.
+	var sent []mcp.Params
+	var mu sync.Mutex
+	acked := make(chan struct{}, 1)
+	server.AddSendingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			switch method {
+			case notificationResourceUpdated:
+				mu.Lock()
+				sent = append(sent, req.GetParams())
+				mu.Unlock()
+			case "notifications/subscriptions/acknowledged":
+				select {
+				case acked <- struct{}{}:
+				default:
+				}
+			}
+			return next(ctx, method, req)
+		}
+	})
+
+	delivered := make(chan string, 4)
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1"}, &mcp.ClientOptions{
+		ResourceUpdatedHandler: func(_ context.Context, req *mcp.ResourceUpdatedNotificationRequest) {
+			select {
+			case delivered <- req.Params.URI:
+			default:
+			}
+		},
+	})
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	session, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	if subErr := session.Subscribe(ctx, &mcp.SubscribeParams{URI: uri}); subErr != nil {
+		t.Fatalf("Subscribe: %v", subErr)
+	}
+	// Subscribe returns before the server has filed the subscription, so the
+	// acknowledgement is what says the SDK's table now holds this session: the
+	// listen handler sends it only after every URI it carries has been
+	// subscribed. Without this wait the notification below is sent to nobody.
+	select {
+	case <-acked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the subscription was never acknowledged, so nothing is subscribed to notify")
+	}
+
+	// The session is recorded under the same owner the notifier stamps, which
+	// is what the request path does on a shared server.
+	for serverSession := range server.Sessions() {
+		sessions.record(serverSession, owner)
+	}
+
+	notifier := &serverNotifier{owner: owner}
+	notifier.attach(server)
+	if updateErr := notifier.ResourceUpdated(ctx, subscriptions.Update{URI: uri, Interval: time.Second}); updateErr != nil {
+		t.Fatalf("ResourceUpdated: %v", updateErr)
+	}
+
+	mu.Lock()
+	seen := slices.Clone(sent)
+	mu.Unlock()
+	if len(seen) != 1 {
+		t.Fatalf("the sending chain saw %d resource-updated notifications, want 1", len(seen))
+	}
+	params, ok := seen[0].(*mcp.ResourceUpdatedNotificationParams)
+	if !ok {
+		t.Fatalf("params = %T, want *mcp.ResourceUpdatedNotificationParams", seen[0])
+	}
+	if got := params.Meta[ownerMetaKey]; got != owner {
+		t.Errorf("owner tag on the params = %v, want %q: the filter drops what it cannot attribute", got, owner)
+	}
+
+	select {
+	case got := <-delivered:
+		if got != uri {
+			t.Errorf("delivered URI = %q, want %q", got, uri)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the notification was sent and never delivered, which is what an untagged notification looks like")
+	}
+}
+
 // TestServerNotifier_WatchMeta_StampsTheOwnerOnASharedServer covers the tag the
 // delivery filter reads.
 //
