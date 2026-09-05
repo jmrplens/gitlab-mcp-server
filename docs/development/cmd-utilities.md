@@ -1061,9 +1061,9 @@ Rewrites the seven assets in place, or (with `--check`) names each stale one and
 
 #### Make targets
 
-- `make brand`
+- `make brand` — also the first generator `make update-all` runs, so a geometry change cannot leave the committed assets stale.
 - `make brand-check` — CI gate.
-- `make brand-rasters` — renders the raster derivatives (README banner WebP, OG and social PNGs, marketplace icons) from those vectors; maintainer-only, needs `rsvg-convert` and `cwebp`.
+- `make brand-rasters` — renders the raster derivatives (README banner WebP, OG and social PNGs, marketplace icons) from those vectors; maintainer-only, needs `rsvg-convert` and `cwebp`, and therefore stays out of `update-all`.
 
 ### gen_icon_webp
 

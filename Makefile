@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run brand brand-check brand-rasters test test-short test-race test-pkg test-integration test-e2e test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race test-pkg test-integration test-e2e test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
@@ -22,8 +22,16 @@ BINARY_NAME=gitlab-mcp-server
 CMD_PATH=./cmd/server
 PKGS=./cmd/... ./internal/...
 # Keep in lockstep with MCP_PUBLISHER_VERSION in .github/workflows/release.yml:
-# this one validates the manifest, that one publishes it.
+# this one validates the manifest, that one publishes it. check-server-json
+# refuses to run when the two disagree.
 MCP_PUBLISHER_VERSION=v1.8.1
+# The publisher is installed once per pinned version into a directory named
+# after that version, so a stale binary can never validate with another
+# release, and CI caches that directory by version instead of resolving the
+# module on every push. It is not a go.mod tool on purpose: the registry
+# module carries 77 direct dependencies that are not this project's.
+MCP_PUBLISHER_DIR=$(HOME)/.cache/gitlab-mcp-server/mcp-publisher/$(MCP_PUBLISHER_VERSION)
+MCP_PUBLISHER=$(MCP_PUBLISHER_DIR)/publisher
 GO_ANALYSIS_PKGS=./...
 # Every e2e build tag, and it must stay every one. A tagged file is invisible
 # to go vet and to golangci-lint unless its tag is listed here, so a suite
@@ -748,8 +756,17 @@ check-install-buttons:
 	go run ./cmd/audit_install_buttons/
 
 ## check-server-json: validate server.json with the official MCP Registry publisher.
-check-server-json:
-	go run github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION) validate server.json
+check-server-json: ensure-mcp-publisher
+	@grep -q 'MCP_PUBLISHER_VERSION: "$(MCP_PUBLISHER_VERSION)"' .github/workflows/release.yml || { echo "MCP_PUBLISHER_VERSION $(MCP_PUBLISHER_VERSION) in the Makefile is not the version .github/workflows/release.yml publishes with; keep the two in lockstep"; exit 1; }
+	$(MCP_PUBLISHER) validate server.json
+
+## mcp-publisher-version: print the pinned MCP Registry publisher version; CI keys its cache on it.
+mcp-publisher-version:
+	@echo $(MCP_PUBLISHER_VERSION)
+
+## ensure-mcp-publisher: install the pinned MCP Registry publisher into its version-named directory when it is not there yet.
+ensure-mcp-publisher:
+	@test -x $(MCP_PUBLISHER) || GOBIN=$(MCP_PUBLISHER_DIR) go install github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION)
 
 ## check-server-json-packages: verify every package server.json declares is
 ## really published and really installable. Downloads the artifacts, so it needs
@@ -910,9 +927,17 @@ publish-lobehub: check-lhm-manifest
 ## gen-readme: regenerate all managed README.md sections (token footprint + stats).
 gen-readme: gen-footprint gen-stats
 
-## update-all: run every generator and doc updater in one pass.
-## Generates: token footprint, repo stats, site stats, llms.txt, testing docs, action catalog manifest, markdown table formatting.
-update-all: gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest
+## update-all: run every generator, the brand assets included, then the table formatter.
+## Generates: brand vectors, token footprint, repo stats, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, markdown table formatting.
+# One generator at a time, in the recipe rather than as prerequisites: brand
+# rewrites internal/toolutil/brandmark_gen.go, which the generators after it
+# compile, and gen-footprint and gen-stats both rewrite README.md, so make -j
+# would interleave them. brand-rasters stays out: it needs rsvg-convert and
+# cwebp, which only the maintainer's machine has.
+update-all:
+	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest; do \
+		$(MAKE) --no-print-directory $$target || exit 1; \
+	done
 	go run ./cmd/format_md_tables/
 	@echo "All generators and formatters complete."
 

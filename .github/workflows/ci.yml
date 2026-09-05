@@ -119,6 +119,20 @@ jobs:
         run: make check-readonly-graphql
       - name: Check the one-click install buttons
         run: make check-install-buttons
+      # The manifest validator is the registry's publisher, a module whose 77
+      # direct dependencies are not this project's, so it is not a go.mod tool.
+      # It is installed once per pinned version into a directory named after
+      # that version and cached by that version, so a push resolves nothing
+      # over the network and a stale binary can never validate with another
+      # release.
+      - name: Read the pinned publisher version
+        id: publisher
+        run: echo "version=$(make -s mcp-publisher-version)" >> "$GITHUB_OUTPUT"
+      - name: Cache the MCP Registry publisher
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/gitlab-mcp-server/mcp-publisher/${{ steps.publisher.outputs.version }}
+          key: mcp-publisher-${{ steps.publisher.outputs.version }}-${{ runner.os }}
       - name: Check MCP Registry manifest
         run: make check-server-json
       # Downloads every declared artifact, so it runs on main only. A pull
@@ -705,6 +719,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
+    # Everything that can fail a change is listed, the test jobs included: the
+    # verdict used to take only the analysis jobs, so a failing unit suite, a
+    # compile error on another platform, or a red Windows leg could sit under
+    # a green required check. The cross-platform summary already tells the
+    # known Go runtime crash on AMX hosts apart from a failing test (issue
+    # 467), so listing it fails the verdict on real failures only.
     needs:
       - generated
       - golangci-lint
@@ -715,6 +735,11 @@ jobs:
       - server-json-schema
       - supply-chain
       - docs-audit
+      - coverage
+      - compile
+      - typecheck
+      - cross_platform_summary
+      - docker-build
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -724,6 +749,9 @@ jobs:
         env:
           RESULTS: ${{ toJSON(needs) }}
           INFORMATIONAL: docs-audit
+          # The image build only runs for a pull request; on a push it is
+          # skipped by design rather than failed.
+          MAY_SKIP: docker-build
         run: bash .github/scripts/needs-verdict.sh
 
   # Every job above runs on Linux, and until this one existed that was the only
