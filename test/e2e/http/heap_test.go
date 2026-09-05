@@ -138,7 +138,7 @@ func driveCredential(t *testing.T, srv *server, token string) {
 //
 // The envelope is decoded rather than searched for the word. A tools/list body
 // on the individual surface contains "error" five times as ordinary catalog
-// text — an enum value and a property name among them — so a substring probe
+// text (an enum value and a property name among them), so a substring probe
 // aborts every run on that surface with a failure that is not there. It was
 // what kept this test from being run on the surface where its signal is
 // strongest.
@@ -170,8 +170,8 @@ func jsonRPCErrorIn(body string) string {
 //
 // Two collections rather than one. The first reading of a process that has just
 // registered a catalog still counts what that registration left behind for one
-// more cycle — finalizers, the profile's own buffers, the response still on the
-// wire — and on the individual surface that was worth several mebibytes, which
+// more cycle (finalizers, the profile's own buffers, the response still on the
+// wire), and on the individual surface that was worth several mebibytes, which
 // is the same order as the budget this test asserts. Reading twice makes both
 // ends of the comparison a settled heap.
 func liveHeapBytes(t *testing.T, pprofAddr string) uint64 {
