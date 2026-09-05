@@ -1,7 +1,7 @@
 {
   "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
-    "types": ["astro/client", "@astrojs/starlight/locals"]
+    "types": ["astro/client", "@astrojs/starlight"]
   },
   "include": ["src", "types", ".astro/types.d.ts"],
   "exclude": ["dist", "build", "node_modules", ".astro"]

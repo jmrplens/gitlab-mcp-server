@@ -74,8 +74,9 @@ const DATA: Record<Kind, string> = {
 	fixes: "fixes",
 };
 
-const t = Astro.locals.t;
-const text = kind ? t(`gm.fact.${kind}` as Parameters<typeof t>[0]) : label;
+// kind is a union of literals, so the template is a union of the keys declared
+// in types/starlight-i18n.d.ts and t checks it without a cast.
+const text = kind ? Astro.locals.t(`gm.fact.${kind}`) : label;
 ---
 
 <div class="fact" data-fact={kind ? DATA[kind] : "note"}>
