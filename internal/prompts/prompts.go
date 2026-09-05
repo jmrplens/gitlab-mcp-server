@@ -83,6 +83,21 @@ func Register(server *mcp.Server, client *gitlabclient.Client, opts ...RegisterO
 //
 // Split from [Register] so the filtering wrapper is applied once, and so a
 // test can collect what would be registered without standing up a server.
+//
+// # Why every handler resolves its client from the request context
+//
+// One MCP server is shared by every credential whose configuration hashes to
+// the same shape, so these registrations run once per shape rather than once
+// per caller, and the client they capture is the credential-less unbound one
+// that refuses every request. Each handler therefore passes the caller's own
+// client through [gitlabclient.Client.For], which the HTTP layer installs on
+// the request context after resolving that request's pool entry. Resolving at
+// call time is what makes a prompt reach the caller's instance, and capturing
+// at registration time is what would make it reach nobody's: the unbound
+// fallback fails closed instead of borrowing whichever credential happened to
+// build the shape. On stdio, and in every test that registers a real client,
+// nothing is ever bound and For returns the captured client unchanged, so the
+// call is invisible there.
 func registerAll(server registrar, client *gitlabclient.Client) {
 	registerSummarizeMRChangesPrompt(server, client)
 	registerReviewMRPrompt(server, client)
@@ -131,7 +146,7 @@ func registerSummarizeMRChangesPrompt(server registrar, client *gitlabclient.Cli
 			mrIIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleSummarizeMRChanges(ctx, client, req)
+		return handleSummarizeMRChanges(ctx, client.For(ctx), req)
 	})
 }
 
@@ -171,7 +186,7 @@ func registerReviewMRPrompt(server registrar, client *gitlabclient.Client) {
 			mrIIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleReviewMR(ctx, client, req)
+		return handleReviewMR(ctx, client.For(ctx), req)
 	})
 }
 
@@ -293,7 +308,7 @@ func registerSummarizePipelineStatusPrompt(server registrar, client *gitlabclien
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleSummarizePipelineStatus(ctx, client, req)
+		return handleSummarizePipelineStatus(ctx, client.For(ctx), req)
 	})
 }
 
@@ -374,7 +389,7 @@ func registerSuggestMRReviewersPrompt(server registrar, client *gitlabclient.Cli
 			mrIIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleSuggestMRReviewers(ctx, client, req)
+		return handleSuggestMRReviewers(ctx, client.For(ctx), req)
 	})
 }
 
@@ -430,7 +445,7 @@ func registerGenerateReleaseNotesPrompt(server registrar, client *gitlabclient.C
 			{Name: "to", Title: toolutil.TitleFromName("to"), Description: "Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleGenerateReleaseNotes(ctx, client, req)
+		return handleGenerateReleaseNotes(ctx, client.For(ctx), req)
 	})
 }
 
@@ -588,7 +603,7 @@ func registerSummarizeOpenMRsPrompt(server registrar, client *gitlabclient.Clien
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleSummarizeOpenMRs(ctx, client, req)
+		return handleSummarizeOpenMRs(ctx, client.For(ctx), req)
 	})
 }
 
@@ -645,7 +660,7 @@ func registerProjectHealthCheckPrompt(server registrar, client *gitlabclient.Cli
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleProjectHealthCheck(ctx, client, req)
+		return handleProjectHealthCheck(ctx, client.For(ctx), req)
 	})
 }
 
@@ -745,7 +760,7 @@ func registerCompareBranchesPrompt(server registrar, client *gitlabclient.Client
 			{Name: "to", Title: toolutil.TitleFromName("to"), Description: "Target branch name, tag, or commit SHA to compare to", Required: true},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleCompareBranches(ctx, client, req)
+		return handleCompareBranches(ctx, client.For(ctx), req)
 	})
 }
 
@@ -812,7 +827,7 @@ func registerDailyStandupPrompt(server registrar, client *gitlabclient.Client) {
 			{Name: "username", Title: toolutil.TitleFromName("username"), Description: "GitLab username to generate the standup for (defaults to the authenticated user if omitted)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleDailyStandup(ctx, client, req)
+		return handleDailyStandup(ctx, client.For(ctx), req)
 	})
 }
 
@@ -975,7 +990,7 @@ func registerTeamMemberWorkloadPrompt(server registrar, client *gitlabclient.Cli
 			{Name: "days", Title: toolutil.TitleFromName("days"), Description: "Number of days to look back for activity (default: 7)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleTeamMemberWorkload(ctx, client, req)
+		return handleTeamMemberWorkload(ctx, client.For(ctx), req)
 	})
 }
 
@@ -1121,7 +1136,7 @@ func registerUserStatsPrompt(server registrar, client *gitlabclient.Client) {
 			{Name: "days", Title: toolutil.TitleFromName("days"), Description: "Number of days to look back for activity (default: 30)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleUserStats(ctx, client, req)
+		return handleUserStats(ctx, client.For(ctx), req)
 	})
 }
 
@@ -1344,7 +1359,7 @@ func registerMRRiskAssessmentPrompt(server registrar, client *gitlabclient.Clien
 			mrIIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMRRiskAssessment(ctx, client, req)
+		return handleMRRiskAssessment(ctx, client.For(ctx), req)
 	})
 }
 

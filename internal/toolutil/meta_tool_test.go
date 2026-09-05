@@ -1037,6 +1037,94 @@ func TestWrapAction(t *testing.T) {
 	}
 }
 
+// TestWrapAction_ClientBoundToTheRequestWinsOverTheCapturedOne verifies the
+// seam that lets one MCP server serve many credentials.
+//
+// Since one server is built per configuration shape rather than per credential,
+// the catalog behind it is bound to the credential-less client that refuses
+// every request, and the caller's own arrives on the request context. Every
+// catalog action on every surface reaches its handler through one of these four
+// wrappers, so this is the single point at which that resolution either happens
+// or does not, for the whole tool surface.
+//
+// The fallback half matters just as much: on stdio and in every test that
+// builds a catalog for one real client, nothing binds anything and the captured
+// client has to be what the handler receives.
+func TestWrapAction_ClientBoundToTheRequestWinsOverTheCapturedOne(t *testing.T) {
+	captured := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	bound := gitlabclient.NewUnboundClient("https://gitlab.com")
+
+	cases := []struct {
+		name string
+		run  func(ctx context.Context, seen *[]*gitlabclient.Client) error
+	}{
+		{
+			name: "WrapAction",
+			run: func(ctx context.Context, seen *[]*gitlabclient.Client) error {
+				action := WrapAction(captured, func(_ context.Context, c *gitlabclient.Client, _ testInput) (testOutput, error) {
+					*seen = append(*seen, c)
+					return testOutput{}, nil
+				})
+				_, err := action(ctx, map[string]any{"name": "x"})
+				return err
+			},
+		},
+		{
+			name: "WrapVoidAction",
+			run: func(ctx context.Context, seen *[]*gitlabclient.Client) error {
+				action := WrapVoidAction(captured, func(_ context.Context, c *gitlabclient.Client, _ testInput) error {
+					*seen = append(*seen, c)
+					return nil
+				})
+				_, err := action(ctx, map[string]any{"name": "x"})
+				return err
+			},
+		},
+		{
+			name: "WrapActionWithRequest",
+			run: func(ctx context.Context, seen *[]*gitlabclient.Client) error {
+				action := WrapActionWithRequest(captured, func(_ context.Context, _ *mcp.CallToolRequest, c *gitlabclient.Client, _ testInput) (testOutput, error) {
+					*seen = append(*seen, c)
+					return testOutput{}, nil
+				})
+				_, err := action(ctx, map[string]any{"name": "x"})
+				return err
+			},
+		},
+		{
+			name: "WrapVoidActionWithRequest",
+			run: func(ctx context.Context, seen *[]*gitlabclient.Client) error {
+				action := WrapVoidActionWithRequest(captured, func(_ context.Context, _ *mcp.CallToolRequest, c *gitlabclient.Client, _ testInput) error {
+					*seen = append(*seen, c)
+					return nil
+				})
+				_, err := action(ctx, map[string]any{"name": "x"})
+				return err
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var seen []*gitlabclient.Client
+			if err := tc.run(gitlabclient.WithClient(context.Background(), bound), &seen); err != nil {
+				t.Fatalf("bound call: %v", err)
+			}
+			if err := tc.run(context.Background(), &seen); err != nil {
+				t.Fatalf("unbound call: %v", err)
+			}
+			if len(seen) != 2 {
+				t.Fatalf("the handler ran %d times, want 2", len(seen))
+			}
+			if seen[0] != bound {
+				t.Errorf("the bound call reached the handler with %p, want the context's client %p", seen[0], bound)
+			}
+			if seen[1] != captured {
+				t.Errorf("the unbound call reached the handler with %p, want the captured client %p", seen[1], captured)
+			}
+		})
+	}
+}
+
 // TestWrapAction_UnmarshalError verifies WrapAction returns an error when
 // params cannot be deserialized into the input struct.
 func TestWrapAction_UnmarshalError(t *testing.T) {

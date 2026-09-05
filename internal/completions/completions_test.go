@@ -7,10 +7,12 @@ package completions
 import (
 	"context"
 	"net/http"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
@@ -1418,6 +1420,101 @@ func TestFormatEntries_BareValuesSpec(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if c.got != c.want {
 				t.Errorf("%s entry = %q, want bare value %q (spec 2025-11-25 §completion/complete)", c.name, c.got, c.want)
+			}
+		})
+	}
+}
+
+// TestComplete_ContextBoundClient_UsesBoundClient verifies that a completion
+// runs against the client bound to the request context rather than the one
+// [NewHandler] was given.
+//
+// This is the seam that lets one MCP server be shared by every credential whose
+// configuration hashes to the same shape: the handler is built once with the
+// unbound client, and the caller's own client is installed per request. The
+// assertion is deliberately two-sided. Values coming from the bound instance
+// prove the binding is read; the handler's own instance receiving no request at
+// all proves the stored client is a fallback and not a second place the
+// completion may reach, which is what keeps one caller's credential from
+// serving another caller's completion.
+//
+// Both branches of [Handler.Complete] are covered, since a prompt reference and
+// a resource reference reach GitLab through different dispatchers.
+func TestComplete_ContextBoundClient_UsesBoundClient(t *testing.T) {
+	cases := []struct {
+		name        string
+		refType     string
+		uri         string
+		argName     string
+		path        string
+		handlerBody string
+		boundBody   string
+		want        string
+	}{
+		{
+			name:        "prompt project_id",
+			refType:     refPrompt,
+			argName:     "project_id",
+			path:        "/api/v4/projects",
+			handlerBody: `[{"id":1,"path_with_namespace":"handler/project"}]`,
+			boundBody:   `[{"id":2,"path_with_namespace":"bound/project"}]`,
+			want:        "bound/project",
+		},
+		{
+			name:        "resource group_id",
+			refType:     refResource,
+			uri:         "gitlab://{group_id}/milestones",
+			argName:     "group_id",
+			path:        "/api/v4/groups",
+			handlerBody: `[{"id":3,"full_path":"handler/group"}]`,
+			boundBody:   `[{"id":4,"full_path":"bound/group"}]`,
+			want:        "bound/group",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Counted rather than asserted inside the handlers: these run on
+			// the server's goroutines, so the verdict belongs on the test's.
+			var handlerHits, boundHits atomic.Int64
+
+			respond := func(hits *atomic.Int64, body string) http.HandlerFunc {
+				return func(w http.ResponseWriter, r *http.Request) {
+					hits.Add(1)
+					if r.URL.Path != c.path {
+						http.NotFound(w, r)
+						return
+					}
+					testutil.RespondJSON(w, http.StatusOK, body)
+				}
+			}
+
+			handlerClient := testutil.NewTestClient(t, respond(&handlerHits, c.handlerBody))
+			boundClient := testutil.NewTestClient(t, respond(&boundHits, c.boundBody))
+
+			h := NewHandler(handlerClient)
+			req := &mcp.CompleteRequest{}
+			req.Params = &mcp.CompleteParams{
+				Ref:      &mcp.CompleteReference{Type: c.refType, Name: "seam", URI: c.uri},
+				Argument: mcp.CompleteParamsArgument{Name: c.argName, Value: "bou"},
+			}
+
+			ctx := gitlabclient.WithClient(context.Background(), boundClient)
+			result, err := h.Complete(ctx, req)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if len(result.Completion.Values) != 1 {
+				t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
+			}
+			if result.Completion.Values[0] != c.want {
+				t.Errorf("completion ran against the wrong instance: got %q, want %q", result.Completion.Values[0], c.want)
+			}
+			if got := boundHits.Load(); got != 1 {
+				t.Errorf("bound instance received %d requests, want 1", got)
+			}
+			if got := handlerHits.Load(); got != 0 {
+				t.Errorf("handler's own instance received %d requests, want 0", got)
 			}
 		})
 	}

@@ -41,7 +41,7 @@ func registerAuditCommitHygienePrompt(server registrar, client *gitlabclient.Cli
 			{Name: "to", Title: toolutil.TitleFromName("to"), Description: "Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleAuditCommitHygiene(ctx, client, req)
+		return handleAuditCommitHygiene(ctx, client.For(ctx), req)
 	})
 }
 
@@ -105,7 +105,7 @@ func registerMRDescriptionQualityPrompt(server registrar, client *gitlabclient.C
 			mrIIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMRDescriptionQuality(ctx, client, req)
+		return handleMRDescriptionQuality(ctx, client.For(ctx), req)
 	})
 }
 

@@ -45,7 +45,7 @@ func registerMergeVelocityPrompt(server registrar, client *gitlabclient.Client) 
 			daysArg(30),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMergeVelocity(ctx, client, req)
+		return handleMergeVelocity(ctx, client.For(ctx), req)
 	})
 }
 
@@ -152,7 +152,7 @@ func registerReleaseReadinessPrompt(server registrar, client *gitlabclient.Clien
 			{Name: "branch", Title: toolutil.TitleFromName("branch"), Description: "Target release branch (default: main)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleReleaseReadiness(ctx, client, req)
+		return handleReleaseReadiness(ctx, client.For(ctx), req)
 	})
 }
 
@@ -257,7 +257,7 @@ func registerReleaseCadencePrompt(server registrar, client *gitlabclient.Client)
 			daysArg(90),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleReleaseCadence(ctx, client, req)
+		return handleReleaseCadence(ctx, client.For(ctx), req)
 	})
 }
 
@@ -373,7 +373,7 @@ func registerWeeklyTeamRecapPrompt(server registrar, client *gitlabclient.Client
 			daysArg(7),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleWeeklyTeamRecap(ctx, client, req)
+		return handleWeeklyTeamRecap(ctx, client.For(ctx), req)
 	})
 }
 

@@ -479,6 +479,17 @@ func Register(server *mcp.Server, client *gitlabclient.Client, opts ...RegisterO
 }
 
 // registerAll performs every registration against a registrar.
+//
+// Every handler registered here resolves the GitLab client it uses from the
+// request context, with base.For(ctx), rather than from the client captured
+// at registration. One mcp.Server is shared by all the credentials whose
+// configuration hashes to the same shape, so the captured client is the
+// credential-less one that refuses every request, and the per-request binding
+// the HTTP layer installs is what makes a read reach the caller's own
+// instance: registration decides which resources exist, the request decides
+// whose GitLab answers them. On stdio, and in every test that registers with a
+// real client, nothing is ever bound and For returns the captured client, so
+// the resolution is invisible there.
 func registerAll(server registrar, client *gitlabclient.Client) {
 	registerCurrentUserResource(server, client)
 	registerGroupsResource(server, client)
@@ -522,7 +533,7 @@ func registerAll(server registrar, client *gitlabclient.Client) {
 
 // registerCurrentUserResource registers the "gitlab://user/current" static
 // resource that returns the authenticated user's profile from the GitLab Users API.
-func registerCurrentUserResource(server registrar, client *gitlabclient.Client) {
+func registerCurrentUserResource(server registrar, base *gitlabclient.Client) {
 	server.AddResource(&mcp.Resource{
 		URI:         "gitlab://user/current",
 		Name:        "current_user",
@@ -532,6 +543,7 @@ func registerCurrentUserResource(server registrar, client *gitlabclient.Client) 
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		u, _, err := client.GL().Users.CurrentUser(gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to get current user", err)
@@ -551,7 +563,7 @@ func registerCurrentUserResource(server registrar, client *gitlabclient.Client) 
 
 // registerGroupsResource registers the "gitlab://groups" static resource
 // that lists all GitLab groups accessible to the authenticated user.
-func registerGroupsResource(server registrar, client *gitlabclient.Client) {
+func registerGroupsResource(server registrar, base *gitlabclient.Client) {
 	server.AddResource(&mcp.Resource{
 		URI:         "gitlab://groups",
 		Name:        "groups",
@@ -561,6 +573,7 @@ func registerGroupsResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		groups, resp, err := client.GL().Groups.ListGroups(&gl.ListGroupsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list groups", err)
@@ -583,7 +596,7 @@ func registerGroupsResource(server registrar, client *gitlabclient.Client) {
 
 // registerProjectResource registers the "gitlab://project/{project_id}" template
 // resource that returns basic metadata for a GitLab project.
-func registerProjectResource(server registrar, client *gitlabclient.Client) {
+func registerProjectResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}",
 		Name:        "project",
@@ -593,6 +606,7 @@ func registerProjectResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconProject,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID := extractSuffix(req.Params.URI, uriProjectPrefix)
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError("gitlab://project/{project_id}")
@@ -617,13 +631,14 @@ func registerProjectResource(server registrar, client *gitlabclient.Client) {
 // registerProjectMembersResource registers the "gitlab://project/{project_id}/members"
 // template resource that lists all members of a GitLab project, including
 // inherited members from parent groups.
-func registerProjectMembersResource(server registrar, client *gitlabclient.Client) {
+func registerProjectMembersResource(server registrar, base *gitlabclient.Client) {
 	registerMembersResource(server, &mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/members",
 		Name:        "project_members",
 		Title:       "Project Members",
 		Description: "Members of a GitLab project, up to one page (100), with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.",
 	}, uriProjectPrefix, "failed to list project members", func(ctx context.Context, projectID string) ([]MemberResourceOutput, *gl.Response, error) {
+		client := base.For(ctx)
 		members, resp, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, nil, err
@@ -639,7 +654,7 @@ func registerProjectMembersResource(server registrar, client *gitlabclient.Clien
 // registerLatestPipelineResource registers the
 // "gitlab://project/{project_id}/pipelines/latest" template resource that
 // returns the most recent CI/CD pipeline for a GitLab project.
-func registerLatestPipelineResource(server registrar, client *gitlabclient.Client) {
+func registerLatestPipelineResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/pipelines/latest",
 		Name:        "latest_pipeline",
@@ -649,6 +664,7 @@ func registerLatestPipelineResource(server registrar, client *gitlabclient.Clien
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/pipelines/latest")
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -665,7 +681,7 @@ func registerLatestPipelineResource(server registrar, client *gitlabclient.Clien
 // registerPipelineResource registers the
 // "gitlab://project/{project_id}/pipeline/{pipeline_id}" template resource
 // that returns details of a specific CI/CD pipeline by its numeric ID.
-func registerPipelineResource(server registrar, client *gitlabclient.Client) {
+func registerPipelineResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/pipeline/{pipeline_id}",
 		Name:        "pipeline",
@@ -675,6 +691,7 @@ func registerPipelineResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		return readProjectIntResource(ctx, req, "/pipeline/", "failed to get pipeline",
 			func(projectID string, pipelineID int64) (PipelineResourceOutput, error) {
 				p, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(ctx))
@@ -689,7 +706,7 @@ func registerPipelineResource(server registrar, client *gitlabclient.Client) {
 // registerPipelineJobsResource registers the
 // "gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs" template
 // resource that lists all jobs for a specific CI/CD pipeline.
-func registerPipelineJobsResource(server registrar, client *gitlabclient.Client) {
+func registerPipelineJobsResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs",
 		Name:        "pipeline_jobs",
@@ -699,6 +716,7 @@ func registerPipelineJobsResource(server registrar, client *gitlabclient.Client)
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconJob,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		uri := strings.TrimSuffix(req.Params.URI, "/jobs")
 		projectID, pipelineIDStr := extractTwoParts(uri, uriProjectPrefix, "/pipeline/")
 		if projectID == "" || pipelineIDStr == "" {
@@ -732,7 +750,7 @@ func registerPipelineJobsResource(server registrar, client *gitlabclient.Client)
 // registerProjectLabelsResource registers the
 // "gitlab://project/{project_id}/labels" template resource that lists all
 // labels defined in a GitLab project.
-func registerProjectLabelsResource(server registrar, client *gitlabclient.Client) {
+func registerProjectLabelsResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/labels",
 		Name:        "project_labels",
@@ -742,6 +760,7 @@ func registerProjectLabelsResource(server registrar, client *gitlabclient.Client
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/labels")
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -768,7 +787,7 @@ func registerProjectLabelsResource(server registrar, client *gitlabclient.Client
 // registerProjectMilestonesResource registers the
 // "gitlab://project/{project_id}/milestones" template resource that lists
 // all milestones in a GitLab project.
-func registerProjectMilestonesResource(server registrar, client *gitlabclient.Client) {
+func registerProjectMilestonesResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/milestones",
 		Name:        "project_milestones",
@@ -778,6 +797,7 @@ func registerProjectMilestonesResource(server registrar, client *gitlabclient.Cl
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/milestones")
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -808,7 +828,7 @@ func registerProjectMilestonesResource(server registrar, client *gitlabclient.Cl
 // registerMergeRequestResource registers the
 // "gitlab://project/{project_id}/mr/{merge_request_iid}" template resource that
 // returns details of a specific merge request by its project-scoped IID.
-func registerMergeRequestResource(server registrar, client *gitlabclient.Client) {
+func registerMergeRequestResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}",
 		Name:        "merge_request",
@@ -818,6 +838,7 @@ func registerMergeRequestResource(server registrar, client *gitlabclient.Client)
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, mrIIDStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/mr/")
 		if projectID == "" || mrIIDStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -852,7 +873,7 @@ func registerMergeRequestResource(server registrar, client *gitlabclient.Client)
 // registerProjectBranchesResource registers the
 // "gitlab://project/{project_id}/branches" template resource that lists
 // all branches in a GitLab project repository.
-func registerProjectBranchesResource(server registrar, client *gitlabclient.Client) {
+func registerProjectBranchesResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/branches",
 		Name:        "project_branches",
@@ -862,6 +883,7 @@ func registerProjectBranchesResource(server registrar, client *gitlabclient.Clie
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconBranch,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/branches")
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -886,7 +908,7 @@ func registerProjectBranchesResource(server registrar, client *gitlabclient.Clie
 
 // registerGroupResource registers the "gitlab://group/{group_id}" template
 // resource that returns details for a specific GitLab group.
-func registerGroupResource(server registrar, client *gitlabclient.Client) {
+func registerGroupResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}",
 		Name:        "group",
@@ -896,6 +918,7 @@ func registerGroupResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		groupID := extractSuffix(req.Params.URI, uriGroupPrefix)
 		if groupID == "" {
 			return nil, mcp.ResourceNotFoundError("gitlab://group/{group_id}")
@@ -920,13 +943,14 @@ func registerGroupResource(server registrar, client *gitlabclient.Client) {
 // registerGroupMembersResource registers the
 // "gitlab://group/{group_id}/members" template resource that lists all
 // members of a GitLab group, including inherited members.
-func registerGroupMembersResource(server registrar, client *gitlabclient.Client) {
+func registerGroupMembersResource(server registrar, base *gitlabclient.Client) {
 	registerMembersResource(server, &mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/members",
 		Name:        "group_members",
 		Title:       "Group Members",
 		Description: "Members of a GitLab group, up to one page (100), with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members.",
 	}, uriGroupPrefix, "failed to list group members", func(ctx context.Context, groupID string) ([]MemberResourceOutput, *gl.Response, error) {
+		client := base.For(ctx)
 		members, resp, err := client.GL().Groups.ListAllGroupMembers(groupID, &gl.ListGroupMembersOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, nil, err
@@ -961,7 +985,7 @@ func registerMembersResource(server registrar, tmpl *mcp.ResourceTemplate, uriPr
 // registerGroupProjectsResource registers the
 // "gitlab://group/{group_id}/projects" template resource that lists all
 // projects within a GitLab group.
-func registerGroupProjectsResource(server registrar, client *gitlabclient.Client) {
+func registerGroupProjectsResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/projects",
 		Name:        "group_projects",
@@ -971,6 +995,7 @@ func registerGroupProjectsResource(server registrar, client *gitlabclient.Client
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconProject,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		groupID := extractMiddle(req.Params.URI, uriGroupPrefix, "/projects")
 		if groupID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -998,7 +1023,7 @@ func registerGroupProjectsResource(server registrar, client *gitlabclient.Client
 // registerProjectIssuesResource registers the
 // "gitlab://project/{project_id}/issues" template resource that lists
 // open issues for a GitLab project.
-func registerProjectIssuesResource(server registrar, client *gitlabclient.Client) {
+func registerProjectIssuesResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/issues",
 		Name:        "project_issues",
@@ -1008,6 +1033,7 @@ func registerProjectIssuesResource(server registrar, client *gitlabclient.Client
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/issues")
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1031,7 +1057,7 @@ func registerProjectIssuesResource(server registrar, client *gitlabclient.Client
 // registerIssueResource registers the
 // "gitlab://project/{project_id}/issue/{issue_iid}" template resource that
 // returns details of a specific issue by its project-scoped IID.
-func registerIssueResource(server registrar, client *gitlabclient.Client) {
+func registerIssueResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/issue/{issue_iid}",
 		Name:        "issue",
@@ -1041,6 +1067,7 @@ func registerIssueResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		return readProjectIntResource(ctx, req, "/issue/", "failed to get issue",
 			func(projectID string, issueIID int64) (IssueResourceOutput, error) {
 				issue, _, err := client.GL().Issues.GetIssue(projectID, issueIID, gl.WithContext(ctx))
@@ -1055,7 +1082,7 @@ func registerIssueResource(server registrar, client *gitlabclient.Client) {
 // registerProjectReleasesResource registers the
 // "gitlab://project/{project_id}/releases" template resource that lists
 // all releases for a GitLab project.
-func registerProjectReleasesResource(server registrar, client *gitlabclient.Client) {
+func registerProjectReleasesResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/releases",
 		Name:        "project_releases",
@@ -1065,6 +1092,7 @@ func registerProjectReleasesResource(server registrar, client *gitlabclient.Clie
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconRelease,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/releases")
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1096,7 +1124,7 @@ func registerProjectReleasesResource(server registrar, client *gitlabclient.Clie
 // registerProjectTagsResource registers the
 // "gitlab://project/{project_id}/tags" template resource that lists all
 // repository tags for a GitLab project.
-func registerProjectTagsResource(server registrar, client *gitlabclient.Client) {
+func registerProjectTagsResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/tags",
 		Name:        "project_tags",
@@ -1106,6 +1134,7 @@ func registerProjectTagsResource(server registrar, client *gitlabclient.Client) 
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconTag,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/tags")
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1135,7 +1164,7 @@ func registerProjectTagsResource(server registrar, client *gitlabclient.Client) 
 // "gitlab://project/{project_id}/commit/{sha}" template resource that returns
 // details for a single commit including message, author/committer, parents
 // and stats.
-func registerCommitResource(server registrar, client *gitlabclient.Client) {
+func registerCommitResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/commit/{sha}",
 		Name:        "commit",
@@ -1145,6 +1174,7 @@ func registerCommitResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconCommit,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, sha := extractTwoParts(req.Params.URI, uriProjectPrefix, "/commit/")
 		if projectID == "" || sha == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1185,7 +1215,7 @@ func registerCommitResource(server registrar, client *gitlabclient.Client) {
 // returns the textual contents of a repository file. Files larger than
 // fileBlobMaxBytes return metadata with content omitted and truncated=true.
 // Binary content is omitted (only metadata returned).
-func registerFileBlobResource(server registrar, client *gitlabclient.Client) {
+func registerFileBlobResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/file/{ref}/{+path}",
 		Name:        "file_blob",
@@ -1195,6 +1225,7 @@ func registerFileBlobResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconFile,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, ref, filePath := extractFileBlobURI(req.Params.URI)
 		if projectID == "" || ref == "" || filePath == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1229,7 +1260,7 @@ func registerFileBlobResource(server registrar, client *gitlabclient.Client) {
 // registerWikiResource registers the
 // "gitlab://project/{project_id}/wiki/{slug}" template resource that returns
 // a single wiki page by slug.
-func registerWikiResource(server registrar, client *gitlabclient.Client) {
+func registerWikiResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/wiki/{slug}",
 		Name:        "wiki_page",
@@ -1239,6 +1270,7 @@ func registerWikiResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconWiki,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, slug := extractTwoParts(req.Params.URI, uriProjectPrefix, "/wiki/")
 		if projectID == "" || slug == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1261,7 +1293,7 @@ func registerWikiResource(server registrar, client *gitlabclient.Client) {
 // registerMergeRequestNotesResource registers the
 // "gitlab://project/{project_id}/mr/{merge_request_iid}/notes" template resource that
 // returns the flat list of notes (comments) for a merge request.
-func registerMergeRequestNotesResource(server registrar, client *gitlabclient.Client) {
+func registerMergeRequestNotesResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}/notes",
 		Name:        "merge_request_notes",
@@ -1271,6 +1303,7 @@ func registerMergeRequestNotesResource(server registrar, client *gitlabclient.Cl
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		uri := strings.TrimSuffix(req.Params.URI, "/notes")
 		projectID, mrIIDStr := extractTwoParts(uri, uriProjectPrefix, "/mr/")
 		if projectID == "" || mrIIDStr == "" {
@@ -1312,7 +1345,7 @@ func registerMergeRequestNotesResource(server registrar, client *gitlabclient.Cl
 // "gitlab://project/{project_id}/mr/{merge_request_iid}/discussions" template resource
 // that returns the discussion threads for a merge request, each containing
 // one or more notes.
-func registerMergeRequestDiscussionsResource(server registrar, client *gitlabclient.Client) {
+func registerMergeRequestDiscussionsResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}/discussions",
 		Name:        "merge_request_discussions",
@@ -1322,6 +1355,7 @@ func registerMergeRequestDiscussionsResource(server registrar, client *gitlabcli
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		uri := strings.TrimSuffix(req.Params.URI, "/discussions")
 		projectID, mrIIDStr := extractTwoParts(uri, uriProjectPrefix, "/mr/")
 		if projectID == "" || mrIIDStr == "" {
@@ -1370,7 +1404,7 @@ func registerMergeRequestDiscussionsResource(server registrar, client *gitlabcli
 // registerReleaseResource registers the
 // "gitlab://project/{project_id}/release/{tag_name}" template resource that
 // returns details for a single release identified by its Git tag.
-func registerReleaseResource(server registrar, client *gitlabclient.Client) {
+func registerReleaseResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/release/{tag_name}",
 		Name:        "release",
@@ -1380,6 +1414,7 @@ func registerReleaseResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconRelease,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, tagName := extractTwoParts(req.Params.URI, uriProjectPrefix, "/release/")
 		if projectID == "" || tagName == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1407,7 +1442,7 @@ func registerReleaseResource(server registrar, client *gitlabclient.Client) {
 // registerBranchResource registers the
 // "gitlab://project/{project_id}/branch/{branch}" template resource,
 // which returns details for a single repository branch.
-func registerBranchResource(server registrar, client *gitlabclient.Client) {
+func registerBranchResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/branch/{branch}",
 		Name:        "branch",
@@ -1417,6 +1452,7 @@ func registerBranchResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconBranch,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, branch := extractTwoParts(req.Params.URI, uriProjectPrefix, "/branch/")
 		if projectID == "" || branch == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1439,8 +1475,8 @@ func registerBranchResource(server registrar, client *gitlabclient.Client) {
 // registerTagResource registers the
 // "gitlab://project/{project_id}/tag/{tag_name}" template resource,
 // which returns details for a single Git tag.
-func registerTagResource(server registrar, client *gitlabclient.Client) {
-	server.AddResourceTemplate(&mcp.ResourceTemplate{
+func registerTagResource(server registrar, base *gitlabclient.Client) {
+	registerProjectNamedResource(server, base, &mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/tag/{tag_name}",
 		Name:        "tag",
 		Title:       "Tag Details",
@@ -1448,14 +1484,34 @@ func registerTagResource(server registrar, client *gitlabclient.Client) {
 		Description: "Get details for a single Git tag. Returns name, target commit SHA, annotation message, and protection status.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconTag,
-	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		return readProjectNamedResource(ctx, req, "/tag/", "failed to get tag",
-			func(projectID, tagName string) (TagResourceOutput, error) {
-				t, _, err := client.GL().Tags.GetTag(projectID, tagName, gl.WithContext(ctx))
-				if err != nil {
-					return TagResourceOutput{}, err
-				}
-				return TagResourceOutput{Name: t.Name, Message: t.Message, Target: t.Target, Protected: t.Protected}, nil
+	}, "/tag/", "failed to get tag",
+		func(ctx context.Context, client *gitlabclient.Client, projectID, tagName string) (TagResourceOutput, error) {
+			t, _, err := client.GL().Tags.GetTag(projectID, tagName, gl.WithContext(ctx))
+			if err != nil {
+				return TagResourceOutput{}, err
+			}
+			return TagResourceOutput{Name: t.Name, Message: t.Message, Target: t.Target, Protected: t.Protected}, nil
+		})
+}
+
+// registerProjectNamedResource registers a template whose handler reads one
+// named child of a project, resolving the request's client first.
+//
+// The two handlers that take this shape were identical down to the token once
+// the client resolution was added to each, which is what makes the helper worth
+// having rather than two copies with a lint exemption on them.
+func registerProjectNamedResource[O any](
+	server registrar,
+	base *gitlabclient.Client,
+	template *mcp.ResourceTemplate,
+	separator, operation string,
+	read func(ctx context.Context, client *gitlabclient.Client, projectID, name string) (O, error),
+) {
+	server.AddResourceTemplate(template, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
+		return readProjectNamedResource(ctx, req, separator, operation,
+			func(projectID, name string) (O, error) {
+				return read(ctx, client, projectID, name)
 			})
 	})
 }
@@ -1464,7 +1520,7 @@ func registerTagResource(server registrar, client *gitlabclient.Client) {
 // "gitlab://project/{project_id}/label/{label_id}" template resource,
 // which returns details for a single project label by numeric ID or
 // label name.
-func registerLabelResource(server registrar, client *gitlabclient.Client) {
+func registerLabelResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/label/{label_id}",
 		Name:        "label",
@@ -1474,6 +1530,7 @@ func registerLabelResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, labelID := extractTwoParts(req.Params.URI, uriProjectPrefix, "/label/")
 		if projectID == "" || labelID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1500,7 +1557,7 @@ func registerLabelResource(server registrar, client *gitlabclient.Client) {
 // identified by its project-scoped IID. Internally, it lists
 // milestones filtered by IID because the GitLab Milestones API
 // exposes only a list endpoint.
-func registerMilestoneResource(server registrar, client *gitlabclient.Client) {
+func registerMilestoneResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/milestone/{milestone_iid}",
 		Name:        "milestone",
@@ -1510,6 +1567,7 @@ func registerMilestoneResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, iidStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/milestone/")
 		if projectID == "" || iidStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1803,7 +1861,7 @@ func extractGroupTwoParts(uri, kind string) (groupID, value string) {
 // "gitlab://project/{project_id}/deployment/{deployment_id}" template
 // resource, which returns details for a single project deployment by
 // numeric ID.
-func registerDeploymentResource(server registrar, client *gitlabclient.Client) {
+func registerDeploymentResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/deployment/{deployment_id}",
 		Name:        "deployment",
@@ -1813,6 +1871,7 @@ func registerDeploymentResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconDeploy,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/deployment/")
 		if projectID == "" || idStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1843,7 +1902,7 @@ func registerDeploymentResource(server registrar, client *gitlabclient.Client) {
 // "gitlab://project/{project_id}/environment/{environment_id}" template
 // resource, which returns details for a single project environment by
 // numeric ID.
-func registerEnvironmentResource(server registrar, client *gitlabclient.Client) {
+func registerEnvironmentResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/environment/{environment_id}",
 		Name:        "environment",
@@ -1853,6 +1912,7 @@ func registerEnvironmentResource(server registrar, client *gitlabclient.Client) 
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconEnvironment,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/environment/")
 		if projectID == "" || idStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1879,7 +1939,7 @@ func registerEnvironmentResource(server registrar, client *gitlabclient.Client) 
 // registerJobResource registers the
 // "gitlab://project/{project_id}/job/{job_id}" template resource, which
 // returns details for a single CI job by numeric ID.
-func registerJobResource(server registrar, client *gitlabclient.Client) {
+func registerJobResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/job/{job_id}",
 		Name:        "job",
@@ -1889,6 +1949,7 @@ func registerJobResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconJob,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/job/")
 		if projectID == "" || idStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1918,7 +1979,7 @@ func registerJobResource(server registrar, client *gitlabclient.Client) {
 // registerSnippetResource registers the "gitlab://snippet/{snippet_id}"
 // template resource, which returns details for a personal (global) snippet
 // by numeric ID.
-func registerSnippetResource(server registrar, client *gitlabclient.Client) {
+func registerSnippetResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://snippet/{snippet_id}",
 		Name:        "snippet",
@@ -1928,6 +1989,7 @@ func registerSnippetResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconSnippet,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		idStr := extractSuffix(req.Params.URI, uriSnippetPrefix)
 		if idStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1956,7 +2018,7 @@ func registerSnippetResource(server registrar, client *gitlabclient.Client) {
 // "gitlab://project/{project_id}/snippet/{snippet_id}" template
 // resource, which returns details for a single project snippet by
 // numeric ID.
-func registerProjectSnippetResource(server registrar, client *gitlabclient.Client) {
+func registerProjectSnippetResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/snippet/{snippet_id}",
 		Name:        "project_snippet",
@@ -1966,6 +2028,7 @@ func registerProjectSnippetResource(server registrar, client *gitlabclient.Clien
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconSnippet,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/snippet/")
 		if projectID == "" || idStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -1994,8 +2057,8 @@ func registerProjectSnippetResource(server registrar, client *gitlabclient.Clien
 // "gitlab://project/{project_id}/feature_flag/{name}" template
 // resource, which returns details for a single project feature flag
 // by name.
-func registerFeatureFlagResource(server registrar, client *gitlabclient.Client) {
-	server.AddResourceTemplate(&mcp.ResourceTemplate{
+func registerFeatureFlagResource(server registrar, base *gitlabclient.Client) {
+	registerProjectNamedResource(server, base, &mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/feature_flag/{name}",
 		Name:        "feature_flag",
 		Title:       "Feature Flag Details",
@@ -2003,23 +2066,21 @@ func registerFeatureFlagResource(server registrar, client *gitlabclient.Client) 
 		Description: "Get details for a single project feature flag by name. Returns name, description, active, and version.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconConfig,
-	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		return readProjectNamedResource(ctx, req, "/feature_flag/", "failed to get feature flag",
-			func(projectID, name string) (FeatureFlagResourceOutput, error) {
-				f, _, err := client.GL().ProjectFeatureFlags.GetProjectFeatureFlag(projectID, name, gl.WithContext(ctx))
-				if err != nil {
-					return FeatureFlagResourceOutput{}, err
-				}
-				return FeatureFlagResourceOutput{Name: f.Name, Description: f.Description, Active: f.Active, Version: f.Version}, nil
-			})
-	})
+	}, "/feature_flag/", "failed to get feature flag",
+		func(ctx context.Context, client *gitlabclient.Client, projectID, name string) (FeatureFlagResourceOutput, error) {
+			f, _, err := client.GL().ProjectFeatureFlags.GetProjectFeatureFlag(projectID, name, gl.WithContext(ctx))
+			if err != nil {
+				return FeatureFlagResourceOutput{}, err
+			}
+			return FeatureFlagResourceOutput{Name: f.Name, Description: f.Description, Active: f.Active, Version: f.Version}, nil
+		})
 }
 
 // registerDeployKeyResource registers the
 // "gitlab://project/{project_id}/deploy_key/{deploy_key_id}" template
 // resource, which returns details for a single project deploy key by
 // numeric ID.
-func registerDeployKeyResource(server registrar, client *gitlabclient.Client) {
+func registerDeployKeyResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/deploy_key/{deploy_key_id}",
 		Name:        "deploy_key",
@@ -2029,6 +2090,7 @@ func registerDeployKeyResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconKey,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/deploy_key/")
 		if projectID == "" || idStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -2055,7 +2117,7 @@ func registerDeployKeyResource(server registrar, client *gitlabclient.Client) {
 // "gitlab://project/{project_id}/board/{board_id}" template resource,
 // which returns details for a single project issue board by numeric
 // ID.
-func registerBoardResource(server registrar, client *gitlabclient.Client) {
+func registerBoardResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/board/{board_id}",
 		Name:        "board",
@@ -2065,6 +2127,7 @@ func registerBoardResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconBoard,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/board/")
 		if projectID == "" || idStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -2085,7 +2148,7 @@ func registerBoardResource(server registrar, client *gitlabclient.Client) {
 // registerGroupMilestoneResource registers the
 // "gitlab://group/{group_id}/milestone/{milestone_iid}" template
 // resource, which returns details for a single group milestone by IID.
-func registerGroupMilestoneResource(server registrar, client *gitlabclient.Client) {
+func registerGroupMilestoneResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/milestone/{milestone_iid}",
 		Name:        "group_milestone",
@@ -2095,6 +2158,7 @@ func registerGroupMilestoneResource(server registrar, client *gitlabclient.Clien
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		groupID, iidStr := extractGroupTwoParts(req.Params.URI, "milestone")
 		if groupID == "" || iidStr == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -2130,7 +2194,7 @@ func registerGroupMilestoneResource(server registrar, client *gitlabclient.Clien
 // "gitlab://group/{group_id}/label/{label_id}" template resource,
 // which returns details for a single group label by numeric ID or
 // name.
-func registerGroupLabelResource(server registrar, client *gitlabclient.Client) {
+func registerGroupLabelResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/label/{label_id}",
 		Name:        "group_label",
@@ -2140,6 +2204,7 @@ func registerGroupLabelResource(server registrar, client *gitlabclient.Client) {
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		client := base.For(ctx)
 		groupID, labelID := extractGroupTwoParts(req.Params.URI, "label")
 		if groupID == "" || labelID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)

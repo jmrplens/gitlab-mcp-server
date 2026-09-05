@@ -64,7 +64,7 @@ func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, cancelMes
 				var zero R
 				return zero, err
 			}
-			out, err := fn(ctx, toolutil.RequestFromContext(ctx), client, input)
+			out, err := fn(ctx, toolutil.RequestFromContext(ctx), client.For(ctx), input)
 			if errors.Is(err, elicitation.ErrElicitationNotSupported) {
 				return unsupportedOutput{ToolName: toolName}, nil
 			}

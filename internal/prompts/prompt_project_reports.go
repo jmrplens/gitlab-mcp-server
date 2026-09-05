@@ -44,7 +44,7 @@ func registerBranchMRSummaryPrompt(server registrar, client *gitlabclient.Client
 			mrStateArg("opened"),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleBranchMRSummary(ctx, client, req)
+		return handleBranchMRSummary(ctx, client.For(ctx), req)
 	})
 }
 
@@ -113,7 +113,7 @@ func registerProjectActivityReportPrompt(server registrar, client *gitlabclient.
 			daysArg(7),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleProjectActivityReport(ctx, client, req)
+		return handleProjectActivityReport(ctx, client.For(ctx), req)
 	})
 }
 
@@ -203,7 +203,7 @@ func registerMRDiscussionHealthPrompt(server registrar, client *gitlabclient.Cli
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMRDiscussionHealth(ctx, client, req)
+		return handleMRDiscussionHealth(ctx, client.For(ctx), req)
 	})
 }
 
@@ -321,7 +321,7 @@ func registerUnassignedItemsPrompt(server registrar, client *gitlabclient.Client
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleUnassignedItems(ctx, client, req)
+		return handleUnassignedItems(ctx, client.For(ctx), req)
 	})
 }
 
@@ -388,7 +388,7 @@ func registerStaleItemsReportPrompt(server registrar, client *gitlabclient.Clien
 			{Name: "stale_days", Title: toolutil.TitleFromName("stale_days"), Description: "Days without update to consider stale (default: 14)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleStaleItemsReport(ctx, client, req)
+		return handleStaleItemsReport(ctx, client.For(ctx), req)
 	})
 }
 

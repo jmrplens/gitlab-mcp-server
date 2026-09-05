@@ -25,7 +25,7 @@ func registerMyOpenMRsPrompt(server registrar, client *gitlabclient.Client) {
 			usernameArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMyOpenMRs(ctx, client, req)
+		return handleMyOpenMRs(ctx, client.For(ctx), req)
 	})
 }
 
@@ -118,7 +118,7 @@ func registerMyPendingReviewsPrompt(server registrar, client *gitlabclient.Clien
 			usernameArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMyPendingReviews(ctx, client, req)
+		return handleMyPendingReviews(ctx, client.For(ctx), req)
 	})
 }
 
@@ -174,7 +174,7 @@ func registerMyIssuesPrompt(server registrar, client *gitlabclient.Client) {
 			issueStateArg("opened"),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMyIssues(ctx, client, req)
+		return handleMyIssues(ctx, client.For(ctx), req)
 	})
 }
 
@@ -246,7 +246,7 @@ func registerMyActivitySummaryPrompt(server registrar, client *gitlabclient.Clie
 			daysArg(7),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMyActivitySummary(ctx, client, req)
+		return handleMyActivitySummary(ctx, client.For(ctx), req)
 	})
 }
 
