@@ -113,4 +113,4 @@ Package-local `RegisterTools` functions have since been removed for ordinary Git
 - [x] All shared types live in `toolutil/` or `testutil/`
 - [x] Runtime-visible actions have `ActionSpec` coverage and tests
 - [x] Root registration is catalog-backed rather than a per-domain registration loop
-- [x] Standard file layout followed across all 163 sub-packages
+- [x] Standard file layout followed across all 168 domain sub-packages [counted 2026-09 as the directories under `internal/tools/` that carry `action_specs.go`; the shared packages such as `dynamic`, `actioncatalog` and `actioncompat` bring the total to 177]

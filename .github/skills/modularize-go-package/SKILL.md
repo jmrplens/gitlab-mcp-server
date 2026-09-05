@@ -40,7 +40,7 @@ Scan the source package and classify every file:
 | **Shared constants** | Annotation variables, format constants | Extract to `${utilPackage}` |
 | **Domain handlers** | branches.go, commits.go, etc. | Move to `${sourcePackage}/{domain}/` |
 | **Domain tests** | branches_test.go, commits_test.go, etc. | Move with their domain |
-| **Test helpers** | helpers_test.go | Extract to `${utilPackage}` as testutil |
+| **Test helpers** | helpers_test.go | Extract to `internal/testutil` (exported `NewTestClient`, `RespondJSON`, `RespondJSONWithPagination`) |
 | **Catalog wiring** | action_specs.go, catalog aggregation | Keep runtime surfaces catalog-backed; do not add package-level meta registration as the final path |
 | **Package doc** | (doc comment in any file) | Create `${sourcePackage}/doc.go` |
 
@@ -63,7 +63,7 @@ Compare the result against the domain mapping table in this skill. For any file 
 1. **Check client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` to understand the canonical struct fields and API contracts for that domain
 2. **Check `client.GL().{Service}.*` calls** in the source file → determines the sub-package name
 3. **Check `action_specs.go` and catalog aggregation** → determines canonical runtime surface status
-4. **Check `docs/tools/{domain}.md`** IF it exists → supplementary user-facing context
+4. **Check the `docs/reference/tools/` page that owns the domain** IF one exists (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages) → supplementary user-facing context
 
 The sub-package name must align with the client-go service name, not with our file naming.
 
@@ -154,7 +154,7 @@ Do not create package-local `RegisterTools` or package-level `RegisterMeta` func
 1. Copy `{domain}_test.go` → `${sourcePackage}/{domain}/{domain}_test.go`
 2. Change package: `package tools` → `package {domain}` (or `package {domain}_test` for black-box)
 3. Update type references to match renamed types
-4. Import test helpers from `${utilPackage}` or recreate locally
+4. Import test helpers from `internal/testutil` (`testutil.NewTestClient`, `testutil.RespondJSON`); do not recreate them locally
 5. Update handler function references
 
 #### 3e. Update Catalog Aggregation
@@ -193,12 +193,12 @@ After ALL domains are migrated:
 
 ### Step 5: Update Entry Point
 
-Verify `cmd/server/main.go` still only imports `${sourcePackage}`:
+Verify `cmd/server/main.go` needs no change for the moved domain: it builds the catalog through `internal/tools` (`gitlabtools.RegisterAll(server, client, tier)` for the individual surface, `BuildActionCatalog` plus the `dynamiccatalog` / `dynamic` packages for the default surface) and imports only the surface-level packages (`internal/tools`, `internal/tools/actioncatalog`, `internal/tools/dynamic`, `internal/tools/dynamiccatalog`) plus `internal/tools/health` for the server's own health probe; no GitLab API domain package is imported there:
 
 ```go
-import "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+import gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 
-// tools.RegisterAll(server, client) — still works, delegates internally
+// gitlabtools.RegisterAll(server, client, tier) projects the catalog; a new domain arrives through action_specs.go
 ```
 
 ## Validation Checklist
@@ -209,35 +209,34 @@ After completing all migrations:
 - [ ] `golangci-lint run --build-tags e2e ./...` — zero warnings
 - [ ] `go test ./internal/... -count=1` — all pass
 - [ ] No import cycles: `go list ./...` or manual review
-- [ ] `cmd/server/main.go` unchanged (still imports `internal/tools`)
-- [ ] Each sub-package has: handler file, `action_specs.go`, markdown formatter, and test file
+- [ ] `cmd/server/main.go` unchanged (it never imports a domain package)
+- [ ] Each sub-package has: `doc.go`, handler file, `action_specs.go`, markdown formatter, and test file named after the module it tests (`make check-test-file-names`)
 - [ ] `${utilPackage}` has no imports from domain sub-packages
 - [ ] Domain sub-packages don't import each other
 
 ## Multi-File Domain Handling
 
-For domains that span multiple source files, consolidate during migration:
+A domain that spans several source files can either stay one package with several files or split into one package per sub-domain. This project did both, and the current tree is the reference:
 
-### Merge Requests (6 files → 1 sub-package)
+### Merge Requests (6 monolith files → 6 sub-packages)
 
 ```text
 merge_requests.go      → mergerequests/merge_requests.go
-mr_notes.go            → mergerequests/notes.go
-mr_discussions.go      → mergerequests/discussions.go
-mr_changes.go          → mergerequests/changes.go
-mr_approvals.go        → mergerequests/approvals.go
-mr_draft_notes.go      → mergerequests/draft_notes.go
+mr_notes.go            → mrnotes/
+mr_discussions.go      → mrdiscussions/
+mr_changes.go          → mrchanges/
+mr_approvals.go        → mrapprovals/
+mr_draft_notes.go      → mrdraftnotes/
 ```
 
-Each file keeps its handler functions; `action_specs.go` consolidates all MR action metadata and catalog routes.
+Each sub-package owns its handlers and `action_specs.go`; `buildMergeRequestActionSpecs` and `buildMRReviewActionSpecs` in `internal/tools/action_specs.go` merge them into the `gitlab_merge_request` catalog group, so one meta-tool still fronts them all.
 
-### Packages (4 files → 1 sub-package)
+### Packages (3 files → 1 sub-package)
 
 ```text
 packages.go            → packages/packages.go
-packages_chunked.go    → packages/chunked.go
-packages_composite.go  → packages/composite.go
-packages_stream.go     → packages/stream.go
+packages_composite.go  → packages/packages_composite.go
+packages_stream.go     → packages/packages_stream.go
 ```
 
 ## Error Recovery
@@ -263,7 +262,7 @@ package gitlab.example.com/.../tools imports gitlab.example.com/.../tools/branch
 ```text
 # Test helper not found
 ./internal/tools/branches/branches_test.go:10: undefined: newTestClient
-→ Fix: Import from toolutil or recreate locally
+→ Fix: Import internal/testutil and call testutil.NewTestClient
 
 # Type mismatch
 cannot use BranchOutput as tools.BranchOutput
@@ -276,7 +275,7 @@ When modularizing `internal/tools/`, use this mapping to understand which files 
 
 ### Service-to-SubPackage Mapping
 
-The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0. Each `client.GL().{Service}` call tells you which API domain a handler belongs to:
+The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.62.0 (see `go.mod`). Each `client.GL().{Service}` call tells you which API domain a handler belongs to. The table records the original monolith-to-sub-package mapping; the migration is complete and `internal/tools/` now holds 177 packages, so treat it as the pattern, not the inventory:
 
 | Sub-Package | client-go Services Used | Source Files |
 |---|---|---|
@@ -286,7 +285,7 @@ The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0. Each `client.
 | `files/` | `RepositoryFiles` | `files.go` |
 | `repository/` | `Repositories` | `repository.go` |
 | `projects/` | `Projects` | `repositories.go` (misnamed — rename during move) |
-| `mergerequests/` | `MergeRequests`, `MergeRequestApprovals`, `Notes`, `Discussions`, `DraftNotes` | `merge_requests.go`, `mr_notes.go`, `mr_discussions.go`, `mr_changes.go`, `mr_approvals.go`, `mr_draft_notes.go` |
+| `mergerequests/` (+ `mrnotes/`, `mrdiscussions/`, `mrchanges/`, `mrapprovals/`, `mrdraftnotes/`) | `MergeRequests`, `MergeRequestApprovals`, `Notes`, `Discussions`, `DraftNotes` | `merge_requests.go`, `mr_notes.go`, `mr_discussions.go`, `mr_changes.go`, `mr_approvals.go`, `mr_draft_notes.go` |
 | `issues/` | `Issues`, `Notes` | `issues.go`, `issue_notes.go` |
 | `labels/` | `Labels` | `labels.go` |
 | `milestones/` | `Milestones` | `milestones.go` |
@@ -297,13 +296,13 @@ The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0. Each `client.
 | `releases/` | `Releases`, `ReleaseLinks` | `releases.go`, `release_links.go` |
 | `search/` | `Search` | `search.go` |
 | `users/` | `Users` | `users.go` |
-| `packages/` | `Packages`, `GenericPackages` | `packages.go`, `packages_chunked.go`, `packages_composite.go`, `packages_stream.go` |
+| `packages/` | `Packages`, `GenericPackages` | `packages.go`, `packages_composite.go`, `packages_stream.go` |
 | `uploads/` | `ProjectMarkdownUploads` | `uploads.go` |
 | `wikis/` | `Wikis` | `wikis.go` |
 | `todos/` | `Todos` | `todos.go` |
 | `health/` | `Version` | `health.go` |
 | `environments/` | `Environments` | `environments.go` |
-| `elicitation/` | _(MCP-only, no GitLab API)_ | `elicitation_tools.go` |
+| `elicitationtools/` | _(MCP-only, no GitLab API)_ | `elicitation_tools.go` |
 
 > **⚠️ This table may be incomplete.** Always scan the source package for files not listed here before starting a migration session. Any unlisted handler file is a new domain to add to the plan.
 
@@ -339,7 +338,7 @@ Before migrating each domain:
 1. **Inspect client-go types**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types (e.g., `gl.Environment`, `gl.CreateEnvironmentOptions`). This defines the canonical fields, types, and API contract.
 2. **Read the source file(s)** in `internal/tools/{domain}.go` — shows our implementation: which client-go fields we expose, our Input/Output structs, and `client.GL().{Service}` calls.
 3. **Check `action_specs.go` and catalog aggregation** for runtime exposure. Files absent from the catalog are in-progress — still migrate them, but note the gap.
-4. **Read `docs/tools/{domain}.md` IF it exists** — supplementary user-facing context. If no doc exists, the combination of steps 1+2 provides everything needed.
+4. **Read the `docs/reference/tools/` page that owns the domain IF one exists** (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages) — supplementary user-facing context. If no doc exists, the combination of steps 1+2 provides everything needed.
 5. **Discover new domains** by scanning `*.go` files AND running `go doc` on the client to find services we haven't wrapped yet.
 
 Never skip a domain just because it lacks documentation. The client-go types have all the information needed.

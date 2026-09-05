@@ -181,7 +181,7 @@ yours, and [IDE Configuration](guides/ide-configuration.md) has the full set.
 You need two values:
 
 1. **GitLab URL** — your instance base URL, for example `https://gitlab.example.com`. On GitLab.com you can leave it out.
-2. **Personal Access Token** — a `glpat-...` token with the `api` scope, created under **User settings > Access tokens**. A `read_api` token also works and gets a read-only tool surface.
+2. **Personal Access Token** — a `glpat-...` token with the `api` scope, created under **User settings > Access tokens**. A `read_api` token also works for reads: in HTTP mode the server serves it a read-only tool surface, while on stdio the write actions stay listed and GitLab refuses them with 403.
 
 If you would rather not paste a token into a config file at all, the HTTP mode
 supports OAuth against your GitLab instance instead: see [OAuth App
@@ -217,10 +217,10 @@ In the default dynamic mode, the AI assistant finds the project-list action with
 The response includes a Markdown table like:
 
 ```text
-| # | Project | Visibility | Stars |
-|---|---------|------------|-------|
-| 1 | [my-app](https://gitlab.example.com/user/my-app) | private | 3 |
-| 2 | [api-service](https://gitlab.example.com/user/api-service) | internal | 1 |
+| ID | Name | Path | Visibility | ⭐ |
+|----|------|------|------------|---|
+| 12 | [my-app](https://gitlab.example.com/user/my-app) | user/my-app | private | 3 |
+| 15 | [api-service](https://gitlab.example.com/user/api-service) | user/api-service | internal | 1 |
 ```
 
 Plus structured JSON data for the AI to process programmatically.
@@ -257,9 +257,9 @@ The server handles all GitLab API calls. You do not need to know project IDs, en
 
 ## Tool Modes
 
-By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_action`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `GITLAB_MCP_TOOL_SURFACE=meta` to use **32 meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit).
+By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_action`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `GITLAB_MCP_TOOL_SURFACE=meta` to use **32 meta-tools** on Free/CE (38 on Premium, 49 on self-managed Ultimate, 50 on GitLab.com Ultimate with Orbit).
 
-To register the complete individual tool set instead (one tool per GitLab operation; up to 1079 on GitLab.com Enterprise/Premium with Orbit), set:
+To register the complete individual tool set instead (one tool per GitLab operation; 854 on Free/CE, 1007 on Premium, 1073 on self-managed Ultimate and 1079 on GitLab.com Ultimate with Orbit), set:
 
 ```env
 GITLAB_MCP_TOOL_SURFACE=individual
@@ -300,26 +300,26 @@ other `${...}` reaches the process literally, so a placeholder such as
 `"GITLAB_TOKEN": "${GITLAB_TOKEN}"` in a local `mcp.json` hands the server that
 exact string rather than the token.
 
-| Variable                          | Required | Description                                                                                      |
-| --------------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
-| `GITLAB_URL`                      | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances            |
-| `GITLAB_TOKEN`                    | Yes      | Personal Access Token                                                                            |
-| `GITLAB_SKIP_TLS_VERIFY`          | No       | `true` for self-signed certs (default `false`)                                                   |
-| `GITLAB_MCP_TOOL_SURFACE`         | No       | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` (default `dynamic`)          |
-| `GITLAB_MCP_CAPABILITY_SURFACE`   | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                       |
-| `GITLAB_MCP_META_PARAM_SCHEMA`    | No       | Meta-tool input schema detail: `opaque`, `compact`, or `full` (default `opaque`)                 |
-| `GITLAB_TIER`                     | No       | Licensing tier: `free`/`ce`, `premium`, `ultimate`; unset detects from license (fallback `free`) |
-| `GITLAB_READ_ONLY`                | No       | Disable mutating tools (default `false`)                                                         |
-| `GITLAB_SAFE_MODE`                | No       | Preview mutating tool inputs (default `false`)                                                   |
-| `EMBEDDED_RESOURCES`              | No       | Append embedded MCP resource links to get-style tool results (default `true`)                    |
-| `GITLAB_MCP_EXCLUDE_TOOLS`        | No       | Comma-separated tool names to exclude from registration                                          |
-| `GITLAB_IGNORE_SCOPES`            | No       | Skip token scope detection and register all tools (default `false`)                              |
-| `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No       | Maximum attachment upload size in bytes (default `2147483648`)                                   |
-| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`  | No       | Extra path-list-separated directories allowed for local GitLab import archives                   |
-| `GITLAB_MCP_RATE_LIMIT_RPS`       | No       | Per-server tools/call rate limit in requests per second; `0` disables it (default `0`)           |
-| `GITLAB_MCP_RATE_LIMIT_BURST`     | No       | Token-bucket burst size when `GITLAB_MCP_RATE_LIMIT_RPS` is greater than `0` (default `40`)      |
-| `GITLAB_MCP_CLIENT_COMPAT`        | No       | Per-client response compatibility (default `auto`)                                               |
-| `GITLAB_MCP_LOG_LEVEL`            | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                |
+| Variable                          | Required | Description                                                                                                                                                                                                    |
+| --------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`                      | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances                                                                                                                          |
+| `GITLAB_TOKEN`                    | Yes      | Personal Access Token                                                                                                                                                                                          |
+| `GITLAB_SKIP_TLS_VERIFY`          | No       | `true` for self-signed certs (default `false`)                                                                                                                                                                 |
+| `GITLAB_MCP_TOOL_SURFACE`         | No       | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` (default `dynamic`)                                                                                                                        |
+| `GITLAB_MCP_CAPABILITY_SURFACE`   | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                                                                                                                                     |
+| `GITLAB_MCP_META_PARAM_SCHEMA`    | No       | Meta-tool input schema detail: `opaque`, `compact`, or `full` (default `opaque`)                                                                                                                               |
+| `GITLAB_TIER`                     | No       | Licensing tier: `free`/`ce`, `premium`, `ultimate`; unset detects from license (fallback `free`)                                                                                                               |
+| `GITLAB_READ_ONLY`                | No       | Disable mutating tools (default `false`)                                                                                                                                                                       |
+| `GITLAB_SAFE_MODE`                | No       | Preview mutating tool inputs (default `false`)                                                                                                                                                                 |
+| `EMBEDDED_RESOURCES`              | No       | Append embedded MCP resource links to get-style tool results (default `true`). Deprecated spelling of `GITLAB_MCP_EMBEDDED_RESOURCES`, still read with a startup warning                                       |
+| `GITLAB_MCP_EXCLUDE_TOOLS`        | No       | Comma-separated tool names to exclude from registration                                                                                                                                                        |
+| `GITLAB_IGNORE_SCOPES`            | No       | Skip token scope detection and register all tools (default `false`)                                                                                                                                            |
+| `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No       | Maximum attachment upload size in bytes (default `2147483648`)                                                                                                                                                 |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`  | No       | Extra path-list-separated directories allowed for local GitLab import archives                                                                                                                                 |
+| `GITLAB_MCP_RATE_LIMIT_RPS`       | No       | Per-server rate limit, in requests per second, on every call that reaches GitLab (`tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get`); `0` disables it (default `0`) |
+| `GITLAB_MCP_RATE_LIMIT_BURST`     | No       | Token-bucket burst size when `GITLAB_MCP_RATE_LIMIT_RPS` is greater than `0` (default `40`)                                                                                                                    |
+| `GITLAB_MCP_CLIENT_COMPAT`        | No       | Per-client response compatibility (default `auto`)                                                                                                                                                             |
+| `GITLAB_MCP_LOG_LEVEL`            | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                                                                                                                              |
 
 Prefer `GITLAB_MCP_TOOL_SURFACE` for new configurations: `dynamic` is the default two-tool low-token find/execute surface, `meta` exposes consolidated domain dispatchers, and `individual` exposes every tool separately. The server still supports the deprecated `GITLAB_MCP_META_TOOLS` selector for compatibility, but the plugin config forwards the explicit `GITLAB_MCP_TOOL_SURFACE` variable.
 

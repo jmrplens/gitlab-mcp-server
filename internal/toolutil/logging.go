@@ -48,7 +48,7 @@ const (
 //
 // result is what the handler returned, taken so the record can say whether the
 // call actually succeeded. A handler that reports failure in its result rather
-// than as a Go error, which [NotFoundResult] does at eighteen call sites, used
+// than as a Go error, which [NotFoundResult] does in every get handler that uses it, used
 // to be logged as "tool call completed" with nothing distinguishing it from a
 // call that worked. An operator could not compute an error rate from this stream,
 // because the stream did not contain one.

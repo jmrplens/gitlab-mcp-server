@@ -707,7 +707,7 @@ test:
     - uses: actions/checkout@v7
     - uses: actions/setup-go@v7
       with:
-        go-version: '1.26'
+        go-version: '1.27.1'
 
     - name: Run tests
       run: go test -race -coverprofile=coverage.out ./...
@@ -715,8 +715,10 @@ test:
     - name: Check coverage
       run: |
         go tool cover -func=coverage.out | grep total | awk '{print $3}' | \
-        awk -F'%' '{if ($1 < 80) exit 1}'
+        awk -F'%' '{if ($1 < 90) exit 1}'
 ```
+
+This project's `.github/workflows/ci.yml` gates total coverage at `COVERAGE_MIN: "90"`.
 
 ## Go 1.24+ / 1.25+ Testing Features
 
@@ -806,3 +808,17 @@ goroutine and truncates the response. Follow the six-rule contract in
 `.github/instructions/test-goroutines.instructions.md` (t.Errorf + response +
 return, or record with atomics and assert on the test goroutine). Verify with
 `make check-test-goroutines`.
+
+## Case loops and file names (gated in CI)
+
+- Every case table runs under `t.Run`: a range over a slice or map literal that
+  asserts must open one subtest per case, named by the `name` field, the string
+  element, or the map key. `go run ./cmd/audit_test_subtests/ -fix` rewrites the
+  unambiguous shapes; `// sequential: <reason>` on the line above a loop declares
+  dependent steps rather than cases. `make check-test-subtests` gates it.
+- Test functions are named `TestToolName_Scenario_ExpectedResult`, and a
+  `_test.go` file exists only under the name of a module it tests
+  (`branches.go` has `branches_test.go`); `make check-test-file-names` gates it.
+- The shared mocks live in `internal/testutil` (`NewTestClient`, `RespondJSON`,
+  `RespondJSONWithPagination`, `AssertRequestPath`, `ForbiddenHandler`); the
+  project uses the standard library only, no `testify`.

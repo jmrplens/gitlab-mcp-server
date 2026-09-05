@@ -9,7 +9,7 @@
 ## Prerequisites
 
 - **Go 1.27+** ([download](https://go.dev/dl/))
-- **Node.js 24.18+ with Corepack** for the documentation site and MCP Inspector. The site uses `pnpm@11.22.0`; keep pnpm configuration in `site/pnpm-workspace.yaml` rather than the `pnpm` field in `package.json`.
+- **Node.js 24.18+ with Corepack** for the documentation site and MCP Inspector. The site uses `pnpm@11.25.0` (the `packageManager` field in `site/package.json` is authoritative); keep pnpm configuration in `site/pnpm-workspace.yaml` rather than the `pnpm` field in `package.json`.
 - **GitLab instance** with Personal Access Token (`api` scope)
 - **Git** for version control
 - **Make** for build automation (optional but recommended)
@@ -25,34 +25,46 @@ gitlab-mcp-server/
 │   │   ├── main.go              # Signal handling, transport selection
 │   │   └── main_test.go         # Server startup and HTTP handler tests
 │   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (-scope structs|actions|metadata|sdk)
-│   ├── audit_catalog_first/ # ActionSpec catalog coverage inventory
+│   ├── audit_catalog_first/     # ActionSpec catalog coverage inventory
 │   ├── audit_discovery_completeness/ # Discovery metadata audit with cluster-aware severity (META-001)
 │   ├── audit_doc_coverage/      # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
+│   ├── audit_doc_tool_names/    # Every gitlab_* name the docs mention is a registered tool
 │   ├── audit_dynamic_aliases/   # Dynamic alias collision governance
+│   ├── audit_e2e_gaps/          # Catalog actions the e2e suite never exercises
 │   ├── audit_edition_tier/      # Doc-grounded Free/Premium/Ultimate tier audit
-│   ├── audit_metrics/           # MCP tool/resource/prompt metrics summary
+│   ├── audit_gateway_chars/     # Served text carries no character a gateway validator rejects
+│   ├── audit_install_buttons/   # One-click install buttons decode to one configuration per command
+│   ├── audit_metrics/           # MCP tool/resource/prompt metrics summary (+ -site-stats)
+│   ├── audit_readonly_graphql/  # No ReadOnly action can reach a GraphQL mutation
+│   ├── audit_string_dupes/      # Finds duplicated string literals missing constants
+│   ├── audit_supply_chain/      # Release-configuration invariants (pinned actions, locked release jobs, ...)
 │   ├── audit_surface_quality/   # Surface quality audit (-view metadata|output|all)
-│   ├── audit_test_names/        # Test function naming convention compliance
-│   ├── audit_tokens/            # Token overhead audit (+ --compare-schemas sizing spike)
+│   ├── audit_test_goroutines/   # testing.T aborts made off the test goroutine
+│   ├── audit_test_names/        # Test function naming compliance (+ -check-files for test-file names)
+│   ├── audit_test_subtests/     # Case loops that assert without a t.Run subtest (+ -fix)
+│   ├── audit_tokens/            # Token overhead audit (+ --compare-schemas sizing spike, -footprint)
+│   ├── bench_resources/         # Measures what the server costs to run; draws the published charts
 │   ├── eval_mcp_surfaces/       # Model-facing MCP surface evaluation harness
-│   ├── audit_string_dupes/              # Finds duplicated string literals missing constants
 │   ├── format_md_tables/        # Normalizes Markdown pipe tables
 │   ├── gen_action_catalog_manifest/ # Generates ActionSpec manifest
+│   ├── gen_brand/               # Emits every vector brand asset from one parametric geometry
 │   ├── gen_docker_tools/        # Generates Docker MCP Registry tools.json
+│   ├── gen_icon_webp/           # Light/dark WebP icon fallbacks (maintainer-only)
 │   ├── gen_lhm_manifest/        # Generates the LobeHub manifest capability arrays
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt
 │   ├── gen_stats/               # Regenerates README stats section
 │   ├── gen_testing_docs/        # Regenerates testing.md managed sections
-│   └── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)
+│   ├── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)
+│   └── internal/                # Shared helpers for the commands above (apidocs, auditshared, docgen, mcpsurface)
 ├── internal/
 │   ├── config/                  # Environment variable loading and validation
 │   ├── gitlab/                  # GitLab API client wrapper with TLS support
-│   ├── completions/             # Autocomplete handler for 17 argument types
+│   ├── completions/             # Autocomplete handler for 18 argument names
 │   ├── progress/                # Progress notification tracker
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + ~175 internal/tools packages (166 with action_specs.go)
+│   ├── tools/                   # Tool orchestration layer + 178 packages under internal/tools/... (168 with action_specs.go)
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
 │   │   ├── register_meta.go     # RegisterAllMeta() — catalog-backed meta-tool groups and standalone surfaces
 │   │   ├── meta_tool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
@@ -60,7 +72,7 @@ gitlab-mcp-server/
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
-│   │   └── ...                  # ~175 internal/tools packages total
+│   │   └── ...                  # 178 packages under internal/tools/... in total
 │   ├── resources/               # 45 MCP resource handlers
 │   └── prompts/                 # 37 MCP prompt handlers
 ├── test/e2e/                    # End-to-end integration tests (suite/ + infra)
@@ -71,7 +83,7 @@ gitlab-mcp-server/
 └── .env                         # Local secrets (gitignored)
 ```
 
-Meta-tool counts are additive: 32 base tools, 16 Enterprise/Premium-specific meta-tools for 48 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 49 when Orbit is available.
+Meta-tool counts are additive: 32 base tools, 17 Enterprise/Premium-specific meta-tools for 49 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 50 when Orbit is available.
 
 ## Architecture
 
@@ -110,11 +122,11 @@ graph TD
 1. **Config** loads settings from environment variables, then `GITLAB_MCP_ENV_FILE`, then `~/.gitlab-mcp-server.env`; the repository's own `.env` is for the Makefile targets, not for the server
 2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
 3. **Tools** are projected from domain-local `ActionSpecs` through the canonical action catalog
-4. **Meta-tools** group catalog actions into 32 base tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
+4. **Meta-tools** group catalog actions into 32 base tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
 7. **Capabilities** provide completions, progress, elicitation, and resource subscriptions
-8. **Server** runs over stdio (default) or HTTP (`--http`)
+8. **Server** runs over stdio (default) or HTTP (`--http`, or `--transport auto`, which serves HTTP only when stdin is `/dev/null`)
 
 See [Architecture Overview](../concepts/architecture.md) for detailed diagrams and component descriptions.
 
@@ -131,10 +143,11 @@ copies in the dual-shape group Datadog output). All other dependency updates
 ship as minor or patch releases.
 
 ```text
-VERSION           # Contains e.g. "1.1.7" — no "v" prefix, no trailing newline
-  ├─ Makefile     # Reads VERSION → passes via -ldflags to go build
-  ├─ .gitlab-ci   # Reads VERSION → prefers CI_COMMIT_TAG if set
-  └─ binary       # Receives version at build time via -X main.version
+VERSION                  # Contains e.g. "2.7.5" — no "v" prefix, no trailing newline
+  ├─ Makefile            # Reads VERSION → passes via -ldflags to go build
+  ├─ release.yml         # Holds the tag (or the rehearsal input) to VERSION before anything is built
+  ├─ .goreleaser.yml     # Stamps {{.Version}} from the tag (or VERSION on a snapshot) via -X main.version
+  └─ binary              # Receives version at build time via -X main.version
 ```
 
 ```bash
@@ -161,7 +174,7 @@ go build -ldflags="-X main.version=$(cat VERSION) -X main.commit=$(git rev-parse
 
 ```bash
 make build-all
-# Produces: linux-amd64, linux-arm64, windows-amd64, windows-arm64
+# Produces: linux-amd64, linux-arm64, windows-amd64, windows-arm64, darwin-amd64, darwin-arm64
 ```
 
 ### Docker
@@ -199,12 +212,12 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
 Publish via Makefile or manually:
 
 ```bash
-# Via Makefile
-make docker-push
+# Via Makefile (DOCKER_REGISTRY is required; it builds and pushes VERSION and latest)
+make docker-push DOCKER_REGISTRY=ghcr.io/jmrplens/gitlab-mcp-server
 
 # Or manually
 docker login ghcr.io -u "$GITHUB_USER" --password-stdin <<< "$GITHUB_TOKEN"
-docker push ghcr.io/jmrplens/gitlab-mcp-server:1.7.1
+docker push "ghcr.io/jmrplens/gitlab-mcp-server:$(cat VERSION)"
 docker push ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
@@ -217,7 +230,7 @@ Unit tests live alongside the code in each sub-package. They use `net/http/httpt
 ```bash
 make test            # Standard tests with coverage
 make test-race       # Tests with race detector
-go test ./internal/... -count=1      # Run all unit tests (~124 packages)
+go test ./internal/... -count=1      # Run all unit tests (199 packages)
 go test ./internal/tools/branches/ -count=1 -v  # Run one domain verbose
 go test ./internal/tools/ -run TestBranch -count=1    # Run specific tests
 ```
@@ -230,15 +243,16 @@ Each sub-package has its own `*_test.go` with table-driven tests:
 // internal/tools/branches/branches_test.go
 
 func TestCreate_Success(t *testing.T) {
-    client, mux := testutil.NewTestClient(t)
+    mux := http.NewServeMux()
     mux.HandleFunc("/api/v4/projects/1/repository/branches", func(w http.ResponseWriter, r *http.Request) {
-        testutil.RespondJSON(w, http.StatusOK, `{"name":"feature-x","commit":{"id":"abc123"}}`)
+        testutil.RespondJSON(w, http.StatusCreated, `{"name":"feature-x","commit":{"id":"abc123"}}`)
     })
+    client := testutil.NewTestClient(t, mux) // the httptest server is closed by t.Cleanup
 
     out, err := Create(context.Background(), client, CreateInput{
-        ProjectID: "1",
-        Branch:    "feature-x",
-        Ref:       "main",
+        ProjectID:  "1",
+        BranchName: "feature-x",
+        Ref:        "main",
     })
     if err != nil {
         t.Fatalf("unexpected error: %v", err)
@@ -251,11 +265,11 @@ func TestCreate_Success(t *testing.T) {
 
 #### Shared helpers (`internal/testutil/`)
 
-| Helper                                 | Purpose                                      |
-| -------------------------------------- | -------------------------------------------- |
-| `testutil.NewTestClient(t)`            | Creates mock GitLab client + httptest mux    |
-| `testutil.RespondJSON(w, code, body)`  | Writes JSON response with status code        |
-| `testutil.RespondJSONWithPagination()` | Writes JSON response with pagination headers |
+| Helper                                 | Purpose                                                                                        |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `testutil.NewTestClient(t, handler)`   | Creates a GitLab client against an httptest server backed by `handler`, closed via `t.Cleanup` |
+| `testutil.RespondJSON(w, code, body)`  | Writes JSON response with status code                                                          |
+| `testutil.RespondJSONWithPagination()` | Writes JSON response with pagination headers                                                   |
 
 ### End-to-End Tests
 
@@ -280,7 +294,7 @@ make test-e2e-docker
 
 This single command handles the full lifecycle: start GitLab CE container, wait for readiness, create test user/token, register CI runner, run tests, and tear down.
 
-For manual step-by-step execution, see [E2E Docker Mode](testing/testing.md#docker-mode) in the testing guide.
+For manual step-by-step execution, see [Docker Mode](../../test/e2e/README.md#docker-mode) in the E2E README.
 
 #### E2E Prerequisites
 
@@ -292,12 +306,12 @@ GITLAB_SKIP_TLS_VERIFY=true
 
 #### E2E Test Structure
 
-| File                                | Description                                           |
-| ----------------------------------- | ----------------------------------------------------- |
-| `test/e2e/suite/setup_test.go`      | Shared state, MCP server setup, helpers, drainSidekiq |
-| `test/e2e/suite/fixture_ce_test.go` | Self-contained GitLab CE resource builders            |
-| `test/e2e/suite/fixture_ee_test.go` | Self-contained GitLab EE resource builders            |
-| `test/e2e/suite/*_test.go`          | 137 domain-specific test files (individual + meta)    |
+| File                                | Description                                                     |
+| ----------------------------------- | --------------------------------------------------------------- |
+| `test/e2e/suite/setup_test.go`      | Shared state, MCP server setup, helpers, drainSidekiq           |
+| `test/e2e/suite/fixture_ce_test.go` | Self-contained GitLab CE resource builders                      |
+| `test/e2e/suite/fixture_ee_test.go` | Self-contained GitLab EE resource builders                      |
+| `test/e2e/suite/*_test.go`          | 169 further test files (individual, meta and dynamic workflows) |
 
 ## MCP Inspector
 
@@ -416,9 +430,9 @@ GITLAB_COM_TOKEN=glpat-... \
 package branches
 
 type CreateInput struct {
-    ProjectID string `json:"project_id" jsonschema:"Project ID or URL-encoded path"`
-    Branch    string `json:"branch"     jsonschema:"Branch name to create"`
-    Ref       string `json:"ref"        jsonschema:"Source branch or commit SHA"`
+    ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
+    BranchName string               `json:"branch_name" jsonschema:"New branch name,required"`
+    Ref        string               `json:"ref"         jsonschema:"Branch name, tag, or commit SHA to create from,required"`
 }
 
 type Output struct {
@@ -502,14 +516,14 @@ Install the Go extension and add to `.vscode/mcp.json`:
 | Dependency                               | Version | Purpose                         |
 | ---------------------------------------- | ------- | ------------------------------- |
 | `github.com/modelcontextprotocol/go-sdk` | v1.7.0  | MCP server framework            |
-| `gitlab.com/gitlab-org/api/client-go/v2` | v2.58.1 | Official GitLab REST API client |
+| `gitlab.com/gitlab-org/api/client-go/v2` | v2.62.0 | Official GitLab REST API client |
 | `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev       |
 
 ## External References
 
 | Resource                       | URL                                                         |
 | ------------------------------ | ----------------------------------------------------------- |
-| MCP Specification (2025-11-25) | <https://modelcontextprotocol.io/specification/2025-11-25/> |
+| MCP Specification (2026-07-28) | <https://modelcontextprotocol.io/specification/2026-07-28/> |
 | MCP Go SDK (pkg.go.dev)        | <https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk> |
 | MCP Go SDK Repository          | <https://github.com/modelcontextprotocol/go-sdk>            |
 | GitLab REST API v4             | <https://docs.gitlab.com/ee/api/rest/>                      |

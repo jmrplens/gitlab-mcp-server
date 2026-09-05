@@ -388,24 +388,23 @@ http-mode-pipeline:
         -o gitlab-mcp-server
     - chmod +x gitlab-mcp-server
   script:
-    # Start HTTP server in background
+    # Start HTTP server in background. --json-response makes each answer a
+    # plain JSON body that jq can read; the default is a text/event-stream
+    # envelope. The default transport is stateless, so every POST stands on
+    # its own and no initialize handshake is needed before a tools/call.
     - |
       ./gitlab-mcp-server --http \
         --gitlab-url="${CI_SERVER_URL}" \
-        --http-addr=127.0.0.1:8080 &
+        --http-addr=127.0.0.1:8080 \
+        --json-response &
       sleep 2
 
-    # Initialize session
-    - |
-      SESSION=$(curl -s -X POST http://127.0.0.1:8080/mcp \
-        -H "Content-Type: application/json" \
-        -H "PRIVATE-TOKEN: ${MCP_PAT}" \
-        -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}')
-
-    # Call tools via HTTP
+    # Call tools via HTTP. The Accept header is mandatory: a POST without
+    # both media types is refused with 400 before the request is read.
     - |
       curl -s -X POST http://127.0.0.1:8080/mcp \
         -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" \
         -H "PRIVATE-TOKEN: ${MCP_PAT}" \
         -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list","params":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}}},"id":2}' \
         | jq '.result.content[0].text'

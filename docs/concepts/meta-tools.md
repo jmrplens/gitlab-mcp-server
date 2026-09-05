@@ -1,12 +1,12 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1073 self-managed Enterprise/Premium individual tools or 1079 GitLab.com Enterprise/Premium tools, **32 base meta-tools** (49 self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 854 (Free/CE) to 1073 (self-managed Ultimate) individual tools, or 1079 on GitLab.com Ultimate, **32 base meta-tools** (38 on Premium, 49 on self-managed Ultimate, 50 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **32 base GitLab/interactive tools**: 28 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 17 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
+In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **32 base GitLab/interactive tools**: 28 catalog-backed meta-tools plus 4 interactive elicitation tools. Premium registers 6 additional inline meta-tools for **38 tools**, Ultimate 11 more for **49 tools** on self-managed GitLab, and GitLab.com adds the experimental `gitlab_orbit` meta-tool on Premium and Ultimate, for **50 tools** on GitLab.com Ultimate. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
 
 The `gitlab_server` meta-tool (actions `status` and `health_check`) is registered separately for server diagnostics and is not included in the 32/49/50 GitLab action catalog counts.
 
@@ -63,61 +63,64 @@ To return to the default dynamic surface, unset `GITLAB_MCP_TOOL_SURFACE` (or se
 
 Meta-tools remain available because they are the most broadly compatible consolidated surface.
 
-| Mode              |                                                                                    Tool Count | Best For                                                                         |
-| ----------------- | --------------------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
-| Dynamic (default) |                                             2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
-| Meta-tools        |               32 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list       |
-| Individual tools  | 854 CE / 1073 self-managed Enterprise/Premium / 1079 GitLab.com Enterprise/Premium with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
+| Mode              |                                                                       Tool Count | Best For                                                                         |
+| ----------------- | -------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
+| Dynamic (default) |                                2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
+| Meta-tools        |                   32 Free/CE / 38 Premium / 49 Ultimate / 50 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
+| Individual tools  | 854 Free/CE / 1007 Premium / 1073 Ultimate / 1079 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
 
 ---
 
 ## Meta-Tool Inventory
 
+Action counts are the Free/CE catalog as served by the binary (read them from the `gitlab://tools` manifest). Premium and Ultimate add actions to several groups: on Ultimate `gitlab_project` has 143, `gitlab_group` 157, `gitlab_issue` 71, `gitlab_merge_request` 58, `gitlab_environment` 23, `gitlab_runner` 34 and `gitlab_storage_move` 18.
+
 ### Core Inline Meta-Tools (17)
 
 | #   | Tool Name              | Actions | Domain                                                                                                                                                                                   |
 | --- | ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `gitlab_project`       | ~92     | Projects, uploads, hooks, badges, boards, import/export, statistics, pages                                                                                                               |
+| 1   | `gitlab_project`       | 123     | Projects, uploads, hooks, badges, boards, import/export, statistics, pages                                                                                                               |
 | 2   | `gitlab_branch`        | 11      | Branches, protected branches, branch rules                                                                                                                                               |
 | 3   | `gitlab_tag`           | 9       | Tags, protected tags                                                                                                                                                                     |
-| 4   | `gitlab_release`       | 11      | Releases, release links                                                                                                                                                                  |
-| 5   | `gitlab_merge_request` | ~46     | MR CRUD, approvals, context-commits, MR emoji, MR resource events                                                                                                                        |
-| 6   | `gitlab_mr_review`     | ~22     | MR notes, discussions, drafts, changes                                                                                                                                                   |
-| 7   | `gitlab_repository`    | ~40     | Repository tree/compare, commit discussions, files, submodules, markdown                                                                                                                 |
-| 8   | `gitlab_group`         | ~64     | Groups, members, labels, milestones, boards, uploads, import/export, epic discussions                                                                                                    |
-| 9   | `gitlab_issue`         | ~55     | Issues, notes, discussions, links, statistics, issue emoji, issue resource events                                                                                                        |
-| 10  | `gitlab_pipeline`      | ~34     | Pipelines, pipeline triggers, pipeline schedules, wait                                                                                                                                   |
-| 11  | `gitlab_job`           | ~25     | Jobs, job token scope, wait                                                                                                                                                              |
-| 12  | `gitlab_user`          | ~29     | Users, events, notifications, keys, namespaces, avatar                                                                                                                                   |
+| 4   | `gitlab_release`       | 12      | Releases, release links                                                                                                                                                                  |
+| 5   | `gitlab_merge_request` | 46      | MR CRUD, approvals, context-commits, MR emoji, MR resource events                                                                                                                        |
+| 6   | `gitlab_mr_review`     | 23      | MR notes, discussions, drafts, changes                                                                                                                                                   |
+| 7   | `gitlab_repository`    | 41      | Repository tree/compare, commit discussions, files, submodules, markdown                                                                                                                 |
+| 8   | `gitlab_group`         | 75      | Groups, members, labels, milestones, boards, uploads, import/export, epic discussions                                                                                                    |
+| 9   | `gitlab_issue`         | 66      | Issues, notes, discussions, links, statistics, issue emoji, issue resource events                                                                                                        |
+| 10  | `gitlab_pipeline`      | 33      | Pipelines, pipeline triggers, pipeline schedules, wait                                                                                                                                   |
+| 11  | `gitlab_job`           | 25      | Jobs, job token scope, wait                                                                                                                                                              |
+| 12  | `gitlab_user`          | 76      | Users, events, notifications, keys, namespaces, avatar, todos                                                                                                                            |
 | 13  | `gitlab_wiki`          | 6       | Project/group wikis                                                                                                                                                                      |
-| 14  | `gitlab_environment`   | ~23     | Environments, protected envs, freeze periods, deployments                                                                                                                                |
-| 15  | `gitlab_ci_variable`   | ~15     | CI/CD variables (project, group, instance)                                                                                                                                               |
+| 14  | `gitlab_environment`   | 18      | Environments, protected envs, freeze periods, deployments                                                                                                                                |
+| 15  | `gitlab_ci_variable`   | 15      | CI/CD variables (project, group, instance)                                                                                                                                               |
 | 16  | `gitlab_template`      | 12      | CI/CD, Dockerfile, gitignore templates                                                                                                                                                   |
-| 17  | `gitlab_admin`         | ~82     | Server settings, broadcast messages, features, license, system hooks, error tracking, alert management, secure files, terraform states, cluster agents, dependency proxy, import service |
+| 17  | `gitlab_admin`         | 92      | Server settings, broadcast messages, features, license, system hooks, error tracking, alert management, secure files, terraform states, cluster agents, dependency proxy, import service |
 
 ### Consolidated Inline Meta-Tools (4)
 
 | #   | Tool Name              | Actions | Sources                                                             |
 | --- | ---------------------- | ------- | ------------------------------------------------------------------- |
-| 18  | `gitlab_access`        | ~48     | Access tokens, deploy tokens, deploy keys, access requests, invites |
-| 19  | `gitlab_package`       | ~20     | Packages, container registry                                        |
-| 20  | `gitlab_snippet`       | ~30     | Snippets, snippet discussions, snippet emoji                        |
-| 21  | `gitlab_feature_flags` | ~10     | Feature flags, feature flag user lists                              |
+| 18  | `gitlab_access`        | 48      | Access tokens, deploy tokens, deploy keys, access requests, invites |
+| 19  | `gitlab_package`       | 29      | Packages, container registry                                        |
+| 20  | `gitlab_snippet`       | 34      | Snippets, snippet discussions, snippet emoji                        |
+| 21  | `gitlab_feature_flags` | 10      | Feature flags, feature flag user lists                              |
 
-### Always-Registered Meta-Tools (3)
+### Always-Registered Meta-Tools (4)
 
-| #   | Tool Name               | Actions | Source                                        |
-| --- | ----------------------- | ------- | --------------------------------------------- |
-| 22  | `gitlab_model_registry` | 1       | ML model registry package download            |
-| 23  | `gitlab_ci_catalog`     | 2       | CI/CD Catalog resource discovery (GraphQL)    |
-| 24  | `gitlab_custom_emoji`   | 3       | Group-level custom emoji management (GraphQL) |
+| #   | Tool Name               | Actions | Source                                                      |
+| --- | ----------------------- | ------- | ----------------------------------------------------------- |
+| 22  | `gitlab_model_registry` | 1       | ML model registry package download                          |
+| 23  | `gitlab_ci_catalog`     | 2       | CI/CD Catalog resource discovery (GraphQL)                  |
+| 24  | `gitlab_custom_emoji`   | 3       | Group-level custom emoji management (GraphQL)               |
+| 25  | `gitlab_storage_move`   | 12      | Project and snippet repository storage moves (`admin_mode`) |
 
 ### Delegated Meta-Tools (2)
 
 | #   | Tool Name       | Actions | Source                                         |
 | --- | --------------- | ------- | ---------------------------------------------- |
-| 25  | `gitlab_search` | 10      | Global, project, group search                  |
-| 26  | `gitlab_runner` | 34      | Runners, runner management, runner controllers |
+| 26  | `gitlab_search` | 10      | Global, project, group search                  |
+| 27  | `gitlab_runner` | 19      | Runners, runner management, runner controllers |
 
 ### Standalone Tools (1)
 
@@ -134,11 +137,40 @@ Meta-tools remain available because they are the most broadly compatible consoli
 | 31  | `gitlab_interactive_project_create` | Guided prompts for name, visibility, initialization, and confirmation | GitLab        |
 | 32  | `gitlab_interactive_release_create` | Guided prompts for tag, name, notes, and confirmation                 | GitLab        |
 
-### GitLab.com Enterprise/Premium Meta-Tools (1)
+### Premium and Ultimate Meta-Tools (17)
+
+Registered when the resolved tier is Premium or Ultimate. Six arrive with Premium:
+
+| Tool Name                | Actions | Source                                   |
+| ------------------------ | ------- | ---------------------------------------- |
+| `gitlab_audit_event`     | 6       | Instance, group and project audit events |
+| `gitlab_enterprise_user` | 4       | Enterprise users (`admin_mode`)          |
+| `gitlab_geo`             | 8       | Geo nodes and sites (`admin_mode`)       |
+| `gitlab_group_scim`      | 4       | Group SCIM identities                    |
+| `gitlab_merge_train`     | 4       | Merge trains                             |
+| `gitlab_project_alias`   | 4       | Project aliases (`admin_mode`)           |
+
+Eleven more arrive with Ultimate:
+
+| Tool Name                      | Actions | Source                                  |
+| ------------------------------ | ------- | --------------------------------------- |
+| `gitlab_attestation`           | 2       | Artifact attestations                   |
+| `gitlab_compliance_policy`     | 2       | Compliance policies                     |
+| `gitlab_dependency`            | 4       | Dependency list and Dependency Firewall |
+| `gitlab_dora_metrics`          | 2       | DORA metrics                            |
+| `gitlab_external_status_check` | 8       | External status checks                  |
+| `gitlab_member_role`           | 6       | Custom member roles                     |
+| `gitlab_security_attribute`    | 5       | Security attributes (GraphQL)           |
+| `gitlab_security_category`     | 3       | Security categories (GraphQL)           |
+| `gitlab_security_finding`      | 1       | Pipeline security findings (GraphQL)    |
+| `gitlab_security_scan_profile` | 3       | Security scan profiles                  |
+| `gitlab_vulnerability`         | 8       | Vulnerabilities (GraphQL)               |
+
+### GitLab.com Premium and Ultimate Meta-Tools (1)
 
 | #   | Tool Name      | Actions | Source                                                                                                          |
 | --- | -------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
-| 33  | `gitlab_orbit` | 6       | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) |
+| 50  | `gitlab_orbit` | 6       | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) |
 
 ---
 
@@ -146,7 +178,7 @@ Meta-tools remain available because they are the most broadly compatible consoli
 
 ### Consolidation Decision
 
-ADR-0005 records the historical consolidation from many standalone meta-tools to the current domain-oriented taxonomy. The stable architecture described here is the current contract: broad visible domain tools, Enterprise/Premium gating for premium groups, and GitLab.com-only gating for `gitlab_orbit`.
+ADR-0005 records the historical consolidation from many standalone meta-tools to the current domain-oriented taxonomy. The stable architecture described here is the current contract: broad visible domain tools, Premium and Ultimate gating for the tiered groups, and GitLab.com-only gating for `gitlab_orbit`.
 
 The consolidated surface reduces:
 
@@ -163,7 +195,7 @@ Developers define action metadata through `ActionSpec` and `CatalogGroupSpec`; m
 All meta-tools use the shared infrastructure in `internal/toolutil/meta_tool.go`:
 
 - `ActionSpec` — canonical action metadata, including the typed route, ownership, aliases, tags, usage hints, projection policy, result policies, and compatibility policy
-- `CatalogGroupSpec` — visible meta-tool group metadata and the ordered action set used to build the catalog
+- `CatalogGroupSpec` (in `internal/tools/actioncatalog`) — visible meta-tool group metadata and the ordered action set used to build the catalog
 - `ActionRoute` — pairs a handler with metadata-driven classification. Typed routes carry both `InputSchema` and `OutputSchema` so each action can expose exact params and result contracts
 - `Route(fn)` / `DestructiveRoute(fn)` — legacy constructors for already-adapted handlers
 - `DeriveAnnotations(routes)` — auto-derives tool-level annotations from route metadata: if any route is destructive → `MetaAnnotations`, otherwise → `NonDestructiveMetaAnnotations`
@@ -294,17 +326,26 @@ Meta-tools advertise a deliberately compact input schema by default (`GITLAB_MCP
 
    For example, `gitlab://tools/gitlab_merge_request.create` returns the call shape and JSON Schema for the `create` action's `params`. The `gitlab://tools` manifest enumerates every visible meta-tool action in the active server configuration.
 
-   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration:
+   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`). `visible_tool_count` is one more than the 32 tools listed above because `gitlab_server`, which sits outside the catalog counts, has actions of its own and so appears in the manifest:
 
    ```json
    {
      "surface": "meta",
      "uri_template": "gitlab://tools/{id}",
+     "visible_tool_count": 33,
+     "entry_count": 858,
+     "visible_tools": [
+       { "name": "gitlab_merge_request", "title": "Merge Request", "detail_uri": "gitlab://tools/gitlab_merge_request", "read_only": false, "destructive": true }
+     ],
      "entries": [
        {
-         "tool": "gitlab_merge_request",
          "id": "gitlab_merge_request.create",
-         "action": "create"
+         "kind": "meta_action",
+         "tool": "gitlab_merge_request",
+         "action": "create",
+         "domain": "merge_request",
+         "detail_uri": "gitlab://tools/gitlab_merge_request.create",
+         "required_params": [{ "name": "project_id", "type": "string" }, { "name": "source_branch", "type": "string" }, { "name": "target_branch", "type": "string" }, { "name": "title", "type": "string" }]
        }
      ]
    }

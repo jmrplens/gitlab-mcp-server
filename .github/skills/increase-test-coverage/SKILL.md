@@ -22,7 +22,7 @@ All tests must:
 
 ## Execution Context
 
-This skill is designed for the `Test Expert` agent or any agent tasked with increasing test coverage. It operates on Go codebases that use the standard `testing` package, `net/http/httptest`, and optionally `testify/assert`.
+This skill is designed for the `Test Expert` agent or any agent tasked with increasing test coverage. It operates on Go codebases that use the standard `testing` package and `net/http/httptest`; this project has no `testify` dependency, so assertions are plain `t.Errorf` / `t.Fatalf`.
 
 ## Pipeline Overview
 
@@ -85,13 +85,13 @@ Before writing any test, analyze the codebase for conventions:
 
 | Convention | Where to Look |
 |------------|---------------|
-| Test helpers | `**/helpers_test.go` — `newTestClient()`, `respondJSON()`, `respondJSONWithPagination()` |
+| Test helpers | `internal/testutil/helpers.go` — `testutil.NewTestClient()`, `testutil.RespondJSON()`, `testutil.RespondJSONWithPagination()`, `testutil.AssertRequestPath()`, `testutil.ForbiddenHandler()` |
 | Mock patterns | How `httptest.NewServer` + `http.HandlerFunc` are used to mock GitLab API |
-| Assertion style | Whether `testify/assert` or stdlib `t.Errorf`/`t.Fatalf` is used |
-| Test naming | Pattern: `TestFunctionName_Scenario` or `TestFunctionName_Scenario_ExpectedResult` |
+| Assertion style | Stdlib `t.Errorf`/`t.Fatalf` only (no `testify`) |
+| Test naming | Pattern: `TestFunctionName_Scenario_ExpectedResult`; a `_test.go` is named after the module it tests (`make check-test-file-names`) |
 | Table-driven tests | Look for `tests := []struct{}` or `cases := map[string]struct{}` patterns |
 | File placement | Tests in same package (white-box) or `_test` package (black-box) |
-| Pagination helpers | `paginationHeaders` struct and `respondJSONWithPagination()` |
+| Pagination helpers | `testutil.PaginationHeaders` struct and `testutil.RespondJSONWithPagination()` |
 
 ### Step 5: Document Research Findings
 
@@ -176,8 +176,8 @@ For each phase:
 
 1. **Read source code** — Understand the function signatures, logic branches, and dependencies
 2. **Write test file** — Create or extend `*_test.go` files following existing patterns
-3. **Use existing helpers** — Reuse `newTestClient()`, `respondJSON()`, `respondJSONWithPagination()`
-4. **Create new helpers if needed** — Add to `helpers_test.go` for reusable mock patterns
+3. **Use existing helpers** — Reuse `testutil.NewTestClient()`, `testutil.RespondJSON()`, `testutil.RespondJSONWithPagination()`
+4. **Create new helpers if needed** — Add to `internal/testutil` when several packages need them, otherwise keep them unexported in the package's own test file
 
 ### Step 2: Test Writing Patterns
 
@@ -218,8 +218,8 @@ func TestFunctionName_Scenarios(t *testing.T) {
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-                respondJSON(w, tt.mockStatus, tt.mockBody)
+            client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
             }))
 
             got, err := functionUnderTest(context.Background(), client, tt.input)
@@ -239,22 +239,26 @@ func TestFunctionName_Scenarios(t *testing.T) {
 When testing POST/PUT operations, validate the request:
 
 ```go
-client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
         t.Errorf("method = %s, want POST", r.Method)
+        http.Error(w, "unexpected method", http.StatusBadRequest)
+        return
     }
     if r.URL.Path != "/api/v4/projects/42/issues" {
         t.Errorf("path = %s, want /api/v4/projects/42/issues", r.URL.Path)
+        http.Error(w, "unexpected path", http.StatusBadRequest)
+        return
     }
-    respondJSON(w, http.StatusCreated, `{...}`)
+    testutil.RespondJSON(w, http.StatusCreated, `{...}`)
 }))
 ```
 
 #### Pagination Tests
 
 ```go
-client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    respondJSONWithPagination(w, http.StatusOK, `[...]`, paginationHeaders{
+client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    testutil.RespondJSONWithPagination(w, http.StatusOK, `[...]`, testutil.PaginationHeaders{
         Page:       "1",
         PerPage:    "20",
         Total:      "50",
@@ -268,8 +272,8 @@ client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.
 
 ```go
 func TestFunction_ContextCancelled(t *testing.T) {
-    client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        respondJSON(w, http.StatusOK, `{}`)
+    client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        testutil.RespondJSON(w, http.StatusOK, `{}`)
     }))
 
     ctx, cancel := context.WithCancel(context.Background())
@@ -414,3 +418,16 @@ goroutine and truncates the response. Follow the six-rule contract in
 `.github/instructions/test-goroutines.instructions.md` (t.Errorf + response +
 return, or record with atomics and assert on the test goroutine). Verify with
 `make check-test-goroutines`.
+
+## Case loops and file names (gated in CI)
+
+- Every case table runs under `t.Run`: a range over a slice or map literal that
+  asserts must open one subtest per case, named by the `name` field, the string
+  element, or the map key. `go run ./cmd/audit_test_subtests/ -fix` rewrites the
+  unambiguous shapes; `// sequential: <reason>` on the line above a loop declares
+  dependent steps rather than cases. `make check-test-subtests` gates it.
+- A `_test.go` file exists only under the name of a module it tests
+  (`branches.go` has `branches_test.go`, `merge_requests.go` has
+  `merge_requests_test.go`); `make check-test-file-names` gates it.
+- Refresh the generated testing reference when done: `go run ./cmd/gen_testing_docs/`,
+  then `go run ./cmd/gen_testing_docs/ --check`.

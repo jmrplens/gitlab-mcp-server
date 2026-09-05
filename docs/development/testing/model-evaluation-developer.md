@@ -9,28 +9,32 @@ around `cmd/eval_mcp_surfaces`.
 
 ## Source Map
 
-| Path                                                     | Purpose                                                                               |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `cmd/eval_mcp_surfaces/main.go`                          | Thin command entry point that delegates to the internal evaluator package.            |
-| `cmd/eval_mcp_surfaces/internal/evaluator/run.go`        | High-level command workflow, environment setup, catalog preparation, and model runs.  |
-| `cmd/eval_mcp_surfaces/internal/evaluator/options.go`    | CLI flags, presets, and tool-surface normalization.                                   |
-| `cmd/eval_mcp_surfaces/internal/evaluator/runner.go`     | Model loop, tool-call budgets, validation feedback, and simulated tool results.       |
-| `cmd/eval_mcp_surfaces/internal/evaluator/sessions.go`   | Mock and live MCP server sessions, resource/prompt registration, and catalog routing. |
-| `cmd/eval_mcp_surfaces/internal/evaluator/bridge.go`     | MCP capability bridge tools for resources, prompts, completions, and capabilities.    |
-| `cmd/eval_mcp_surfaces/internal/evaluator/case_*.go`     | Typed case definitions, case registry, prompt rendering, and fixture engine.          |
-| `cmd/eval_mcp_surfaces/internal/evaluator/report.go`     | Per-run Markdown reports, metrics, diagnostics, usage, and coverage output.           |
-| `cmd/eval_mcp_surfaces/internal/evaluator/comparison.go` | Cross-report comparison for model, token, diagnostic, usage, and coverage trends.     |
-| `cmd/eval_mcp_surfaces/internal/evaluator/providers.go`  | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.            |
-| `cmd/eval_mcp_surfaces/internal/evaluator/fixtures.go`   | Docker GitLab fixture preparation and placeholder replacement.                        |
-| `cmd/eval_mcp_surfaces/internal/evalrun/`                | Small run utilities shared by fixture and model execution code.                       |
-| `cmd/eval_mcp_surfaces/internal/termio/`                 | Terminal progress and log routing for long local runs and wrapper scripts.            |
-| `dist/evaluation/mcp-surfaces/`                          | Generated reports, traces, and fixture state; ignored by Git.                         |
-| `docs/testing/model-results.md`                          | Current published benchmark result copied from generated reports.                     |
+| Path                                                     | Purpose                                                                                                                    |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `cmd/eval_mcp_surfaces/main.go`                          | Thin command entry point that delegates to the internal evaluator package.                                                 |
+| `cmd/eval_mcp_surfaces/internal/evaluator/run.go`        | High-level command workflow, environment setup, catalog preparation, and model runs.                                       |
+| `cmd/eval_mcp_surfaces/internal/evaluator/options.go`    | CLI flags, presets, and tool-surface normalization.                                                                        |
+| `cmd/eval_mcp_surfaces/internal/evaluator/runner.go`     | Model loop, tool-call budgets, validation feedback, and simulated tool results.                                            |
+| `cmd/eval_mcp_surfaces/internal/evaluator/sessions.go`   | Mock and live MCP server sessions, resource/prompt registration, and catalog routing.                                      |
+| `cmd/eval_mcp_surfaces/internal/evaluator/bridge.go`     | MCP capability bridge tools for resources, prompts, completions, and capabilities.                                         |
+| `cmd/eval_mcp_surfaces/internal/evaluator/cases/`        | The typed case catalog: prompts, expected steps, preset membership and fixture references, one file per partition.         |
+| `cmd/eval_mcp_surfaces/internal/evaluator/case_*.go`     | Case registry, case types, prompt rendering, assertions, and the fixture engine that resolves the catalog's fixture names. |
+| `cmd/eval_mcp_surfaces/internal/evaluator/report.go`     | Per-run Markdown reports, metrics, diagnostics, usage, and coverage output.                                                |
+| `cmd/eval_mcp_surfaces/internal/evaluator/comparison.go` | Cross-report comparison for model, token, diagnostic, usage, and coverage trends.                                          |
+| `cmd/eval_mcp_surfaces/internal/evaluator/providers.go`  | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.                                                 |
+| `cmd/eval_mcp_surfaces/internal/evaluator/fixtures.go`   | Docker GitLab fixture preparation and placeholder replacement.                                                             |
+| `cmd/eval_mcp_surfaces/internal/evalrun/`                | Small run utilities shared by fixture and model execution code.                                                            |
+| `cmd/eval_mcp_surfaces/internal/termio/`                 | Terminal progress and log routing for long local runs and wrapper scripts.                                                 |
+| `dist/evaluation/mcp-surfaces/`                          | Generated reports, traces, and fixture state; ignored by Git.                                                              |
+| `docs/development/testing/model-results.md`              | Current published benchmark result copied from generated reports.                                                          |
 
-Case definitions are grouped in `case_registry_*.go` files by partition:
-`case_registry_read.go`, `case_registry_mutating.go`,
-`case_registry_destructive.go`, `case_registry_capabilities.go`, and the
-Enterprise/Premium variants. Add new cases there rather than in testdata files.
+Case definitions live in the `cases` package, one file per partition:
+`read.go`, `mutating.go`, `destructive.go`, `capabilities.go`,
+`error_recovery.go`, and the `enterprise_read.go`, `enterprise_mutating.go`
+and `enterprise_destructive.go` variants; `registry.go` merges them. A case ID
+is unique across the whole catalog, not per partition. Add new cases there
+rather than in testdata files (the `--tasks` flag is deprecated and loads
+nothing).
 
 The evaluator implementation intentionally lives under `internal/evaluator` so
 the command can stay small while the implementation keeps package-private helper
@@ -71,9 +75,10 @@ The evaluator reads model provider keys from environment variables:
 | Qwen      | `QWEN_API_KEY`                       |
 
 Docker mode also needs `test/e2e/.env.docker`, created by the E2E provisioning
-scripts. Enterprise Docker mode additionally needs `GITLAB_TIER=ultimate` (or `premium`), the
-EE image, and `ENTERPRISE_LICENSE` supplied through the shell or the repository
-`.env` file. Never print or commit `.env`, `.env.docker`, provider keys,
+scripts. Enterprise Docker mode additionally needs `GITLAB_TIER=ultimate` (or `premium`)
+for the evaluator and the server it embeds, the EE image, `GITLAB_ENTERPRISE=true`
+for `setup-gitlab.sh` (the only enterprise switch that script reads), and
+`ENTERPRISE_LICENSE` supplied through the shell or the repository `.env` file. Never print or commit `.env`, `.env.docker`, provider keys,
 licenses, raw traces, or generated fixture state.
 
 The documented Qwen configuration uses `QWEN_API_KEY` directly. Keep provider
@@ -160,7 +165,7 @@ setup script installs those without echoing the license:
 ```bash
 timeout 3600s env GITLAB_IMAGE=gitlab/gitlab-ee:latest GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" docker compose -f test/e2e/docker-compose.yml up -d
 timeout 1800s ./test/e2e/scripts/wait-for-gitlab.sh
-timeout 1800s GITLAB_TIER=ultimate ./test/e2e/scripts/setup-gitlab.sh
+timeout 1800s env GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
 timeout 1800s ./test/e2e/scripts/register-runner.sh
 ```
 
@@ -358,13 +363,15 @@ committed docs.
 
 ## Adding Or Updating Cases
 
-Edit the typed registry files in `cmd/eval_mcp_surfaces/internal/evaluator/`:
+Edit the typed case files in `cmd/eval_mcp_surfaces/internal/evaluator/cases/`:
 
-- `case_registry_read.go` for CE read-only operations.
-- `case_registry_mutating.go` for CE safe mutations.
-- `case_registry_destructive.go` for CE destructive operations.
-- `case_registry_capabilities.go` for MCP capability bridge scenarios.
-- `case_registry_enterprise_*.go` for Enterprise/Premium scenarios.
+- `read.go` for CE read-only operations.
+- `mutating.go` for CE safe mutations.
+- `destructive.go` for CE destructive operations.
+- `capabilities.go` for MCP capability bridge scenarios.
+- `error_recovery.go` for failure-recovery scenarios.
+- `enterprise_read.go`, `enterprise_mutating.go` and
+  `enterprise_destructive.go` for Enterprise/Premium scenarios.
 
 Use the following guidance:
 
@@ -381,7 +388,7 @@ After changing tests or evaluation behavior, run focused verification and lint
 the affected Markdown files:
 
 ```bash
-timeout 300s go test ./cmd/eval_mcp_surfaces ./cmd/gen_testing_docs -count=1
-timeout 120s go run ./cmd/gen_testing_docs/ --check
-timeout 120s npx markdownlint-cli2 docs/testing/*.md
+timeout 300s go test ./cmd/eval_mcp_surfaces/... ./cmd/gen_testing_docs -count=1
+timeout 120s go run ./cmd/gen_testing_docs/ --check -skip-coverage
+timeout 120s npx markdownlint-cli2 docs/development/testing/*.md
 ```

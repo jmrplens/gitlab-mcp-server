@@ -19,7 +19,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | [ADR-0005](adr-0005-meta-tool-consolidation.md)                                  | Meta-tool consolidation from 68 to a compact domain catalog        | Accepted; registration mechanics superseded by ADR-0014 | Historical but useful                           | 2026-03-06 |
 | [ADR-0006](adr-0006-raw-graphql-for-uncovered-domains.md)                        | Raw GraphQL.Do() for domains without client-go service wrappers    | Accepted                                                | Current                                         | 2026-03-23 |
 | [ADR-0007](adr-0007-rich-error-semantics.md)                                     | Rich error semantics for LLM-actionable diagnostics                | Accepted                                                | Current                                         | 2026-04-06 |
-| [ADR-0008](adr-0008-universal-identity.md)                                       | Universal identity system                                          | Accepted                                                | Current                                         | 2026-04-13 |
+| [ADR-0008](adr-0008-universal-identity.md)                                       | Universal identity system                                          | Accepted, partially unimplemented (HTTP legacy mode)    | Current                                         | 2026-04-18 |
 | [ADR-0009](adr-0009-progressive-graphql-migration.md)                            | Progressive GraphQL migration strategy                             | Accepted                                                | Current                                         | 2026-04-20 |
 | [ADR-0010](adr-0010-no-resource-subscribe.md)                                    | No resource subscribe capability                                   | Superseded by ADR-0015                                  | Historical but useful                           | 2026-04-26 |
 | [ADR-0011](adr-0011-low-token-dynamic-toolset.md)                                | Low-token dynamic toolset mode                                     | Accepted; catalog source refined by ADR-0014            | Current, with catalog-first terminology updates | 2026-05-07 |
@@ -46,7 +46,7 @@ ADR-0004 is now a standalone document. It was previously referenced only in the 
 
 New ADRs follow the template in `.github/skills/create-architectural-decision-record/`. Each ADR includes:
 
-- YAML front matter (title, status, date, authors, tags)
+- YAML front matter (title, status, date, authors, tags). ADR-0010 and ADR-0015 through ADR-0019 carry none and state their status and date in the Status section instead
 - Context, decision drivers, and options considered
 - Decision outcome with positive/negative consequences
 - Compliance checklist

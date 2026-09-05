@@ -83,9 +83,9 @@ Present a documentation plan to the user:
 
 ```text
 File                              Symbols   Documented   Missing   Action
-internal/tools/branches/branch.go    12         4          8       Add file header, doc 8 symbols
+internal/tools/branches/branches.go    12         4          8       Add file header, doc 8 symbols
 internal/tools/branches/action_specs.go 3       1          2       Add file header, doc 2 funcs
-internal/tools/branches/branch_test.go 6        0          6       Add file header, doc 6 tests
+internal/tools/branches/branches_test.go 6      0          6       Add file header, doc 6 tests
 ```
 
 Wait for user confirmation before proceeding.
@@ -173,25 +173,28 @@ type Buffer struct {
 **Structs with exported fields** — use either type-level doc or per-field comments:
 
 ```go
-// BranchCreateInput defines parameters for creating a new branch in a
-// GitLab project.
-type BranchCreateInput struct {
-    ProjectID  string `json:"project_id"  jsonschema:"required,description=Project ID or URL-encoded path"`
-    BranchName string `json:"branch_name" jsonschema:"required,description=Name of the new branch"`
-    Ref        string `json:"ref"         jsonschema:"description=Source branch, tag, or commit SHA"`
+// CreateInput defines parameters for creating a new branch in a
+// GitLab project. The package name carries the domain, so the type takes
+// no Branch prefix.
+type CreateInput struct {
+    ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
+    BranchName string               `json:"branch_name" jsonschema:"New branch name,required"`
+    Ref        string               `json:"ref"         jsonschema:"Branch name, tag, or commit SHA to create from,required"`
 }
 ```
 
 Or with per-field comments when fields are complex:
 
 ```go
-// PaginationOutput contains metadata for paginated API responses.
+// PaginationOutput holds pagination metadata extracted from GitLab API responses.
 type PaginationOutput struct {
-    Page       int  `json:"page"`        // Current page number (1-based).
-    PerPage    int  `json:"per_page"`    // Number of items per page.
-    Total      int  `json:"total"`       // Total number of items across all pages.
-    TotalPages int  `json:"total_pages"` // Total number of pages.
-    HasMore    bool `json:"has_more"`    // Whether additional pages exist.
+    Page       int64 `json:"page"`        // X-Page: current page number (1-based).
+    PerPage    int64 `json:"per_page"`    // X-Per-Page: items per page.
+    TotalItems int64 `json:"total_items"` // X-Total: items across all pages.
+    TotalPages int64 `json:"total_pages"` // X-Total-Pages: total page count.
+    NextPage   int64 `json:"next_page"`   // X-Next-Page: 0 on the last page.
+    PrevPage   int64 `json:"prev_page"`   // X-Prev-Page: 0 on the first page.
+    HasMore    bool  `json:"has_more"`    // Derived: NextPage > 0.
 }
 ```
 
@@ -238,7 +241,7 @@ func HasPrefix(s, prefix string) bool {
 For **error conditions**, document when and why errors occur:
 
 ```go
-// branchCreate creates a new branch in the specified GitLab project.
+// Create creates a new branch in the specified GitLab project.
 // It calls the GitLab Branches API and returns the created branch details.
 //
 // Returns an error if:
@@ -246,7 +249,7 @@ For **error conditions**, document when and why errors occur:
 //  - the ref to branch from does not exist (400)
 //  - the branch name already exists (409)
 //  - the context is cancelled or times out
-func branchCreate(ctx context.Context, client *gitlabclient.Client, in BranchCreateInput) (BranchOutput, error) {
+func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 ```
 
 For **methods**, use a consistent receiver name and don't stutter:
@@ -324,10 +327,10 @@ var (
 Even unexported helpers deserve documentation when their logic is non-trivial:
 
 ```go
-// branchToOutput converts a GitLab API [gl.Branch] to the MCP tool output
-// format, extracting relevant fields and computing the web URL from the
-// project path and branch name.
-func branchToOutput(b *gl.Branch) BranchOutput {
+// ToOutput converts a GitLab API [gl.Branch] to the MCP tool output
+// format, mirroring every field of the SDK struct (1:1 policy) and
+// flattening the head commit into the branch record.
+func ToOutput(b *gl.Branch) Output {
 ```
 
 #### 7. ActionSpec Functions
@@ -394,7 +397,7 @@ Every test function MUST have a doc comment that explains:
 **Simple test function**:
 
 ```go
-// TestBranchCreate_Success verifies that branchCreate creates a new branch
+// TestBranchCreate_Success verifies that Create creates a new branch
 // when the GitLab API returns HTTP 201 Created.
 //
 // The test mocks the POST /projects/:id/repository/branches endpoint to
@@ -410,7 +413,7 @@ func TestBranchCreate_Success(t *testing.T) {
 **Error scenario test**:
 
 ```go
-// TestBranchCreate_ProjectNotFound verifies that branchCreate returns an
+// TestBranchCreate_ProjectNotFound verifies that Create returns an
 // error when the target project does not exist.
 //
 // The mock returns HTTP 404 with a GitLab error body. The test asserts
@@ -423,7 +426,7 @@ func TestBranchCreate_ProjectNotFound(t *testing.T) {
 **Edge case test**:
 
 ```go
-// TestBranchList_EmptyResults verifies that branchList returns an empty
+// TestBranchList_EmptyResults verifies that List returns an empty
 // slice (not nil) when the project has no branches.
 //
 // The mock returns HTTP 200 with an empty JSON array "[]". The test
@@ -438,7 +441,7 @@ func TestBranchList_EmptyResults(t *testing.T) {
 For table-driven tests, document the overall strategy AND ensure each test case name is self-describing:
 
 ```go
-// TestBranchList_Scenarios uses table-driven subtests to validate branchList
+// TestBranchList_Scenarios uses table-driven subtests to validate List
 // across multiple conditions. Each subtest configures a dedicated httptest
 // handler that returns the appropriate response for the scenario.
 //
@@ -461,27 +464,32 @@ func TestBranchList_Scenarios(t *testing.T) {
 
 #### 4. Test Helper Functions
 
+The shared helpers live in `internal/testutil` (`helpers.go`); a domain test
+file rarely defines its own. Their doc comments are the model for any local
+helper:
+
 ```go
-// newTestClient creates a [gitlabclient.Client] backed by an httptest server
+// NewTestClient creates a [gitlabclient.Client] backed by an httptest server
 // using the provided handler. The httptest server is automatically stopped
-// when the test completes via [testing.T.Cleanup]. Calls [testing.T.Helper]
+// when the test completes via [testing.TB.Cleanup]. Calls [testing.TB.Helper]
 // so that failures report the caller's line number.
-func newTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
-    t.Helper()
+func NewTestClient(tb testing.TB, handler http.Handler) *gitlabclient.Client {
+    tb.Helper()
 ```
 
 ```go
-// respondJSON writes a JSON response with the given status code and body
+// RespondJSON writes a JSON response with the given status code and body
 // to the [http.ResponseWriter]. It sets Content-Type to application/json.
 // Designed for use in httptest handlers to simulate GitLab API responses.
-func respondJSON(w http.ResponseWriter, status int, body string) {
+func RespondJSON(w http.ResponseWriter, status int, body string) {
 ```
 
 ```go
-// respondJSONWithPagination writes a JSON response with GitLab pagination
-// headers (X-Page, X-Per-Page, X-Total, X-Total-Pages, X-Next-Page).
+// RespondJSONWithPagination writes a JSON response with GitLab pagination
+// headers (X-Page, X-Per-Page, X-Total, X-Total-Pages, X-Next-Page,
+// X-Prev-Page); headers whose [PaginationHeaders] field is empty are omitted.
 // Used in httptest handlers to simulate paginated GitLab API list endpoints.
-func respondJSONWithPagination(w http.ResponseWriter, status int, body string, p paginationHeaders) {
+func RespondJSONWithPagination(w http.ResponseWriter, status int, body string, p PaginationHeaders) {
 ```
 
 #### 5. Test Constants and Fixtures

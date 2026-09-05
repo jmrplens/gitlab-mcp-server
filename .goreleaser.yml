@@ -31,8 +31,8 @@ builds:
 # macOS universal (fat) binary for the Claude Desktop extension (.mcpb):
 # platform_overrides in the MCPB manifest key by OS only (darwin/win32), not
 # by architecture, so the darwin entry point must run on both arm64 and amd64.
-# replace: false keeps the per-arch darwin assets that go-selfupdate matches
-# by exact name.
+# replace: false keeps the per-arch darwin assets that the Homebrew formula
+# and the installers look up by exact name.
 universal_binaries:
   - id: gitlab-mcp-server-universal
     ids: [gitlab-mcp-server]
@@ -119,7 +119,7 @@ release:
     name: gitlab-mcp-server
   # Draft first: every asset (binaries, checksums.txt + signature, SBOMs, and
   # the .mcpb attached by the workflow) is in place before the release becomes
-  # visible, so go-selfupdate never observes a partial release. The workflow's
+  # visible, so no installer or updater observes a partial release. The workflow's
   # "Publish release" step flips the draft after the last upload.
   draft: true
   replace_existing_draft: true

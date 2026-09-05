@@ -54,9 +54,6 @@ type testEntry struct {
 var (
 	// covPattern matches TestCov* prefixed tests.
 	covPattern = regexp.MustCompile(`^TestCov[A-Z]`)
-
-	// e2eWorkflow matches top-level E2E workflow tests that should be skipped.
-	e2eWorkflow = regexp.MustCompile(`^Test(FullWorkflow|MetaToolWorkflow)$`)
 )
 
 // main audits test function naming convention compliance across the project.
@@ -198,11 +195,6 @@ func scanFile(path string) []testEntry {
 
 // classify determines the naming pattern and suggests a corrected name.
 func classify(name string) (pattern, suggested string) {
-	// Skip E2E workflow entry points.
-	if e2eWorkflow.MatchString(name) {
-		return PatternSkip, name
-	}
-
 	// TestCov* prefix tests.
 	if covPattern.MatchString(name) {
 		suggested = renameCov(name)

@@ -1141,7 +1141,7 @@ func registerCommitResource(server registrar, client *gitlabclient.Client) {
 		Name:        "commit",
 		Title:       "Commit Details",
 		MIMEType:    mimeJSON,
-		Description: "Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions/deletions).",
+		Description: "Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions, deletions and their total).",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconCommit,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {

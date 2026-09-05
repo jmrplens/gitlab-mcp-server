@@ -37,22 +37,21 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 | ------------------ | ------------------------------------------------------- |
 | Language           | Go 1.27.1                                               |
 | MCP SDK            | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0    |
-| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0        |
-| Self-Update        | `github.com/creativeprojects/go-selfupdate` v1.5.2     |
+| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.62.0 (check `go.mod`, it moves with every dependency bump) |
 | Transport          | stdio (primary), HTTP (optional)                        |
-| Architecture       | ~175 domain sub-packages under `internal/tools/` (166 with `action_specs.go`); canonical action catalog at `internal/tools/action_catalog.go` projects everything into meta, dynamic, `gitlab://tools`, audits, LLM files, and individual tool surfaces (ADR-0004) |
+| Architecture       | 177 packages under `internal/tools/` (168 with `action_specs.go`); canonical action catalog at `internal/tools/action_catalog.go` projects everything into meta, dynamic, `gitlab://tools`, audits, LLM files, and individual tool surfaces (ADR-0004) |
 | Test Infrastructure| `net/http/httptest` mocks, `testutil.NewTestClient`     |
 | Static Analysis    | golangci-lint v2 (Go linters/formatters), govulncheck, markdownlint |
 
 ### Key Project Patterns
 
 - **Tool sub-packages**: `internal/tools/{domain}/` — each has `action_specs.go`, typed I/O structs, handler functions, `_test.go` files, and optional Markdown formatters
-- **Tool naming**: `gitlab_{action}_{resource}` in snake_case
-- **Test naming**: `TestToolName_Scenario_ExpectedResult` with table-driven subtests
-- **Error wrapping**: `fmt.Errorf("context: %w", err)` with `toolutil.WrapErr`
-- **Pagination**: `toolutil.BuildPaginationResponse()` for list operations
-- **Meta-tools**: Domain-level dispatch tools wrapping individual tools
-- **Markdown formatters**: Each sub-package provides `FormatMarkdown()` for human-readable output
+- **Tool naming**: catalog routes are `{domain}.{action}`; an individual tool's name is declared per action in `IndividualTool.Name` (domain-first `gitlab_issue_list` prevails, a legacy verb-first set such as `gitlab_list_issue_discussions` exists), never derived from a formula
+- **Test naming**: `TestToolName_Scenario_ExpectedResult`; every case table runs under `t.Run` (`make check-test-subtests`); a `_test.go` is named after the module it tests (`make check-test-file-names`)
+- **Error wrapping**: `toolutil.WrapErr` for reads, `WrapErrWithMessage` / `WrapErrWithHint` / `WrapErrWithStatusHint` for mutations, `NotFoundResult` for 404s on get handlers
+- **Pagination**: `toolutil.ApplyListOptions()` on the request and `toolutil.PaginationFromResponse()` on the response for list operations
+- **Meta-tools**: one dispatcher per catalog group (`gitlab_issue`, `gitlab_project`, ...) projected from the same `ActionSpecs` as the individual and dynamic surfaces, not wrappers around individual tools
+- **Markdown formatters**: each sub-package registers its formatters with `toolutil.RegisterMarkdown` in the `init()` of its `markdown.go`
 
 ## Planning Modes
 
@@ -114,7 +113,7 @@ You operate in different modes depending on the type of plan requested. Always i
 **Key questions to investigate**:
 
 - Does this contradict any existing ADR?
-- How does this affect the canonical action catalog (ADR-0004) and the ~175 sub-package structure?
+- How does this affect the canonical action catalog (ADR-0004) and the 177-package structure under `internal/tools/`?
 - What is the impact on HTTP mode vs stdio mode?
 - Does this require changes to the MCP SDK usage patterns?
 
@@ -228,6 +227,8 @@ Before producing any plan, you MUST complete these steps:
 ## Plan Output Format
 
 All plans MUST be saved to `/plan/` directory using naming convention: `[purpose]-[component]-[version].md`
+
+`plan/` is gitignored (local working notes, per ADR-0013), so a plan is never committed and markdownlint ignores it; anything that must outlive the working tree goes into an ADR or a GitHub issue.
 
 **Purpose prefixes**: `feature` | `refactor` | `architecture` | `test` | `bug` | `docs` | `upgrade` | `security` | `infrastructure`
 

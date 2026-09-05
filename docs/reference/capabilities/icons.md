@@ -278,17 +278,24 @@ palette would band the antialiased edges).
 
 ### Catalog Projection Pattern
 
-Each catalog-backed tool receives its icon when `RegisterAll` projects the canonical action catalog into individual MCP tools:
+Icons are attached per **catalog group**, not per package: `internal/tools/catalog_group_metadata.go` maps every group name (`gitlab_branch`, `gitlab_issue`, ...) to its icon, a group missing from that map falls back to `IconServer`, and a meta-tool, the individual tools projected from its actions, and the dynamic surface's `gitlab://tools` entries all inherit the group's icon. Each catalog-backed tool receives it when `RegisterAll` projects the canonical action catalog into individual MCP tools:
 
 ```go
-func RegisterAll(server *mcp.Server, client *gitlab.Client, opts RegisterOptions) error {
-    catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Enterprise: opts.Enterprise})
+func RegisterAll(server *mcp.Server, client *gitlabclient.Client, tier edition.Tier) *actioncatalog.Catalog {
+    catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
     if err != nil {
-        return err
+        panic(fmt.Errorf("build individual action catalog: %w", err))
     }
-    return RegisterIndividualCatalogTools(server, catalog, opts)
+    RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
+        IncludeStandaloneUtilities: true,
+        SchemaCacheKey:             "individual|" + tier.String(),
+    })
+    RegisterMetaStandaloneTools(server, client)
+    return catalog
 }
 ```
+
+Resources and prompts name their icon directly at registration (`Icons: toolutil.IconIssue` on the `mcp.Resource` or `mcp.Prompt` literal).
 
 The `icon()` helper in `toolutil` base64-encodes each SVG constant, reads its
 pre-generated WebP fallbacks from an embedded filesystem, and wraps all
@@ -318,183 +325,183 @@ verifies the committed assets are still current.
 
 ## Icon Gallery
 
-All 50 domain icons with their SVG preview, exported variable name, and the tool packages that use each one. The brand mark is documented separately below.
+All 50 domain icons with their SVG preview, exported variable name, and the catalog groups that carry each one. A group is a meta-tool (`gitlab_branch`, `gitlab_issue`, ...); the individual tools projected from its actions and the `gitlab://tools` entries on the dynamic surface inherit its icon, so a group name below stands for every tool it aggregates. Resources and prompts pick their icon directly and are listed in the [complete reference](#complete-icon-to-group-reference) further down. Twelve icons (`IconAlert`, `IconBot`, `IconContainer`, `IconDiscussion`, `IconEpic`, `IconImport`, `IconIntegration`, `IconLink`, `IconNotify`, `IconSchedule`, `IconTodo`, `IconUpload`) currently have no consumer on any served surface: the domains they were drawn for route under a broader group (`gitlab_admin`, `gitlab_group`, `gitlab_issue`, `gitlab_merge_request`, ...) and take that group's icon. The brand mark is documented separately below.
 
 <!-- markdownlint-disable MD033 -->
 
 ### Source Control
 
-| Preview                                                            | Name          | Packages                                   |
-| ------------------------------------------------------------------ | ------------- | ------------------------------------------ |
-| <img src="icons/branch.svg" width="32" height="32" alt="Branch">   | `IconBranch`  | branches, repository, repositorysubmodules |
-| <img src="icons/commit.svg" width="32" height="32" alt="Commit">   | `IconCommit`  | commits, mrcontextcommits                  |
-| <img src="icons/tag.svg" width="32" height="32" alt="Tag">         | `IconTag`     | tags                                       |
-| <img src="icons/release.svg" width="32" height="32" alt="Release"> | `IconRelease` | releases                                   |
-| <img src="icons/file.svg" width="32" height="32" alt="File">       | `IconFile`    | files, markdown, pages                     |
+| Preview                                                            | Name          | Catalog groups                                                                                                  |
+| ------------------------------------------------------------------ | ------------- | --------------------------------------------------------------------------------------------------------------- |
+| <img src="icons/branch.svg" width="32" height="32" alt="Branch">   | `IconBranch`  | `gitlab_branch`                                                                                                 |
+| <img src="icons/commit.svg" width="32" height="32" alt="Commit">   | `IconCommit`  | none (resource `commit` and prompt `audit_commit_hygiene` only; commit actions route under `gitlab_repository`) |
+| <img src="icons/tag.svg" width="32" height="32" alt="Tag">         | `IconTag`     | `gitlab_tag`                                                                                                    |
+| <img src="icons/release.svg" width="32" height="32" alt="Release"> | `IconRelease` | `gitlab_release`                                                                                                |
+| <img src="icons/file.svg" width="32" height="32" alt="File">       | `IconFile`    | `gitlab_repository`                                                                                             |
 
 ### Issues and Planning
 
-| Preview                                                                | Name            | Packages                                        |
-| ---------------------------------------------------------------------- | --------------- | ----------------------------------------------- |
-| <img src="icons/issue.svg" width="32" height="32" alt="Issue">         | `IconIssue`     | issues, workitems                               |
-| <img src="icons/label.svg" width="32" height="32" alt="Label">         | `IconLabel`     | awardemoji, badges, grouplabels, labels, topics |
-| <img src="icons/milestone.svg" width="32" height="32" alt="Milestone"> | `IconMilestone` | groupmilestones, milestones                     |
-| <img src="icons/board.svg" width="32" height="32" alt="Board">         | `IconBoard`     | boards, groupboards                             |
-| <img src="icons/link.svg" width="32" height="32" alt="Link">           | `IconLink`      | issuelinks, releaselinks                        |
-| <img src="icons/epic.svg" width="32" height="32" alt="Epic">           | `IconEpic`      | epicissues, epicnotes, epics                    |
-| <img src="icons/todo.svg" width="32" height="32" alt="Todo">           | `IconTodo`      | todos                                           |
+| Preview                                                                | Name            | Catalog groups                                                                                                            |
+| ---------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| <img src="icons/issue.svg" width="32" height="32" alt="Issue">         | `IconIssue`     | `gitlab_issue`                                                                                                            |
+| <img src="icons/label.svg" width="32" height="32" alt="Label">         | `IconLabel`     | none (label resources and the `label_distribution` prompt; label actions route under `gitlab_project` and `gitlab_group`) |
+| <img src="icons/milestone.svg" width="32" height="32" alt="Milestone"> | `IconMilestone` | none (milestone resources and prompts; milestone actions route under `gitlab_project` and `gitlab_group`)                 |
+| <img src="icons/board.svg" width="32" height="32" alt="Board">         | `IconBoard`     | none (resource `board`; board actions route under `gitlab_project` and `gitlab_group`)                                    |
+| <img src="icons/link.svg" width="32" height="32" alt="Link">           | `IconLink`      | none                                                                                                                      |
+| <img src="icons/epic.svg" width="32" height="32" alt="Epic">           | `IconEpic`      | none (epic actions route under `gitlab_group`)                                                                            |
+| <img src="icons/todo.svg" width="32" height="32" alt="Todo">           | `IconTodo`      | none (todo actions route under `gitlab_user`)                                                                             |
 
 ### Merge Requests
 
-| Preview                                                                  | Name             | Packages                                                                                                                   |
-| ------------------------------------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| <img src="icons/mr.svg" width="32" height="32" alt="MR">                 | `IconMR`         | deploymentmergerequests, mergerequests, mrapprovals, mrchanges                                                             |
-| <img src="icons/discussion.svg" width="32" height="32" alt="Discussion"> | `IconDiscussion` | commitdiscussions, epicdiscussions, issuediscussions, issuenotes, mrdiscussions, mrdraftnotes, mrnotes, snippetdiscussions |
+| Preview                                                                  | Name             | Catalog groups                                                      |
+| ------------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------- |
+| <img src="icons/mr.svg" width="32" height="32" alt="MR">                 | `IconMR`         | `gitlab_merge_request`, `gitlab_mr_review`                          |
+| <img src="icons/discussion.svg" width="32" height="32" alt="Discussion"> | `IconDiscussion` | none (discussion and note actions route under their parent's group) |
 
 ### CI/CD
 
-| Preview                                                              | Name           | Packages                                                          |
-| -------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------- |
-| <img src="icons/pipeline.svg" width="32" height="32" alt="Pipeline"> | `IconPipeline` | cilint, pipelines, pipelinetriggers                               |
-| <img src="icons/job.svg" width="32" height="32" alt="Job">           | `IconJob`      | jobs, jobtokenscope                                               |
-| <img src="icons/runner.svg" width="32" height="32" alt="Runner">     | `IconRunner`   | clusteragents, runners, runnercontrollers, runnercontrollerscopes |
-| <img src="icons/schedule.svg" width="32" height="32" alt="Schedule"> | `IconSchedule` | freezeperiods, pipelineschedules                                  |
-| <img src="icons/variable.svg" width="32" height="32" alt="Variable"> | `IconVariable` | civariables, groupvariables, instancevariables                    |
+| Preview                                                              | Name           | Catalog groups                                                                                     |
+| -------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------- |
+| <img src="icons/pipeline.svg" width="32" height="32" alt="Pipeline"> | `IconPipeline` | `gitlab_pipeline`                                                                                  |
+| <img src="icons/job.svg" width="32" height="32" alt="Job">           | `IconJob`      | `gitlab_job`                                                                                       |
+| <img src="icons/runner.svg" width="32" height="32" alt="Runner">     | `IconRunner`   | `gitlab_runner`                                                                                    |
+| <img src="icons/schedule.svg" width="32" height="32" alt="Schedule"> | `IconSchedule` | none (pipeline schedules route under `gitlab_pipeline`, freeze periods under `gitlab_environment`) |
+| <img src="icons/variable.svg" width="32" height="32" alt="Variable"> | `IconVariable` | `gitlab_ci_variable`                                                                               |
 
 ### Environments and Deployments
 
-| Preview                                                                    | Name              | Packages        |
-| -------------------------------------------------------------------------- | ----------------- | --------------- |
-| <img src="icons/environment.svg" width="32" height="32" alt="Environment"> | `IconEnvironment` | environments    |
-| <img src="icons/deploy.svg" width="32" height="32" alt="Deploy">           | `IconDeploy`      | deployments     |
-| <img src="icons/infra.svg" width="32" height="32" alt="Infra">             | `IconInfra`       | terraformstates |
+| Preview                                                                    | Name              | Catalog groups                                                                    |
+| -------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------- |
+| <img src="icons/environment.svg" width="32" height="32" alt="Environment"> | `IconEnvironment` | `gitlab_environment`                                                              |
+| <img src="icons/deploy.svg" width="32" height="32" alt="Deploy">           | `IconDeploy`      | none (resource `deployment`; deployment actions route under `gitlab_environment`) |
+| <img src="icons/infra.svg" width="32" height="32" alt="Infra">             | `IconInfra`       | `gitlab_geo`, `gitlab_storage_move`                                               |
 
 ### Projects and Groups
 
-| Preview                                                            | Name          | Packages                                                                   |
-| ------------------------------------------------------------------ | ------------- | -------------------------------------------------------------------------- |
-| <img src="icons/project.svg" width="32" height="32" alt="Project"> | `IconProject` | projectdiscovery, projects                                                 |
-| <img src="icons/group.svg" width="32" height="32" alt="Group">     | `IconGroup`   | groups, namespaces                                                         |
-| <img src="icons/queue.svg" width="32" height="32" alt="Queue">     | `IconQueue`   | resourcegroups                                                             |
-| <img src="icons/user.svg" width="32" height="32" alt="User">       | `IconUser`    | accessrequests, avatar, ffuserlists, groupmembers, invites, members, users |
-| <img src="icons/bot.svg" width="32" height="32" alt="Bot">         | `IconBot`     | groupserviceaccounts                                                       |
+| Preview                                                            | Name          | Catalog groups                                                                         |
+| ------------------------------------------------------------------ | ------------- | -------------------------------------------------------------------------------------- |
+| <img src="icons/project.svg" width="32" height="32" alt="Project"> | `IconProject` | `gitlab_project`, `gitlab_project_alias`, and the standalone `gitlab_discover_project` |
+| <img src="icons/group.svg" width="32" height="32" alt="Group">     | `IconGroup`   | `gitlab_group`, `gitlab_group_scim`                                                    |
+| <img src="icons/queue.svg" width="32" height="32" alt="Queue">     | `IconQueue`   | `gitlab_merge_train`                                                                   |
+| <img src="icons/user.svg" width="32" height="32" alt="User">       | `IconUser`    | `gitlab_user`, `gitlab_enterprise_user`                                                |
+| <img src="icons/bot.svg" width="32" height="32" alt="Bot">         | `IconBot`     | none (service accounts route under `gitlab_group` and `gitlab_project`)                |
 
 ### Packages and Registry
 
-| Preview                                                                | Name            | Packages                  |
-| ---------------------------------------------------------------------- | --------------- | ------------------------- |
-| <img src="icons/package.svg" width="32" height="32" alt="Package">     | `IconPackage`   | dependencyproxy, packages |
-| <img src="icons/container.svg" width="32" height="32" alt="Container"> | `IconContainer` | containerregistry         |
+| Preview                                                                | Name            | Catalog groups                                                 |
+| ---------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
+| <img src="icons/package.svg" width="32" height="32" alt="Package">     | `IconPackage`   | `gitlab_package`, `gitlab_dependency`, `gitlab_model_registry` |
+| <img src="icons/container.svg" width="32" height="32" alt="Container"> | `IconContainer` | none (the container registry routes under `gitlab_package`)    |
 
 ### Search and Analytics
 
-| Preview                                                                | Name            | Packages                                                     |
-| ---------------------------------------------------------------------- | --------------- | ------------------------------------------------------------ |
-| <img src="icons/search.svg" width="32" height="32" alt="Search">       | `IconSearch`    | search                                                       |
-| <img src="icons/analytics.svg" width="32" height="32" alt="Analytics"> | `IconAnalytics` | appstatistics, issuestatistics, projectstatistics, usagedata |
+| Preview                                                                | Name            | Catalog groups                                                   |
+| ---------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------- |
+| <img src="icons/search.svg" width="32" height="32" alt="Search">       | `IconSearch`    | `gitlab_search`, and `gitlab_find_action` on the dynamic surface |
+| <img src="icons/analytics.svg" width="32" height="32" alt="Analytics"> | `IconAnalytics` | `gitlab_dora_metrics`, `gitlab_orbit`                            |
 
 ### Security and Access
 
-| Preview                                                                        | Name                | Packages                                                                                                                     |
-| ------------------------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| <img src="icons/security.svg" width="32" height="32" alt="Security">           | `IconSecurity`      | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings |
-| <img src="icons/shield.svg" width="32" height="32" alt="Shield">               | `IconShield`        | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages                                                 |
-| <img src="icons/vulnerability.svg" width="32" height="32" alt="Vulnerability"> | `IconVulnerability` | securityfindings, vulnerabilities                                                                                            |
-| <img src="icons/compliance.svg" width="32" height="32" alt="Compliance">       | `IconCompliance`    | attestations, compliancepolicy                                                                                               |
-| <img src="icons/token.svg" width="32" height="32" alt="Token">                 | `IconToken`         | accesstokens, deploytokens, jobtokenscope, runnercontrollertokens                                                            |
-| <img src="icons/key.svg" width="32" height="32" alt="Key">                     | `IconKey`           | deploykeys, keys                                                                                                             |
+| Preview                                                                        | Name                | Catalog groups                                                                                                     |
+| ------------------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| <img src="icons/security.svg" width="32" height="32" alt="Security">           | `IconSecurity`      | `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`, `gitlab_security_scan_profile` |
+| <img src="icons/shield.svg" width="32" height="32" alt="Shield">               | `IconShield`        | `gitlab_attestation`, `gitlab_external_status_check`                                                               |
+| <img src="icons/vulnerability.svg" width="32" height="32" alt="Vulnerability"> | `IconVulnerability` | `gitlab_vulnerability`                                                                                             |
+| <img src="icons/compliance.svg" width="32" height="32" alt="Compliance">       | `IconCompliance`    | `gitlab_compliance_policy`                                                                                         |
+| <img src="icons/token.svg" width="32" height="32" alt="Token">                 | `IconToken`         | `gitlab_access`                                                                                                    |
+| <img src="icons/key.svg" width="32" height="32" alt="Key">                     | `IconKey`           | none (resource `deploy_key`; key actions route under `gitlab_access`, `gitlab_user` and `gitlab_group`)            |
 
 ### Documentation and Content
 
-| Preview                                                            | Name          | Packages |
-| ------------------------------------------------------------------ | ------------- | -------- |
-| <img src="icons/wiki.svg" width="32" height="32" alt="Wiki">       | `IconWiki`    | wikis    |
-| <img src="icons/snippet.svg" width="32" height="32" alt="Snippet"> | `IconSnippet` | snippets |
+| Preview                                                            | Name          | Catalog groups                                       |
+| ------------------------------------------------------------------ | ------------- | ---------------------------------------------------- |
+| <img src="icons/wiki.svg" width="32" height="32" alt="Wiki">       | `IconWiki`    | `gitlab_wiki`, and the five workflow guide resources |
+| <img src="icons/snippet.svg" width="32" height="32" alt="Snippet"> | `IconSnippet` | `gitlab_snippet`                                     |
 
 ### Configuration and Administration
 
-| Preview                                                              | Name           | Packages                                                                                                                          |
-| -------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="icons/config.svg" width="32" height="32" alt="Config">     | `IconConfig`   | appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq |
-| <img src="icons/server.svg" width="32" height="32" alt="Server">     | `IconServer`   | metadata                                                                                                                          |
-| <img src="icons/template.svg" width="32" height="32" alt="Template"> | `IconTemplate` | ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates                                      |
+| Preview                                                              | Name           | Catalog groups                                                                                                                                |
+| -------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="icons/config.svg" width="32" height="32" alt="Config">     | `IconConfig`   | `gitlab_admin`, `gitlab_feature_flags`, `gitlab_member_role`, the `gitlab_interactive_*` wizards, and the `gitlab://tools` manifest resources |
+| <img src="icons/server.svg" width="32" height="32" alt="Server">     | `IconServer`   | `gitlab_execute_action` on the dynamic surface, and the fallback for a group missing from the icon map                                        |
+| <img src="icons/template.svg" width="32" height="32" alt="Template"> | `IconTemplate` | `gitlab_template`, `gitlab_ci_catalog`                                                                                                        |
 
 ### Notifications and Events
 
-| Preview                                                          | Name         | Packages                         |
-| ---------------------------------------------------------------- | ------------ | -------------------------------- |
-| <img src="icons/notify.svg" width="32" height="32" alt="Notify"> | `IconNotify` | broadcastmessages, notifications |
-| <img src="icons/event.svg" width="32" height="32" alt="Event">   | `IconEvent`  | events, resourceevents           |
-| <img src="icons/audit.svg" width="32" height="32" alt="Audit">   | `IconAudit`  | auditevents                      |
-| <img src="icons/alert.svg" width="32" height="32" alt="Alert">   | `IconAlert`  | alertmanagement, errortracking   |
+| Preview                                                          | Name         | Catalog groups                                                           |
+| ---------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------ |
+| <img src="icons/notify.svg" width="32" height="32" alt="Notify"> | `IconNotify` | none (notification actions route under `gitlab_user` and `gitlab_admin`) |
+| <img src="icons/event.svg" width="32" height="32" alt="Event">   | `IconEvent`  | `gitlab_custom_emoji`                                                    |
+| <img src="icons/audit.svg" width="32" height="32" alt="Audit">   | `IconAudit`  | `gitlab_audit_event`                                                     |
+| <img src="icons/alert.svg" width="32" height="32" alt="Alert">   | `IconAlert`  | none (alert and error-tracking actions route under `gitlab_admin`)       |
 
 ### Integrations and Operations
 
-| Preview                                                                    | Name              | Packages                                                                                 |
-| -------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
-| <img src="icons/integration.svg" width="32" height="32" alt="Integration"> | `IconIntegration` | integrations, systemhooks                                                                |
-| <img src="icons/health.svg" width="32" height="32" alt="Health">           | `IconHealth`      | health                                                                                   |
-| <img src="icons/upload.svg" width="32" height="32" alt="Upload">           | `IconUpload`      | groupmarkdownuploads, uploads                                                            |
-| <img src="icons/import.svg" width="32" height="32" alt="Import">           | `IconImport`      | bulkimports, groupimportexport, grouprelationsexport, importservice, projectimportexport |
+| Preview                                                                    | Name              | Catalog groups                                                                                   |
+| -------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| <img src="icons/integration.svg" width="32" height="32" alt="Integration"> | `IconIntegration` | none (integration actions route under `gitlab_project`, system hooks under `gitlab_admin`)       |
+| <img src="icons/health.svg" width="32" height="32" alt="Health">           | `IconHealth`      | `gitlab_server` (`gitlab_server_status` on the individual surface)                               |
+| <img src="icons/upload.svg" width="32" height="32" alt="Upload">           | `IconUpload`      | none (upload actions route under `gitlab_project` and `gitlab_group`)                            |
+| <img src="icons/import.svg" width="32" height="32" alt="Import">           | `IconImport`      | none (import and export actions route under `gitlab_project`, `gitlab_group` and `gitlab_admin`) |
 
 <!-- markdownlint-enable MD033 -->
 
-## Complete Icon-to-Package Reference
+## Complete Icon-to-Group Reference
 
-Alphabetical listing of all 50 domain icons and every sub-package that uses each one.
+Alphabetical listing of all 50 domain icons, the catalog groups that carry each one (from `internal/tools/catalog_group_metadata.go`, plus the standalone and dynamic tools), and the resources and prompts that name it directly.
 
-| Icon          | Variable            | Packages                                                                                                                          |
-| ------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Alert         | `IconAlert`         | alertmanagement, errortracking                                                                                                    |
-| Analytics     | `IconAnalytics`     | appstatistics, issuestatistics, projectstatistics, usagedata                                                                      |
-| Audit         | `IconAudit`         | auditevents                                                                                                                       |
-| Board         | `IconBoard`         | boards, groupboards                                                                                                               |
-| Bot           | `IconBot`           | groupserviceaccounts                                                                                                              |
-| Branch        | `IconBranch`        | branches, repository, repositorysubmodules                                                                                        |
-| Commit        | `IconCommit`        | commits, mrcontextcommits                                                                                                         |
-| Compliance    | `IconCompliance`    | attestations, compliancepolicy                                                                                                    |
-| Config        | `IconConfig`        | appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq |
-| Container     | `IconContainer`     | containerregistry                                                                                                                 |
-| Deploy        | `IconDeploy`        | deployments                                                                                                                       |
-| Discussion    | `IconDiscussion`    | commitdiscussions, epicdiscussions, issuediscussions, issuenotes, mrdiscussions, mrdraftnotes, mrnotes, snippetdiscussions        |
-| Epic          | `IconEpic`          | epicissues, epicnotes, epics                                                                                                      |
-| Environment   | `IconEnvironment`   | environments                                                                                                                      |
-| Event         | `IconEvent`         | events, resourceevents                                                                                                            |
-| File          | `IconFile`          | files, markdown, pages                                                                                                            |
-| Group         | `IconGroup`         | groups, namespaces                                                                                                                |
-| Health        | `IconHealth`        | health                                                                                                                            |
-| Import        | `IconImport`        | bulkimports, groupimportexport, grouprelationsexport, importservice, projectimportexport                                          |
-| Infra         | `IconInfra`         | terraformstates                                                                                                                   |
-| Integration   | `IconIntegration`   | integrations, systemhooks                                                                                                         |
-| Issue         | `IconIssue`         | issues, workitems                                                                                                                 |
-| Job           | `IconJob`           | jobs, jobtokenscope                                                                                                               |
-| Key           | `IconKey`           | deploykeys, keys                                                                                                                  |
-| Label         | `IconLabel`         | awardemoji, badges, grouplabels, labels, topics                                                                                   |
-| Link          | `IconLink`          | issuelinks, releaselinks                                                                                                          |
-| MR            | `IconMR`            | deploymentmergerequests, mergerequests, mrapprovals, mrchanges                                                                    |
-| Milestone     | `IconMilestone`     | groupmilestones, milestones                                                                                                       |
-| Notify        | `IconNotify`        | broadcastmessages, notifications                                                                                                  |
-| Package       | `IconPackage`       | dependencyproxy, packages                                                                                                         |
-| Pipeline      | `IconPipeline`      | cilint, pipelines, pipelinetriggers                                                                                               |
-| Project       | `IconProject`       | projectdiscovery, projects                                                                                                        |
-| Queue         | `IconQueue`         | resourcegroups                                                                                                                    |
-| Release       | `IconRelease`       | releases                                                                                                                          |
-| Runner        | `IconRunner`        | clusteragents, runners, runnercontrollers, runnercontrollerscopes                                                                 |
-| Schedule      | `IconSchedule`      | freezeperiods, pipelineschedules                                                                                                  |
-| Search        | `IconSearch`        | search                                                                                                                            |
-| Security      | `IconSecurity`      | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings      |
-| Server        | `IconServer`        | metadata                                                                                                                          |
-| Shield        | `IconShield`        | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages                                                      |
-| Snippet       | `IconSnippet`       | snippets                                                                                                                          |
-| Tag           | `IconTag`           | tags                                                                                                                              |
-| Template      | `IconTemplate`      | ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates                                      |
-| Todo          | `IconTodo`          | todos                                                                                                                             |
-| Token         | `IconToken`         | accesstokens, deploytokens, jobtokenscope, runnercontrollertokens                                                                 |
-| Upload        | `IconUpload`        | groupmarkdownuploads, uploads                                                                                                     |
-| User          | `IconUser`          | accessrequests, avatar, ffuserlists, groupmembers, invites, members, users                                                        |
-| Variable      | `IconVariable`      | civariables, groupvariables, instancevariables                                                                                    |
-| Vulnerability | `IconVulnerability` | securityfindings, vulnerabilities                                                                                                 |
-| Wiki          | `IconWiki`          | wikis                                                                                                                             |
+| Icon          | Variable            | Catalog groups and standalone tools                                                                                | Resources and prompts                                                                                                                                                                                                                                                                                       |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Alert         | `IconAlert`         | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Analytics     | `IconAnalytics`     | `gitlab_dora_metrics`, `gitlab_orbit`                                                                              | prompts `merge_velocity`, `project_activity_report`, `weekly_team_recap`                                                                                                                                                                                                                                    |
+| Audit         | `IconAudit`         | `gitlab_audit_event`                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Board         | `IconBoard`         | none                                                                                                               | resource `board`                                                                                                                                                                                                                                                                                            |
+| Bot           | `IconBot`           | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Branch        | `IconBranch`        | `gitlab_branch`                                                                                                    | resources `branch`, `project_branches`; prompts `branch_mr_summary`, `compare_branches`                                                                                                                                                                                                                     |
+| Commit        | `IconCommit`        | none                                                                                                               | resource `commit`; prompt `audit_commit_hygiene`                                                                                                                                                                                                                                                            |
+| Compliance    | `IconCompliance`    | `gitlab_compliance_policy`                                                                                         | none                                                                                                                                                                                                                                                                                                        |
+| Config        | `IconConfig`        | `gitlab_admin`, `gitlab_feature_flags`, `gitlab_member_role`; the `gitlab_interactive_*` wizards                   | resources `feature_flag`, `tool_manifest`, `tool_detail`                                                                                                                                                                                                                                                    |
+| Container     | `IconContainer`     | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Deploy        | `IconDeploy`        | none                                                                                                               | resource `deployment`                                                                                                                                                                                                                                                                                       |
+| Discussion    | `IconDiscussion`    | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Epic          | `IconEpic`          | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Environment   | `IconEnvironment`   | `gitlab_environment`                                                                                               | resource `environment`                                                                                                                                                                                                                                                                                      |
+| Event         | `IconEvent`         | `gitlab_custom_emoji`                                                                                              | none                                                                                                                                                                                                                                                                                                        |
+| File          | `IconFile`          | `gitlab_repository`                                                                                                | resource `file_blob`                                                                                                                                                                                                                                                                                        |
+| Group         | `IconGroup`         | `gitlab_group`, `gitlab_group_scim`                                                                                | resources `group`, `groups`; prompt `team_overview`                                                                                                                                                                                                                                                         |
+| Health        | `IconHealth`        | `gitlab_server` (`gitlab_server_status` on the individual surface)                                                 | prompt `project_health_check`                                                                                                                                                                                                                                                                               |
+| Import        | `IconImport`        | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Infra         | `IconInfra`         | `gitlab_geo`, `gitlab_storage_move`                                                                                | none                                                                                                                                                                                                                                                                                                        |
+| Integration   | `IconIntegration`   | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Issue         | `IconIssue`         | `gitlab_issue`                                                                                                     | resources `issue`, `project_issues`; prompts `my_issues`, `stale_items_report`, `unassigned_items`                                                                                                                                                                                                          |
+| Job           | `IconJob`           | `gitlab_job`                                                                                                       | resources `job`, `pipeline_jobs`                                                                                                                                                                                                                                                                            |
+| Key           | `IconKey`           | none                                                                                                               | resource `deploy_key`                                                                                                                                                                                                                                                                                       |
+| Label         | `IconLabel`         | none                                                                                                               | resources `label`, `group_label`, `project_labels`; prompt `label_distribution`                                                                                                                                                                                                                             |
+| Link          | `IconLink`          | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| MR            | `IconMR`            | `gitlab_merge_request`, `gitlab_mr_review`                                                                         | resources `merge_request`, `merge_request_notes`, `merge_request_discussions`; prompts `summarize_mr_changes`, `review_mr`, `suggest_mr_reviewers`, `mr_risk_assessment`, `summarize_open_mrs`, `my_open_mrs`, `my_pending_reviews`, `group_mr_dashboard`, `mr_discussion_health`, `mr_description_quality` |
+| Milestone     | `IconMilestone`     | none                                                                                                               | resources `milestone`, `group_milestone`, `project_milestones`; prompts `milestone_progress`, `group_milestone_progress`                                                                                                                                                                                    |
+| Notify        | `IconNotify`        | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Package       | `IconPackage`       | `gitlab_package`, `gitlab_dependency`, `gitlab_model_registry`                                                     | none                                                                                                                                                                                                                                                                                                        |
+| Pipeline      | `IconPipeline`      | `gitlab_pipeline`                                                                                                  | resources `pipeline`, `latest_pipeline`; prompt `summarize_pipeline_status`                                                                                                                                                                                                                                 |
+| Project       | `IconProject`       | `gitlab_project`, `gitlab_project_alias`; the standalone `gitlab_discover_project`                                 | resources `project`, `group_projects`                                                                                                                                                                                                                                                                       |
+| Queue         | `IconQueue`         | `gitlab_merge_train`                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Release       | `IconRelease`       | `gitlab_release`                                                                                                   | resources `release`, `project_releases`; prompts `generate_release_notes`, `release_cadence`, `release_readiness`                                                                                                                                                                                           |
+| Runner        | `IconRunner`        | `gitlab_runner`                                                                                                    | none                                                                                                                                                                                                                                                                                                        |
+| Schedule      | `IconSchedule`      | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Search        | `IconSearch`        | `gitlab_search`; `gitlab_find_action` on the dynamic surface                                                       | none                                                                                                                                                                                                                                                                                                        |
+| Security      | `IconSecurity`      | `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`, `gitlab_security_scan_profile` | prompts `audit_project_workflow`, `audit_project_full`                                                                                                                                                                                                                                                      |
+| Server        | `IconServer`        | `gitlab_execute_action` on the dynamic surface; the fallback for a group missing from the icon map                 | none                                                                                                                                                                                                                                                                                                        |
+| Shield        | `IconShield`        | `gitlab_attestation`, `gitlab_external_status_check`                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Snippet       | `IconSnippet`       | `gitlab_snippet`                                                                                                   | resources `snippet`, `project_snippet`                                                                                                                                                                                                                                                                      |
+| Tag           | `IconTag`           | `gitlab_tag`                                                                                                       | resources `tag`, `project_tags`                                                                                                                                                                                                                                                                             |
+| Template      | `IconTemplate`      | `gitlab_template`, `gitlab_ci_catalog`                                                                             | none                                                                                                                                                                                                                                                                                                        |
+| Todo          | `IconTodo`          | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Token         | `IconToken`         | `gitlab_access`                                                                                                    | none                                                                                                                                                                                                                                                                                                        |
+| Upload        | `IconUpload`        | none                                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| User          | `IconUser`          | `gitlab_user`, `gitlab_enterprise_user`                                                                            | resource `current_user`; prompts `daily_standup`, `team_member_workload`, `user_stats`, `user_activity_report`, `reviewer_workload`, `my_activity_summary`, `project_contributors`                                                                                                                          |
+| Variable      | `IconVariable`      | `gitlab_ci_variable`                                                                                               | none                                                                                                                                                                                                                                                                                                        |
+| Vulnerability | `IconVulnerability` | `gitlab_vulnerability`                                                                                             | none                                                                                                                                                                                                                                                                                                        |
+| Wiki          | `IconWiki`          | `gitlab_wiki`                                                                                                      | resource `wiki_page`; the five `gitlab://guides/*` workflow guides                                                                                                                                                                                                                                          |
 
 ## Brand Mark
 
@@ -538,18 +545,19 @@ picture for the server and for one of its tools.
 
 ## Testing
 
-Icon integrity is validated by 8 unit tests in [`internal/toolutil/icons_test.go`](../../../internal/toolutil/icons_test.go):
+Icon integrity is validated by 9 unit tests in [`internal/toolutil/icons_test.go`](../../../internal/toolutil/icons_test.go):
 
-| Test                               | Validates                                                                |
-| ---------------------------------- | ------------------------------------------------------------------------ |
-| `TestAllIcons_ThreeEntries`        | Every icon has exactly 3 entries (SVG + WebP light + WebP dark)          |
-| `TestAllIcons_ValidDataURI`        | Every entry's Source starts with the matching `data:<MIMEType>;base64,`  |
-| `TestAllIcons_CorrectMIMEType`     | Entry 0 is `image/svg+xml`; entries 1–2 are `image/webp`                 |
-| `TestAllIcons_NonEmpty`            | No entry's Source is empty                                               |
-| `TestAllIcons_DecodesToSVG`        | The SVG entry's base64 payload decodes to a `<svg>...</svg>` document    |
-| `TestAllIcons_SizesAny`            | The SVG entry's `Sizes` field equals `["any"]` (scalable)                |
-| `TestAllIcons_WebPFallbackTheme`   | WebP entries declare `Theme` `light`/`dark` and `Sizes: ["16x16"]`       |
-| `TestAllIcons_WebPFallbackDecodes` | WebP payloads decode to a real 16×16 image via `golang.org/x/image/webp` |
+| Test                                | Validates                                                                                                                  |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `TestAllIcons_ThreeEntries`         | Every icon has exactly 3 entries (SVG + WebP light + WebP dark)                                                            |
+| `TestAllIcons_ValidDataURI`         | Every entry's Source starts with the matching `data:<MIMEType>;base64,`                                                    |
+| `TestAllIcons_CorrectMIMEType`      | Entry 0 is `image/svg+xml`; entries 1–2 are `image/webp`                                                                   |
+| `TestAllIcons_NonEmpty`             | No entry's Source is empty                                                                                                 |
+| `TestAllIcons_DecodesToSVG`         | The SVG entry's base64 payload decodes to a `<svg>...</svg>` document                                                      |
+| `TestAllIcons_SizesAny`             | The SVG entry's `Sizes` field equals `["any"]` (scalable)                                                                  |
+| `TestAllIcons_WebPFallbackTheme`    | WebP entries declare `Theme` `light`/`dark` and `Sizes: ["16x16"]`                                                         |
+| `TestAllIcons_WebPFallbackDecodes`  | WebP payloads decode to a real 16×16 image via `golang.org/x/image/webp`                                                   |
+| `TestWebpIcon_PanicsOnMissingAsset` | A name with no generated WebP pair panics during package initialization instead of shipping an icon with two empty entries |
 
 ## Security Considerations
 

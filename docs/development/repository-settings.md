@@ -90,8 +90,11 @@ for the container image; the tag ruleset closes it for the release itself.
 gh api repos/jmrplens/gitlab-mcp-server/rulesets --jq '.[] | {id, name, target, enforcement}'
 ```
 
-**Current state.** Not present. One ruleset exists, `Protect main`, and its
-target is `branch`.
+**Current state.** Satisfied. A second ruleset, `Protect tags` (id
+`22194732`, enforcement `active`), targets every tag (`~ALL`, which is wider
+than the `v*` pattern above and equally acceptable) with the `deletion`,
+`update` and `non_fast_forward` rules and no bypass actors. Checked on
+2026-09-05 with the command above.
 
 ## SC-01: keep the deploy-key ruleset bypass declared
 
@@ -111,7 +114,8 @@ gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.bypass_actors'
 ```
 
 **Current state.** Already satisfied. The ruleset carries
-`{"actor_type": "DeployKey", "actor_id": null, "bypass_mode": "always"}`, and
+`{"actor_type": "DeployKey", "actor_id": null, "bypass_mode": "always"}` (beside
+a `RepositoryRole` entry for the repository administrators), and
 the oldest version its history records already carries it, so it predates the
 security work that filed this item. The remaining work is to keep it: a standing
 requirement to re-check after any ruleset edit, not an outstanding change.

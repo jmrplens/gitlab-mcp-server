@@ -179,12 +179,17 @@ func TestApplyHTTPEnvOverlay_NilInputsAreNoOps(t *testing.T) {
 func TestApplyHTTPEnvOverlay_OAuthOriginSettingsFollowPrecedence(t *testing.T) {
 	envPublicURL := "https://env.example.com/gitlab"
 	envOrigins := "https://env-origin.example"
+	// The application allow-list joined the overlay late: the variable was
+	// documented for HTTP mode and read by nothing there, so only the flag
+	// admitted an application.
+	envClientUID := "12ab,34cd"
 
 	t.Run("environment fills an unpassed flag", func(t *testing.T) {
 		hcfg := newOverlayConfig()
 		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{
 			PublicURL:      &envPublicURL,
 			TrustedOrigins: &envOrigins,
+			OAuthClientUID: &envClientUID,
 		})
 		if hcfg.publicURL != envPublicURL {
 			t.Errorf("publicURL = %q, want the environment value %q", hcfg.publicURL, envPublicURL)
@@ -192,21 +197,29 @@ func TestApplyHTTPEnvOverlay_OAuthOriginSettingsFollowPrecedence(t *testing.T) {
 		if hcfg.trustedOrigins != envOrigins {
 			t.Errorf("trustedOrigins = %q, want the environment value %q", hcfg.trustedOrigins, envOrigins)
 		}
+		if hcfg.oauthClientUID != envClientUID {
+			t.Errorf("oauthClientUID = %q, want the environment value %q", hcfg.oauthClientUID, envClientUID)
+		}
 	})
 
 	t.Run("passed flag beats the environment", func(t *testing.T) {
-		hcfg := newOverlayConfig("public-url", "trusted-origins")
+		hcfg := newOverlayConfig("public-url", "trusted-origins", "oauth-client-uid")
 		hcfg.publicURL = "https://flag.example.com"
 		hcfg.trustedOrigins = "https://flag-origin.example"
+		hcfg.oauthClientUID = "flag-uid"
 		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{
 			PublicURL:      &envPublicURL,
 			TrustedOrigins: &envOrigins,
+			OAuthClientUID: &envClientUID,
 		})
 		if hcfg.publicURL != "https://flag.example.com" {
 			t.Errorf("publicURL = %q, want the flag value", hcfg.publicURL)
 		}
 		if hcfg.trustedOrigins != "https://flag-origin.example" {
 			t.Errorf("trustedOrigins = %q, want the flag value", hcfg.trustedOrigins)
+		}
+		if hcfg.oauthClientUID != "flag-uid" {
+			t.Errorf("oauthClientUID = %q, want the flag value", hcfg.oauthClientUID)
 		}
 	})
 }

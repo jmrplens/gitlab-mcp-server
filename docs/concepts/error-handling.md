@@ -52,32 +52,33 @@ Created via `NewDetailedError(domain, action, err)` which automatically:
 
 Inspects the error chain and returns a diagnostic message:
 
-| Error Type           | Example Message                                     |
-| -------------------- | --------------------------------------------------- |
-| GitLab HTTP response | Delegates to `ClassifyHTTPStatus`                   |
-| Connection refused   | "GitLab server is unreachable (connection refused)" |
-| DNS failure          | "GitLab server hostname could not be resolved"      |
-| Timeout              | "Request to GitLab timed out"                       |
-| TLS/SSL              | "TLS/SSL handshake failed"                          |
-| URL error            | "network error reaching GitLab"                     |
-| Other                | "unexpected error"                                  |
+| Error Type           | Message                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| GitLab HTTP response | Delegates to `ClassifyHTTPStatus`                                                                       |
+| Connection refused   | "GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running" |
+| DNS failure          | "GitLab server hostname could not be resolved (DNS error). Check GITLAB_URL"                            |
+| Timeout              | "Request to GitLab timed out. The server may be overloaded or unreachable"                              |
+| TLS/SSL              | "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_SKIP_TLS_VERIFY=true"          |
+| URL error            | "network error reaching GitLab (\<op\>)"                                                                |
+| Other                | "unexpected error"                                                                                      |
 
 ### ClassifyHTTPStatus
 
 Maps HTTP status codes to actionable guidance:
 
-| Code | Message                                                                |
-| ---- | ---------------------------------------------------------------------- |
-| 400  | "bad request — check your input parameters"                            |
-| 401  | "authentication failed — GITLAB_TOKEN may be invalid or expired"       |
-| 403  | "access denied — your token lacks the required permissions"            |
-| 404  | "not found — the requested resource does not exist or you lack access" |
-| 409  | "conflict — the resource already exists or there is a state conflict"  |
-| 422  | "validation failed — GitLab rejected the request due to invalid data"  |
-| 429  | "rate limited — too many requests, please wait before retrying"        |
-| 500  | "GitLab internal server error"                                         |
-| 502  | "GitLab is temporarily unavailable (bad gateway)"                      |
-| 503  | "GitLab is under maintenance or overloaded"                            |
+| Code | Message                                                                                                                                                                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | "bad request: check your input parameters"                                                                                                                                                                                                              |
+| 401  | "authentication failed: GITLAB_TOKEN may be invalid or expired"                                                                                                                                                                                         |
+| 403  | "access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings" |
+| 404  | "not found: the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct"                                                                                                        |
+| 405  | "method not allowed: the action cannot be performed on this resource in its current state"                                                                                                                                                              |
+| 409  | "conflict: the resource already exists or there is a state conflict"                                                                                                                                                                                    |
+| 422  | "validation failed: GitLab rejected the request due to invalid data"                                                                                                                                                                                    |
+| 429  | "rate limited: too many requests, please wait before retrying"                                                                                                                                                                                          |
+| 500  | "GitLab internal server error: the server encountered an unexpected condition"                                                                                                                                                                          |
+| 502  | "GitLab is temporarily unavailable (bad gateway): try again shortly"                                                                                                                                                                                    |
+| 503  | "GitLab is under maintenance or overloaded (service unavailable): try again shortly"                                                                                                                                                                    |
 
 ## Error Flow in Tool Handlers
 
@@ -98,7 +99,7 @@ The basic error enrichment function for **read-only** operations (list, get, sea
 
 ```go
 err := WrapErr("list_issues", originalErr)
-// Result: "list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired: <original>"
+// Result: "list_issues: authentication failed: GITLAB_TOKEN may be invalid or expired: <original>"
 ```
 
 ### ExtractGitLabMessage
@@ -118,7 +119,7 @@ Like `WrapErr` but also includes the specific GitLab error message when availabl
 
 ```go
 err := WrapErrWithMessage("fileCreate", originalErr)
-// Result: "fileCreate: bad request — A file with this name already exists: POST .../files: 400"
+// Result: "fileCreate: bad request: check your input parameters (A file with this name already exists): POST .../files: 400"
 // Falls back to WrapErr format when glErr.Message adds no useful detail
 ```
 
@@ -131,7 +132,7 @@ if toolutil.IsHTTPStatus(err, 409) {
     return toolutil.WrapErrWithHint("branchProtect", err,
         "protected branch rule already exists — use gitlab_protected_branch_get to view current rules")
 }
-// Result: "branchProtect: conflict — Protected branch rule already exists.
+// Result: "branchProtect: conflict: the resource already exists or there is a state conflict (Protected branch rule already exists).
 //          Suggestion: protected branch rule already exists — use gitlab_protected_branch_get to view current rules: <original>"
 ```
 
@@ -166,18 +167,29 @@ For handlers that need different hints per status code, use a `switch` over `IsH
 For "get" handlers, HTTP 404 errors are intercepted **before** the standard error flow and returned as structured, informational results instead of opaque Go errors. This improves the LLM experience: instead of a raw error, the assistant receives an `IsError: true` result with a human-readable explanation and domain-specific next-step hints.
 
 ```go
-// In a catalog route wrapper for the get action:
-out, err := Get(ctx, client, input)
-if err != nil && toolutil.IsHTTPStatus(err, 404) {
-    result := toolutil.NotFoundResult("Branch", fmt.Sprintf("%q in project %s", input.BranchName, input.ProjectID),
+// In the domain's action_specs.go, wrapping the get route: a 404 becomes a
+// typed not-found output returned with a nil error.
+route := toolutil.RouteAction(client, Get)
+baseHandler := route.Handler
+route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
+    result, err := baseHandler(ctx, input)
+    if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+        branchName, _ := input["branch_name"].(string)
+        projectID, _ := input["project_id"].(string)
+        return branchNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", branchName, projectID)}, nil
+    }
+    return result, err
+}
+
+// In the domain's markdown.go, registered from init(): the registry turns
+// that output into the informational error result.
+func formatBranchNotFound(out branchNotFoundOutput) *mcp.CallToolResult {
+    return toolutil.NotFoundResult("Branch", out.Identifier,
         "Use gitlab_branch_list with project_id to list available branches",
         "Verify the branch name is spelled correctly (case-sensitive)",
     )
-    // The result is passed as well as the error: no Go error means INFO
-    // rather than ERROR, and the result is what stamps is_error on the record.
-    toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, result, nil)
-    return result, Output{}, nil
 }
+toolutil.RegisterMarkdownResult(formatBranchNotFound)
 ```
 
 The `NotFoundResult(resource, identifier string, hints ...string)` function in `internal/toolutil/not_found.go`:
@@ -185,9 +197,9 @@ The `NotFoundResult(resource, identifier string, hints ...string)` function in `
 1. Creates a Markdown-formatted `CallToolResult` with `IsError: true`
 2. Includes a `## ❓ {Resource} Not Found` heading with the identifier
 3. Appends `💡 Next steps` hints specific to the domain
-4. The handler returns `nil` as the Go error so `LogToolCallAll` logs at INFO level, and passing the result to it stamps `is_error: true` on that record. Without that, every 404 the server turns into a helpful message would be counted as a success
+4. The route returns a `nil` Go error, so the call is logged at INFO level rather than ERROR; `LogToolCallAll` receives the formatted result and reads `IsError` off it to stamp `is_error: true` on that record. Without that, every 404 the server turns into a helpful message would be counted as a success
 
-This pattern is applied to **27 get handlers** across 21 domains: projects, groups, branches, tags, commits, files, issues (get + get_by_id), merge requests, milestones, labels, pipelines, releases, release links, environments, deployments, snippets, wikis, users, issue links, issue notes, MR notes, MR discussions, MR draft notes, badges (project + group), and award emoji (6 variants).
+This pattern is applied through one shared not-found formatter in each of **19 domains**: award emoji, badges, branches, dependency firewall, deployments, environments, files, groups, labels, merge requests, milestones, Orbit, pipelines, projects, releases, snippets, tags, users, and wikis. A domain's formatter covers every get variant it has (project and group badges, each award-emoji target), which is why the typed output carries the identifier and hints rather than the formatter hardcoding them.
 
 ### ErrorResultMarkdown
 
@@ -245,8 +257,8 @@ Before executing destructive operations (delete, force-push), handlers use the c
 
 1. **YOLO_MODE / AUTOPILOT** env var set → skip confirmation
 2. **Explicit `confirm: true`** in params → proceed
-3. **MCP elicitation supported** → ask user interactively via `elicitation.Confirm()`
-4. **No confirmation mechanism** → return `CancelledResult`
+3. **MCP elicitation supported** → ask user interactively via `ConfirmAction()`; a decline or cancel returns `CancelledResult`
+4. **No confirmation mechanism** → fail closed: return an `IsError` result asking the caller to re-send with `confirm: true` once the user has approved
 
 ## Testing Error Handling
 
@@ -274,17 +286,17 @@ Actionable hints were added across the entire codebase to help LLMs self-correct
 
 ### Coverage
 
-| Metric                                         | Count                             |
-| ---------------------------------------------- | --------------------------------- |
-| `WrapErrWithHint` call sites (GraphQL)         | 278                               |
-| `WrapErrWithStatusHint` call sites (REST)      | 866                               |
-| **Total hinted error sites**                   | **1,144**                         |
-| `WrapErrWithMessage` (skip-category, retained) | 354                               |
-| `NotFoundResult` (informational 404s)          | 27 handlers; 22 source references |
-| `internal/tools` packages with hints           | 156 of 176                        |
-| Source files with hints                        | 176                               |
+| Metric                                         | Count                                |
+| ---------------------------------------------- | ------------------------------------ |
+| `WrapErrWithHint` call sites (GraphQL)         | 320                                  |
+| `WrapErrWithStatusHint` call sites (REST)      | 879                                  |
+| **Total hinted error sites**                   | **1,199**                            |
+| `WrapErrWithMessage` (skip-category, retained) | 363                                  |
+| `NotFoundResult` (informational 404s)          | 19 shared formatters, one per domain |
+| `internal/tools` packages with hints           | 162 of 177                           |
+| Source files with hints                        | 189                                  |
 
-The call-site counts above are source-level counts from `rg` over `internal/`; package totals can be verified with `go list ./internal/tools/...`. `NotFoundResult` is listed by handler coverage and source references because shared formatters cover multiple get-handler variants.
+The call-site counts above are source-level counts from `grep` over `internal/` (non-test files, `internal/toolutil` itself excluded); package totals can be verified with `go list ./internal/tools/...`. `NotFoundResult` is counted by formatter because each shared formatter covers every get-handler variant of its domain.
 
 ### Skip Categories
 

@@ -89,7 +89,7 @@ Implement Option 4 with the following architecture:
 
 > **Superseded (2026-08)**: the normalization adapter is gone. OAuth mode is Bearer-only — what the `WWW-Authenticate` challenge advertises is exactly what is accepted — and legacy mode reads both headers directly through `serverpool.ExtractToken`, never through this package. A personal access token sent as `Authorization: Bearer` works in either mode, so nothing is lost.
 >
-> `oauth.NormalizeAuthHeader` survived as unmounted code for a while after that, with this document still describing it as wired. It was deleted in 2026-08; the surviving statements about it below record what was decided in 2025, not how the server behaves.
+> `oauth.NormalizeAuthHeader` survived as unmounted code for a while after that, with this document still describing it as wired. It was deleted in 2026-08; the surviving statements about it below record what was decided in April 2026, not how the server behaves.
 >
 > Two further corrections to the description above: `auth.RequireBearerToken` is mounted in **oauth mode only**, not "all HTTP modes" — legacy mode authenticates in `mcpServerGate` alone, which is why `req.Extra.TokenInfo` is unset there and identity in legacy HTTP mode degrades to the empty value that `ResolveIdentity` returns. And in oauth mode the SDK middleware is no longer the outermost layer: `bearerGuard` runs in front of it to rate-limit, cache rejections, and answer with RFC 6750 error codes.
 
@@ -99,10 +99,19 @@ Implement Option 4 with the following architecture:
 - Create `UserIdentity` and store via `IdentityToContext(ctx, identity)`.
 - Pass enriched context to `server.Run(identityCtx, transport)`.
 
+> **Amended (2026-09)**: the last step no longer holds as written. The GitLab
+> probe now runs after the transport is connected, so that `initialize` can be
+> answered while the catalog is still being built, and the context handed to
+> `server.Run` carries no identity. The resolved identity is stored in a
+> `deferredIdentity` (`cmd/server/readiness.go`) and overlaid onto every
+> request context by a receiving middleware, which is the same
+> `IdentityToContext` value handlers read through `ResolveIdentity`. Resolution
+> still happens once, at startup, so NEG-001 is unchanged.
+
 ### Token Caching (`internal/oauth/cache.go`)
 
 - `TokenCache` with `sync.RWMutex` + `map[string]cacheEntry`.
-- Keys: SHA-256 hex of raw tokens (never stored in plain text).
+- Keys: SHA-256 hex of raw tokens (never stored in plain text). [Since 2026-08 the hash covers the instance URL and the token together, so a credential verified against one published instance cannot pass as identity on another; `Get` and `Put` take both.]
 - TTL from `TokenInfo.Expiration` set by the verifier.
 - `NewGitLabVerifier` accepts optional `*TokenCache` parameter (nil = no caching).
 

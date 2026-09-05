@@ -42,9 +42,11 @@ whitelist that enforces it (`internal/subscriptions.Templates()`), so none
 can drift from the others:
 
 - every subscribable template's **description** ends with the marker
-  sentence `Subscribable: subscriptions/listen (protocol 2026-07-28);
-  resources/subscribe on stateful sessions.` — appended mechanically at
-  registration, never hand-written;
+  sentence `Subscribable: subscriptions/listen (protocol 2026-07-28).
+  Resources/subscribe on stateful sessions.` — appended mechanically at
+  registration, never hand-written (two sentences rather than a semicolon,
+  because the served surface stays free of the characters strict gateway
+  validators reject);
 - every subscribable template also carries the vendor-namespaced
   **`_meta` key** `io.github.jmrplens/subscribable: true` — the spec's
   sanctioned per-object extension point, for generic clients that want to
@@ -53,7 +55,8 @@ can drift from the others:
   `resources.subscribe` capability);
 - the **`gitlab://tools` manifest** carries the full list under
   `subscriptions.subscribable_uri_templates`;
-- in HTTP mode, the **Server Card** at `/.well-known/mcp/server-card.json`
+- in HTTP mode, the **Server Card** at `/server-card` (also served at the
+  legacy `/.well-known/mcp/server-card.json` path)
   carries a top-level `subscriptions` block with the same list plus a
   per-method `available` boolean (on stateless HTTP,
   `resources/subscribe` is listed with `available: false` and a

@@ -655,7 +655,7 @@ Add the server to `~/.codex/config.toml`. The `default_tools_approval_mode = "ap
 ```toml
 [mcp_servers.gitlab]
 command = "/path/to/gitlab-mcp-server"
-args = ["stdio"]
+args = ["--transport", "stdio"]
 startup_timeout_sec = 60
 default_tools_approval_mode = "approve"
 

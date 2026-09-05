@@ -33,8 +33,6 @@ func TestClassify_NamingPatterns(t *testing.T) {
 		{name: "two part", input: "TestCreateIssue_ReturnsIssue", wantPattern: Pattern2Part, wantSuggested: "TestCreateIssue_ReturnsIssue"},
 		{name: "no underscore", input: "TestCreateIssueReturnsIssue", wantPattern: PatternNoUnderscore, wantSuggested: "TestCreate_IssueReturnsIssue"},
 		{name: "coverage prefix", input: "TestCovBuildCatalogError", wantPattern: PatternTestCov, wantSuggested: "TestBuild_Catalog_Error"},
-		{name: "e2e full workflow", input: "TestFullWorkflow", wantPattern: PatternSkip, wantSuggested: "TestFullWorkflow"},
-		{name: "e2e meta workflow", input: "TestMetaToolWorkflow", wantPattern: PatternSkip, wantSuggested: "TestMetaToolWorkflow"},
 	}
 
 	for _, testCase := range testCases {

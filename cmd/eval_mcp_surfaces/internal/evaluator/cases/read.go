@@ -40,7 +40,7 @@ func readEvalCases() []Case {
 		// older cases kept their identifiers. See the package doc comment for
 		// the allocation rule.
 		baseReadEvalCase("MT-199", "List merged merge requests in project `my-org/tools/gitlab-mcp-server` ordered by updated date, with 5 results per page.", readStep("gitlab_merge_request", "list", params("project_id"), params("state", "order_by", "sort", "per_page"))),
-		baseReadEvalCase("MT-200", "Get all pending to-do items for the current user.", readStep("gitlab_todo", "list", nil, params("state", "per_page"))),
+		baseReadEvalCase("MT-200", "Get all pending to-do items for the current user.", readStep("gitlab_user", "todo_list", nil, params("state", "per_page"))),
 		baseReadEvalCase("MT-201", "List all available MCP resources exposed by the server.", readStep("gitlab_list_resources", "", nil, nil)),
 		baseReadEvalCase("MT-210", "List all MCP capabilities exposed by the server.", readStep("gitlab_list_capabilities", "", nil, nil)),
 		baseReadEvalCase("MT-211", "Read MCP resource `gitlab://tools` to inspect the tool catalog manifest.", readStep("gitlab_read_resource", "", params("uri"), nil)),

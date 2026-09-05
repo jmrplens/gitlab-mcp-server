@@ -45,12 +45,14 @@ These prompts are registered directly in `internal/prompts/prompts.go`.
 
 Personal dashboard prompts that aggregate across all projects. Registered in `internal/prompts/prompt_cross_project.go`.
 
-| #   | Name                  | Arguments | Description                                                                                                             |
-| --- | --------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 13  | `my_open_mrs`         | —         | Show all open MRs where you are author or assignee across all projects. Grouped by project.                             |
-| 14  | `my_pending_reviews`  | —         | Show all open MRs where you are assigned as reviewer across all projects. Grouped by project.                           |
-| 15  | `my_issues`           | —         | Show all issues assigned to you across all projects. Includes overdue detection and project grouping.                   |
-| 16  | `my_activity_summary` | `days`    | Generate a personal activity summary for a configurable time period across all projects. Includes daily activity chart. |
+| #   | Name                  | Arguments           | Description                                                                                                             |
+| --- | --------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 13  | `my_open_mrs`         | `username`          | Show all open MRs where you are author or assignee across all projects. Grouped by project.                             |
+| 14  | `my_pending_reviews`  | `username`          | Show all open MRs where you are assigned as reviewer across all projects. Grouped by project.                           |
+| 15  | `my_issues`           | `username`, `state` | Show all issues assigned to you across all projects. Includes overdue detection and project grouping.                   |
+| 16  | `my_activity_summary` | `username`, `days`  | Generate a personal activity summary for a configurable time period across all projects. Includes daily activity chart. |
+
+`username` defaults to the authenticated user when omitted; `state` defaults to `opened`.
 
 ## Team Management Prompts (4)
 
@@ -58,8 +60,8 @@ Group-level team management prompts. Registered in `internal/prompts/prompt_team
 
 | #   | Name                   | Arguments                             | Description                                                                                                                                                |
 | --- | ---------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 17  | `user_activity_report` | `group_id`*, `username`*, `days`      | Generate a detailed activity report for a specific user. Designed for managers to review team member productivity.                                         |
-| 18  | `team_overview`        | `group_id`*                           | Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes workload pie chart.                        |
+| 17  | `user_activity_report` | `username`*, `days`                   | Generate a detailed activity report for a specific user across all projects. Designed for managers to review team member productivity.                     |
+| 18  | `team_overview`        | `group_id`*, `days`                   | Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes workload pie chart.                        |
 | 19  | `group_mr_dashboard`   | `group_id`*, `state`, `target_branch` | List merge requests across a GitLab group with optional state and target branch filters. Grouped by project with blocker and readiness summary statistics. |
 | 20  | `reviewer_workload`    | `group_id`*                           | Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances.                              |
 
@@ -67,13 +69,13 @@ Group-level team management prompts. Registered in `internal/prompts/prompt_team
 
 Project-level analysis prompts. Registered in `internal/prompts/prompt_project_reports.go`.
 
-| #   | Name                      | Arguments                       | Description                                                                                                                            |
-| --- | ------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 21  | `branch_mr_summary`       | `project_id`*, `target_branch`* | List all MRs targeting a specific branch. Shows readiness summary with conflict/draft/approval counts.                                 |
-| 22  | `project_activity_report` | `project_id`*, `days`           | Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart.                   |
-| 23  | `mr_discussion_health`    | `project_id`*                   | Analyze unresolved discussion threads across open MRs. Use for review follow-up and merge-readiness cleanup, not approval-rule status. |
-| 24  | `unassigned_items`        | `project_id`*                   | Find open MRs and issues that have no assignee. Helps identify ownership gaps.                                                         |
-| 25  | `stale_items_report`      | `project_id`*, `stale_days`     | Find MRs and issues that haven't been updated for a configurable number of days. Default: 14 days.                                     |
+| #   | Name                      | Arguments                                | Description                                                                                                                            |
+| --- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 21  | `branch_mr_summary`       | `project_id`*, `target_branch`*, `state` | List all MRs targeting a specific branch. Shows readiness summary with conflict/draft/approval counts.                                 |
+| 22  | `project_activity_report` | `project_id`*, `days`                    | Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart.                   |
+| 23  | `mr_discussion_health`    | `project_id`*                            | Analyze unresolved discussion threads across open MRs. Use for review follow-up and merge-readiness cleanup, not approval-rule status. |
+| 24  | `unassigned_items`        | `project_id`*                            | Find open MRs and issues that have no assignee. Helps identify ownership gaps.                                                         |
+| 25  | `stale_items_report`      | `project_id`*, `stale_days`              | Find MRs and issues that haven't been updated for a configurable number of days. Default: 14 days.                                     |
 
 ## Analytics Prompts (4)
 
@@ -83,7 +85,7 @@ Velocity and release analytics prompts. Registered in `internal/prompts/prompt_a
 | --- | ------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | 26  | `merge_velocity`    | `project_id`*, `days`   | Analyze MR throughput metrics. Shows merge rate, average time-to-merge, and daily merged count chart.                               |
 | 27  | `release_readiness` | `project_id`*, `branch` | Check readiness of a release branch by analyzing open MRs targeting it, draft/conflict counts, and unresolved discussion threads.   |
-| 28  | `release_cadence`   | `project_id`*           | Analyze release frequency. Shows time between releases, average cadence, and release history chart.                                 |
+| 28  | `release_cadence`   | `project_id`*, `days`   | Analyze release frequency. Shows time between releases, average cadence, and release history chart. Default: 90 days.               |
 | 29  | `weekly_team_recap` | `group_id`*, `days`     | Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs, issues activity, and events into a single summary. |
 
 ## Milestone & Label Prompts (4)
@@ -139,7 +141,7 @@ Project configuration audit prompts. Registered in `internal/prompts/prompt_audi
 | `merge_request_iid` | string (required) | Merge request IID (project-scoped numeric ID, visible as `!N` in GitLab) |
 | `group_id`          | string (required) | Group ID (numeric) or URL-encoded path                                   |
 | `username`          | string            | GitLab username (defaults to authenticated user when omitted)            |
-| `days`              | string            | Number of days to look back (default varies by prompt: 7 or 30)          |
+| `days`              | string            | Number of days to look back (default varies by prompt: 7, 30 or 90)      |
 | `from` / `to`       | string            | Git refs: tag name, branch name, or commit SHA                           |
 | `branch`            | string            | Target branch name (default: `main`)                                     |
 | `target_branch`     | string            | Target branch for MR filtering                                           |
@@ -149,7 +151,7 @@ Project configuration audit prompts. Registered in `internal/prompts/prompt_audi
 
 ## Autocomplete Support
 
-All prompt arguments support intelligent autocomplete via the completions handler (`internal/completions/`). When a client sends a `completion/complete` request for a prompt argument, the server queries GitLab to suggest matching values.
+Identifier and ref arguments (`project_id`, `group_id`, `merge_request_iid`, `username`, `from`, `to`, `branch`, `target_branch`, `milestone`) support intelligent autocomplete via the completions handler (`internal/completions/`). When a client sends a `completion/complete` request for one of them, the server queries GitLab to suggest matching values. Free-form arguments (`days`, `stale_days`, `state`) get no suggestions. See [Completions](capabilities/completions.md).
 
 ## Source Files
 

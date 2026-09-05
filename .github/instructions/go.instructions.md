@@ -315,7 +315,7 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 - `ExpectedResult` describes what should happen: `Success`, `Error`, `ReturnsEmpty`, `NoPanic`, etc.
 - The `_ExpectedResult` suffix may be omitted when the scenario is self-descriptive
 - Table-driven tests use `t.Run(tt.name, ...)` subtests; the outer function follows the convention
-- E2E workflow entry points (`TestFullWorkflow`, `TestMetaToolWorkflow`) are exempt
+- The e2e suite's per-domain entry points (`TestIndividual_Branches`, `TestMeta_Groups`, `TestDynamicToolSurface_DomainCoverage`) are the two-part form, named by the surface they drive
 - Lowercase helpers (`testCreateProject`) are intentionally private and exempt
 - Use PascalCase for each segment, not snake_case within segments
 

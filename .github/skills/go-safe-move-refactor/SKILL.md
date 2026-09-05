@@ -47,7 +47,7 @@ Record:
 2. List all non-test handler files in the source package to find everything that exists
 3. Check `action_specs.go` and catalog aggregation for the domain's canonical runtime exposure
 4. Look for related files (e.g., a domain might span `{domain}.go` + `{domain}_extra.go`)
-5. If `docs/tools/{domain}.md` exists, read it for supplementary user-facing context — but do NOT skip the move if no doc exists
+5. If a page under `docs/reference/tools/` owns the domain (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages), read it for supplementary user-facing context — but do NOT skip the move if no doc exists
 
 ### Step 2: Analyze Dependencies
 
@@ -190,15 +190,15 @@ Verify: `go build ./...`
 2. Change package: `package tools` → `package branches`
 3. Update type references: `BranchOutput` → `Output`
 4. Update function references: `branchCreate(...)` → `Create(...)`
-5. Import test helpers (from `toolutil` or recreate locally):
+5. Import the shared test helpers:
 
    ```go
-   import "module/path/internal/toolutil/testutil"
+   import "github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
    ```
 
-6. If test helpers use `newTestClient`, either:
-   - Import from a shared test utilities package
-   - Or copy the helper into the test file (since it's small)
+6. If the moved tests use a local `newTestClient`, replace it with
+   `testutil.NewTestClient(t, handler)` (and `respondJSON` with
+   `testutil.RespondJSON`) rather than copying the helper again
 
 Verify:
 
@@ -255,29 +255,27 @@ If `BranchOutput` is used in another domain (e.g., `merge_requests.go` reference
 
 ### Format Functions in markdown.go
 
-`markdown.go` contains `format*` functions for EVERY domain. Options:
-
-**Option A** (Recommended): Keep format functions in `toolutil/markdown.go` as a centralized formatter
-**Option B**: Move domain-specific formatters to their domain package
-**Option C**: Use an interface — each domain implements `Formatter`
-
-Choose Option A for this project because format functions are simple and don't warrant an interface.
+Markdown formatters belong to the domain package: each sub-package has its own
+`markdown.go` whose `init()` registers every formatter with
+`toolutil.RegisterMarkdown[T]` (or `RegisterMarkdownPair` / `RegisterMarkdownTriple`),
+and `toolutil.MarkdownForResult` dispatches by output type
+(`internal/toolutil/md_registry.go`). `toolutil/markdown.go` holds only the
+shared building blocks (`MarkdownTableSeparator`, `WriteHints`, the `FmtMd*`
+constants). When moving a domain, move its `Format*Markdown` functions with it
+and keep the `init()` registration; `TestAllMarkdownFormattersRegistered` in
+`internal/tools` fails if an output type is left without a formatter.
 
 ### Test Helpers
 
-The `helpers_test.go` file is shared by ALL domain tests. Options:
-
-**Option A**: Extract to `toolutil/testhelpers_test.go` (only available in `toolutil` tests)
-**Option B** (Recommended): Create `internal/testutil/` package with exported helpers
-**Option C**: Copy helpers into each domain test file (duplicated but simple)
-
-Choose Option B for this project. Create:
+Shared test helpers already live in `internal/testutil` (exported, importable
+from any package). Do not recreate `helpers_test.go` in a moved package; import
+these instead:
 
 ```go
 package testutil
 
 // NewTestClient creates a GitLab client pointed at a test HTTP server.
-func NewTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client { ... }
+func NewTestClient(tb testing.TB, handler http.Handler) *gitlabclient.Client { ... }
 
 // RespondJSON writes a JSON response with the given status code and body.
 func RespondJSON(w http.ResponseWriter, status int, body string) { ... }
@@ -340,17 +338,17 @@ import (
     gl "gitlab.com/gitlab-org/api/client-go/v2"                        // For gl.*Options, gl.Ptr(), gl.WithContext()
     gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"  // For client type
     "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"             // For shared utilities
-    "github.com/modelcontextprotocol/go-sdk/mcp"                          // For tool registration
+    "github.com/modelcontextprotocol/go-sdk/mcp"                          // Only when a handler builds an *mcp.CallToolResult itself
 )
 ```
 
 ### Files With Low-Level HTTP Access
 
-Some files (`packages_stream.go`, `packages_chunked.go`, `uploads.go`) use `client.GL().NewRequest()` and `client.GL().Do()` for direct HTTP calls. These also use `client.GL().BaseURL()` for URL construction. Ensure all three patterns work after the move.
+`internal/tools/packages/packages_stream.go` uses `client.GL().NewRequest()` and `client.GL().Do()` for a streamed download, and `internal/tools/uploads/uploads.go` uses `client.GL().BaseURL()` to build the full upload URL. Ensure these patterns still work after a move that touches them.
 
 ### Naming Inconsistency Fix
 
-When moving `repositories.go` → `projects/projects.go`, this is a **rename AND move**. The file uses `client.GL().Projects.*` (not `Repositories`). Update the package doc comment to reflect that this is the Projects domain.
+Historical example (the move is done): the monolith's `repositories.go` held **Projects** CRUD (`client.GL().Projects.*`, not `Repositories`) and became `projects/projects.go` in a **rename AND move**, with the package doc comment updated to say it is the Projects domain. Apply the same check whenever a file name and its `client.GL().{Service}` calls disagree.
 
 ### Domain Reference Hierarchy
 
@@ -360,5 +358,5 @@ Before moving any domain:
 
 1. **Inspect client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types (e.g., `gl.Branch`, `gl.CreateBranchOptions`). This defines the canonical fields and API contract — use it to validate that type renames and field mappings are correct after the move.
 2. **Read the source file(s)** (`internal/tools/{domain}.go`) to understand our implementation: handler functions, `client.GL().{Service}.*` calls, and our Input/Output struct subset.
-3. **If `docs/tools/{domain}.md` exists**, read it for supplementary user-facing context. If no doc exists, `go doc` + source code provide everything needed.
+3. **If a `docs/reference/tools/` page owns the domain** (see `doc-ownership.json` there), read it for supplementary user-facing context. If no doc exists, `go doc` + source code provide everything needed.
 4. **Check catalog exposure**: verify the domain appears in `ActionSpecs` and catalog aggregation. Uncataloged files are in-progress features — still move them, but note the gap.

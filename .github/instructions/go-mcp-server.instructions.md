@@ -19,7 +19,7 @@ server := mcp.NewServer(
         Name:    "my-server",
         Version: "v1.7.0",
     },
-    nil, // or provide mcp.Options
+    nil, // or provide *mcp.ServerOptions
 )
 ```
 
@@ -27,8 +27,8 @@ server := mcp.NewServer(
 
 Use snake_case with a service prefix to avoid conflicts when multiple MCP servers run together:
 
-- **Format for this project**: individual tools use `gitlab_{action}_{resource}` (e.g., `gitlab_create_issue`, `gitlab_list_projects`), while catalog action IDs use `{domain}.{action}`
-- **Be action-oriented**: Start with verbs (`get`, `list`, `search`, `create`, `update`, `delete`)
+- **Format for this project**: catalog action IDs are `{domain}.{action}` (`issue.create`, `project.list`); on the individual surface the declared name is domain-first, `gitlab_{domain}_{action}` (`gitlab_issue_create`, `gitlab_project_list`), with a legacy verb-first set (`gitlab_list_issue_discussions`) that stays as declared. New actions take the domain-first form; the name is `IndividualTool.Name` in the `ActionSpec`, never derived by formula. Meta-tools are the bare domain (`gitlab_issue`) with the operation in the `action` argument
+- **The action segment is a verb**: `get`, `list`, `search`, `create`, `update`, `delete`
 - **Be specific**: Avoid generic names that could conflict with other servers
 - **Descriptions**: Must narrowly and unambiguously describe functionality, matching actual behavior
 
@@ -105,7 +105,7 @@ Guidelines for setting annotations:
 
 ## Adding Resources
 
-Use `mcp.AddResource` for providing accessible data:
+Use `server.AddResource` for providing accessible data (in this repository resources are registered through `internal/resources`, whose `HandlerIndex` keeps the same handlers reachable for `resources/subscribe`):
 
 ```go
 func GetResource(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -127,7 +127,7 @@ func GetResource(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadRe
     }, nil
 }
 
-mcp.AddResource(server,
+server.AddResource(
     &mcp.Resource{
         URI:         "file:///data/example.txt",
         Name:        "Example Data",
@@ -140,31 +140,31 @@ mcp.AddResource(server,
 
 ## Adding Prompts
 
-Use `mcp.AddPrompt` for reusable prompt templates:
+Use `server.AddPrompt` for reusable prompt templates. A `mcp.PromptHandler` takes the request only; arguments arrive as `req.Params.Arguments` (`map[string]string`), so validate them in the handler:
 
 ```go
-type PromptInput struct {
-    Topic string `json:"topic" jsonschema:"the topic to analyze"`
-}
-
-func AnalyzePrompt(ctx context.Context, req *mcp.GetPromptRequest, input PromptInput) (
+func AnalyzePrompt(ctx context.Context, req *mcp.GetPromptRequest) (
     *mcp.GetPromptResult,
     error,
 ) {
+    topic := req.Params.Arguments["topic"]
+    if topic == "" {
+        return nil, fmt.Errorf("topic is required")
+    }
     return &mcp.GetPromptResult{
         Description: "Analyze the given topic",
-        Messages: []mcp.PromptMessage{
+        Messages: []*mcp.PromptMessage{
             {
-                Role: mcp.RoleUser,
-                Content: mcp.TextContent{
-                    Text: fmt.Sprintf("Analyze this topic: %s", input.Topic),
+                Role: "user",
+                Content: &mcp.TextContent{
+                    Text: fmt.Sprintf("Analyze this topic: %s", topic),
                 },
             },
         },
     }, nil
 }
 
-mcp.AddPrompt(server,
+server.AddPrompt(
     &mcp.Prompt{
         Name:        "analyze",
         Description: "Analyze a topic",
@@ -196,16 +196,21 @@ if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
 
 ### HTTP Transport
 
-For remote servers, multi-client scenarios, web service deployments:
+For remote servers, multi-client scenarios, web service deployments, the SDK provides an `http.Handler` rather than a transport; `cmd/server` mounts it behind its own authentication, CORS, security-header and rate-limit middleware and serves one pooled `*mcp.Server` per (token, GitLab URL):
 
 ```go
-import "github.com/modelcontextprotocol/go-sdk/mcp"
+import (
+    "net/http"
 
-transport := &mcp.HTTPTransport{
-    Addr: ":8080",
-}
+    "github.com/modelcontextprotocol/go-sdk/mcp"
+)
 
-if err := server.Run(ctx, transport); err != nil {
+handler := mcp.NewStreamableHTTPHandler(
+    func(*http.Request) *mcp.Server { return server },
+    &mcp.StreamableHTTPOptions{Stateless: true}, // the project default (--stateless)
+)
+
+if err := http.ListenAndServe(":8080", handler); err != nil {
     log.Fatal(err)
 }
 ```
@@ -352,14 +357,10 @@ func LongRunningTool(ctx context.Context, req *mcp.CallToolRequest, input Input)
 Configure server behavior with options:
 
 ```go
-options := &mcp.Options{
-    Capabilities: &mcp.ServerCapabilities{
-        Tools:     &mcp.ToolsCapability{},
-        Resources: &mcp.ResourcesCapability{
-            Subscribe: true,
-        },
-        Prompts: &mcp.PromptsCapability{},
-    },
+options := &mcp.ServerOptions{
+    Instructions:      "…",
+    CompletionHandler: completions.NewHandler(client).Complete, // completion/complete
+    SubscribeHandler:  subscribe,                   // resources/subscribe (advertises the capability)
 }
 
 server := mcp.NewServer(
@@ -367,6 +368,8 @@ server := mcp.NewServer(
     options,
 )
 ```
+
+The SDK infers `capabilities` from what is registered and which handlers are set; `internal/capguard` keeps the methods this server answers in step with what it declares.
 
 ## Testing
 
@@ -532,29 +535,28 @@ mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in
 
 ### Elicitation (User Input)
 
-Request user input during tool execution:
+Request user input during tool execution. The request goes to the session, not the server, and `RequestedSchema` is a JSON Schema object (`map[string]any`); in this repository go through `internal/elicitation`, which also handles clients that declared no elicitation capability and the destructive-action confirmation that `YOLO_MODE` skips:
 
 ```go
-elicitReq := &mcp.ElicitRequest{
+result, err := req.Session.Elicit(ctx, &mcp.ElicitParams{
     Message: "Confirm deletion?",
-    RequestedSchema: &mcp.ElicitRequestSchema{
-        Properties: map[string]mcp.ElicitPropertySchema{
-            "confirm": {Type: "boolean", Description: "Confirm deletion"},
+    RequestedSchema: map[string]any{
+        "type": "object",
+        "properties": map[string]any{
+            "confirm": map[string]any{"type": "boolean", "description": "Confirm deletion"},
         },
     },
-}
-result, err := server.Elicit(ctx, elicitReq)
+})
 ```
 
 ### Completions
 
-Provide argument autocompletion:
+Provide argument autocompletion through `ServerOptions.CompletionHandler`; one handler serves every `completion/complete` request and routes on the ref it names (`internal/completions` does this for GitLab-aware arguments):
 
 ```go
-mcp.AddCompletionProvider(server, mcp.NewRef(mcp.RefToolInput, "tool_name", "arg"),
-    func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
-        return &mcp.CompleteResult{
-            Completion: mcp.Completion{Values: suggestions},
-        }, nil
-    })
+opts.CompletionHandler = func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+    return &mcp.CompleteResult{
+        Completion: mcp.CompletionResultDetails{Values: suggestions},
+    }, nil
+}
 ```

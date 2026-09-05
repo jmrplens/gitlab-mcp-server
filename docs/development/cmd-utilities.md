@@ -8,31 +8,40 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 
 ## Quick reference
 
-| Utility                        | Category                      | Purpose                                                                                                                                                                                             | Make target                               |
-| ------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `audit_1to1`                   | SDK/API parity audits         | Consolidated SDK↔API parity audit (struct/action/metadata gap streams, plus the `sdk` service and raw-GraphQL gate)                                                                                 | `make audit-1to1`                         |
-| `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                       | `make audit-catalog-first`                |
-| `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                          | `make audit-discovery`                    |
-| `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                   | `make audit-doc-coverage`                 |
-| `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                            | `make audit-dynamic-aliases`              |
-| `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                | `make audit-edition-tier`                 |
-| `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                          | `make check-readonly-graphql`             |
-| `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`              |
-| `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint` |
-| `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase)                                                                                                                                 | `make audit-metrics`                      |
-| `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                       |
-| `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints                                                                                                                                  | `make audit-test-names`                   |
-| `audit_string_dupes`           | Source quality audits         | Finds duplicated string literals missing `const`/`var` declarations                                                                                                                                 | —                                         |
-| `audit_supply_chain`           | Release & supply-chain audits | Five release-configuration invariants: pinned actions, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current security policy, signature-verifying installers | `make check-supply-chain`                 |
-| `gen_action_catalog_manifest`  | Generators                    | Generates the ActionSpec group-builder manifest                                                                                                                                                     | `make gen-action-catalog-manifest`        |
-| `gen_lhm_manifest`             | Generators                    | Generates the tools/prompts/resources arrays in `lhm.plugin.json` (LobeHub Marketplace)                                                                                                             | `make gen-lhm-manifest`                   |
-| `gen_llms`                     | Generators                    | Generates `llms.txt` and `llms-full.txt`                                                                                                                                                            | `make gen-llms`                           |
-| `gen_stats`                    | Generators                    | Regenerates the managed repository statistics section in `README.md`                                                                                                                                | `make gen-stats`                          |
-| `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                         | `make gen-testing-docs`                   |
-| `gen_docker_tools`             | Generators                    | Generates a Docker MCP Registry-compatible `tools.json`                                                                                                                                             | —                                         |
-| `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md` and `docs/`                                                                                                                                          | part of `make audit-docs`                 |
-| `eval_mcp_surfaces`            | Evaluation                    | Evaluates model behavior across MCP tool surfaces                                                                                                                                                   | `make eval-surfaces-docker*`              |
-| `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                       | `make build`, `make run`                  |
+| Utility                        | Category                      | Purpose                                                                                                                                                                                             | Make target                                           |
+| ------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `audit_1to1`                   | SDK/API parity audits         | Consolidated SDK↔API parity audit (struct/action/metadata gap streams, plus the `sdk` service and raw-GraphQL gate)                                                                                 | `make audit-1to1`                                     |
+| `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                       | `make audit-catalog-first`                            |
+| `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                          | `make audit-discovery`                                |
+| `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                   | `make audit-doc-coverage`                             |
+| `audit_doc_tool_names`         | Catalog & metadata audits     | Every `gitlab_*` tool name the documentation mentions is one some surface registers                                                                                                                 | `make check-doc-tool-names`                           |
+| `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                            | `make audit-dynamic-aliases`                          |
+| `audit_e2e_gaps`               | Catalog & metadata audits     | Catalog actions the e2e suite never exercises                                                                                                                                                       | `make audit-e2e-gaps`                                 |
+| `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                | `make audit-edition-tier`                             |
+| `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                          | `make check-readonly-graphql`                         |
+| `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`                          |
+| `audit_gateway_chars`          | Surface quality audits        | Served descriptions and titles carry no character an MCP gateway validator rejects                                                                                                                  | `make check-gateway-chars`                            |
+| `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint`             |
+| `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase); `-site-stats` writes the site's stats JSON                                                                                     | `make audit-metrics`, `make gen-site-stats`           |
+| `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                                   |
+| `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                           | `make audit-test-names`, `make check-test-file-names` |
+| `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                      | `make check-test-goroutines`                          |
+| `audit_test_subtests`          | Source quality audits         | Case loops that assert without a `t.Run` subtest; `-fix` rewrites the unambiguous ones                                                                                                              | `make check-test-subtests`                            |
+| `audit_string_dupes`           | Source quality audits         | Finds duplicated string literals missing `const`/`var` declarations                                                                                                                                 | —                                                     |
+| `audit_supply_chain`           | Release & supply-chain audits | Five release-configuration invariants: pinned actions, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current security policy, signature-verifying installers | `make check-supply-chain`                             |
+| `audit_install_buttons`        | Release & supply-chain audits | Decodes every one-click install button and holds the buttons to one configuration per command                                                                                                       | `make check-install-buttons`                          |
+| `gen_action_catalog_manifest`  | Generators                    | Generates the ActionSpec group-builder manifest                                                                                                                                                     | `make gen-action-catalog-manifest`                    |
+| `gen_lhm_manifest`             | Generators                    | Generates the tools/prompts/resources arrays in `lhm.plugin.json` (LobeHub Marketplace)                                                                                                             | `make gen-lhm-manifest`                               |
+| `gen_llms`                     | Generators                    | Generates `llms.txt` and `llms-full.txt`                                                                                                                                                            | `make gen-llms`                                       |
+| `gen_stats`                    | Generators                    | Regenerates the managed repository statistics section in `README.md`                                                                                                                                | `make gen-stats`                                      |
+| `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                         | `make gen-testing-docs`                               |
+| `gen_docker_tools`             | Generators                    | Generates a Docker MCP Registry-compatible `tools.json`                                                                                                                                             | —                                                     |
+| `gen_brand`                    | Generators                    | Emits every vector brand asset from one parametric geometry                                                                                                                                         | `make brand`, `make brand-check`                      |
+| `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                           | `make gen-icon-webp`                                  |
+| `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                | part of `make audit-docs`                             |
+| `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential) and draws the published charts                                                                                         | `make bench-resources`                                |
+| `eval_mcp_surfaces`            | Evaluation                    | Evaluates model behavior across MCP tool surfaces                                                                                                                                                   | `make eval-surfaces-docker*`                          |
+| `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                       | `make build`, `make run`                              |
 
 ## SDK/API parity audits
 
@@ -213,6 +222,37 @@ A JSON backlog with per-file findings.
 - `make audit-doc-coverage`
 - `make audit-doc-coverage-check` — CI gate.
 
+### audit_doc_tool_names
+
+Checks every `gitlab_*` tool name the documentation mentions against the names the server actually registers. `audit_doc_coverage` compares `domain.action` IDs, so a page can name a tool no surface has ever registered and still audit clean; that is how a verb-first spelling of the issue list survived in guides while the individual surface projects `gitlab_issue_list`, and every copy-pasted example answered `unknown tool`. The name set is built in memory from the same registration paths the server uses, across the individual, meta and dynamic surfaces at the Ultimate tier, so it needs no network and cannot drift from the catalog.
+
+The roots scanned are `docs/`, `site/src/content/docs/`, `README.md`, `llms-install.md`, `CLAUDE.md` and `npm/gitlab-mcp-server/README.md`; the npm launcher's README is in the list because it is published to a registry, where a wrong name is not fixable without republishing a version. Tokens that look like tool names but are not (the evaluator's bridge tools, for example) are listed in the source with the reason for each exemption.
+
+#### Usage
+
+```bash
+# Report
+go run ./cmd/audit_doc_tool_names/
+
+# CI gate
+go run ./cmd/audit_doc_tool_names/ --check
+```
+
+#### Flags
+
+| Flag     | Type   | Default | Description                                                 |
+| -------- | ------ | ------- | ----------------------------------------------------------- |
+| `-check` | `bool` | `false` | Exit non-zero when the docs name a tool that does not exist |
+
+#### Output
+
+The number of registered names and of documentation files scanned, then each unregistered name with the files that mention it. Exits `1` under `-check` when any is found, and `1` whenever the documentation tree cannot be scanned.
+
+#### Make targets
+
+- `make audit-doc-tool-names` — the report.
+- `make check-doc-tool-names` — CI gate.
+
 ### audit_dynamic_aliases
 
 Audits the dynamic-toolset compatibility alias catalog for governance issues: canonical-route collisions and ambiguous aliases.
@@ -240,6 +280,32 @@ With `-output tsv` (default): tab-separated values to stdout (`Severity\tProblem
 #### Notes
 
 The TSV schema is the machine-readable contract consumed by CI; `-output json` is available for programmatic consumers.
+
+### audit_e2e_gaps
+
+Reports which canonical catalog actions the e2e suite under `test/e2e/suite` never exercises. It builds the Ultimate-tier action catalog offline and scans the suite sources for the three invocation shapes: individual tool names (`gitlab_branch_create`), meta calls (a `gitlab_branch` literal followed by an `"action": "create"` pair within a short window), and dynamic execute calls naming canonical `domain.action` IDs. An action counts as exercised when any surface references it.
+
+#### Usage
+
+```bash
+go run ./cmd/audit_e2e_gaps/
+go run ./cmd/audit_e2e_gaps/ -output json
+```
+
+#### Flags
+
+| Flag      | Type     | Default          | Description                    |
+| --------- | -------- | ---------------- | ------------------------------ |
+| `-suite`  | `string` | `test/e2e/suite` | e2e suite source directory     |
+| `-output` | `string` | `tsv`            | Output format: `tsv` or `json` |
+
+#### Output
+
+With `tsv`, one tab-separated row per uncovered action (`id`, group, edition, `readonly=`, `destructive=`) and a summary line, `e2e gap audit: N/M actions exercised (P%), K uncovered`. With `json`, a report carrying the catalog count, the exercised count and the uncovered rows. Any other format is rejected with exit `2`; a catalog that cannot be built or a suite that cannot be scanned exits `1`. Gaps alone do not fail the command: it is a work list, not a gate.
+
+#### Make targets
+
+- `make audit-e2e-gaps`
 
 ### audit_edition_tier
 
@@ -369,9 +435,43 @@ A Markdown report to stdout with summary tables, violations/findings grouped by 
 
 The shared `listTools` applies `LockdownInputSchemas`, so the audit reflects exactly what clients see. Legacy wrappers (`audit-tools`, `audit-output`) exist for backward compatibility.
 
+### audit_gateway_chars
+
+Scans everything a client receives from `tools/list`, `prompts/list` and `resources/list`, on every tool surface and at the widest tier, for characters that MCP gateway validators reject. It exists because of a real rejection: a gateway introspecting this server refused onboarding with `Description contains unsafe characters: ';'`. The semicolons were ordinary English punctuation, but the gateway is the door, and the door's rules win. The audit measures the served surface rather than grepping the source, because a description is assembled from several source strings and a semicolon that survives assembly is a rejection wherever it came from. The policy is pure ASCII prose plus a short list of rejected ASCII characters (the semicolon).
+
+#### Usage
+
+```bash
+# Report every offender with enough context to find the source string
+go run ./cmd/audit_gateway_chars/
+
+# CI gate
+go run ./cmd/audit_gateway_chars/ -check
+
+# Verify that a GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS value clears the audit
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS='old=new' go run ./cmd/audit_gateway_chars/ -apply -check
+```
+
+#### Flags
+
+| Flag     | Type   | Default | Description                                                                                                    |
+| -------- | ------ | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `-check` | `bool` | `false` | Exit non-zero if any offending character is served                                                             |
+| `-apply` | `bool` | `false` | Apply `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` before scanning, to verify a substitution config clears the audit |
+| `-full`  | `bool` | `false` | Print each offending string whole (tab-separated) instead of a one-line excerpt                                |
+
+#### Output
+
+One line per offender (surface, location, excerpt), sorted by surface, then a summary line. Exits `1` under `-check` when anything is served with an offending character, and `1` when `-apply` is given a malformed substitution value.
+
+#### Make targets
+
+- `make audit-gateway-chars` — the report.
+- `make check-gateway-chars` — CI gate.
+
 ### audit_tokens
 
-Measures the LLM context-window overhead of every registered tool/resource/prompt definition across the individual, meta, and dynamic surfaces using the cl100k_base tokenizer (via `github.com/tiktoken-go/tokenizer`, with a bytes/4 fallback). With `--compare-schemas`, it runs a sizing spike comparing `GITLAB_MCP_META_PARAM_SCHEMA` modes. With `-footprint`, it measures every tier × surface × schema-mode combination and regenerates the README token-footprint section plus the standalone reference doc; add `-check` to verify those are current without writing (CI gate).
+Measures the LLM context-window overhead of every registered tool/resource/prompt definition across the individual, meta, and dynamic surfaces using the cl100k_base tokenizer (via `github.com/tiktoken-go/tokenizer`, with a bytes/4 fallback). With `--compare-schemas`, it runs a sizing spike comparing `GITLAB_MCP_META_PARAM_SCHEMA` modes. With `-footprint`, it measures every tier × surface × schema-mode combination and regenerates the README token-claim block and token-footprint section, the standalone reference doc and the site's `token-footprint.json`; add `-check` to verify those are current without writing (CI gate).
 
 #### Usage
 
@@ -391,18 +491,18 @@ go run ./cmd/audit_tokens/ -footprint -check
 
 #### Flags
 
-| Flag               | Type   | Default | Description                                                                                                                                                  |
-| ------------------ | ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-footprint`       | `bool` | `false` | Measure all tiers × surfaces × `GITLAB_MCP_META_PARAM_SCHEMA` modes and write the README token-footprint section + `docs/development/token-footprint.md`     |
-| `-check`           | `bool` | `false` | With `-footprint`, verify the README token-footprint section and `docs/development/token-footprint.md` are current without writing (exits non-zero on drift) |
-| `-compare-schemas` | `bool` | `false` | Compare `GITLAB_MCP_META_PARAM_SCHEMA` modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit                        |
-| `-json`            | `bool` | `false` | Emit a JSON summary instead of the Markdown report                                                                                                           |
-| `-top-tools`       | `int`  | `30`    | Number of individual tools to list by token cost                                                                                                             |
-| `-top-domains`     | `int`  | `20`    | Number of domains to list by token cost                                                                                                                      |
+| Flag               | Type   | Default | Description                                                                                                                                                                                                              |
+| ------------------ | ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-footprint`       | `bool` | `false` | Measure all tiers × surfaces × `GITLAB_MCP_META_PARAM_SCHEMA` modes and write the README token-claim block and token-footprint section, `docs/development/token-footprint.md` and `site/src/data/token-footprint.json`   |
+| `-check`           | `bool` | `false` | With `-footprint`, verify the README token-claim block and token-footprint section, `docs/development/token-footprint.md` and `site/src/data/token-footprint.json` are current without writing (exits non-zero on drift) |
+| `-compare-schemas` | `bool` | `false` | Compare `GITLAB_MCP_META_PARAM_SCHEMA` modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit                                                                                    |
+| `-json`            | `bool` | `false` | Emit a JSON summary instead of the Markdown report                                                                                                                                                                       |
+| `-top-tools`       | `int`  | `30`    | Number of individual tools to list by token cost                                                                                                                                                                         |
+| `-top-domains`     | `int`  | `20`    | Number of domains to list by token cost                                                                                                                                                                                  |
 
 #### Output
 
-Default mode: a Markdown report to stdout with mode comparison, per-tool costs, and domain totals. `-compare-schemas` mode: a sizing table with opaque/full/compact byte costs per meta-tool. `-footprint` mode: rewrites the `<!-- START TOKEN FOOTPRINT -->` section of `README.md` and writes `docs/development/token-footprint.md`.
+Default mode: a Markdown report to stdout with mode comparison, per-tool costs, and domain totals. `-compare-schemas` mode: a sizing table with opaque/full/compact byte costs per meta-tool. `-footprint` mode: rewrites the token-claim block and the `<!-- START TOKEN FOOTPRINT -->` section of `README.md`, and writes `docs/development/token-footprint.md` and `site/src/data/token-footprint.json`.
 
 #### Make targets
 
@@ -427,18 +527,22 @@ go run ./cmd/audit_metrics/
 
 #### Flags
 
-| Flag           | Type   | Default | Description                                            |
-| -------------- | ------ | ------- | ------------------------------------------------------ |
-| `-json`        | `bool` | `false` | Emit a JSON summary instead of the Markdown report     |
-| `-top-domains` | `int`  | `20`    | Number of domains to list by tool count (must be >= 0) |
+| Flag           | Type     | Default | Description                                                                                                       |
+| -------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `-json`        | `bool`   | `false` | Emit a JSON summary instead of the Markdown report                                                                |
+| `-top-domains` | `int`    | `20`    | Number of domains to list by tool count (must be >= 0)                                                            |
+| `-site-stats`  | `string` | `""`    | Write the single-sourced site stats JSON (`site/src/data/stats.json`) to this path instead of printing the report |
+| `-check`       | `bool`   | `false` | With `-site-stats`, verify the committed file is current instead of writing it (exits non-zero on drift)          |
 
 #### Output
 
-A Markdown report to stdout by default, or a JSON summary with `-json`.
+A Markdown report to stdout by default, or a JSON summary with `-json`. With `-site-stats`, the stats JSON the documentation site reads.
 
 #### Make targets
 
 - `make audit-metrics`
+- `make gen-site-stats` — writes `site/src/data/stats.json`.
+- `make check-site-stats` — CI gate; also part of `make audit-docs`.
 
 ## Source quality audits
 
@@ -527,7 +631,7 @@ Human report to stdout (per-site `file:line [category] boundary`), summary line,
 #### Make targets
 
 - `make audit-test-goroutines` — writes `plan/test-goroutines-backlog.json`.
-- `make check-test-goroutines` — CI gate; also step [6/7] of `make analyze`.
+- `make check-test-goroutines` — CI gate; also step [6/8] of `make analyze`.
 
 ### audit_test_names
 
@@ -542,7 +646,13 @@ go run ./cmd/audit_test_names/ cmd internal test
 
 #### Flags
 
-This utility takes no flags; pass positional directory arguments.
+| Flag           | Type   | Default | Description                                                                                              |
+| -------------- | ------ | ------- | -------------------------------------------------------------------------------------------------------- |
+| `-apply`       | `bool` | `false` | Rename test functions in place to match the suggested names                                              |
+| `-dry-run`     | `bool` | `false` | Print what would be renamed without writing files (use with `-apply`)                                    |
+| `-check-files` | `bool` | `false` | Audit test **file** names against the module-naming convention instead, and exit non-zero on a violation |
+
+Pass one or more positional directory arguments after the flags; with none the command prints its usage and exits `1`.
 
 #### Positional arguments
 
@@ -552,11 +662,12 @@ This utility takes no flags; pass positional directory arguments.
 
 #### Output
 
-CSV to stdout (`file,current_name,pattern,suggested_name`), with a summary printed to stderr.
+CSV to stdout (`file,current_name,pattern,suggested_name`), with a summary printed to stderr. `-check-files` prints the offending file names instead.
 
 #### Make targets
 
 - `make audit-test-names` — runs with `cmd internal test`.
+- `make check-test-file-names` — `-check-files cmd internal test`; CI gate for test-file naming (`export_test.go`, build-constrained and external-package qualifiers, and `test/e2e` are the codified exemptions).
 
 ### audit_test_subtests
 
@@ -656,6 +767,32 @@ One line per violation under a `supply-chain audit FAILED (N problems):` header,
 #### Make targets
 
 - `make check-supply-chain` — CI gate; also step [8/8] of `make analyze`.
+
+### audit_install_buttons
+
+Checks the one-click install buttons against what the pages around them claim. A button's configuration travels inside its URL, base64 in every client this project links and percent-encoded on top of that in some, so nothing about it is visible in review and no text search finds a flag inside it: removing `--http=false` from every example in the tree left eight buttons still registering it. The audit therefore decodes rather than searches, and holds the buttons to the promise the prose makes, that every button registers the same configuration. Buttons are grouped by the command they launch, since a Docker button and an npx button are different configurations on purpose, and within a group the arguments have to agree.
+
+#### Usage
+
+```bash
+go run ./cmd/audit_install_buttons/
+go run ./cmd/audit_install_buttons/ -v
+```
+
+#### Flags
+
+| Flag   | Type     | Default | Description                        |
+| ------ | -------- | ------- | ---------------------------------- |
+| `-dir` | `string` | `.`     | Repository root to audit           |
+| `-v`   | `bool`   | `false` | List every button that was checked |
+
+#### Output
+
+`audit_install_buttons: N buttons decode cleanly and agree within each command`, or one line per problem on stderr followed by a count, with exit `1`. Finding no button at all is also exit `1`, because it means the audit is looking in the wrong place.
+
+#### Make targets
+
+- `make check-install-buttons` — CI gate.
 
 ## Generators
 
@@ -893,16 +1030,70 @@ A JSON array to stdout.
 
 None. Run directly with `go run`.
 
-## Formatters
+### gen_brand
 
-### format_md_tables
+Emits every vector brand asset from one parametric geometry, so the mark cannot drift between its surfaces. The mark is the "fan-out": a source node projecting three branch arcs, each ending in a node, which reads as a git graph and as the project's architecture (one canonical action catalog projected to three tool surfaces). The geometry lives in the command as constants; every emitter renders the same arcs at its own scale, so editing a curve edits every asset in the same run.
 
-Normalizes Markdown pipe tables in `README.md` and `docs/` (or explicit positional paths).
+Outputs, relative to the repository root: `site/src/assets/logo.svg` (canonical classed mark, painted by the site's CSS tokens), `.github/brand/logo-mono.svg` (single-color `currentColor` variant), `site/public/favicon.svg` (self-contained colors on its own dark ground), `internal/toolutil/brandmark_gen.go` (the 24x24 `currentColor` MCP brand mark, as a Go constant), and the `.github/brand/banner.svg`, `og.svg` and `social.svg` cards.
 
 #### Usage
 
 ```bash
-# Format the default set (README.md and docs/)
+# Write all assets
+go run ./cmd/gen_brand/
+
+# CI gate: byte-compare the committed assets against the geometry
+go run ./cmd/gen_brand/ --check
+```
+
+#### Flags
+
+| Flag      | Type   | Default | Description                                                       |
+| --------- | ------ | ------- | ----------------------------------------------------------------- |
+| `--check` | `bool` | `false` | Verify the committed assets match the geometry instead of writing |
+
+#### Output
+
+Rewrites the seven assets in place, or (with `--check`) names each stale one and exits `1`.
+
+#### Make targets
+
+- `make brand`
+- `make brand-check` — CI gate.
+- `make brand-rasters` — renders the raster derivatives (README banner WebP, OG and social PNGs, marketplace icons) from those vectors; maintainer-only, needs `rsvg-convert` and `cwebp`.
+
+### gen_icon_webp
+
+Rasterizes every `svg<Name>` constant in `internal/toolutil/icons.go` into two 16x16 lossless WebP files under `internal/toolutil/icons/webp/`, `<name>-light.webp` (near-black glyph) and `<name>-dark.webp` (near-white glyph), the `Theme`-tagged fallbacks served to MCP clients whose icon MIME allowlist admits `image/webp` but not SVG. It requires `rsvg-convert` (librsvg) and `cwebp` (libwebp) on `PATH` and refuses to start without them. Maintainer-only: the generated files are committed, so ordinary builds and CI never invoke it. Run it after adding or editing an icon.
+
+#### Usage
+
+```bash
+go run ./cmd/gen_icon_webp/
+go run ./cmd/gen_icon_webp/ --check
+```
+
+#### Flags
+
+| Flag      | Type   | Default | Description                                                            |
+| --------- | ------ | ------- | ---------------------------------------------------------------------- |
+| `--check` | `bool` | `false` | Verify the committed WebP assets match `icons.go` without writing them |
+
+#### Make targets
+
+- `make gen-icon-webp`
+- `make check-icon-webp` — same external-tool requirement, so it is not part of CI.
+
+## Formatters
+
+### format_md_tables
+
+Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/` (or explicit positional paths).
+
+#### Usage
+
+```bash
+# Format the default set (README.md, docs/ and site/src/content/docs/)
 go run ./cmd/format_md_tables/
 
 # CI gate
@@ -914,16 +1105,16 @@ go run ./cmd/format_md_tables/ README.md docs/reference/tools/issues.md
 
 #### Flags
 
-| Flag     | Type     | Default | Description                                        |
-| -------- | -------- | ------- | -------------------------------------------------- |
-| `-check` | `bool`   | `false` | Fail if any Markdown table needs formatting        |
-| `-root`  | `string` | `.`     | Repository root containing `README.md` and `docs/` |
+| Flag     | Type     | Default | Description                                                                  |
+| -------- | -------- | ------- | ---------------------------------------------------------------------------- |
+| `-check` | `bool`   | `false` | Fail if any Markdown table needs formatting                                  |
+| `-root`  | `string` | `.`     | Repository root containing `README.md`, `docs/` and `site/src/content/docs/` |
 
 #### Positional arguments
 
-| Argument                | Type       | Description                                     |
-| ----------------------- | ---------- | ----------------------------------------------- |
-| (optional) `<paths...>` | positional | Explicit paths; defaults to `{README.md, docs}` |
+| Argument                | Type       | Description                                                            |
+| ----------------------- | ---------- | ---------------------------------------------------------------------- |
+| (optional) `<paths...>` | positional | Explicit paths; defaults to `{README.md, docs, site/src/content/docs}` |
 
 #### Output
 
@@ -933,6 +1124,61 @@ Rewrites files in place unless `-check` is set, in which case it only verifies f
 
 - Part of `make audit-docs` (with `-check`).
 - `make analyze-fix` — applies fixes.
+
+## Benchmarks
+
+### bench_resources
+
+Measures what the server costs to run, and draws the charts the documentation publishes. Everything else measured in this repository is about tokens and tool counts; none of it tells an operator how much memory to give a container, how long a client waits before the first tool call answers, or what a second credential adds to a shared deployment. This command answers those from the real binary, on both transports, and writes one record every downstream artifact is rendered from.
+
+It needs nothing but a Go toolchain: GitLab is stood in for by an in-process HTTP server on loopback, and the OTLP collector by another, so a run is offline and a second machine measures the same thing rather than its own network. The tool surface is passed to the server explicitly and never read from the environment, for the reason given about generators: a developer machine exporting `GITLAB_MCP_TOOL_SURFACE` would otherwise publish different numbers than CI.
+
+#### Usage
+
+```bash
+# Measure, then render
+go run ./cmd/bench_resources/
+
+# Redraw the charts and tables from the committed record
+go run ./cmd/bench_resources/ -render
+
+# CI gate: are the committed charts and tables current?
+go run ./cmd/bench_resources/ -check
+
+# Short smoke matrix, for verifying a change to this command
+go run ./cmd/bench_resources/ -quick -json /tmp/x.json
+```
+
+#### Flags
+
+| Flag               | Type       | Default                                                      | Description                                                                          |
+| ------------------ | ---------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `-binary`          | `string`   | `""`                                                         | Server binary to measure; empty builds `./cmd/server` into a temporary directory     |
+| `-json`            | `string`   | `site/src/data/resource-benchmark.json`                      | Measurement record to write, and to render from                                      |
+| `-doc-charts`      | `string`   | `docs/reference/benchmarks`                                  | Directory for the Markdown documentation's SVG charts                                |
+| `-site-charts`     | `string`   | `site/public/benchmarks`                                     | Directory for the site's SVG charts                                                  |
+| `-doc-page`        | `string`   | `docs/reference/resource-benchmark.md`                       | Markdown page whose generated block is rewritten                                     |
+| `-site-page`       | `string`   | `site/src/content/docs/operations/resource-benchmark.mdx`    | English site page whose generated block is rewritten                                 |
+| `-site-page-es`    | `string`   | `site/src/content/docs/es/operations/resource-benchmark.mdx` | Spanish site page whose generated block is rewritten                                 |
+| `-scenarios`       | `string`   | `""`                                                         | Comma-separated scenario ids to measure; empty runs the whole matrix                 |
+| `-rounds`          | `int`      | `3`                                                          | Measured rounds per method                                                           |
+| `-sample-interval` | `duration` | `100ms`                                                      | How often the resident set is sampled                                                |
+| `-render`          | `bool`     | `false`                                                      | Skip measurement: redraw charts and tables from the committed record                 |
+| `-check`           | `bool`     | `false`                                                      | Verify the committed charts and tables match the committed record; implies `-render` |
+| `-quick`           | `bool`     | `false`                                                      | Short smoke matrix, for verifying a change to this command                           |
+| `-v`               | `bool`     | `false`                                                      | Print progress for every client and round                                            |
+
+A partial matrix (`-scenarios`, `-quick`) is refused unless `-json` names a record of its own, so it cannot overwrite the published one.
+
+#### Output
+
+The measurement record, the SVG chart pairs under the two chart directories, and the generated blocks of the three documentation pages. A full run takes several minutes: every scenario builds a tool catalog per client, which is the cost being measured.
+
+#### Make targets
+
+- `make bench-resources` — measure and render.
+- `make bench-resources-render` — redraw from the committed record; what to run after changing a figure.
+- `make check-bench-resources` — CI gate; seconds, since no benchmark is run.
 
 ## Evaluation
 
@@ -952,20 +1198,30 @@ The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only
 
 ## CI gate targets
 
-The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains the markdown/llms/testing/formatter/godoc/surface/alias checks plus link and site checks.
+The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains markdownlint, the table formatter, the llms, LobeHub-manifest, testing-docs and site-stats checks, the local-link check, the godoc, surface-quality and alias audits, and the site's own `check`, `build` and `lint`.
 
-| Make target                              | Utility                        | What it gates                                                                        | Exit behavior                                             |
-| ---------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `check-action-catalog-manifest`          | `gen_action_catalog_manifest`  | Generated ActionSpec manifest is current                                             | Non-zero if the manifest is stale                         |
-| `check-llms`                             | `gen_llms`                     | `llms.txt` and `llms-full.txt` are current and structurally valid                    | Non-zero if either file is stale or malformed             |
-| `check-lhm-manifest`                     | `gen_lhm_manifest`             | `lhm.plugin.json` declares the registered tools, prompts, and resources              | Non-zero if the manifest is stale                         |
-| `check-footprint`                        | `audit_tokens -footprint`      | README token-footprint section and `docs/development/token-footprint.md` are current | Non-zero if either is stale                               |
-| `check-stats`                            | `gen_stats`                    | README repository-statistics section is current                                      | Non-zero if the section is stale                          |
-| `audit-discovery-check`                  | `audit_discovery_completeness` | No META-001 finding meets the configured severity threshold                          | Non-zero if any finding meets `-severity` (default error) |
-| `audit-doc-coverage-check`               | `audit_doc_coverage`           | No `docs/reference/tools/*.md` has missing/orphan/tier_mismatch findings             | Non-zero if any file has a finding                        |
-| `audit-godocs-check`                     | `godoc_tool audit`             | No package, symbol, or test Godoc findings remain                                    | Non-zero when findings are present                        |
-| `audit-dynamic-aliases`                  | `audit_dynamic_aliases`        | No error-severity alias governance finding (collisions, ambiguity)                   | Non-zero (`1`) if any error-severity finding exists       |
-| `audit-docs` → `format_md_tables -check` | `format_md_tables`             | All Markdown pipe tables are normalized                                              | Non-zero if any table needs formatting                    |
-| `check-testing-docs`                     | `gen_testing_docs`             | The `docs/development/testing/testing.md` test-metrics block is current              | Non-zero if the generated section is stale                |
-| `check-supply-chain`                     | `audit_supply_chain`           | The five release-configuration invariants still hold                                 | Non-zero if any is broken, or if the audit cannot be run  |
-| `check-readonly-graphql`                 | `audit_readonly_graphql`       | No action classified ReadOnly can reach a GraphQL mutation                           | Non-zero on any finding, or if the audit cannot be run    |
+| Make target                              | Utility                            | What it gates                                                                                                              | Exit behavior                                             |
+| ---------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `check-action-catalog-manifest`          | `gen_action_catalog_manifest`      | Generated ActionSpec manifest is current                                                                                   | Non-zero if the manifest is stale                         |
+| `check-llms`                             | `gen_llms`                         | `llms.txt` and `llms-full.txt` are current and structurally valid                                                          | Non-zero if either file is stale or malformed             |
+| `check-lhm-manifest`                     | `gen_lhm_manifest`                 | `lhm.plugin.json` declares the registered tools, prompts, and resources                                                    | Non-zero if the manifest is stale                         |
+| `check-footprint`                        | `audit_tokens -footprint`          | README token-footprint section, `docs/development/token-footprint.md` and `site/src/data/token-footprint.json` are current | Non-zero if any is stale                                  |
+| `check-stats`                            | `gen_stats`                        | README repository-statistics section is current                                                                            | Non-zero if the section is stale                          |
+| `audit-discovery-check`                  | `audit_discovery_completeness`     | No META-001 finding meets the configured severity threshold                                                                | Non-zero if any finding meets `-severity` (default error) |
+| `audit-doc-coverage-check`               | `audit_doc_coverage`               | No `docs/reference/tools/*.md` has missing/orphan/tier_mismatch findings                                                   | Non-zero if any file has a finding                        |
+| `audit-godocs-check`                     | `godoc_tool audit`                 | No package, symbol, or test Godoc findings remain                                                                          | Non-zero when findings are present                        |
+| `audit-dynamic-aliases`                  | `audit_dynamic_aliases`            | No error-severity alias governance finding (collisions, ambiguity)                                                         | Non-zero (`1`) if any error-severity finding exists       |
+| `audit-docs` → `format_md_tables -check` | `format_md_tables`                 | All Markdown pipe tables are normalized                                                                                    | Non-zero if any table needs formatting                    |
+| `check-testing-docs`                     | `gen_testing_docs`                 | The `docs/development/testing/testing.md` test-metrics block is current                                                    | Non-zero if the generated section is stale                |
+| `check-supply-chain`                     | `audit_supply_chain`               | The five release-configuration invariants still hold                                                                       | Non-zero if any is broken, or if the audit cannot be run  |
+| `check-doc-tool-names`                   | `audit_doc_tool_names`             | Every `gitlab_*` name the documentation mentions is registered on some surface                                             | Non-zero if any name is unregistered                      |
+| `check-gateway-chars`                    | `audit_gateway_chars`              | Nothing served carries a character a gateway validator rejects                                                             | Non-zero if any offender is served                        |
+| `check-install-buttons`                  | `audit_install_buttons`            | Every install button decodes and agrees with the others for its command                                                    | Non-zero on a problem, or when no button is found         |
+| `check-test-goroutines`                  | `audit_test_goroutines`            | No `testing.T` abort is made off the test goroutine                                                                        | Non-zero if any abort site exists                         |
+| `check-test-subtests`                    | `audit_test_subtests`              | No case loop asserts without a `t.Run` subtest                                                                             | Non-zero if any site remains                              |
+| `check-test-file-names`                  | `audit_test_names -check-files`    | Every `_test.go` is named after a module it tests                                                                          | Non-zero on a violation                                   |
+| `check-site-stats`                       | `audit_metrics -site-stats -check` | `site/src/data/stats.json` is current                                                                                      | Non-zero if the file is stale                             |
+| `check-bench-resources`                  | `bench_resources -check`           | The committed benchmark charts and tables match the committed record                                                       | Non-zero if they are stale                                |
+| `brand-check`                            | `gen_brand --check`                | The committed brand assets match the geometry                                                                              | Non-zero on drift                                         |
+| `check-icon-webp`                        | `gen_icon_webp --check`            | The committed WebP icons match `icons.go` (needs `rsvg-convert` and `cwebp`, so not run in CI)                             | Non-zero on drift                                         |
+| `check-readonly-graphql`                 | `audit_readonly_graphql`           | No action classified ReadOnly can reach a GraphQL mutation                                                                 | Non-zero on any finding, or if the audit cannot be run    |

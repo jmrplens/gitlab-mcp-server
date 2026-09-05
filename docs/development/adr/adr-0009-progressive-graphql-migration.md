@@ -15,7 +15,7 @@ superseded_by: ""
 
 ## Context
 
-GitLab maintains two API surfaces: REST API v4 and GraphQL API. The project currently exposes GitLab operations through 163 internal tool sub-packages; most actions are REST-backed, while GraphQL is used for domains where REST is deprecated, unavailable, or significantly less efficient (ADR-0006). GitLab has begun deprecating certain REST endpoints in favor of GraphQL equivalents:
+GitLab maintains two API surfaces: REST API v4 and GraphQL API. The project currently exposes GitLab operations through 168 domain sub-packages under `internal/tools/`; most actions are REST-backed, while GraphQL is used for domains where REST is deprecated, unavailable, or significantly less efficient (ADR-0006). GitLab has begun deprecating certain REST endpoints in favor of GraphQL equivalents:
 
 - **Epics REST API**: deprecated since GitLab 17.0, removal planned for 19.0
 - **Security Findings REST**: deprecated in favor of GraphQL `Pipeline.securityReportFindings`
@@ -84,7 +84,7 @@ Current priority queue based on known deprecation timelines:
 | ✅        | Epics (6 tools)            | REST deprecated 17.0, removal 19.0 | Migrated to Work Items API via client-go `WorkItems` service |
 | ✅        | Epic Issues (4 tools)      | REST deprecated 17.0, removal 19.0 | Migrated to Work Items children/parent widgets               |
 | ✅        | Epic Notes (5 tools)       | REST deprecated 17.0, removal 19.0 | Migrated to Work Items notes widgets                         |
-| ✅        | Epic Discussions (7 tools) | REST deprecated 17.0, removal 19.0 | Migrated to Work Items discussions widgets                   |
+| ✅        | Epic Discussions (6 tools) | REST deprecated 17.0, removal 19.0 | Migrated to Work Items discussions widgets                   |
 | P3       | Iterations                 | Feature gap                        | Migrate when client-go adds GraphQL wrapper                  |
 
 ## References

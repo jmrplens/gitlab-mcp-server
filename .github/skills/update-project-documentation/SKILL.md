@@ -28,15 +28,15 @@ For each code change, identify which documentation files are affected:
 
 | Change Type | Affected Documentation |
 |-------------|----------------------|
-| New exported type/function | Package docs, possibly tools/resources reference |
-| Modified function signature | Package docs, tools reference, examples |
-| New MCP tool | `docs/reference/tools/README.md`, package docs |
-| New MCP resource | `docs/reference/resources.md`, package docs |
-| New MCP prompt | `docs/reference/prompts.md`, package docs |
-| Configuration change | `docs/reference/configuration.md` |
-| New package | `docs/README.md` index, new package doc |
+| New exported type/function | Its godoc comment (`make audit-godocs-check`), possibly tools/resources reference |
+| Modified function signature | Godoc comment, tools reference, examples |
+| New MCP tool | The `docs/reference/tools/` page that owns the domain (`doc-ownership.json` there; `go run ./cmd/audit_doc_coverage/` gates it); the catalog tables in `docs/reference/tools/README.md` are generated |
+| New MCP resource | `docs/reference/resources.md` |
+| New MCP prompt | `docs/reference/prompts.md` |
+| Configuration change | `docs/reference/configuration.md`, `docs/reference/env.md`, `docs/reference/cli.md`, and the `CLAUDE.md` variable and flag tables |
+| New package | `docs/concepts/architecture.md` component view; `docs/development/cmd-utilities.md` for a new `cmd/` utility |
 | Architecture change | `docs/concepts/architecture.md`, diagrams |
-| Build/deploy change | `docs/development/development.md`, `docs/deployment.md` |
+| Build/deploy change | `docs/development/development.md`, `docs/guides/installation.md`, `docs/guides/remote-deployment.md` |
 | Removed API | All referencing documents |
 
 ### Step 3: Assess Impact
@@ -61,6 +61,7 @@ For each affected document:
 - **UPD-007**: Never introduce TBD/TODO placeholders in updates
 - **UPD-008**: Maintain consistent terminology with the rest of the documentation
 - **UPD-009**: When creating or editing Markdown pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` and verify with `go run ./cmd/format_md_tables/ --check` so source tables keep consistent padding and alignment markers
+- **UPD-010**: Never hand-edit generator-owned content: the README stats block, `docs/development/testing/testing.md`, the catalog tables in `docs/reference/tools/README.md`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Run the generator instead (`make update-all` runs them all; ADR-0013)
 
 ### For New APIs
 
@@ -127,8 +128,8 @@ After completing updates, provide a summary:
 ### Documents Updated
 | Document | Sections Changed | Change Type |
 |----------|-----------------|-------------|
-| `docs/reference/tools/README.md` | Added `gitlab_new_tool` section | New API |
-| `docs/packages/tools.md` | Updated exported functions table | Modified API |
+| `docs/reference/tools/branches.md` | Added `gitlab_branch_new_action` section | New API |
+| `docs/concepts/architecture.md` | Updated component view | Modified API |
 
 ### Parity Status
 - [x] All changes documented

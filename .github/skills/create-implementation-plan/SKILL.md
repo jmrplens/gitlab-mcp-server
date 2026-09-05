@@ -43,7 +43,7 @@ Plans must consist of discrete, atomic phases containing executable tasks. Each 
 
 ## Output File Specifications
 
-- Save implementation plan files in `/plan/` directory
+- Save implementation plan files in `/plan/` directory. It is gitignored (local working notes, per ADR-0013) and markdownlint skips it; a plan is never committed, so anything that must outlive the working tree goes into an ADR or a GitHub issue
 - Use naming convention: `[purpose]-[component]-[version].md`
 - Purpose prefixes: `upgrade|refactor|feature|data|infrastructure|process|architecture|design`
 - Example: `upgrade-system-command-4.md`, `feature-auth-module-1.md`

@@ -17,10 +17,11 @@ how to recover.
 
 ## What Is Evaluated
 
-The evaluator uses natural-language tasks from
-`cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md`. Each row declares
-the expected tool, action, required parameters, whether the task is destructive,
-and the success condition.
+The evaluator uses natural-language tasks from the typed case catalog in
+`cmd/eval_mcp_surfaces/internal/evaluator/cases/`. Each case declares its
+prompt, the expected tool and action of every step, the required parameters,
+whether a step is destructive, the presets it belongs to, and the success
+condition.
 
 | Case type           | Prefix | Purpose                                                                          |
 | ------------------- | ------ | -------------------------------------------------------------------------------- |
@@ -28,16 +29,17 @@ and the success condition.
 | Multi-step workflow | `MS-`  | The model must sequence multiple MCP calls in the requested order.               |
 | Failure simulation  | `MF-`  | The model must recover from injected failures or unsafe output.                  |
 
-The current automated corpus contains 235 cases and 391 expected tool
-operations:
+The current catalog contains 260 cases declaring about 490 expected tool
+operations across both editions; the CE case set is 147 of those cases and
+about 285 operations:
 
 | Area                          | Count |
 | ----------------------------- | ----: |
-| Single-operation cases        |   187 |
-| Multi-step workflow scenarios |    43 |
-| Failure simulation scenarios  |     5 |
-| Total cases                   |   235 |
-| Expected tool operations      |   391 |
+| Single-operation cases        |   204 |
+| Multi-step workflow scenarios |    53 |
+| Failure simulation scenarios  |     3 |
+| Total cases                   |   260 |
+| Expected tool operations      |  ~490 |
 
 ## Evaluation Modes
 

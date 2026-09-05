@@ -8,7 +8,7 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 - **Language**: Go 1.27.1
 - **MCP SDK**: `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0
-- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
+- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v2` v2.62.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
 - **Transport**: stdio (primary), HTTP (optional)
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
 
@@ -16,55 +16,75 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 ```text
 gitlab-mcp-server/
-├── cmd/                    # 20 dev utility binaries — see docs/development/cmd-utilities.md for the full reference
-│   ├── server/             # MCP server entry point (+ --shutdown flag)
+├── cmd/                    # server + 31 dev utility binaries — see docs/development/cmd-utilities.md for the full reference
+│   ├── server/             # MCP server entry point (+ --shutdown, --probe flags)
 │   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata|sdk; -validate-docs)
 │   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Discovery-metadata quality audit (META-001)
-│   ├── audit_doc_coverage/ # docs/tools/*.md vs catalog coverage gaps (DOC-002)
+│   ├── audit_doc_coverage/ # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
+│   ├── audit_doc_tool_names/ # Every `gitlab_*` name the docs mention exists on the surface it claims (make check-doc-tool-names)
 │   ├── audit_dynamic_aliases/ # Dynamic-toolset alias governance
+│   ├── audit_e2e_gaps/     # Catalog actions the e2e suite never exercises
 │   ├── audit_edition_tier/ # Doc-grounded licensing tier vs binary gating
+│   ├── audit_gateway_chars/ # Served descriptions/titles vs strict gateway validators (make check-gateway-chars)
+│   ├── audit_install_buttons/ # One-click install payloads decode to one configuration per command
 │   ├── audit_surface_quality/ # MCP surface metadata + output quality (-view; was audit_tools + audit_output)
+│   ├── audit_supply_chain/ # Release-configuration invariants (SHA-pinned uses:, Dependabot cooldowns, SECURITY.md, installers)
 │   ├── audit_tokens/       # Token overhead; -footprint, --compare-schemas (was audit_meta_schema); cl100k_base tokenizer (tokens.go)
 │   ├── audit_metrics/      # MCP tool/resource/prompt metrics
 │   ├── audit_readonly_graphql/ # No ReadOnly action may reach a GraphQL mutation (make check-readonly-graphql)
 │   ├── audit_test_goroutines/ # Off-goroutine testing.T abort audit (--check gate)
-│   ├── audit_test_names/   # Test naming convention (+ -apply/-dry-run)
+│   ├── audit_test_names/   # Test naming convention (+ -apply/-dry-run; -check-files gates test-file naming)
+│   ├── audit_test_subtests/ # Case loops that assert without a t.Run subtest (-fix rewrites the unambiguous ones)
 │   ├── audit_string_dupes/ # Duplicated string literals missing constants
+│   ├── bench_resources/    # What the server costs to run, and the charts the docs publish
 │   ├── godoc_tool/         # Godoc auditor + fixer (audit/fix; was audit_godocs + add_docs)
 │   ├── format_md_tables/   # Markdown pipe-table normalizer
 │   ├── gen_action_catalog_manifest/ # ActionSpec group-builder manifest
+│   ├── gen_brand/          # Every vector brand asset from one parametric geometry
 │   ├── gen_docker_tools/   # Docker MCP Registry tools.json
+│   ├── gen_icon_webp/      # Light/dark WebP icon fallbacks from icons.go
+│   ├── gen_lhm_manifest/   # Capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/           # llms.txt / llms-full.txt
 │   ├── gen_stats/          # README repository-statistics section (was inside gen_readme)
 │   ├── gen_testing_docs/   # docs/development/testing/testing.md test-metrics block
-│   └── eval_mcp_surfaces/  # Model-behavior evaluation across MCP surfaces
+│   ├── eval_mcp_surfaces/  # Model-behavior evaluation across MCP surfaces
+│   └── internal/           # Helpers shared by the commands (apidocs, auditshared, docgen, mcpsurface)
 ├── internal/
-│   ├── config/             # Configuration loading (.env, flags)
+│   ├── config/             # Configuration loading (dotenv files, flags, env vars, HTTP env overlay)
+│   ├── edition/            # Licensing tier model (Free/Premium/Ultimate)
 │   ├── gitlab/             # GitLab API client wrapper
+│   ├── oauth/              # OAuth HTTP mode: token cache, GitLab verifier, RFC 9728 metadata
 │   ├── serverpool/         # HTTP mode: per-token+URL server pool & LRU cache
+│   ├── subscriptions/      # resources/subscribe: polled watchers, leases (ADR-0015)
+│   ├── telemetry/, mcpotel/ # OpenTelemetry export and MCP instrumentation
+│   ├── clientcompat/, gatewaycompat/, cachehints/, capguard/ # Per-client and gateway compatibility, cache hints, capability guard
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/              # Tool orchestration layer + 176 internal/tools packages
+│   ├── tools/              # Tool orchestration layer + 177 internal/tools packages
+│   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/        # Low-token dynamic find/execute surface
+│   │   ├── dynamiccatalog/ # Build(): the dynamic catalog assembled the way the server assembles it
 │   │   ├── branches/       # Branch & protected branch tools
 │   │   ├── commits/        # Commit tools
 │   │   ├── issues/         # Issue CRUD tools
 │   │   ├── mergerequests/  # Merge request CRUD tools
 │   │   ├── projects/       # Project CRUD tools
-│   │   └── ...             # 176 internal/tools packages total
+│   │   └── ...             # 177 internal/tools packages total
 │   ├── resources/          # MCP resource implementations
-│   └── prompts/            # MCP prompt implementations
-├── docs/                   # Documentation, ADRs, specs
-│   ├── adr/
-│   ├── spec/
-│   ├── oauth-app-setup.md  # Creating GitLab OAuth applications for MCP clients
-│   └── ide-configuration.md # Per-IDE MCP JSON configuration (stdio, HTTP legacy, OAuth)
+│   ├── prompts/            # MCP prompt implementations
+│   ├── completions/        # Argument completion handler
+│   ├── progress/           # MCP progress notifications
+│   └── elicitation/        # MCP elicitation capability
+├── docs/                   # Documentation (Diátaxis: guides/, reference/, concepts/, development/)
+│   ├── guides/             # installation, ide-configuration.md, oauth-app-setup.md, http-server-mode, remote-deployment, telemetry
+│   ├── reference/          # cli, configuration, env, output format, tools/ (per domain), resources, prompts, capabilities/
+│   ├── concepts/           # architecture, dynamic tools, meta-tools, error handling, GraphQL, security
+│   └── development/        # adr/ (Architectural Decision Records), testing/ (generated), static analysis, cmd utilities
 ├── plan/                   # Implementation plans
 ├── .github/                # Copilot agents, skills, instructions
-├── .env                    # Local dev secrets (gitignored)
 ├── .gitignore
 ├── go.mod
 ├── go.sum
@@ -96,8 +116,8 @@ gitlab-mcp-server/
 
 ### GitLab Integration
 
-- Stdio mode uses `GITLAB_URL`; HTTP mode uses `--gitlab-url` when fixed, or per-request `GITLAB-URL` headers when omitted
-- Authentication via `GITLAB_TOKEN` (Personal Access Token)
+- Stdio mode uses `GITLAB_URL`; HTTP mode requires `--gitlab-url` (one instance fixes it, several publish an allow-list the `GITLAB-URL` header selects from) unless `--allow-any-gitlab-url` is passed, which lets the header name any host and is meant for single-user local deployments only
+- Authentication via `GITLAB_TOKEN` (Personal Access Token); the token is read from the environment or a dotenv file (`~/.gitlab-mcp-server.env`, or the file `GITLAB_MCP_ENV_FILE` names), never from a working-directory `.env` and never from a flag
 - Self-signed TLS certificates: skip verification when `GITLAB_SKIP_TLS_VERIFY=true`
 - All API calls must respect `context.Context` for cancellation
 - Rate limiting awareness and retry logic
@@ -159,9 +179,9 @@ go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 ```
 
-- Requires `.env` with `GITLAB_URL`, `GITLAB_TOKEN` (user needs create/delete project permissions)
-- Two sequential workflows: `TestFullWorkflow` (~174 subtests, individual tools) and `TestMetaToolWorkflow` (~151 subtests, meta-tools)
-- Dynamic surface coverage lives in `TestDynamicToolSurface_*` and validates the default two-tool find/execute workflow against the same E2E GitLab fixture. To run only that workflow in Docker mode, run `set -a && source test/e2e/.env.docker && set +a` after the Docker GitLab setup scripts complete, then use `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/`.
+- Requires `GITLAB_URL` and `GITLAB_TOKEN` in the environment (user needs create/delete project permissions)
+- One test file per domain (172 files), in three families named by the surface they drive: `TestIndividual_*` (individual tools), `TestMeta_*` (meta-tools; `TestEE_*` for the Enterprise-only domains on an EE runtime) and `TestDynamicToolSurface_*`
+- Dynamic surface coverage lives in `TestDynamicToolSurface_*` and validates the default two-tool find/execute workflow against the same E2E GitLab fixture. To run only that family in Docker mode, run `set -a && source test/e2e/.env.docker && set +a` after the Docker GitLab setup scripts complete, then use `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/`.
 - Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, wikis, CI variables, environments, issue links, deploy keys, snippets, pipeline schedules, badges, access tokens, award emoji, elicitation
 - Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies
 - Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools
@@ -208,7 +228,8 @@ GOOS=darwin GOARCH=arm64 go build -o dist/gitlab-mcp-server-darwin-arm64 ./cmd/s
 When creating a new release and uploading binaries to GitHub Releases:
 
 1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)
-2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.asc`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches asset names exactly and will fail to find files with decorated names
+2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.sigstore.json`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — the Homebrew formula, winget, the installers and `scripts/fetch-release-assets.sh` look assets up by exact name and will not find a decorated one
+3. The full chain (draft-then-publish, `.mcpb` bundle, npm and PyPI trusted publishers, Homebrew tap, winget, `server.json` stamping, and how to rehearse it with `gh workflow run release.yml --ref <branch>`) is documented under "Release process" in `CLAUDE.md`
 
 ### Git Workflow
 
@@ -220,23 +241,23 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 | Variable                 | Description                       | Example            |
 | ------------------------ | --------------------------------- | ------------------ |
-| `GITLAB_URL`             | GitLab instance URL. In HTTP mode, optional via `--gitlab-url`; when set it fixes the GitLab instance, and when omitted clients must send `GITLAB-URL` per request | `https://gitlab.example.com` |
+| `GITLAB_URL`             | GitLab instance URL. In HTTP mode it is `--gitlab-url`, required unless `--allow-any-gitlab-url` is passed; one value fixes the instance, several publish an allow-list the `GITLAB-URL` header must select from | `https://gitlab.example.com` |
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `GITLAB_MCP_META_TOOLS`             | Deprecated compatibility selector; prefer `GITLAB_MCP_TOOL_SURFACE` for new configs | _(unset)_          |
 | `GITLAB_MCP_TOOL_SURFACE`           | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; overrides legacy `GITLAB_MCP_META_TOOLS` | `dynamic` (default when unset) |
 | `GITLAB_MCP_CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
-| `GITLAB_MCP_META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `GITLAB_MCP_META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
-| `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |
-| `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating tools and returns a JSON preview | `false` (default)  |
+| `GITLAB_MCP_META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~6.5x), or `full` (~11.9x). Independent of `GITLAB_MCP_META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
+| `GITLAB_READ_ONLY`       | Read-only mode: removes mutating operations per action; reads keep working on every surface | `false` (default)  |
+| `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating operations per action and returns a JSON preview | `false` (default)  |
 | `GITLAB_ENTERPRISE`      | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset (`true` → `ultimate`, `false` → `free`); logs a deprecation warning | `false` (default) |
 | `GITLAB_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
 | `EVAL_SURFACE_ENTERPRISE` | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus | `false` (default)  |
 | `EVAL_SURFACE_CASE_SET`   | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (CE only), `all` (CE+Enterprise) | `ce` (default)     |
 | `EVAL_SURFACE_FIXTURE_SMOKE` | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) | `false` (default) |
 | `--max-output-retries`   | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output | `2` (default)      |
-| `GITLAB_MCP_MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
-| `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |
+| `GITLAB_MCP_MAX_HTTP_CLIENTS`       | Maximum unique (token, GitLab URL) server entries kept in the HTTP pool; bounds pooled entries, not sessions (also `--max-http-clients` flag) | `100` (default)    |
+| `GITLAB_MCP_SESSION_TIMEOUT` | Idle MCP session timeout, HTTP mode with `--stateless=false` only (also `--session-timeout` flag) | `30m` (default)  |
 | `GITLAB_MCP_ACTION_TIMEOUT`         | Cancel an action still running after this long, both transports (also `--action-timeout` in HTTP mode; `0` disables, max 24h). Above the longest wait any action offers | `65m`            |
 | `GITLAB_MCP_DRAIN_DELAY`            | HTTP mode: after `SIGTERM`, answer `/health` with `503 draining` for this long before closing the listener, so a polling balancer removes the instance first (also `--drain-delay`; max 5m) | `0`              |
 | `GITLAB_MCP_RATE_LIMIT_RPS`         | Per-server rate limit, in req/s, on every call that reaches GitLab (`tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get`); `0` disables it. Both transports: `0` in stdio, `10` in HTTP mode, where `--rate-limit-rps` overrides it | `0` / `10` (HTTP) |
@@ -244,7 +265,9 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_MCP_AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
 | `GITLAB_MCP_OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
 
-**HTTP-only flags** (no environment variable equivalent):
+This table is the subset an assistant meets most often. Every variable, its bounds and its flag are tabulated under "Environment variables" in `CLAUDE.md`; `docs/reference/env.md` and `docs/reference/cli.md` are the user-facing references. In HTTP mode an explicitly passed flag wins over the environment variable, which wins over the default (`internal/config/http_overlay.go`).
+
+**HTTP-only flags** (no environment variable equivalent; two of many, the rest are in `CLAUDE.md`):
 
 | Flag                       | Description                                                    | Default            |
 | -------------------------- | -------------------------------------------------------------- | ------------------ |
@@ -260,7 +283,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 ## AI Assistance Infrastructure
 
-This project includes 7 agents, 18 skills, and 7 instruction files in `.github/` for AI-assisted development. See `CLAUDE.md` at the project root for a comprehensive catalog of all agents, skills, workflows, and when to use each one.
+This project includes 7 agents, 19 skills, and 8 instruction files in `.github/` for AI-assisted development. See `CLAUDE.md` at the project root for a comprehensive catalog of all agents, skills, workflows, and when to use each one.
 
 Key agents: `go-mcp-expert` (primary coding), `test-expert` (testing, coverage, false-pass detection), `plan-expert` (strategic planning), `debug` (debugging), `se-reviewer` (OWASP + architecture), `documentation-writer` (project docs with Context7 + web research).
 

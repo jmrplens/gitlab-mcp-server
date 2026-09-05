@@ -26,19 +26,20 @@ This document explains when and how the GraphQL integration is used, the pattern
 
 ### Domains using GraphQL
 
-| Domain                     | Package                              | Reason                                                                                                                                 |
-| -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Epics (6 tools)            | `internal/tools/epics/`              | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items GraphQL API via client-go `WorkItems` service             |
-| Epic Notes (5 tools)       | `internal/tools/epicnotes/`          | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items notes widgets via client-go `WorkItems` service           |
-| Epic Discussions (7 tools) | `internal/tools/epicdiscussions/`    | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items discussions widgets via client-go `WorkItems` service     |
-| Epic Issues (4 tools)      | `internal/tools/epicissues/`         | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items children/parent widgets via client-go `WorkItems` service |
-| Vulnerabilities            | `internal/tools/vulnerabilities/`    | GraphQL provides richer query/mutation capabilities than REST                                                                          |
-| Security Attributes        | `internal/tools/securityattributes/` | GraphQL-only namespace classification feature via client-go `SecurityAttributes` service                                               |
-| Security Categories        | `internal/tools/securitycategories/` | GraphQL-only namespace classification feature via client-go `SecurityCategories` service                                               |
-| Security Findings          | `internal/tools/securityfindings/`   | REST endpoint deprecated; GraphQL `Pipeline.securityReportFindings` is the replacement                                                 |
-| CI/CD Catalog              | `internal/tools/cicatalog/`          | GraphQL-only feature — no REST API exists                                                                                              |
-| Branch Rules               | `internal/tools/branchrules/`        | GraphQL-only aggregated view of branch protections, approval rules, and status checks                                                  |
-| Custom Emoji               | `internal/tools/customemoji/`        | GraphQL-only — no REST API for custom emoji management                                                                                 |
+| Domain                     | Package                              | Reason                                                                                                                                       |
+| -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Epics (6 tools)            | `internal/tools/epics/`              | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items GraphQL API via client-go `WorkItems` service                   |
+| Epic Notes (5 tools)       | `internal/tools/epicnotes/`          | REST API deprecated since GitLab 17.0 (removal 19.0); raw GraphQL against the Work Items notes widget, GID resolved by `epicworkitems`       |
+| Epic Discussions (6 tools) | `internal/tools/epicdiscussions/`    | REST API deprecated since GitLab 17.0 (removal 19.0); raw GraphQL against the Work Items discussions widget, GID resolved by `epicworkitems` |
+| Epic Issues (4 tools)      | `internal/tools/epicissues/`         | REST API deprecated since GitLab 17.0 (removal 19.0); raw GraphQL against the Work Items hierarchy widget, GID resolved by `epicworkitems`   |
+| Work Items (13 tools)      | `internal/tools/workitems/`          | Work items and saved views are GraphQL-only; typed client-go `WorkItems` service                                                             |
+| Vulnerabilities            | `internal/tools/vulnerabilities/`    | GraphQL provides richer query/mutation capabilities than REST                                                                                |
+| Security Attributes        | `internal/tools/securityattributes/` | GraphQL-only namespace classification feature; raw `GraphQL.Do()` queries and mutations                                                      |
+| Security Categories        | `internal/tools/securitycategories/` | GraphQL-only namespace classification feature; raw `GraphQL.Do()` queries and mutations                                                      |
+| Security Findings          | `internal/tools/securityfindings/`   | REST endpoint deprecated; GraphQL `Pipeline.securityReportFindings` is the replacement                                                       |
+| CI/CD Catalog              | `internal/tools/cicatalog/`          | GraphQL-only feature — no REST API exists                                                                                                    |
+| Branch Rules               | `internal/tools/branchrules/`        | GraphQL-only aggregated view of branch protections, approval rules, and status checks                                                        |
+| Custom Emoji               | `internal/tools/customemoji/`        | GraphQL-only — no REST API for custom emoji management                                                                                       |
 
 ## Architecture
 
@@ -73,7 +74,7 @@ graph TD
 
 ### Pattern 1: Raw `GraphQL.Do()` for tool handlers
 
-Used by domain sub-packages (`vulnerabilities`, `securityfindings`, `cicatalog`, `branchrules`, `customemoji`) that implement complete tool handlers with GraphQL queries. Domains backed by typed client-go GraphQL services, such as `securityattributes` and `securitycategories`, follow the same ActionSpec and markdown patterns while delegating query construction to client-go.
+Used by domain sub-packages (`vulnerabilities`, `securityfindings`, `securityattributes`, `securitycategories`, `cicatalog`, `branchrules`, `customemoji`, and the epic widgets in `epicnotes`, `epicdiscussions` and `epicissues`) that implement complete tool handlers with GraphQL queries. The `epicworkitems` helper package (`ResolveEpicGID`, `ResolveWorkItemGID`) turns a group path and IID into the global ID those widget mutations need.
 
 ```go
 // Define the query as a Go constant
@@ -109,35 +110,34 @@ _, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
 
 ### Pattern 2: client-go `WorkItems` service wrappers
 
-Used by the `epics`, `epicnotes`, `epicdiscussions`, and `epicissues` packages after migrating from the deprecated Epics REST API. The client-go `WorkItems` service provides typed Go methods that execute GraphQL queries internally, so tool handlers don't write raw GraphQL.
+Used by the `epics` package after migrating from the deprecated Epics REST API, and by `workitems`. The client-go `WorkItems` service provides typed Go methods that execute GraphQL queries internally, so tool handlers don't write raw GraphQL. Every method is addressed by namespace path and IID; client-go resolves the global ID itself.
 
 ```go
 // List epics — client-go builds and executes the GraphQL query internally
 items, _, err := client.GL().WorkItems.ListWorkItems(input.FullPath, &gl.ListWorkItemsOptions{
-    Types: gl.Ptr([]string{"Epic"}),
+    First: &defaultFirst,
+    Types: []string{"EPIC"},
     State: gl.Ptr(input.State),
 }, gl.WithContext(ctx))
 
 // Get a single epic by IID
-item, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, nil, gl.WithContext(ctx))
+item, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 
 // Create an epic (WorkItemTypeEpic = "gid://gitlab/WorkItems::Type/8")
-item, _, err := client.GL().WorkItems.CreateWorkItem(&gl.CreateWorkItemOptions{
-    NamespacePath:  gl.Ptr(input.FullPath),
-    Title:          gl.Ptr(input.Title),
-    WorkItemTypeID: gl.Ptr(gl.WorkItemTypeEpic),
+item, _, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeEpic, &gl.CreateWorkItemOptions{
+    Title: input.Title,
 }, gl.WithContext(ctx))
 
-// Update and Delete use a two-step pattern: resolve GID first, then mutate
-gidItem, _, err := client.GL().WorkItems.GetWorkItem(fullPath, iid, nil, gl.WithContext(ctx))
-item, _, err := client.GL().WorkItems.UpdateWorkItem(gidItem.ID, &gl.UpdateWorkItemOptions{
+// Update and delete take the same path + IID pair
+item, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, &gl.UpdateWorkItemOptions{
     Title: gl.Ptr(newTitle),
 }, gl.WithContext(ctx))
+_, err = client.GL().WorkItems.DeleteWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 ```
 
 **When to use this pattern**: When client-go provides typed service wrappers for the GraphQL domain (currently: WorkItems). This is preferred over raw `GraphQL.Do()` because it avoids hand-written query strings and response structs.
 
-**Two-step GID pattern**: `UpdateWorkItem` and `DeleteWorkItem` require a GitLab Global ID (GID) as the first argument, not a namespace path + IID. To obtain the GID, first call `GetWorkItem(fullPath, iid)` which returns the work item including its `.ID` field (a GID string like `"gid://gitlab/WorkItem/101"`), then pass that GID to the mutation method.
+**Where a GID is still needed**: the epic notes, discussions and issue-link mutations are raw GraphQL against work item widgets, and those mutations take a GitLab Global ID (a string like `"gid://gitlab/WorkItem/101"`) rather than a path and IID. `epicworkitems.ResolveEpicGID` and `ResolveWorkItemGID` do that lookup once so the three sub-packages share it.
 
 ## Key Design Decisions
 
@@ -211,8 +211,8 @@ if err != nil {
     return ..., toolutil.WrapErr("dismiss_vulnerability", err)
 }
 if len(resp.Data.VulnerabilityDismiss.Errors) > 0 {
-    return ..., fmt.Errorf("dismiss_vulnerability: %s",
-        resp.Data.VulnerabilityDismiss.Errors[0])
+    return ..., toolutil.GraphQLMutationError("dismiss_vulnerability",
+        resp.Data.VulnerabilityDismiss.Errors)
 }
 ```
 
@@ -230,6 +230,8 @@ The `internal/toolutil/graphql.go` module provides shared GraphQL infrastructure
 | `FormatGID()`               | Builds a GitLab GID string                                     |
 | `ParseGID()`                | Extracts type and ID from a GID string                         |
 | `MergeVariables()`          | Merges multiple variable maps                                  |
+| `GraphQLTopLevelError()`    | Wraps the top-level `errors` array of a GraphQL response       |
+| `GraphQLMutationError()`    | Wraps a mutation payload's `errors` array as one error         |
 
 ## Testing GraphQL Tools
 
@@ -239,7 +241,7 @@ GraphQL tools are tested using `httptest` mocking at the `/api/graphql` endpoint
 - `testutil.RespondGraphQL(w, status, dataJSON)` — wraps response in `{"data": ...}` envelope
 
 ```go
-client, mux := testutil.NewTestClient(t, testutil.GraphQLHandler(
+client := testutil.NewTestClient(t, testutil.GraphQLHandler(
     map[string]http.HandlerFunc{
         "vulnerabilities": func(w http.ResponseWriter, r *http.Request) {
             testutil.RespondGraphQL(w, http.StatusOK, `{
@@ -259,5 +261,5 @@ client, mux := testutil.NewTestClient(t, testutil.GraphQLHandler(
 
 - [GitLab GraphQL API Reference](https://docs.gitlab.com/ee/api/graphql/reference/)
 - [GitLab GraphQL Explorer](https://docs.gitlab.com/ee/api/graphql/#interactive-graphql-explorer)
-- [client-go GraphQL.Do()](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2#GraphQLService.Do)
+- [client-go GraphQL.Do()](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2#GraphQL.Do)
 - [ADR-0006: Raw GraphQL.Do() for Uncovered Domains](../development/adr/adr-0006-raw-graphql-for-uncovered-domains.md)

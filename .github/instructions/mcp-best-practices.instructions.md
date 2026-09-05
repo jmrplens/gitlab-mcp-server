@@ -11,7 +11,7 @@ Protocol-level guidelines for building high-quality MCP servers that enable LLMs
 
 ### Naming
 
-- **snake_case with service prefix**: `gitlab_create_issue`, `gitlab_list_projects`
+- **snake_case with service prefix, domain first**: `gitlab_issue_create`, `gitlab_project_list` (the catalog IDs are `issue.create`, `project.list`; the individual name is declared in the `ActionSpec`, not derived)
 - **Action-oriented verbs**: get, list, search, create, update, delete
 - **Specific names**: Avoid generic names that conflict with other MCP servers
 - **Descriptions must match behavior exactly**: Narrow, unambiguous descriptions
@@ -63,7 +63,7 @@ For list operations:
 - **Actionable messages**: Tell the LLM what went wrong AND what to try next
 - **Report tool errors in results**: Use `IsError: true` in `CallToolResult` for recoverable errors
 - **Don't expose internals**: Hide stack traces, internal paths, database details
-- **Wrap with context**: `fmt.Errorf("gitlab_list_projects: %w", err)`
+- **Wrap with context**: `toolutil.WrapErr("list projects", err)` for reads, `toolutil.WrapErrWithMessage`/`WrapErrWithHint` for writes (they classify the failure and keep GitLab's own message; see `internal/toolutil/errors.go`)
 - **Clean up resources**: Always release connections, files on errors
 
 ## Security
@@ -127,11 +127,11 @@ Provide domain-specific icons on all tools, resources, and prompts for visual id
 
 ### Elicitation
 
-Tools can request user input via `server.Elicit()` for confirmation of destructive actions or collecting missing parameters.
+Tools request user input through the session, `req.Session.Elicit(ctx, &mcp.ElicitParams{...})`, for confirmation of destructive actions or to collect missing parameters; the multi-step flows live in `internal/elicitation`. See the elicitation section of `go-mcp-server.instructions.md` for the pattern.
 
 ### Completions
 
-Provide argument autocompletion for tool parameters using `mcp.AddCompletionProvider()`. Register completions for arguments that have a finite, discoverable set of values (project IDs, branch names, user names).
+Provide argument autocompletion through one `ServerOptions.CompletionHandler`, which serves every `completion/complete` request and dispatches on the argument name (`internal/completions`). Complete arguments that have a finite, discoverable set of values (project IDs, branch names, user names).
 
 ### Discovery and Meta-Tools
 

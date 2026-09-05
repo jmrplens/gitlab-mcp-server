@@ -30,7 +30,7 @@ No-match searches return a small `suggestions` list built from nearby indexed to
 
 Fuzzy matching is conservative. It runs when lexical search returns no matches or only low-confidence matches, ignores query tokens shorter than three characters, and uses bounded Levenshtein distance with a maximum of two edits. Fuzzy recovery is filtered so weak typo matches do not elevate destructive actions.
 
-Long prompts are searched twice: once as the whole normalized query, and again through overlapping three- to six-term windows when the query is long enough. Segmented search runs for queries longer than six meaningful terms, or for five- and six-term queries when the requested result limit is 10 or lower. Each segment match receives a large window-size boost so multi-intent prompts can surface each relevant action without forcing the model to split the prompt perfectly.
+Long prompts are searched twice: once as the whole normalized query, and again through overlapping three- to six-term windows when the query is long enough. Segmented search runs for every query of five or more meaningful terms; the requested result limit plays no part in that decision. Each segment match receives a large window-size boost so multi-intent prompts can surface each relevant action without forcing the model to split the prompt perfectly.
 
 `describe` and `execute` accept canonical action IDs and unambiguous aliases. Ambiguous aliases are rejected with repair guidance listing the valid canonical action IDs. Dynamic `execute` normalizes schema-safe parameter aliases before dispatch, logs name-only normalization metadata at debug level, and reports unknown or missing parameters with valid schema fields before calling the route handler. It does not silently drop unsupported security-sensitive fields such as `masked` or `protected`; callers receive validation feedback and must retry with fields accepted by the selected action schema. Destructive actions still require explicit `confirm:true` before execution.
 
@@ -67,6 +67,8 @@ Additional scoring adjustments:
 | Unmatched action-specific word penalty, per word   |   -60 |
 | Segmented-search boost, per matched window term    |    90 |
 
+A few intent-specific boosts sit beside these in `ranking.go`, each narrow to one action family whose generic signals ranked wrongly in the regression corpus: comparing refs (90), listing releases (80), resolving a git remote URL through `discover_project.resolve` (95), fetching one project by path (220), searching projects (90), service accounts (80, plus 30 for the scope), CI job token scope (80), and code search and the current user (1000 each). The last two are deliberately large: both actions pass the match-ratio filter through an intent bypass while matching only a couple of tokens of a long query, so their scaled base score is tiny next to a competitor that stacks many matches, and the boost has to exceed that deficit outright.
+
 ## Operational Limits
 
 These constants are intentionally internal tuning values, not user-facing configuration knobs. They are documented here so maintainers can explain observed ranking behavior and update tests deliberately when changing them.
@@ -81,7 +83,7 @@ These constants are intentionally internal tuning values, not user-facing config
 | Fuzzy token length         | Query parts shorter than three characters are not fuzzy-matched                                                          |
 | Fuzzy distance scores      | Distance 0 = 40, distance 1 = 34, distance 2 = 28, plus 2 when first letters match                                       |
 | Fuzzy destructive safety   | Destructive fuzzy results require an exact destructive verb plus a resource/action/tag signal                            |
-| Segmented search windows   | Three to six meaningful terms                                                                                            |
+| Segmented search windows   | Three to six meaningful terms; segmented search runs for queries of five or more terms                                   |
 | No-match suggestions       | Up to six nearby indexed tokens, then common fallback domains                                                            |
 | Unknown action suggestions | Up to five nearby canonical action IDs                                                                                   |
 | Unknown param suggestions  | Levenshtein recovery against valid params with maximum distance three                                                    |

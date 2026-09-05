@@ -1,10 +1,11 @@
 # AI Model Evaluation Results
 
 This document publishes the current model-evaluation results selected with
-`cmd/eval_mcp_surfaces --publish-docs`. Meta-tools and dynamic results are
-kept in separate managed sections, with additional Enterprise/Premium sections
-for licensed Docker runs, so publishing one surface or edition does not replace
-the others. Raw reports and traces are not committed.
+`cmd/eval_mcp_surfaces --publish-docs`. Each surface and edition has its own
+managed section (CE dynamic, Enterprise/Premium meta-tools, Enterprise/Premium
+dynamic), so publishing one does not replace the others. A CE meta-tools block
+is not present at the moment, so a CE meta run has nowhere to publish here
+until one is added. Raw reports and traces are not committed.
 
 ## Dynamic Results
 

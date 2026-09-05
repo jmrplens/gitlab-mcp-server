@@ -12,11 +12,11 @@ The dynamic toolset is the low-token operating mode for gitlab-mcp-server. It ex
 
 Use the dynamic toolset when the initial MCP `tools/list` payload is the limiting factor for your AI client. This is common with clients that have small tool-context budgets, strict tool-count limits, or slow tool palette rendering.
 
-| Mode                     |                                                                 Visible Tools | Best For                                                               |
-| ------------------------ | ----------------------------------------------------------------------------: | ---------------------------------------------------------------------- |
-| Dynamic toolset, default |                                                                             2 | Low-token clients that can find an action with schema, then execute it |
-| Meta-tools               |               32 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Broad compatibility and predictable domain-level action selection      |
-| Individual tools         | 854 CE / 1073 self-managed enterprise / 1079 GitLab.com Enterprise with Orbit | Clients that benefit from one tool per GitLab operation                |
+| Mode                     |                                                                    Visible Tools | Best For                                                               |
+| ------------------------ | -------------------------------------------------------------------------------: | ---------------------------------------------------------------------- |
+| Dynamic toolset, default |                                                                                2 | Low-token clients that can find an action with schema, then execute it |
+| Meta-tools               |                   32 Free/CE / 38 Premium / 49 Ultimate / 50 GitLab.com Ultimate | Broad compatibility and predictable domain-level action selection      |
+| Individual tools         | 854 Free/CE / 1007 Premium / 1073 Ultimate / 1079 GitLab.com Ultimate with Orbit | Clients that benefit from one tool per GitLab operation                |
 
 Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes discovery, not business behavior.
 
@@ -341,7 +341,7 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 
 | Concern              | Meta-tools                                                                              | Dynamic toolset                                    |
 | -------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Initial tool count   | 32/48/49                                                                                | 2                                                  |
+| Initial tool count   | 32/38/49/50                                                                             | 2                                                  |
 | Model selection      | Choose a domain tool and action                                                         | Find an action with schema, execute                |
 | Schema discovery     | `action` enum plus `gitlab://tools/{id}` or `GITLAB_MCP_META_PARAM_SCHEMA=compact/full` | `gitlab_find_action` returns action schemas inline |
 | Minimal capabilities | Keeps `gitlab://tools` and omits optional prompts and data resources                    | Keeps action schema discovery through find         |
@@ -369,7 +369,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 | `internal/toolutil/meta_tool.go`          | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers                                       |
 | `cmd/server/main.go`                      | Selects `GITLAB_MCP_TOOL_SURFACE` and registers meta, individual, or dynamic surfaces                                    |
 | `cmd/eval_mcp_surfaces`                   | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks                                          |
-| `test/e2e/suite/dynamic_test.go`          | E2E coverage for the default dynamic two-tool surface                                                                    |
+| `test/e2e/suite/dynamic_ce_test.go`       | E2E coverage for the default dynamic two-tool surface                                                                    |
 
 ### Registering New Actions
 

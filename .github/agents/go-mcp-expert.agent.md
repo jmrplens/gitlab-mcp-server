@@ -27,7 +27,7 @@ You are an expert Go developer specializing in building Model Context Protocol (
 When helping with Go MCP development:
 
 1. **Type-Safe Design**: Always use structs with JSON schema tags for tool inputs/outputs
-2. **Tool Naming**: Use project conventions: individual tools are `gitlab_{action}_{resource}` and catalog routes are `{domain}.{action}`
+2. **Tool Naming**: Use project conventions: catalog routes are `{domain}.{action}`, and an individual tool's name is declared per action in `IndividualTool.Name` (never derived from a formula). The prevailing form is domain-first (`gitlab_issue_list`, `gitlab_branch_create`); a legacy verb-first set (`gitlab_list_issue_discussions`) and abbreviated names (`gitlab_mr_list`) also exist, so read the spec rather than guess
 3. **Tool Annotations**: Always set readOnlyHint, destructiveHint, idempotentHint, openWorldHint
 4. **Error Handling**: Provide actionable error messages that guide LLMs toward solutions
 5. **Context Usage**: Ensure all long-running operations respect context cancellation
@@ -50,9 +50,9 @@ Default runtime surface is `GITLAB_MCP_TOOL_SURFACE=dynamic`, which exposes `git
 
 Use `gitlab://tools` and `gitlab://tools/{id}` terminology when referring to tool manifests and executable action schemas. Avoid legacy resource names and the old three-step dynamic discovery flow.
 
-Each `ActionSpec` declares a minimum `Edition` (`free`, `premium`, or `ultimate`). Edition gating flows through `GITLAB_TIER` / `--tier` and `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`), which removes premium/ultimate-only actions and prunes per-field schema entries once the active tier resolves. When adding or updating an action, set the lowest edition that exposes the endpoint correctly and add tier hints in `ParameterGuidance` when a field is edition-gated.
+Each `ActionSpec` declares a minimum `Edition` (`free`, `premium`, or `ultimate`; empty means `free`). Edition gating flows through `GITLAB_TIER` / `--tier` into `internal/tools/action_catalog.go`: `filterActionSpecGroupsByTier` drops every action whose edition exceeds the resolved tier, and `pruneSchemaFieldsByTier` removes the struct fields tagged `tier:"premium"` / `tier:"ultimate"` from the input schema strictly and from the output schema leniently (higher-tier output data is still passed through, only omitted from the model-facing schema). When adding or updating an action, set the lowest edition that exposes the endpoint correctly, tag edition-gated fields with `tier:"..."`, and add tier hints in `ParameterGuidance` when a field is edition-gated.
 
-Discovery metadata (aliases, usage, parameter guidance, related actions) is checked by `cmd/audit_discovery_completeness` against a `link_create_batch`-class gold standard. New actions should fill all four buckets before review.
+Discovery metadata (aliases, usage, parameter guidance, related actions) is checked by `cmd/audit_discovery_completeness` against a `release.link_create_batch`-class gold standard. New actions should fill all four buckets before review.
 
 ## Key SDK Components
 
@@ -72,13 +72,13 @@ Discovery metadata (aliases, usage, parameter guidance, related actions) is chec
 
 ### Resource Registration
 
-- `mcp.AddResource()` with Resource definition and handler
+- `(*mcp.Server).AddResource()` and `AddResourceTemplate()` with Resource definition and handler (methods on the server, unlike the generic `mcp.AddTool()`)
 - Resource URIs and MIME types
 - ResourceContents and TextResourceContents
 
 ### Prompt Registration
 
-- `mcp.AddPrompt()` with Prompt definition and handler
+- `(*mcp.Server).AddPrompt()` with Prompt definition and handler
 - PromptArgument definitions
 - PromptMessage construction
 
