@@ -18,12 +18,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,830 |
-| Unit test functions                                   | 13,251 |
+| Total test functions                                  | 13,865 |
+| Unit test functions                                   | 13,286 |
 | E2E test functions                                    |    579 |
-| cmd test functions                                    |  2,292 |
+| cmd test functions                                    |  2,326 |
 | Test files (internal/)                                |    503 |
-| Test files (cmd/)                                     |    141 |
+| Test files (cmd/)                                     |    143 |
 | Test files (test/e2e/)                                |    229 |
 | Tool sub-packages tested                              |    176 |
 | Core packages tested                                  |     21 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,422 | 82.6% |
+| `TestFunc_Scenario` (2-part)           | 11,420 | 82.4% |
 | `TestFunc` (no underscore)             |    968 |  7.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,440 | 10.4% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,477 | 10.7% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,207 |        134 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            308 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (176) |          8,444 |        355 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (176) |          8,445 |        355 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            579 |        229 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,292 |        141 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,830** |    **873** |                                                                                                 |
+| cmd packages            |          2,326 |        143 | server entry point and developer command utilities                                              |
+| **Total**               |     **13,865** |    **875** |                                                                                                 |
 
 ### Core Packages
 
@@ -89,7 +89,7 @@
 | issues            |   223 |      n/a |    21 |
 | users             |   210 |      n/a |    38 |
 | dynamic           |   162 |      n/a |     2 |
-| jobs              |   149 |      n/a |    17 |
+| jobs              |   151 |      n/a |    17 |
 | packages          |   131 |      n/a |     9 |
 | search            |   118 |      n/a |    10 |
 | commits           |   114 |      n/a |    13 |
@@ -148,7 +148,7 @@
 | customemoji             |        26 |          2 |      n/a |         3 |
 | dbmigrations            |         7 |          1 |      n/a |         1 |
 | dependencies            |        15 |          2 |      n/a |         4 |
-| dependencyfirewall      |        20 |          3 |      n/a |         1 |
+| dependencyfirewall      |        19 |          3 |      n/a |         1 |
 | dependencyproxy         |         5 |          1 |      n/a |         1 |
 | deploykeys              |        71 |          2 |      n/a |         9 |
 | deploymentmergerequests |        25 |          1 |      n/a |         1 |
@@ -211,7 +211,7 @@
 | issues                  |       223 |          2 |      n/a |        21 |
 | issuestatistics         |        43 |          1 |      n/a |         3 |
 | iterationdata           |         8 |          1 |      n/a |         0 |
-| jobs                    |       149 |          4 |      n/a |        17 |
+| jobs                    |       151 |          4 |      n/a |        17 |
 | jobtokenscope           |        52 |          2 |      n/a |         8 |
 | keys                    |        21 |          1 |      n/a |         2 |
 | labeldata               |         6 |          1 |      n/a |         0 |
@@ -292,7 +292,7 @@
 | wikis                   |        61 |          2 |      n/a |         6 |
 | workitems               |        95 |          3 |      n/a |         6 |
 | workitemsavedviews      |        50 |          4 |      n/a |         7 |
-| **Total**               | **8,444** |    **355** |          | **1,175** |
+| **Total**               | **8,445** |    **355** |          | **1,175** |
 
 </details>
 
@@ -304,6 +304,7 @@
 | ---------------------------------------------- | -------: |
 | cmd/audit_1to1                                 |      n/a |
 | cmd/audit_1to1/internal/actions                |      n/a |
+| cmd/audit_1to1/internal/enums                  |      n/a |
 | cmd/audit_1to1/internal/merge                  |      n/a |
 | cmd/audit_1to1/internal/metadata               |      n/a |
 | cmd/audit_1to1/internal/sdk                    |      n/a |
