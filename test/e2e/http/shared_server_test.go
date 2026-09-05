@@ -571,8 +571,16 @@ func TestSharedServer_TwoPublishedInstancesShareOneShape(t *testing.T) {
 //
 // Each half here is a consequence only the real order can produce. The
 // subscription half is covered by the two owner tests above, where one
-// credential's watcher must not notify another's session, and the telemetry half
-// is visible only through an exporter, which is the collector module's subject.
+// credential's watcher must not notify another's session.
+//
+// Telemetry is the fourth middleware the binding is documented as running
+// outside, and it is deliberately not asserted here: it resolves the caller
+// through toolutil.ResolveIdentity, which reads the identity the authentication
+// gate put on the request context, not the credential state the binding
+// installs. Moving the binding inward therefore changes nothing a span records
+// today. Keeping it outside stays right as a rule, since an attributer that did
+// read the credential would break silently, but there is no consequence to
+// assert, and a test asserting one would be asserting its own setup.
 func TestSharedServer_PerCredentialLimitsProveTheBindingRunsOutermost(t *testing.T) {
 	const (
 		firstToken  = "glpat-first-tenant"
