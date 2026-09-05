@@ -928,24 +928,24 @@ func TestInsertEntry_ExistingEntry(t *testing.T) {
 	pool.mu.Lock()
 	existingElement := pool.lru.PushBack(existingKey)
 	otherElement := pool.lru.PushFront(otherKey)
-	pool.entries[existingKey] = &poolEntry{server: existingServer, element: existingElement}
-	pool.entries[otherKey] = &poolEntry{server: otherServer, element: otherElement}
+	pool.entries[existingKey] = &Entry{server: existingServer, element: existingElement}
+	pool.entries[otherKey] = &Entry{server: otherServer, element: otherElement}
 	pool.mu.Unlock()
 
 	// A concurrent builder lost the race: its freshly built server must be
 	// discarded in favor of the already-stored one.
 	rebuilt := mcp.NewServer(&mcp.Implementation{Name: "rebuilt", Version: "0.0.0"}, nil)
-	server := pool.insertEntry(existingKey, "unused-token", &poolEntry{server: rebuilt})
+	entry := pool.insertEntry(existingKey, "unused-token", &Entry{server: rebuilt})
 
-	if server != existingServer {
+	if entry.Server() != existingServer {
 		t.Fatal("insertEntry() returned the rebuilt server; want the existing cached server")
 	}
 
 	pool.mu.Lock()
-	missingServer, missingOK := pool.existingServerLocked("missing")
+	missingEntry, missingOK := pool.existingEntryLocked("missing")
 	pool.mu.Unlock()
-	if missingOK || missingServer != nil {
-		t.Fatalf("existingServerLocked(missing) = (%v, %v), want (nil, false)", missingServer, missingOK)
+	if missingOK || missingEntry != nil {
+		t.Fatalf("existingEntryLocked(missing) = (%v, %v), want (nil, false)", missingEntry, missingOK)
 	}
 	if front := pool.lru.Front(); front == nil || front.Value != existingKey {
 		t.Fatalf("front LRU key = %v, want %s", front, existingKey)
@@ -1104,7 +1104,7 @@ func TestRevalidateAll_EvictsInvalidTokens(t *testing.T) {
 	}
 	goodKey := tokenHash("good-token")
 	goodElem := pool.lru.PushFront(goodKey)
-	pool.entries[goodKey] = &poolEntry{
+	pool.entries[goodKey] = &Entry{
 		server:        mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil),
 		client:        healthyClient,
 		element:       goodElem,
@@ -1119,7 +1119,7 @@ func TestRevalidateAll_EvictsInvalidTokens(t *testing.T) {
 	}
 	badKey := tokenHash("bad-token")
 	badElem := pool.lru.PushFront(badKey)
-	pool.entries[badKey] = &poolEntry{
+	pool.entries[badKey] = &Entry{
 		server:        mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil),
 		client:        unhealthyClient,
 		element:       badElem,
@@ -1181,7 +1181,7 @@ func TestStartRevalidation_TriggersRevalidation(t *testing.T) {
 	}
 	key := tokenHash("valid-tok")
 	elem := pool.lru.PushFront(key)
-	pool.entries[key] = &poolEntry{
+	pool.entries[key] = &Entry{
 		server:        mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil),
 		client:        client,
 		element:       elem,
@@ -1481,8 +1481,8 @@ func TestEvictIdle_ReclaimsOnlyStaleEntries(t *testing.T) {
 }
 
 // TestEvictIdle_HitRefreshesLastUsed verifies that serving a request keeps an
-// entry alive. GetOrCreate answers established entries from a fast path that
-// bypasses existingServerLocked, so that path has to refresh lastUsed itself;
+// entry alive. GetOrCreateEntry answers established entries from a fast path
+// that bypasses existingEntryLocked, so that path has to refresh lastUsed itself;
 // if it does not, the sweep reclaims servers that are actively in use.
 func TestEvictIdle_HitRefreshesLastUsed(t *testing.T) {
 	cfg := testConfig(stubGitLabBase)
@@ -2006,10 +2006,10 @@ func TestStartIdleEviction_NilContextAndDisabled_DoesNotPanic(t *testing.T) {
 // the single place an entry leaves the map.
 func TestPool_OnEvictFiresOnEveryRemovalPath(t *testing.T) {
 	newRecordingPool := func(evicted *[]*mcp.Server, mu *sync.Mutex, opts ...Option) *ServerPool {
-		record := WithOnEvict(func(srv *mcp.Server) {
+		record := WithOnEvict(func(entry *Entry) {
 			mu.Lock()
 			defer mu.Unlock()
-			*evicted = append(*evicted, srv)
+			*evicted = append(*evicted, entry.Server())
 		})
 		return New(testConfig(stubGitLabBase), testFactory(), append([]Option{record}, opts...)...)
 	}
@@ -2097,7 +2097,7 @@ func TestStartRevalidation_PanickingEvictionCallback_DoesNotKillTheProcess(t *te
 
 	pool := New(testConfig(srv.URL), testFactory(),
 		WithRevalidateInterval(10*time.Millisecond),
-		WithOnEvict(func(*mcp.Server) { panic("a callback outside the pool") }),
+		WithOnEvict(func(*Entry) { panic("a callback outside the pool") }),
 	)
 	if _, err := pool.GetOrCreate("glpat-revalidate", srv.URL); err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
@@ -2137,7 +2137,7 @@ func revalidationEntry(t *testing.T, pool *ServerPool, baseURL, token string, va
 		t.Fatalf("building a client for %q: %v", token, err)
 	}
 	key := tokenHash(token)
-	pool.entries[key] = &poolEntry{
+	pool.entries[key] = &Entry{
 		server:        mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil),
 		client:        client,
 		element:       pool.lru.PushFront(key),
@@ -2664,5 +2664,174 @@ func TestAcquireProbeSlot_ReleaseIsIdempotent(t *testing.T) {
 
 	if got := len(pool.probes); got != 0 {
 		t.Errorf("slots held after a double release = %d, want 0", got)
+	}
+}
+
+// TestEntry_AnswersForTheCredentialRatherThanForTheServer verifies the handle
+// that replaced a bare *mcp.Server as the thing a caller holds.
+//
+// One server is now shared by every credential of a configuration shape, so a
+// server pointer no longer answers "which credential is this". Everything that
+// has to know keys on the entry instead, and on the opaque owner token it
+// carries, so those have to be readable and distinct.
+func TestEntry_AnswersForTheCredentialRatherThanForTheServer(t *testing.T) {
+	cfg := testConfig(stubGitLabBase)
+	// One server for every credential, which is what a shape-shared factory
+	// does and what makes the entry rather than the server the identity.
+	shared := mcp.NewServer(&mcp.Implementation{Name: "shape", Version: "0.0.0"}, nil)
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return shared, nil
+	})
+
+	first, err := pool.GetOrCreateEntry("glpat-first", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(first): %v", err)
+	}
+	second, err := pool.GetOrCreateEntry("glpat-second", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(second): %v", err)
+	}
+
+	facts := []struct {
+		name string
+		ok   func() bool
+		want string
+	}{
+		{"one server serves the first credential", func() bool { return first.Server() == shared }, "the entry is not served by the shared server"},
+		{"one server serves the second credential", func() bool { return second.Server() == shared }, "the entry is not served by the shared server"},
+		{"each entry has a client", func() bool { return first.Client() != nil && second.Client() != nil }, "an entry was built with no GitLab client"},
+		{"the clients are not shared", func() bool { return first.Client() != second.Client() }, "two credentials share one GitLab client"},
+		{"the configuration names the instance", func() bool { return first.Config() != nil && first.Config().GitLabURL == stubGitLabBase }, "Config() does not name the instance the entry was built for"},
+		// Whatever the lookup produced, the accessor reports it rather than a
+		// second, independently resolved answer.
+		{"the identity is the entry's own", func() bool { return first.Identity() == first.identity }, "Identity() does not report the entry's own"},
+		{"each entry has an owner token", func() bool { return first.Owner() != "" && second.Owner() != "" }, "an entry was built with no owner token"},
+		{"the owner tokens are distinct", func() bool { return first.Owner() != second.Owner() }, "two credentials share one owner token"},
+	}
+	for _, fact := range facts {
+		t.Run(fact.name, func(t *testing.T) {
+			if !fact.ok() {
+				t.Error(fact.want)
+			}
+		})
+	}
+
+	// Nothing downstream may see a credential change identity between requests:
+	// the owner token is what its sessions and notifications are filed under.
+	again, againErr := pool.GetOrCreateEntry("glpat-first", stubGitLabBase, nil)
+	if againErr != nil {
+		t.Fatalf("GetOrCreateEntry(first, again): %v", againErr)
+	}
+	if again != first {
+		t.Error("a second request for one credential returned a different entry")
+	}
+}
+
+// TestEntry_TheZeroHandleAnswersTheZeroValues verifies that the accessors
+// survive a nil entry.
+//
+// An eviction callback and the authentication gate both reach for these before
+// they know an entry exists, and a panic in either would take a request or a
+// pool sweep with it.
+func TestEntry_TheZeroHandleAnswersTheZeroValues(t *testing.T) {
+	var absent *Entry
+
+	cases := []struct {
+		name string
+		zero func() bool
+	}{
+		{"Server", func() bool { return absent.Server() == nil }},
+		{"Client", func() bool { return absent.Client() == nil }},
+		{"Config", func() bool { return absent.Config() == nil }},
+		{"Owner", func() bool { return absent.Owner() == "" }},
+		{"Identity", func() bool { return !absent.Identity().Resolved() }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !tc.zero() {
+				t.Errorf("(*Entry)(nil).%s() answered something other than the zero value", tc.name)
+			}
+		})
+	}
+}
+
+// TestWithOnInsert_FiresWithTheEntry verifies the hook that builds a
+// credential's per-request state.
+//
+// It takes the entry rather than the server because the server is shared: told
+// only "this server was inserted", the callback could not tell which credential
+// it was being asked about, and every entry after the first would be missed.
+func TestWithOnInsert_FiresWithTheEntry(t *testing.T) {
+	var mu sync.Mutex
+	var owners []string
+
+	shared := mcp.NewServer(&mcp.Implementation{Name: "shape", Version: "0.0.0"}, nil)
+	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return shared, nil
+	}, WithOnInsert(func(entry *Entry) {
+		mu.Lock()
+		defer mu.Unlock()
+		owners = append(owners, entry.Owner())
+	}))
+
+	for _, token := range []string{"glpat-one", "glpat-two"} {
+		t.Run(token, func(t *testing.T) {
+			if _, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil); err != nil {
+				t.Fatalf("GetOrCreateEntry(%s): %v", token, err)
+			}
+		})
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(owners) != 2 {
+		t.Fatalf("the insert hook fired %d times for two credentials, want 2", len(owners))
+	}
+	if owners[0] == "" || owners[0] == owners[1] {
+		t.Errorf("the hook was handed owners %q and %q, want two distinct non-empty tokens", owners[0], owners[1])
+	}
+}
+
+// TestEvictServer_DropsEveryEntryServedByThatServer verifies the eviction a
+// failed background registration needs, now that one failure is everybody's.
+//
+// A registration runs once per configuration shape and the server it produces
+// serves every credential of that shape, so a registration that failed failed
+// for all of them. Stopping at the first match would leave the rest holding a
+// server with no tools, which is the exact condition this exists to clear.
+func TestEvictServer_DropsEveryEntryServedByThatServer(t *testing.T) {
+	shared := mcp.NewServer(&mcp.Implementation{Name: "shape", Version: "0.0.0"}, nil)
+	var mu sync.Mutex
+	var evicted []string
+	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return shared, nil
+	}, WithOnEvict(func(entry *Entry) {
+		mu.Lock()
+		defer mu.Unlock()
+		evicted = append(evicted, entry.Owner())
+	}))
+
+	for _, token := range []string{"glpat-a", "glpat-b", "glpat-c"} {
+		t.Run(token, func(t *testing.T) {
+			if _, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil); err != nil {
+				t.Fatalf("GetOrCreateEntry(%s): %v", token, err)
+			}
+		})
+	}
+	if pool.Size() != 3 {
+		t.Fatalf("pool.Size() = %d before eviction, want 3", pool.Size())
+	}
+
+	if !pool.EvictServer(shared) {
+		t.Fatal("EvictServer() reported it found nothing, but three entries were just built")
+	}
+	if pool.Size() != 0 {
+		t.Errorf("pool.Size() = %d after eviction, want 0: entries of the same shape survived", pool.Size())
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(evicted) != 3 {
+		t.Errorf("the evict hook fired %d times, want 3", len(evicted))
 	}
 }

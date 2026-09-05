@@ -796,3 +796,151 @@ func TestAttachArgumentLimits_LeavesOtherMethodsAlone(t *testing.T) {
 		})
 	}
 }
+
+// TestAttachRateLimitFunc_ResolvesABucketPerRequest verifies that the limit is
+// a property of the caller rather than of the server.
+//
+// One MCP server now answers for every credential of a configuration shape, so
+// a bucket captured at registration would be one budget shared by every tenant
+// and the noisiest of them would refuse everybody else's calls. The resolver is
+// what makes each request draw on its own.
+func TestAttachRateLimitFunc_ResolvesABucketPerRequest(t *testing.T) {
+	t.Parallel()
+
+	type tenantKey struct{}
+	buckets := map[string]*RateLimiter{
+		"noisy": NewRateLimiter(1, 1),
+		"quiet": NewRateLimiter(1, 1),
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	for tenant := range buckets {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "echo_" + tenant,
+			Description: "Answers so the limiter is the only thing that can refuse.",
+		}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+		})
+	}
+	AttachRateLimitFunc(server, func(ctx context.Context) *RateLimiter {
+		tenant, _ := ctx.Value(tenantKey{}).(string)
+		return buckets[tenant]
+	})
+	// Installed last, so it runs first and every handler below it sees the
+	// tenant this call belongs to. It stands in for the credential binding the
+	// HTTP layer performs; the tool name stands in for the credential.
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			// extractToolName rather than a type assertion of its own: the
+			// SDK delivers tools/call params to receiving middleware as
+			// *CallToolParamsRaw, and asserting the typed form silently
+			// matches nothing.
+			name := strings.TrimPrefix(extractToolName(req), "echo_")
+			return next(context.WithValue(ctx, tenantKey{}, name), method, req)
+		}
+	})
+
+	session, ctx := connectClient(t, server)
+	call := func(tenant string) bool {
+		t.Helper()
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo_" + tenant})
+		if err != nil {
+			t.Fatalf("CallTool(%s): %v", tenant, err)
+		}
+		return res.IsError
+	}
+
+	if call("noisy") {
+		t.Fatal("the noisy tenant's first call was refused within its own burst")
+	}
+	if !call("noisy") {
+		t.Error("the noisy tenant's second call was served, so its bucket is not being drawn on")
+	}
+	if call("quiet") {
+		t.Error("the quiet tenant was refused because another tenant had spent its budget")
+	}
+}
+
+// TestAttachRateLimitFunc_NothingToInstall verifies the two calls that must
+// register no middleware at all: no server, and no resolver.
+func TestAttachRateLimitFunc_NothingToInstall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		server  *mcp.Server
+		resolve func(context.Context) *RateLimiter
+	}{
+		{name: "no server", resolve: func(context.Context) *RateLimiter { return nil }},
+		{name: "no resolver", server: mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			AttachRateLimitFunc(tc.server, tc.resolve)
+		})
+	}
+}
+
+// TestAttachRateLimitFunc_AnUnlimitedRequestIsServed verifies that a resolver
+// answering nil means "not limited" rather than "refused".
+//
+// It is the stdio default and the state of a request on a shared server that
+// nothing could attribute, and in both the call has to go through: a limiter
+// that refused what it could not identify would turn a missing binding into an
+// outage.
+func TestAttachRateLimitFunc_AnUnlimitedRequestIsServed(t *testing.T) {
+	t.Parallel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	calls := 0
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "echo",
+		Description: "Counts how many times the underlying handler runs.",
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		calls++
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+	})
+	AttachRateLimitFunc(server, func(context.Context) *RateLimiter { return nil })
+
+	session, ctx := connectClient(t, server)
+	for i := range 3 {
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo"})
+		if err != nil {
+			t.Fatalf("CallTool #%d: %v", i+1, err)
+		}
+		if res.IsError {
+			t.Fatalf("CallTool #%d was refused although no bucket applies", i+1)
+		}
+	}
+	if calls != 3 {
+		t.Errorf("handler invocations = %d, want 3", calls)
+	}
+}
+
+// TestForCompletions_IsDerivedOnceAndKept verifies the memoization the
+// per-request resolver made necessary.
+//
+// The completion bucket used to be derived at registration, where there was one
+// limiter per server. Resolved per request, a scaled copy built each time would
+// arrive full on every call, which is not a looser limit but no limit at all.
+func TestForCompletions_IsDerivedOnceAndKept(t *testing.T) {
+	t.Parallel()
+
+	limiter := NewRateLimiter(1, 2)
+	first := limiter.forCompletions()
+	if first == nil {
+		t.Fatal("forCompletions() returned nil for a configured limiter")
+	}
+	if second := limiter.forCompletions(); second != first {
+		t.Errorf("forCompletions() returned a new bucket on the second call (%p then %p)", first, second)
+	}
+	if first == limiter {
+		t.Error("forCompletions() returned the tool bucket itself, so completions share it")
+	}
+
+	var absent *RateLimiter
+	if got := absent.forCompletions(); got != nil {
+		t.Errorf("(*RateLimiter)(nil).forCompletions() = %p, want nil", got)
+	}
+}

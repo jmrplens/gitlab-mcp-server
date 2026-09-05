@@ -83,6 +83,21 @@ type requestCarriers struct {
 // them share one map without threading it through every constructor between.
 var mcpCarriers requestCarriers
 
+// carriedMCPHandler stamps the MCP handler's requests with a carrier token.
+//
+// It wraps the SDK handler itself, INSIDE the authentication gate, and the
+// order is load-bearing twice over. A token is minted only for a POST that
+// reaches the SDK, not for one the gate is about to refuse. And what the
+// registry records is the context the gate produced, which is what carries the
+// resolved pool entry: with the carrier outside the gate it recorded the
+// context as it arrived, and everything downstream that asks the carrier which
+// credential a request belongs to got no answer at all. The symptom was every
+// tool call failing with ErrUnboundClient and every stateful session being
+// refused as somebody else's.
+func carriedMCPHandler(next http.Handler) http.Handler {
+	return mcpCarriers.middleware(next)
+}
+
 // middleware stamps every POST to the MCP endpoint with a fresh carrier token
 // and registers that POST's context under it.
 //

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -1432,40 +1431,6 @@ func prepareStdioCatalog(
 // HTTP pool). See mcp.ServerOptions.SchemaCache.
 var sharedSchemaCache = mcp.NewSchemaCache()
 
-// startPooledRegistration builds the tool catalog for a freshly inserted pool
-// entry, on a goroutine, behind that server's readiness gate.
-//
-// It runs from the pool's post-insert hook rather than from the factory because
-// of what happens when it fails. The entry is cached by then, so the failure
-// has to be published twice: to the requests parked on the gate, and to the
-// pool through evict, or the next request for that credential takes the fast
-// path and is handed a server with no tools. A factory that started this would
-// be racing its own insertion, and a fast failure would find nothing to evict.
-//
-// A server with no shell recorded is not an error: the map is consumed by the
-// first hook that sees it, so a second call for the same server has nothing
-// left to do.
-func startPooledRegistration(ctx context.Context, pending *sync.Map, srv *mcp.Server, evict func()) {
-	loaded, ok := pending.LoadAndDelete(srv)
-	if !ok {
-		return
-	}
-	shell, ok := loaded.(*serverShell)
-	if !ok {
-		return
-	}
-	go func() {
-		if registerErr := shell.register(ctx); registerErr != nil {
-			shell.gate.markFailed(registerErr)
-			slog.ErrorContext(ctx, "the tool catalog could not be built for a pooled credential",
-				"error", registerErr)
-			evict()
-			return
-		}
-		shell.gate.markReady()
-	}()
-}
-
 // createServer builds a fully configured [*mcp.Server] with all tools,
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
@@ -1509,26 +1474,6 @@ func keepAliveInterval(settings serverSettings, cfg *config.ServerConfig) time.D
 		return *settings.keepAlive
 	}
 	return keepAliveFor(cfg)
-}
-
-// sessionIDMinter returns the function the SDK calls to mint a session ID.
-// With no tag — stdio, where sessions cannot be presented by another caller —
-// it returns nil so the SDK keeps its own default.
-func sessionIDMinter(tag string) func() string {
-	if tag == "" {
-		return nil
-	}
-	return func() string { return tag + sessionTagSeparator + rand.Text() }
-}
-
-// sessionTagOf returns the pool tag a session ID was minted under, and whether
-// the ID carries one at all.
-func sessionTagOf(sessionID string) (string, bool) {
-	tag, _, found := strings.Cut(sessionID, sessionTagSeparator)
-	if !found || tag == "" {
-		return "", false
-	}
-	return tag, true
 }
 
 // The context bounds the server's lifetime rather than any one request: it is
@@ -1582,12 +1527,64 @@ type serverShell struct {
 
 	// subs is nil on the minimal capability surface, which registers no
 	// subscribable resource.
-	subs *subscriptionRuntime
+	subs *subscriptionShape
 	// gate holds every catalog-dependent method back until register returns.
 	gate *readinessGate
 	// identifier is what telemetry resolves a tools/call against; register
 	// fills it in from the catalog it builds.
 	identifier *deferredCallIdentifier
+
+	// state is the credential a request that bound none runs under.
+	//
+	// On stdio it is the process's one credential, with its watchers, its
+	// bucket and its listen ceiling, and every request finds it. On a server
+	// shared by a configuration shape it is the fail-closed default: the client
+	// is the unbound one, there are no watchers, and a request that reaches it
+	// is a request this server could not attribute to anybody.
+	state *credentialState
+	// shared records that this server answers for many credentials, which is
+	// what makes an unattributed request an error rather than the normal case.
+	shared bool
+	// sessions records which credential each session belongs to. Nil on stdio,
+	// where there is one credential and nothing to tell apart.
+	sessions *sessionOwners
+}
+
+// stateFor returns the credential a request runs under: the one bound to its
+// context, or this server's default.
+func (sh *serverShell) stateFor(ctx context.Context) *credentialState {
+	if state := credentialStateFrom(ctx); state != nil {
+		return state
+	}
+	return sh.state
+}
+
+// subscriptionRuntimeFor returns the watchers a request's credential owns, or
+// nil when this server could not attribute the request to one.
+func (sh *serverShell) subscriptionRuntimeFor(ctx context.Context) *subscriptionRuntime {
+	state := sh.stateFor(ctx)
+	if state == nil {
+		return nil
+	}
+	return state.subs
+}
+
+// rateLimiterFor returns the token bucket a request's credential owns.
+func (sh *serverShell) rateLimiterFor(ctx context.Context) *toolutil.RateLimiter {
+	state := sh.stateFor(ctx)
+	if state == nil {
+		return nil
+	}
+	return state.limiter
+}
+
+// listenCounterFor returns the open-stream counter a request's credential owns.
+func (sh *serverShell) listenCounterFor(ctx context.Context) *listenCounter {
+	state := sh.stateFor(ctx)
+	if state == nil {
+		return nil
+	}
+	return state.listen
 }
 
 // newServerShell builds the half of the server that needs nothing from GitLab.
@@ -1606,14 +1603,19 @@ func newServerShell(
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
 	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 
-	// Resource subscriptions. The manager has to exist before the server,
-	// because its handlers travel in ServerOptions; the notifier is
-	// attached to the server once there is one. The SDK turns the
+	// Resource subscriptions. The machinery has to exist before the server,
+	// because its handlers travel in ServerOptions; each credential's notifier
+	// is attached to the server once there is one. The SDK turns the
 	// resources.subscribe capability on by itself when a SubscribeHandler
 	// is set, so leaving these nil is what withholds the capability on a
 	// surface that registers no subscribable resources.
-	subs := newSubscriptionRuntime(client, cfg, settings.subscriptions)
-	subscribeHandler, unsubscribeHandler := subs.handlers()
+	//
+	// The shell is declared before the server it holds so the handlers can
+	// resolve the request's credential through it; nothing reads any of its
+	// fields until a request arrives, by which point they are all set.
+	shell := &serverShell{}
+	subs := newSubscriptionShape(client, cfg, settings.subscriptions)
+	subscribeHandler, unsubscribeHandler := subs.handlers(shell.subscriptionRuntimeFor)
 	serverCapabilities := &mcp.ServerCapabilities{
 		Tools:     &mcp.ToolCapabilities{ListChanged: true},
 		Resources: &mcp.ResourceCapabilities{ListChanged: true},
@@ -1646,14 +1648,16 @@ func newServerShell(
 		Instructions: buildInstructions(toolSurface, capabilitySurface, cfg.Stateless),
 		Logger:       sdkLogger(),
 		Capabilities: serverCapabilities,
-		// The SDK asks the RESOLVED server for the session ID, so a tag minted
-		// here is a trustworthy statement about which pooled entry owns the
-		// session. cmd/server/auth_gate.go checks it on every later request:
-		// without that, the SDK serves any request carrying a known session ID
-		// from the session's own server, discarding the per-credential
-		// resolution entirely (go-sdk streamable.go serveStatefulPOST returns
-		// before getServer is ever called).
-		GetSessionID: sessionIDMinter(settings.sessionTag),
+		// Session IDs are the SDK's own random ones. They used to carry a tag
+		// naming the pooled server that minted them, which cmd/server/auth_gate.go
+		// checked on every later request: without some such check, the SDK
+		// serves any request carrying a known session ID from the session's own
+		// server, discarding the per-credential resolution entirely (go-sdk
+		// streamable.go serveStatefulPOST returns before getServer is ever
+		// called). A tag can no longer say that. GetSessionID takes no request,
+		// so a server shared by a configuration shape mints under one tag for
+		// every credential it serves. The same check is now made against
+		// [sessionOwners], which records the owner where it is actually known.
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 			return completionHandler.Complete(ctx, req)
 		},
@@ -1692,7 +1696,7 @@ func newServerShell(
 		SchemaCache: sharedSchemaCache,
 	})
 
-	subs.attach(ctx, server)
+	subs.attach(ctx, server, shell.subscriptionRuntimeFor)
 
 	// First, therefore innermost: the SDK wraps the current handler on each
 	// call, so the last middleware added is the one that runs first. See
@@ -1762,7 +1766,7 @@ func newServerShell(
 	// every server rather than beside the subscription runtime, because that
 	// runtime is nil on the minimal capability surface while the SDK still
 	// acknowledges and holds a list-changed listen there.
-	server.AddReceivingMiddleware(listenLimitsFromEnv().middleware())
+	server.AddReceivingMiddleware(listenLimitsFromEnv().middleware(shell.listenCounterFor))
 
 	// Shape limit on tool-call arguments, on every transport and independent
 	// of the rate limit below. The two answer different questions: the
@@ -1772,12 +1776,13 @@ func newServerShell(
 	// budget notices.
 	toolutil.AttachArgumentLimits(server, toolutil.DefaultMaxArgumentDepth)
 
-	// Per-server rate limit on every call that reaches GitLab. In HTTP mode each pooled
-	// per-token-and-URL server entry gets its own bucket. In stdio mode the
+	// Per-credential rate limit on every call that reaches GitLab. In HTTP mode
+	// each pooled per-token-and-URL entry gets its own bucket, resolved per
+	// request now that one server answers for many of them. In stdio mode the
 	// bucket is global to the process. Disabled when RateLimitRPS is 0, which
 	// is the stdio default; HTTP mode defaults to 10 rps with a burst of 40.
-	if limiter := toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst); limiter != nil {
-		toolutil.AttachRateLimit(server, limiter)
+	if cfg.RateLimitRPS > 0 {
+		toolutil.AttachRateLimitFunc(server, shell.rateLimiterFor)
 		slog.Info(
 			"tools/call rate limit enabled",
 			"rps", cfg.RateLimitRPS,
@@ -1785,6 +1790,32 @@ func newServerShell(
 		)
 	}
 
+	identifier := attachIdentityMiddlewares(server, settings, toolSurface)
+
+	shell.server = server
+	shell.client = client
+	shell.cfg = cfg
+	shell.toolSurface = toolSurface
+	shell.capabilitySurface = capabilitySurface
+	shell.subs = subs
+	shell.gate = gate
+	shell.identifier = identifier
+	shell.shared = settings.credentials != nil
+	shell.sessions = settings.sessions
+	shell.state = shell.defaultCredentialState()
+	return shell, nil
+}
+
+// attachIdentityMiddlewares installs the outermost half of the receiving chain,
+// the half that decides who a request is, plus the sending filter that decides
+// who a notification is for. It returns the call identifier telemetry resolves
+// a tools/call against, which registration fills in later.
+//
+// It is a function of its own because the ordering rules are the whole content
+// of it, and because they are read far more often than they are changed. The
+// SDK wraps the current handler on each addition, so the LAST middleware added
+// is the FIRST to run, and every comment below is about that inversion.
+func attachIdentityMiddlewares(server *mcp.Server, settings serverSettings, toolSurface string) *deferredCallIdentifier {
 	// Near the end, so the span covers every middleware above it, and so a
 	// panic reaches this middleware's deferred span.End before recoverPanics
 	// swallows it. That ordering is what lets the SDK record the panic as an
@@ -1822,6 +1853,20 @@ func newServerShell(
 		server.AddReceivingMiddleware(settings.identity.middleware())
 	}
 
+	// Records which credential each session belongs to. Added before the
+	// binding below, so it runs after it and reads what it installed.
+	if settings.sessions != nil {
+		server.AddReceivingMiddleware(settings.sessions.recordingMiddleware)
+	}
+
+	// The request's own credential, resolved from the POST that carries it.
+	// Outside the telemetry, rate-limit, listen-ceiling and subscription
+	// middlewares, all of which ask which credential this is and would
+	// otherwise answer for the wrong one, or for none.
+	if settings.credentials != nil {
+		server.AddReceivingMiddleware(settings.credentials.bindCredential)
+	}
+
 	// Near the end so the context it installs is the one every middleware
 	// below it and the handler itself run under: a call whose HTTP carrier
 	// goes away has to stop where the work is, which is the GitLab request
@@ -1831,16 +1876,38 @@ func newServerShell(
 	// Added last so it wraps every middleware above it as well as the handler.
 	server.AddReceivingMiddleware(recoverPanics)
 
-	return &serverShell{
-		server:            server,
-		client:            client,
-		cfg:               cfg,
-		toolSurface:       toolSurface,
-		capabilitySurface: capabilitySurface,
-		subs:              subs,
-		gate:              gate,
-		identifier:        identifier,
-	}, nil
+	// Delivery of a resource-updated notification is filtered by owner, but
+	// only on a server that has more than one. On stdio every notification
+	// belongs to the one credential there is, and a filter there would drop
+	// every one of them for want of a tag nothing needs to write.
+	if settings.sessions != nil {
+		server.AddSendingMiddleware(settings.sessions.sendingMiddleware)
+	}
+	return identifier
+}
+
+// defaultCredentialState builds the credential a request that bound none runs
+// under.
+//
+// On stdio that is the process's one credential, and it owns the watchers, the
+// bucket and the ceiling exactly as the server used to. On a shared server it
+// is the fail-closed default: the client is the unbound one, and there are no
+// watchers, so a subscription that could not be attributed is refused rather
+// than accepted and polled with a client that refuses every read.
+func (sh *serverShell) defaultCredentialState() *credentialState {
+	state := &credentialState{
+		client:  sh.client,
+		limiter: toolutil.NewRateLimiter(sh.cfg.RateLimitRPS, sh.cfg.RateLimitBurst),
+		listen:  &listenCounter{},
+	}
+	if sh.shared {
+		return state
+	}
+	state.subs = sh.subs.newRuntime("", sh.client)
+	if state.subs != nil {
+		state.subs.notifier.attach(sh.server)
+	}
+	return state
 }
 
 // register builds the tool catalog and everything derived from it: the tool
@@ -2001,7 +2068,7 @@ func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoute
 // an operator who removes an action with --exclude-tools and finds it still
 // readable through resources/read has been given a guard that does not guard.
 // A subscription would go on polling for it too, which is why
-// [newSubscriptionRuntime] takes the same list.
+// [publishSubscriptionIndex] takes the same list.
 func registerConfiguredCapabilities(
 	server *mcp.Server,
 	client *gitlabclient.Client,
@@ -2030,11 +2097,15 @@ func registerConfiguredCapabilities(
 // rather than built with the runtime because the runtime is created by the
 // shell, before the catalog exists. Nothing can read it too early: the
 // readiness gate holds resources/subscribe until registration has finished.
-func publishSubscriptionIndex(subs *subscriptionRuntime, client *gitlabclient.Client, capabilitySurface string, excludedActions []string) {
-	if subs == nil || subs.reader == nil || capabilitySurface != config.CapabilitySurfaceFull {
+//
+// One index per shape, shared by every credential's watchers: the handlers it
+// names are the shared server's own, and they read whichever client the polling
+// context carries.
+func publishSubscriptionIndex(subs *subscriptionShape, client *gitlabclient.Client, capabilitySurface string, excludedActions []string) {
+	if subs == nil || capabilitySurface != config.CapabilitySurfaceFull {
 		return
 	}
-	subs.reader.setIndex(resources.NewHandlerIndex(client, resources.RegisterOptions{ExcludedActions: excludedActions}))
+	subs.setIndex(resources.NewHandlerIndex(client, resources.RegisterOptions{ExcludedActions: excludedActions}))
 }
 
 func registerConfiguredToolSurface(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, toolSurface string) (serverSurfaceRegistration, error) {
@@ -2476,68 +2547,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
 	}
 
-	// Each pooled entry mints session IDs under its own tag, and sessionTags
-	// records which tag belongs to which server so the gate can refuse a
-	// session presented with a different credential.
-	var sessionTags sync.Map
-	// Carries each shell from the factory to the post-insert hook, which is
-	// where its registration starts. Entries are removed as they are consumed,
-	// so a build that never reaches insertion leaves nothing behind.
-	var pendingRegistration sync.Map
-	// Declared before the factory so the factory's background registration can
-	// evict the entry it belongs to. The factory only reads it from a goroutine
-	// it starts while serving a request, which is necessarily after New has
-	// returned and assigned it.
-	var pool *serverpool.ServerPool
-	pool = serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
-		tag := rand.Text()
-		// No server-initiated keepalive on any HTTP entry, stateful included.
-		// The SDK's keepalive is a JSON-RPC ping request, and it closes the
-		// session the first time one goes unanswered — so a client that is
-		// simply between requests, or one whose transport does not carry
-		// server-initiated messages to it, loses its session at the 30-second
-		// mark for being idle. Liveness on this transport is the SSE
-		// keep-alive comment (see sseAwareWriter), which puts bytes on the
-		// wire without asking the client for anything.
-		// The shell rather than the whole server, and registration on a
-		// goroutine behind the readiness gate. Building the catalog is the
-		// entire cost of a pool entry, measured at 1.8s on the dynamic surface
-		// and 3.0s on individual against a shell too fast to time, and it is
-		// paid on the FIRST REQUEST OF EVERY CREDENTIAL rather than once per
-		// process the way stdio pays it. A shared deployment pays it per user,
-		// and again whenever an entry is reclaimed by the size bound or by
-		// --pool-idle-timeout. Answering the handshake from the shell moves all
-		// of it off the path a client is waiting on.
-		shell, err := newServerShell(ctx, client, serverCfg,
-			withSessionTag(tag), withKeepAlive(0), withTransport(mcpotel.TransportTCP))
-		if err != nil {
-			return nil, err
-		}
-		srv := shell.server
-		sessionTags.Store(srv, tag)
-		// Recorded, not started. Registration begins from the pool's
-		// post-insert hook below, because a failure has to be able to evict
-		// this entry and the pool inserts it only after this factory returns:
-		// starting here would race the insertion, and a fast failure would
-		// find nothing to evict and leave the poisoned entry cached.
-		pendingRegistration.Store(srv, shell)
-		return srv, nil
-	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
-		serverpool.WithOnInsert(func(srv *mcp.Server) {
-			startPooledRegistration(ctx, &pendingRegistration, srv, func() { pool.EvictServer(srv) })
-		}),
-		// The tag map must not outlive the pool entries it describes. Without
-		// this it grew past --max-http-clients on credential churn, and every
-		// stale key kept a whole server — its GitLab client and its registered
-		// tool surface — reachable.
-		serverpool.WithOnEvict(func(srv *mcp.Server) { sessionTags.Delete(srv) }),
-		serverpool.WithRevalidateInterval(cfg.RevalidateInterval),
-		serverpool.WithIdleTimeout(cfg.PoolIdleTimeout),
-		// Entry construction is bounded by the server's lifetime rather than
-		// by the request that triggered it: an entry is shared, so one client
-		// disconnecting must not abort a build others are waiting on — but
-		// shutdown must stop it.
-		serverpool.WithBaseContext(func() context.Context { return ctx }))
+	binding, pool := newShapedServerPool(ctx, cfg)
 	defer pool.Close()
 
 	pool.StartRevalidation(ctx)
@@ -2652,7 +2662,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		mux.HandleFunc("GET "+path, cardHandler)
 	}
 
-	registerHTTPMCPHandlers(ctx, cfg, httpAddr, pool, &sessionTags, mux)
+	registerHTTPMCPHandlers(ctx, cfg, httpAddr, pool, binding, mux)
 
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
@@ -2745,12 +2755,23 @@ func startServing(
 	return serverErr, nil
 }
 
-func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, sessionTags *sync.Map, mux *http.ServeMux) {
+// poolBinding carries the two registries that make one server serve many
+// credentials from the place they are created down to the gate that fills them.
+//
+// They travel together because they answer the same question from two sides:
+// which pooled credential a request belongs to, and which one a session was
+// opened by.
+type poolBinding struct {
+	credentials *credentialStates
+	sessions    *sessionOwners
+}
+
+func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, binding poolBinding, mux *http.ServeMux) {
 	if cfg.AuthMode == config.AuthModeOAuth {
-		registerOAuthMCPHandlers(ctx, cfg, httpAddr, pool, sessionTags, mux)
+		registerOAuthMCPHandlers(ctx, cfg, httpAddr, pool, binding, mux)
 		return
 	}
-	registerLegacyMCPHandlers(ctx, cfg, pool, sessionTags, mux)
+	registerLegacyMCPHandlers(ctx, cfg, pool, binding, mux)
 }
 
 // mountMCPEndpoint routes the MCP handler to the paths that are the MCP
@@ -2770,10 +2791,7 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 // deployment already tells the server its public path, so it does not need a
 // second flag to say the same thing.
 func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handler) {
-	// Innermost, so a token is minted only for a POST that reaches the SDK
-	// and not for one this chain is about to refuse. See [requestCarriers].
-	carried := mcpCarriers.middleware(handler)
-	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, carried))
+	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, handler))
 	for _, pattern := range mcpEndpointPatterns(cfg) {
 		mux.Handle(pattern, guarded)
 	}
@@ -3082,7 +3100,7 @@ func tokenCacheSweepInterval(ttl time.Duration) time.Duration {
 	return max(ttl/tokenCacheSweepDivisor, tokenCacheSweepMinInterval)
 }
 
-func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string, pool *serverpool.ServerPool, sessionTags *sync.Map, mux *http.ServeMux) {
+func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string, pool *serverpool.ServerPool, binding poolBinding, mux *http.ServeMux) {
 	// The protected-resource identifier is the advertised public origin
 	// (validated at config load: https, no fragment, no trailing slash) —
 	// RFC 9728 §1.2. Deriving it from the bind address produced host-less
@@ -3114,7 +3132,8 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		sourceBudget:       sourceBudget,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
-		sessionTags:        sessionTags,
+		sessions:           binding.sessions,
+		credentials:        binding.credentials,
 		// The same challenge the guard in front emits, minus its error
 		// parameters: a gate rejection is a pool failure, not a verdict on
 		// the credential, but a client reaching it must still be told the
@@ -3207,7 +3226,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// SDK can publish the token info its streamable handler reads back, so
 	// it stays, and its verification is a cache hit on what the guard has
 	// already resolved.
-	mountMCPEndpoint(cfg, mux, guard.middleware(authMiddleware(gate.middleware(mcpHandler))))
+	mountMCPEndpoint(cfg, mux, guard.middleware(authMiddleware(gate.middleware(carriedMCPHandler(mcpHandler)))))
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
@@ -3238,7 +3257,7 @@ func oauthCacheTTL(configured time.Duration) time.Duration {
 	return config.DefaultOAuthCacheTTL
 }
 
-func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, sessionTags *sync.Map, mux *http.ServeMux) {
+func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, binding poolBinding, mux *http.ServeMux) {
 	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
 	sourceBudget := transportFailureBudget(cfg.TrustedProxyHeader)
@@ -3252,12 +3271,13 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		sourceBudget:       sourceBudget,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		trustedProxies:     trustedProxiesOf(cfg.TrustedProxies),
-		sessionTags:        sessionTags,
+		sessions:           binding.sessions,
+		credentials:        binding.credentials,
 		challenge:          legacyAuthChallenge,
 		stateless:          cfg.Stateless,
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
-	mountMCPEndpoint(cfg, mux, gate.middleware(mcpHandler))
+	mountMCPEndpoint(cfg, mux, gate.middleware(carriedMCPHandler(mcpHandler)))
 }
 
 // periodicCleanupInterval is how often the expiring caches (token identities,
@@ -3653,10 +3673,6 @@ const mcpEndpointPath = "/mcp"
 
 // Paths the server card is published at.
 const (
-	// sessionTagSeparator divides the pool tag from the random part of a
-	// session ID. "." is not produced by rand.Text(), so the split is
-	// unambiguous.
-	sessionTagSeparator = "."
 	// serverCardPath is the location the server-card extension recommends.
 	serverCardPath = "/server-card"
 	// serverCardLegacyPath is the location its earlier draft recommended,

@@ -119,6 +119,53 @@ func fastOptions() subscriptions.Options {
 	}
 }
 
+// newTestSubscriptions builds the subscription machinery a single-credential
+// server has: the per-shape half, and one credential's runtime over it.
+//
+// The two halves used to be one object, and every test here drove that object.
+// They are separate because a server is now shared by every credential of a
+// configuration shape: the streams, the handler index and the stateless flag
+// belong to the shape, and the watchers belong to the credential, since a
+// watcher polls with a token and its first read is the subscription's
+// authorization check. A test that needs only the watchers takes the runtime
+// through [newTestRuntime]; a test that needs the streams or the handler pair
+// takes both from here.
+//
+// The owner is empty, which is what stdio passes: one credential, nothing to
+// tell apart.
+func newTestSubscriptions(
+	client *gitlabclient.Client,
+	cfg *config.ServerConfig,
+	opts subscriptions.Options,
+) (*subscriptionShape, *subscriptionRuntime) {
+	shape := newSubscriptionShape(client, cfg, opts)
+	return shape, shape.newRuntime("", client)
+}
+
+// newTestRuntime is [newTestSubscriptions] for the tests that only drive one
+// credential's watchers.
+func newTestRuntime(
+	client *gitlabclient.Client,
+	cfg *config.ServerConfig,
+	opts subscriptions.Options,
+) *subscriptionRuntime {
+	_, runtime := newTestSubscriptions(client, cfg, opts)
+	return runtime
+}
+
+// staticRuntime resolves every request to one runtime, which is what a
+// single-credential server does: [serverShell.subscriptionRuntimeFor] falls
+// back to the shell's own state whenever nothing bound a credential.
+func staticRuntime(runtime *subscriptionRuntime) func(context.Context) *subscriptionRuntime {
+	return func(context.Context) *subscriptionRuntime { return runtime }
+}
+
+// staticCounter is [staticRuntime] for the listen ceiling: one credential, one
+// counter, whatever the request carried.
+func staticCounter(counter *listenCounter) func(context.Context) *listenCounter {
+	return func(context.Context) *listenCounter { return counter }
+}
+
 // leasedPolling drives watchers fast and gives them a lease short enough
 // that a test can watch one run out.
 func leasedPolling(lease, slow time.Duration) serverOption {
@@ -221,7 +268,7 @@ func TestCreateServer_SubscribeCapability_FollowsCapabilitySurface(t *testing.T)
 func TestSubscribe_UnsubscribableURI_StartsNoWatcher(t *testing.T) {
 	backend, gitlab := newPipelineBackend(t, "running")
 	client := subscriptionGitLabClient(t, gitlab.URL)
-	manager := newSubscriptionRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), fastOptions()).manager
+	manager := newTestRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), fastOptions()).manager
 	t.Cleanup(manager.Close)
 
 	const uri = "gitlab://project/42/issues" // a collection: deliberately excluded
@@ -247,7 +294,7 @@ func TestSubscribe_UnsubscribableURI_StartsNoWatcher(t *testing.T) {
 func TestSubscribe_UnreadableURI_StartsNoWatcher(t *testing.T) {
 	backend, gitlab := newPipelineBackend(t, "running")
 	client := subscriptionGitLabClient(t, gitlab.URL)
-	manager := newSubscriptionRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), fastOptions()).manager
+	manager := newTestRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), fastOptions()).manager
 	t.Cleanup(manager.Close)
 
 	// Pipeline 12345 is not served by the backend, so the read 404s.
@@ -420,7 +467,7 @@ func TestSubscribe_SessionEnds_WatcherStops(t *testing.T) {
 // bridge with a session whose transport it can close underneath it.
 func TestSessionBridge_SessionEnds_ReleasesItsWatchers(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -466,7 +513,7 @@ func TestSessionBridge_SessionEnds_ReleasesItsWatchers(t *testing.T) {
 // two for one URI.
 func TestSessionBridge_DuplicateSubscribe_ReleasesOnFirstUnsubscribe(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -505,7 +552,7 @@ func TestSessionBridge_DuplicateSubscribe_ReleasesOnFirstUnsubscribe(t *testing.
 // session cannot release a watch another session holds.
 func TestSessionBridge_ForeignUnsubscribe_LeavesTheWatchAlone(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -756,8 +803,7 @@ func TestResourceReader_ReadsThroughTheRegisteredHandler(t *testing.T) {
 		t.Fatal("ReadResource returned no contents")
 	}
 
-	reader := &resourceReader{}
-	reader.setIndex(subscriptionHandlerIndex(t, gitlab.URL))
+	reader := newTestReader(t, gitlab.URL)
 	watched, err := reader.Read(ctx, uri)
 	if err != nil {
 		t.Fatalf("resourceReader.Read: %v", err)
@@ -774,8 +820,7 @@ func TestResourceReader_ReadsThroughTheRegisteredHandler(t *testing.T) {
 // the subscribable set.
 func TestResourceReader_RejectsUnsubscribableURI(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	reader := &resourceReader{}
-	reader.setIndex(subscriptionHandlerIndex(t, gitlab.URL))
+	reader := newTestReader(t, gitlab.URL)
 
 	if _, err := reader.Read(context.Background(), "gitlab://project/42/issues"); err == nil {
 		t.Error("resourceReader.Read(collection) error = nil, want a refusal")
@@ -798,9 +843,9 @@ func TestSubscribe_StatelessHTTP_LegacyPathIsRefused(t *testing.T) {
 	cfg := subscriptionCfg(config.CapabilitySurfaceFull)
 	cfg.Stateless = true
 
-	runtime := newSubscriptionRuntime(client, cfg, fastOptions())
+	shape, runtime := newTestSubscriptions(client, cfg, fastOptions())
 	t.Cleanup(runtime.manager.Close)
-	subscribe, unsubscribe := runtime.handlers()
+	subscribe, unsubscribe := shape.handlers(staticRuntime(runtime))
 	if subscribe == nil || unsubscribe == nil {
 		t.Fatal("handlers() returned nil in stateless mode; the capability must stay advertised for subscriptions/listen")
 	}
@@ -828,9 +873,9 @@ func TestSubscribe_StatefulHTTP_LegacyPathIsAccepted(t *testing.T) {
 	cfg := subscriptionCfg(config.CapabilitySurfaceFull)
 	cfg.Stateless = false
 
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL), cfg, fastOptions())
+	shape, runtime := newTestSubscriptions(subscriptionGitLabClient(t, gitlab.URL), cfg, fastOptions())
 	t.Cleanup(runtime.manager.Close)
-	subscribe, _ := runtime.handlers()
+	subscribe, _ := shape.handlers(staticRuntime(runtime))
 
 	session, _ := connectedSessions(t)
 	err := subscribe(context.Background(), &mcp.SubscribeRequest{
@@ -845,24 +890,136 @@ func TestSubscribe_StatefulHTTP_LegacyPathIsAccepted(t *testing.T) {
 	}
 }
 
-// TestNewSubscriptionRuntime_MinimalSurface_IsNil verifies no manager, and
-// therefore no capability, on a surface without GitLab resources.
-func TestNewSubscriptionRuntime_MinimalSurface_IsNil(t *testing.T) {
+// TestNewSubscriptionShape_MinimalSurface_IsNil verifies no shape, no runtime
+// and therefore no capability on a surface without GitLab resources.
+//
+// Every method that is reached on the nil shape is exercised here, because nil
+// is not an error case on this surface: it is what --capability-surface=minimal
+// produces, and the wiring calls all of them on it unconditionally.
+func TestNewSubscriptionShape_MinimalSurface_IsNil(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
 	client := subscriptionGitLabClient(t, gitlab.URL)
 
-	runtime := newSubscriptionRuntime(client, subscriptionCfg(config.CapabilitySurfaceMinimal), subscriptions.Options{})
+	shape, runtime := newTestSubscriptions(client, subscriptionCfg(config.CapabilitySurfaceMinimal), subscriptions.Options{})
+	if shape != nil {
+		t.Errorf("newSubscriptionShape(minimal) = %v, want nil", shape)
+	}
 	if runtime != nil {
-		t.Errorf("newSubscriptionRuntime(minimal) = %v, want nil", runtime)
+		t.Errorf("newRuntime on no shape = %v, want nil", runtime)
 	}
 
-	sub, unsub := runtime.handlers()
+	sub, unsub := shape.handlers(staticRuntime(runtime))
 	if sub != nil || unsub != nil {
-		t.Error("handlers() on no runtime returned non-nil handlers; the SDK would advertise a capability with no backing")
+		t.Error("handlers() on no shape returned non-nil handlers; the SDK would advertise a capability with no backing")
 	}
 
-	if runtime.streamRegistry() == nil {
-		t.Error("streamRegistry() on no runtime returned nil; nothing could then end a stream the SDK is holding")
+	if shape.streamRegistry() == nil {
+		t.Error("streamRegistry() on no shape returned nil; nothing could then end a stream the SDK is holding")
+	}
+
+	// setIndex is called by registration on every surface, and registration
+	// does not know whether subscriptions were offered.
+	shape.setIndex(subscriptionHandlerIndex(t, gitlab.URL))
+
+	// close on the runtime is what eviction calls, on whatever the surface
+	// produced.
+	runtime.close()
+}
+
+// TestSubscriptionShape_Handlers_ARequestBoundToNoCredential_IsRefused covers
+// the fail-closed branch of the two handlers a shared server registers.
+//
+// Each call is routed to the runtime of the pool entry the request belongs to.
+// A request that resolves to none is refused rather than served from a default,
+// because on a shared server the default watches with the unbound client: a
+// subscription accepted there would be answered by a watcher that can never
+// read, and its first read is the authorization check ADR-0015 relies on.
+func TestSubscriptionShape_Handlers_ARequestBoundToNoCredential_IsRefused(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	shape, runtime := newTestSubscriptions(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
+	t.Cleanup(runtime.manager.Close)
+
+	subscribe, unsubscribe := shape.handlers(staticRuntime(nil))
+	if subscribe == nil || unsubscribe == nil {
+		t.Fatal("handlers() returned nil on a full capability surface")
+	}
+
+	const uri = "gitlab://project/42/pipeline/99"
+	subErr := subscribe(t.Context(), &mcp.SubscribeRequest{
+		Session: testSession,
+		Params:  &mcp.SubscribeParams{URI: uri},
+	})
+	if !errors.Is(subErr, errUnboundSubscribe) {
+		t.Errorf("subscribe error = %v, want %v; an unattributed subscription must not be watched", subErr, errUnboundSubscribe)
+	}
+	unsubErr := unsubscribe(t.Context(), &mcp.UnsubscribeRequest{
+		Session: testSession,
+		Params:  &mcp.UnsubscribeParams{URI: uri},
+	})
+	if !errors.Is(unsubErr, errUnboundSubscribe) {
+		t.Errorf("unsubscribe error = %v, want %v", unsubErr, errUnboundSubscribe)
+	}
+	if runtime.manager.Len() != 0 {
+		t.Errorf("watchers = %d after two refusals, want 0", runtime.manager.Len())
+	}
+}
+
+// TestServerNotifier_WatchMeta_StampsTheOwnerOnASharedServer covers the tag the
+// delivery filter reads.
+//
+// A notification carries it so that a server answering for many credentials can
+// tell whose watcher produced it; the filter drops anything untagged, so an
+// unstamped notification from a pooled entry would be silently undeliverable.
+// On stdio the owner is empty, and the key is left out rather than written
+// empty, because "" is also what an unrecorded session reads as.
+func TestServerNotifier_WatchMeta_StampsTheOwnerOnASharedServer(t *testing.T) {
+	update := subscriptions.Update{URI: "gitlab://project/42/pipeline/99", Interval: time.Second}
+
+	tests := map[string]string{
+		"a pooled credential": "owner-mine",
+		"stdio, which serves one credential and tells none apart": "",
+	}
+
+	for name, owner := range tests {
+		t.Run(name, func(t *testing.T) {
+			notifier := &serverNotifier{owner: owner}
+
+			meta := notifier.watchMeta(update)
+
+			got, tagged := meta[ownerMetaKey]
+			if owner == "" {
+				if tagged {
+					t.Errorf("the owner key was written as %v with no owner to name", got)
+				}
+				return
+			}
+			if got != owner {
+				t.Errorf("owner tag = %v, want %q; the delivery filter would drop this notification", got, owner)
+			}
+			if _, described := meta[watchMetaKey]; !described {
+				t.Error("stamping the owner dropped the watch metadata the notification carries for the client")
+			}
+		})
+	}
+}
+
+// TestListenCounter_ANilCounter_IsANoOp covers the nil receiver every method
+// tolerates.
+//
+// Nil is what a request nothing could attribute to a credential resolves to.
+// The ceiling lets it through — the process-wide one is what actually bounds
+// the process — so acquire, release and count all have to answer rather than
+// panic on the request path.
+func TestListenCounter_ANilCounter_IsANoOp(t *testing.T) {
+	var counter *listenCounter
+
+	if !counter.acquire(1) {
+		t.Error("a nil counter refused a slot; an unattributed listen would be refused rather than bounded per process")
+	}
+	counter.release()
+	if got := counter.count(); got != 0 {
+		t.Errorf("count = %d on a nil counter, want 0", got)
 	}
 }
 
@@ -877,7 +1034,7 @@ func TestNewSubscriptionRuntime_MinimalSurface_IsNil(t *testing.T) {
 // request is then held open until its handler's context ends, and nothing but
 // the stream registry ends it.
 //
-// So on --capability-surface=minimal, where newSubscriptionRuntime returns nil,
+// So on --capability-surface=minimal, where newSubscriptionShape returns nil,
 // the registry used to be absent and those streams became unreachable. The
 // visible symptom was in shutdown: the process ignored its signal for the full
 // HTTP drain budget and then died with "http server shutdown: context deadline
@@ -908,8 +1065,8 @@ func TestSubscriptionRuntime_NoRuntime_ShutdownStillEndsListenStreams(t *testing
 
 	// Nil is exactly what the minimal capability surface produces, and attach
 	// is called on it unconditionally.
-	var runtime *subscriptionRuntime
-	runtime.attach(ctx, server)
+	var shape *subscriptionShape
+	shape.attach(ctx, server, staticRuntime(nil))
 
 	// Applied last, so it wraps the stream registry's middleware and sees what
 	// the SDK's handler finally returned.
@@ -1084,17 +1241,45 @@ func TestListenStreams_EveryURIStops_ClosesTheStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, release := streams.arm([]string{"uri-a", "uri-b"}, cancel)
+	_, release := streams.arm([]string{"uri-a", "uri-b"}, "owner", cancel)
 	defer release()
 
-	streams.stopped("uri-a", subscriptions.ErrInaccessible)
+	streams.stoppedFor("owner", "uri-a", subscriptions.ErrInaccessible)
 	if ctx.Err() != nil {
 		t.Fatal("the stream ended while it was still watching uri-b")
 	}
 
-	streams.stopped("uri-b", subscriptions.ErrInaccessible)
+	streams.stoppedFor("owner", "uri-b", subscriptions.ErrInaccessible)
 	if ctx.Err() == nil {
 		t.Error("every watched URI stopped and the stream was left open")
+	}
+}
+
+// TestListenStreams_AnotherCredentialsWatchStops_LeavesTheStream verifies the
+// scope that keeps a shared server honest.
+//
+// Watchers are per credential, so "this URI stopped" is a statement about one
+// credential's watch. Without the owner, one tenant's watcher retiring on a 404
+// would close every other tenant's open listen over the same URI, and the
+// specification's graceful completion result would be delivered to clients
+// whose subscription is perfectly alive.
+func TestListenStreams_AnotherCredentialsWatchStops_LeavesTheStream(t *testing.T) {
+	streams := newListenStreams()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const uri = "gitlab://project/42/pipeline/99"
+	_, release := streams.arm([]string{uri}, "mine", cancel)
+	defer release()
+
+	streams.stoppedFor("somebody-elses", uri, subscriptions.ErrInaccessible)
+	if ctx.Err() != nil {
+		t.Fatal("another credential's watch stopping closed this credential's stream over the same URI")
+	}
+
+	streams.stoppedFor("mine", uri, subscriptions.ErrInaccessible)
+	if ctx.Err() == nil {
+		t.Error("the stream's own watch stopped and the stream was left open")
 	}
 }
 
@@ -1104,10 +1289,10 @@ func TestListenStreams_UnrelatedURIStops_LeavesTheStream(t *testing.T) {
 	streams := newListenStreams()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, release := streams.arm([]string{"mine"}, cancel)
+	_, release := streams.arm([]string{"mine"}, "owner", cancel)
 	defer release()
 
-	streams.stopped("somebody-elses", subscriptions.ErrEvicted)
+	streams.stoppedFor("owner", "somebody-elses", subscriptions.ErrEvicted)
 	if ctx.Err() != nil {
 		t.Error("a stream ended over a URI it never subscribed to")
 	}
@@ -1118,10 +1303,10 @@ func TestListenStreams_UnrelatedURIStops_LeavesTheStream(t *testing.T) {
 func TestListenStreams_ReleasedStream_IsNotCancelled(t *testing.T) {
 	streams := newListenStreams()
 	cancelled := false
-	_, release := streams.arm([]string{"uri"}, func() { cancelled = true })
+	_, release := streams.arm([]string{"uri"}, "owner", func() { cancelled = true })
 	release()
 
-	streams.stopped("uri", subscriptions.ErrInaccessible)
+	streams.stoppedFor("owner", "uri", subscriptions.ErrInaccessible)
 	if cancelled {
 		t.Error("a released stream was cancelled; its request had already returned")
 	}
@@ -1152,7 +1337,7 @@ func TestListenStreams_CloseAll_EndsEveryStreamItHolds(t *testing.T) {
 	// closeAll makes it on this goroutine.
 	ended := make([]bool, len(cases))
 	for i, tc := range cases {
-		_, release := streams.arm(tc.uris, func() { ended[i] = true })
+		_, release := streams.arm(tc.uris, "owner", func() { ended[i] = true })
 		t.Cleanup(release)
 	}
 
@@ -1181,7 +1366,7 @@ func TestListenStreams_ArmedAfterCloseAll_EndsImmediately(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, release := streams.arm(nil, cancel)
+	_, release := streams.arm(nil, "owner", cancel)
 	defer release()
 
 	if ctx.Err() == nil {
@@ -1257,7 +1442,7 @@ func TestClosableListenURIs_MixedStream_IsLeftAlone(t *testing.T) {
 // instead of being left hanging against a server that stopped watching.
 func TestSubscriptionRuntime_WatchStops_EndsTheStream(t *testing.T) {
 	backend, gitlab := newPipelineBackend(t, "running")
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	shape, runtime := newTestSubscriptions(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 
@@ -1268,7 +1453,9 @@ func TestSubscriptionRuntime_WatchStops_EndsTheStream(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, release := runtime.streams.arm([]string{uri}, cancel)
+	// Armed under the same owner the runtime watches as, which is what scopes
+	// the stop to this credential's streams.
+	_, release := shape.streams.arm([]string{uri}, "", cancel)
 	defer release()
 
 	// The pipeline becomes unreadable: deleted, or this token lost access.
@@ -1393,6 +1580,21 @@ func subscriptionHandlerIndex(t *testing.T, gitlabURL string) resources.HandlerI
 	return resources.NewHandlerIndex(subscriptionGitLabClient(t, gitlabURL))
 }
 
+// newTestReader builds a resource reader with an index of its own, which is
+// what [subscriptionShape.newRuntime] hands a watcher.
+//
+// The index pointer is the shape's, shared by every credential's reader, so a
+// reader built as a bare literal has none and setIndex would dereference nil.
+func newTestReader(t *testing.T, gitlabURL string) *resourceReader {
+	t.Helper()
+	reader := &resourceReader{
+		index:  &atomic.Pointer[resources.HandlerIndex]{},
+		client: subscriptionGitLabClient(t, gitlabURL),
+	}
+	reader.setIndex(subscriptionHandlerIndex(t, gitlabURL))
+	return reader
+}
+
 // connectInMemory returns a client session connected to server.
 func connectInMemory(t *testing.T, server *mcp.Server) *mcp.ClientSession {
 	t.Helper()
@@ -1512,7 +1714,7 @@ func TestWireSubscribeError_MapsSentinelsToCodes(t *testing.T) {
 func TestSubscribe_MissingResource_RefusedWithInvalidParamsCode(t *testing.T) {
 	backend, gitlab := newPipelineBackend(t, "running")
 	backend.setMissing()
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -1549,7 +1751,7 @@ func TestSubscribe_MissingResource_RefusedWithInvalidParamsCode(t *testing.T) {
 // stops it opening two for one URI.
 func TestSessionBridge_OneListenTeardownKeepsAnothersWatch(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -1601,7 +1803,7 @@ func TestSessionBridge_OneListenTeardownKeepsAnothersWatch(t *testing.T) {
 // unsubscribe releases it. Only the listen path needed a finer identity.
 func TestSessionBridge_LegacySubscribeIsStillSessionScoped(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -1658,7 +1860,7 @@ func TestSessionBridge_AnOpenListenKeepsItsWatchAtFullSpeed(t *testing.T) {
 	// renewal every second and two seconds of slack before demotion, which no
 	// scheduler starvation a runner produces gets near.
 	opts.Lease = 3 * time.Second
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), opts)
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -1706,7 +1908,7 @@ func TestSessionBridge_ALegacySubscribeStillFollowsTheLease(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
 	opts := fastOptions()
 	opts.Lease = 100 * time.Millisecond
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), opts)
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -1740,7 +1942,7 @@ func TestSessionBridge_ALegacySubscribeStillFollowsTheLease(t *testing.T) {
 // subscribes to a dozen resources at a time.
 func TestSessionBridge_OneRenewalTickerPerStream(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -1814,30 +2016,39 @@ func TestSessionBridge_OneRenewalTickerPerStream(t *testing.T) {
 // closed every stream would satisfy the cap and destroy the feature.
 func TestListenLimit_CapsConcurrentStreams(t *testing.T) {
 	for _, tc := range []struct {
-		name        string
-		perServer   int
-		perProcess  int
-		streams     int
-		wantServed  int
-		wantRefused int
+		name          string
+		perCredential int
+		perProcess    int
+		streams       int
+		wantServed    int
+		wantRefused   int
 	}{
-		{"under_the_per_server_cap", 4, 100, 3, 3, 0},
-		{"at_the_per_server_cap", 4, 100, 4, 4, 0},
-		{"over_the_per_server_cap", 4, 100, 7, 4, 3},
+		{"under_the_per_credential_cap", 4, 100, 3, 3, 0},
+		{"at_the_per_credential_cap", 4, 100, 4, 4, 0},
+		{"over_the_per_credential_cap", 4, 100, 7, 4, 3},
 		{"the_process_cap_binds_first", 100, 2, 5, 2, 3},
 		{"disabled_by_a_non_positive_cap", 0, 0, 6, 6, 0},
+		{"an_unattributed_request_is_bounded_by_the_process_cap_alone", 1, 2, 5, 2, 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			limits := listenLimits{
-				perServer:   tc.perServer,
-				perProcess:  tc.perProcess,
-				processOpen: &listenCounter{},
-				serverOpen:  &listenCounter{},
+				perCredential: tc.perCredential,
+				perProcess:    tc.perProcess,
+				processOpen:   &listenCounter{},
+			}
+
+			// A nil counter is what a request nothing could attribute to a
+			// credential resolves to, and the last case drives exactly that:
+			// the per-credential ceiling cannot be charged to anybody, so only
+			// the process-wide one binds.
+			counter := &listenCounter{}
+			if tc.name == "an_unattributed_request_is_bounded_by_the_process_cap_alone" {
+				counter = nil
 			}
 
 			held := make(chan struct{})
 			var inFlight atomic.Int64
-			handler := limits.middleware()(func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+			handler := limits.middleware(staticCounter(counter))(func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
 				inFlight.Add(1)
 				defer inFlight.Add(-1)
 				<-held
@@ -1883,14 +2094,14 @@ func TestListenLimit_CapsConcurrentStreams(t *testing.T) {
 // request that was well formed.
 func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
 	limits := listenLimits{
-		perServer:   1,
-		perProcess:  1,
-		processOpen: &listenCounter{},
-		serverOpen:  &listenCounter{},
+		perCredential: 1,
+		perProcess:    1,
+		processOpen:   &listenCounter{},
 	}
+	credential := &listenCounter{}
 	held := make(chan struct{})
 	defer close(held)
-	handler := limits.middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+	handler := limits.middleware(staticCounter(credential))(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
 		<-held
 		return &mcp.CallToolResult{}, nil
 	})
@@ -1901,7 +2112,7 @@ func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
 		_, _ = handler(t.Context(), methodSubscriptionsListen, nil)
 	}()
 	<-opened
-	waitFor(t, func() bool { return limits.serverOpen.count() == 1 })
+	waitFor(t, func() bool { return credential.count() == 1 })
 
 	_, err := handler(t.Context(), methodSubscriptionsListen, nil)
 	if err == nil {
@@ -1925,12 +2136,12 @@ func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
 // them.
 func TestListenLimit_OtherMethodsAreNotCounted(t *testing.T) {
 	limits := listenLimits{
-		perServer:   1,
-		perProcess:  1,
-		processOpen: &listenCounter{},
-		serverOpen:  &listenCounter{},
+		perCredential: 1,
+		perProcess:    1,
+		processOpen:   &listenCounter{},
 	}
-	handler := limits.middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+	credential := &listenCounter{}
+	handler := limits.middleware(staticCounter(credential))(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
 		return &mcp.CallToolResult{}, nil
 	})
 	for _, method := range []string{"tools/call", "tools/list", "resources/read", "ping"} {
@@ -1938,7 +2149,7 @@ func TestListenLimit_OtherMethodsAreNotCounted(t *testing.T) {
 			if _, err := handler(t.Context(), method, nil); err != nil {
 				t.Fatalf("%s: %v", method, err)
 			}
-			if open := limits.serverOpen.count(); open != 0 {
+			if open := credential.count(); open != 0 {
 				t.Errorf("%s left %d listen slots taken, want 0", method, open)
 			}
 		})
@@ -1949,29 +2160,33 @@ func TestListenLimit_OtherMethodsAreNotCounted(t *testing.T) {
 // anything that is not a positive number leaves the defaults in place.
 func TestListenLimitsFromEnv(t *testing.T) {
 	for _, tc := range []struct {
-		name           string
-		perServer      string
-		wantPerServer  int
-		wantPerProcess int
+		name              string
+		configured        string
+		wantPerCredential int
+		wantPerProcess    int
 	}{
 		{"unset", "", maxListenStreamsPerServer, maxListenStreamsPerProcess},
 		{"explicit", "8", 8, maxListenStreamsPerProcess},
 		{"zero_disables", "0", 0, maxListenStreamsPerProcess},
 		{"garbage_keeps_the_default", "many", maxListenStreamsPerServer, maxListenStreamsPerProcess},
+		{"negative_keeps_the_default", "-1", maxListenStreamsPerServer, maxListenStreamsPerProcess},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.perServer != "" {
-				t.Setenv(maxListenStreamsEnv, tc.perServer)
+			if tc.configured != "" {
+				t.Setenv(maxListenStreamsEnv, tc.configured)
 			}
 			got := listenLimitsFromEnv()
-			if got.perServer != tc.wantPerServer {
-				t.Errorf("perServer = %d, want %d", got.perServer, tc.wantPerServer)
+			if got.perCredential != tc.wantPerCredential {
+				t.Errorf("perCredential = %d, want %d", got.perCredential, tc.wantPerCredential)
 			}
 			if got.perProcess != tc.wantPerProcess {
 				t.Errorf("perProcess = %d, want %d", got.perProcess, tc.wantPerProcess)
 			}
-			if got.processOpen == nil || got.serverOpen == nil {
-				t.Error("the counters must be non-nil, or the middleware cannot count")
+			// The per-credential counter is no longer a field: one server
+			// answers for every credential of a configuration shape, so a
+			// counter held here would be one budget shared by every tenant.
+			if got.processOpen == nil {
+				t.Error("the process counter must be non-nil, or the middleware cannot count")
 			}
 		})
 	}
@@ -2049,8 +2264,9 @@ func TestExcludedActions_NarrowResourcesAndSubscriptions_NotOnlyTools(t *testing
 
 	// The subscription path reads through this index, so it has to refuse the
 	// excluded URI as well: a client that knows the URI never calls
-	// resources/list and would otherwise still be served.
-	reader := &resourceReader{}
+	// resources/list and would otherwise still be served. The index cell comes
+	// from the shape, so a reader assembled here has to be given one.
+	reader := &resourceReader{index: &atomic.Pointer[resources.HandlerIndex]{}}
 	reader.setIndex(narrowed)
 	if _, readErr := reader.Read(t.Context(), "gitlab://project/42"); readErr == nil {
 		t.Error("the subscription reader served an excluded resource, so a subscription would poll GitLab for it")
@@ -2132,13 +2348,18 @@ func resourceTemplateURIs(t *testing.T, server *mcp.Server) map[string]bool {
 }
 
 // TestResourceReader_WithoutAnIndex_AnswersNotReadyInsteadOfPanicking covers
-// the reader before registration has published an index. The runtime seeds
-// one, so nothing built through it gets here; the point is that a reader that
+// the reader before registration has published an index. The shape seeds one,
+// so nothing built through it gets here; the point is that a reader that
 // somehow does answers with the retryable "not ready" rather than
 // dereferencing nil inside a watcher.
+//
+// The index cell itself is supplied, and has to be: it belongs to the shape and
+// is shared by every credential's reader, so a bare &resourceReader{} has no
+// cell at all and Read dereferences that instead. Only the unpublished index
+// this test is about is reachable from any wiring the server has.
 func TestResourceReader_WithoutAnIndex_AnswersNotReadyInsteadOfPanicking(t *testing.T) {
 	t.Parallel()
-	reader := &resourceReader{}
+	reader := &resourceReader{index: &atomic.Pointer[resources.HandlerIndex]{}}
 	_, err := reader.Read(context.Background(), "gitlab://project/42/pipeline/99")
 	if !errors.Is(err, errCatalogNotReady) {
 		t.Errorf("Read() error = %v, want %v", err, errCatalogNotReady)
@@ -2170,7 +2391,7 @@ func TestSessionBridge_ALeaseTooShortToRenew_StartsNoTicker(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
 	opts := fastOptions()
 	opts.Lease = 2 * time.Nanosecond
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), opts)
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
@@ -2201,7 +2422,7 @@ func TestSessionBridge_ALeaseTooShortToRenew_StartsNoTicker(t *testing.T) {
 // the context is what decides between a real watch and the refusal.
 func TestSessionBridge_SubscribeUnlessStateless_TellsTheListenPathFromTheLegacyOne(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
-	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+	runtime := newTestRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(runtime.manager.Close)
 	bridge := newSessionBridge(runtime.manager)
