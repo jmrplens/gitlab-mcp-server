@@ -25,7 +25,7 @@ Six axes, chosen because they are the ones that move the numbers:
 
 | Axis                 | Values                                      | Why it matters                                                                                                                                        |
 | -------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Transport            | stdio, HTTP                                 | stdio gives every client its own process; HTTP serves everyone from one and pools a catalog per credential                                            |
+| Transport            | stdio, HTTP                                 | stdio gives every client its own process; HTTP serves everyone from one, pooling credential state per token and one built catalog per configuration   |
 | Tool surface         | `dynamic`, `meta`, `individual`             | the dynamic surface registers two tools and the individual one roughly a thousand                                                                     |
 | Concurrent clients   | 4 processes on stdio, 8 credentials on HTTP | on HTTP the pool holds one entry per token, so this is the axis a shared deployment grows along                                                       |
 | Parallel requests    | 2 to 4 in flight per client                 | separates the cost of having clients from the cost of them all calling at once                                                                        |

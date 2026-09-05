@@ -38,7 +38,23 @@ In HTTP mode, a single process serves all clients. Idle, before any credential h
 
 ### Per-Token Pool Entry Cost
 
-A pool entry is the whole catalog for that token: its MCP server, GitLab client, registered tools, resources and prompts.
+> **The figures in this section predate the sharing work and overstate what a
+> credential now costs.** They were measured when a pool entry was the whole
+> catalog for that token: its own MCP server, GitLab client, registered tools,
+> resources and prompts. Since then the catalog and its schemas are built once
+> per configuration and shared, and the MCP server itself is built once per
+> configuration shape and shared by every credential that hashes to it
+> ([ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)).
+> A pool entry is now credential state: a GitLab client, a rate-limit bucket, a
+> listen counter, a watcher set, and the sessions that credential holds open.
+>
+> Measured locally on the development machine, the live heap an idle process
+> holds per additional credential fell from 434 to 17 KiB on `dynamic`, 815 to
+> 73 KiB on `meta` and 1,487 to 8 KiB on `individual`. The before and after runs
+> are written up in
+> [Resource hot spots](../development/resource-hot-spots.md#what-this-branch-measured).
+> The tables below stay as they were until the reference host they were taken on
+> is re-run.
 
 | Tool surface | Process with one credential | Each further credential |
 | ------------ | --------------------------: | ----------------------: |
@@ -46,7 +62,7 @@ A pool entry is the whole catalog for that token: its MCP server, GitLab client,
 | `meta`       |                    ~197 MiB |                 ~35 MiB |
 | `individual` |                    ~334 MiB |                 ~36 MiB |
 
-Memory per credential goes the other way from what the tool counts suggest: `individual` costs the least per additional credential despite registering about a thousand tools, because pooled entries share their tool schemas, while `dynamic` costs the most because every entry carries its own search index.
+Memory per credential used to go the other way from what the tool counts suggest: `individual` cost the least per additional credential despite registering about a thousand tools, because pooled entries already shared their tool schemas, while `dynamic` cost the most because every entry carried its own search index. Both of those causes are gone.
 
 ### Scaling in HTTP Mode
 
@@ -57,7 +73,7 @@ Memory per credential goes the other way from what the tool counts suggest: `ind
 | 20                | 0.7 to 1.4 GiB    | ~1 to 2 GiB                                       | A small team                                                    |
 | 100 (default max) | 3.5 to 7 GiB      | ~4 to 8 GiB                                       | Default `--max-http-clients`; a pool no small instance can hold |
 
-Budget roughly 100 MiB per credential expected to be live at once, on top of 128 MiB for the process, and read `--max-http-clients` as a memory setting rather than a concurrency one. `--pool-idle-timeout` (default 1h) reclaims entries nobody has used, so the live count is what matters, not how many tokens have ever connected; an entry rebuilt after reclamation pays the catalog build again, about 2 seconds on `dynamic` and `meta` and 4 to 5 seconds on `individual`.
+Those totals are the pre-sharing ones and are now an upper bound rather than an estimate. What a credential adds at rest is small; what still grows with the credential count is the work in flight, since each live client's requests allocate while they are served. Size from concurrent load rather than from the number of tokens, and treat `--max-http-clients` as a bound on pooled credentials rather than as the memory setting it used to be. `--pool-idle-timeout` (default 1h) reclaims entries nobody has used, so the live count is what matters, not how many tokens have ever connected; an entry rebuilt after reclamation no longer pays for a catalog build unless it is the only credential of its configuration, because the built server is shared.
 
 ### CPU Usage
 
@@ -95,7 +111,8 @@ subscriptions to the same URI share one watcher, so goroutines count per
 distinct watched URI — the one
 kind of work this server performs without a request in flight:
 
-- Up to **10 watchers per server** (per token+URL pool entry in HTTP mode),
+- Up to **10 watchers per credential** (per token+URL pool entry in HTTP mode,
+  which is what owns them even where several credentials share one MCP server),
   each one GitLab read per tick at an adaptive cadence: 5s while the
   resource is busy, 15s default, 60s settled, 10min once lease-demoted.
 - Worst case **120 requests/minute per token** (10 watchers at the 5s
@@ -117,7 +134,7 @@ Understanding the terminology is important for capacity planning:
 | **Connected client**  | Client has sent a POST; under the default stateless transport its session ends with the response, under `--stateless=false` it holds a `Mcp-Session-Id` | 1 pool entry for its token; a session (~2 goroutines) only in stateful mode                     |
 | **Active client**     | Connected client currently executing tool calls                                                                                                         | Pool entry + tool goroutines                                                                    |
 | **Idle client**       | Connected but no recent requests                                                                                                                        | Session goroutines in stateful mode, plus up to 10 watcher goroutines if it holds subscriptions |
-| **Unique token**      | Distinct GitLab PAT in the pool                                                                                                                         | 1 pool entry (35 to 71 MiB, by tool surface)                                                    |
+| **Unique token**      | Distinct GitLab PAT in the pool                                                                                                                         | 1 pool entry: a client, a rate-limit bucket, a counter and its watchers, not a tool catalog     |
 
 **Key insight**: Multiple sessions from the same token share one pool entry. A user with 3 IDE windows using the same token = 3 sessions, 1 pool entry.
 
@@ -125,12 +142,13 @@ Understanding the terminology is important for capacity planning:
 
 Memory growth comes from:
 
-1. **Unique tokens in pool** — each adds 35 to 71 MiB (bounded by `--max-http-clients`, reclaimed by `--pool-idle-timeout`)
-2. **Active MCP sessions** — minimal per-session overhead managed by the SDK
-3. **Tool execution** — temporary allocations during GitLab API calls (GC reclaims)
-4. **Large API responses** — paginated list results with many items
+1. **Distinct configurations served** — each builds one tool catalog and one MCP server, shared by every credential that hashes to it. In a deployment that pins `--tier` and publishes one instance there is exactly one
+2. **Unique tokens in pool** — each adds credential state only, bounded by `--max-http-clients` and reclaimed by `--pool-idle-timeout`
+3. **Active MCP sessions** — minimal per-session overhead managed by the SDK
+4. **Tool execution** — temporary allocations during GitLab API calls (GC reclaims)
+5. **Large API responses** — paginated list results with many items
 
-The pool is the only source of **persistent** memory growth, and it is bounded.
+The catalogs are the persistent growth, and there are as many of them as there are configurations; the pool is bounded and no longer carries one each.
 
 ## GitLab API Rate Limits
 
@@ -146,7 +164,7 @@ The server pool does NOT aggregate tokens — each client is independently rate-
 
 ## Capacity Planning Recommendations
 
-Size the pool from memory: about 100 MiB per credential live at once, plus 128 MiB for the process. `--session-timeout` only matters with `--stateless=false`.
+Size from the load rather than from the token count: one built catalog per configuration served, plus what the concurrent requests allocate while they run. The figures above are the pre-sharing ones and are now an upper bound. `--session-timeout` only matters with `--stateless=false`.
 
 ### Small Team (5-20 developers)
 

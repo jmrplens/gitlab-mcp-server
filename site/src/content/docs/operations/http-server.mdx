@@ -20,7 +20,7 @@ import FAQ from "../../../components/FAQ.astro";
 
 - **HTTP mode serves many clients from one process**, while stdio spawns a separate process per client.
 - **Every request carries its own GitLab token.** Sessions are isolated in a bounded LRU pool keyed by a hash of token + GitLab URL, so clients never share state.
-- **Size for concurrent credentials, not for requests.** The process idles near 40 MiB holding no catalog, and each live token+URL pair adds its own: budget about 100 MiB per credential you expect at once.
+- **Size for concurrent load, not for the number of tokens.** The process idles near 40 MiB holding no catalog, and builds one per configuration it is asked to serve, shared by every credential of that configuration. A credential of its own adds a GitLab client and a little bookkeeping; what grows with the number of people using it at once is the requests they have in flight.
 
 :::
 
@@ -593,9 +593,9 @@ Size the host from the HTTP server's resident set, not from the binary, and size
 
 Three things follow from this.
 
-**Memory tracks live credentials, not requests.** The pool holds one MCP server instance per distinct token and GitLab URL, each with its own catalog, so a deployment's peak follows how many people are using it at once. A practical budget is about 100 MiB per credential you expect to be live simultaneously, on top of 128 MiB for the process itself. 512 MB is comfortable for a handful of credentials and is not a ceiling anyone should aim at with more: eight concurrent credentials exceeded it on every tool surface measured.
+**Memory tracks configurations and concurrent work, not the number of tokens.** The pool holds one entry per distinct token and GitLab URL, but an entry is a GitLab client and its bookkeeping, not a catalog: the MCP server and its registered surface are built once per configuration and shared by every credential whose configuration matches. Measured at rest, a twentieth credential adds well under a mebibyte on every tool surface. The figures in the table above predate that sharing and are an upper bound; the numbers to size against are the process itself plus whatever the concurrent requests allocate while they run.
 
-**`--max-http-clients` is a memory setting, and so is `--pool-idle-timeout`.** The first defaults to 100 entries, a pool far larger than a small instance can hold; the second (default `1h`) decides how long an unused entry keeps its catalog. Those two are the pair to lower if you are memory-constrained, and to raise only alongside more RAM. `--session-timeout` is not part of it, despite sounding like it: it bounds an idle MCP session, it applies to `--stateless=false` only (under the default stateless transport a session ends with the response to its own POST), and ending a session does not release the pooled entry behind it.
+**`--max-http-clients` bounds pooled credentials; `--pool-idle-timeout` reclaims them.** The first defaults to 100 entries, the second (default `1h`) decides how long an unused one is kept. Neither is the memory dial it used to be, since an entry no longer carries a catalog, but both still bound how many live GitLab clients and watchers the process holds. `--session-timeout` is a different thing again, despite sounding like it: it bounds an idle MCP session, it applies to `--stateless=false` only (under the default stateless transport a session ends with the response to its own POST), and ending a session does not release the pooled entry behind it.
 
 **The tool surface changes responses more than memory.** All three build the same canonical action catalog, and per credential the difference is a factor of two (`dynamic` costs the most, since it also builds a search index). What the surface really decides is the size of a `tools/list`: 12 KB, 584 KB and 3.1 MB for `dynamic`, `meta` and `individual`. Pick the surface for token cost and response time, and pick the instance size for concurrency.
 

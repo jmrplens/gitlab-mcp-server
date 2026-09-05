@@ -18,8 +18,8 @@ were built from a clean tree at those commits.
 
 ## What a pool entry was made of
 
-In HTTP mode the pool builds one MCP server per credential, and until this
-work every one of those servers built everything it needed from scratch: the
+In HTTP mode the pool used to build one MCP server per credential, and until
+this work every one of those servers built everything it needed from scratch: the
 tool catalog, the schemas the tools carry, the search index of the dynamic
 surface, the `gitlab://tools` manifest. The resident set therefore grew as a
 straight line in the number of pooled credentials, and the slope was the size
@@ -379,3 +379,195 @@ responses compared by hand. That exploratory comparison is what found the
 compact and full envelopes changing under compilation, and why they are shared
 as maps rather than compiled; the goldens above are what pins that finding from
 now on.
+
+## The server itself: one per configuration shape
+
+The direction's last step is done: the pool no longer builds a server per
+credential. It builds one per **configuration shape** and hands the same one to
+every credential that hashes to it, with the pool entry reduced to credential
+state. The decision, its evidence in the go-sdk source and the alternatives
+weighed are recorded in
+[ADR-0020](adr/adr-0020-one-server-per-configuration-shape.md); this is what the
+code does.
+
+**The shape** is what the catalog key already named plus what the shell reads:
+tool surface, capability surface, meta parameter-schema mode, tier and whether
+it was pinned, whether the instance is GitLab.com, read-only including the
+token-scope narrowing, safe mode, the excluded tools, the token scopes and the
+transport's statelessness (`serverShapeKey` in `cmd/server/shape.go`). The
+instance URL is not in it, since two instances of one tier share a catalog and
+the client is per credential either way. `shapeServers` builds each shape at
+most once, and registration runs behind that server's readiness gate, so the
+first credential of a shape still does not wait for the catalog and every later
+one finds it built. That build was 1.8 s on the dynamic surface and 3.0 s on
+individual, and it used to be paid per credential and again after every
+eviction.
+
+**The credential travels with the request.** A shape server is registered with
+the credential-less client for its instance class, and every handler resolves
+the caller's client from the request context through
+`(*gitlab.Client).For(ctx)`, falling back to that unbound client, which refuses
+everything. The fallback is what makes an unattributed request fail rather than
+run under whoever happened to build the shape. The resolution happens in
+`WrapAction` and its three siblings, which covers every catalog action on every
+surface, and in the 38 resource closures, the 37 prompt closures, the completion
+handler and the interactive flows.
+
+The channel is the per-POST carrier in `cmd/server/carrier.go`, for the reason
+already recorded there: context values reach a handler in stateless mode, where
+the session is connected with the POST's own context, and do not in stateful
+mode, where it is connected with the initialize POST's. The gate resolves the
+pool entry, stamps its `credentialState` on the HTTP request context, and
+`bindCredential` reads it back and installs it, along with the client, on the
+handler context. It is added after the telemetry, rate-limit, listen-ceiling and
+subscription middlewares so that it runs before them, which is what lets each of
+them read the right tenant's bucket, ceiling and watchers.
+
+**Session ownership is recorded rather than derived.**
+`ServerOptions.GetSessionID` takes no request, so the per-server session tag
+stopped meaning anything the moment one server served more than one credential.
+`sessionOwners` writes down the session, its ID and the owner when a request of
+that session arrives already bound, forgets a session when `ServerSession.Wait`
+returns, and forgets every session of an entry the pool evicts. The gate's
+ownership check reads that map instead of parsing a prefix. Only the two kinds
+of session something asks about are recorded, one carrying an ID and one that
+subscribes: on the default stateless transport every other POST is its own
+session, and recording those would cost an entry and a parked goroutine per
+request for a fact nothing reads.
+
+**Subscriptions split in two.** A `subscriptionShape` per shape holds the
+polling options, the listen-stream registry and the handler index registration
+publishes. A `subscriptionRuntime` per pool entry holds the watchers, because a
+watcher polls with a credential and ADR-0015 makes its first read the
+authorization check. Two credentials watching one URI have one watcher each, and
+each stream records its owner so a watch stopping closes only that credential's
+streams.
+
+Delivery is filtered, since the SDK exposes no per-session send. Each entry
+carries an opaque owner token minted from `crypto/rand.Text`, never derived from
+the credential; the notifier stamps it into the notification's `_meta`, and a
+sending middleware on the shape server forwards the notification with that key
+removed to the sessions of the same owner, dropping everything else, including
+any notification with no tag and any session with no recorded owner.
+
+Two details of that middleware are load-bearing and neither is obvious. It reads
+the **params**, not the request: the SDK's two delivery paths instantiate the
+request generic differently, so a type assertion on the request matches one and
+drops the other in silence, which is precisely what the first version did. And
+it restores the key after the send, because the legacy path hands one params
+value to every subscriber in turn and a key stripped for good would make every
+session after the first look untagged. The `_meta` map is never written to: the
+stripped one is a new map, and the shared one is where the SDK stamps its own
+subscription id.
+
+The invariant, stated so it can be tested: two credentials listening to the same
+resource URI each receive exactly their own watcher's notifications, with their
+own watch state in `_meta`, and a credential whose access has been revoked
+receives nothing, because its own watcher stopped and the others' notifications
+are filtered away from its sessions. It is checked on the wire in
+`test/e2e/http/` and over the middleware itself in `cmd/server/`.
+
+### Why it had to be a filter
+
+Resource subscriptions were the one part with no per-credential seam. The go-sdk
+keeps the subscription table per server (`Server.resourceSubscriptions`, URI
+to session to request id), and `Server.ResourceUpdated` is the only exported
+delivery: it notifies every session on that server subscribed to the URI.
+`ServerSession` exposes no per-session notification (its senders are
+`NotifyProgress`, `Log`, `Ping`, `ListRoots`, `CreateMessage` and `Elicit`),
+and the 2026-07-28 form needs the listen request id the SDK stamps into
+`_meta` itself. On a shared server, credential A's watcher would notify B's
+session: each change delivered twice, A's watch state in B's `_meta`, and
+after B's access is revoked, when its own watcher has stopped on the 401 or
+404 while the SDK's table still holds its session for as long as the listen
+is open, B would keep learning that the resource changed from A's polling.
+ADR-0015 makes the first read the authorization check because every session
+on one manager shares one token; a shared server keeps that at the polling
+end and would lose it at the delivery end.
+
+What made the filter possible is that both of the SDK's delivery paths build the
+notification per session and run it through the server's **sending middleware**:
+`notifySessions` in `shared.go` and `notifySubscribedSessions` in `server.go`
+each call `newRequest(sess, params)` and then `handleNotify`, which dispatches
+through the handler `AddSendingMiddleware` wraps. The session and the params are
+both in hand there, and a middleware that returns without calling the next
+handler does not send. The context is not a channel: both functions create a
+fresh `context.Background()` with a ten second timeout, so nothing the caller of
+`ResourceUpdated` puts on its own context arrives. That is why the owner travels
+in the params.
+
+The ways through that were weighed, and what each would have cost:
+
+| Way                                                                                  | What it delivers                                                                             | What it costs                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Route `subscriptions/listen` to a per-credential subscription server, stateless only | A flat heap on the default transport; delivery stays per credential without an SDK change    | A second shell (templates and manager, no tools) and a gate that reads the body's method itself, since the SDK checks `Mcp-Method` against a single message only and a batch skips it; `--stateless=false` keeps a full server per credential, because a session lives on one server and `resources/subscribe` arrives on it later |
+| Per-session delivery in the go-sdk                                                   | The shared server needs nothing else; each manager hands its update to the sessions it knows | `ServerSession.ResourceUpdated(ctx, params)` upstream, reading the session's own request id from the table; nothing here can use it until it is released                                                                                                                                                                           |
+| Accept cross-notification within a shape                                             | Nothing to build                                                                             | Duplicates, wrong watch state, and the post-revocation leak above                                                                                                                                                                                                                                                                  |
+| Keep one server per credential and shrink it                                         | Some of the remainder                                                                        | The remainder is the SDK tool table and closures, 1.1 MB on individual, and the bound descriptors and route maps, about 3 MB on dynamic; smaller, never flat                                                                                                                                                                       |
+
+The fifth way is the one taken, and it is not in the table because it was not
+seen until the SDK's sending path was read: tag the notification with its owner
+and filter delivery on the way out. It needs no second shell, no body parser in
+the authentication path, and it works identically on both transports. When
+per-session delivery is released upstream, the tag and the filter go away and
+nothing else changes. The ask is recorded in
+[upstream-bugs.md](upstream-bugs.md).
+
+### What this branch measured
+
+Same driver and the same machine as the section above (AMD Ryzen 5 3550H, 8
+threads, 60.8 GiB, kernel 6.1, Go 1.27.1), one HTTP process per surface,
+credential counts 1, 2, 5, 10 and 20, ten seconds per step. Before is the branch
+point, which is the shared-catalog work already described; after is this branch.
+
+The first thing the run says is that the resident set under load is the wrong
+instrument for this change, and it is worth stating rather than hiding, because
+the headline numbers barely move:
+
+| Surface      | Peak resident set per credential, before |    after | Peak at 20 credentials, before |   after |
+| ------------ | ---------------------------------------: | -------: | -----------------------------: | ------: |
+| `dynamic`    |                                  8.6 MiB |  7.3 MiB |                        360 MiB | 331 MiB |
+| `meta`       |                                  7.4 MiB |  2.7 MiB |                        317 MiB | 262 MiB |
+| `individual` |                                 30.5 MiB | 26.3 MiB |                        921 MiB | 835 MiB |
+
+Those slopes are least-squares lines through the five steps, and most of what
+they measure is not the credential. The driver keeps four requests in flight per
+credential on `dynamic` and `meta` and two on `individual`, so at the last step
+the process is serving eighty concurrent calls, and what they allocate while
+they are being served is the bulk of the line. The previous section said the
+same thing about its own residue and it is more true here, now that the part
+sharing can reach has been removed: what is left of the slope is the load, not
+the tenancy. These figures also carry the noise of a machine that was running
+other work, which is why the "before" column does not reproduce the previous
+section's "after" column exactly although it is the same binary: 8.6 against
+6.6 on `dynamic`, 30.5 against 27.7 on `individual`. Read the resident-set
+slopes as an order of magnitude rather than as a measurement, and read the
+per-credential figure below as the measurement.
+
+The credential's own cost is what an idle process holds, and that is what this
+change was aimed at. Driving one `tools/list` per credential and reading
+`HeapAlloc` from `/debug/pprof/heap?gc=1&debug=1` after a collection, on the
+same two binaries, twenty credentials each:
+
+| Surface      | Live heap per credential, before |  after | Ratio |
+| ------------ | -------------------------------: | -----: | ----: |
+| `dynamic`    |                          434 KiB | 17 KiB |   26x |
+| `meta`       |                          815 KiB | 73 KiB |   11x |
+| `individual` |                        1,487 KiB |  8 KiB |  186x |
+
+In absolute terms the twentieth credential adds 0.3 MiB on `dynamic`, 1.4 MiB on
+`meta` and 0.2 MiB on `individual` over the first, against 8, 15 and 27 MiB
+before. That is the target: what a credential costs is now the pool entry (a
+GitLab client, a rate-limit bucket, a listen counter, a watcher set) rather than
+a registered tool surface, and the registered surface is paid once per
+configuration. The e2e test
+`TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials` pins the same
+measurement with a budget so a regression to a server per credential fails the
+build rather than being rediscovered.
+
+Per-call processor cost is unchanged, which is expected: 20.0 ms before and
+20.2 ms after on `dynamic`, 19.2 and 19.1 on `meta`, 357 and 342 on
+`individual`. It was never this work's target, and the options for it are
+enumerated at the end of
+[What remains, per credential and per call](#what-remains-per-credential-and-per-call).
+None of them is implemented.

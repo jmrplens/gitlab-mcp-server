@@ -88,6 +88,7 @@ readable without opening the tracker:
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
 | 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | No | No | No | No | Yes |
 | 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | No | No | No | No | Yes |
+| 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -608,6 +609,46 @@ literal illustration in the specification is the case that comes back wrong.
 **How we found it**: the lifecycle specification audit, on stdio. HTTP cannot
 reach it: the header check rejects a `_meta`-only version with `-32020`, and
 `protocolVersionMiddleware` in this repository answers the header case itself.
+
+### A resource update cannot be delivered to one session
+
+- **Reported**: no. Deferred: the workaround is complete and no upstream change
+  is being asked for yet.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `sessionOwners.sendingMiddleware` in
+  `cmd/server/session_owner.go` stamps the owning pool entry into the
+  notification's `_meta`, filters delivery per session on the way out, and
+  strips the private key from a clone before the frame is written. It retires
+  the day either fix below lands.
+
+**What**: `Server.ResourceUpdated(ctx, params)` is the only exported delivery
+for `notifications/resources/updated`, and it notifies **every** session
+subscribed to that URI. `ServerSession` exposes no equivalent of its own: its
+senders are `NotifyProgress`, `Log`, `Ping`, `ListRoots`, `CreateMessage` and
+`Elicit`. Application code cannot construct the 2026-07-28 form either, because
+that one needs the listen request id the SDK stamps into `_meta` from its own
+subscription table.
+
+**Why it matters here**: one `mcp.Server` now serves every credential of a
+configuration shape (ADR-0020), and the SDK's subscription table is keyed by URI
+and session with no notion of a credential. Two credentials subscribed to the
+same resource therefore each receive the other's notifications, carrying the
+other's watch state, and a credential whose access was revoked goes on being
+told the resource changed by somebody else's polling.
+
+**Either of two changes would close it.** A per-session sender,
+`ServerSession.ResourceUpdated(ctx, params)`, reading that session's own request
+id from the table, so a caller can deliver to the sessions it knows about. Or
+propagating the caller's context to the sending middleware: both delivery paths
+build a fresh `context.Background()` with a ten second timeout
+(`notifySessions` in `shared.go`, `notifySubscribedSessions` in `server.go`), so
+nothing a caller of `ResourceUpdated` puts on its context can reach the
+middleware, which is why the owner has to travel in the params instead.
+
+**How we found it**: making the pool share one server per configuration shape.
+The delivery end was the only part of the design with no per-credential seam.
 
 ## OpenAI Codex (`openai/codex`)
 

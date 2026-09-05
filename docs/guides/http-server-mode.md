@@ -257,7 +257,9 @@ This means options that affect the size of MCP schemas, such as `--meta-param-sc
 
 ### Server Pool
 
-The core of HTTP mode is the **Server Pool** (`internal/serverpool`), a bounded cache of MCP server instances keyed by the SHA-256 hash of each client's token **and** GitLab URL.
+The core of HTTP mode is the **Server Pool** (`internal/serverpool`), a bounded cache of pool entries keyed by the SHA-256 hash of each client's token **and** GitLab URL. An entry holds the credential: a GitLab client, the configuration resolved for it, the user it belongs to, a rate-limit bucket, its resource watchers, and an opaque owner token.
+
+The `*mcp.Server` an entry is served by is **not** per credential. It is built once per configuration shape and shared by every credential whose configuration hashes to that shape, because everything a server holds is decided by configuration: the tool catalog and its schemas, the surface projected from it, the resource and prompt registrations, the handshake. The credential is supplied per request instead. See [ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md).
 
 ```mermaid
 graph TD
@@ -270,9 +272,13 @@ graph TD
         GS --> EXTRACT[ExtractToken + ExtractGitLabURL]
         EXTRACT --> POOL[ServerPool]
 
-        POOL --> ENTRY1["hash(glpat-aaa + gitlab.com)<br/>*mcp.Server + *gitlab.Client"]
-        POOL --> ENTRY2["hash(glpat-bbb + gitlab.com)<br/>*mcp.Server + *gitlab.Client"]
-        POOL --> ENTRY3["hash(glpat-aaa + self-hosted)<br/>*mcp.Server + *gitlab.Client"]
+        POOL --> ENTRY1["hash(glpat-aaa + gitlab.com)<br/>client, config, watchers, owner"]
+        POOL --> ENTRY2["hash(glpat-bbb + gitlab.com)<br/>client, config, watchers, owner"]
+        POOL --> ENTRY3["hash(glpat-aaa + self-hosted)<br/>client, config, watchers, owner"]
+
+        ENTRY1 --> SHAPE1["shape: dynamic, ultimate, read-write<br/>one *mcp.Server"]
+        ENTRY2 --> SHAPE1
+        ENTRY3 --> SHAPE2["shape: dynamic, free, read-only<br/>one *mcp.Server"]
     end
 
     ENTRY1 --> GL1[GitLab API<br/>as user A @ gitlab.com]
@@ -282,11 +288,12 @@ graph TD
 
 **Key properties:**
 
-- Clients with the **same token and same GitLab URL** share the same `*mcp.Server` instance
-- Clients with **different tokens** or **different GitLab URLs** get completely isolated server instances
-- Each server instance has its own GitLab client authenticated with that specific token against that specific GitLab instance
-- Each server instance stores its own server configuration snapshot, derived from global process settings plus detected per-token/per-instance data
-- Each server instance detects token scopes and the licensing tier independently, so multi-instance deployments can serve Free, Premium, and Ultimate GitLab instances from the same process. The tier is detected from the instance license (`GET /license` → plan; fallback `free`). If `--tier` is explicitly set, that configured value wins and tier detection is disabled.
+- Clients with the **same token and same GitLab URL** share the same pool entry
+- Clients with **different tokens** or **different GitLab URLs** get separate entries, each with its own GitLab client, configuration snapshot, rate-limit bucket, watchers and listen-stream ceiling
+- Every request runs under its own entry's GitLab client, resolved from the request context. A server's registered handlers hold a credential-less client that refuses every call, so a request that cannot be attributed to an entry fails rather than borrowing one
+- Each entry detects token scopes and the licensing tier independently, so multi-instance deployments can serve Free, Premium, and Ultimate GitLab instances from the same process. The tier is detected from the instance license (`GET /license` → plan; fallback `free`). If `--tier` is explicitly set, that configured value wins and tier detection is disabled
+- The shape a server is built for covers the tool surface, the capability surface, the meta parameter-schema mode, the tier and whether it was pinned, GitLab.com versus self-managed, read-only including the narrowing a `read_api` token causes, safe mode, the excluded tools and the token scopes. The instance URL is deliberately not part of it, since the client is per entry regardless
+- Session ownership and resource-updated notifications are per entry, not per server: a session may only be driven by the credential that opened it, and a notification reaches only the sessions of the credential whose watcher produced it
 - Zero cross-contamination between clients by construction
 
 ### Session Key Isolation
@@ -735,12 +742,12 @@ that: it is keyed on `(token, GitLab URL)` and is reused in both modes.
 
 When a client sends its first HTTP POST to `/mcp`:
 
-1. `StreamableHTTPHandler` calls the `getServer` callback
-2. `ExtractToken()` reads the token and `ResolveRequestOptions()` applies MCP configuration precedence to resolve the effective GitLab URL
-3. `ServerPool.GetOrCreate(token, gitlabURL)` hashes `(token, url)` and checks the pool
-4. If the `(token, url)` pair is new: creates a GitLab client + MCP server, registers all tools/resources/prompts
-5. Returns the `*mcp.Server` for that `(token, url)` pair
-6. SDK establishes an MCP session and returns a `Mcp-Session-Id` header
+1. The authentication gate reads the token and `ResolveRequestOptions()` applies MCP configuration precedence to resolve the effective GitLab URL
+2. `ServerPool.GetOrCreateEntry(token, gitlabURL, scopes)` hashes `(token, url)` and checks the pool
+3. If the `(token, url)` pair is new: creates a GitLab client, verifies the credential, detects the tier and scopes, and asks for the server of the resulting configuration shape. The first credential of a shape builds that server and registers all tools, resources and prompts behind a readiness gate; every later credential of the same shape finds it built
+4. The gate stamps the entry onto the request context, and `StreamableHTTPHandler` calls the `getServer` callback, which returns the shape's `*mcp.Server`
+5. Inside the server, the first middleware binds the request to that entry: its GitLab client, its rate-limit bucket, its watchers, its listen-stream ceiling
+6. SDK establishes an MCP session and returns a `Mcp-Session-Id` header, and the session is recorded as belonging to that entry
 
 ### 2. Subsequent Requests
 
@@ -748,15 +755,15 @@ Subsequent requests with the same `(token, GitLab URL)` pair:
 
 1. Token and URL are extracted and hashed into a composite key
 2. Pool finds the existing entry and promotes it in the LRU list
-3. Same `*mcp.Server` is returned — session state is preserved
+3. The same shape server is returned, bound to the same entry, and session state is preserved
 
 ### 3. Session Timeout
 
 If a client is idle for longer than `--session-timeout` (default: 30 minutes):
 
 1. The MCP SDK closes the idle session (HTTP transport level)
-2. The pool entry (server + client) **remains** in the pool
-3. Next request from the same `(token, url)` pair creates a new MCP session on the existing server
+2. The pool entry **remains** in the pool
+3. Next request from the same `(token, url)` pair creates a new MCP session on the shape's server, bound to the same entry
 
 ### Timeout model: HTTP layer vs MCP session
 
@@ -898,7 +905,7 @@ The **GitLab token** always varies per client. The **GitLab URL** can vary per c
 | Token required at startup | Yes (`GITLAB_TOKEN`)                 | No — per-request                       |
 | Clients per process       | 1                                    | Many (bounded by `--max-http-clients`) |
 | Process lifecycle         | AI client spawns/kills               | Long-running daemon                    |
-| Memory per client         | ~50 MB (full process)                | ~130 KB (pool entry)                   |
+| Memory per client         | ~50 MB (full process)                | a pool entry, not a registered surface |
 | Client isolation          | Process-level                        | Pool entry-level (same guarantees)     |
 | Network requirement       | None (stdio pipes)                   | TCP/HTTP                               |
 | Session management        | SDK handles                          | SDK + server pool                      |
