@@ -808,9 +808,13 @@ func TestAttachRateLimitFunc_ResolvesABucketPerRequest(t *testing.T) {
 	t.Parallel()
 
 	type tenantKey struct{}
+	// A burst of one, and a refill slow enough that wall clock cannot decide the
+	// outcome: at one request per second the noisy tenant's second call is
+	// served whenever a second passes between the two, which is a second of a
+	// loaded machine's scheduling rather than anything about the code.
 	buckets := map[string]*RateLimiter{
-		"noisy": NewRateLimiter(1, 1),
-		"quiet": NewRateLimiter(1, 1),
+		"noisy": NewRateLimiter(0.001, 1),
+		"quiet": NewRateLimiter(0.001, 1),
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
@@ -863,23 +867,46 @@ func TestAttachRateLimitFunc_ResolvesABucketPerRequest(t *testing.T) {
 
 // TestAttachRateLimitFunc_NothingToInstall verifies the two calls that must
 // register no middleware at all: no server, and no resolver.
+//
+// Each guard is asserted through what happens without it rather than by the
+// call returning. Dropping the nil-server check dereferences a nil server here.
+// Dropping the nil-resolver check installs a middleware that calls a nil
+// function on the first request, so the case that would otherwise assert
+// nothing at all drives a real call through the server it built.
 func TestAttachRateLimitFunc_NothingToInstall(t *testing.T) {
 	t.Parallel()
 
-	cases := []struct {
-		name    string
-		server  *mcp.Server
-		resolve func(context.Context) *RateLimiter
-	}{
-		{name: "no server", resolve: func(context.Context) *RateLimiter { return nil }},
-		{name: "no resolver", server: mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			AttachRateLimitFunc(tc.server, tc.resolve)
+	t.Run("no server", func(t *testing.T) {
+		t.Parallel()
+		AttachRateLimitFunc(nil, func(context.Context) *RateLimiter { return nil })
+	})
+
+	t.Run("no resolver", func(t *testing.T) {
+		t.Parallel()
+		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+		var calls int
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "echo",
+			Description: "Answers, so that only an installed middleware could refuse or panic.",
+		}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+			calls++
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 		})
-	}
+
+		AttachRateLimitFunc(server, nil)
+
+		session, ctx := connectClient(t, server)
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo"})
+		if err != nil {
+			t.Fatalf("CallTool: %v; a middleware was installed with no resolver to call", err)
+		}
+		if res.IsError {
+			t.Errorf("the call was refused: %v", res.Content)
+		}
+		if calls != 1 {
+			t.Errorf("handler invocations = %d, want 1", calls)
+		}
+	})
 }
 
 // TestAttachRateLimitFunc_AnUnlimitedRequestIsServed verifies that a resolver

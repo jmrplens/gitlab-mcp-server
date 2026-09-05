@@ -2751,6 +2751,37 @@ func TestAcquireProbeSlot_ReleaseIsIdempotent(t *testing.T) {
 	}
 }
 
+// perTokenUserGitLab answers /api/v4/user with a different user per token, and
+// accepts every credential.
+//
+// The shared stub answers {} to everything, which makes every pooled entry's
+// identity the zero value: a test comparing identities against it compares
+// nothing. This is what a test asserting on identity needs.
+func perTokenUserGitLab(t *testing.T) string {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("PRIVATE-TOKEN")
+		if token == "" {
+			token, _ = strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		// The id is derived from the token so that two credentials differ in
+		// both fields rather than only in the name. Encoded rather than
+		// formatted: the token is the test's own literal, but writing a request
+		// value into a response body unescaped is the shape a scanner objects
+		// to wherever it appears.
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": len(token), "username": "user-" + token})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
 // TestEntry_AnswersForTheCredentialRatherThanForTheServer verifies the handle
 // that replaced a bare *mcp.Server as the thing a caller holds.
 //
@@ -2759,7 +2790,11 @@ func TestAcquireProbeSlot_ReleaseIsIdempotent(t *testing.T) {
 // has to know keys on the entry instead, and on the opaque owner token it
 // carries, so those have to be readable and distinct.
 func TestEntry_AnswersForTheCredentialRatherThanForTheServer(t *testing.T) {
-	cfg := testConfig(stubGitLabBase)
+	// A GitLab that names a different user per token, so the identity facts
+	// below compare something. Against the shared stub, which resolves no user
+	// at all, every identity is the zero value and a constant Identity() passes.
+	gitlab := perTokenUserGitLab(t)
+	cfg := testConfig(gitlab)
 	// One server for every credential, which is what a shape-shared factory
 	// does and what makes the entry rather than the server the identity.
 	shared := mcp.NewServer(&mcp.Implementation{Name: "shape", Version: "0.0.0"}, nil)
@@ -2767,11 +2802,11 @@ func TestEntry_AnswersForTheCredentialRatherThanForTheServer(t *testing.T) {
 		return shared, nil
 	})
 
-	first, err := pool.GetOrCreateEntry("glpat-first", stubGitLabBase, nil)
+	first, err := pool.GetOrCreateEntry("glpat-first", gitlab, nil)
 	if err != nil {
 		t.Fatalf("GetOrCreateEntry(first): %v", err)
 	}
-	second, err := pool.GetOrCreateEntry("glpat-second", stubGitLabBase, nil)
+	second, err := pool.GetOrCreateEntry("glpat-second", gitlab, nil)
 	if err != nil {
 		t.Fatalf("GetOrCreateEntry(second): %v", err)
 	}
@@ -2785,10 +2820,16 @@ func TestEntry_AnswersForTheCredentialRatherThanForTheServer(t *testing.T) {
 		{"one server serves the second credential", func() bool { return second.Server() == shared }, "the entry is not served by the shared server"},
 		{"each entry has a client", func() bool { return first.Client() != nil && second.Client() != nil }, "an entry was built with no GitLab client"},
 		{"the clients are not shared", func() bool { return first.Client() != second.Client() }, "two credentials share one GitLab client"},
-		{"the configuration names the instance", func() bool { return first.Config() != nil && first.Config().GitLabURL == stubGitLabBase }, "Config() does not name the instance the entry was built for"},
+		{"the configuration names the instance", func() bool { return first.Config() != nil && first.Config().GitLabURL == gitlab }, "Config() does not name the instance the entry was built for"},
 		// Whatever the lookup produced, the accessor reports it rather than a
 		// second, independently resolved answer.
 		{"the identity is the entry's own", func() bool { return first.Identity() == first.identity }, "Identity() does not report the entry's own"},
+		{"the identity names the user behind the credential", func() bool {
+			return first.Identity().Resolved() && first.Identity().Username == "user-glpat-first"
+		}, "Identity() does not name the user this credential belongs to"},
+		{"two credentials do not share an identity", func() bool {
+			return first.Identity() != second.Identity()
+		}, "two credentials report one identity; a constant would pass every other check here"},
 		{"each entry has an owner token", func() bool { return first.Owner() != "" && second.Owner() != "" }, "an entry was built with no owner token"},
 		{"the owner tokens are distinct", func() bool { return first.Owner() != second.Owner() }, "two credentials share one owner token"},
 	}
@@ -2802,7 +2843,7 @@ func TestEntry_AnswersForTheCredentialRatherThanForTheServer(t *testing.T) {
 
 	// Nothing downstream may see a credential change identity between requests:
 	// the owner token is what its sessions and notifications are filed under.
-	again, againErr := pool.GetOrCreateEntry("glpat-first", stubGitLabBase, nil)
+	again, againErr := pool.GetOrCreateEntry("glpat-first", gitlab, nil)
 	if againErr != nil {
 		t.Fatalf("GetOrCreateEntry(first, again): %v", againErr)
 	}
