@@ -177,3 +177,35 @@ func TestNewHealthResponse_CarriesTheDrainingStatus(t *testing.T) {
 		t.Errorf("config_digest = %q, want d1", got.ConfigDigest)
 	}
 }
+
+// TestAnnounceDraining_FlipsTheFlagAndHoldsForTheDelay covers both shapes of
+// the announcement: with no delay the flag flips and the caller closes the
+// listener at once, and with one the flag is already draining while the
+// listener is held open for the whole delay, which is the window a balancer
+// polling /health needs to see the 503 before the close.
+func TestAnnounceDraining_FlipsTheFlagAndHoldsForTheDelay(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		delay time.Duration
+	}{
+		{name: "no delay closes at once", delay: 0},
+		{name: "a delay holds the listener open", delay: 30 * time.Millisecond},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var draining atomic.Bool
+			started := time.Now()
+			announceDraining(t.Context(), &draining, tc.delay)
+			elapsed := time.Since(started)
+
+			if !draining.Load() {
+				t.Error("the draining flag was not set; /health would keep answering 200 through the close")
+			}
+			if elapsed < tc.delay {
+				t.Errorf("announceDraining returned after %s, want at least the %s delay", elapsed, tc.delay)
+			}
+		})
+	}
+}

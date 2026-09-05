@@ -449,3 +449,48 @@ func TestStartTelemetry_TheEnabledAnnouncement_SurvivesAWarnLogLevel(t *testing.
 		t.Errorf("the startup announcement was suppressed at LOG_LEVEL=warn; captured %v", messages)
 	}
 }
+
+// TestStartTelemetry_WarnsWhenACredentialCrossesTheNetworkInTheClear covers
+// the one configuration mistake this server refuses to keep quiet about: a
+// collector header configured beside a plaintext endpoint on another host.
+//
+// The endpoint is a name under the reserved .invalid domain, so it is remote
+// by any reading and resolves to nothing at once rather than hanging the
+// shutdown flush on a connection attempt. The warning is read off the base
+// handler because it is emitted after the bridge is installed, which is where
+// it has to be for the collector to receive it too.
+func TestStartTelemetry_WarnsWhenACredentialCrossesTheNetworkInTheClear(t *testing.T) {
+	restore := telemetryFlag
+	t.Cleanup(func() { telemetryFlag = restore })
+	telemetryFlag = nil
+
+	t.Setenv("GITLAB_MCP_TELEMETRY", "true")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.invalid:4318")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer%20secret")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+	t.Setenv("OTEL_BSP_EXPORT_TIMEOUT", "200")
+
+	var mu sync.Mutex
+	var messages []string
+	capture := levelCapturingHandler{threshold: slog.LevelWarn, mu: &mu, messages: &messages}
+	previous, previousBase := slog.Default(), baseLogHandler
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+		baseLogHandler = previousBase
+	})
+	baseLogHandler = capture
+	slog.SetDefault(slog.New(capture))
+
+	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	t.Cleanup(func() { stop(boundedShutdown(t)) })
+	if !provider.Enabled() {
+		t.Fatal("telemetry did not start, so there was no export to warn about")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	const warning = "a collector credential is configured against a plaintext endpoint on another host; it crosses the network in the clear on every export"
+	if !slices.Contains(messages, warning) {
+		t.Errorf("the plaintext-credential warning was not logged; captured %v", messages)
+	}
+}

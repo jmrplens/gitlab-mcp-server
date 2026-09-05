@@ -391,3 +391,89 @@ func TestTelemetryResources_AnUnusablePolicy_RecordsNothing(t *testing.T) {
 		t.Errorf("telemetryResources() = %#v, want nil so nothing about a resource is recorded", got)
 	}
 }
+
+// TestLogIdentityPolicy_SpeaksOnlyForANonDefaultPolicy pins the one line an
+// operator skimming a log for surprises needs, and its absence for the default:
+// "we are recording nobody" on every startup would be noise, "we are recording
+// usernames" is the line that has to be there.
+func TestLogIdentityPolicy_SpeaksOnlyForANonDefaultPolicy(t *testing.T) {
+	cases := []struct {
+		name   string
+		policy telemetry.IdentityPolicy
+		want   string
+	}{
+		{name: "the default says nothing", policy: telemetry.DefaultIdentityPolicy, want: ""},
+		{name: "full names what is exported", policy: telemetry.IdentityFull, want: "telemetry records caller identity"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			logIdentityPolicy(tc.policy)
+
+			if tc.want == "" && buf.Len() != 0 {
+				t.Errorf("the default policy logged %q, want silence", buf.String())
+			}
+			if tc.want != "" && !strings.Contains(buf.String(), tc.want) {
+				t.Errorf("log = %q, want it to carry %q", buf.String(), tc.want)
+			}
+		})
+	}
+}
+
+// TestTelemetryIdentityPolicy_TheFlagBeatsTheEnvironment covers the precedence
+// for the policy the same way the rotation test does for its flag: what the
+// operator typed wins over what the environment happened to carry.
+func TestTelemetryIdentityPolicy_TheFlagBeatsTheEnvironment(t *testing.T) {
+	withFreshFlagSet(t)
+	t.Setenv(telemetry.EnvIdentityName, string(telemetry.IdentityNone))
+
+	previous := telemetryIdentityFlag
+	t.Cleanup(func() { telemetryIdentityFlag = previous })
+	telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy), "")
+	if err := flag.CommandLine.Parse([]string{"-telemetry-identity=full"}); err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+
+	policy, err := telemetryIdentityPolicy()
+	if err != nil {
+		t.Fatalf("telemetryIdentityPolicy: %v", err)
+	}
+	if policy != telemetry.IdentityFull {
+		t.Errorf("policy = %q, want the flag's full rather than the environment's none", policy)
+	}
+}
+
+// TestIdentityKeyring_ARotationOutOfRange_RecordsNothingAndAnnouncesNothing
+// covers a rotation that parses but that the keyring refuses: longer than the
+// thirty days a generated key may live. The keyring is then absent, which
+// every consumer reads as "record nothing", and the startup announcement says
+// nothing either, because announcing that identity is recorded and then
+// failing to build the thing that records it would be the announcement lying.
+func TestIdentityKeyring_ARotationOutOfRange_RecordsNothingAndAnnouncesNothing(t *testing.T) {
+	t.Setenv(telemetry.EnvIdentityName, string(telemetry.IdentityPseudonymous))
+	t.Setenv(telemetry.EnvIdentityKeyName, "")
+	t.Setenv(telemetry.EnvIdentityRotationName, (telemetry.MaxKeyRotation + time.Hour).String())
+	resetIdentityKeyring(t)
+
+	var buf bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	if ring := identityKeyring(); ring != nil {
+		t.Fatalf("identityKeyring() = %v, want nil for a rotation past the maximum", ring)
+	}
+	if !strings.Contains(buf.String(), "keyring could not be built") {
+		t.Errorf("log = %q, want the keyring failure reported", buf.String())
+	}
+
+	buf.Reset()
+	announceIdentityChoice()
+	if strings.Contains(buf.String(), "telemetry records caller identity") {
+		t.Errorf("startup log %q announces identity recording for a keyring that could not be built", buf.String())
+	}
+}

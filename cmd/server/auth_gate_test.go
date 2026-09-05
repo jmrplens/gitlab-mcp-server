@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -1077,5 +1079,110 @@ func TestTransportSource(t *testing.T) {
 				t.Errorf("transportSource(%q) = %q, want %q", tc.remote, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestGateFailure_Write_LogsARefusalTheClientNeverReceived covers the write
+// failing under the refusal: the status is already committed, so nothing can
+// be resent, and the log line is the only trace that a rejection was lost.
+// The writer is the same broken connection the SSE heartbeat tests use.
+func TestGateFailure_Write_LogsARefusalTheClientNeverReceived(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
+	failure := &gateFailure{status: http.StatusUnauthorized, code: errCodeUnauthorized, message: "no token"}
+	recorder := httptest.NewRecorder()
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader(`{"id":7}`))
+
+	failure.write(brokenResponseWriter{recorder}, r)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d committed before the body failed", recorder.Code, http.StatusUnauthorized)
+	}
+	if !strings.Contains(logged.String(), "failed to write gate error response") {
+		t.Errorf("log = %q, want the lost refusal reported", logged.String())
+	}
+}
+
+// TestMcpServerGate_Middleware_RefusesASessionMintedForAnotherCredential
+// drives the ownership check through the middleware rather than calling it
+// directly, so the refusal is asserted the way a client sees it: a 404 with a
+// JSON-RPC body, and the handler behind the gate never reached.
+func TestMcpServerGate_Middleware_RefusesASessionMintedForAnotherCredential(t *testing.T) {
+	gate := newGate(t, okFactory)
+	// A tag map that knows nothing about the server the credential resolves
+	// to: whatever session ID arrives was minted for somebody else.
+	gate.sessionTags = &sync.Map{}
+
+	var reached atomic.Bool
+	handler := gate.middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		reached.Store(true)
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	req.Header.Set("PRIVATE-TOKEN", gateTestToken)
+	req.Header.Set(mcpSessionIDHeader, "somebody-else"+sessionTagSeparator+"abc")
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d for a session that belongs to another credential: %s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	}
+	if reached.Load() {
+		t.Error("the MCP handler ran on a session the credential does not own")
+	}
+	if decoded := decodeJSONRPCError(t, recorder.Body.String(), "1"); !strings.Contains(decoded.Error.Message, "does not belong") {
+		t.Errorf("message = %q, want it to say the session belongs to somebody else", decoded.Error.Message)
+	}
+}
+
+// TestNewTransportBudget_WithoutALimiter_IsAbsent pins that no limiter means
+// no budget at all rather than a budget that panics on first use: the nil
+// budget is the documented shape of a deployment without a trusted proxy
+// header, and every method already tolerates it.
+func TestNewTransportBudget_WithoutALimiter_IsAbsent(t *testing.T) {
+	t.Parallel()
+	if budget := newTransportBudget(nil); budget != nil {
+		t.Errorf("newTransportBudget(nil) = %+v, want nil", budget)
+	}
+	limiter := serverpool.NewAuthRateLimiter(2, authFailureWindow)
+	if got := newTransportBudget(limiter).rateLimiter(); got != limiter {
+		t.Error("rateLimiter() did not hand back the limiter the budget wraps")
+	}
+}
+
+// TestTransportBudget_Cleanup_ForgetsLapsedPairsOnly covers the sweep the
+// periodic cleanup runs: a pair whose window has passed is dropped, so the
+// same key charges the source again on its next failure, and a pair still
+// inside its window is kept, so it does not.
+func TestTransportBudget_Cleanup_ForgetsLapsedPairsOnly(t *testing.T) {
+	t.Parallel()
+
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(3, authFailureWindow))
+	const source = "203.0.113.7"
+	budget.charge(source, "198.51.100.1")
+	budget.charge(source, "198.51.100.2")
+
+	budget.mu.Lock()
+	budget.charged[source+"\x00"+"198.51.100.1"] = time.Now().Add(-2 * authFailureWindow)
+	budget.mu.Unlock()
+
+	budget.cleanup()
+
+	budget.mu.Lock()
+	remaining := len(budget.charged)
+	budget.mu.Unlock()
+	if remaining != 1 {
+		t.Fatalf("cleanup left %d pair(s), want 1: the lapsed pair forgotten and the live one kept", remaining)
+	}
+
+	// The kept pair is still counted, so charging it again costs nothing.
+	budget.charge(source, "198.51.100.2")
+	if budget.blocked(source) {
+		t.Fatal("a key still inside its window was charged a second time")
+	}
+	// The forgotten pair is a fresh key again, and it is the third one.
+	budget.charge(source, "198.51.100.1")
+	if !budget.blocked(source) {
+		t.Error("a key whose window lapsed did not charge the source again after cleanup")
 	}
 }

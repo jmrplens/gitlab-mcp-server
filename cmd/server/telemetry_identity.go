@@ -261,13 +261,7 @@ func identityRedactor() *telemetry.Redactor {
 		if policy == telemetry.IdentityNone {
 			return
 		}
-		redactor, err := telemetry.NewRedactor(policy, identityKeyring())
-		if err != nil {
-			slog.Error("telemetry identity redactor could not be built; recording nothing about callers",
-				"component", "telemetry", "error", err)
-			return
-		}
-		identityRedactorVal = redactor
+		identityRedactorVal = telemetry.NewRedactor(policy, identityKeyring())
 	})
 	return identityRedactorVal
 }

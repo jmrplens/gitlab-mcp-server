@@ -17,14 +17,10 @@ func attrMap(t *testing.T, attrs []attribute.KeyValue) map[string]string {
 	return out
 }
 
-// newRedactor builds one or fails the test.
+// newRedactor builds one over the test keyring.
 func newRedactor(t *testing.T, policy IdentityPolicy) *Redactor {
 	t.Helper()
-	redactor, err := NewRedactor(policy, testKeyring(t))
-	if err != nil {
-		t.Fatalf("NewRedactor(%q, testKeyring(t)): %v", policy, err)
-	}
-	return redactor
+	return NewRedactor(policy, testKeyring(t))
 }
 
 // TestRedactor_DefaultExportsNothing pins the default, which is the only value
@@ -298,10 +294,7 @@ func TestPolicyDescription_SaysWhatEachPolicyExports(t *testing.T) {
 func TestRedactor_ABrokenKeyringYieldsNoIdentityAtAll(t *testing.T) {
 	t.Parallel()
 
-	redactor, err := NewRedactor(IdentityPseudonymous, nil)
-	if err != nil {
-		t.Fatalf("NewRedactor: %v", err)
-	}
+	redactor := NewRedactor(IdentityPseudonymous, nil)
 
 	if attrs := redactor.Attributes("42", "jane"); len(attrs) != 0 {
 		t.Errorf("a redactor with no keyring produced %v; an empty digest is not a pseudonym", attrs)

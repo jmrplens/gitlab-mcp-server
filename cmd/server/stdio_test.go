@@ -483,3 +483,34 @@ func assertJSONRPCRefusal(t *testing.T, raw []byte, wantCode int, detail string)
 		t.Errorf("message = %q, want it to name %s", answer.Error.Message, detail)
 	}
 }
+
+// TestSanitizedInput_MaxLineBytes_DefaultsWhenUnconfigured pins the ceiling a
+// reader built without limits enforces: the default, not zero, since a zero
+// ceiling would refuse every line.
+func TestSanitizedInput_MaxLineBytes_DefaultsWhenUnconfigured(t *testing.T) {
+	t.Parallel()
+	reader, _ := resilientStdioWith(strings.NewReader(""), &bytes.Buffer{}, stdioLimits{})
+	if got := reader.maxLineBytes(); got != defaultMaxStdioLineBytes {
+		t.Errorf("maxLineBytes() = %d with no limit configured, want the default %d", got, defaultMaxStdioLineBytes)
+	}
+	configured, _ := resilientStdioWith(strings.NewReader(""), &bytes.Buffer{}, stdioLimits{maxLineBytes: 512})
+	if got := configured.maxLineBytes(); got != 512 {
+		t.Errorf("maxLineBytes() = %d, want the configured 512", got)
+	}
+}
+
+// TestErrorLine_AnIDThatIsNotJSON_WritesNothing covers the one way the answer
+// can fail to marshal: a raw id that is not valid JSON, which the encoder
+// refuses rather than copying through. Every caller passes an id scalarID
+// has already vetted, so the case is a contract check on the only fallback:
+// silence, since a half-formed line on the protocol stream would be worse
+// than no answer.
+func TestErrorLine_AnIDThatIsNotJSON_WritesNothing(t *testing.T) {
+	t.Parallel()
+	if got := errorLine(json.RawMessage("{"), -32600, "refused"); got != nil {
+		t.Errorf("errorLine with an unmarshalable id wrote %q, want nothing", got)
+	}
+	if got := errorLine(json.RawMessage(`7`), -32600, "refused"); !strings.HasSuffix(string(got), "\n") || !strings.Contains(string(got), `"id":7`) {
+		t.Errorf("errorLine with a valid id wrote %q, want a newline-terminated answer carrying the id", got)
+	}
+}

@@ -2112,3 +2112,101 @@ func resourceTemplateURIs(t *testing.T, server *mcp.Server) map[string]bool {
 	}
 	return uris
 }
+
+// TestResourceReader_WithoutAnIndex_AnswersNotReadyInsteadOfPanicking covers
+// the reader before registration has published an index. The runtime seeds
+// one, so nothing built through it gets here; the point is that a reader that
+// somehow does answers with the retryable "not ready" rather than
+// dereferencing nil inside a watcher.
+func TestResourceReader_WithoutAnIndex_AnswersNotReadyInsteadOfPanicking(t *testing.T) {
+	t.Parallel()
+	reader := &resourceReader{}
+	_, err := reader.Read(context.Background(), "gitlab://project/42/pipeline/99")
+	if !errors.Is(err, errCatalogNotReady) {
+		t.Errorf("Read() error = %v, want %v", err, errCatalogNotReady)
+	}
+}
+
+// TestSessionBridge_ForgetStream_IgnoresANilStream pins the nil guard on the
+// bookkeeping a renewal ticker drops when it ends: a legacy subscribe has no
+// stream, and forgetting nothing must be a no-op rather than a map write
+// under a nil key.
+func TestSessionBridge_ForgetStream_IgnoresANilStream(t *testing.T) {
+	t.Parallel()
+	bridge := newSessionBridge(nil)
+	bridge.renewing[&listenStream{cancel: func() {}}] = struct{}{}
+
+	bridge.forgetStream(nil)
+
+	if len(bridge.renewing) != 1 {
+		t.Errorf("forgetStream(nil) changed the renewal set to %d entries, want the one stream left alone", len(bridge.renewing))
+	}
+}
+
+// TestSessionBridge_ALeaseTooShortToRenew_StartsNoTicker covers the renewal
+// interval collapsing to zero: a lease of a couple of nanoseconds leaves
+// nothing to divide into thirds, and a ticker cannot be built on a zero
+// interval, so the stream holds its watch without one rather than panicking
+// in time.NewTicker.
+func TestSessionBridge_ALeaseTooShortToRenew_StartsNoTicker(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	opts := fastOptions()
+	opts.Lease = 2 * time.Nanosecond
+	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), opts)
+	t.Cleanup(runtime.manager.Close)
+	bridge := newSessionBridge(runtime.manager)
+	session, _ := connectedSessions(t)
+
+	streamCtx, endStream := context.WithCancel(t.Context())
+	defer endStream()
+	ctx := withListenStream(streamCtx, &listenStream{cancel: func() {}})
+	if err := bridge.Subscribe(ctx, &mcp.SubscribeRequest{
+		Session: session,
+		Params:  &mcp.SubscribeParams{URI: "gitlab://project/42/pipeline/99"},
+	}); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	if runtime.manager.Len() != 1 {
+		t.Fatalf("watchers = %d, want 1: the watch itself is unaffected by the missing ticker", runtime.manager.Len())
+	}
+	if got := bridge.activeRenewals(); got != 0 {
+		t.Errorf("activeRenewals() = %d, want 0 when the lease leaves no interval to renew on", got)
+	}
+}
+
+// TestSessionBridge_SubscribeUnlessStateless_TellsTheListenPathFromTheLegacyOne
+// pins the one distinction the stateless handler draws. The SDK routes both
+// resources/subscribe and every URI of a subscriptions/listen through it, and
+// only the first is undeliverable on a sessionless transport, so the mark on
+// the context is what decides between a real watch and the refusal.
+func TestSessionBridge_SubscribeUnlessStateless_TellsTheListenPathFromTheLegacyOne(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
+	t.Cleanup(runtime.manager.Close)
+	bridge := newSessionBridge(runtime.manager)
+	session, _ := connectedSessions(t)
+	req := &mcp.SubscribeRequest{
+		Session: session,
+		Params:  &mcp.SubscribeParams{URI: "gitlab://project/42/pipeline/99"},
+	}
+
+	if err := bridge.subscribeUnlessStateless(t.Context(), req); !errors.Is(err, errStatelessSubscribe) {
+		t.Fatalf("a legacy subscribe on a stateless transport returned %v, want %v", err, errStatelessSubscribe)
+	}
+	if runtime.manager.Len() != 0 {
+		t.Fatalf("watchers = %d after the refusal, want none started", runtime.manager.Len())
+	}
+
+	streamCtx, endStream := context.WithCancel(t.Context())
+	defer endStream()
+	listen := withListenStream(streamCtx, &listenStream{cancel: func() {}})
+	if err := bridge.subscribeUnlessStateless(listen, req); err != nil {
+		t.Fatalf("a listen-path subscribe was refused: %v", err)
+	}
+	if runtime.manager.Len() != 1 {
+		t.Errorf("watchers = %d after the listen-path subscribe, want 1", runtime.manager.Len())
+	}
+}

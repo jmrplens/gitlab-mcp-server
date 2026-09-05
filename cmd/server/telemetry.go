@@ -191,12 +191,9 @@ func installSlogBridge() (restore func()) {
 	}
 
 	previous := slog.Default()
+	// Non-nil by construction: NewSlogHandler declines only a nil base, which
+	// the check above already turned away.
 	bridged := telemetry.NewSlogHandler(baseLogHandler, telemetry.DefaultLogSeverity, identityRedactor())
-	if bridged == nil {
-		return func() {
-			// Same as above: no bridge, nothing to put back.
-		}
-	}
 	slog.SetDefault(slog.New(bridged))
 	return func() { slog.SetDefault(previous) }
 }

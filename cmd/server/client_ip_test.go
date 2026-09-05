@@ -6,6 +6,7 @@ package main
 import (
 	"net/http"
 	"net/netip"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -252,5 +253,28 @@ func TestTrustedProxiesOf_UnparseableList_TrustsNobody(t *testing.T) {
 	}
 	if trustedProxiesOf([]string{"127.0.0.1"}).empty() {
 		t.Error("a valid list produced an empty trusted set")
+	}
+}
+
+// TestClientIP_HeaderWithNoHops_ChargesThePeer covers a header that is present
+// and carries only separators and whitespace: there is no hop to believe, so
+// the trusted peer itself is charged, exactly as if the header were absent.
+func TestClientIP_HeaderWithNoHops_ChargesThePeer(t *testing.T) {
+	t.Parallel()
+	proxies, err := parseTrustedProxies([]string{"127.0.0.1"})
+	if err != nil {
+		t.Fatalf("parseTrustedProxies: %v", err)
+	}
+	for _, value := range []string{" , ", ",", " ,, "} {
+		t.Run(strconv.Quote(value), func(t *testing.T) {
+			t.Parallel()
+			r := &http.Request{
+				RemoteAddr: "127.0.0.1:12345",
+				Header:     http.Header{"X-Forwarded-For": {value}},
+			}
+			if got := clientIP(r, "X-Forwarded-For", proxies); got != "127.0.0.1" {
+				t.Errorf("clientIP(%q) = %q, want the peer 127.0.0.1", value, got)
+			}
+		})
 	}
 }
