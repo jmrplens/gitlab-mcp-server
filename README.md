@@ -458,7 +458,71 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 <summary><strong>Unnecessary statistics</strong> — numbers nobody asked for</summary>
 
 <!-- START STATS -->
-@@GENERATED@@
+
+### File counts
+
+| Category                 |     Files |       Lines |
+| ------------------------ | --------: | ----------: |
+| Source (`.go`, non-test) |     1,073 |     227,996 |
+| Unit tests (`_test.go`)  |       640 |     369,928 |
+| End-to-end tests         |       226 |      61,190 |
+| **Total**                | **1,939** | **659,114** |
+
+### Functions
+
+| Category                        |  Count |
+| ------------------------------- | -----: |
+| Source functions                |  8,526 |
+| . Exported (public)             |  2,808 |
+| . Unexported (private)          |  5,718 |
+| Unit test functions (`TestXxx`) | 13,147 |
+| Subtests (`t.Run(...)`)         |  4,910 |
+| End-to-end test functions       |    577 |
+
+### Ratios worth noting
+
+| Observation                        |                      Value |
+| ---------------------------------- | -------------------------: |
+| Test lines vs source lines         | 1.62× more tests than code |
+| Average source file length         |                 ~212 lines |
+| Average test file length           |                 ~578 lines |
+| Comment lines in source            |  34,989 (~15.3% of source) |
+| Test functions per source function |                       1.5× |
+
+### Code patterns
+
+| Pattern                            | Count |
+| ---------------------------------- | ----: |
+| `if err != nil` checks             | 7,153 |
+| `defer` statements                 | 1,206 |
+| `struct` types defined             | 2,888 |
+| `//nolint` suppressions            |   280 |
+| `TODO` / `FIXME` / `HACK` comments |     2 |
+
+### Project
+
+| Metric                         | Value |
+| ------------------------------ | ----: |
+| Go packages                    |   252 |
+| Direct dependencies (`go.mod`) |    31 |
+| Indirect dependencies          |    38 |
+
+### Hall of fame
+
+| Record              | File                                   |
+| ------------------- | -------------------------------------- |
+| Longest source file | `cmd/server/main.go`. 4,410 lines      |
+| Longest test file   | `cmd/server/main_test.go`. 8,795 lines |
+
+### Because why not
+
+| Fact                                 | Value                                                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Source code printed at 55 lines/page | ~4,145 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,520 (impossible to avoid)                                                                         |
+| Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
+| Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
+
 <!-- END STATS -->
 
 </details>
