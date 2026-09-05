@@ -76,8 +76,21 @@ func build(client *gitlabclient.Client, dotcom bool, cfg *config.ServerConfig) (
 	if standaloneErr != nil {
 		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
+	// Validated here and again after the safe-mode rewrite, because
+	// buildActionCatalog validates only what it built: the standalone and
+	// interactive groups join afterwards, and the rewrite replaces the
+	// handler and the binder of every mutating action. Both are the kind of
+	// step that can leave an action bound to the credential-less client the
+	// shared copy is built with, which would refuse every call for every
+	// credential of the configuration.
+	if validateErr := withStandalone.Validate(); validateErr != nil {
+		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("validate dynamic action catalog: %w", validateErr)
+	}
 	if cfg.SafeMode {
 		withStandalone = withStandalone.WithSafeModePreviews()
+		if validateErr := withStandalone.Validate(); validateErr != nil {
+			return nil, gitlabtools.WithheldActions{}, fmt.Errorf("validate safe-mode dynamic action catalog: %w", validateErr)
+		}
 	}
 	return withStandalone, withheld, nil
 }

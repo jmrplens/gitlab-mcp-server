@@ -466,6 +466,13 @@ func TestCatalog_ValidateRejectsInvalidCatalogs(t *testing.T) {
 			want: "nil input schema",
 		},
 		{
+			name: "no binder",
+			catalog: catalogWithActions(t, "gitlab_project", []Action{
+				{Name: "get", Route: testRouteWithoutBinder(false)},
+			}),
+			want: "has no binder",
+		},
+		{
 			name: "bad schema uri",
 			catalog: catalogWithActions(t, "gitlab_project", []Action{
 				{Name: "get", Route: testRoute(false), SchemaURI: "gitlab://schema/meta/gitlab_project/list"},
@@ -514,6 +521,19 @@ func TestCatalog_ValidateAcceptsValidAndRejectsNil(t *testing.T) {
 	})
 	if err := catalog.Validate(); err != nil {
 		t.Fatalf("Validate(valid) error = %v", err)
+	}
+
+	// The dynamic controllers are the one exemption from the binder rule:
+	// gitlab_find_action and gitlab_execute_action close over the registry
+	// rather than a client, so there is no client for a binder to take.
+	controllers := NewCatalog()
+	controllerGroup := NewGroup(GroupOptions{ToolName: "gitlab_dynamic", SurfaceKind: SurfaceKindDynamicController})
+	controllerGroup.SetAction(Action{Name: "find", Route: testRouteWithoutBinder(false)})
+	if err := controllers.AddGroup(controllerGroup); err != nil {
+		t.Fatalf("AddGroup(dynamic controllers) error = %v", err)
+	}
+	if err := controllers.Validate(); err != nil {
+		t.Fatalf("Validate(dynamic controllers) error = %v, want the binder rule not to apply", err)
 	}
 }
 
@@ -579,8 +599,18 @@ func catalogWithActions(t *testing.T, toolName string, actions []Action) *Catalo
 	return catalog
 }
 
-// testRoute supports test route assertions in actioncatalog tests.
+// testRoute supports test route assertions in actioncatalog tests. It carries
+// a binder because [Catalog.Validate] requires one of every catalog action but
+// the dynamic controllers; [testRouteWithoutBinder] is the route that does not.
 func testRoute(destructive bool) toolutil.ActionRoute {
+	return testRouteWithoutBinder(destructive).WithBoundHandler(nil, func(*gitlabclient.Client) toolutil.ActionFunc {
+		return testHandler
+	})
+}
+
+// testRouteWithoutBinder is testRoute's route with its handler installed
+// directly, the shape a catalog refuses.
+func testRouteWithoutBinder(destructive bool) toolutil.ActionRoute {
 	return toolutil.ActionRoute{
 		Handler:     testHandler,
 		Destructive: destructive,

@@ -550,6 +550,22 @@ func validateCatalogGroup(group Group, seenAliases map[string]ActionID) error {
 	return nil
 }
 
+// requiresRouteBinder reports whether a group's actions must carry a binder.
+//
+// Every action that reaches GitLab must: a catalog is built once per
+// configuration with a credential-less client and rebound per credential, so a
+// route with no binder keeps whatever client its closure captured, which for
+// the shared copy is the unbound one. That action would then refuse every call
+// for every credential, and no domain test would see it, because the domain
+// builds its route with a real client.
+//
+// The dynamic controller tools are the exception and the only one: gitlab_find_action
+// and gitlab_execute_action close over the registry rather than a client, so
+// they have no client to bind and nothing for a rebind to rebuild.
+func requiresRouteBinder(group Group) bool {
+	return group.SurfaceKind != SurfaceKindDynamicController
+}
+
 func validateCatalogAction(group Group, action Action, seenAliases map[string]ActionID) error {
 	if strings.TrimSpace(action.Name) == "" {
 		return fmt.Errorf("action name is required for tool %q", group.ToolName)
@@ -559,6 +575,9 @@ func validateCatalogAction(group Group, action Action, seenAliases map[string]Ac
 	}
 	if action.Route.InputSchema == nil {
 		return fmt.Errorf("action %q has nil input schema", action.ID)
+	}
+	if requiresRouteBinder(group) && action.Route.Bind == nil {
+		return fmt.Errorf("action %q has no binder: build the route with a constructor that takes the client (RouteAction, RouteVoidAction, RouteActionWithRequest, DestructiveAction and the rest) or with ActionRoute.WithBoundHandler, so a shared catalog can rebuild its handler for each credential", action.ID)
 	}
 	if err := toolutil.ValidateRouteBinding(action.Route); err != nil {
 		return fmt.Errorf("action %q: %w", action.ID, err)

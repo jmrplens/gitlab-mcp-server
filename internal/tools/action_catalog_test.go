@@ -555,21 +555,26 @@ func TestEnsureActionSpecOwners_FillsMissingOwnersDefensively(t *testing.T) {
 	}
 }
 
-// testCatalogActionRoute supports test catalog action route assertions in tools tests.
+// testCatalogActionRoute supports test catalog action route assertions in
+// tools tests. It carries a binder because a catalog requires one of every
+// action: a route without one keeps the client its closure captured, which for
+// a shared catalog is the credential-less one.
 func testCatalogActionRoute(params ...string) toolutil.ActionRoute {
 	properties := make(map[string]any, len(params))
 	for _, param := range params {
 		properties[param] = map[string]any{"type": "string"}
 	}
-	return toolutil.ActionRoute{
-		Handler: func(context.Context, map[string]any) (any, error) {
-			return map[string]any{}, nil
-		},
+	route := toolutil.ActionRoute{
 		InputSchema: map[string]any{
 			"type":       "object",
 			"properties": properties,
 		},
 	}
+	return route.WithBoundHandler(nil, func(*gitlabclient.Client) toolutil.ActionFunc {
+		return func(context.Context, map[string]any) (any, error) {
+			return map[string]any{}, nil
+		}
+	})
 }
 
 // mustBuildActionCatalog builds action catalog test fixtures and fails the test on error.
