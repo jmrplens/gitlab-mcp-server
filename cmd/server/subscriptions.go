@@ -158,6 +158,11 @@ type sessionBridge struct {
 	// number of open listen streams holding their own watches, which is worth
 	// being able to read directly rather than inferring from goroutine counts.
 	liveRenewals atomic.Int64
+	// renewals counts the renewals those tickers have performed. A test that
+	// wants "the stream keeps its watch at full speed" can wait for this to
+	// move instead of sleeping across a lease and reading the clock, which is
+	// the shape that failed on a loaded runner.
+	renewals atomic.Int64
 }
 
 // watchHold identifies one watch as the manager counts it: by session and URI.
@@ -238,6 +243,7 @@ func (b *sessionBridge) renewWhileStreaming(ctx context.Context, session *mcp.Se
 				return
 			case <-ticker.C:
 				b.manager.RenewAll(session)
+				b.renewals.Add(1)
 			}
 		}
 	}()
@@ -311,6 +317,12 @@ func (b *sessionBridge) startRenewing(stream *listenStream) bool {
 // activeRenewals reports how many renewal tickers are running.
 func (b *sessionBridge) activeRenewals() int64 {
 	return b.liveRenewals.Load()
+}
+
+// streamRenewals reports how many times an open listen stream has renewed the
+// watches of its session so far.
+func (b *sessionBridge) streamRenewals() int64 {
+	return b.renewals.Load()
 }
 
 // forgetStream drops the bookkeeping for a stream that is going away.

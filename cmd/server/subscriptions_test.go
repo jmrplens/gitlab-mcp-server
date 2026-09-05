@@ -1643,12 +1643,21 @@ func TestSessionBridge_LegacySubscribeIsStillSessionScoped(t *testing.T) {
 // why it is fixed alongside: the feature would otherwise have shipped and
 // quietly degraded by a factor of forty after thirty minutes.
 //
-// A short lease is injected so the renewal has to actually happen rather than
-// the test passing because nothing had time to expire.
+// The renewal is observed rather than the clock. This test used to sleep for
+// several short leases and then assert that no watch had been demoted, which
+// failed on a loaded macOS runner: with a 150 ms lease, the renewal goroutine
+// only had to be starved for 100 ms for the watch to slow down, and the test
+// reported a defect that was not there. Now the lease is long enough that only
+// a real failure to renew could demote the watch, and the assertion waits for
+// the bridge's own renewal count to move, so what is checked is that the open
+// stream renews and that the renewals keep the watch at full speed.
 func TestSessionBridge_AnOpenListenKeepsItsWatchAtFullSpeed(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
 	opts := fastOptions()
-	opts.Lease = 150 * time.Millisecond
+	// The stream renews every Lease/3; a lease of three seconds gives a
+	// renewal every second and two seconds of slack before demotion, which no
+	// scheduler starvation a runner produces gets near.
+	opts.Lease = 3 * time.Second
 	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
 		subscriptionCfg(config.CapabilitySurfaceFull), opts)
 	t.Cleanup(runtime.manager.Close)
@@ -1666,15 +1675,24 @@ func TestSessionBridge_AnOpenListenKeepsItsWatchAtFullSpeed(t *testing.T) {
 		t.Fatalf("Subscribe: %v", err)
 	}
 
-	// Several leases' worth of silence. With no renewal the watch is demoted
-	// well before this elapses.
-	time.Sleep(700 * time.Millisecond)
+	// Two renewals prove the ticker is running and renewing; with the lease
+	// above they take about two seconds, and the deadline is generous because
+	// a slow renewal is exactly what must not fail this test.
+	const wantRenewals = 2
+	deadline := time.Now().Add(20 * time.Second)
+	for bridge.streamRenewals() < wantRenewals {
+		if time.Now().After(deadline) {
+			t.Fatalf("the listen stream renewed %d time(s) in 20 s, want at least %d; the renewal ticker is not running",
+				bridge.streamRenewals(), wantRenewals)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 
 	if runtime.manager.Len() != 1 {
 		t.Fatalf("the watch is gone entirely; this test can no longer see what it checks")
 	}
 	if demoted := runtime.manager.DemotedCount(); demoted != 0 {
-		t.Errorf("%d watch(es) demoted while the listen stream was open and being read", demoted)
+		t.Errorf("%d watch(es) demoted while the listen stream was open and renewing", demoted)
 	}
 }
 
