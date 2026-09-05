@@ -508,7 +508,7 @@ func TestServerShell_DefaultCredentialState_FailsClosedOnlyWhenShared(t *testing
 			name: "a server shared by a configuration shape",
 			opts: []serverOption{
 				withSubscriptionOptions(fastOptions()),
-				withSharedCredentials(&credentialStates{}, newSessionOwners()),
+				withSharedCredentials(&credentialStates{}, newSessionOwners(false)),
 			},
 		},
 	}
@@ -559,7 +559,7 @@ func TestServerShell_StateFor_ABoundRequest_OverridesTheDefault(t *testing.T) {
 	shell, err := newServerShell(t.Context(), subscriptionGitLabClient(t, gitlab.URL), &config.ServerConfig{
 		ToolSurface:       config.ToolSurfaceDynamic,
 		CapabilitySurface: config.CapabilitySurfaceFull,
-	}, withSharedCredentials(&credentialStates{}, newSessionOwners()))
+	}, withSharedCredentials(&credentialStates{}, newSessionOwners(false)))
 	if err != nil {
 		t.Fatalf("newServerShell: %v", err)
 	}

@@ -227,7 +227,7 @@ func TestSessionOwners_SendingMiddleware_DeliversOnlyToTheOwningSession(t *testi
 			params := updateParams(tt.tag, uri)
 			for shape, req := range deliveryShapes(tt.session, params) {
 				t.Run(shape, func(t *testing.T) {
-					owners := newSessionOwners()
+					owners := newSessionOwners(false)
 					owners.record(owned, mine)
 
 					got := runSendingMiddleware(t, owners, req)
@@ -339,7 +339,7 @@ func assertDelivered(
 // single-session test and drops the second session onwards here.
 func TestSessionOwners_SendingMiddleware_OneNotificationReachesEverySessionOfItsOwner(t *testing.T) {
 	const owner = "owner-mine"
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	first, _ := connectedSessions(t)
 	second, _ := connectedSessions(t)
 	owners.record(first, owner)
@@ -389,7 +389,7 @@ func TestSessionOwners_SendingMiddleware_OneNotificationReachesEverySessionOfIts
 // request. Judging any of those by an owner tag they never carry would drop
 // them all.
 func TestSessionOwners_SendingMiddleware_LeavesEveryOtherMethodAlone(t *testing.T) {
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 
 	methods := []string{
 		"notifications/tools/list_changed",
@@ -431,7 +431,7 @@ func TestSessionOwners_SendingMiddleware_LeavesEveryOtherMethodAlone(t *testing.
 // filter exists for is a wiring defect, and delivering it would defeat the
 // filter.
 func TestSessionOwners_SendingMiddleware_MalformedResourceUpdate_IsDropped(t *testing.T) {
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	session, clientSession := connectedSessions(t)
 	owners.record(session, "owner-mine")
 
@@ -475,7 +475,7 @@ func TestSessionOwners_SendingMiddleware_MalformedResourceUpdate_IsDropped(t *te
 // filters, so the guard is what keeps it from dereferencing one on the way to
 // the SDK's own error handling.
 func TestSessionOwners_SendingMiddleware_ANilRequest_IsPassedOn(t *testing.T) {
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	var calls int
 	handler := owners.sendingMiddleware(func(context.Context, string, mcp.Request) (mcp.Result, error) {
 		calls++
@@ -526,7 +526,7 @@ func TestMetaWithout_CopiesRatherThanMutating(t *testing.T) {
 // time.
 func TestSessionOwners_Record_IsIdempotentAndFilesTheSessionID(t *testing.T) {
 	const owner = "owner-mine"
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	session := newIdentifiedSessions(t).connect(t)
 
 	owners.record(session, owner)
@@ -555,8 +555,16 @@ func TestSessionOwners_Record_IsIdempotentAndFilesTheSessionID(t *testing.T) {
 //
 // The latest record wins, for both lookups. Anything else would leave the gate
 // comparing a live session against a credential the pool no longer holds.
+//
+// The reverse indexes have to follow too, and asserting only the forward
+// lookups is what let them drift: the previous owner went on listing this
+// session, so its eviction would have dropped a claim belonging to the
+// credential that now holds it, and the session ID would have been forgotten
+// from under a live session. No HTTP path reaches the rebinding today, since a
+// session presented with a different credential is refused, and that refusal is
+// decided from this very map.
 func TestSessionOwners_Record_ASessionRebound_FollowsTheNewCredential(t *testing.T) {
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	session := newIdentifiedSessions(t).connect(t)
 
 	owners.record(session, "owner-before")
@@ -568,6 +576,34 @@ func TestSessionOwners_Record_ASessionRebound_FollowsTheNewCredential(t *testing
 	if got := owners.ownerOfID(session.ID()); got != "owner-after" {
 		t.Errorf("ownerOfID = %q, want the credential that most recently claimed the session", got)
 	}
+
+	owners.mu.Lock()
+	staleSessions := len(owners.sessionsByOwner["owner-before"])
+	staleIDs := len(owners.idsByOwner["owner-before"])
+	owners.mu.Unlock()
+	if staleSessions != 0 || staleIDs != 0 {
+		t.Errorf("the previous owner still lists %d session(s) and %d id(s) of a session it no longer holds",
+			staleSessions, staleIDs)
+	}
+
+	t.Run("the previous owner's eviction leaves it alone", func(t *testing.T) {
+		owners.forgetOwner("owner-before")
+
+		if got := owners.ownerOf(session); got != "owner-after" {
+			t.Errorf("ownerOf = %q after the previous owner was evicted, want the current one", got)
+		}
+		if got := owners.ownerOfID(session.ID()); got != "owner-after" {
+			t.Errorf("ownerOfID = %q after the previous owner was evicted, want the current one", got)
+		}
+	})
+
+	t.Run("the current owner's eviction takes it", func(t *testing.T) {
+		owners.forgetOwner("owner-after")
+
+		if got := owners.ownerOf(session); got != "" {
+			t.Errorf("ownerOf = %q after the owning credential was evicted, want none", got)
+		}
+	})
 }
 
 // TestSessionOwners_OwnerOfID_AnswersOnlyForWhatItRecorded pins the lookup the
@@ -578,7 +614,7 @@ func TestSessionOwners_Record_ASessionRebound_FollowsTheNewCredential(t *testing
 // own token, and an empty answer that compared equal to an entry with no token
 // would hand somebody else's session over.
 func TestSessionOwners_OwnerOfID_AnswersOnlyForWhatItRecorded(t *testing.T) {
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	recorded := newIdentifiedSessions(t).recordUnder(t, owners, "owner-mine")
 
 	tests := []struct {
@@ -608,7 +644,7 @@ func TestSessionOwners_OwnerOfID_AnswersOnlyForWhatItRecorded(t *testing.T) {
 // panic.
 func TestSessionOwners_Forget_DropsOneSessionAndLeavesTheRest(t *testing.T) {
 	const owner = "owner-mine"
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	minted := newIdentifiedSessions(t)
 
 	first, second := minted.connect(t), minted.connect(t)
@@ -650,7 +686,7 @@ func TestSessionOwners_Forget_DropsOneSessionAndLeavesTheRest(t *testing.T) {
 // nobody holds.
 func TestSessionOwners_Forget_ASessionMissingFromThePerOwnerIndexes_IsStillDropped(t *testing.T) {
 	const owner = "owner-mine"
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	session := newIdentifiedSessions(t).connect(t)
 
 	// Recorded in the primary indexes only.
@@ -678,7 +714,7 @@ func TestSessionOwners_Forget_ASessionMissingFromThePerOwnerIndexes_IsStillDropp
 // credential's sessions must survive it, or one eviction would end every
 // tenant's session on the shared server.
 func TestSessionOwners_ForgetOwner_DropsEverySessionOfAnEvictedCredential(t *testing.T) {
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	minted := newIdentifiedSessions(t)
 
 	evicted := map[string]*mcp.ServerSession{
@@ -723,7 +759,7 @@ func TestSessionOwners_ForgetOwner_DropsEverySessionOfAnEvictedCredential(t *tes
 // table that kept those would grow for the life of the process, and each entry
 // keeps a session pointer reachable.
 func TestSessionOwners_ADisconnectedSession_IsForgotten(t *testing.T) {
-	owners := newSessionOwners()
+	owners := newSessionOwners(false)
 	session, clientSession := connectedSessions(t)
 	owners.record(session, "owner-mine")
 
@@ -749,7 +785,7 @@ func TestSessionOwners_ADisconnectedSession_IsForgotten(t *testing.T) {
 // panics.
 func TestSessionOwners_NothingToRecord_IsANoOp(t *testing.T) {
 	var absent *sessionOwners
-	populated := newSessionOwners()
+	populated := newSessionOwners(false)
 	session, _ := connectedSessions(t)
 
 	absent.record(session, "owner")
@@ -801,6 +837,7 @@ func TestSessionOwners_RecordingMiddleware_RecordsOnlyWhatWillBeRead(t *testing.
 		// literal nil, which a zero req could not express.
 		req       mcp.Request
 		noRequest bool
+		stateless bool
 		wantOwner string
 	}{
 		{
@@ -821,6 +858,25 @@ func TestSessionOwners_RecordingMiddleware_RecordsOnlyWhatWillBeRead(t *testing.
 			name:      "a legacy subscribe, for the same reason",
 			bind:      true,
 			method:    methodResourcesSubscribe,
+			session:   ephemeral,
+			wantOwner: "owner-mine",
+		},
+		{
+			// The sessionless transport refuses this method before it
+			// subscribes anything, so the session it arrived on can never
+			// receive a notification and recording it buys nothing.
+			name:      "a legacy subscribe on the sessionless transport",
+			bind:      true,
+			stateless: true,
+			method:    methodResourcesSubscribe,
+			session:   ephemeral,
+		},
+		{
+			// The listen path works there, so it is recorded on both.
+			name:      "a listen on the sessionless transport",
+			bind:      true,
+			stateless: true,
+			method:    methodSubscriptionsListen,
 			session:   ephemeral,
 			wantOwner: "owner-mine",
 		},
@@ -853,7 +909,7 @@ func TestSessionOwners_RecordingMiddleware_RecordsOnlyWhatWillBeRead(t *testing.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			owners := newSessionOwners()
+			owners := newSessionOwners(tt.stateless)
 			var reached bool
 			handler := owners.recordingMiddleware(func(context.Context, string, mcp.Request) (mcp.Result, error) {
 				reached = true

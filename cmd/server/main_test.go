@@ -7342,7 +7342,7 @@ func TestKeepAliveInterval_HTTPPoolEntriesRunWithoutTheServerPing(t *testing.T) 
 		t.Errorf("keepAliveInterval(stateful, no override) = %v, want 0 — a server-initiated ping is not ours to send at 2026-07-28, and the SDK starts it before the revision is known", got)
 	}
 
-	poolOptions := []serverOption{withSharedCredentials(&credentialStates{}, newSessionOwners()), withKeepAlive(0)}
+	poolOptions := []serverOption{withSharedCredentials(&credentialStates{}, newSessionOwners(false)), withKeepAlive(0)}
 	if got := keepAliveInterval(newServerSettings(poolOptions), stateful); got != 0 {
 		t.Errorf("keepAliveInterval(stateful, pool options) = %v, want 0 — a stateful HTTP session must not be closed for not answering a ping", got)
 	}

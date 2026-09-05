@@ -223,7 +223,7 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 	// the gate can refuse a session presented with a different credential and
 	// so a resource-updated notification reaches only its own subscriber. It
 	// replaces the per-server session tag, which a shared server cannot mint.
-	sessions := newSessionOwners()
+	sessions := newSessionOwners(cfg.Stateless)
 	// credentials holds the per-credential half of every shared server: the
 	// client, the rate-limit bucket, the watchers, the listen ceiling.
 	credentials := &credentialStates{}

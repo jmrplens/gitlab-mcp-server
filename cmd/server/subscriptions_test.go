@@ -991,7 +991,7 @@ func TestServerNotifier_ResourceUpdated_TagsWhatTheFilterReads(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
 	server := subscriptionTestServer(t, gitlab.URL, config.CapabilitySurfaceFull, fastPolling())
 
-	sessions := newSessionOwners()
+	sessions := newSessionOwners(false)
 	server.AddSendingMiddleware(sessions.sendingMiddleware)
 	// Added after the filter, so it wraps it and sees the params before the
 	// owner key is stripped for the wire.

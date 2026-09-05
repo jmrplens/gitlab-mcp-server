@@ -472,7 +472,7 @@ func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvail
 	}
 	mux := http.NewServeMux()
 	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory, cfg.GitLabURL),
-		poolBinding{credentials: &credentialStates{}, sessions: newSessionOwners()}, mux)
+		poolBinding{credentials: &credentialStates{}, sessions: newSessionOwners(false)}, mux)
 
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -671,13 +671,13 @@ func TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredentia
 	theirs := gateTestEntry(t, pool, gateTestToken+"-other", gitlab)
 
 	minted := newIdentifiedSessions(t)
-	sessions := newSessionOwners()
+	sessions := newSessionOwners(false)
 	ownID := minted.recordUnder(t, sessions, mine.Owner())
 	otherID := minted.recordUnder(t, sessions, theirs.Owner())
 
 	// A credential the pool has since evicted: its sessions were forgotten with
 	// it, so the ID is as unknown as one that was never opened.
-	evicted := newSessionOwners()
+	evicted := newSessionOwners(false)
 	evictedID := minted.recordUnder(t, evicted, mine.Owner())
 	evicted.forgetOwner(mine.Owner())
 
@@ -1150,7 +1150,7 @@ func TestMcpServerGate_Middleware_RefusesASessionMintedForAnotherCredential(t *t
 			gate.stateless = false
 			// An ownership table that knows nothing about the ID presented, so
 			// whatever arrives was opened by somebody else or never existed.
-			gate.sessions = newSessionOwners()
+			gate.sessions = newSessionOwners(false)
 
 			var reached atomic.Bool
 			handler := gate.middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -1202,7 +1202,7 @@ func TestMcpServerGate_Middleware_AcceptsASessionTheCredentialOwns(t *testing.T)
 	gitlab := gateStubGitLab(t, false)
 	gate := newGateAgainst(t, okFactory, gitlab)
 	gate.stateless = false
-	gate.sessions = newSessionOwners()
+	gate.sessions = newSessionOwners(false)
 
 	// The entry the gate will resolve for this credential, so the session is
 	// recorded under the owner the request arrives as.

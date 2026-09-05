@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -396,11 +397,42 @@ func TestShapeServers_ForServerAndForget_FindAShapeByItsServer(t *testing.T) {
 //
 // Run under -race, where an unsynchronized map would be reported outright.
 func TestShapeServers_Get_ConcurrentCallsForOneShape_BuildOnce(t *testing.T) {
+	const callers = 32
+
 	var builds int64
 	var mu sync.Mutex
-	shapes, started := countingShapes(&builds, &mu, nil)
+	var started []*serverShape
+	// arrived counts the callers that have reached get. The build holds until
+	// every one of them has, which is what makes the race deterministic: with
+	// the lock held across the build they are all queued behind it, so a second
+	// builder can only appear if the lock was released around it, and then all
+	// thirty-one of them appear. Without the wait the window is a few
+	// microseconds wide and the regression showed up in none of the first twenty
+	// runs.
+	var arrived atomic.Int64
+	shapes := newShapeServers(
+		func(*config.ServerConfig, bool) (*serverShape, error) {
+			mu.Lock()
+			builds++
+			mu.Unlock()
+			// Bounded, because a correct implementation is the case where
+			// nobody else can arrive: the other callers are blocked on the
+			// registry's lock, which this build holds.
+			deadline := time.Now().Add(2 * time.Second)
+			for arrived.Load() < callers && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			return &serverShape{shell: &serverShell{
+				server: mcp.NewServer(&mcp.Implementation{Name: "shape", Version: "0"}, nil),
+			}}, nil
+		},
+		func(shape *serverShape) {
+			mu.Lock()
+			started = append(started, shape)
+			mu.Unlock()
+		},
+	)
 
-	const callers = 32
 	results := make([]*serverShape, callers)
 	errs := make([]error, callers)
 	var wg sync.WaitGroup
@@ -408,6 +440,7 @@ func TestShapeServers_Get_ConcurrentCallsForOneShape_BuildOnce(t *testing.T) {
 	for i := range callers {
 		wg.Go(func() {
 			<-start
+			arrived.Add(1)
 			results[i], errs[i] = shapes.get(shapeTestConfig(), false)
 		})
 	}
@@ -431,7 +464,7 @@ func TestShapeServers_Get_ConcurrentCallsForOneShape_BuildOnce(t *testing.T) {
 		t.Errorf("count = %d, want 1", got)
 	}
 	mu.Lock()
-	registrations := len(*started)
+	registrations := len(started)
 	mu.Unlock()
 	if registrations != 1 {
 		t.Errorf("registration was started %d time(s) for one shape, want 1; "+

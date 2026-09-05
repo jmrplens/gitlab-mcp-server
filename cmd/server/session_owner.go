@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"maps"
 	"sync"
 
@@ -39,6 +40,12 @@ import (
 // pool evicts the entry, so a rebuilt credential's sessions cannot be answered
 // for by the entry that replaced it.
 type sessionOwners struct {
+	// stateless records that this deployment runs the sessionless transport,
+	// where a legacy resources/subscribe is refused before it can subscribe
+	// anything. Recording the session it arrived on would then cost a map entry
+	// and a goroutine parked on Wait for a fact nothing can ever read.
+	stateless bool
+
 	mu        sync.Mutex
 	bySession map[*mcp.ServerSession]string
 	byID      map[string]string
@@ -48,8 +55,9 @@ type sessionOwners struct {
 	sessionsByOwner map[string]map[*mcp.ServerSession]struct{}
 }
 
-func newSessionOwners() *sessionOwners {
+func newSessionOwners(stateless bool) *sessionOwners {
 	return &sessionOwners{
+		stateless:       stateless,
 		bySession:       make(map[*mcp.ServerSession]string),
 		byID:            make(map[string]string),
 		idsByOwner:      make(map[string]map[string]struct{}),
@@ -79,6 +87,18 @@ func (o *sessionOwners) record(session *mcp.ServerSession, owner string) {
 		o.rememberIDLocked(id, owner)
 		o.mu.Unlock()
 		return
+	}
+	if known {
+		// Rebinding to another credential. The forward lookups are overwritten
+		// below, but the reverse indexes are not: without this the previous
+		// owner's eviction would still find this session and drop a live
+		// credential's claim on it, and the ID would answer for whichever owner
+		// was written last. No HTTP path reaches this today, because a session
+		// is refused when it is presented with a different credential, and it
+		// is written down rather than left to that: the map is what the refusal
+		// is decided from.
+		o.dropSessionLocked(existing, session)
+		o.dropIDLocked(existing, id)
 	}
 	o.bySession[session] = owner
 	if o.sessionsByOwner[owner] == nil {
@@ -211,7 +231,7 @@ func (o *sessionOwners) recordingMiddleware(next mcp.MethodHandler) mcp.MethodHa
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 		owner := ownerOfRequest(ctx)
 		if owner != "" && req != nil {
-			if session, ok := req.GetSession().(*mcp.ServerSession); ok && worthRecording(session, method) {
+			if session, ok := req.GetSession().(*mcp.ServerSession); ok && o.worthRecording(session, method) {
 				o.record(session, owner)
 			}
 		}
@@ -231,13 +251,23 @@ func (o *sessionOwners) recordingMiddleware(next mcp.MethodHandler) mcp.MethodHa
 //
 // The two cases that are read are therefore the two recorded. A session with an
 // ID is a stateful one, and the gate checks every later request against it. A
-// subscribe, by either method, is the request that makes a session able to
-// receive a resource update, which is what the delivery filter has to attribute.
-func worthRecording(session *mcp.ServerSession, method string) bool {
+// subscribe is the request that makes a session able to receive a resource
+// update, which is what the delivery filter has to attribute.
+//
+// Which subscribe depends on the transport. subscriptions/listen counts on
+// both, since the subscription is that open request. The session-era
+// resources/subscribe counts only where it can be honored: on the sessionless
+// transport it is refused before it subscribes anything, so a session recorded
+// for it can never receive a notification, and recording one costs a map entry
+// and a goroutine parked on Wait per request for a fact nothing reads.
+func (o *sessionOwners) worthRecording(session *mcp.ServerSession, method string) bool {
 	if session.ID() != "" {
 		return true
 	}
-	return method == methodSubscriptionsListen || method == methodResourcesSubscribe
+	if method == methodSubscriptionsListen {
+		return true
+	}
+	return method == methodResourcesSubscribe && !o.stateless
 }
 
 // methodResourcesSubscribe is the session-era subscription method. The SDK
@@ -310,11 +340,17 @@ func (o *sessionOwners) sendingMiddleware(next mcp.MethodHandler) mcp.MethodHand
 		}
 		update, ok := req.GetParams().(*mcp.ResourceUpdatedNotificationParams)
 		if !ok || update == nil {
+			o.dropped(ctx, "", "the notification carried no resource-updated params")
 			return nil, nil
 		}
 		session, _ := req.GetSession().(*mcp.ServerSession)
 		tagged, _ := update.Meta[ownerMetaKey].(string)
-		if tagged == "" || tagged != o.ownerOf(session) {
+		if tagged == "" {
+			o.dropped(ctx, update.URI, "the notification carried no owner tag")
+			return nil, nil
+		}
+		if tagged != o.ownerOf(session) {
+			o.dropped(ctx, update.URI, "the receiving session belongs to another credential, or to none")
 			return nil, nil
 		}
 
@@ -323,6 +359,24 @@ func (o *sessionOwners) sendingMiddleware(next mcp.MethodHandler) mcp.MethodHand
 		defer func() { update.Meta = original }()
 		return next(ctx, method, req)
 	}
+}
+
+// dropped records a notification the filter refused to deliver.
+//
+// Every drop here is a wiring defect rather than a normal outcome: this server
+// tags everything it sends and records every session that could be subscribed,
+// so in a correct wiring the filter forwards or has nothing to do. Failing
+// closed is right, but doing it silently is what made the first version of this
+// so hard to see, since the SDK logs that it sent the notification either way
+// and the client simply never hears anything. Debug rather than warn because a
+// session that closed while a notification was in flight can produce one
+// legitimately.
+//
+// The owner token is deliberately not logged. It is what a notification is
+// attributed by, and a log is not the place to publish it; the URI and the
+// reason are what identify the problem.
+func (o *sessionOwners) dropped(ctx context.Context, uri, reason string) {
+	slog.DebugContext(ctx, "resource-updated notification not delivered", "uri", uri, "reason", reason)
 }
 
 // notificationResourceUpdated is the method name of a resource-updated
