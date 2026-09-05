@@ -136,6 +136,9 @@ type session struct {
 
 	mu     sync.Mutex
 	stderr strings.Builder
+	// notifications holds every notification call read past while waiting
+	// for a response, in arrival order, for the tests that want them.
+	notifications []map[string]any
 }
 
 // startSession launches the binary with the given environment and returns a
@@ -316,11 +319,62 @@ func (s *session) readMessage(t *testing.T, within time.Duration) map[string]any
 	}
 }
 
-// call sends a request and returns its response.
+// call sends a request and returns the response carrying its id.
+//
+// Matching on the id is what makes this a call rather than "the next line".
+// The server speaks unprompted: after initialize it announces the catalog it
+// registered once the transport was connected, as tools, prompts and resources
+// list_changed notifications, and a reader that took the next line for the
+// answer was one message behind from then on. Every later assertion then ran
+// against a notification, which has no error and so never failed, and the real
+// responses piled up unread in the pipe. On Windows, whose pipe is smaller than
+// Linux's, four of those were enough to block the server's write and hold its
+// shutdown forever, which is how this surfaced. Notifications read past are
+// kept in notifications; a response to some other request is a failure, since
+// nothing here sends two requests without reading the first one back.
 func (s *session) call(t *testing.T, msg string) map[string]any {
 	t.Helper()
+
+	want := requestIDOf(t, msg)
 	s.send(t, msg)
-	return s.readMessage(t, 30*time.Second)
+	for {
+		got := s.readMessage(t, 30*time.Second)
+		if _, isCall := got["method"]; isCall && got["id"] == nil {
+			s.mu.Lock()
+			s.notifications = append(s.notifications, got)
+			s.mu.Unlock()
+			continue
+		}
+		if !sameID(got["id"], want) {
+			s.mu.Lock()
+			passed := len(s.notifications)
+			s.mu.Unlock()
+			t.Fatalf("waiting for the response to id %v, read a message for id %v after passing %d notification(s): %v\nstderr: %s",
+				want, got["id"], passed, got, s.stderrText())
+		}
+		return got
+	}
+}
+
+// requestIDOf reads the id out of an outgoing request, failing on a message
+// that has none: a notification is sent with send, not call.
+func requestIDOf(t *testing.T, msg string) any {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(msg), &decoded); err != nil {
+		t.Fatalf("call was given a message that is not JSON: %q: %v", msg, err)
+	}
+	id, ok := decoded["id"]
+	if !ok || id == nil {
+		t.Fatalf("call was given a message without an id; use send for a notification: %q", msg)
+	}
+	return id
+}
+
+// sameID compares two JSON-RPC ids as the decoder produced them, a number or a
+// string, without caring which of the two spellings each side used.
+func sameID(a, b any) bool {
+	return fmt.Sprint(a) == fmt.Sprint(b)
 }
 
 // alive reports whether the server process is still running.

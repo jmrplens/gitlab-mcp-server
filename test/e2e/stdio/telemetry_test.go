@@ -3,7 +3,6 @@
 package stdioe2e
 
 import (
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -76,22 +75,13 @@ func TestTelemetry_EnabledWithAnUnreachableCollectorKeepsStdoutClean(t *testing.
 	// below.
 	session.waitForStderr(t, "telemetry", 5*time.Second)
 
-	// On Windows a telemetry stack pointed at a dead collector does not release
-	// the stdio server when its client closes stdin: the process runs on with
-	// its exporters retrying and never reaches the shutdown flush (observed for
-	// 90 seconds). That is a distinct defect, tracked in
-	// https://github.com/jmrplens/gitlab-mcp-server/issues/507. The running
-	// phase above already proved the thing this test exists for, that stdout
-	// stays pure JSON-RPC while every export fails, so on Windows we stop here
-	// and let the harness tear the process down. Elsewhere the clean-exit half
-	// runs unchanged.
-	if runtime.GOOS == "windows" {
-		return
-	}
-
 	// Shutdown flushes, which is the other moment an exporter writes. Closing
 	// stdin is the stdio shutdown a client actually performs, and the portable
-	// one.
+	// one. This once hung on Windows and was blamed on the flush; the cause
+	// was the harness reading notifications as responses and leaving the real
+	// ones unread in a pipe too small to hold them, so the server's last write
+	// never returned. call now matches on the id, and the exit is asserted on
+	// every platform.
 	if _, exited := session.closeStdinAndWait(t, 20*time.Second); !exited {
 		t.Errorf("the server did not exit; a telemetry flush against a dead collector held it open\nstderr: %s",
 			session.stderrText())

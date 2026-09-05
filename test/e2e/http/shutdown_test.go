@@ -112,12 +112,12 @@ func TestShutdown_OpenListenStreams_ProcessExitsCleanlyOnEverySurface(t *testing
 				}
 			}
 			if code != 0 {
-				t.Errorf("exit status %d after SIGTERM, want 0:\n%s", code, srv.logs())
+				t.Errorf("exit status %d after %s, want 0:\n%s", code, terminationSignalName, srv.logs())
 			}
 			if strings.Contains(srv.logs(), "context deadline exceeded") {
 				t.Errorf("shutdown ran out of its drain budget:\n%s", srv.logs())
 			}
-			t.Logf("exited %s after SIGTERM", elapsed)
+			t.Logf("exited %s after %s", elapsed, terminationSignalName)
 		})
 	}
 }
@@ -216,7 +216,7 @@ func (s *shutdownServer) terminateAndWait(t *testing.T, grace time.Duration) (ti
 	select {
 	case <-reaped:
 	case <-time.After(grace):
-		t.Fatalf("the server was still running %s after SIGTERM; it had to be killed:\n%s", grace, s.logs())
+		t.Fatalf("the server was still running %s after %s; it had to be killed:\n%s", grace, terminationSignalName, s.logs())
 	}
 	return time.Since(started), s.cmd.ProcessState.ExitCode()
 }

@@ -801,19 +801,19 @@ jobs:
       # and drive it the way a client does, over pipes and sockets, which is
       # where a platform difference actually surfaces.
       #
-      # macOS only. Linux has them as jobs of their own, e2e-http and
-      # e2e-stdio, on the same runner image with the same commands, so running
-      # them here as well was six minutes of runner time answering a question
-      # already answered in the same run. The unit suite above does stay on
-      # Linux, as the control that tells a macOS-only failure from one that
-      # would fail anywhere.
+      # macOS and Windows, not Linux. Linux has them as jobs of their own,
+      # e2e-http and e2e-stdio, on the same runner image with the same
+      # commands, so running them here as well was six minutes of runner time
+      # answering a question already answered in the same run. The unit suite
+      # above does stay on Linux, as the control that tells a failure of one
+      # platform from one that would fail anywhere.
       #
-      # Windows runs them too: the harnesses terminate the server the way the
-      # platform does, SIGTERM where it exists and a CTRL_BREAK event to the
-      # server's own console process group on Windows, which the Go runtime
-      # delivers as the os.Interrupt the server stops on (terminate_*_test.go
-      # in each module). The unix-socket cases assert only what Windows'
-      # AF_UNIX support shares with the others.
+      # The harnesses terminate the server the way each platform does: SIGTERM
+      # where it exists, and on Windows a CTRL_BREAK event to the server's own
+      # console process group, which the Go runtime delivers as the
+      # os.Interrupt the server stops on (terminate_*_test.go in each module).
+      # The unix-socket cases assert only what Windows' AF_UNIX support shares
+      # with the others.
       - name: HTTP transport end-to-end
         if: matrix.os != 'ubuntu-latest'
         run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/

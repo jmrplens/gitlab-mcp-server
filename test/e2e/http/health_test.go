@@ -128,7 +128,7 @@ func TestHealth_Draining_AnswersServiceUnavailableBeforeTheListenerCloses(t *tes
 		time.Sleep(50 * time.Millisecond)
 	}
 	if code != http.StatusServiceUnavailable || body.Status != "draining" {
-		t.Fatalf("after SIGTERM /health answered %d %q, want 503 draining:\n%s", code, body.Status, s.logs())
+		t.Fatalf("after %s /health answered %d %q, want 503 draining:\n%s", terminationSignalName, code, body.Status, s.logs())
 	}
 	if header.Get("Cache-Control") != "no-store" {
 		t.Errorf("Cache-Control = %q while draining, want no-store", header.Get("Cache-Control"))
@@ -142,10 +142,10 @@ func TestHealth_Draining_AnswersServiceUnavailableBeforeTheListenerCloses(t *tes
 	select {
 	case <-reaped:
 	case <-time.After(delay + shutdownGrace):
-		t.Fatalf("the server was still running %s after SIGTERM:\n%s", delay+shutdownGrace, s.logs())
+		t.Fatalf("the server was still running %s after %s:\n%s", delay+shutdownGrace, terminationSignalName, s.logs())
 	}
 	if elapsed := time.Since(signaled); elapsed < delay {
-		t.Errorf("the process exited %s after SIGTERM, before the %s drain delay had passed", elapsed, delay)
+		t.Errorf("the process exited %s after %s, before the %s drain delay had passed", elapsed, terminationSignalName, delay)
 	}
 	if exit := s.cmd.ProcessState.ExitCode(); exit != 0 {
 		t.Errorf("exit status %d after a drained shutdown, want 0:\n%s", exit, s.logs())

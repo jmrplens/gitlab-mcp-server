@@ -36,7 +36,7 @@ func TestShutdown_IsNotBlockedByAnOpenSubscription(t *testing.T) {
 			t.Fatalf("tools/list failed: %v", got["error"])
 		}
 		if !s.terminate(t, grace) {
-			t.Fatalf("the server ignored SIGTERM with nothing open:\n%s", s.stderrText())
+			t.Fatalf("the server ignored %s with nothing open:\n%s", terminationSignalName, s.stderrText())
 		}
 	})
 
@@ -67,7 +67,7 @@ func TestShutdown_IsNotBlockedByAnOpenSubscription(t *testing.T) {
 		}
 
 		if !s.terminate(t, grace) {
-			t.Fatalf("the server ignored SIGTERM with a subscription open; it had to be killed:\n%s", s.stderrText())
+			t.Fatalf("the server ignored %s with a subscription open; it had to be killed:\n%s", terminationSignalName, s.stderrText())
 		}
 	})
 }
@@ -151,7 +151,7 @@ func TestShutdown_ExitStatusSaysItWasClean(t *testing.T) {
 			},
 		},
 		{
-			name: "SIGTERM with nothing in flight",
+			name: terminationSignalName + " with nothing in flight",
 			stop: func(t *testing.T, s *session) (int, bool) {
 				t.Helper()
 				return s.terminateAndWait(t, grace)
