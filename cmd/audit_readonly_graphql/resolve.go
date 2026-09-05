@@ -204,6 +204,14 @@ func (r *resolver) resolveSpecCall(call *ast.CallExpr, at frame, depth int) (str
 		retName, retHandlers := r.resolveSpec(ret.expr, ret.frame, depth+1)
 		name, handlers = merge(name, handlers, retName, retHandlers)
 	}
+	// A method on the spec, WithEmbeddedResource for one, returns the spec it
+	// was called on with a field set, so the construction is its receiver:
+	// helperSpec(...).WithEmbeddedResource(...) declares whatever helperSpec
+	// declared.
+	if receiver := methodReceiver(call); receiver != nil {
+		recvName, recvHandlers := r.resolveSpec(receiver, at, depth+1)
+		name, handlers = merge(name, handlers, recvName, recvHandlers)
+	}
 	return name, handlers
 }
 
