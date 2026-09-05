@@ -30,7 +30,7 @@ Before starting, gather context:
 
 ### Pattern 1: Package Comment
 
-Every package needs exactly one `Package` comment, typically in the main file or a dedicated `doc.go`:
+Every package needs exactly one `Package` comment, and it lives in `doc.go` (the godoc audit reports one anywhere else; `go run ./cmd/godoc_tool/ fix --move-package-doc` moves it):
 
 ```go
 // Package tools implements MCP tool handlers for GitLab operations.

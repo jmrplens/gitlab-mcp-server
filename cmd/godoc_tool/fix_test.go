@@ -7,6 +7,7 @@
 package main
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -1016,6 +1017,7 @@ func TestCamelToWords_SplitsAndInitialisms(t *testing.T) {
 		want string
 	}{
 		{name: "empty", in: "", want: "resources"},
+		{name: "underscore only collapses to nothing", in: "_", want: "resources"},
 		{name: "underscores", in: "project_id", want: "project ID"},
 		{name: "digit boundary", in: "v2Client", want: "v 2 client"},
 		{name: "initialism", in: "JSONPayload", want: "JSON payload"},
@@ -1112,4 +1114,127 @@ func TestDocInsertions_SkipTokensTheyDoNotOwn(t *testing.T) {
 			t.Error("typeSpecDocInsertion() = true for a const declaration, want false")
 		}
 	})
+}
+
+// TestGenerateFuncDoc_MethodDecl_UsesMethodDoc verifies generateFuncDoc routes
+// a declaration with a receiver to the method generator rather than the
+// function generators, which the isTest/exported branches above it never
+// exercise for a method.
+func TestGenerateFuncDoc_MethodDecl_UsesMethodDoc(t *testing.T) {
+	t.Parallel()
+
+	method := firstFuncDecl(t, "package sample\ntype widget struct{}\nfunc (widget) Run() bool { return true }\n")
+	got := generateFuncDoc(method, "sample", false)
+	if want := "Run reports whether the widget satisfies the run condition."; got != want {
+		t.Fatalf("generateFuncDoc(method) = %q, want %q", got, want)
+	}
+}
+
+// TestTestHasTableDrivenCases_BodylessDeclReturnsFalse verifies a declaration
+// with no body (a forward declaration for an assembly implementation) is
+// reported as not table-driven instead of panicking on a nil body.
+func TestTestHasTableDrivenCases_BodylessDeclReturnsFalse(t *testing.T) {
+	t.Parallel()
+
+	decl := firstFuncDecl(t, "package sample\nfunc TestWidget(t *testing.T)\n")
+	if testHasTableDrivenCases(decl) {
+		t.Error("testHasTableDrivenCases(bodyless) = true, want false")
+	}
+}
+
+// TestIsTableDrivenCompositeLit_Shapes verifies the composite-literal
+// classifier: only an array of structs is a table, while a struct literal
+// (non-array type) and an array of a non-struct element are not.
+func TestIsTableDrivenCompositeLit_Shapes(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		expr string
+		want bool
+	}{
+		{name: "array of structs is table-driven", expr: "[]struct{ name string }{}", want: true},
+		{name: "struct literal is not an array", expr: "point{}", want: false},
+		{name: "array of non-structs is not table-driven", expr: "[]int{}", want: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			node, err := parser.ParseExpr(tc.expr)
+			if err != nil {
+				t.Fatalf("ParseExpr(%q) error = %v", tc.expr, err)
+			}
+			if got := isTableDrivenCompositeLit(node); got != tc.want {
+				t.Errorf("isTableDrivenCompositeLit(%q) = %v, want %v", tc.expr, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestProcessFile_OutOfRangeInsertionIsSkipped verifies the bounds guard in the
+// insertion loop drops an insertion whose line range falls outside the file,
+// leaving the source unchanged. A real parse never yields such a range, so it
+// drives the collectInsertions seam.
+func TestProcessFile_OutOfRangeInsertionIsSkipped(t *testing.T) {
+	original := collectInsertions
+	collectInsertions = func(*token.FileSet, *ast.File, string, bool) []insertion {
+		return []insertion{{startLine: 9999, endLine: 9998, comment: "ignored"}}
+	}
+	t.Cleanup(func() { collectInsertions = original })
+
+	source := "package sample\n\nfunc ListProjects() {}\n"
+	path := writeFixFile(t, t.TempDir(), "sample.go", source)
+
+	captureFixStdout(t, func() {
+		if err := processFile(path); err != nil {
+			t.Errorf("processFile() error = %v", err)
+		}
+	})
+	if got := readFixFile(t, path); got != source {
+		t.Fatalf("processFile() rewrote the file for an out-of-range insertion:\n%s", got)
+	}
+}
+
+// TestProcessFile_WriteErrorIsReported verifies processFile surfaces a write
+// failure. A filesystem the test owns, running as root, never refuses the
+// write, so it drives the writeSource seam.
+func TestProcessFile_WriteErrorIsReported(t *testing.T) {
+	original := writeSource
+	writeSource = func(string, []byte) error { return errors.New("disk full") }
+	t.Cleanup(func() { writeSource = original })
+
+	path := writeFixFile(t, t.TempDir(), "sample.go", "package sample\n\nfunc ListProjects() {}\n")
+	if err := processFile(path); err == nil || !strings.HasPrefix(err.Error(), "write ") {
+		t.Fatalf("processFile() error = %v, want write error", err)
+	}
+}
+
+// TestFuncDocInsertion_EmptyCommentIsSkipped verifies funcDocInsertion reports
+// no insertion when the generator yields an empty comment. Every real
+// declaration produces a non-empty comment, so it drives the genFuncDoc seam.
+func TestFuncDocInsertion_EmptyCommentIsSkipped(t *testing.T) {
+	original := genFuncDoc
+	genFuncDoc = func(*ast.FuncDecl, string, bool) string { return "" }
+	t.Cleanup(func() { genFuncDoc = original })
+
+	decl := firstFuncDecl(t, "package sample\nfunc Widget() {}\n")
+	if _, ok := funcDocInsertion(token.NewFileSet(), decl, "sample", false); ok {
+		t.Error("funcDocInsertion() = true for an empty comment, want false")
+	}
+}
+
+// TestTypeSpecDocInsertion_EmptyCommentIsSkipped verifies typeSpecDocInsertion
+// reports no insertion when the generator yields an empty comment. Every real
+// type produces a non-empty comment, so it drives the genTypeDoc seam.
+func TestTypeSpecDocInsertion_EmptyCommentIsSkipped(t *testing.T) {
+	original := genTypeDoc
+	genTypeDoc = func(*ast.TypeSpec, string) string { return "" }
+	t.Cleanup(func() { genTypeDoc = original })
+
+	decl := &ast.GenDecl{Tok: token.TYPE}
+	spec := &ast.TypeSpec{Name: ast.NewIdent("Widget")}
+	if _, ok := typeSpecDocInsertion(token.NewFileSet(), decl, spec, "sample"); ok {
+		t.Error("typeSpecDocInsertion() = true for an empty comment, want false")
+	}
 }

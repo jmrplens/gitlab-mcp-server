@@ -25,6 +25,7 @@ const (
 	categoryPackageDocMissing  = "pkgdoc_missing"
 	categoryPackageDocForm     = "pkgdoc_form"
 	categoryPackageDocMultiple = "pkgdoc_multiple"
+	categoryPackageDocLocation = "pkgdoc_location"
 	categoryFuncMissing        = "func_missing"
 	categoryFuncForm           = "func_form"
 	categoryMethodMissing      = "method_missing"
@@ -48,6 +49,26 @@ const (
 	formatMarkdown = "markdown"
 	formatJSON     = "json"
 )
+
+// Seams over the toolchain and standard library, so a test can drive the
+// failure branches a toolchain and filesystem the tests own, and run as root,
+// never produce on their own: a `go list` whose rows are blank or missing a
+// tab, a Windows GOOS, a doc build that rejects its options, and a JSON marshal
+// of a report that cannot be encoded.
+var (
+	goListOutput    = defaultGoListOutput
+	runtimeGOOS     = runtime.GOOS
+	newDocFromFiles = doc.NewFromFiles
+	marshalIndent   = json.MarshalIndent
+)
+
+// defaultGoListOutput runs `go list` and returns its raw output. It is the
+// production value of the goListOutput seam.
+func defaultGoListOutput(ctx context.Context) ([]byte, error) {
+	// #nosec G204 -- goExecutable returns the fixed Go tool path from the active runtime installation.
+	cmd := exec.CommandContext(ctx, goExecutable(), "list", "-f", "{{.Dir}}\t{{.ImportPath}}\t{{.Name}}", "./...")
+	return cmd.Output()
+}
 
 // options controls how the documentation audit scans and reports packages.
 //
@@ -196,9 +217,7 @@ func listPackages() ([]packageInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// #nosec G204 -- goExecutable returns the fixed Go tool path from the active runtime installation.
-	cmd := exec.CommandContext(ctx, goExecutable(), "list", "-f", "{{.Dir}}\t{{.ImportPath}}\t{{.Name}}", "./...")
-	out, err := cmd.Output()
+	out, err := goListOutput(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("go list: %w", err)
 	}
@@ -224,7 +243,7 @@ func listPackages() ([]packageInfo, error) {
 // goExecutable returns the absolute Go tool path from the runtime installation.
 func goExecutable() string {
 	name := "go"
-	if runtime.GOOS == "windows" {
+	if runtimeGOOS == "windows" {
 		name += ".exe"
 	}
 	return filepath.Join(runtime.GOROOT(), "bin", name) //nolint:staticcheck // Avoid PATH lookup for Sonar go:S4036.
@@ -302,6 +321,13 @@ func checkPackageDocs(pkg packageInfo, files map[string]*ast.File, findings *[]f
 	for _, path := range packageDocs {
 		docText := strings.TrimSpace(files[path].Doc.Text())
 		if validPackageDoc(pkg.Name, docText) {
+			// A package comment has one home. Anywhere else it is one file
+			// header away from being mistaken for one, and a second file's
+			// header away from being duplicated; `fix -move-package-doc`
+			// moves it.
+			if filepath.Base(path) != packageDocFile {
+				*findings = append(*findings, newFinding(categoryPackageDocLocation, pkg, path, pkg.Name, fmt.Sprintf("package comment lives in %s; keep it in %s", filepath.Base(path), packageDocFile)))
+			}
 			continue
 		}
 		want := "Package " + pkg.Name
@@ -336,7 +362,7 @@ func checkExportedDocs(pkg packageInfo, parsed parsedPackage, findings *[]findin
 	for _, file := range parsed.sourceFiles {
 		files = append(files, file)
 	}
-	docPackage, err := doc.NewFromFiles(parsed.fset, files, pkg.ImportPath)
+	docPackage, err := newDocFromFiles(parsed.fset, files, pkg.ImportPath)
 	if err != nil {
 		return fmt.Errorf("build doc package %s: %w", pkg.ImportPath, err)
 	}
@@ -532,7 +558,7 @@ func renderReport(report report, format string) ([]byte, error) {
 	case formatMarkdown:
 		return []byte(renderMarkdown(report)), nil
 	case formatJSON:
-		out, err := json.MarshalIndent(report, "", "  ")
+		out, err := marshalIndent(report, "", "  ")
 		if err != nil {
 			return nil, fmt.Errorf("marshal json: %w", err)
 		}

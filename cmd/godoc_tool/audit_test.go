@@ -2,8 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/doc"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -52,6 +56,13 @@ func TestAuditPackage_DetectsPackageCommentProblems(t *testing.T) {
 			},
 			categories: []string{categoryPackageDocMultiple, categoryPackageDocForm},
 		},
+		{
+			name: "package doc outside doc.go",
+			files: map[string]string{
+				"sample.go": "// Package sample provides a fixture.\npackage sample\n",
+			},
+			categories: []string{categoryPackageDocLocation},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -81,7 +92,8 @@ func TestAuditPackage_AcceptsCommandPackageDoc(t *testing.T) {
 	t.Parallel()
 
 	pkg := writePackageFixture(t, "main", map[string]string{
-		"main.go": "// Command widget audits widgets.\npackage main\n",
+		"doc.go":  "// Command widget audits widgets.\npackage main\n",
+		"main.go": "package main\n",
 	})
 	findings, err := auditPackage(pkg, false)
 	if err != nil {
@@ -100,7 +112,7 @@ func TestAuditPackage_CommandPackageDocForm(t *testing.T) {
 	t.Parallel()
 
 	pkg := writePackageFixture(t, "main", map[string]string{
-		"main.go": "// widget audits widgets.\npackage main\n",
+		"doc.go": "// widget audits widgets.\npackage main\n",
 	})
 	if err := os.MkdirAll(filepath.Join(pkg.Dir, "testdata"), 0o750); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -318,7 +330,8 @@ func writeModuleFixture(t *testing.T) string {
 	writeAuditFile(t, dir, "go.mod", "module example.com/fixture\n\ngo 1.27\n")
 	writeAuditFile(t, dir, "a/a.go", "package a\n\nfunc Missing() {}\n")
 	writeAuditFile(t, dir, "a/a_test.go", "package a\n\nimport \"testing\"\n\nfunc TestUndocumented(t *testing.T) {}\n")
-	writeAuditFile(t, dir, "internal/b/b.go", "// Package b is documented.\npackage b\n\nfunc AlsoMissing() {}\n")
+	writeAuditFile(t, dir, "internal/b/doc.go", "// Package b is documented.\npackage b\n")
+	writeAuditFile(t, dir, "internal/b/b.go", "package b\n\nfunc AlsoMissing() {}\n")
 	return dir
 }
 
@@ -940,5 +953,187 @@ func TestGoExecutable_PointsAtTheRunningToolchain(t *testing.T) {
 	info, err := os.Stat(got)
 	if err != nil || info.IsDir() {
 		t.Fatalf("goExecutable() = %q, want an existing file (stat error %v)", got, err)
+	}
+}
+
+// TestGoExecutable_WindowsGOOS_AppendsExeSuffix verifies the Windows branch of
+// goExecutable, which appends the .exe suffix. It drives the runtimeGOOS seam
+// because the tests run on a non-Windows host that never takes the branch on
+// its own. The test is serial so its global override never overlaps the
+// parallel TestGoExecutable_PointsAtTheRunningToolchain.
+func TestGoExecutable_WindowsGOOS_AppendsExeSuffix(t *testing.T) {
+	original := runtimeGOOS
+	runtimeGOOS = "windows"
+	t.Cleanup(func() { runtimeGOOS = original })
+
+	if got := filepath.Base(goExecutable()); got != "go.exe" {
+		t.Fatalf("goExecutable() base = %q, want go.exe", got)
+	}
+}
+
+// TestListPackages_MalformedGoListRows verifies the three rows a real
+// toolchain never emits: a blank interior line is skipped, and a row missing
+// either tab is rejected. It drives the goListOutput seam to feed listPackages
+// output the toolchain would never produce.
+func TestListPackages_MalformedGoListRows(t *testing.T) {
+	testCases := []struct {
+		name    string
+		output  string
+		wantErr string
+		wantLen int
+	}{
+		{name: "blank interior line is skipped", output: "d\tp\tn\n\nd2\tp2\tn2\n", wantLen: 2},
+		{name: "row without a tab is rejected", output: "no-tabs-here\n", wantErr: "unexpected go list row"},
+		{name: "row with a single tab is rejected", output: "dir\tonly-one-field\n", wantErr: "unexpected go list row"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			original := goListOutput
+			goListOutput = func(context.Context) ([]byte, error) { return []byte(tc.output), nil }
+			t.Cleanup(func() { goListOutput = original })
+
+			pkgs, err := listPackages()
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("listPackages() error = %v, want %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("listPackages() error = %v", err)
+			}
+			if len(pkgs) != tc.wantLen {
+				t.Errorf("listPackages() len = %d, want %d", len(pkgs), tc.wantLen)
+			}
+		})
+	}
+}
+
+// TestAuditPackage_DocBuildError_IsReported verifies auditPackage surfaces a
+// doc.NewFromFiles failure rather than reporting a clean package. The failure
+// is unreachable with real input (NewFromFiles only errors on an invalid
+// option type, which the audit never passes), so it drives the newDocFromFiles
+// seam.
+func TestAuditPackage_DocBuildError_IsReported(t *testing.T) {
+	original := newDocFromFiles
+	newDocFromFiles = func(*token.FileSet, []*ast.File, string, ...any) (*doc.Package, error) {
+		return nil, errors.New("boom")
+	}
+	t.Cleanup(func() { newDocFromFiles = original })
+
+	pkg := writePackageFixture(t, "sample", map[string]string{
+		"doc.go":    "// Package sample provides a fixture.\npackage sample\n",
+		"sample.go": "package sample\n\nfunc Missing() {}\n",
+	})
+	if _, err := auditPackage(pkg, false); err == nil || !strings.HasPrefix(err.Error(), "build doc package ") {
+		t.Fatalf("auditPackage() error = %v, want build doc package error", err)
+	}
+}
+
+// TestRun_JSONMarshalError_IsReported verifies run reports a JSON marshal
+// failure from renderReport rather than writing a truncated report. A real
+// report always marshals, so it drives the marshalIndent seam, and empties the
+// package list through the goListOutput seam so run reaches the render step.
+func TestRun_JSONMarshalError_IsReported(t *testing.T) {
+	origList := goListOutput
+	goListOutput = func(context.Context) ([]byte, error) { return []byte(""), nil }
+	t.Cleanup(func() { goListOutput = origList })
+	origMarshal := marshalIndent
+	marshalIndent = func(any, string, string) ([]byte, error) { return nil, errors.New("boom") }
+	t.Cleanup(func() { marshalIndent = origMarshal })
+
+	if _, err := runForTest([]string{"--format=json"}); err == nil || !strings.HasPrefix(err.Error(), "marshal json") {
+		t.Fatalf("run() error = %v, want marshal json error", err)
+	}
+}
+
+// errWriter is an io.Writer whose Write always fails, used to exercise the
+// report's stdout write-error branch.
+type errWriter struct{}
+
+func (errWriter) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
+
+// TestRun_StdoutWriteError_IsReported verifies run reports a failure to write
+// the report to stdout. It feeds an empty package list through the goListOutput
+// seam so run reaches the write, and a writer that always fails as the
+// destination.
+func TestRun_StdoutWriteError_IsReported(t *testing.T) {
+	original := goListOutput
+	goListOutput = func(context.Context) ([]byte, error) { return []byte(""), nil }
+	t.Cleanup(func() { goListOutput = original })
+
+	if err := run(nil, errWriter{}); err == nil || !strings.HasPrefix(err.Error(), "write stdout") {
+		t.Fatalf("run() error = %v, want write stdout error", err)
+	}
+}
+
+// TestCheckValueDoc_UnexportedAndSingleValidDoc verifies the two remaining
+// value-doc paths: a group whose names are all unexported is not audited at
+// all, and a single exported name whose comment already starts with it yields
+// no finding. go/doc filters unexported names before the audit sees them, so
+// the helper is exercised directly.
+func TestCheckValueDoc_UnexportedAndSingleValidDoc(t *testing.T) {
+	t.Parallel()
+
+	pkg := packageInfo{ImportPath: "example.com/x", Name: "x"}
+	testCases := []struct {
+		name  string
+		names []string
+		doc   string
+	}{
+		{name: "all names unexported are skipped", names: []string{"lower", "alsoLower"}, doc: ""},
+		{name: "single valid comment yields no finding", names: []string{"Answer"}, doc: "Answer is the answer."},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var findings []finding
+			checkValueDoc(pkg, categoryConstMissing, categoryConstForm, "const", tc.names, tc.doc, &findings)
+			if len(findings) != 0 {
+				t.Fatalf("checkValueDoc() findings = %+v, want none", findings)
+			}
+		})
+	}
+}
+
+// TestAuditPackage_TypeAssociatedSymbolsAreChecked verifies the audit walks
+// the symbols go/doc groups under a type: a constructor function, a typed
+// constant, and a typed variable. Each carries a valid comment, so the audit
+// reports nothing while the type-associated loop bodies still run.
+func TestAuditPackage_TypeAssociatedSymbolsAreChecked(t *testing.T) {
+	t.Parallel()
+
+	pkg := writePackageFixture(t, "sample", map[string]string{
+		"doc.go": "// Package sample provides a fixture.\npackage sample\n",
+		"sample.go": `package sample
+
+// Widget builds things.
+type Widget struct{}
+
+// NewWidget builds a Widget.
+func NewWidget() Widget { return Widget{} }
+
+// Mode selects behavior.
+type Mode int
+
+// ModeOn enables the mode.
+const ModeOn Mode = 1
+
+// Registry holds widgets.
+type Registry struct{}
+
+// DefaultRegistry is the default registry.
+var DefaultRegistry Registry
+`,
+	})
+
+	findings, err := auditPackage(pkg, false)
+	if err != nil {
+		t.Fatalf("auditPackage() error = %v", err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("auditPackage() = %#v, want no findings", findings)
 	}
 }
