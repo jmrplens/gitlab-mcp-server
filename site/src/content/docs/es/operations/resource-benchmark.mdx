@@ -48,6 +48,24 @@ ejecuta el banco de pruebas y redibuja las gráficas a partir del registro que
 escribe. La máquina, la compilación y el método aparecen en el texto bajo el
 encabezado, porque una cifra de memoria residente sin ellos no es accionable.
 
+Los escenarios puntuales se quedan en ocho credenciales. Un despliegue
+compartido atiende a cientos, así que el banco de pruebas ejecuta además una
+**serie de concurrencia** por superficie: un solo proceso HTTP al que se le
+dan por turnos 1, 2, 5, 10, 20, 50, 100, 200, 500 y 1000 credenciales
+distintas, cada una calentada con un `tools/list`, y que se mide en cada
+recuento durante una fase estable de diez segundos en la que todas las
+credenciales llaman sin parar a `tools/call` y `tools/list`. Cada paso
+registra la memoria residente (media y pico), el tiempo de procesador por
+llamada, el p50 y el p99 de ambos métodos y el número de goroutines, y captura
+un perfil de CPU y otro de heap del servidor a través de su listener
+`--pprof-addr`, que el análisis lee y el sitio no publica. Una serie se detiene
+antes de tumbar la máquina: antes de cada paso se estima, a partir de los
+pasos anteriores, la memoria residente que alcanzaría, y el resto de la lista
+se omite cuando la estimación supera el presupuesto de memoria (el 80% de la
+memoria disponible del equipo salvo que se indique otro); un paso cuyo p99 de
+`tools/call` pase de 30 segundos es el último que se ejecuta. Dónde se detuvo
+cada serie, y por qué, se indica bajo su tabla.
+
 <Aside type="caution" title="Léelas como formas, no como constantes">
 Una máquina, un sistema operativo, una cadena de herramientas de Go. Las
 relaciones entre las cifras deberían trasladarse a tu equipo; los valores
@@ -185,8 +203,13 @@ make bench-resources-render   # redibujar desde el registro, sin medir
 make check-bench-resources    # comprobar que las gráficas cuadran con el registro
 ```
 
-La matriz completa tarda unos minutos, la mayor parte construyendo un catálogo
-por cliente, que es justo el coste que se está midiendo y no una sobrecarga
-del arnés. Los detalles para quien desarrolle, incluido lo que el arnés
-deliberadamente no mide, están en
+Los escenarios puntuales tardan unos minutos, la mayor parte construyendo un
+catálogo por cliente, que es justo el coste que se está midiendo y no una
+sobrecarga del arnés; las series tardan después lo que la memoria del equipo
+les permita, hasta un cuarto de hora por superficie. Las series también pueden
+medirse en un equipo y dibujarse en otro: compila el driver y el servidor, y en
+el equipo con memoria ejecuta el driver con `-binary`, `-json`, `-profiles` y
+`-no-render`, que no lee nada de ningún repositorio; después copia el registro
+de vuelta y ejecuta `make bench-resources-render`. Los detalles para quien
+desarrolle, incluido lo que el arnés deliberadamente no mide, están en
 [la referencia de consumo de recursos](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/resource-benchmark.md).

@@ -45,6 +45,22 @@ runs the benchmark and redraws the charts from the record it writes. The
 machine, the build and the method are named in the text under the heading,
 because a resident-set figure without them is a number nobody can act on.
 
+The point scenarios stop at eight credentials. A shared deployment meets
+hundreds, so the benchmark also runs a **concurrency series** per surface:
+one HTTP process, given 1, 2, 5, 10, 20, 50, 100, 200, 500 and 1000 distinct
+credentials in turn, each warmed with a `tools/list`, and measured over a
+ten-second steady phase at each count in which every credential keeps calling
+`tools/call` and `tools/list`. Each step records the resident set (mean and
+peak), processor time per call, the p50 and p99 of both methods and the
+goroutine count, and captures a CPU and a heap profile of the server through
+its `--pprof-addr` listener, which the analysis reads and the site does not
+publish. A series stops early rather than take the host down: before each
+step the resident set it would reach is estimated from the steps so far, and
+the rest of the list is skipped when the estimate exceeds the memory budget
+(80% of the host's available memory unless one is given); a step whose
+`tools/call` p99 passes 30 seconds is the last one run. Where a series
+stopped, and why, is printed under its table.
+
 <Aside type="caution" title="Read these as shapes, not as constants">
 One machine, one operating system, one Go toolchain. The relationships between
 the numbers should carry to your host; the absolute values will not. The
@@ -178,8 +194,13 @@ make bench-resources-render   # redraw from the committed record, no measuring
 make check-bench-resources    # verify the charts match the record
 ```
 
-The full matrix takes a few minutes, most of it spent building one catalog per
-client, which is the cost being measured rather than overhead of the harness.
-The developer-facing details, including what the harness deliberately does not
-measure, are in
+The point scenarios take a few minutes, most of it spent building one catalog
+per client, which is the cost being measured rather than overhead of the
+harness; the series then take as long as the host's memory lets them, up to a
+quarter of an hour per surface. The series can also be measured on one host
+and rendered on another: build the driver and the server, and on the host
+with the memory run the driver with `-binary`, `-json`, `-profiles` and
+`-no-render`, which reads nothing from a repository; then copy the record back
+and run `make bench-resources-render`. The developer-facing details, including
+what the harness deliberately does not measure, are in
 [the resource benchmark reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/resource-benchmark.md).

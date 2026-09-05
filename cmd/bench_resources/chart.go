@@ -13,6 +13,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 )
 
@@ -68,6 +69,21 @@ type lineSeries struct {
 	Label string
 	X     []float64
 	Y     []float64
+	// Dashed draws the line dashed, for a companion of another series: the
+	// latency figure pairs a solid p50 with a dashed p99.
+	Dashed bool
+	// Group names the series this one shares a color with. Empty colors the
+	// series by its own index, which is what every single-line-per-surface
+	// figure wants; the paired figure groups by surface so a reader can tell
+	// a surface's tail from its median without a second legend.
+	Group string
+}
+
+// lineMarker is a labeled vertical rule at one X, used for the credential
+// count a series stopped at.
+type lineMarker struct {
+	X     float64
+	Label string
 }
 
 // lineSpec is a line chart over a numeric X axis.
@@ -79,6 +95,15 @@ type lineSpec struct {
 	Series    []lineSeries
 	Format    func(float64) string
 	Threshold *thresholdLine
+	// LogX lays the X axis out in decades and labels it at the series' own
+	// points rather than at every integer, which is what a credential count
+	// running from one to a thousand needs: on a linear axis the first nine
+	// steps would sit inside the first pixel.
+	LogX bool
+	// LogY selects a base-10 vertical axis, as the bar charts have it.
+	LogY bool
+	// Markers are drawn as dashed vertical rules in the threshold color.
+	Markers []lineMarker
 }
 
 // canvas accumulates SVG elements.
@@ -113,17 +138,39 @@ func (c *canvas) close() string {
 	return c.sb.String()
 }
 
+// legendEntry is one item of a legend: a label, the color it stands for,
+// and whether the series it names is drawn dashed.
+type legendEntry struct {
+	label  string
+	color  string
+	dashed bool
+}
+
 // legend paints one swatch and label per series, left to right under the
-// title.
+// title, colored by position.
 func (c *canvas) legend(labels []string) {
+	entries := make([]legendEntry, 0, len(labels))
+	for i, label := range labels {
+		entries = append(entries, legendEntry{label: label, color: c.p.Series[i%len(c.p.Series)]})
+	}
+	c.legendEntries(entries)
+}
+
+// legendEntries paints a legend whose colors and line styles are given: a
+// filled swatch for a solid series, a dashed stroke for a dashed one.
+func (c *canvas) legendEntries(entries []legendEntry) {
 	x := float64(padL)
 	y := 70.0
-	for i, label := range labels {
-		color := c.p.Series[i%len(c.p.Series)]
-		fmt.Fprintf(&c.sb, `<rect x="%.1f" y="%.1f" width="11" height="11" rx="2" fill="%s"/>`+"\n", x, y-9, color)
+	for _, entry := range entries {
+		if entry.dashed {
+			fmt.Fprintf(&c.sb, `<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="2.5" stroke-dasharray="4 3"/>`+"\n",
+				x, y-3.5, x+11, y-3.5, entry.color)
+		} else {
+			fmt.Fprintf(&c.sb, `<rect x="%.1f" y="%.1f" width="11" height="11" rx="2" fill="%s"/>`+"\n", x, y-9, entry.color)
+		}
 		fmt.Fprintf(&c.sb, `<text x="%.1f" y="%.1f" %s font-size="11.5" fill="%s">%s</text>`+"\n",
-			x+16, y, fontStack, c.p.Text, xmlEscape(label))
-		x += 27 + textWidth(label, 11.5)
+			x+16, y, fontStack, c.p.Text, xmlEscape(entry.label))
+		x += 27 + textWidth(entry.label, 11.5)
 	}
 }
 
@@ -369,6 +416,95 @@ func (c *canvas) bar(g barGeometry) {
 		g.x+g.width/2, labelY-4, fontStack, c.p.Text, xmlEscape(g.label))
 }
 
+// lineExtent is the range a line chart's data spans, with the smallest
+// positive Y kept for a log axis.
+type lineExtent struct {
+	minX, maxX, minY, maxY float64
+}
+
+// extentOf measures a spec's series, folding the threshold into the Y range
+// so the rule is always inside the plot.
+func extentOf(spec lineSpec) lineExtent {
+	e := lineExtent{minX: math.MaxFloat64, minY: math.MaxFloat64}
+	for _, series := range spec.Series {
+		for i, y := range series.Y {
+			e.maxY = math.Max(e.maxY, y)
+			if y > 0 {
+				e.minY = math.Min(e.minY, y)
+			}
+			e.maxX = math.Max(e.maxX, series.X[i])
+			e.minX = math.Min(e.minX, series.X[i])
+		}
+	}
+	if spec.Threshold != nil {
+		e.maxY = math.Max(e.maxY, spec.Threshold.Value)
+	}
+	if e.minX == math.MaxFloat64 {
+		e.minX = 0
+	}
+	if e.minY == math.MaxFloat64 {
+		e.minY = 1
+	}
+	return e
+}
+
+// xMapper returns the horizontal coordinate function for a spec: linear
+// between the data's ends, or by decades when the axis is logarithmic. One
+// point alone sits in the middle either way.
+func xMapper(spec lineSpec, e lineExtent) func(float64) float64 {
+	return func(v float64) float64 {
+		if e.maxX == e.minX {
+			return float64(padL) + float64(plotW)/2
+		}
+		if spec.LogX {
+			lo, hi := math.Log10(math.Max(e.minX, 1)), math.Log10(math.Max(e.maxX, 1))
+			return float64(padL) + clamp01((math.Log10(math.Max(v, 1))-lo)/(hi-lo))*float64(plotW)
+		}
+		return float64(padL) + (v-e.minX)/(e.maxX-e.minX)*float64(plotW)
+	}
+}
+
+// xTicks lists where the horizontal axis is labeled: every integer across
+// the range on a linear axis, and the series' own points on a logarithmic
+// one, deduplicated and in order.
+func xTicks(spec lineSpec, e lineExtent) []float64 {
+	if !spec.LogX {
+		var ticks []float64
+		for x := e.minX; x <= e.maxX; x++ {
+			ticks = append(ticks, x)
+		}
+		return ticks
+	}
+	seen := map[float64]bool{}
+	var ticks []float64
+	for _, series := range spec.Series {
+		for _, x := range series.X {
+			if !seen[x] {
+				seen[x] = true
+				ticks = append(ticks, x)
+			}
+		}
+	}
+	slices.Sort(ticks)
+	return ticks
+}
+
+// seriesColor picks a series' color: its group's when it names one, so a
+// dashed companion shares its partner's hue, and its own position otherwise.
+func seriesColor(p palette, spec lineSpec, index int) string {
+	series := spec.Series[index]
+	if series.Group == "" {
+		return p.Series[index%len(p.Series)]
+	}
+	var groups []string
+	for _, other := range spec.Series {
+		if other.Group != "" && !slices.Contains(groups, other.Group) {
+			groups = append(groups, other.Group)
+		}
+	}
+	return p.Series[slices.Index(groups, series.Group)%len(p.Series)]
+}
+
 // renderLines draws a line chart over a numeric X axis.
 func renderLines(p palette, spec lineSpec) string {
 	format := spec.Format
@@ -376,46 +512,34 @@ func renderLines(p palette, spec lineSpec) string {
 		format = func(v float64) string { return fmt.Sprintf("%.0f", v) }
 	}
 
-	maxY, maxX, minX := 0.0, 0.0, math.MaxFloat64
-	for _, series := range spec.Series {
-		for i, y := range series.Y {
-			maxY = math.Max(maxY, y)
-			maxX = math.Max(maxX, series.X[i])
-			minX = math.Min(minX, series.X[i])
-		}
+	e := extentOf(spec)
+	var sc scale
+	var ticks []float64
+	if spec.LogY {
+		sc, ticks = logScale(e.minY, e.maxY)
+	} else {
+		sc, ticks = linearScale(e.maxY * 1.1)
 	}
-	if spec.Threshold != nil {
-		maxY = math.Max(maxY, spec.Threshold.Value)
-	}
-	if minX == math.MaxFloat64 {
-		minX = 0
-	}
-	sc, ticks := linearScale(maxY * 1.1)
-	xPos := func(v float64) float64 {
-		if maxX == minX {
-			return float64(padL) + float64(plotW)/2
-		}
-		return float64(padL) + (v-minX)/(maxX-minX)*float64(plotW)
-	}
+	xPos := xMapper(spec, e)
 
 	c := newCanvas(p, spec.Title, spec.Subtitle)
-	labels := make([]string, 0, len(spec.Series))
-	for _, series := range spec.Series {
-		labels = append(labels, series.Label)
+	entries := make([]legendEntry, 0, len(spec.Series))
+	for i, series := range spec.Series {
+		entries = append(entries, legendEntry{label: series.Label, color: seriesColor(p, spec, i), dashed: series.Dashed})
 	}
-	c.legend(labels)
+	c.legendEntries(entries)
 	for _, tick := range ticks {
 		c.gridLine(sc.pos(tick), format(tick))
 	}
 	c.axisLabels(spec.YAxis, spec.XAxis)
 
-	for x := minX; x <= maxX; x++ {
+	for _, x := range xTicks(spec, e) {
 		fmt.Fprintf(&c.sb, `<text x="%.1f" y="%d" %s font-size="11" text-anchor="middle" fill="%s">%.0f</text>`+"\n",
 			xPos(x), padT+plotH+20, fontStack, p.Muted, x)
 	}
 
 	for seriesIndex, series := range spec.Series {
-		color := p.Series[seriesIndex%len(p.Series)]
+		color := seriesColor(p, spec, seriesIndex)
 		var path strings.Builder
 		for i := range series.X {
 			command := 'L'
@@ -424,8 +548,12 @@ func renderLines(p palette, spec lineSpec) string {
 			}
 			fmt.Fprintf(&path, "%c%.1f,%.1f", command, xPos(series.X[i]), sc.pos(series.Y[i]))
 		}
-		fmt.Fprintf(&c.sb, `<path d="%s" fill="none" stroke="%s" stroke-width="2.5" stroke-linejoin="round"/>`+"\n",
-			path.String(), color)
+		dash := ""
+		if series.Dashed {
+			dash = ` stroke-dasharray="6 4"`
+		}
+		fmt.Fprintf(&c.sb, `<path d="%s" fill="none" stroke="%s" stroke-width="2.5" stroke-linejoin="round"%s/>`+"\n",
+			path.String(), color, dash)
 		for i := range series.X {
 			fmt.Fprintf(&c.sb, `<circle cx="%.1f" cy="%.1f" r="3" fill="%s"/>`+"\n",
 				xPos(series.X[i]), sc.pos(series.Y[i]), color)
@@ -441,6 +569,15 @@ func renderLines(p palette, spec lineSpec) string {
 
 	if spec.Threshold != nil {
 		c.threshold(sc.pos(spec.Threshold.Value), spec.Threshold.Label)
+	}
+	for i, marker := range spec.Markers {
+		x := xPos(marker.X)
+		fmt.Fprintf(&c.sb, `<line x1="%.1f" y1="%d" x2="%.1f" y2="%d" stroke="%s" stroke-width="1.5" stroke-dasharray="3 3"/>`+"\n",
+			x, padT, x, padT+plotH, p.Threshold)
+		// Stacked down the rule, so two series that stopped at the same
+		// count do not write over each other.
+		fmt.Fprintf(&c.sb, `<text x="%.1f" y="%d" %s font-size="11" text-anchor="end" fill="%s">%s</text>`+"\n",
+			x-4, padT+14+14*i, fontStack, p.Threshold, xmlEscape(marker.Label))
 	}
 	return c.close()
 }

@@ -51,6 +51,29 @@ type labels struct {
 	LatencyTitle    string
 	LatencySubtitle string
 
+	// The concurrency series: three figures over the credential count, the
+	// per-step table, and the sentence that says where a series stopped.
+	SeriesMemoryTitle     string
+	SeriesMemorySubtitle  string
+	SeriesLatencyTitle    string
+	SeriesLatencySubtitle string
+	SeriesCPUTitle        string
+	SeriesCPUSubtitle     string
+	SeriesCPUY            string
+	SeriesX               string
+	SeriesBudget          string
+	SeriesStopped         string
+	SeriesP50             string
+	SeriesP99             string
+	SeriesHead            []string
+	SeriesCaption         string
+	SeriesBudgetClause    string
+	SeriesNoBudget        string
+	SeriesComplete        string
+	SeriesStopBudget      string
+	SeriesStopLatency     string
+	SeriesStopFailure     string
+
 	MeasuredOn string
 	// HostCPUs, HostRAM and HostKernel are the words the machine's own
 	// description is written with. The sentence naming the host is prose, so
@@ -89,29 +112,52 @@ func (l labels) callDetail(recorded string) string {
 //nolint:dupl // one bundle per language, identical in shape by definition
 func englishLabels() labels {
 	return labels{
-		Code:            "en",
-		MemoryTitle:     "Resident memory by tool surface",
-		MemorySubtitle:  "stdio holds one catalog per process; HTTP holds one per credential in the pool",
-		MemoryY:         "Resident set (MiB)",
-		MemoryStdioOne:  "stdio, one process",
-		MemoryHTTPOne:   "HTTP, one credential",
-		MemoryHTTPAll:   "HTTP, %d credentials",
-		MemoryThreshold: "512 MiB",
-		RampTitle:       "Resident memory as credentials arrive",
-		RampSubtitle:    "HTTP mode: every distinct token builds its own catalog in the pool",
-		RampX:           "live credentials (pool entries)",
-		StartupTitle:    "What a client waits for",
-		StartupSubtitle: "HTTP mode, log scale: the catalog is built on the first tools/list, not at startup",
-		StartupY:        "milliseconds (log scale)",
-		StartupReady:    "process ready",
-		StartupCold:     "first tools/list (cold)",
-		StartupWarm:     "tools/list once warm (p50)",
-		LatencyTitle:    "Request latency by method",
-		LatencySubtitle: "solid bar p50, faint extension p99, log scale",
-		MeasuredOn:      "Measured on %s, build %s, %s. %d rounds per method, resident set sampled every %d ms.",
-		HostCPUs:        "logical CPUs",
-		HostRAM:         "GiB RAM",
-		HostKernel:      "kernel",
+		Code:                  "en",
+		MemoryTitle:           "Resident memory by tool surface",
+		MemorySubtitle:        "stdio holds one catalog per process; HTTP holds one per credential in the pool",
+		MemoryY:               "Resident set (MiB)",
+		MemoryStdioOne:        "stdio, one process",
+		MemoryHTTPOne:         "HTTP, one credential",
+		MemoryHTTPAll:         "HTTP, %d credentials",
+		MemoryThreshold:       "512 MiB",
+		RampTitle:             "Resident memory as credentials arrive",
+		RampSubtitle:          "HTTP mode: every distinct token builds its own catalog in the pool",
+		RampX:                 "live credentials (pool entries)",
+		StartupTitle:          "What a client waits for",
+		StartupSubtitle:       "HTTP mode, log scale: the catalog is built on the first tools/list, not at startup",
+		StartupY:              "milliseconds (log scale)",
+		StartupReady:          "process ready",
+		StartupCold:           "first tools/list (cold)",
+		StartupWarm:           "tools/list once warm (p50)",
+		LatencyTitle:          "Request latency by method",
+		LatencySubtitle:       "solid bar p50, faint extension p99, log scale",
+		SeriesMemoryTitle:     "Resident memory as credentials accumulate",
+		SeriesMemorySubtitle:  "HTTP mode, one process: each step's peak, the memory budget, and where a series stopped",
+		SeriesLatencyTitle:    "tools/call latency as credentials accumulate",
+		SeriesLatencySubtitle: "solid line p50, dashed line p99, both axes on a log scale",
+		SeriesCPUTitle:        "Processor time per call as credentials accumulate",
+		SeriesCPUSubtitle:     "CPU time the server consumed over the steady phase, divided by the calls that completed",
+		SeriesCPUY:            "CPU milliseconds per call",
+		SeriesX:               "live credentials (log scale)",
+		SeriesBudget:          "budget %.0f MiB",
+		SeriesStopped:         "%s: stopped at %d",
+		SeriesP50:             "%s p50",
+		SeriesP99:             "%s p99",
+		SeriesHead: []string{
+			"Credentials", "Resident, mean", "Resident, peak", "CPU per call", "Calls",
+			"tools/call p50", "tools/call p99", "tools/list p50", "tools/list p99", "Goroutines",
+		},
+		SeriesCaption:      "%s, %s surface: %d in flight per credential, %.0f s per step, %s",
+		SeriesBudgetClause: "memory budget %.0f MiB",
+		SeriesNoBudget:     "no memory budget",
+		SeriesComplete:     "Every planned step ran, up to %d credentials.",
+		SeriesStopBudget:   "Stopped at %d credentials: the next step (%d) was estimated at %.0f MiB against a budget of %.0f MiB.",
+		SeriesStopLatency:  "Stopped at %d credentials: the tools/call p99 reached %.0f ms, above the %d ms ceiling.",
+		SeriesStopFailure:  "Stopped at %d credentials: admitting the credentials of the next step (%d) failed: %s.",
+		MeasuredOn:         "Measured on %s, build %s, %s. %d rounds per method, resident set sampled every %d ms.",
+		HostCPUs:           "logical CPUs",
+		HostRAM:            "GiB RAM",
+		HostKernel:         "kernel",
 		SummaryHead: []string{
 			"Scenario", "Clients", "Idle", "One client", "All clients", "Per extra client",
 			"Peak", "Goroutines", "CPU, % of one core",
@@ -129,15 +175,19 @@ func englishLabels() labels {
 		},
 		SurfaceNote: "Resident set in MiB, times in milliseconds.",
 		FigureAlt: map[string]string{
-			figureMemory:     "Grouped bars comparing resident memory across the dynamic, meta and individual surfaces on both transports.",
-			figureMemoryRamp: "Lines showing resident memory growing as each new credential builds its own catalog in the HTTP pool.",
-			figureStartup:    "Grouped bars on a log scale comparing process readiness, the first cold tools/list and a warm one.",
-			figureLatency:    "Grouped bars on a log scale comparing resources/list, tools/call and tools/list latency across transports and surfaces.",
+			figureMemory:        "Grouped bars comparing resident memory across the dynamic, meta and individual surfaces on both transports.",
+			figureMemoryRamp:    "Lines showing resident memory growing as each new credential builds its own catalog in the HTTP pool.",
+			figureStartup:       "Grouped bars on a log scale comparing process readiness, the first cold tools/list and a warm one.",
+			figureLatency:       "Grouped bars on a log scale comparing resources/list, tools/call and tools/list latency across transports and surfaces.",
+			figureSeriesMemory:  "Lines on a log scale of credentials showing each surface's peak resident memory per step, the memory budget, and the count each series stopped at.",
+			figureSeriesLatency: "Lines on log scales showing the tools/call p50 and p99 per surface as the credential count grows.",
+			figureSeriesCPU:     "Lines on a log scale of credentials showing the processor time per call for each surface.",
 		},
 		TableCaption: map[string]string{
 			"summary": "Memory, goroutines and processor time per scenario",
 			"startup": "What a client waits for, per scenario",
 			"latency": "Latency percentiles per method",
+			"series":  "Concurrency series",
 		},
 	}
 }
@@ -148,29 +198,52 @@ func englishLabels() labels {
 func spanishLabels() labels {
 	//#nosec G101 -- user-facing wording, not a credential
 	return labels{
-		Code:            "es",
-		MemoryTitle:     "Memoria residente por superficie de herramientas",
-		MemorySubtitle:  "stdio mantiene un catálogo por proceso; HTTP mantiene uno por credencial en el pool",
-		MemoryY:         "Conjunto residente (MiB)",
-		MemoryStdioOne:  "stdio, un proceso",
-		MemoryHTTPOne:   "HTTP, una credencial",
-		MemoryHTTPAll:   "HTTP, %d credenciales",
-		MemoryThreshold: "512 MiB",
-		RampTitle:       "Memoria residente según llegan credenciales",
-		RampSubtitle:    "Modo HTTP: cada token distinto construye su propio catálogo en el pool",
-		RampX:           "credenciales activas (entradas del pool)",
-		StartupTitle:    "Lo que espera un cliente",
-		StartupSubtitle: "Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar",
-		StartupY:        "milisegundos (escala logarítmica)",
-		StartupReady:    "proceso listo",
-		StartupCold:     "primer tools/list (en frío)",
-		StartupWarm:     "tools/list ya en caliente (p50)",
-		LatencyTitle:    "Latencia de petición por método",
-		LatencySubtitle: "barra sólida p50, extensión tenue p99, escala logarítmica",
-		MeasuredOn:      "Medido en %s, compilación %s, %s. %d rondas por método, conjunto residente muestreado cada %d ms.",
-		HostCPUs:        "CPU lógicas",
-		HostRAM:         "GiB de RAM",
-		HostKernel:      "núcleo",
+		Code:                  "es",
+		MemoryTitle:           "Memoria residente por superficie de herramientas",
+		MemorySubtitle:        "stdio mantiene un catálogo por proceso; HTTP mantiene uno por credencial en el pool",
+		MemoryY:               "Conjunto residente (MiB)",
+		MemoryStdioOne:        "stdio, un proceso",
+		MemoryHTTPOne:         "HTTP, una credencial",
+		MemoryHTTPAll:         "HTTP, %d credenciales",
+		MemoryThreshold:       "512 MiB",
+		RampTitle:             "Memoria residente según llegan credenciales",
+		RampSubtitle:          "Modo HTTP: cada token distinto construye su propio catálogo en el pool",
+		RampX:                 "credenciales activas (entradas del pool)",
+		StartupTitle:          "Lo que espera un cliente",
+		StartupSubtitle:       "Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar",
+		StartupY:              "milisegundos (escala logarítmica)",
+		StartupReady:          "proceso listo",
+		StartupCold:           "primer tools/list (en frío)",
+		StartupWarm:           "tools/list ya en caliente (p50)",
+		LatencyTitle:          "Latencia de petición por método",
+		LatencySubtitle:       "barra sólida p50, extensión tenue p99, escala logarítmica",
+		SeriesMemoryTitle:     "Memoria residente según se acumulan credenciales",
+		SeriesMemorySubtitle:  "Modo HTTP, un proceso: el pico de cada paso, el presupuesto de memoria y dónde se detuvo cada serie",
+		SeriesLatencyTitle:    "Latencia de tools/call según se acumulan credenciales",
+		SeriesLatencySubtitle: "línea continua p50, discontinua p99, ambos ejes en escala logarítmica",
+		SeriesCPUTitle:        "Tiempo de procesador por llamada según se acumulan credenciales",
+		SeriesCPUSubtitle:     "tiempo de CPU consumido por el servidor en la fase estable, dividido entre las llamadas completadas",
+		SeriesCPUY:            "milisegundos de CPU por llamada",
+		SeriesX:               "credenciales activas (escala logarítmica)",
+		SeriesBudget:          "presupuesto %.0f MiB",
+		SeriesStopped:         "%s: detenida en %d",
+		SeriesP50:             "%s p50",
+		SeriesP99:             "%s p99",
+		SeriesHead: []string{
+			"Credenciales", "Residente, media", "Residente, pico", "CPU por llamada", "Llamadas",
+			"tools/call p50", "tools/call p99", "tools/list p50", "tools/list p99", "Goroutines",
+		},
+		SeriesCaption:      "%s, superficie %s: %d en vuelo por credencial, %.0f s por paso, %s",
+		SeriesBudgetClause: "presupuesto de memoria de %.0f MiB",
+		SeriesNoBudget:     "sin presupuesto de memoria",
+		SeriesComplete:     "Se ejecutaron todos los pasos previstos, hasta %d credenciales.",
+		SeriesStopBudget:   "Detenida en %d credenciales: el siguiente paso (%d) se estimó en %.0f MiB frente a un presupuesto de %.0f MiB.",
+		SeriesStopLatency:  "Detenida en %d credenciales: el p99 de tools/call alcanzó %.0f ms, por encima del techo de %d ms.",
+		SeriesStopFailure:  "Detenida en %d credenciales: no se pudieron admitir las credenciales del siguiente paso (%d): %s.",
+		MeasuredOn:         "Medido en %s, compilación %s, %s. %d rondas por método, conjunto residente muestreado cada %d ms.",
+		HostCPUs:           "CPU lógicas",
+		HostRAM:            "GiB de RAM",
+		HostKernel:         "núcleo",
 		SummaryHead: []string{
 			"Escenario", "Clientes", "En reposo", "Un cliente", "Todos los clientes",
 			"Por cliente extra", "Pico", "Goroutines", "CPU, % de un núcleo",
@@ -185,15 +258,19 @@ func spanishLabels() labels {
 		},
 		SurfaceNote: "Conjunto residente en MiB, tiempos en milisegundos.",
 		FigureAlt: map[string]string{
-			figureMemory:     "Barras agrupadas que comparan la memoria residente de las superficies dynamic, meta e individual en ambos transportes.",
-			figureMemoryRamp: "Líneas que muestran cómo crece la memoria residente cuando cada credencial nueva construye su catálogo en el pool HTTP.",
-			figureStartup:    "Barras agrupadas en escala logarítmica que comparan el arranque del proceso, el primer tools/list en frío y uno en caliente.",
-			figureLatency:    "Barras agrupadas en escala logarítmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie.",
+			figureMemory:        "Barras agrupadas que comparan la memoria residente de las superficies dynamic, meta e individual en ambos transportes.",
+			figureMemoryRamp:    "Líneas que muestran cómo crece la memoria residente cuando cada credencial nueva construye su catálogo en el pool HTTP.",
+			figureStartup:       "Barras agrupadas en escala logarítmica que comparan el arranque del proceso, el primer tools/list en frío y uno en caliente.",
+			figureLatency:       "Barras agrupadas en escala logarítmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie.",
+			figureSeriesMemory:  "Líneas sobre una escala logarítmica de credenciales con el pico de memoria residente de cada superficie por paso, el presupuesto de memoria y el número de credenciales en que se detuvo cada serie.",
+			figureSeriesLatency: "Líneas en escalas logarítmicas con el p50 y el p99 de tools/call por superficie según crece el número de credenciales.",
+			figureSeriesCPU:     "Líneas sobre una escala logarítmica de credenciales con el tiempo de procesador por llamada de cada superficie.",
 		},
 		TableCaption: map[string]string{
 			"summary": "Memoria, goroutines y tiempo de procesador por escenario",
 			"startup": "Lo que espera un cliente, por escenario",
 			"latency": "Percentiles de latencia por método",
+			"series":  "Serie de concurrencia",
 		},
 	}
 }
@@ -207,19 +284,24 @@ var surfaceOrder = []string{surfaceDynamic, surfaceMeta, surfaceIndividual}
 // agree: a renamed figure that missed one of them would either lose its
 // description or point a page at a file nobody writes.
 const (
-	figureMemory     = "memory"
-	figureMemoryRamp = "memory-ramp"
-	figureStartup    = "startup"
-	figureLatency    = "latency"
+	figureMemory        = "memory"
+	figureMemoryRamp    = "memory-ramp"
+	figureStartup       = "startup"
+	figureLatency       = "latency"
+	figureSeriesMemory  = "series-memory"
+	figureSeriesLatency = "series-latency"
+	figureSeriesCPU     = "series-cpu"
 )
 
 // buildFigures assembles every figure for one language, in a fixed order.
 // A figure the record holds no measurements for is left out rather than
 // written empty, because an SVG with axes and no bars does not read as "not
-// measured", it reads as zero.
+// measured", it reads as zero. The series figures follow the same rule: a
+// record from before the series, or a run that measured none, draws none.
 func buildFigures(run *Run, l labels) []figure {
 	memory, ramp := memorySpec(run, l), rampSpec(run, l)
 	startup, latency := startupSpec(run, l), latencySpec(run, l)
+	seriesMemory, seriesLatency, seriesCPU := seriesMemorySpec(run, l), seriesLatencySpec(run, l), seriesCPUSpec(run, l)
 
 	var out []figure
 	add := func(name string, series int, render func(palette) string) {
@@ -231,7 +313,94 @@ func buildFigures(run *Run, l labels) []figure {
 	add(figureMemoryRamp, len(ramp.Series), func(p palette) string { return renderLines(p, ramp) })
 	add(figureStartup, len(startup.Series), func(p palette) string { return renderBars(p, startup) })
 	add(figureLatency, len(latency.Series), func(p palette) string { return renderBars(p, latency) })
+	add(figureSeriesMemory, len(seriesMemory.Series), func(p palette) string { return renderLines(p, seriesMemory) })
+	add(figureSeriesLatency, len(seriesLatency.Series), func(p palette) string { return renderLines(p, seriesLatency) })
+	add(figureSeriesCPU, len(seriesCPU.Series), func(p palette) string { return renderLines(p, seriesCPU) })
 	return out
+}
+
+// orderedSeries lists the record's series in surface order, which is the
+// order every figure's legend and every table follows.
+func orderedSeries(run *Run) []SeriesScenario {
+	var out []SeriesScenario
+	for _, surface := range surfaceOrder {
+		for _, series := range run.Series {
+			if series.Surface == surface && len(series.Steps) > 0 {
+				out = append(out, series)
+			}
+		}
+	}
+	return out
+}
+
+// seriesLine draws one series as a line over its steps' credential counts,
+// taking the Y of each step from pick.
+func seriesLine(series SeriesScenario, label string, pick func(SeriesStep) float64) lineSeries {
+	line := lineSeries{Label: label}
+	for _, step := range series.Steps {
+		line.X = append(line.X, float64(step.Clients))
+		line.Y = append(line.Y, pick(step))
+	}
+	return line
+}
+
+// seriesMemorySpec is the sizing figure at scale: each surface's peak
+// resident set per step, the budget the series planned against, and a
+// marker where each stopped early.
+//
+// The surfaces share one chart rather than getting one each, because the
+// comparison a reader makes is between surfaces at the same credential
+// count, and the budget and the stops read the same on one axis.
+func seriesMemorySpec(run *Run, l labels) lineSpec {
+	spec := lineSpec{
+		Title: l.SeriesMemoryTitle, Subtitle: l.SeriesMemorySubtitle,
+		XAxis: l.SeriesX, YAxis: l.MemoryY, LogX: true,
+		Format: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+	}
+	for _, series := range orderedSeries(run) {
+		spec.Series = append(spec.Series, seriesLine(series, series.Surface, func(s SeriesStep) float64 { return s.RSSPeakMiB }))
+		if spec.Threshold == nil && series.BudgetMiB > 0 {
+			spec.Threshold = &thresholdLine{Value: series.BudgetMiB, Label: fmt.Sprintf(l.SeriesBudget, series.BudgetMiB)}
+		}
+		if series.Stop != nil {
+			spec.Markers = append(spec.Markers, lineMarker{
+				X: float64(series.StoppedAt), Label: fmt.Sprintf(l.SeriesStopped, series.Surface, series.StoppedAt),
+			})
+		}
+	}
+	return spec
+}
+
+// seriesLatencySpec is where the latency knee shows: the tools/call median
+// and tail per surface, on log axes, the tail dashed beside its median.
+func seriesLatencySpec(run *Run, l labels) lineSpec {
+	spec := lineSpec{
+		Title: l.SeriesLatencyTitle, Subtitle: l.SeriesLatencySubtitle,
+		XAxis: l.SeriesX, YAxis: l.StartupY, LogX: true, LogY: true, Format: msLabel,
+	}
+	for _, series := range orderedSeries(run) {
+		median := seriesLine(series, fmt.Sprintf(l.SeriesP50, series.Surface), func(s SeriesStep) float64 { return s.CallP50Ms })
+		median.Group = series.Surface
+		tail := seriesLine(series, fmt.Sprintf(l.SeriesP99, series.Surface), func(s SeriesStep) float64 { return s.CallP99Ms })
+		tail.Group = series.Surface
+		tail.Dashed = true
+		spec.Series = append(spec.Series, median, tail)
+	}
+	return spec
+}
+
+// seriesCPUSpec is the cost of a call at scale: processor milliseconds per
+// completed call, per surface.
+func seriesCPUSpec(run *Run, l labels) lineSpec {
+	spec := lineSpec{
+		Title: l.SeriesCPUTitle, Subtitle: l.SeriesCPUSubtitle,
+		XAxis: l.SeriesX, YAxis: l.SeriesCPUY, LogX: true,
+		Format: func(v float64) string { return fmt.Sprintf("%.2f", v) },
+	}
+	for _, series := range orderedSeries(run) {
+		spec.Series = append(spec.Series, seriesLine(series, series.Surface, func(s SeriesStep) float64 { return s.CPUMsPerCall }))
+	}
+	return spec
 }
 
 // presentSurfaces keeps the surfaces this record actually measured, so a

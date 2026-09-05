@@ -21,15 +21,16 @@ memory limit.
 
 ## What is measured
 
-Five axes, chosen because they are the ones that move the numbers:
+Six axes, chosen because they are the ones that move the numbers:
 
-| Axis               | Values                                      | Why it matters                                                                                             |
-| ------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Transport          | stdio, HTTP                                 | stdio gives every client its own process; HTTP serves everyone from one and pools a catalog per credential |
-| Tool surface       | `dynamic`, `meta`, `individual`             | the dynamic surface registers two tools and the individual one roughly a thousand                          |
-| Concurrent clients | 4 processes on stdio, 8 credentials on HTTP | on HTTP the pool holds one entry per token, so this is the axis a shared deployment grows along            |
-| Parallel requests  | 2 to 4 in flight per client                 | separates the cost of having clients from the cost of them all calling at once                             |
-| Telemetry          | off, on                                     | exporting is work the server would not otherwise do                                                        |
+| Axis                 | Values                                      | Why it matters                                                                                                                                        |
+| -------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transport            | stdio, HTTP                                 | stdio gives every client its own process; HTTP serves everyone from one and pools a catalog per credential                                            |
+| Tool surface         | `dynamic`, `meta`, `individual`             | the dynamic surface registers two tools and the individual one roughly a thousand                                                                     |
+| Concurrent clients   | 4 processes on stdio, 8 credentials on HTTP | on HTTP the pool holds one entry per token, so this is the axis a shared deployment grows along                                                       |
+| Parallel requests    | 2 to 4 in flight per client                 | separates the cost of having clients from the cost of them all calling at once                                                                        |
+| Telemetry            | off, on                                     | exporting is work the server would not otherwise do                                                                                                   |
+| Credentials at scale | 1 to 1000 on HTTP, one series per surface   | a shared deployment meets hundreds of tokens, not eight; the series measures the slope and the latency knee instead of multiplying a per-token figure |
 
 Four metrics, taken from the operating system and from the wire rather than
 from inside the program:
@@ -44,6 +45,13 @@ from inside the program:
   above 100% means several cores were busy.
 - **Goroutine count**, at rest, with every client attached.
 - **Latency percentiles**, per MCP method, from the client's side of the wire.
+
+The concurrency series records, at each credential count: the resident set
+over the steady phase, as a mean and a peak; processor time per completed
+call; the p50 and p99 of `tools/call` and of `tools/list`; the goroutine
+count; the pool counters the driver knows (entries admitted and the capacity
+it sized the pool to); and a CPU profile and a heap profile of the server,
+kept beside the record for the analysis rather than committed.
 
 ## How it is measured
 
@@ -86,13 +94,70 @@ A few details that change what the numbers mean:
   so there is no connection ceremony to time and the first thing a client
   waits for is its first real request. That is why the startup figures are
   anchored on the first `tools/list` rather than on a handshake.
-- **The goroutine count comes from a traceback signal.** The binary exposes no
-  debug endpoint, so the only way to ask is `SIGQUIT` with `GOTRACEBACK=all`,
-  which prints every goroutine's stack and ends the process. It is therefore
-  the last thing each scenario does.
+- **The point scenarios take the goroutine count from a traceback signal.**
+  They start the server without its profile listener, so the process is the
+  one an operator runs, and the only way to ask is `SIGQUIT` with
+  `GOTRACEBACK=all`, which prints every goroutine's stack and ends the
+  process. It is therefore the last thing each scenario does. The series
+  reads the count off `--pprof-addr` instead, which leaves the process alive
+  for the next step.
 - **Percentiles are nearest-rank**, so every published percentile is a value
   that was actually observed rather than one interpolated between two that
   were.
+
+### The concurrency series
+
+One HTTP process per surface, started with `--pprof-addr` on a loopback port
+the driver picks and `--max-http-clients` set to the largest count, so nothing
+a step admitted is evicted before the next step measures it. The driver then
+steps through the credential counts, 1, 2, 5, 10, 20, 50, 100, 200, 500 and
+1000 by default (`-clients` overrides the list; `-quick` uses 1, 2, 5), and at
+each count:
+
+1. **Admits the new credentials**, eight at a time, each warmed with one cold
+   `tools/list` so the pool holds a built entry for it. Serial admission is
+   what the ramp scenario measures; here the question is the steady state at
+   N, and warming a thousand credentials one at a time at two seconds each
+   would spend more of the hour after which the pool rebuilds a credential on
+   the warm-up than on the measurement.
+2. **Runs a steady phase** of ten seconds (`-step-duration`) in which every
+   credential keeps the scenario's parallelism in flight, each worker
+   alternating `tools/call` and `tools/list`. A fixed duration rather than a
+   fixed call count, because a CPU profile is taken over wall-clock seconds and
+   because a count that took seconds at one credential would take unbounded
+   time once latency degrades, which is exactly the region the series exists
+   to reach. Every per-call figure divides by the calls that actually
+   completed.
+3. **Profiles the server while it serves**: a CPU profile over the first 80%
+   of the phase, from the listener's `/debug/pprof/profile`, and as the phase
+   ends a heap profile and the goroutine total from
+   `/debug/pprof/goroutine?debug=1`, which unlike the traceback signal leaves
+   the process alive for the next step. Profiles land under
+   `bench/profiles/<scenario>/<clients>.cpu.pb.gz` and `<clients>.heap.pb.gz`
+   (`-profiles`), ignored by git.
+
+Two guards keep the series from taking the host down, and both are recorded
+so the page says where a series stopped and why rather than presenting a
+shorter series as the whole:
+
+- **A memory budget.** Before each step the resident set it would reach is
+  estimated from the steps so far, a straight line fitted through their peaks
+  (MiB per credential times the count, plus the process's own share; with a
+  single step to go on, the extrapolation is proportional, which errs toward
+  stopping early). When the estimate exceeds the budget, the step and every
+  step after it are skipped. The budget is `-memory-budget`, in MiB, or 80% of
+  the host's available memory (`MemAvailable` in `/proc/meminfo`) read when
+  the run starts; a host that does not report it runs with no budget and the
+  series says so.
+- **A latency ceiling.** A step whose `tools/call` p99 exceeds 30 seconds is
+  the last one run: past that a client has given up, and the next step would
+  measure timeouts rather than the server.
+
+Telemetry stays off for the series, so it measures the same server the point
+scenarios do. The pool's own counters are therefore not read off the OTLP
+sink; what the record carries is what the driver knows, which is exact: it
+created one entry per credential, and it sized the pool so that none was
+evicted between steps.
 
 ## Measurements
 
@@ -251,6 +316,14 @@ to the response sizes.
   should carry to other machines; the absolute values will not.
 - **Disk and network.** Nothing here writes to disk in the hot path, and the
   only network is loopback.
+- **Pool evictions.** The series sizes the pool to its largest step, so none
+  happen, and the counters it records say so by construction. What an evicted
+  and rebuilt entry costs is the cold `tools/list` the ramp measures.
+- **The driver's own load.** The driver and the server share the host, and at
+  a thousand credentials the driver is reading thousands of responses a
+  second. The server's figures are its own (resident set and processor time
+  are read per process), but the latencies include whatever the driver added
+  by being busy.
 
 ## Reproducing
 
@@ -260,16 +333,50 @@ make bench-resources-render   # redraw from the committed record, no measuring
 make check-bench-resources    # verify the charts and tables match the record
 ```
 
-The full matrix takes several minutes, most of it spent building one tool
-catalog per client, which is the cost being measured rather than overhead of
-the harness. For a faster check while changing the harness itself, run a
-smoke matrix somewhere harmless:
+The full matrix takes several minutes for the point scenarios, most of it
+spent building one tool catalog per client, which is the cost being measured
+rather than overhead of the harness, and then as long as the series take: up
+to a quarter of an hour per surface on a host that can hold a thousand
+credentials, less where the budget stops them earlier. For a faster check
+while changing the harness itself, run a smoke matrix somewhere harmless:
 
 ```bash
 go run ./cmd/bench_resources/ -quick -json /tmp/bench.json \
+  -profiles /tmp/bench-profiles \
   -doc-page /tmp/doc.md -site-page /tmp/en.mdx -site-page-es /tmp/es.mdx
 ```
 
 A partial matrix refuses to write to the published record: replacing measured
 numbers with a two-scenario smoke test would leave the documentation
-presenting them as the figures.
+presenting them as the figures. A `-clients` list of your own is partial for
+the same reason.
+
+### Measuring on one host, rendering on another
+
+The series at 500 and 1000 credentials needs tens of gigabytes, which is not
+the machine the documentation is written on. The driver therefore has a
+measure-only mode that reads nothing from the repository: not `VERSION`, not
+the docs, not the stylesheet. Build both binaries here, copy them to the host
+that has the memory, and run:
+
+```bash
+go build -o dist/bench_resources ./cmd/bench_resources
+go build -o dist/gitlab-mcp-server ./cmd/server
+
+# On the measuring host, with no Go toolchain and no checkout:
+./bench_resources -binary ./gitlab-mcp-server \
+  -json /var/tmp/bench/resource-benchmark.json \
+  -profiles /var/tmp/bench/profiles \
+  -no-render
+```
+
+Then copy the record back over `site/src/data/resource-benchmark.json` and
+redraw from it with `make bench-resources-render`; the profiles stay on the
+measuring host, or beside the record under `bench/profiles/`, which git
+ignores. Two things about the measuring host: the driver and the server each
+hold one socket per request in flight, so at a thousand credentials with four
+in flight each the open-file limit has to allow several thousand descriptors
+(Go raises the soft limit to the hard one on its own, so `ulimit -Hn` is the
+figure to check); and the budget is read from the host's available memory
+when the run starts, so stop whatever else is using it first, or pass
+`-memory-budget` explicitly.
