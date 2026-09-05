@@ -420,9 +420,27 @@ func TestSharedIndividualCatalog_TwoServersListOneCatalogUnchanged(t *testing.T)
 
 // TestSharedMetaCatalog_ConcurrentEntriesBuildSafely verifies what the pool
 // does under a startup burst: several entries for one fresh configuration
-// build and register at once, from one origin, and list the same tools.
-// Run under the race detector, this is the proof that the caches and the
-// shared maps are read concurrently and written once.
+// build from one origin, register at once, list the same tools, leave the
+// schema maps they all share exactly as they found them, and each run their
+// actions under their own credential. Run under the race detector, this is
+// the proof that the caches and the shared maps are read concurrently and
+// written once.
+//
+// Building and registering are two bursts rather than one so that the schema
+// digests can be taken between them: maps a burst of registrations must not
+// change have to be read before it runs. Both halves stay concurrent, which
+// is what the cold catalog cache and the compiled-schema cache are raced for.
+//
+// The listing comparison is not what says the schemas agree, and cannot be.
+// In opaque mode a meta-tool's input schema is a pure function of the tool
+// name and the sorted action names, which is exactly the key it is compiled
+// and cached under, so every entry is served one compiled schema whatever
+// maps its own catalog carries; giving each server a cache key of its own,
+// the way the individual test does, would only compare two rebuilds of that
+// same pure function. What the listing does carry per entry is the
+// description and the annotations, both derived at registration from that
+// entry's own routes. The schemas are covered by the digests instead, and the
+// binding of a shared catalog to one credential by the health action.
 func TestSharedMetaCatalog_ConcurrentEntriesBuildSafely(t *testing.T) {
 	const entries = 6
 	clients := make([]*gitlabclient.Client, entries)
@@ -431,20 +449,37 @@ func TestSharedMetaCatalog_ConcurrentEntriesBuildSafely(t *testing.T) {
 	}
 	cfg := &config.ServerConfig{Tier: edition.Premium, ExcludeTools: []string{"race-" + t.Name()}}
 
+	catalogs := make([]*actioncatalog.Catalog, entries)
 	origins := make([]*actioncatalog.Catalog, entries)
-	lists := make([][]byte, entries)
 	failures := make([]error, entries)
-	var wg sync.WaitGroup
+	var building sync.WaitGroup
 	for i := range entries {
-		wg.Go(func() {
+		building.Go(func() {
 			catalog, _, err := SharedMetaCatalog(clients[i], cfg)
 			if err != nil {
 				failures[i] = err
 				return
 			}
-			origins[i] = catalog.SharedOrigin()
+			catalogs[i], origins[i] = catalog, catalog.SharedOrigin()
+		})
+	}
+	building.Wait()
+	for i := range entries {
+		if failures[i] != nil {
+			t.Fatalf("entry %d failed to build: %v", i, failures[i])
+		}
+		if origins[i] == nil || origins[i] != origins[0] {
+			t.Fatalf("entry %d has origin %p, want entry 0's %p", i, origins[i], origins[0])
+		}
+	}
+	before := schemaDigests(t, catalogs[0])
+
+	lists := make([][]byte, entries)
+	var registering sync.WaitGroup
+	for i := range entries {
+		registering.Go(func() {
 			server := newListingServer()
-			RegisterMetaCatalog(server, catalog)
+			RegisterMetaCatalog(server, catalogs[i])
 			RegisterMetaStandaloneTools(server, clients[i])
 			tools, err := toolutil.ListRegisteredTools(context.Background(), server, "race")
 			if err != nil {
@@ -454,16 +489,23 @@ func TestSharedMetaCatalog_ConcurrentEntriesBuildSafely(t *testing.T) {
 			lists[i], failures[i] = json.Marshal(tools)
 		})
 	}
-	wg.Wait()
+	registering.Wait()
+
+	reached := make(map[string]int, entries)
 	for i := range entries {
 		if failures[i] != nil {
-			t.Fatalf("entry %d failed: %v", i, failures[i])
-		}
-		if origins[i] == nil || origins[i] != origins[0] {
-			t.Fatalf("entry %d has origin %p, want entry 0's %p", i, origins[i], origins[0])
+			t.Fatalf("entry %d failed to register: %v", i, failures[i])
 		}
 		if !bytes.Equal(lists[i], lists[0]) {
 			t.Fatalf("entry %d lists different tools from entry 0", i)
+		}
+		if !reflect.DeepEqual(schemaDigests(t, catalogs[i]), before) {
+			t.Fatalf("a burst of registrations changed a schema map entry %d shares with every other entry", i)
+		}
+		if url := gitlabURLReached(t, catalogs[i]); reached[url] != 0 {
+			t.Fatalf("entry %d reached %q, the instance of entry %d", i, url, reached[url]-1)
+		} else {
+			reached[url] = i + 1
 		}
 	}
 }
