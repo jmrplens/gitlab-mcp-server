@@ -18,11 +18,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // TestParseListenerFlags_ReadsEverySpelling covers the flag spellings the flag
@@ -566,5 +569,115 @@ func TestLivePeers_ExcludesThisProcess(t *testing.T) {
 		if len(p.args) == 0 {
 			t.Errorf("livePeers returned pid %d with no command line", p.pid)
 		}
+	}
+}
+
+// TestLivePeers_ListsRunningPeersAndSkipsOnesWithoutACommandLine covers what
+// the probe reads off the process table: a running instance with its command
+// line, and nothing for a process that has no command line to read.
+//
+// The second is a real shape rather than a defensive one. A process that has
+// exited but not yet been reaped is still listed under its name, so
+// discovery finds it, and its command line is empty, so there is no listener
+// to derive from it. Listing it would send the probe to the default port on
+// behalf of a process that serves nothing.
+func TestLivePeers_ListsRunningPeersAndSkipsOnesWithoutACommandLine(t *testing.T) {
+	binary := buildPeer(t, filepath.Join(t.TempDir(), peerName(t)))
+	withArgv0(t, binary)
+	running := startPeer(t, binary, nil)
+
+	// Started and killed but deliberately not reaped until the test ends, so
+	// it stays in the table as a zombie for the duration of the assertions.
+	zombie := exec.CommandContext(t.Context(), binary)
+	if err := zombie.Start(); err != nil {
+		t.Fatalf("starting the peer that will become a zombie: %v", err)
+	}
+	t.Cleanup(func() { _ = zombie.Wait() })
+	if err := zombie.Process.Kill(); err != nil {
+		t.Fatalf("killing the peer: %v", err)
+	}
+
+	runningPID := pid32(t, running.cmd.Process.Pid)
+	zombiePID := pid32(t, zombie.Process.Pid)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		peers, err := livePeers()
+		if err != nil {
+			t.Fatalf("livePeers: %v", err)
+		}
+		var sawRunning, sawZombie bool
+		for _, p := range peers {
+			switch p.pid {
+			case runningPID:
+				sawRunning = true
+				if len(p.args) == 0 || p.args[0] != binary {
+					t.Errorf("pid %d listed with args %q, want its command line starting with %q", p.pid, p.args, binary)
+				}
+			case zombiePID:
+				sawZombie = true
+			}
+		}
+		if sawRunning && !sawZombie {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after 10s: running peer listed=%v, zombie listed=%v; want the running one and not the zombie", sawRunning, sawZombie)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestLivePeers_ProcessListingFails_ReturnsTheError pins that discovery
+// reports an unreadable process table rather than answering "no instances",
+// which --probe would turn into an unhealthy verdict with the wrong cause.
+func TestLivePeers_ProcessListingFails_ReturnsTheError(t *testing.T) {
+	original := listProcesses
+	t.Cleanup(func() { listProcesses = original })
+	listProcesses = func() ([]*process.Process, error) {
+		return nil, errors.New("procfs is not mounted")
+	}
+
+	peers, err := livePeers()
+	if err == nil || !strings.Contains(err.Error(), "procfs is not mounted") {
+		t.Fatalf("livePeers() = %v, %v; want the listing's error", peers, err)
+	}
+}
+
+// TestRunProbe_ATargetThatCannotBecomeARequest_IsUnhealthy covers a host:port
+// that splits cleanly and still cannot be asked: net.SplitHostPort accepts any
+// host text, and the URL built from it is what refuses the space.
+func TestRunProbe_ATargetThatCannotBecomeARequest_IsUnhealthy(t *testing.T) {
+	t.Parallel()
+	var said bytes.Buffer
+	code := runProbe(t.Context(), []string{"a b:80"}, "", probeDeps{}, &said)
+	if code != probeUnhealthy {
+		t.Errorf("runProbe(%q) = %d, want %d: %s", "a b:80", code, probeUnhealthy, said.String())
+	}
+	if !strings.Contains(said.String(), "invalid character") {
+		t.Errorf("runProbe said %q, want the URL parser's complaint about the host", said.String())
+	}
+}
+
+// TestCertificateName_PrefersDNSThenIPThenCommonName pins the name the probe
+// asks a pinned listener to answer to, in the order the certificate's own
+// contents decide it.
+func TestCertificateName_PrefersDNSThenIPThenCommonName(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		cert *x509.Certificate
+		want string
+	}{
+		{name: "a DNS name wins", cert: &x509.Certificate{DNSNames: []string{"mcp.example"}, IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1)}, Subject: pkix.Name{CommonName: "cn"}}, want: "mcp.example"},
+		{name: "an IP address without DNS names", cert: &x509.Certificate{IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1)}, Subject: pkix.Name{CommonName: "cn"}}, want: "127.0.0.1"},
+		{name: "the common name is the last resort", cert: &x509.Certificate{Subject: pkix.Name{CommonName: "cn"}}, want: "cn"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := certificateName(tc.cert); got != tc.want {
+				t.Errorf("certificateName() = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

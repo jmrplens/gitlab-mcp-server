@@ -130,12 +130,18 @@ func clearStaleSocket(ctx context.Context, path string) error {
 			path, dialErr,
 		)
 	}
-	if removeErr := os.Remove(path); removeErr != nil {
+	if removeErr := removeStaleSocket(path); removeErr != nil {
 		return fmt.Errorf("removing stale socket %q: %w", path, removeErr)
 	}
 	slog.WarnContext(ctx, "removed a stale unix socket left by an earlier run", "path", path)
 	return nil
 }
+
+// removeStaleSocket unlinks a socket the probe above proved dead. A variable
+// because the tests run with every permission, so nothing on disk can make
+// the unlink fail, and the branch reporting that failure is otherwise never
+// run.
+var removeStaleSocket = os.Remove //nolint:gochecknoglobals // test seam
 
 // repeatedFlag is a flag that may be given more than once, and whose single
 // occurrence may itself be a comma-separated list.

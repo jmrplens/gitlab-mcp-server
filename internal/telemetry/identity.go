@@ -139,9 +139,11 @@ type Redactor struct {
 //
 // A nil keyring is accepted and yields no digest, which is the same answer the
 // zero value gives: a caller that never wired one records nothing rather than
-// emitting something that looks like a pseudonym and is not.
-func NewRedactor(policy IdentityPolicy, keys *Keyring) (*Redactor, error) {
-	return &Redactor{policy: policy, keys: keys}, nil
+// emitting something that looks like a pseudonym and is not. Nothing here can
+// fail: the policy was validated where it was parsed, and the keyring is
+// whatever the caller built, nil included.
+func NewRedactor(policy IdentityPolicy, keys *Keyring) *Redactor {
+	return &Redactor{policy: policy, keys: keys}
 }
 
 // Policy reports what this redactor was built for.

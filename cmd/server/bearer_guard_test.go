@@ -798,3 +798,75 @@ func TestBearerGuard_BlockedByTheFleetBudget_NamesTheTransportSource(t *testing.
 		t.Errorf("the 429 line does not name the transport source that spent the budget: %s", line)
 	}
 }
+
+// TestBearerGuard_MultiInstanceWithoutASelection_IsRefusedBeforeVerification
+// covers a deployment publishing several instances and a request naming none.
+//
+// The refusal is answered before the verifier runs, on purpose: verifying
+// would put this bearer on the wire to an instance the caller never chose. It
+// is a 400 that names the published set, which oauth mode may do because the
+// RFC 9728 metadata serves the same list unauthenticated, and it is not
+// charged to the limiter, since nothing was learned about the credential.
+func TestBearerGuard_MultiInstanceWithoutASelection_IsRefusedBeforeVerification(t *testing.T) {
+	t.Parallel()
+
+	var verified atomic.Int64
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		verified.Add(1)
+		return nil, errors.New("must not be reached")
+	})
+	g.instances = []string{"https://gitlab.com", "https://gitlab.example.com"}
+	g.resolveInstance = func(*http.Request) (string, error) { return "", errMissingGitLabURL }
+
+	failure := g.check(guardRequest(t, "gloas-valid"))
+
+	if failure == nil || failure.status != http.StatusBadRequest {
+		t.Fatalf("failure = %+v, want a 400 asking for the GITLAB-URL header", failure)
+	}
+	for _, instance := range g.instances {
+		if !strings.Contains(failure.message, instance) {
+			t.Errorf("message = %q, want it to publish %s", failure.message, instance)
+		}
+	}
+	if verified.Load() != 0 {
+		t.Error("the verifier ran for a request that named no instance; the bearer went on the wire")
+	}
+	assertSpendsNoBudget(t, g)
+}
+
+// TestDescribeScopeShortfall_NamesWhatTheTokenHolds pins the wording of the
+// scope refusal for each shape a token's scope list can take, because the
+// reader is somebody who believes they granted the right thing and has to be
+// told what they actually hold.
+func TestDescribeScopeShortfall_NamesWhatTheTokenHolds(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		granted []string
+		want    []string
+		unwant  []string
+	}{
+		{name: "no scope at all", granted: nil, want: []string{"no GitLab API scope"}},
+		{name: "one scope", granted: []string{"read_user"}, want: []string{"the read_user scope,"}},
+		{name: "several scopes", granted: []string{"read_user", "profile"}, want: []string{"the read_user, profile scopes"}},
+		{name: "GitLab's own mcp scope is explained", granted: []string{"mcp"}, want: []string{"the mcp scope", "GitLab's mcp scope is for its own MCP server"}},
+		{name: "the orbit variant is explained too", granted: []string{"mcp_orbit", "profile"}, want: []string{"GitLab's mcp scope is for its own MCP server"}},
+		{name: "an unrelated scope gets no mcp aside", granted: []string{"profile"}, unwant: []string{"GitLab's mcp scope"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := describeScopeShortfall(tc.granted, oauth.MinimumScope, oauth.ScopeAPI)
+			for _, want := range tc.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("describeScopeShortfall(%v) = %q, want it to carry %q", tc.granted, got, want)
+				}
+			}
+			for _, unwanted := range tc.unwant {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("describeScopeShortfall(%v) = %q, must not carry %q", tc.granted, got, unwanted)
+				}
+			}
+		})
+	}
+}

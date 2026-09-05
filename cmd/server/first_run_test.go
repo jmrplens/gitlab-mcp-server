@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,5 +148,31 @@ func TestIsInteractiveTerminal_IsFalseForAFile(t *testing.T) {
 func TestExecutableName_FallsBackToTheProjectName(t *testing.T) {
 	if got := executableName(); got == "" {
 		t.Error("executableName returned an empty string; the --help line would be unusable")
+	}
+}
+
+// TestExecutableName_WhenTheLookupFails_NamesTheProject covers the fallback
+// itself, which the happy path above cannot reach on any platform where the
+// test binary knows its own path. Both ways the lookup can come back empty
+// yield the documented name rather than an empty command the reader cannot
+// type.
+func TestExecutableName_WhenTheLookupFails_NamesTheProject(t *testing.T) {
+	original := osExecutable
+	t.Cleanup(func() { osExecutable = original })
+
+	cases := []struct {
+		name   string
+		lookup func() (string, error)
+	}{
+		{name: "the lookup errors", lookup: func() (string, error) { return "", errors.New("procfs is not mounted") }},
+		{name: "the lookup answers an empty path", lookup: func() (string, error) { return "", nil }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			osExecutable = tc.lookup
+			if got := executableName(); got != "gitlab-mcp-server" {
+				t.Errorf("executableName() = %q, want the project name as the fallback", got)
+			}
+		})
 	}
 }

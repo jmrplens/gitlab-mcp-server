@@ -582,6 +582,161 @@ func TestRestrictDirToOwner_ASymlink_IsRefused(t *testing.T) {
 	}
 }
 
+// TestRestrictDirToOwner_ADescriptorCallThatFails_IsReported covers the two
+// descriptor calls that guard the staging directory's mode, and the verdict
+// on a mode that was applied and did not take.
+//
+// None of the three can be provoked through the filesystem: a fresh directory
+// accepts its owner's fchmod, fstat on an open descriptor does not fail, and
+// a filesystem that silently ignores a chmod is not one the tests run on. So
+// each is driven through its seam, and what is asserted is that the check
+// refuses rather than serving a socket in a directory it could not confirm.
+func TestRestrictDirToOwner_ADescriptorCallThatFails_IsReported(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	originalChmod, originalStat := fchmodStagingDir, fstatStagingDir
+	t.Cleanup(func() {
+		fchmodStagingDir = originalChmod
+		fstatStagingDir = originalStat
+	})
+
+	cases := []struct {
+		name  string
+		chmod func(*os.File, os.FileMode) error
+		stat  func(*os.File) (os.FileInfo, error)
+		want  string
+	}{
+		{
+			name:  "the chmod fails",
+			chmod: func(*os.File, os.FileMode) error { return errors.New("read-only file system") },
+			stat:  originalStat,
+			want:  "restricting the staging directory",
+		},
+		{
+			name:  "the stat fails",
+			chmod: originalChmod,
+			stat:  func(*os.File) (os.FileInfo, error) { return nil, errors.New("stale file handle") },
+			want:  "checking the staging directory",
+		},
+		{
+			name:  "the mode did not apply",
+			chmod: originalChmod,
+			stat: func(f *os.File) (os.FileInfo, error) {
+				info, err := f.Stat()
+				if err != nil {
+					return nil, err
+				}
+				return wrongModeInfo{FileInfo: info}, nil
+			},
+			want: "refusing to build a socket in it",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fchmodStagingDir, fstatStagingDir = tc.chmod, tc.stat
+			dir := filepath.Join(t.TempDir(), "staging")
+			if err := os.Mkdir(dir, stagingDirMode); err != nil {
+				t.Fatalf("creating the directory: %v", err)
+			}
+
+			err := restrictDirToOwner(dir)
+			if err == nil {
+				t.Fatal("restrictDirToOwner() accepted a directory whose mode it could not confirm")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to say %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestNewStagingDir_ADirectoryItCannotRestrict_IsRemovedAndReported covers the
+// reservation succeeding and the restriction failing: the name must not be
+// left behind, since a staging directory nobody will remove is a socket path
+// nobody can reach.
+//
+// The reservation is made to hand back a symlink to a real directory, which is
+// the shape O_NOFOLLOW exists to refuse.
+func TestNewStagingDir_ADirectoryItCannotRestrict_IsRemovedAndReported(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	parent := t.TempDir()
+	target := filepath.Join(parent, "real")
+	if err := os.Mkdir(target, stagingDirMode); err != nil {
+		t.Fatalf("creating the target directory: %v", err)
+	}
+	original := mkdirStagingDir
+	t.Cleanup(func() { mkdirStagingDir = original })
+	var reserved string
+	mkdirStagingDir = func(name string, _ os.FileMode) error {
+		reserved = name
+		return os.Symlink(target, name)
+	}
+
+	_, err := newStagingDir(parent)
+	if err == nil {
+		t.Fatal("newStagingDir() handed out a directory it could not restrict")
+	}
+	if !strings.Contains(err.Error(), "opening the staging directory") {
+		t.Errorf("error = %q, want the restriction failure", err)
+	}
+	if _, statErr := os.Lstat(reserved); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("the reserved name %s was left behind: %v", reserved, statErr)
+	}
+}
+
+// TestBindUnixSocket_AStagingFailure_IsReportedWithThePath covers the two ways
+// the bind can fail before a socket exists: no staging directory could be
+// reserved, and the staged name was already occupied. Both name the operator's
+// path, since that is the one they typed, and neither leaves a staging
+// directory behind.
+func TestBindUnixSocket_AStagingFailure_IsReportedWithThePath(t *testing.T) {
+	// Deliberately not parallel: see the note on the binding tests.
+	original := mkdirStagingDir
+	t.Cleanup(func() { mkdirStagingDir = original })
+
+	cases := []struct {
+		name  string
+		mkdir func(string, os.FileMode) error
+		want  string
+	}{
+		{
+			name:  "no staging directory could be reserved",
+			mkdir: func(string, os.FileMode) error { return errors.New("no space left on device") },
+			want:  "preparing to bind unix socket",
+		},
+		{
+			// The reservation succeeds, and a directory already stands where
+			// the socket was to be created, so the bind itself is refused.
+			name: "the staged name is already occupied",
+			mkdir: func(name string, mode os.FileMode) error {
+				if err := os.Mkdir(name, mode); err != nil {
+					return err
+				}
+				return os.Mkdir(filepath.Join(name, stagedSocketName), mode)
+			},
+			want: "listening on unix socket",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mkdirStagingDir = tc.mkdir
+			dir := socketDir(t)
+			path := filepath.Join(dir, "s.sock")
+
+			listener, err := bindUnixSocket(t.Context(), path, 0o660)
+			if err == nil {
+				_ = listener.Close()
+				t.Fatal("bindUnixSocket() served on a socket its staging could not produce")
+			}
+			if !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), path) {
+				t.Errorf("error = %q, want it to say %q and name %s", err, tc.want, path)
+			}
+			if leftovers := stagingLeftovers(t, dir); len(leftovers) != 0 {
+				t.Errorf("staging directories left behind: %v", leftovers)
+			}
+		})
+	}
+}
+
 // TestConfirmReachable_APathNothingIsServing_IsReported covers the check that
 // turns an unverifiable assumption into a startup failure.
 //

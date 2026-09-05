@@ -167,6 +167,12 @@ var (
 	lstatStagedSocket = os.Lstat        //nolint:gochecknoglobals // test seam
 	mkdirStagingDir   = os.Mkdir        //nolint:gochecknoglobals // test seam
 	readRandomName    = cryptorand.Read //nolint:gochecknoglobals // test seam
+	// The two descriptor calls restrictDirToOwner makes on the staging
+	// directory it just opened. fchmod cannot fail for the owner of a fresh
+	// directory, and fstat on an open descriptor cannot fail at all, so the
+	// branches refusing a mode that did not apply exist only through these.
+	fchmodStagingDir = (*os.File).Chmod //nolint:gochecknoglobals // test seam
+	fstatStagingDir  = (*os.File).Stat  //nolint:gochecknoglobals // test seam
 )
 
 // confirmReachable connects to path and hangs up.
@@ -300,10 +306,10 @@ func restrictDirToOwner(dir string) error {
 	}
 	defer func() { _ = file.Close() }()
 
-	if chmodErr := file.Chmod(stagingDirMode); chmodErr != nil {
+	if chmodErr := fchmodStagingDir(file, stagingDirMode); chmodErr != nil {
 		return fmt.Errorf("restricting the staging directory %q: %w", dir, chmodErr)
 	}
-	info, err := file.Stat()
+	info, err := fstatStagingDir(file)
 	if err != nil {
 		return fmt.Errorf("checking the staging directory %q: %w", dir, err)
 	}

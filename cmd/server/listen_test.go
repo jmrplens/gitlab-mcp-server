@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -156,6 +157,37 @@ func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
 	}
 	if _, err := os.Lstat(path); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("stale socket still present: %v", err)
+	}
+}
+
+// TestClearStaleSocket_ADeadSocketThatCannotBeRemoved_IsReported covers the
+// unlink failing after the probe proved the socket dead. The tests hold every
+// permission, so the unlink is failed through its seam; what is asserted is
+// that the failure names the path and reaches the operator instead of the
+// bind failing a moment later on a file the log never mentioned.
+func TestClearStaleSocket_ADeadSocketThatCannotBeRemoved_IsReported(t *testing.T) {
+	path := filepath.Join(socketDir(t), "stuck.sock")
+	listener := listenUnixForTest(t, path)
+	if unix, ok := listener.(*net.UnixListener); ok {
+		unix.SetUnlinkOnClose(false)
+	} else {
+		t.Fatalf("listener type = %T, want *net.UnixListener", listener)
+	}
+	_ = listener.Close()
+
+	original := removeStaleSocket
+	t.Cleanup(func() { removeStaleSocket = original })
+	removeStaleSocket = func(string) error { return errors.New("operation not permitted") }
+
+	err := clearStaleSocket(t.Context(), path)
+	if err == nil {
+		t.Fatal("clearStaleSocket() reported success for a socket it could not remove")
+	}
+	// The path is rendered with %q, which escapes the backslashes of a
+	// Windows path, so the expectation is the quoted form rather than the
+	// raw one.
+	if !strings.Contains(err.Error(), "removing stale socket") || !strings.Contains(err.Error(), strconv.Quote(path)) {
+		t.Errorf("error = %q, want the unlink failure naming %s", err, strconv.Quote(path))
 	}
 }
 

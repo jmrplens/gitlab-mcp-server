@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,11 @@ import (
 // shutdownGracePeriod is the maximum time runShutdown waits after graceful
 // termination before force-killing remaining peer processes.
 const shutdownGracePeriod = 5 * time.Second
+
+// listProcesses enumerates every process on the machine. A variable because
+// the listing fails only when procfs itself is unreadable, which no input to
+// this binary produces, and the branch that reports it is otherwise never run.
+var listProcesses = process.Processes //nolint:gochecknoglobals // test seam
 
 // runShutdown finds all running instances of this binary (excluding self),
 // sends SIGTERM (Unix) / TerminateProcess (Windows), waits up to 5 seconds
@@ -52,6 +58,17 @@ func runShutdown() int {
 	}
 
 forceKill:
+	forceKillPeers(peers, os.Stderr)
+	return 0
+}
+
+// forceKillPeers kills every peer still running once the grace period has
+// lapsed, and reports the outcome on stderr.
+//
+// Zero kills is a possible outcome rather than a contradiction: a peer can
+// exit between the last poll and the deadline, and then there is nothing left
+// to kill and nothing to complain about.
+func forceKillPeers(peers []*process.Process, stderr io.Writer) {
 	var killed int
 	for _, p := range peers {
 		running, _ := p.IsRunning()
@@ -61,11 +78,10 @@ forceKill:
 		}
 	}
 	if killed > 0 {
-		fmt.Fprintf(os.Stderr, "shutdown: force-killed %d instance(s)\n", killed)
-	} else {
-		fmt.Fprintf(os.Stderr, "shutdown: all instances terminated\n")
+		fmt.Fprintf(stderr, "shutdown: force-killed %d instance(s)\n", killed)
+		return
 	}
-	return 0
+	fmt.Fprintf(stderr, "shutdown: all instances terminated\n")
 }
 
 // findPeers returns all running processes matching this binary's base name,
@@ -76,7 +92,7 @@ func findPeers() ([]*process.Process, error) {
 	self := os.Getpid()
 	baseName := canonicalBinaryName(filepath.Base(os.Args[0]))
 
-	all, err := process.Processes()
+	all, err := listProcesses()
 	if err != nil {
 		return nil, err
 	}
