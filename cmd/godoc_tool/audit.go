@@ -25,6 +25,7 @@ const (
 	categoryPackageDocMissing  = "pkgdoc_missing"
 	categoryPackageDocForm     = "pkgdoc_form"
 	categoryPackageDocMultiple = "pkgdoc_multiple"
+	categoryPackageDocLocation = "pkgdoc_location"
 	categoryFuncMissing        = "func_missing"
 	categoryFuncForm           = "func_form"
 	categoryMethodMissing      = "method_missing"
@@ -302,6 +303,13 @@ func checkPackageDocs(pkg packageInfo, files map[string]*ast.File, findings *[]f
 	for _, path := range packageDocs {
 		docText := strings.TrimSpace(files[path].Doc.Text())
 		if validPackageDoc(pkg.Name, docText) {
+			// A package comment has one home. Anywhere else it is one file
+			// header away from being mistaken for one, and a second file's
+			// header away from being duplicated; `fix -move-package-doc`
+			// moves it.
+			if filepath.Base(path) != packageDocFile {
+				*findings = append(*findings, newFinding(categoryPackageDocLocation, pkg, path, pkg.Name, fmt.Sprintf("package comment lives in %s; keep it in %s", filepath.Base(path), packageDocFile)))
+			}
 			continue
 		}
 		want := "Package " + pkg.Name

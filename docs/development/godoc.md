@@ -95,7 +95,7 @@ package projectdiscovery
 That comment is not a harmless file header. It becomes a malformed package comment in Godoc and can also create
 multiple package comments when the package already has a correct `doc.go`.
 
-Prefer one canonical `doc.go` package comment, then remove package-adjacent file comments from other files.
+The package comment has one home: `doc.go`. The audit reports a well-formed package comment that lives in any other file (`pkgdoc_location`), because a comment there is one file header away from being mistaken for one and one more file away from being duplicated. `go run ./cmd/godoc_tool/ fix --move-package-doc <path>` moves it: the comment lands verbatim above the package clause of a new `doc.go`, and the file it came from keeps everything else, its build constraint included.
 
 ## CLI Reference
 

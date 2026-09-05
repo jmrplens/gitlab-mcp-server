@@ -1,16 +1,3 @@
-// Command godoc_tool is the consolidated Go documentation auditor and fixer.
-// It combines the read-only audit (formerly audit_godocs — reports missing or
-// malformed doc comments) and the in-place fixer (formerly add_docs — generates
-// and inserts godoc-compliant comments) behind two subcommands.
-//
-// Usage:
-//
-//	godoc_tool audit [--format markdown|json] [--output path] [--fail-on-findings]
-//	godoc_tool fix [--dry-run] <paths...>
-//
-// The audit subcommand's flags match the former audit_godocs binary exactly.
-// The fix subcommand gains a --dry-run flag (prints what would change without
-// writing files) that the former add_docs binary lacked.
 package main
 
 import (
@@ -40,14 +27,20 @@ func main() {
 	case "fix":
 		fs := flag.NewFlagSet("fix", flag.ExitOnError)
 		fs.BoolVar(&dryRun, "dry-run", false, "print what would change without writing files")
+		var movePackageDoc bool
+		fs.BoolVar(&movePackageDoc, "move-package-doc", false, "move each package comment into a doc.go of its own instead of documenting symbols")
 		fs.Parse(os.Args[2:]) //nolint:errcheck // ExitOnError handles parse failures
 		if fs.NArg() == 0 {
 			fmt.Fprintln(os.Stderr, "fix: at least one file or directory path is required")
 			os.Exit(2)
 		}
+		process := processPath
+		if movePackageDoc {
+			process = movePackageDocs
+		}
 		var failed bool
 		for _, p := range fs.Args() {
-			if err := processPath(p); err != nil {
+			if err := process(p); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				failed = true
 			}

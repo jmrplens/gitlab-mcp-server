@@ -52,6 +52,13 @@ func TestAuditPackage_DetectsPackageCommentProblems(t *testing.T) {
 			},
 			categories: []string{categoryPackageDocMultiple, categoryPackageDocForm},
 		},
+		{
+			name: "package doc outside doc.go",
+			files: map[string]string{
+				"sample.go": "// Package sample provides a fixture.\npackage sample\n",
+			},
+			categories: []string{categoryPackageDocLocation},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -81,7 +88,8 @@ func TestAuditPackage_AcceptsCommandPackageDoc(t *testing.T) {
 	t.Parallel()
 
 	pkg := writePackageFixture(t, "main", map[string]string{
-		"main.go": "// Command widget audits widgets.\npackage main\n",
+		"doc.go":  "// Command widget audits widgets.\npackage main\n",
+		"main.go": "package main\n",
 	})
 	findings, err := auditPackage(pkg, false)
 	if err != nil {
@@ -100,7 +108,7 @@ func TestAuditPackage_CommandPackageDocForm(t *testing.T) {
 	t.Parallel()
 
 	pkg := writePackageFixture(t, "main", map[string]string{
-		"main.go": "// widget audits widgets.\npackage main\n",
+		"doc.go": "// widget audits widgets.\npackage main\n",
 	})
 	if err := os.MkdirAll(filepath.Join(pkg.Dir, "testdata"), 0o750); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -318,7 +326,8 @@ func writeModuleFixture(t *testing.T) string {
 	writeAuditFile(t, dir, "go.mod", "module example.com/fixture\n\ngo 1.27\n")
 	writeAuditFile(t, dir, "a/a.go", "package a\n\nfunc Missing() {}\n")
 	writeAuditFile(t, dir, "a/a_test.go", "package a\n\nimport \"testing\"\n\nfunc TestUndocumented(t *testing.T) {}\n")
-	writeAuditFile(t, dir, "internal/b/b.go", "// Package b is documented.\npackage b\n\nfunc AlsoMissing() {}\n")
+	writeAuditFile(t, dir, "internal/b/doc.go", "// Package b is documented.\npackage b\n")
+	writeAuditFile(t, dir, "internal/b/b.go", "package b\n\nfunc AlsoMissing() {}\n")
 	return dir
 }
 

@@ -562,6 +562,9 @@ go run ./cmd/godoc_tool/ audit --fail-on-findings
 # Fix a path (dry-run first)
 go run ./cmd/godoc_tool/ fix --dry-run ./internal/tools/branches/
 go run ./cmd/godoc_tool/ fix ./internal/tools/branches/
+
+# Move every package comment below a path into a doc.go of its own
+go run ./cmd/godoc_tool/ fix --move-package-doc ./internal/
 ```
 
 #### Subcommands
