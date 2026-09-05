@@ -2596,6 +2596,28 @@ func TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_AShellThatCannotBeBuilt_IsAnsweredUnavailable covers the
+// pool factory refusing to build a shell at all, which a malformed
+// description substitution does when the listener was brought up without
+// runHTTP's startup validation in front of it. The request is answered as an
+// upstream failure rather than served from nothing, and the reason stays
+// out of the response.
+func TestServeHTTP_AShellThatCannotBeBuilt_IsAnsweredUnavailable(t *testing.T) {
+	t.Setenv(gatewaycompat.EnvVar, "=x")
+	gitlab := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(gitlab.URL, true))
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	body := readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d: %s", resp.StatusCode, http.StatusServiceUnavailable, body)
+	}
+	if strings.Contains(body, gatewaycompat.EnvVar) {
+		t.Errorf("body = %q leaks the deployment's configuration to the client", body)
+	}
+}
+
 // TestCreateServer_ARegistrationFailure_IsReturned covers the two callers
 // that want a finished server and get a failure instead: createServer itself,
 // and the server card built on top of it.
@@ -9410,6 +9432,29 @@ func TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly(t *testing.T) {
 				t.Fatal("serveStdio did not return")
 			}
 		})
+	}
+}
+
+// TestServeStdio_AnyOtherEnd_IsReportedAsAFailure is the counterweight to the
+// two documented shutdowns: a session that ends for any other reason is a
+// failure and exits non-zero, which is what a supervisor's restart policy
+// acts on. A context deadline is the reachable stand-in here, since it ends
+// the run without the client closing its pipe and without a cancellation.
+func TestServeStdio_AnyOtherEnd_IsReportedAsAFailure(t *testing.T) {
+	heldOpenStdin(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- serveStdio(ctx, newTestMCPServer(t)) }()
+
+	select {
+	case serveErr := <-done:
+		if !errors.Is(serveErr, context.DeadlineExceeded) || !strings.Contains(serveErr.Error(), "mcp server error") {
+			t.Errorf("serveStdio() = %v, want the deadline reported as a server error", serveErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("serveStdio did not return after its context expired")
 	}
 }
 
