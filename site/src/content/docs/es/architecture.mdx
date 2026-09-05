@@ -54,12 +54,14 @@ sequenceDiagram
     participant GL as API GitLab
 
     Usuario->>IA: "Muestra las MRs abiertas en my-project"
-    IA->>MCP: tools/call: gitlab_merge_request {action: list, project_id: "my-project"}
+    IA->>MCP: tools/call: gitlab_execute_action {action: "merge_request.list", params: {project_id: "my-project", state: "opened"}}
     MCP->>GL: GET /api/v4/projects/my-project/merge_requests?state=opened
     GL-->>MCP: 200 OK [{id: 1, title: "..."}]
     MCP-->>IA: {content: [JSON estructurado + markdown]}
     IA-->>Usuario: "Se encontraron 3 merge requests abiertas..."
 ```
+
+La llamada anterior corresponde a la superficie dinámica predeterminada; con `GITLAB_MCP_TOOL_SURFACE=meta` la misma petición es `gitlab_merge_request` con `{action: "list", params: {...}}`.
 
 **Características:**
 
@@ -106,9 +108,12 @@ Inicia el modo HTTP con:
 
 ```bash
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
-# O sin --gitlab-url (los clientes envían la cabecera GITLAB-URL por solicitud)
-./gitlab-mcp-server --http --http-addr=0.0.0.0:8080
+# O, solo para un despliegue local de un único usuario, deja que cada petición nombre su
+# propia instancia en la cabecera GITLAB-URL (sin ninguno de los dos flags el servidor se niega a arrancar)
+./gitlab-mcp-server --http --http-addr=127.0.0.1:8080 --allow-any-gitlab-url
 ```
+
+`--gitlab-url` es obligatorio en modo HTTP salvo que se pase `--allow-any-gitlab-url`. Puede repetirse para publicar varias instancias, en cuyo caso la cabecera `GITLAB-URL` elige entre ellas y es obligatoria.
 
 Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para la configuración detallada.
 
@@ -128,16 +133,16 @@ Como todas las superficies comparten la misma entrada del catálogo, los schemas
 
 ### Gating por nivel (tier)
 
-Las entradas del catálogo también son conscientes del nivel: cada acción y cada schema de entrada/salida se etiqueta con la edición de GitLab más baja (`free`, `premium` o `ultimate`) que la expone. Al arrancar, el servidor resuelve el nivel activo (`GITLAB_TIER` / `--tier`, o autodetección vía `GET /license`) y llama a `pruneSchemaFieldsByTier` (en `internal/tools/action_catalog.go`) para descartar las acciones exclusivas de premium/ultimate y podar las entradas de schema por campo que estén restringidas por edición. Esto mantiene coherentes las meta-herramientas, las herramientas individuales y la superficie dinámica: una acción exclusiva de Premium se oculta en todas partes en cuanto el nivel se resuelve a `free`.
+Las entradas del catálogo también son conscientes del nivel: cada acción y cada schema de entrada/salida se etiqueta con la edición de GitLab más baja (`free`, `premium` o `ultimate`) que la expone. Cuando se construye un servidor (al arrancar en modo stdio, por entrada token+URL del pool en modo HTTP) se resuelve el nivel (`GITLAB_TIER` / `--tier`, o autodetección vía `GET /license`, con `free` como valor de respaldo), el filtro del catálogo descarta las acciones exclusivas de premium/ultimate por encima de él, y `pruneSchemaFieldsByTier` (en `internal/tools/action_catalog.go`) poda las entradas de schema por campo que estén restringidas por edición. Esto mantiene coherentes las meta-herramientas, las herramientas individuales y la superficie dinámica: una acción exclusiva de Premium se oculta en todas partes en cuanto el nivel se resuelve a `free`.
 
 ```mermaid
 graph LR
-    catalog[Catálogo de acciones canónico] --> meta["Meta-herramientas<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit en GitLab.com Enterprise"]
-    catalog --> individual["Herramientas individuales<br/>gitlab_issue_list, gitlab_project_create, ...<br/>+ 6 gitlab_orbit_* en GitLab.com Enterprise"]
-    catalog --> dynamic["Herramientas dinámicas<br/>gitlab_find_action + gitlab_execute_action<br/>+ IDs de dominio orbit.* en GitLab.com Enterprise"]
+    catalog[Catálogo de acciones canónico] --> meta["Meta-herramientas<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit en GitLab.com Premium/Ultimate"]
+    catalog --> individual["Herramientas individuales<br/>gitlab_issue_list, gitlab_project_create, ...<br/>+ 6 gitlab_orbit_* en GitLab.com Premium/Ultimate"]
+    catalog --> dynamic["Herramientas dinámicas<br/>gitlab_find_action + gitlab_execute_action<br/>+ IDs de dominio orbit.* en GitLab.com Premium/Ultimate"]
 ```
 
-Orbit se proyecta a través del mismo catálogo que cualquier otro dominio: en modo meta aparece como la meta-herramienta `gitlab_orbit` con seis acciones; en modo individual aparece como seis herramientas `gitlab_orbit_*`; en modo dinámico sus acciones se descubren como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` mediante `gitlab_find_action`/`gitlab_execute_action`.
+Orbit se proyecta a través del mismo catálogo que cualquier otro dominio, restringido a una conexión con `https://gitlab.com` en el nivel Premium o Ultimate: en modo meta aparece como la meta-herramienta `gitlab_orbit` con seis acciones; en modo individual aparece como seis herramientas `gitlab_orbit_*`; en modo dinámico sus acciones se descubren como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` mediante `gitlab_find_action`/`gitlab_execute_action`.
 
 ### Conjunto de herramientas dinámico (predeterminado)
 
@@ -157,7 +162,7 @@ El modo dinámico es la superficie predeterminada de bajo consumo de tokens y es
 
 ### Modo meta-herramientas
 
-Con `GITLAB_MCP_TOOL_SURFACE=meta`, el servidor expone una base de **{stats.meta.base} meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden herramientas Enterprise/Premium para un total de {stats.meta.self_managed_enterprise}, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de {stats.meta.gitlab_com}. Cada meta-herramienta agrupa operaciones relacionadas:
+Con `GITLAB_MCP_TOOL_SURFACE=meta`, el servidor expone una base de **{stats.meta.base} meta-herramientas por dominio** en lugar del catálogo individual. El nivel Premium añade 6 meta-herramientas para un total de 38, Ultimate 11 más para un total de {stats.meta.self_managed_enterprise} en una instancia autoalojada, y GitLab.com en Premium o Ultimate añade `gitlab_orbit` (la funcionalidad Knowledge Graph de GitLab.com) para un total de {stats.meta.gitlab_com}. Cada meta-herramienta agrupa operaciones relacionadas:
 
 ```mermaid
 graph TD
@@ -166,9 +171,9 @@ graph TD
     A --> D[create]
     A --> E[update]
     A --> F[delete]
-    A --> G[add_watcher]
-    A --> H[bulk_update]
-    A --> I[wizard_create]
+    A --> G[move]
+    A --> H[subscribe]
+    A --> I[note_create]
 ```
 
 La IA envía un parámetro `action` para seleccionar la operación y anida los parámetros propios de la operación en `params` (las meta-herramientas solo aceptan esas dos claves en el nivel superior):
@@ -181,7 +186,7 @@ La IA envía un parámetro `action` para seleccionar la operación y anida los p
     "params": {
       "project_id": "my-org/backend",
       "title": "Fix N+1 query in /users",
-      "labels": "bug,performance"
+      "labels": ["bug", "performance"]
     }
   }
 }
@@ -204,6 +209,7 @@ Flujos de creación interactivos que recopilan la entrada del usuario paso a pas
 - **Asistente de creación de proyectos** — configuración guiada de proyectos
 - **Asistente de creación de issues** — creación estructurada de issues
 - **Asistente de merge requests** — creación asistida de MRs
+- **Asistente de creación de releases**: etiqueta, nombre y notas, y después confirmación
 
 Requiere que el cliente de IA soporte la capacidad de MCP elicitation.
 
@@ -211,10 +217,10 @@ Requiere que el cliente de IA soporte la capacidad de MCP elicitation.
 
 {stats.resources} recursos MCP de solo lectura que proporcionan datos contextuales:
 
-- Configuración y versión del servidor
-- Perfil del usuario actual
-- Plantillas de información de proyectos
-- Capacidades de la instancia de GitLab
+- Perfil del usuario actual y grupos accesibles
+- Plantillas de proyecto, grupo, issue, merge request, pipeline y repositorio
+- El manifiesto `gitlab://tools`, que se adapta a la superficie activa, y los schemas por acción
+- Guías de flujo de trabajo estáticas (flujo Git, higiene de MRs, revisión de código, conventional commits, diagnóstico de pipelines)
 
 ### Prompts
 
@@ -234,8 +240,10 @@ Las llamadas exitosas a herramientas devuelven una respuesta en formato dual:
 ```json
 {
   "structuredContent": {
-    "type": "gitlab_issue",
-    "data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
+    "iid": 42,
+    "title": "Fix N+1 query",
+    "state": "opened",
+    "web_url": "https://gitlab.example.com/my-org/backend/-/issues/42",
     "next_steps": [
       "Ver detalles del issue",
       "Añadir etiquetas",
@@ -251,7 +259,7 @@ Las llamadas exitosas a herramientas devuelven una respuesta en formato dual:
 }
 ```
 
-- **`structuredContent`** — JSON tipado para que la IA lo analice y razone sobre él, incluye sugerencias de `next_steps` y cumple el schema de salida declarado cuando existe
+- **`structuredContent`** — La salida tipada del handler serializada como JSON (los campos anteriores son un subconjunto de la salida de issue), para que la IA la analice y razone sobre ella; incluye sugerencias de `next_steps` y cumple el schema de salida declarado de la herramienta cuando existe
 - **`content`** — Markdown formateado para la visualización humana
 
 Este formato dual asegura que la IA pueda tomar decisiones de seguimiento mientras presenta una salida limpia al usuario. Los errores de ejecución usan `isError: true` y pueden devolver solo Markdown para que los clientes no interpreten el error como un resultado estructurado exitoso.
@@ -292,5 +300,5 @@ El [índice completo de ADR](https://github.com/jmrplens/gitlab-mcp-server/blob/
 ## Referencia de la fuente
 
 :::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md) en el repositorio.
+Para la referencia técnica completa, consulta [`docs/concepts/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md) en el repositorio.
 :::

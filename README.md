@@ -241,7 +241,7 @@ It is a personal service, run by one person and offered as-is: no SLA, no suppor
 <details>
 <summary>More: resources, prompts, and capabilities</summary>
 
-- **45 MCP resources** (read-only data: projects, issues, pipelines, MRs, branches, members, the surface-aware `gitlab://tools` manifest, and workflow best-practice guides). 26 single-object kinds are also [subscribable](docs/reference/capabilities/subscriptions.md).
+- **45 MCP resources** (read-only data: projects, issues, pipelines, MRs, branches, members, the surface-aware `gitlab://tools` manifest, and workflow best-practice guides). 26 resource kinds, single objects plus three single-parent lists, are also [subscribable](docs/reference/capabilities/subscriptions.md).
 - **37 MCP prompts** (code review, pipeline status, risk assessment, release notes, standup, analytics, audit, and more).
 - **4 elicitation wizards** (interactive issue/MR/release/project creation).
 - **4 MCP capabilities** (completions, progress, elicitation, and [resource subscriptions](docs/reference/capabilities/subscriptions.md) — live `resources/updated` notifications, honored by polling) and **51 tool icons** (50 domain icons plus the project mark) for visual identification in MCP clients.
@@ -459,10 +459,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,072 |     227,756 |
+| Source (`.go`, non-test) |     1,072 |     227,759 |
 | Unit tests (`_test.go`)  |       639 |     369,458 |
 | End-to-end tests         |       226 |      61,190 |
-| **Total**                | **1,937** | **658,404** |
+| **Total**                | **1,937** | **658,407** |
 
 ### Functions
 
@@ -482,7 +482,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.62× more tests than code |
 | Average source file length         |                 ~212 lines |
 | Average test file length           |                 ~578 lines |
-| Comment lines in source            |  34,933 (~15.3% of source) |
+| Comment lines in source            |  34,936 (~15.3% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
@@ -515,7 +515,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~4,141 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,493 (impossible to avoid)                                                                         |
+| Source lines mentioning `"gitlab"`   | 13,495 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

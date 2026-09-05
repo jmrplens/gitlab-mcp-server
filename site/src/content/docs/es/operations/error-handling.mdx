@@ -8,7 +8,7 @@ faq:
   - q: "¿Qué función de envoltura de errores se usa para cada operación?"
     a: "Las operaciones de solo lectura (`list`, `get`, `search`) usan `WrapErr`. Las operaciones de escritura (`create`, `update`, `delete`) usan `WrapErrWithMessage`, que incluye el detalle específico extraído de la respuesta de GitLab. Cuando se conoce la acción correctiva, `WrapErrWithHint` añade una sugerencia, y `WrapErrWithStatusHint` limita esa sugerencia a un único código de estado HTTP. Una operación `get` que devuelve 404 usa `NotFoundResult` en lugar de devolver un error."
   - q: "¿Por qué un 404 no aparece como error?"
-    a: "Para los handlers `get`, las respuestas 404 se tratan como **informativas** en lugar de fallos. En vez de devolver un error Go opaco registrado a nivel ERROR, el handler devuelve un `CallToolResult` con `IsError: true` y sugerencias específicas del dominio, registrado a nivel INFO. Este patrón `NotFoundResult` se aplica a los 27 handlers get en 21 dominios y proporciona al asistente de IA los siguientes pasos accionables, como listar los recursos disponibles o verificar el nombre del recurso."
+    a: "Para los handlers `get`, las respuestas 404 se tratan como **informativas** en lugar de fallos. En vez de devolver un error Go opaco registrado a nivel ERROR, el handler devuelve un `CallToolResult` con `IsError: true` y sugerencias específicas del dominio, registrado a nivel INFO. Este patrón `NotFoundResult` se aplica mediante un formateador compartido en cada uno de 19 dominios y proporciona al asistente de IA los siguientes pasos accionables, como listar los recursos disponibles o verificar el nombre del recurso."
   - q: "¿Debería el asistente de IA reintentar una operación fallida?"
     a: "Depende de si el error es **transitorio** o **permanente**. Los errores transitorios —429, 5xx, timeouts y conexión rechazada— son seguros de reintentar tras una espera. Los errores permanentes —4xx excepto 429— indican un problema con la propia solicitud, así que reintentar produce el mismo resultado. Para errores permanentes, corrige los parámetros de entrada o la configuración en lugar de reintentar."
 ---
@@ -27,7 +27,8 @@ Cada error de la API de GitLab se clasifica por código de estado HTTP en un men
 | 400              | Solicitud incorrecta | Verifica tus parámetros de entrada                   |
 | 401              | Autenticación        | `GITLAB_TOKEN` puede ser inválido o haber expirado   |
 | 403              | Permisos             | Tu token carece de los permisos requeridos           |
-| 404              | No encontrado        | El recurso no existe o no tienes acceso              |
+| 404              | No encontrado        | No existe, es inaccesible o supera tu tier de GitLab |
+| 405              | No permitido         | La acción no se aplica al estado actual del recurso  |
 | 409              | Conflicto            | El recurso ya existe o hay un conflicto de estado    |
 | 422              | Validación           | GitLab rechazó la solicitud debido a datos inválidos |
 | 429              | Límite de velocidad  | Demasiadas solicitudes — espera antes de reintentar  |
@@ -90,20 +91,21 @@ El servidor usa cinco funciones de manejo de errores, elegidas según el tipo de
 
 ```mermaid
 flowchart TD
-    A[Operación] --> B{Tipo?}
-    B -->|Solo lectura| C[WrapErr]
-    B -->|Escritura| D{Hint conocido?}
-    D -->|No| E[WrapErrWithMessage]
-    D -->|Sí| F{Código específico?}
-    F -->|Sí| G[WrapErrWithStatusHint]
-    F -->|No| H[WrapErrWithHint]
-    B -->|GET 404| I[NotFoundResult]
+    A[Se produce un error] --> B{Tipo de operación?}
+    B -->|list / get / search| C{Es HTTP 404<br/>en un GET?}
+    C -->|Sí| D[NotFoundResult]
+    C -->|No| E[WrapErr]
+    B -->|create / update / delete| F{Corrección conocida<br/>para este error?}
+    F -->|Sí| G{Código HTTP<br/>concreto?}
+    G -->|Sí| H[WrapErrWithStatusHint]
+    G -->|No| I[WrapErrWithHint]
+    F -->|No| J[WrapErrWithMessage]
 
-    style C fill:#3b82f6,color:#fff
-    style E fill:#f59e0b,color:#000
-    style G fill:#ef4444,color:#fff
-    style H fill:#ef4444,color:#fff
-    style I fill:#22c55e,color:#fff
+    style D fill:#3b82f6,color:#fff
+    style E fill:#6b7280,color:#fff
+    style H fill:#f59e0b,color:#000
+    style I fill:#f59e0b,color:#000
+    style J fill:#ef4444,color:#fff
 ```
 
 ### NotFoundResult — Respuestas informativas para 404
@@ -121,43 +123,34 @@ Branch `feature/old` was not found in the project.
 - Check branch name spelling and case sensitivity
 ```
 
-Este patrón se aplica a los 27 handlers get en 21 dominios. Se registra a nivel INFO (resultado esperado) y proporciona al asistente de IA los siguientes pasos accionables.
+Este patrón se aplica mediante un formateador compartido en cada uno de 19 dominios, de modo que todos los handlers get de un dominio responden igual. Se registra a nivel INFO (resultado esperado) y proporciona al asistente de IA los siguientes pasos accionables.
 
-## Sugerencias de validación
+## Sugerencias correctivas
 
-Para **errores de validación 422**, el servidor enriquece automáticamente el error con guía basada en coincidencia de patrones. Se reconocen más de 15 patrones comunes, incluyendo:
-
-- Campos requeridos faltantes
-- Formatos de fecha inválidos
-- Límites de longitud de nombre/título
-- Nombres de recursos duplicados
-- Valores de enumeración inválidos
-
-Estas sugerencias ayudan al asistente de IA a corregir su solicitud sin llamadas adicionales a la API.
+Cuando se conoce la corrección de un error, el handler la adjunta en el punto de llamada: `WrapErrWithStatusHint` añade la sugerencia solo cuando la respuesta lleva un estado HTTP concreto (un fallo de validación `422`, un `404`, un `409`) y recurre a `WrapErrWithMessage` para cualquier otro estado, mientras que `WrapErrWithHint` la añade siempre, que es lo que necesitan los errores de GraphQL, ya que no llevan código de estado. La sugerencia viaja en el texto del error como `Suggestion: ...`, de modo que el asistente de IA puede corregir su solicitud sin llamadas adicionales a la API.
 
 ## Formato de respuesta de error
 
-Cuando una herramienta encuentra un error, la respuesta se formatea como un bloque Markdown con campos de diagnóstico estructurados:
+Cuando un handler responde con un resultado de error en lugar de un error de Go, la respuesta es un bloque Markdown con campos de diagnóstico estructurados:
 
 ```markdown
-## ❌ Error: list_branches
+## ❌ Error: branch/list
 
-**Status**: 401 Unauthorized
-**Detail**: authentication failed — GITLAB_TOKEN may be invalid or expired
-**Request ID**: abc123def456
-
-💡 **Suggestion**: Check that your token is valid and has the `api` scope.
+**Message**: authentication failed: GITLAB_TOKEN may be invalid or expired
+**HTTP Status**: 401 (authentication failed: GITLAB_TOKEN may be invalid or expired)
+**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 (401 Unauthorized)
+**Request ID**: `abc123def456`
 ```
 
 La respuesta estructurada incluye:
 
-| Campo          | Descripción                                      |
-| -------------- | ------------------------------------------------ |
-| **Operation**  | La acción de la herramienta que falló            |
-| **Status**     | Código de estado HTTP y clasificación            |
-| **Detail**     | Mensaje de error específico de GitLab            |
-| **Request ID** | `X-Request-Id` de GitLab para tickets de soporte |
-| **Suggestion** | Sugerencia accionable (cuando está disponible)   |
+| Campo           | Descripción                                                         |
+| --------------- | ------------------------------------------------------------------- |
+| **Encabezado**  | El dominio y la acción que fallaron                                 |
+| **Message**     | El mensaje de error clasificado                                     |
+| **HTTP Status** | El código de estado de GitLab y su clasificación, cuando lo hubo    |
+| **Details**     | La línea de la petición y el mensaje que devolvió GitLab, si lo hay |
+| **Request ID**  | El `X-Request-Id` de GitLab para tickets de soporte                 |
 
 ## Errores transitorios vs permanentes
 
@@ -208,5 +201,5 @@ Detail: 403 Forbidden
 ## Referencia de la fuente
 
 :::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/error-handling.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/error-handling.md) en el repositorio.
+Para la referencia técnica completa, consulta [`docs/concepts/error-handling.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/error-handling.md) en el repositorio.
 :::

@@ -10,7 +10,7 @@ Every release publishes one self-contained binary per platform: Linux, macOS and
 
 ## Install script
 
-Both scripts do the same four things: detect the platform, download the matching asset from the latest GitHub Release, verify its SHA-256 against the `checksums.txt` of that same release, and copy it to a per-user directory. Verification fails closed: a mismatch, a missing entry, or a `checksums.txt` that cannot be fetched aborts the install rather than skipping the check.
+Both scripts do the same four things: detect the platform, download the matching asset from the latest GitHub Release, verify its SHA-256 against the `checksums.txt` of that same release, and copy it to a per-user directory. Verification fails closed: a mismatch, a missing entry, or a `checksums.txt` that cannot be fetched aborts the install rather than skipping the check. Because `checksums.txt` comes from the same release as the binary, both scripts also check a signature when they can: with `cosign` installed they verify `checksums.txt.sigstore.json` against this repository's release workflow, pinned to the version being installed, and they ask the `gh` CLI for the build-provenance attestation whenever that verified nothing. A verifier that ran and said no aborts; a verifier that could not run only warns, unless `REQUIRE_SIGNATURE=1` makes that fatal too.
 
 <Tabs>
 <TabItem label="Linux / macOS">
@@ -21,12 +21,13 @@ curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scr
 
 The script needs `curl` or `wget`, plus `sha256sum` or `shasum`. It maps `x86_64` to `amd64` and `aarch64` to `arm64`, refuses any other OS or architecture, and installs the file with mode `0755` as `$HOME/.local/bin/gitlab-mcp-server`. An existing binary at that path is removed first, so re-running over a server that is still running does not fail with "Text file busy". If `$HOME/.local/bin` is not on your PATH, the script says so and prints the `export PATH=...` line to add.
 
-| Variable           | Default                      | Effect                                                                  |
-| ------------------ | ---------------------------- | ----------------------------------------------------------------------- |
-| `INSTALL_DIR`      | `$HOME/.local/bin`           | Target directory                                                        |
-| `VERSION`          | `latest`                     | Release tag to install, for example `v2.7.5`                            |
-| `REPO`             | `jmrplens/gitlab-mcp-server` | GitHub repository to download from                                      |
-| `ALLOW_UNVERIFIED` | unset                        | `1` skips the checksum verification, for systems without a SHA-256 tool |
+| Variable            | Default                      | Effect                                                                  |
+| ------------------- | ---------------------------- | ----------------------------------------------------------------------- |
+| `INSTALL_DIR`       | `$HOME/.local/bin`           | Target directory                                                        |
+| `VERSION`           | `latest`                     | Release tag to install, for example `v2.7.5`                            |
+| `REPO`              | `jmrplens/gitlab-mcp-server` | GitHub repository to download from                                      |
+| `REQUIRE_SIGNATURE` | unset                        | `1` aborts unless a signature or attestation verifies                   |
+| `ALLOW_UNVERIFIED`  | unset                        | `1` skips the checksum verification, for systems without a SHA-256 tool |
 
 Variables go in front of `sh`, since that is the process running the script:
 
@@ -43,7 +44,7 @@ irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/in
 
 The script reads the real machine architecture (`PROCESSOR_ARCHITEW6432` first, so a 32-bit PowerShell on 64-bit Windows still picks the right build), downloads `gitlab-mcp-server-windows-amd64.exe` or `gitlab-mcp-server-windows-arm64.exe`, verifies it with `Get-FileHash`, and installs it as `%LOCALAPPDATA%\Programs\gitlab-mcp-server\gitlab-mcp-server.exe`. It then appends that folder to your **user** PATH if it is not there yet. No 32-bit x86 build is published, so the script stops on that architecture.
 
-The same overrides exist as environment variables (`VERSION`, `INSTALL_DIR`, `REPO`, `ALLOW_UNVERIFIED`) and, when you save the script and run it as a file, as parameters (`-Version`, `-InstallDir`, `-Repo`). When piping into `iex`, set the variables first:
+The same overrides exist as environment variables (`VERSION`, `INSTALL_DIR`, `REPO`, `REQUIRE_SIGNATURE`, `ALLOW_UNVERIFIED`) and, when you save the script and run it as a file, as parameters (`-Version`, `-InstallDir`, `-Repo`). When piping into `iex`, set the variables first:
 
 ```powershell
 $env:VERSION = 'v2.7.5'
@@ -100,7 +101,7 @@ On Windows, rename the file to `gitlab-mcp-server.exe` and place it in a folder 
 
 ## Verify what you downloaded
 
-The install scripts already compare the download with `checksums.txt`. Done by hand, that check plus the signature on the checksums file takes two commands. `checksums.txt` lists the SHA-256 of the seven binaries, and `checksums.txt.sigstore.json` is a keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) signature of that file, made by the release workflow under GitHub's OIDC identity, so there is no key to distribute.
+The install scripts already compare the download with `checksums.txt`, and check the signature on it when `cosign` or `gh` is installed. Done by hand, that check plus the signature on the checksums file takes two commands. `checksums.txt` lists the SHA-256 of the seven binaries, and `checksums.txt.sigstore.json` is a keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) signature of that file, made by the release workflow under GitHub's OIDC identity, so there is no key to distribute.
 
 1. Download `checksums.txt` and `checksums.txt.sigstore.json` from the same release as the binary.
 2. Verify the signature. The identity is the release workflow at the tag you downloaded:

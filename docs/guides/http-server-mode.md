@@ -116,7 +116,7 @@ The general flags (`--version`, `--shutdown`, `--tool-search`, `-h`/`--help`) be
 
 `--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest, while `minimal` keeps `gitlab://tools` and omits prompts, workflow guides, and optional GitLab data resources. Dynamic schema discovery still works with `minimal` because `gitlab_find_action` returns schemas inline.
 
-`--meta-param-schema` affects visible domain meta-tool `inputSchema` only. Keep the default `opaque` unless a client needs `compact` or `full` schemas in `tools/list`; exact call shapes remain available through `gitlab://tools/{id}`. Current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
+`--meta-param-schema` affects visible domain meta-tool `inputSchema` only. Keep the default `opaque` unless a client needs `compact` or `full` schemas in `tools/list`; exact call shapes remain available through `gitlab://tools/{id}`. Current audit metrics show `compact` is 8.1x larger than `opaque`, and `full` is 18.0x larger.
 
 ### Stateless Mode
 

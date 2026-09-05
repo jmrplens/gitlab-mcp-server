@@ -6,9 +6,9 @@ faq:
   - q: "¿Qué es la elicitación MCP?"
     a: "La elicitación es una capacidad MCP que permite a GitLab MCP Server **pausar y solicitar información al usuario mediante formularios estructurados** renderizados por el cliente. Impulsa la creación tipo asistente de recursos complejos como issues, merge requests, releases y proyectos. En lugar de exigir todos los parámetros de antemano, el servidor recopila los campos paso a paso, valida cada respuesta, adapta las preguntas posteriores a las anteriores y confirma antes de crear el recurso."
   - q: "¿Qué herramientas de asistente interactivo están disponibles?"
-    a: "GitLab MCP Server proporciona cuatro asistentes de elicitación: `gitlab_interactive_issue_create` (selección de proyecto, etiquetas, asignación), `gitlab_interactive_mr_create` (selección de ramas y opciones), `gitlab_interactive_release_create` (selección de tags y milestones) y `gitlab_interactive_project_create` (selección de namespace y configuración). Cada uno confirma con el usuario antes de realizar la llamada final a la API de GitLab."
+    a: "GitLab MCP Server proporciona cuatro asistentes de elicitación: `gitlab_interactive_issue_create` (título, descripción, etiquetas, confidencialidad), `gitlab_interactive_mr_create` (rama origen y destino, título, descripción, etiquetas, opciones de eliminar la rama origen y de squash), `gitlab_interactive_release_create` (nombre del tag, nombre de la release, descripción) y `gitlab_interactive_project_create` (nombre, descripción, visibilidad, inicialización del README, rama predeterminada). Los asistentes de issue, MR y release reciben el `project_id` de destino como parámetro de la herramienta, y cada uno confirma con el usuario antes de realizar la llamada final a la API de GitLab."
   - q: "¿Qué ocurre cuando un cliente no admite la elicitación?"
-    a: "GitLab MCP Server degrada de forma elegante a las herramientas parametrizadas estándar. El asistente proporciona todos los parámetros directamente en una sola llamada en lugar de usar el flujo del asistente. La funcionalidad se preserva por completo — solo se pierde la experiencia paso a paso. Por ejemplo, llamar a `gitlab_issue` con `action: create` y pasar todos los campos a la vez produce el mismo resultado sin soporte de elicitación."
+    a: "GitLab MCP Server degrada de forma elegante a las herramientas parametrizadas estándar. El asistente proporciona todos los parámetros directamente en una sola llamada en lugar de usar el flujo del asistente. La funcionalidad se preserva por completo — solo se pierde la experiencia paso a paso. Por ejemplo, ejecutar `issue.create` mediante `gitlab_execute_action` en la superficie predeterminada (o `gitlab_issue` con `action: create` cuando `GITLAB_MCP_TOOL_SURFACE=meta`) y pasar todos los campos a la vez produce el mismo resultado sin soporte de elicitación."
   - q: "¿Qué clientes MCP admiten la elicitación?"
     a: "La elicitación la admiten **Claude Desktop** y **Claude Code**. **VS Code Copilot** y **Cursor** aún no la admiten, por lo que en esos clientes GitLab MCP Server recurre a las herramientas de creación parametrizadas estándar. Como el soporte de capacidades de los clientes cambia con frecuencia, confirma el estado actual en la documentación del cliente específico."
 ---
@@ -59,12 +59,14 @@ Como los formularios multi-ronda viajan dentro del resultado de la herramienta, 
 
 GitLab MCP Server proporciona cuatro herramientas de creación tipo asistente. Cada una guía al usuario por los campos que necesita un recurso y confirma antes de realizar la llamada final a la API.
 
-| Herramienta                         | Descripción                                                                      |
-| ----------------------------------- | -------------------------------------------------------------------------------- |
-| `gitlab_interactive_issue_create`   | Creación de issues paso a paso con selección de proyecto, etiquetas y asignación |
-| `gitlab_interactive_mr_create`      | Creación guiada de merge requests con selección de ramas y opciones              |
-| `gitlab_interactive_release_create` | Asistente de creación de releases con selección de tags y milestones             |
-| `gitlab_interactive_project_create` | Creación de proyectos con selección de namespace y configuración                 |
+| Herramienta                         | Descripción                                                                                                                             |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_interactive_issue_create`   | Creación de issues paso a paso: título, descripción, etiquetas, confidencialidad, confirmación                                          |
+| `gitlab_interactive_mr_create`      | Creación guiada de merge requests: ramas, título, descripción, etiquetas, opciones de eliminar la rama origen y de squash, confirmación |
+| `gitlab_interactive_release_create` | Asistente de creación de releases: nombre del tag, nombre de la release, descripción, confirmación                                      |
+| `gitlab_interactive_project_create` | Creación de proyectos: nombre, descripción, visibilidad, inicialización del README, rama predeterminada, confirmación                   |
+
+Los asistentes de issue, merge request y release reciben el `project_id` de destino como parámetro de la herramienta; los formularios recopilan el resto de campos. Estas cuatro herramientas se registran por nombre en las superficies meta e individual; en la superficie dinámica predeterminada se alcanzan mediante `gitlab_execute_action` con los IDs de catálogo `interactive.issue_create`, `interactive.mr_create`, `interactive.release_create` e `interactive.project_create`, que `gitlab_find_action` devuelve.
 
 ### ¿Por qué usar un asistente en lugar de una única llamada?
 
@@ -91,7 +93,7 @@ La elicitación requiere que el cliente MCP declare soporte para la capacidad:
 Cuando la elicitación no está disponible, el servidor recurre a las herramientas parametrizadas estándar. El asistente de IA proporciona todos los parámetros directamente, sin el flujo interactivo del asistente. La funcionalidad se mantiene — solo se reduce la experiencia interactiva.
 
 :::tip
-Incluso sin soporte de elicitación, puedes usar las herramientas de creación estándar (por ejemplo, `gitlab_issue` con `action: create`) proporcionando todos los parámetros en una única llamada.
+Incluso sin soporte de elicitación, puedes usar las acciones de creación estándar (`issue.create` mediante `gitlab_execute_action` en la superficie predeterminada, o `gitlab_issue` con `action: create` cuando `GITLAB_MCP_TOOL_SURFACE=meta`) proporcionando todos los parámetros en una única llamada.
 :::
 
 <FAQ />

@@ -10,7 +10,7 @@ Cada release publica un binario autocontenido por plataforma: Linux, macOS y Win
 
 ## Script de instalación
 
-Los dos scripts hacen las mismas cuatro cosas: detectar la plataforma, descargar el archivo correspondiente de la última GitHub Release, verificar su SHA-256 contra el `checksums.txt` de esa misma release y copiarlo a un directorio del usuario. La verificación falla de forma segura: una discrepancia, una entrada ausente o un `checksums.txt` que no se puede descargar abortan la instalación en lugar de saltarse la comprobación.
+Los dos scripts hacen las mismas cuatro cosas: detectar la plataforma, descargar el archivo correspondiente de la última GitHub Release, verificar su SHA-256 contra el `checksums.txt` de esa misma release y copiarlo a un directorio del usuario. La verificación falla de forma segura: una discrepancia, una entrada ausente o un `checksums.txt` que no se puede descargar abortan la instalación en lugar de saltarse la comprobación. Como `checksums.txt` viene de la misma release que el binario, los dos scripts comprueban además una firma cuando pueden: con `cosign` instalado verifican `checksums.txt.sigstore.json` contra el workflow de release de este repositorio, fijado a la versión que se instala, y piden a la CLI `gh` la atestación de procedencia de compilación siempre que eso no haya verificado nada. Un verificador que se ejecutó y dijo que no aborta; un verificador que no pudo ejecutarse solo avisa, salvo que `REQUIRE_SIGNATURE=1` lo convierta también en fatal.
 
 <Tabs>
 <TabItem label="Linux / macOS">
@@ -21,12 +21,13 @@ curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scr
 
 El script necesita `curl` o `wget`, además de `sha256sum` o `shasum`. Traduce `x86_64` a `amd64` y `aarch64` a `arm64`, rechaza cualquier otro sistema o arquitectura, e instala el archivo con modo `0755` como `$HOME/.local/bin/gitlab-mcp-server`. Si ya hay un binario en esa ruta lo elimina primero, de modo que volver a ejecutarlo sobre un servidor en marcha no falla con "Text file busy". Si `$HOME/.local/bin` no está en tu PATH, el script lo avisa e imprime la línea `export PATH=...` que debes añadir.
 
-| Variable           | Por defecto                  | Efecto                                                                        |
-| ------------------ | ---------------------------- | ----------------------------------------------------------------------------- |
-| `INSTALL_DIR`      | `$HOME/.local/bin`           | Directorio de destino                                                         |
-| `VERSION`          | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v2.7.5`                       |
-| `REPO`             | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub desde el que descargar                                  |
-| `ALLOW_UNVERIFIED` | sin definir                  | `1` omite la verificación del checksum, para sistemas sin herramienta SHA-256 |
+| Variable            | Por defecto                  | Efecto                                                                        |
+| ------------------- | ---------------------------- | ----------------------------------------------------------------------------- |
+| `INSTALL_DIR`       | `$HOME/.local/bin`           | Directorio de destino                                                         |
+| `VERSION`           | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v2.7.5`                       |
+| `REPO`              | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub desde el que descargar                                  |
+| `REQUIRE_SIGNATURE` | sin definir                  | `1` aborta salvo que se verifique una firma o una atestación                  |
+| `ALLOW_UNVERIFIED`  | sin definir                  | `1` omite la verificación del checksum, para sistemas sin herramienta SHA-256 |
 
 Las variables van delante de `sh`, que es el proceso que ejecuta el script:
 
@@ -43,7 +44,7 @@ irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/in
 
 El script lee la arquitectura real de la máquina (primero `PROCESSOR_ARCHITEW6432`, de modo que un PowerShell de 32 bits en un Windows de 64 bits sigue eligiendo la compilación correcta), descarga `gitlab-mcp-server-windows-amd64.exe` o `gitlab-mcp-server-windows-arm64.exe`, lo verifica con `Get-FileHash` y lo instala como `%LOCALAPPDATA%\Programs\gitlab-mcp-server\gitlab-mcp-server.exe`. Después añade esa carpeta a tu PATH de **usuario** si aún no está. No se publica ninguna compilación x86 de 32 bits, así que el script se detiene en esa arquitectura.
 
-Existen las mismas opciones como variables de entorno (`VERSION`, `INSTALL_DIR`, `REPO`, `ALLOW_UNVERIFIED`) y, si guardas el script y lo ejecutas como archivo, como parámetros (`-Version`, `-InstallDir`, `-Repo`). Al encadenarlo con `iex`, define primero las variables:
+Existen las mismas opciones como variables de entorno (`VERSION`, `INSTALL_DIR`, `REPO`, `REQUIRE_SIGNATURE`, `ALLOW_UNVERIFIED`) y, si guardas el script y lo ejecutas como archivo, como parámetros (`-Version`, `-InstallDir`, `-Repo`). Al encadenarlo con `iex`, define primero las variables:
 
 ```powershell
 $env:VERSION = 'v2.7.5'
@@ -100,7 +101,7 @@ En Windows, renombra el archivo a `gitlab-mcp-server.exe` y colócalo en una car
 
 ## Verifica lo que has descargado
 
-Los scripts de instalación ya comparan la descarga con `checksums.txt`. Hecho a mano, esa comprobación más la firma del archivo de checksums son dos comandos. `checksums.txt` lista el SHA-256 de los siete binarios, y `checksums.txt.sigstore.json` es una firma keyless de [Cosign](https://docs.sigstore.dev/cosign/installation/) sobre ese archivo, hecha por el workflow de release con la identidad OIDC de GitHub, así que no hay ninguna clave que distribuir.
+Los scripts de instalación ya comparan la descarga con `checksums.txt`, y comprueban su firma cuando `cosign` o `gh` están instalados. Hecho a mano, esa comprobación más la firma del archivo de checksums son dos comandos. `checksums.txt` lista el SHA-256 de los siete binarios, y `checksums.txt.sigstore.json` es una firma keyless de [Cosign](https://docs.sigstore.dev/cosign/installation/) sobre ese archivo, hecha por el workflow de release con la identidad OIDC de GitHub, así que no hay ninguna clave que distribuir.
 
 1. Descarga `checksums.txt` y `checksums.txt.sigstore.json` de la misma release que el binario.
 2. Verifica la firma. La identidad es el workflow de release en la etiqueta que has descargado:

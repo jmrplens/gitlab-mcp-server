@@ -12,7 +12,7 @@ faq:
   - q: "How do I enable Enterprise tools?"
     a: "Set the licensing tier explicitly or let the server auto-detect it. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`; in HTTP mode pass `--tier=premium` or `--tier=ultimate`. When the tier is omitted, the server auto-detects the edition from `GET /license` per token+URL entry, falling back to `free`. Forcing the Enterprise/Premium catalog takes the meta-tool count from {{meta.base}} to {{meta.self_managed_enterprise}}. The deprecated `GITLAB_ENTERPRISE=true` environment variable is still honored when `GITLAB_TIER` is unset (it maps to `ultimate`) and logs a warning. There is no `--enterprise` flag in HTTP mode — passing one aborts startup; use `--tier`."
   - q: "Which operating systems and architectures are supported?"
-    a: "Pre-built binaries are available for Linux, macOS, and Windows on both amd64 and arm64 — six binaries in total. macOS ships separate Intel (amd64) and Apple Silicon (arm64) builds. Each platform ships as a single self-contained binary — no Go runtime, interpreter or library bundle to install. The Linux builds are position-independent executables that use the glibc dynamic loader, so they need a glibc userland; on musl distributions such as Alpine, use the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl."
+    a: "Pre-built binaries are available for Linux, macOS, and Windows on both amd64 and arm64 — six binaries in total, plus a universal macOS build, gitlab-mcp-server-darwin-all, that runs on both. macOS ships separate Intel (amd64) and Apple Silicon (arm64) builds. Each platform ships as a single self-contained binary — no Go runtime, interpreter or library bundle to install. The Linux builds are position-independent executables that use the glibc dynamic loader, so they need a glibc userland; on musl distributions such as Alpine, use the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl."
   - q: "Does GitLab MCP Server work with OpenAI Codex?"
     a: 'Yes. The server detects Codex sessions automatically and applies a compatibility profile: content annotation priorities are rounded to integer values, which the Codex builds bundled with ChatGPT.app require, while every other field is delivered unchanged. Configure the server in ~/.codex/config.toml with default_tools_approval_mode = "approve" so non-interactive runs can execute write tools, and keep the default dynamic tool surface. Set GITLAB_MCP_CLIENT_COMPAT=off to disable the per-client rewriting.'
   - q: "Which MCP clients are compatible with GitLab MCP Server?"
@@ -48,16 +48,17 @@ To enable enterprise features in stdio mode, set `GITLAB_TIER=premium` or `GITLA
 
 Pre-built binaries are available for all major platforms:
 
-| OS      | Architecture          | Binary                                |
-| ------- | --------------------- | ------------------------------------- |
-| Linux   | amd64                 | `gitlab-mcp-server-linux-amd64`       |
-| Linux   | arm64                 | `gitlab-mcp-server-linux-arm64`       |
-| macOS   | amd64 (Intel)         | `gitlab-mcp-server-darwin-amd64`      |
-| macOS   | arm64 (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`      |
-| Windows | amd64                 | `gitlab-mcp-server-windows-amd64.exe` |
-| Windows | arm64                 | `gitlab-mcp-server-windows-arm64.exe` |
+| OS      | Architecture              | Binary                                |
+| ------- | ------------------------- | ------------------------------------- |
+| Linux   | amd64                     | `gitlab-mcp-server-linux-amd64`       |
+| Linux   | arm64                     | `gitlab-mcp-server-linux-arm64`       |
+| macOS   | amd64 (Intel)             | `gitlab-mcp-server-darwin-amd64`      |
+| macOS   | arm64 (Apple Silicon)     | `gitlab-mcp-server-darwin-arm64`      |
+| macOS   | universal (arm64 + amd64) | `gitlab-mcp-server-darwin-all`        |
+| Windows | amd64                     | `gitlab-mcp-server-windows-amd64.exe` |
+| Windows | arm64                     | `gitlab-mcp-server-windows-arm64.exe` |
 
-The Linux binaries are dynamically linked position-independent executables and require glibc. On musl systems (Alpine), run the container image `ghcr.io/jmrplens/gitlab-mcp-server` instead — it is built against musl inside the image. The npm linux packages declare `libc: glibc` for the same reason and are skipped on musl by design.
+The Linux binaries are dynamically linked position-independent executables and require glibc. On musl systems (Alpine), run the container image `ghcr.io/jmrplens/gitlab-mcp-server` instead — it is built against musl inside the image. From the first release after 2.7.5 the npm Linux packages declare `libc: glibc` for the same reason and are skipped on musl by design.
 
 ## MCP client compatibility
 
@@ -85,7 +86,7 @@ For Codex, add the server to `~/.codex/config.toml` with tool pre-approval — w
 ```toml title="~/.codex/config.toml"
 [mcp_servers.gitlab]
 command = "/path/to/gitlab-mcp-server"
-args = ["stdio"]
+args = ["--transport", "stdio"]
 default_tools_approval_mode = "approve"
 
 [mcp_servers.gitlab.env]

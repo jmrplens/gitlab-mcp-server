@@ -6,7 +6,7 @@ faq:
   - q: "What are MCP resource subscriptions?"
     a: "A client asks the server to watch a resource with `resources/subscribe`, and the server sends `notifications/resources/updated` when its content changes. GitLab MCP Server honors this by **polling**: a watcher re-reads the subscribed URI through the same handler `resources/read` uses and notifies only when the content actually changed. GitLab offers no push channel a local server could consume, so polling under explicit bounds is the honest implementation."
   - q: "Which resources can be subscribed to?"
-    a: "26 single-object resource kinds: a project or group; a pipeline, its job list, the latest pipeline, a single job; a merge request with its discussions and notes; an issue; a deployment, environment, or feature flag; a release, tag, or branch; a milestone or label (project or group); a board; a deploy key; a snippet; a wiki page; and a repository file. **Collections are refused** — subscribing to an issue list would notify on changes the subscriber never asked about."
+    a: "26 resource kinds, single objects plus three single-parent lists: a project or group; a pipeline, its job list, the latest pipeline, a single job; a merge request with its discussions and notes; an issue; a deployment, environment, or feature flag; a release, tag, or branch; a milestone or label (project or group); a board; a deploy key; a snippet; a wiki page; and a repository file. **Collections are refused** — subscribing to an issue list would notify on changes the subscriber never asked about."
   - q: "How fast do notifications arrive?"
     a: "Latency is the polling cadence: **5 seconds** while the resource is busy (a running pipeline, an open merge request), **15 seconds** by default, **60 seconds** once settled, and **10 minutes** after a watch lease-demotes from 30 minutes of session inactivity. Any request on the session restores full speed. The `_meta` on each notification reports the watch state and its current cadence."
   - q: "What does watching cost against my GitLab rate limit?"
@@ -23,7 +23,7 @@ Subscriptions are advertised on `GITLAB_MCP_CAPABILITY_SURFACE=full` (the defaul
 
 ## What can be watched?
 
-26 single-object resource kinds — objects with a lifecycle worth following:
+26 resource kinds: single objects with a lifecycle worth following, plus three single-parent lists (a pipeline's jobs, a merge request's discussions and its notes):
 
 | Group             | Subscribable resources                                                            |
 | ----------------- | --------------------------------------------------------------------------------- |

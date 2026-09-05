@@ -4,7 +4,7 @@ description: "Ejemplos de gestión de issues con GitLab MCP Server — triar, as
 datePublished: "2026-04-23"
 faq:
   - q: "¿Cómo triago issues de GitLab con un asistente de IA?"
-    a: "Se trabaja de arriba abajo: pide al asistente que liste los issues abiertos que te interesan y después que los asigne, etiquete y enlace. Un ciclo típico son cuatro llamadas: `issue.list` (filtrando por `state: opened` y una etiqueta) para ver el backlog, `issue.update` para fijar `assignee_ids`, `labels` y `milestone_id`, `issue.link_create` para registrar dependencias, y de nuevo `issue.update` con `state_event: close` al resolverlo. En la superficie dinámica predeterminada son acciones de `gitlab_execute_action`, localizables con `gitlab_find_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` son las acciones `list`, `update` y `link_create` de la meta-herramienta `gitlab_issue`."
+    a: "Se trabaja de arriba abajo: pide al asistente que liste los issues abiertos que te interesan y después que los asigne, etiquete y enlace. Un ciclo típico son cuatro llamadas: `issue.list` (filtrando por `state: opened` y un array `labels`) para ver el backlog, `issue.update` para fijar `assignee_ids`, `add_labels` y `milestone_id`, `issue.link_create` (con `target_project_id` y `target_issue_iid`) para registrar dependencias, y de nuevo `issue.update` con `state_event: close` al resolverlo. En la superficie dinámica predeterminada son acciones de `gitlab_execute_action`, localizables con `gitlab_find_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` son las acciones `list`, `update` y `link_create` de la meta-herramienta `gitlab_issue`."
   - q: "¿Cuál es la diferencia entre relates_to, blocks y is_blocked_by?"
     a: "Son los tres valores de `link_type` que acepta `issue.link_create` (`gitlab_issue` con `action: link_create` en la superficie meta). `relates_to` es una asociación simétrica y no bloqueante: ningún issue condiciona al otro. `blocks` significa que el issue de origen debe resolverse antes de que el destino pueda avanzar. `is_blocked_by` es la dirección inversa de esa misma relación, así que crear un enlace `blocks` de #300 a #400 es lo que hace que #400 aparezca como `is_blocked_by` #300. Listar los enlaces con `issue.link_list` devuelve el tipo de relación junto a cada issue enlazado."
   - q: "¿Puede un asistente de IA cerrar un issue por mí?"
@@ -60,7 +60,7 @@ flowchart LR
 
 ```text
 issue.list → project_id: "my-group/backend",
-  state: "opened", labels: "bug"
+  state: "opened", labels: ["bug"]
 ```
 
 Devuelve: títulos de issues, autores, etiquetas, milestones, asignados y fechas de creación.
@@ -71,7 +71,7 @@ Devuelve: títulos de issues, autores, etiquetas, milestones, asignados y fechas
 
 ```text
 issue.update → project_id: "my-group/backend",
-  issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend"
+  issue_iid: 123, assignee_ids: [45], add_labels: ["priority::high", "team::backend"]
 ```
 
 ### Triaje masivo por milestone
@@ -114,7 +114,7 @@ Modela las relaciones entre issues para que las dependencias sean explícitas. M
 
 ```text
 issue.link_create → project_id: "my-group/backend",
-  issue_iid: 100, target_issue_iid: 200, link_type: "relates_to"
+  issue_iid: 100, target_project_id: "my-group/backend", target_issue_iid: "200", link_type: "relates_to"
 ```
 
 ### Crear relaciones de bloqueo
@@ -123,8 +123,10 @@ issue.link_create → project_id: "my-group/backend",
 
 ```text
 issue.link_create → project_id: "my-group/backend",
-  issue_iid: 300, target_issue_iid: 400, link_type: "blocks"
+  issue_iid: 300, target_project_id: "my-group/backend", target_issue_iid: "400", link_type: "blocks"
 ```
+
+`target_project_id` es obligatorio incluso cuando ambos issues viven en el mismo proyecto, porque un enlace puede cruzar proyectos.
 
 ### Ver vínculos de issues
 
@@ -169,7 +171,7 @@ project.label_create → project_id: "my-group/backend",
 project.milestone_get → project_id: "my-group/backend", milestone_iid: 15
 ```
 
-Devuelve: porcentaje de completado, conteo de issues abiertos/cerrados, fecha de inicio, fecha límite y días restantes.
+Devuelve: título, estado, fecha de inicio, fecha límite, si ha expirado y URL web del milestone; `project.milestone_issues` lista los issues que siguen abiertos en él.
 
 ---
 
@@ -226,7 +228,7 @@ Devuelve: issues coincidentes en todos los proyectos accesibles con títulos, de
 
 ```text
 issue.list_group → group_id: "platform",
-  state: "opened", labels: "security"
+  state: "opened", labels: ["security"]
 ```
 
 Devuelve: issues relacionados con seguridad en todos los proyectos del grupo.
@@ -237,14 +239,14 @@ En la superficie dinámica predeterminada, el asistente descubre primero la acci
 
 ```text
 gitlab_find_action → query: "issues abiertos con una etiqueta"
-gitlab_execute_action → action: "issue.list", params: { project_id: "my-group/backend", state: "opened", labels: "bug" }
+gitlab_execute_action → action: "issue.list", params: { project_id: "my-group/backend", state: "opened", labels: ["bug"] }
 ```
 
 Asignar, etiquetar y vincular siguen la misma forma:
 
 ```text
-gitlab_execute_action → action: "issue.update", params: { project_id: "my-group/backend", issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend" }
-gitlab_execute_action → action: "issue.link_create", params: { project_id: "my-group/backend", issue_iid: 300, target_issue_iid: 400, link_type: "blocks" }
+gitlab_execute_action → action: "issue.update", params: { project_id: "my-group/backend", issue_iid: 123, assignee_ids: [45], add_labels: ["priority::high", "team::backend"] }
+gitlab_execute_action → action: "issue.link_create", params: { project_id: "my-group/backend", issue_iid: 300, target_project_id: "my-group/backend", target_issue_iid: "400", link_type: "blocks" }
 ```
 
 Con `GITLAB_MCP_TOOL_SURFACE=meta` las mismas llamadas van a la meta-herramienta `gitlab_issue` con `action: list`, `action: update` y `action: link_create`, cada una con los parámetros anidados en `params`.

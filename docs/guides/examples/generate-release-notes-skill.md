@@ -28,14 +28,14 @@ requests, and diffs, then produces polished release notes.
 
 3. Ask Copilot: *"Generate release notes from v1.0.0 to v1.1.0 for project 42"*
 
-## Three Approaches
+## Two Approaches
 
 The skill documents two complementary approaches:
 
-| Approach            | Tool                                         | Requires      | Best For                      |
-| ------------------- | -------------------------------------------- | ------------- | ----------------------------- |
-| **A. Manual**       | `gitlab_repository` + `gitlab_merge_request` | Nothing extra | Full control, no LLM needed   |
-| **B. Prompt-Based** | `generate_release_notes` prompt              | LLM client    | Editable LLM-enriched context |
+| Approach            | Tool                                                                                                                                                                            | Requires      | Best For                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ----------------------------- |
+| **A. Manual**       | `repository.compare` + `merge_request.list` through `gitlab_execute_action` (default surface); `gitlab_repository` + `gitlab_merge_request` with `GITLAB_MCP_TOOL_SURFACE=meta` | Nothing extra | Full control, no LLM needed   |
+| **B. Prompt-Based** | `generate_release_notes` prompt                                                                                                                                                 | LLM client    | Editable LLM-enriched context |
 
 ## Categories
 

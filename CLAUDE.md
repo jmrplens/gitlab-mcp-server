@@ -152,7 +152,7 @@ gitlab-mcp-server/
 │   │   └── wikis/               # Wiki tools
 │   ├── resources/               # 45 MCP resource implementations
 │   ├── prompts/                 # 37 MCP prompt implementations
-│   ├── completions/             # 17 argument completion types
+│   ├── completions/             # 18 argument completion types
 │   ├── progress/                # MCP progress notifications
 │   ├── elicitation/             # MCP elicitation capability
 ├── docs/                        # Project documentation (Diátaxis framework, audience-first)
@@ -417,7 +417,7 @@ driven by `make` targets, never beside another tool's variables in a shell).
 | `GITLAB_MCP_META_TOOLS`             | No       | Deprecated compatibility selector; prefer `GITLAB_MCP_TOOL_SURFACE` for new configs |
 | `GITLAB_MCP_TOOL_SURFACE`           | No       | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; default is `dynamic` when unset, unless legacy `GITLAB_MCP_META_TOOLS` is explicitly set |
 | `GITLAB_MCP_CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps the surface-aware `gitlab://tools` manifest |
-| `GITLAB_MCP_META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~6.5x), or `full` (~11.9x). Independent of `GITLAB_MCP_META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
+| `GITLAB_MCP_META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~8.1x), or `full` (~18.0x). Independent of `GITLAB_MCP_META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
 | `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
 | `GITLAB_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |

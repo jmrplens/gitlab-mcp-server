@@ -29,7 +29,7 @@ GitLab MCP Server assigns **50 unique domain icons** to all {stats.tools.ultimat
 
 ## Icon gallery
 
-All icons at 32px display size, grouped by domain category. The `Name` column shows the Go variable used in code.
+All 50 domain icons at 32px display size, grouped by domain category. The `Name` column shows the Go variable used in code. Icons are attached per **catalog group**, a group being a meta-tool such as `gitlab_branch` or `gitlab_issue`: the individual tools projected from its actions and the `gitlab://tools` entries on the dynamic surface inherit the group's icon, so a group name below stands for every tool it aggregates. Resources and prompts pick their icon directly. Twelve icons (`IconAlert`, `IconBot`, `IconContainer`, `IconDiscussion`, `IconEpic`, `IconImport`, `IconIntegration`, `IconLink`, `IconNotify`, `IconSchedule`, `IconTodo`, `IconUpload`) currently have no consumer on any served surface: the domains they were drawn for route under a broader group and take that group's icon.
 
 ### Source control
 
@@ -38,7 +38,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -54,7 +54,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconBranch</code>
       </td>
-      <td>branches, repository, repositorysubmodules</td>
+      <td>gitlab_branch</td>
     </tr>
     <tr>
       <td>
@@ -68,7 +68,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconCommit</code>
       </td>
-      <td>commits, mrcontextcommits</td>
+      <td>none (resource commit and prompt audit_commit_hygiene only; commit actions route under gitlab_repository)</td>
     </tr>
     <tr>
       <td>
@@ -82,7 +82,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconTag</code>
       </td>
-      <td>tags</td>
+      <td>gitlab_tag</td>
     </tr>
     <tr>
       <td>
@@ -96,7 +96,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconRelease</code>
       </td>
-      <td>releases</td>
+      <td>gitlab_release</td>
     </tr>
     <tr>
       <td>
@@ -110,7 +110,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconFile</code>
       </td>
-      <td>files, markdown, pages</td>
+      <td>gitlab_repository</td>
     </tr>
   </tbody>
 </table>
@@ -122,7 +122,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -138,7 +138,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconIssue</code>
       </td>
-      <td>issues, workitems</td>
+      <td>gitlab_issue</td>
     </tr>
     <tr>
       <td>
@@ -152,7 +152,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconLabel</code>
       </td>
-      <td>awardemoji, badges, grouplabels, labels, topics</td>
+      <td>none (label resources and the label_distribution prompt; label actions route under gitlab_project and gitlab_group)</td>
     </tr>
     <tr>
       <td>
@@ -166,7 +166,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconMilestone</code>
       </td>
-      <td>groupmilestones, milestones</td>
+      <td>none (milestone resources and prompts; milestone actions route under gitlab_project and gitlab_group)</td>
     </tr>
     <tr>
       <td>
@@ -180,7 +180,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconBoard</code>
       </td>
-      <td>boards, groupboards</td>
+      <td>none (resource board; board actions route under gitlab_project and gitlab_group)</td>
     </tr>
     <tr>
       <td>
@@ -194,7 +194,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconLink</code>
       </td>
-      <td>issuelinks, releaselinks</td>
+      <td>none (issue and release links route under gitlab_issue and gitlab_release)</td>
     </tr>
     <tr>
       <td>
@@ -208,7 +208,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconTodo</code>
       </td>
-      <td>todos</td>
+      <td>none (todo actions route under gitlab_user)</td>
     </tr>
     <tr>
       <td>
@@ -222,7 +222,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconEpic</code>
       </td>
-      <td>epics, epicdiscussions</td>
+      <td>none (epic actions route under gitlab_group)</td>
     </tr>
   </tbody>
 </table>
@@ -234,7 +234,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -250,7 +250,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconMR</code>
       </td>
-      <td>mergerequests, mrapprovals, mrchanges, deploymentmergerequests</td>
+      <td>gitlab_merge_request, gitlab_mr_review</td>
     </tr>
     <tr>
       <td>
@@ -265,8 +265,9 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
         <code>IconDiscussion</code>
       </td>
       <td>
-        issuediscussions, issuenotes, mrdiscussions, mrdraftnotes, mrnotes,
-        commitdiscussions, epicdiscussions, snippetdiscussions
+        none (discussion and note actions route under their parent's group:
+        gitlab_issue, gitlab_mr_review, gitlab_repository, gitlab_group,
+        gitlab_snippet)
       </td>
     </tr>
   </tbody>
@@ -279,7 +280,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -295,7 +296,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconPipeline</code>
       </td>
-      <td>cilint, pipelines, pipelinetriggers</td>
+      <td>gitlab_pipeline</td>
     </tr>
     <tr>
       <td>
@@ -309,7 +310,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconJob</code>
       </td>
-      <td>jobs, jobtokenscope</td>
+      <td>gitlab_job</td>
     </tr>
     <tr>
       <td>
@@ -323,7 +324,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconSchedule</code>
       </td>
-      <td>freezeperiods, pipelineschedules</td>
+      <td>none (pipeline schedules route under gitlab_pipeline, freeze periods under gitlab_environment)</td>
     </tr>
     <tr>
       <td>
@@ -337,7 +338,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconVariable</code>
       </td>
-      <td>civariables, groupvariables, instancevariables</td>
+      <td>gitlab_ci_variable</td>
     </tr>
     <tr>
       <td>
@@ -351,7 +352,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconRunner</code>
       </td>
-      <td>clusteragents, runners, runnercontrollers, runnercontrollerscopes</td>
+      <td>gitlab_runner</td>
     </tr>
   </tbody>
 </table>
@@ -363,7 +364,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -379,7 +380,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconEnvironment</code>
       </td>
-      <td>environments</td>
+      <td>gitlab_environment</td>
     </tr>
     <tr>
       <td>
@@ -393,7 +394,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconDeploy</code>
       </td>
-      <td>deployments</td>
+      <td>none (resource deployment; deployment actions route under gitlab_environment)</td>
     </tr>
     <tr>
       <td>
@@ -407,7 +408,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconInfra</code>
       </td>
-      <td>terraformstates</td>
+      <td>gitlab_geo, gitlab_storage_move</td>
     </tr>
   </tbody>
 </table>
@@ -419,7 +420,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -435,7 +436,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconProject</code>
       </td>
-      <td>projectdiscovery, projects</td>
+      <td>gitlab_project, gitlab_project_alias, and the standalone gitlab_discover_project</td>
     </tr>
     <tr>
       <td>
@@ -449,7 +450,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconGroup</code>
       </td>
-      <td>groups, namespaces, resourcegroups</td>
+      <td>gitlab_group, gitlab_group_scim</td>
     </tr>
     <tr>
       <td>
@@ -463,10 +464,35 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconUser</code>
       </td>
+      <td>gitlab_user, gitlab_enterprise_user</td>
+    </tr>
+    <tr>
       <td>
-        accessrequests, avatar, ffuserlists, groupmembers, invites, members,
-        users
+        <img
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M3 2h10M3 14h10' stroke-linecap='round'/%3E%3Cpath d='M4 2v2.5L8 8 4 11.5V14M12 2v2.5L8 8l4 3.5V14'/%3E%3C/svg%3E"
+          width="32"
+          height="32"
+          alt="Queue"
+        />
       </td>
+      <td>
+        <code>IconQueue</code>
+      </td>
+      <td>gitlab_merge_train</td>
+    </tr>
+    <tr>
+      <td>
+        <img
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='3' y='5' width='10' height='9' rx='2' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Ccircle cx='6' cy='9' r='1' fill='%23888'/%3E%3Ccircle cx='10' cy='9' r='1' fill='%23888'/%3E%3Cline x1='8' y1='2' x2='8' y2='5' stroke='%23888' stroke-width='1.5'/%3E%3Ccircle cx='8' cy='2' r='1' fill='%23888'/%3E%3Cline x1='6' y1='12' x2='10' y2='12' stroke='%23888' stroke-width='1' stroke-linecap='round'/%3E%3C/svg%3E"
+          width="32"
+          height="32"
+          alt="Bot"
+        />
+      </td>
+      <td>
+        <code>IconBot</code>
+      </td>
+      <td>none (service accounts route under gitlab_group and gitlab_project)</td>
     </tr>
   </tbody>
 </table>
@@ -478,7 +504,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -494,7 +520,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconPackage</code>
       </td>
-      <td>dependencyproxy, packages</td>
+      <td>gitlab_package, gitlab_dependency, gitlab_model_registry</td>
     </tr>
     <tr>
       <td>
@@ -508,7 +534,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconContainer</code>
       </td>
-      <td>containerregistry</td>
+      <td>none (the container registry routes under gitlab_package)</td>
     </tr>
   </tbody>
 </table>
@@ -520,7 +546,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -536,7 +562,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconSearch</code>
       </td>
-      <td>search</td>
+      <td>gitlab_search, and gitlab_find_action on the dynamic surface</td>
     </tr>
     <tr>
       <td>
@@ -550,7 +576,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconAnalytics</code>
       </td>
-      <td>appstatistics, issuestatistics, projectstatistics, usagedata</td>
+      <td>gitlab_dora_metrics, gitlab_orbit</td>
     </tr>
   </tbody>
 </table>
@@ -562,7 +588,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -578,7 +604,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconSecurity</code>
       </td>
-      <td>license, protectedenvs, securefiles</td>
+      <td>gitlab_security_attribute, gitlab_security_category, gitlab_security_finding, gitlab_security_scan_profile</td>
     </tr>
     <tr>
       <td>
@@ -592,7 +618,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconToken</code>
       </td>
-      <td>accesstokens, deploytokens, jobtokenscope, runnercontrollertokens</td>
+      <td>gitlab_access</td>
     </tr>
     <tr>
       <td>
@@ -606,7 +632,49 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconKey</code>
       </td>
-      <td>deploykeys, keys</td>
+      <td>none (resource deploy_key; key actions route under gitlab_access, gitlab_user and gitlab_group)</td>
+    </tr>
+    <tr>
+      <td>
+        <img
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.5' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 1L2 4v4c0 4 3 6 6 7 3-1 6-3 6-7V4z'/%3E%3Cpath d='M5.5 8l2 2 3.5-4'/%3E%3C/svg%3E"
+          width="32"
+          height="32"
+          alt="Shield"
+        />
+      </td>
+      <td>
+        <code>IconShield</code>
+      </td>
+      <td>gitlab_attestation, gitlab_external_status_check</td>
+    </tr>
+    <tr>
+      <td>
+        <img
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.3' stroke-linecap='round'%3E%3Cellipse cx='8' cy='9' rx='3' ry='4' fill='%23888'/%3E%3Cpath d='M5 9H2m12 0h-3M5 6L3 4m10 2l-2-2M5 12l-2 2m10-2l-2 2M6 4.5a2 2 0 0 1 4 0'/%3E%3C/svg%3E"
+          width="32"
+          height="32"
+          alt="Vulnerability"
+        />
+      </td>
+      <td>
+        <code>IconVulnerability</code>
+      </td>
+      <td>gitlab_vulnerability</td>
+    </tr>
+    <tr>
+      <td>
+        <img
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M3 1.5h7l3 3v10H3z'/%3E%3Cpath d='M5.5 9l2 2 3.5-4' stroke-linecap='round'/%3E%3C/svg%3E"
+          width="32"
+          height="32"
+          alt="Compliance"
+        />
+      </td>
+      <td>
+        <code>IconCompliance</code>
+      </td>
+      <td>gitlab_compliance_policy</td>
     </tr>
   </tbody>
 </table>
@@ -618,7 +686,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -634,7 +702,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconWiki</code>
       </td>
-      <td>wikis</td>
+      <td>gitlab_wiki, and the five workflow guide resources</td>
     </tr>
     <tr>
       <td>
@@ -648,7 +716,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconSnippet</code>
       </td>
-      <td>snippets</td>
+      <td>gitlab_snippet</td>
     </tr>
   </tbody>
 </table>
@@ -660,7 +728,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -677,8 +745,8 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
         <code>IconConfig</code>
       </td>
       <td>
-        appearance, applications, customattributes, dbmigrations,
-        elicitationtools, featureflags, features, planlimits, settings, sidekiq
+        gitlab_admin, gitlab_feature_flags, gitlab_member_role, the
+        gitlab_interactive_* wizards, and the gitlab://tools manifest resources
       </td>
     </tr>
     <tr>
@@ -693,7 +761,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconServer</code>
       </td>
-      <td>metadata</td>
+      <td>gitlab_execute_action on the dynamic surface, and the fallback for a group missing from the icon map</td>
     </tr>
     <tr>
       <td>
@@ -707,10 +775,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconTemplate</code>
       </td>
-      <td>
-        ciyamltemplates, dockerfiletemplates, gitignoretemplates,
-        licensetemplates, projecttemplates
-      </td>
+      <td>gitlab_template, gitlab_ci_catalog</td>
     </tr>
   </tbody>
 </table>
@@ -722,7 +787,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -738,7 +803,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconNotify</code>
       </td>
-      <td>broadcastmessages, notifications</td>
+      <td>none (notification actions route under gitlab_user and gitlab_admin)</td>
     </tr>
     <tr>
       <td>
@@ -752,7 +817,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconEvent</code>
       </td>
-      <td>events, resourceevents</td>
+      <td>gitlab_custom_emoji</td>
     </tr>
     <tr>
       <td>
@@ -766,7 +831,21 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconAlert</code>
       </td>
-      <td>alertmanagement, errortracking</td>
+      <td>none (alert and error-tracking actions route under gitlab_admin)</td>
+    </tr>
+    <tr>
+      <td>
+        <img
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='3' y='2' width='10' height='13' rx='1' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Crect x='6' y='1' width='4' height='2' rx='.5' fill='%23888'/%3E%3Cline x1='5.5' y1='7' x2='10.5' y2='7' stroke='%23888' stroke-width='1.2' stroke-linecap='round'/%3E%3Cline x1='5.5' y1='9.5' x2='10.5' y2='9.5' stroke='%23888' stroke-width='1.2' stroke-linecap='round'/%3E%3Cline x1='5.5' y1='12' x2='8.5' y2='12' stroke='%23888' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E"
+          width="32"
+          height="32"
+          alt="Audit"
+        />
+      </td>
+      <td>
+        <code>IconAudit</code>
+      </td>
+      <td>gitlab_audit_event</td>
     </tr>
   </tbody>
 </table>
@@ -778,7 +857,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
     <tr>
       <th style="width:60px">Preview</th>
       <th>Name</th>
-      <th>Packages</th>
+      <th>Catalog groups</th>
     </tr>
   </thead>
   <tbody>
@@ -794,7 +873,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconIntegration</code>
       </td>
-      <td>integrations, systemhooks</td>
+      <td>none (integration actions route under gitlab_project, system hooks under gitlab_admin)</td>
     </tr>
     <tr>
       <td>
@@ -808,7 +887,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconHealth</code>
       </td>
-      <td>health</td>
+      <td>gitlab_server (gitlab_server_status on the individual surface)</td>
     </tr>
     <tr>
       <td>
@@ -822,7 +901,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
       <td>
         <code>IconUpload</code>
       </td>
-      <td>groupmarkdownuploads, uploads</td>
+      <td>none (upload actions route under gitlab_project and gitlab_group)</td>
     </tr>
     <tr>
       <td>
@@ -837,8 +916,8 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
         <code>IconImport</code>
       </td>
       <td>
-        bulkimports, groupimportexport, grouprelationsexport, importservice,
-        projectimportexport
+        none (import and export actions route under gitlab_project,
+        gitlab_group and gitlab_admin)
       </td>
     </tr>
   </tbody>

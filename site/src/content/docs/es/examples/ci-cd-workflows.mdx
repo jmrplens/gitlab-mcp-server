@@ -80,7 +80,7 @@ Devuelve: IDs de pipelines, ramas, razones de fallo y duraciones.
 **Prompt**: "Muéstrame los jobs fallidos en el pipeline #45892"
 
 ```text
-job.list → project_id: "my-group/backend", pipeline_id: 45892, scope: "failed"
+job.list → project_id: "my-group/backend", pipeline_id: 45892, scope: ["failed"]
 ```
 
 Devuelve: nombres de jobs, stages, mensajes de error e información del runner.
@@ -109,7 +109,7 @@ Configura el entorno en el que se ejecutan tus pipelines listando, creando y aco
 ci_variable.list → project_id: "my-group/backend"
 ```
 
-Devuelve: claves de variables, estado de protección, estado de enmascaramiento y ámbitos de entorno. Los valores están enmascarados por seguridad.
+Devuelve: claves de variables, valores, estado de protección, estado de enmascaramiento y ámbitos de entorno. El valor llega tal como GitLab se lo devuelve al token, así que trata la salida como sensible.
 
 ### Añadir variable de despliegue
 
@@ -210,25 +210,25 @@ Mide el rendimiento de entrega con las cuatro métricas DORA —frecuencia de de
 
 ### Rendimiento del proyecto
 
-**Prompt**: "Muéstrame las métricas DORA del proyecto backend en los últimos 30 días"
+**Prompt**: "Muéstrame la frecuencia de despliegue del proyecto backend durante enero"
 
 ```text
 dora_metrics.project → project_id: "my-group/backend",
-  metric: "all", start_date: "2024-01-01", end_date: "2024-01-31"
+  metric: "deployment_frequency", start_date: "2024-01-01", end_date: "2024-01-31"
 ```
 
-Devuelve: frecuencia de despliegue, tiempo de entrega para cambios, tiempo de restauración del servicio y tasa de fallo en cambios.
+Devuelve: una serie de valores diarios de la métrica solicitada. `metric` es obligatorio y admite uno de `deployment_frequency`, `lead_time_for_changes`, `time_to_restore_service` o `change_failure_rate`, así que las cuatro métricas son cuatro llamadas.
 
 ### Métricas a nivel de grupo
 
-**Prompt**: "Compara las métricas DORA entre todos los proyectos del grupo platform"
+**Prompt**: "Compara la tasa mensual de fallo en cambios entre todos los proyectos del grupo platform"
 
 ```text
 dora_metrics.group → group_id: "platform",
-  metric: "all", interval: "monthly"
+  metric: "change_failure_rate", interval: "monthly"
 ```
 
-Devuelve: métricas agregadas para todo el grupo, útil para dashboards de liderazgo de ingeniería.
+Devuelve: la métrica agregada para todo el grupo por intervalo, útil para dashboards de liderazgo de ingeniería.
 
 ## Llamadas CI/CD dinámicas primero
 

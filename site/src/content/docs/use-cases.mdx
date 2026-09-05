@@ -10,7 +10,7 @@ faq:
   - q: "How does GitLab MCP Server help debug CI/CD pipelines?"
     a: 'The CI/CD workflow uses the `pipeline`, `job`, and `ci_variable` domains (`gitlab_pipeline`, `gitlab_job`, and `gitlab_ci_variable` on the meta surface) to inspect and recover failing pipelines without leaving the editor. You can ask for the latest pipeline status, list the failed jobs in a specific pipeline, retrieve a job''s logs to find the error, check the project''s CI variables, and retry failed jobs. For example, _"Why did the last pipeline fail on branch feature/auth?"_ returns the failing stage and job so the assistant can explain the error and suggest a fix.'
   - q: "Can GitLab MCP Server generate reports and release notes?"
-    a: 'Yes. The reports workflow relies on pre-built MCP prompts such as standup, risk-assessment, workload, and milestone-report to produce daily standup summaries, risk assessments, milestone progress reports, and team workload analysis. Release management combines the `release` domain (whose `link_*` actions manage release assets) with `tag` (`gitlab_release` and `gitlab_tag` on the meta surface) to create releases, manage tags, and upload assets — for instance, _"Generate release notes comparing v1.0 to v2.0"_ assembles a changelog from the commits between two refs.'
+    a: 'Yes. The reports workflow relies on pre-built MCP prompts such as `daily_standup`, `mr_risk_assessment`, `team_member_workload` and `milestone_progress` to produce daily standup summaries, risk assessments, milestone progress reports, and team workload analysis. Release management combines the `release` domain (whose `link_*` actions manage release assets) with `tag` (`gitlab_release` and `gitlab_tag` on the meta surface) to create releases, manage tags, and upload assets — for instance, _"Generate release notes comparing v1.0 to v2.0"_ assembles a changelog from the commits between two refs.'
 ---
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
@@ -20,7 +20,7 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
 
 ## Workflows
 
-Each card names the catalog domains it uses. On the default dynamic surface the assistant finds and runs their actions through `gitlab_find_action` and `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` each domain is a `gitlab_<domain>` meta-tool.
+Each card names the catalog domains it uses. On the default dynamic surface the assistant finds and runs their actions through `gitlab_find_action` and `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` each domain is a `gitlab_<domain>` meta-tool, except where a card notes that a domain's actions live on a base meta-tool instead.
 
 <CardGrid>
  <Card title="🔀 Code Review" icon="pencil">
@@ -42,7 +42,7 @@ Each card names the catalog domains it uses. On the default dynamic surface the 
     <Card title="📋 Issue Management" icon="list-format">
      Create, update, and track issues. Manage labels, milestones, and assignments through conversation.
 
-     **Key domains:** `issue`, `project` (`label_*` and `milestone_*` actions)
+     **Key domains:** `issue`, `label`, `milestone` (the last two are actions on the `gitlab_project` meta-tool)
 
      **Try:** _"Create a bug report titled 'Fix login page' with label 'bug' and assign to @alice"_
     </Card>
@@ -74,7 +74,7 @@ Each card names the catalog domains it uses. On the default dynamic surface the 
     <Card title="📊 Reports & Analytics" icon="open-book">
      Generate standup summaries, risk assessments, milestone reports, and team workload analysis using AI-powered prompts.
 
-     **Key prompts:** standup, risk-assessment, workload, milestone-report
+     **Key prompts:** `daily_standup`, `mr_risk_assessment`, `team_member_workload`, `milestone_progress`
 
      **Try:** _"Give me a daily standup summary for project my-app"_
     </Card>

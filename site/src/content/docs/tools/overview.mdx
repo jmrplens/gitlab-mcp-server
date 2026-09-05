@@ -259,7 +259,7 @@ Because all three modes share the canonical action catalog, **safety behavior st
 
 All tools follow a consistent naming pattern:
 
-- **Individual tools**: `gitlab_{domain}_{action}` (e.g., `gitlab_issue_create`, `gitlab_project_list`) — domain first, not verb first
+- **Individual tools**: the prevailing form is `gitlab_{domain}_{action}` (e.g., `gitlab_issue_create`, `gitlab_project_list`), domain first; a legacy set is verb first instead (`gitlab_list_issue_discussions`, `gitlab_add_ssh_key`), and each name is declared in the action's catalog spec rather than derived, so read it from `gitlab://tools` instead of inferring it
 - **Meta-tools**: `gitlab_{domain}` (e.g., `gitlab_issue`, `gitlab_project`)
 - **Dynamic actions**: canonical `domain.action` IDs executed through `gitlab_execute_action` (e.g., `issue.create`, `merge_request.list`)
 
@@ -267,39 +267,39 @@ All tools follow a consistent naming pattern:
 
 ### Project management
 
-| Meta-tool        | Description                                                                                                                          | Key Actions                                                                                                  |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `gitlab_project` | Project CRUD, configuration, hooks, labels, milestones, members, badges, boards, integrations, Pages, and uploads                    | list, get, create, update, delete, fork, star, archive, label\_\*, milestone\_\*, members, badge\_\*, upload |
-| `gitlab_issue`   | Issue lifecycle, notes, discussions, links, work items (including work item types), time tracking, award emoji, and resource events  | list, get, create, update, delete, note\_\*, link\_\*, discussion\_\*, work_item\_\*, time\_\*               |
-| `gitlab_group`   | Group CRUD, subgroups, members, badges, hooks, labels, milestones, transfer, and descendant projects                                 | list, get, create, update, delete, group_label\_\*, group_milestone\_\*, group_member\_\*, badge\_\*         |
-| `gitlab_user`    | User information, status, SSH keys, GPG keys, emails, activity, preferences, to-do items, and instance service accounts (Enterprise) | get, current, list, ssh_key\_\*, gpg_key\_\*, email\_\*, status\_\*, todo\_\*, service_account\_\*           |
-| `gitlab_wiki`    | Wiki page management and attachments                                                                                                 | list, get, create, update, delete, upload_attachment                                                         |
+| Meta-tool        | Description                                                                                                                          | Key Actions                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_project` | Project CRUD, configuration, hooks, labels, milestones, members, badges, boards, integrations, Pages, and uploads                    | list, get, create, update, delete, fork, star, archive, label\_\*, milestone\_\*, members, badge\_\*, upload         |
+| `gitlab_issue`   | Issue lifecycle, notes, discussions, links, work items (including work item types), time tracking, award emoji, and resource events  | list, get, create, update, delete, note\_\*, link\_\*, discussion\_\*, work_item\_\*, time\_\*                       |
+| `gitlab_group`   | Group CRUD, subgroups, members, badges, hooks, labels, milestones, transfer, and descendant projects                                 | list, get, create, update, delete, group_label\_\*, group_milestone\_\*, group_member\_\*, badge\_\*                 |
+| `gitlab_user`    | User information, status, SSH keys, GPG keys, emails, activity, preferences, to-do items, and instance service accounts (Enterprise) | get, current, list, ssh_keys, add_ssh_key, gpg_keys, emails, get_status, set_status, todo\_\*, list_service_accounts |
+| `gitlab_wiki`    | Wiki page management and attachments                                                                                                 | list, get, create, update, delete, upload_attachment                                                                 |
 
 ### Code & repository
 
-| Meta-tool              | Description                                                                                                                                         | Key Actions                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `gitlab_branch`        | Branch management and protection rules (including branch rule queries via GraphQL)                                                                  | list, get, create, delete, protect, unprotect, branch_rule\_\*                                |
-| `gitlab_tag`           | Tag management and protection rules with GPG signature verification                                                                                 | list, get, create, delete, protect, unprotect                                                 |
-| `gitlab_release`       | Release management and release asset links                                                                                                          | list, get, create, update, delete, link\_\*                                                   |
-| `gitlab_repository`    | Repository tree, files, commits, diffs, blame, compare (including cross-project), cherry-pick, revert, contributors, archives, changelogs, markdown | tree, file\_\*, commit\_\*, compare, blame, archive, changelog, submodule\_\*, discussion\_\* |
-| `gitlab_merge_request` | MR lifecycle, approvals, approval rules, time tracking, subscriptions, context commits, award emoji, and resource events                            | list, get, create, update, merge, rebase, approve, approval\_\*, time\_\*, event\_\*          |
+| Meta-tool              | Description                                                                                                                                         | Key Actions                                                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_branch`        | Branch management and protection rules (including branch rule queries via GraphQL)                                                                  | list, get, create, delete, protect, unprotect, rule_list                                                                   |
+| `gitlab_tag`           | Tag management and protection rules with GPG signature verification                                                                                 | list, get, create, delete, protect, unprotect, get_signature                                                               |
+| `gitlab_release`       | Release management and release asset links                                                                                                          | list, get, create, update, delete, link\_\*                                                                                |
+| `gitlab_repository`    | Repository tree, files, commits, diffs, blame, compare (including cross-project), cherry-pick, revert, contributors, archives, changelogs, markdown | tree, compare, blob, archive, changelog\_\*, file\_\*, commit\_\*, commit_discussion\_\*, list_submodules, markdown_render |
+| `gitlab_merge_request` | MR lifecycle, approvals, approval rules, time tracking, subscriptions, context commits, award emoji, and resource events                            | list, get, create, update, merge, rebase, approve, approval\_\*, time\_\*, emoji_mr\_\*, event_mr\_\*                      |
 
 ### Code review
 
-| Meta-tool          | Description                                                                | Key Actions                                                |
-| ------------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `gitlab_mr_review` | MR notes, threaded discussions, code diffs, draft notes, and diff versions | note\_\*, discussion\_\*, diff\_\*, draft\_\*, version\_\* |
+| Meta-tool          | Description                                                                | Key Actions                                                                        |
+| ------------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `gitlab_mr_review` | MR notes, threaded discussions, code diffs, draft notes, and diff versions | note\_\*, discussion\_\*, draft_note\_\*, changes_get, raw_diffs, diff_version\_\* |
 
 ### CI/CD
 
-| Meta-tool            | Description                                                                                                  | Key Actions                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `gitlab_pipeline`    | Pipeline management, resource groups, test reports, trigger tokens, pipeline bridges, and pipeline schedules | list, get, create, cancel, retry, delete, wait, schedule\_\*, trigger\_\* |
-| `gitlab_job`         | CI job management, artifacts, logs, and Kubernetes agents (force cancel supported)                           | list, get, play, cancel, retry, erase, trace, artifacts, wait, k8s\_\*    |
-| `gitlab_runner`      | CI/CD runner management, runner controllers, controller scopes, and controller tokens                        | list, get, update, remove, jobs, controller\_\*, register, verify         |
-| `gitlab_ci_variable` | CI/CD variables at instance, group, and project scope                                                        | list, get, create, update, delete (at each scope level)                   |
-| `gitlab_environment` | Environment management, protected environments, deployment freeze periods, and deployment records            | list, get, create, update, delete, stop, deployment\_\*, freeze\_\*       |
+| Meta-tool            | Description                                                                                                  | Key Actions                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `gitlab_pipeline`    | Pipeline management, resource groups, test reports, trigger tokens, pipeline bridges, and pipeline schedules | list, get, create, cancel, retry, delete, wait, schedule\_\*, trigger\_\*      |
+| `gitlab_job`         | CI job management, artifacts, logs, and the CI job token scope (force cancel supported)                      | list, get, play, cancel, retry, erase, trace, artifacts, wait, token_scope\_\* |
+| `gitlab_runner`      | CI/CD runner management, runner controllers, controller scopes, and controller tokens                        | list, get, update, remove, jobs, controller\_\*, register, verify              |
+| `gitlab_ci_variable` | CI/CD variables at instance, group, and project scope                                                        | list, get, create, update, delete (at each scope level)                        |
+| `gitlab_environment` | Environment management, protected environments, deployment freeze periods, and deployment records            | list, get, create, update, delete, stop, deployment\_\*, freeze\_\*            |
 
 ### Search & analysis
 
@@ -309,28 +309,28 @@ All tools follow a consistent naming pattern:
 
 ### Access & credentials
 
-| Meta-tool       | Description                                                                                    | Key Actions                                                             |
-| --------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `gitlab_access` | Deploy keys, deploy tokens, project access tokens, group access tokens, and access requests    | deploy_key\_\*, deploy_token\_\*, project_token\_\*, group_token\_\*    |
-| `gitlab_admin`  | Instance administration: Sidekiq, settings, license, broadcast messages, hooks, PATs, and more | sidekiq\_\*, setting\_\*, license\_\*, broadcast\_\*, hook\_\*, pat\_\* |
+| Meta-tool       | Description                                                                                         | Key Actions                                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `gitlab_access` | Deploy keys, deploy tokens, project, group and personal access tokens, access requests, and invites | deploy_key\_\*, deploy_token\_\*, token_project\_\*, token_group\_\*, token_personal\_\*, invite\_\* |
+| `gitlab_admin`  | Instance administration: Sidekiq, settings, license, broadcast messages, system hooks, and more     | sidekiq\_\*, settings\_\*, license\_\*, broadcast_message\_\*, system_hook\_\*, feature\_\*          |
 
 ### Packages & content
 
-| Meta-tool         | Description                                                                   | Key Actions                                                 |
-| ----------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `gitlab_package`  | Package registry management and generic package file upload/download          | list, get, delete, upload, download, protection_rule\_\*    |
-| `gitlab_snippet`  | Project and personal snippets with discussions, notes, and award emoji        | list, get, create, update, delete, discussion\_\*, note\_\* |
-| `gitlab_template` | Project templates (gitignores, CI YAML, Dockerfiles, licenses) and CI linting | gitignore\_\*, ci\_\*, dockerfile\_\*, license\_\*, lint    |
+| Meta-tool         | Description                                                                   | Key Actions                                                                              |
+| ----------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `gitlab_package`  | Package registry, container registry, and generic package publish/download    | list, group_list, delete, publish, download, file\_\*, registry\_\*, protection_rule\_\* |
+| `gitlab_snippet`  | Project and personal snippets with discussions, notes, and award emoji        | list, get, create, update, delete, discussion\_\*, note\_\*                              |
+| `gitlab_template` | Project templates (gitignores, CI YAML, Dockerfiles, licenses) and CI linting | gitignore\_\*, ci_yml\_\*, dockerfile\_\*, license\_\*, project_template\_\*, lint       |
 
 ### Discovery & utilities
 
-| Meta-tool               | Description                                                         | Key Actions                                      |
-| ----------------------- | ------------------------------------------------------------------- | ------------------------------------------------ |
-| `gitlab_feature_flags`  | Feature flag and feature flag user list management                  | list, get, create, update, delete, user_list\_\* |
-| `gitlab_model_registry` | ML model package file download from GitLab Model Registry           | download                                         |
-| `gitlab_ci_catalog`     | CI/CD Catalog resource discovery (reusable components, templates)   | list, get                                        |
-| `gitlab_custom_emoji`   | Group-level custom emoji management via GraphQL                     | list, get, create, delete                        |
-| `gitlab_storage_move`   | Repository storage moves for projects, snippets, and groups (admin) | retrieve\_\*, get\_\*, schedule\_\*              |
+| Meta-tool               | Description                                                         | Key Actions                         |
+| ----------------------- | ------------------------------------------------------------------- | ----------------------------------- |
+| `gitlab_feature_flags`  | Feature flag and feature flag user list management                  | feature_flag\_\*, ff_user_list\_\*  |
+| `gitlab_model_registry` | ML model package file download from GitLab Model Registry           | download                            |
+| `gitlab_ci_catalog`     | CI/CD Catalog resource discovery (reusable components, templates)   | list, get                           |
+| `gitlab_custom_emoji`   | Group-level custom emoji management via GraphQL                     | list, create, delete                |
+| `gitlab_storage_move`   | Repository storage moves for projects, snippets, and groups (admin) | retrieve\_\*, get\_\*, schedule\_\* |
 
 Five more tools are registered alongside the dispatchers. They take their parameters directly, with no `action` envelope, and keep the same names in individual mode:
 
@@ -348,11 +348,15 @@ A `gitlab_server` dispatcher is registered alongside these and is not counted in
 
 ## Enterprise-only tools
 
-When the Enterprise/Premium catalog is enabled, the server registers {stats.meta.self_managed_enterprise - stats.meta.base} additional self-managed meta-tools for GitLab Premium and Ultimate features:
+When the resolved tier is Premium or Ultimate, the server registers up to {stats.meta.self_managed_enterprise - stats.meta.base} additional self-managed meta-tools for GitLab Premium and Ultimate features. Six arrive with Premium:
 
-`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`, `gitlab_security_scan_profile`
+`gitlab_audit_event`, `gitlab_enterprise_user`, `gitlab_geo`, `gitlab_group_scim`, `gitlab_merge_train`, `gitlab_project_alias`
 
-On GitLab.com Enterprise/Premium, the catalog also registers `gitlab_orbit` with six read-only Knowledge Graph actions: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`.
+Eleven more arrive with Ultimate:
+
+`gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_dependency`, `gitlab_dora_metrics`, `gitlab_external_status_check`, `gitlab_member_role`, `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`, `gitlab_security_scan_profile`, `gitlab_vulnerability`
+
+On GitLab.com with a Premium or Ultimate tier, the catalog also registers `gitlab_orbit` with six read-only Knowledge Graph actions: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`.
 
 :::note
 Enterprise tools require a GitLab Premium or Ultimate license on your instance. Forcing the Enterprise/Premium catalog on a Community Edition instance will register the tools but API calls will return permission errors.
@@ -364,7 +368,7 @@ Enterprise tools require a GitLab Premium or Ultimate license on your instance. 
 
 - [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) — detailed meta-tool architecture and usage
 - [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) — low-token search/describe/execute mode
-- [Orbit](/gitlab-mcp-server/tools/orbit/) — GitLab.com Enterprise/Premium Knowledge Graph tools
+- [Orbit](/gitlab-mcp-server/tools/orbit/) — GitLab.com Premium/Ultimate Knowledge Graph tools
 - [Resources & Prompts](/gitlab-mcp-server/tools/resources-prompts/) — read-only context and prompt templates
 
 ## External references

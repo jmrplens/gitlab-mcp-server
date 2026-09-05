@@ -261,22 +261,27 @@ Más allá de ejecutar el servidor en pipelines, GitLab MCP Server proporciona h
 
 ### Pipelines
 
-El dominio `pipeline` gestiona el ciclo de vida completo de los pipelines. Sus acciones son IDs `pipeline.<acción>` para `gitlab_execute_action` en la superficie dinámica predeterminada y los valores de `action` de la meta-herramienta `gitlab_pipeline` con `GITLAB_MCP_TOOL_SURFACE=meta`:
+El dominio `pipeline` gestiona el ciclo de vida completo de los pipelines. Sus acciones son IDs `pipeline.<acción>` para `gitlab_execute_action` en la superficie dinámica predeterminada (las acciones de programaciones llevan `pipeline_schedule.` en su lugar, como se indica más abajo) y los valores de `action` de la meta-herramienta `gitlab_pipeline` con `GITLAB_MCP_TOOL_SURFACE=meta`:
 
-| Acción                | Descripción                                                                                         |
-| --------------------- | --------------------------------------------------------------------------------------------------- |
-| `list`                | Listar pipelines con filtrado por estado, ref                                                       |
-| `get`                 | Obtener detalles y estado del pipeline                                                              |
-| `create`              | Disparar un nuevo pipeline con variables                                                            |
-| `cancel`              | Cancelar un pipeline en ejecución                                                                   |
-| `retry`               | Reintentar un pipeline fallido                                                                      |
-| `delete`              | Eliminar un pipeline                                                                                |
-| `variables`           | Listar variables del pipeline                                                                       |
-| `test_report`         | Obtener el informe de tests de un pipeline                                                          |
-| `wait`                | **Esperar a la finalización** del pipeline con polling                                              |
-| `schedule_*`          | CRUD de programaciones (list, get, create, edit, delete, run, take_ownership)                       |
-| `schedule_*_variable` | CRUD de variables de programación (list_variables, create_variable, edit_variable, delete_variable) |
-| `trigger_*`           | Gestión de tokens de trigger (list, get, create, update, delete)                                    |
+| Acción                | Descripción                                                                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list`                | Listar pipelines con filtrado por estado, ref                                                                                                                                 |
+| `get`                 | Obtener detalles y estado del pipeline                                                                                                                                        |
+| `create`              | Disparar un nuevo pipeline con variables                                                                                                                                      |
+| `cancel`              | Cancelar un pipeline en ejecución                                                                                                                                             |
+| `retry`               | Reintentar un pipeline fallido                                                                                                                                                |
+| `delete`              | Eliminar un pipeline                                                                                                                                                          |
+| `variables`           | Listar variables del pipeline                                                                                                                                                 |
+| `test_report`         | Obtener el informe de tests de un pipeline                                                                                                                                    |
+| `wait`                | **Esperar a la finalización** del pipeline con polling                                                                                                                        |
+| `latest`              | Obtener el último pipeline de una ref                                                                                                                                         |
+| `test_report_summary` | Obtener el resumen del informe de tests de un pipeline                                                                                                                        |
+| `update_metadata`     | Actualizar los metadatos de un pipeline (nombre)                                                                                                                              |
+| `trigger_*`           | Gestión de tokens de trigger de pipeline (list, get, create, update, delete, run)                                                                                             |
+| `schedule_*`          | CRUD de programaciones de pipeline (list, get, create, update, delete, run, take ownership, list triggered pipelines); prefijo `pipeline_schedule.` en la superficie dinámica |
+| `schedule_*_variable` | CRUD de variables de programación (create, edit, delete); mismo prefijo en la superficie dinámica                                                                             |
+
+Las filas de programaciones pertenecen al dominio `pipeline_schedule`, así que en la superficie dinámica sus IDs se leen `pipeline_schedule.schedule_list`, `pipeline_schedule.schedule_run`, `pipeline_schedule.schedule_take_ownership`, `pipeline_schedule.schedule_list_triggered_pipelines`, `pipeline_schedule.schedule_create_variable`, `pipeline_schedule.schedule_edit_variable`, etc.; en la superficie meta son valores de `action` de `gitlab_pipeline` como el resto de la tabla.
 
 :::tip[Esperar pipeline]
 La acción `wait` consulta un pipeline hasta que alcanza un estado terminal (success, failed, canceled). Esto es especialmente útil en scripts CI que necesitan bloquearse hasta que un pipeline disparado termine.
@@ -286,18 +291,25 @@ La acción `wait` consulta un pipeline hasta que alcanza un estado terminal (suc
 
 El dominio `job` proporciona gestión completa de jobs. Sus acciones son IDs `job.<acción>` para `gitlab_execute_action` en la superficie dinámica predeterminada y los valores de `action` de la meta-herramienta `gitlab_job` con `GITLAB_MCP_TOOL_SURFACE=meta`:
 
-| Acción              | Descripción                                       |
-| ------------------- | ------------------------------------------------- |
-| `list`              | Listar jobs de un pipeline                        |
-| `get`               | Obtener detalles del job                          |
-| `play`              | Ejecutar un job manual                            |
-| `cancel`            | Cancelar un job en ejecución                      |
-| `retry`             | Reintentar un job fallido                         |
-| `trace`             | Obtener la salida del log del job                 |
-| `artifacts`         | Listar artefactos del job                         |
-| `download_artifact` | Descargar un artefacto específico                 |
-| `delete_artifacts`  | Eliminar artefactos del job                       |
-| `wait`              | **Esperar a la finalización** del job con polling |
+| Acción               | Descripción                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `list`               | Listar jobs de un pipeline                                                                         |
+| `get`                | Obtener detalles del job                                                                           |
+| `play`               | Ejecutar un job manual                                                                             |
+| `cancel`             | Cancelar un job en ejecución                                                                       |
+| `retry`              | Reintentar un job fallido                                                                          |
+| `trace`              | Obtener la salida del log del job                                                                  |
+| `artifacts`          | Listar artefactos del job                                                                          |
+| `download_artifacts` | Descargar el archivo de artefactos de un job                                                       |
+| `download_single_*`  | Descargar un único fichero de los artefactos de un job, por ID de job o por ref y nombre de job    |
+| `keep_artifacts`     | Conservar los artefactos más allá de su caducidad                                                  |
+| `delete_artifacts`   | Eliminar los artefactos de un job (una variante a nivel de proyecto elimina los de todos los jobs) |
+| `erase`              | Borrar el log y los artefactos de un job                                                           |
+| `list_project`       | Listar jobs de todo un proyecto                                                                    |
+| `list_bridges`       | Listar los jobs de trigger (bridge) de un pipeline                                                 |
+| `wait`               | **Esperar a la finalización** del job con polling                                                  |
+
+Las dos descargas de un único fichero son `job.download_single_artifact` (por ID de job) y `job.download_single_artifact_by_ref` (por ref y nombre de job); la eliminación a nivel de proyecto es `job.delete_project_artifacts`.
 
 ### Configuración CI/CD
 
@@ -357,5 +369,5 @@ Para la referencia completa de herramientas, consulta [Resumen de herramientas](
 ## Referencia de la fuente
 
 :::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/ci-cd.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/ci-cd.md) en el repositorio.
+Para la referencia técnica completa, consulta [`docs/guides/ci-cd.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/ci-cd.md) en el repositorio.
 :::

@@ -309,7 +309,7 @@ Checking the download against `checksums.txt` and its Cosign signature, upgradin
 
 There is no setup wizard. MCP configuration belongs in your client's own JSON file, which is what [Manual configuration](#manual-configuration) below documents, and a wizard writing a dotfile on one machine could not put it there.
 
-Running the binary in a terminal with neither `GITLAB_TOKEN` nor `GITLAB_URL` set, or double-clicking it, prints what the server is, the two values it needs, and where the per-client JSON is documented, then waits for Enter so a double-clicked window on Windows does not close before you can read it. An MCP client never sees that screen: a client connects pipes rather than a terminal, so the server starts normally.
+Running the binary in a terminal without both `GITLAB_TOKEN` and `GITLAB_URL` set (either one missing is enough), or double-clicking it, prints what the server is, the two values it needs, and where the per-client JSON is documented, then waits for Enter so a double-clicked window on Windows does not close before you can read it. An MCP client never sees that screen: a client connects pipes rather than a terminal, so the server starts normally.
 
 :::tip[Keeping the token out of client JSON]
 This is the file every registration command on this page writes to. The server reads `~/.gitlab-mcp-server.env` for values it does not already have in its environment, one `KEY=value` per line, so nothing needs an `env` block in the client configuration:
@@ -706,26 +706,8 @@ You do not need to set anything to get the two-tool catalog: dynamic is the defa
 
 Meta-tools cut the visible tool count by more than 95% compared with individual tools, and the tool-schema tokens by roughly three quarters, while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
 
-Pair dynamic mode with `GITLAB_MCP_CAPABILITY_SURFACE=minimal` to keep only workspace roots plus `gitlab://tools`, and omit optional resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
+Pair dynamic mode with `GITLAB_MCP_CAPABILITY_SURFACE=minimal` to keep only the `gitlab://tools` manifest (and its `gitlab://tools/{id}` template), and omit optional resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
 :::
-
-## Common setup questions
-
-### What GitLab token scope does GitLab MCP Server need?
-
-GitLab MCP Server needs a Personal Access Token with the **`api`** scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the **`read_api`** scope and set `GITLAB_READ_ONLY=true`, which disables every mutating tool. Create tokens under **GitLab → Preferences → Access Tokens**.
-
-### How do I connect to a self-managed GitLab instance?
-
-Point `GITLAB_URL` at your instance, for example `GITLAB_URL=https://gitlab.example.com`. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only for self-managed Community or Enterprise Edition instances. If the instance uses a self-signed or internal CA certificate, also set `GITLAB_SKIP_TLS_VERIFY=true` to bypass certificate verification on a trusted network.
-
-### Which tool mode does GitLab MCP Server use by default?
-
-By default GitLab MCP Server runs in **dynamic mode**, which exposes only two tools — `gitlab_find_action` and `gitlab_execute_action` — to keep the AI client's context small while still reaching every GitLab operation. Set `GITLAB_MCP_TOOL_SURFACE=meta` for consolidated domain-level meta-tools, or `GITLAB_MCP_TOOL_SURFACE=individual` for one tool per operation.
-
-### Why does my AI client fail to connect?
-
-A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that `GITLAB_URL` is correct and reachable from your machine, that the token carries the `api` scope (or `read_api` in read-only mode) and has not expired, and that self-signed certificates are handled by setting `GITLAB_SKIP_TLS_VERIFY=true`.
 
 ## Next steps
 

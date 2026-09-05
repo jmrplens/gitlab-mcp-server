@@ -27,9 +27,9 @@ ajustes que de verdad mueven esas cifras.
 - **La primera llamada de cada credencial paga el registro**, y son segundos,
   no milisegundos. Ninguna llamada posterior vuelve a pagarlo, aunque en
   `individual` un `tools/list` en caliente sigue tardando segundos por sí solo.
-- **La superficie de herramientas apenas cambia la memoria y cambia por
-  completo las respuestas**: un `tools/list` ocupa 12 KB en `dynamic` y 3,1 MB
-  en `individual`.
+- **La superficie de herramientas cambia las respuestas mucho más que la
+  memoria**: por credencial la diferencia es de un factor de dos, mientras que
+  un `tools/list` ocupa 12 KB en `dynamic` y 3,1 MB en `individual`.
 
 </Aside>
 
@@ -139,7 +139,7 @@ por cada uno.
 **HTTP.** Parte de unos 40 MiB para un proceso que no atiende a nadie y suma
 un catálogo por cada token distinto. Medido por credencial adicional: 35 MiB
 en `meta`, 36 MiB en `individual` y 71 MiB en `dynamic`. El pico de memoria
-residente con ocho credenciales llamando a la vez llegó a entre 599 MiB y 1,16
+residente con ocho credenciales llamando a la vez llegó a entre 599 MiB y 1,14
 GiB según la superficie.
 
 Una regla práctica para HTTP: **reserva unos 100 MiB por credencial que

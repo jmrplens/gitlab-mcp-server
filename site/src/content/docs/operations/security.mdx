@@ -132,6 +132,8 @@ GITLAB_SKIP_TLS_VERIFY=true
 Disabling TLS verification removes protection against man-in-the-middle attacks. Only use this for development environments with self-signed certificates. Never disable TLS verification in production.
 :::
 
+In HTTP mode, `--auth-mode=oauth` refuses `--skip-tls-verify` for a non-loopback instance: bearer tokens are forwarded to that instance on every call, and an unverified certificate would let any host answering its address collect them. Install the CA in the system trust store, or point `SSL_CERT_FILE` at a CA bundle, instead.
+
 ## Read-only mode
 
 Enable read-only mode to prevent any mutating operations:
@@ -184,15 +186,15 @@ Authorization: Bearer <gitlab-personal-access-token>
 
 The server maintains a **bounded LRU pool** of client sessions:
 
-- Each token gets its own isolated MCP server instance
+- Each token and GitLab URL pair gets its own isolated MCP server instance
 - Sessions are independent — one user cannot access another's context
-- Idle sessions expire after `--session-timeout` (default: 30 minutes)
-- Maximum concurrent sessions controlled by `--max-http-clients` (default: 100)
+- Idle sessions expire after `--session-timeout` (default: 30 minutes) under `--stateless=false`; the default stateless transport ends each POST's session with its response
+- Pooled entries are bounded by `--max-http-clients` (default: 100), which caps token+URL entries rather than sessions or concurrent requests
 
 ### HTTP mode recommendations
 
 - Terminate TLS on a reverse proxy, or on the server itself with `--tls-cert`/`--tls-key`; when the proxy shares the machine, `--http-addr=/run/…/server.sock` removes the hop rather than encrypting it
-- Configure `--trusted-proxy-header` to match the header your proxy sets (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) together with `--trusted-proxies`, the addresses or CIDR ranges the proxy connects from, so the built-in rate limiter sees real client IPs. **The header is believed only on a connection from a listed address**; from any other peer it is ignored and the peer itself is charged, so a client that reaches the listener directly cannot choose the address its failures count against. One flag without the other refuses startup. For `X-Forwarded-For`, the server reads from the right, skipping hops that are themselves listed, and charges the first that is not; a hop that is not an address charges the peer.
+- Configure `--trusted-proxy-header` to match the header your proxy sets (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) together with `--trusted-proxies`, the addresses or CIDR ranges the proxy connects from, so the authentication-failure limiter (ten failures per address per minute, answered with `429`) charges real client addresses rather than the proxy's; the per-call rate limiter is keyed by token and needs no address. **The header is believed only on a connection from a listed address**; from any other peer it is ignored and the peer itself is charged, so a client that reaches the listener directly cannot choose the address its failures count against. One flag without the other refuses startup. For `X-Forwarded-For`, the server reads from the right, skipping hops that are themselves listed, and charges the first that is not; a hop that is not an address charges the peer.
 - Enable rate limiting at the proxy level
 - Restrict access to trusted networks
 - Monitor session metrics for unusual patterns
@@ -333,7 +335,7 @@ A useful report includes the affected version (`gitlab-mcp-server --version`), t
 ### HTTP mode
 
 - ☐ Terminate TLS — reverse proxy, `--tls-cert`/`--tls-key`, or a unix socket to a same-host proxy
-- ☐ Configure `--trusted-proxy-header` and `--trusted-proxies` for accurate rate limiting
+- ☐ Configure `--trusted-proxy-header` and `--trusted-proxies` so authentication failures are charged to real client addresses
 - ☐ Configure appropriate `--session-timeout` and `--max-http-clients`
 - ☐ Enable rate limiting
 - ☐ Restrict network access to trusted clients
@@ -356,5 +358,5 @@ A useful report includes the affected version (`gitlab-mcp-server --version`), t
 ## Source reference
 
 :::note[Developer Documentation]
-For the complete technical reference, see [`docs/security.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/security.md) in the repository.
+For the complete technical reference, see [`docs/concepts/security.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/security.md) in the repository.
 :::

@@ -4,7 +4,7 @@ description: "Issue management examples with GitLab MCP Server — triage, assig
 datePublished: "2026-04-23"
 faq:
   - q: "How do I triage GitLab issues with an AI assistant?"
-    a: "Ask your assistant to list the open issues you care about, then to assign, label, and link them. A typical triage loop is four calls: `issue.list` (filtered by `state: opened` and a label) to see the backlog, `issue.update` to set `assignee_ids`, `labels`, and `milestone_id`, `issue.link_create` to record dependencies, and `issue.update` again with `state_event: close` once resolved. On the default dynamic surface these are `gitlab_execute_action` actions, discoverable through `gitlab_find_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` they are the `gitlab_issue` meta-tool's `list`, `update`, and `link_create` actions."
+    a: "Ask your assistant to list the open issues you care about, then to assign, label, and link them. A typical triage loop is four calls: `issue.list` (filtered by `state: opened` and a `labels` array) to see the backlog, `issue.update` to set `assignee_ids`, `add_labels`, and `milestone_id`, `issue.link_create` (with `target_project_id` and `target_issue_iid`) to record dependencies, and `issue.update` again with `state_event: close` once resolved. On the default dynamic surface these are `gitlab_execute_action` actions, discoverable through `gitlab_find_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` they are the `gitlab_issue` meta-tool's `list`, `update`, and `link_create` actions."
   - q: "What is the difference between relates_to, blocks, and is_blocked_by?"
     a: "They are the three `link_type` values accepted by `issue.link_create` (`gitlab_issue` with `action: link_create` on the meta surface). `relates_to` is a symmetric, non-blocking association — neither issue gates the other. `blocks` means the source issue must be resolved before the target can proceed. `is_blocked_by` is the inverse direction of the same relationship, so creating a `blocks` link from #300 to #400 is what makes #400 report `is_blocked_by` #300. Listing links with `issue.link_list` returns the relationship type alongside each linked issue."
   - q: "Can an AI assistant close a GitLab issue for me?"
@@ -60,7 +60,7 @@ flowchart LR
 
 ```text
 issue.list → project_id: "my-group/backend",
-  state: "opened", labels: "bug"
+  state: "opened", labels: ["bug"]
 ```
 
 Returns: issue titles, authors, labels, milestones, assignees, and creation dates.
@@ -71,7 +71,7 @@ Returns: issue titles, authors, labels, milestones, assignees, and creation date
 
 ```text
 issue.update → project_id: "my-group/backend",
-  issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend"
+  issue_iid: 123, assignee_ids: [45], add_labels: ["priority::high", "team::backend"]
 ```
 
 ### Bulk triage by milestone
@@ -114,7 +114,7 @@ Model relationships between issues so dependencies are explicit. Mark issues as 
 
 ```text
 issue.link_create → project_id: "my-group/backend",
-  issue_iid: 100, target_issue_iid: 200, link_type: "relates_to"
+  issue_iid: 100, target_project_id: "my-group/backend", target_issue_iid: "200", link_type: "relates_to"
 ```
 
 ### Create blocking relationships
@@ -123,8 +123,10 @@ issue.link_create → project_id: "my-group/backend",
 
 ```text
 issue.link_create → project_id: "my-group/backend",
-  issue_iid: 300, target_issue_iid: 400, link_type: "blocks"
+  issue_iid: 300, target_project_id: "my-group/backend", target_issue_iid: "400", link_type: "blocks"
 ```
+
+`target_project_id` is required even when both issues live in the same project, because a link may cross projects.
 
 ### View issue links
 
@@ -169,7 +171,7 @@ project.label_create → project_id: "my-group/backend",
 project.milestone_get → project_id: "my-group/backend", milestone_iid: 15
 ```
 
-Returns: completion percentage, open/closed issue counts, start date, due date, and remaining days.
+Returns: title, state, start date, due date, whether it has expired, and the milestone's web URL; `project.milestone_issues` lists the issues still open in it.
 
 ---
 
@@ -226,7 +228,7 @@ Returns: matching issues across all accessible projects with titles, description
 
 ```text
 issue.list_group → group_id: "platform",
-  state: "opened", labels: "security"
+  state: "opened", labels: ["security"]
 ```
 
 Returns: security-related issues across all projects in the group.
@@ -237,14 +239,14 @@ On the default dynamic surface the assistant discovers the issue action and its 
 
 ```text
 gitlab_find_action → query: "open issues with a label"
-gitlab_execute_action → action: "issue.list", params: { project_id: "my-group/backend", state: "opened", labels: "bug" }
+gitlab_execute_action → action: "issue.list", params: { project_id: "my-group/backend", state: "opened", labels: ["bug"] }
 ```
 
 Assigning, labeling and linking follow the same shape:
 
 ```text
-gitlab_execute_action → action: "issue.update", params: { project_id: "my-group/backend", issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend" }
-gitlab_execute_action → action: "issue.link_create", params: { project_id: "my-group/backend", issue_iid: 300, target_issue_iid: 400, link_type: "blocks" }
+gitlab_execute_action → action: "issue.update", params: { project_id: "my-group/backend", issue_iid: 123, assignee_ids: [45], add_labels: ["priority::high", "team::backend"] }
+gitlab_execute_action → action: "issue.link_create", params: { project_id: "my-group/backend", issue_iid: 300, target_project_id: "my-group/backend", target_issue_iid: "400", link_type: "blocks" }
 ```
 
 With `GITLAB_MCP_TOOL_SURFACE=meta` the same calls go to the `gitlab_issue` meta-tool with `action: list`, `action: update` and `action: link_create`, each with the parameters nested under `params`.

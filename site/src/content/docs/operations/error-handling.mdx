@@ -8,7 +8,7 @@ faq:
   - q: "Which error wrapping function is used for which operation?"
     a: "Read-only operations (`list`, `get`, `search`) use `WrapErr`. Mutating operations (`create`, `update`, `delete`) use `WrapErrWithMessage`, which includes the specific detail extracted from the GitLab response. When a corrective action is known, `WrapErrWithHint` appends a suggestion, and `WrapErrWithStatusHint` scopes that hint to a single HTTP status code. A `get` operation returning 404 uses `NotFoundResult` instead of returning an error."
   - q: "Why does a 404 not appear as an error?"
-    a: "For `get` handlers, 404 responses are treated as **informational** rather than failures. Instead of returning an opaque Go error logged at ERROR level, the handler returns a `CallToolResult` with `IsError: true` and domain-specific hints, logged at INFO level. This `NotFoundResult` pattern is applied to all 27 get handlers across 21 domains and gives the AI assistant actionable next steps, such as listing available resources or checking the resource name."
+    a: "For `get` handlers, 404 responses are treated as **informational** rather than failures. Instead of returning an opaque Go error logged at ERROR level, the handler returns a `CallToolResult` with `IsError: true` and domain-specific hints, logged at INFO level. This `NotFoundResult` pattern is applied through a shared formatter in each of 19 domains and gives the AI assistant actionable next steps, such as listing available resources or checking the resource name."
   - q: "Should the AI assistant retry a failed operation?"
     a: "It depends on whether the error is **transient** or **permanent**. Transient errors — 429, 5xx, timeouts, and connection refused — are safe to retry after a delay. Permanent errors — 4xx except 429 — indicate a problem with the request itself, so retrying produces the same result. For permanent errors, fix the input parameters or configuration instead of retrying."
 ---
@@ -22,18 +22,19 @@ GitLab MCP Server provides structured error handling that classifies errors, ext
 
 Every error from the GitLab API is classified by HTTP status code into an actionable message:
 
-| Status Code | Classification | Message                                                  |
-| ----------- | -------------- | -------------------------------------------------------- |
-| 400         | Bad request    | Check your input parameters                              |
-| 401         | Authentication | `GITLAB_TOKEN` may be invalid or expired                 |
-| 403         | Permissions    | Your token lacks the required permissions                |
-| 404         | Not found      | The resource does not exist or you lack access           |
-| 409         | Conflict       | The resource already exists or there is a state conflict |
-| 422         | Validation     | GitLab rejected the request due to invalid data          |
-| 429         | Rate limit     | Too many requests — wait before retrying                 |
-| 500         | Server error   | GitLab internal server error                             |
-| 502         | Bad gateway    | GitLab is temporarily unavailable                        |
-| 503         | Maintenance    | GitLab is under maintenance or overloaded                |
+| Status Code | Classification | Message                                                   |
+| ----------- | -------------- | --------------------------------------------------------- |
+| 400         | Bad request    | Check your input parameters                               |
+| 401         | Authentication | `GITLAB_TOKEN` may be invalid or expired                  |
+| 403         | Permissions    | Your token lacks the required permissions                 |
+| 404         | Not found      | Missing, inaccessible, or above your GitLab tier          |
+| 405         | Not allowed    | The action does not apply to the resource's current state |
+| 409         | Conflict       | The resource already exists or there is a state conflict  |
+| 422         | Validation     | GitLab rejected the request due to invalid data           |
+| 429         | Rate limit     | Too many requests — wait before retrying                  |
+| 500         | Server error   | GitLab internal server error                              |
+| 502         | Bad gateway    | GitLab is temporarily unavailable                         |
+| 503         | Maintenance    | GitLab is under maintenance or overloaded                 |
 
 Network-level errors are also classified:
 
@@ -122,43 +123,34 @@ Branch `feature/old` was not found in the project.
 - Check branch name spelling and case sensitivity
 ```
 
-This pattern is applied to all 27 get handlers across 21 domains. It logs at INFO level (expected outcome) and provides the AI assistant with actionable next steps.
+This pattern is applied through a shared formatter in each of 19 domains, so every get handler of a domain answers the same way. It logs at INFO level (expected outcome) and provides the AI assistant with actionable next steps.
 
-## Validation hints
+## Corrective hints
 
-For **422 validation errors**, the server automatically enriches the error with guidance based on pattern matching. Over 15 common patterns are recognized, including:
-
-- Missing required fields
-- Invalid date formats
-- Name/title length limits
-- Duplicate resource names
-- Invalid enum values
-
-These hints help the AI assistant correct its request without additional API calls.
+Where the fix for an error is known, the handler attaches it at the call site: `WrapErrWithStatusHint` appends the hint only when the response carries one HTTP status (a `422` validation failure, a `404`, a `409`), falling back to `WrapErrWithMessage` for every other status, and `WrapErrWithHint` always appends it, which is what GraphQL errors need since they carry no status code. The suggestion travels in the error text as `Suggestion: ...`, so the AI assistant can correct its request without additional API calls.
 
 ## Error response format
 
-When a tool encounters an error, the response is formatted as a Markdown block with structured diagnostic fields:
+When a handler answers with an error result rather than a Go error, the response is a Markdown block with structured diagnostic fields:
 
 ```markdown
-## ❌ Error: list_branches
+## ❌ Error: branch/list
 
-**Status**: 401 Unauthorized
-**Detail**: authentication failed — GITLAB_TOKEN may be invalid or expired
-**Request ID**: abc123def456
-
-💡 **Suggestion**: Check that your token is valid and has the `api` scope.
+**Message**: authentication failed: GITLAB_TOKEN may be invalid or expired
+**HTTP Status**: 401 (authentication failed: GITLAB_TOKEN may be invalid or expired)
+**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 (401 Unauthorized)
+**Request ID**: `abc123def456`
 ```
 
 The structured response includes:
 
-| Field          | Description                                 |
-| -------------- | ------------------------------------------- |
-| **Operation**  | The tool action that failed                 |
-| **Status**     | HTTP status code and classification         |
-| **Detail**     | Specific error message from GitLab          |
-| **Request ID** | GitLab's `X-Request-Id` for support tickets |
-| **Suggestion** | Actionable hint (when available)            |
+| Field           | Description                                                     |
+| --------------- | --------------------------------------------------------------- |
+| **Heading**     | The domain and action that failed                               |
+| **Message**     | The classified error message                                    |
+| **HTTP Status** | GitLab's status code and its classification, when there was one |
+| **Details**     | The request line and the message GitLab returned, when present  |
+| **Request ID**  | GitLab's `X-Request-Id` for support tickets                     |
 
 ## Transient vs permanent errors
 
@@ -209,5 +201,5 @@ Detail: 403 Forbidden
 ## Source reference
 
 :::note[Developer Documentation]
-For the complete technical reference, see [`docs/error-handling.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/error-handling.md) in the repository.
+For the complete technical reference, see [`docs/concepts/error-handling.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/error-handling.md) in the repository.
 :::

@@ -80,7 +80,7 @@ Returns: pipeline IDs, branches, failure reasons, and durations.
 **Prompt**: "Show me the failed jobs in pipeline #45892"
 
 ```text
-job.list → project_id: "my-group/backend", pipeline_id: 45892, scope: "failed"
+job.list → project_id: "my-group/backend", pipeline_id: 45892, scope: ["failed"]
 ```
 
 Returns: job names, stages, failure messages, and runner info.
@@ -109,7 +109,7 @@ Configure the environment your pipelines run in by listing, creating, and scopin
 ci_variable.list → project_id: "my-group/backend"
 ```
 
-Returns: variable keys, protection status, masking status, and environment scopes. Values are masked for security.
+Returns: variable keys, values, protection status, masking status, and environment scopes. The value comes back as GitLab returns it to the token, so treat the output as sensitive.
 
 ### Add a deployment variable
 
@@ -210,25 +210,25 @@ Measure delivery performance with the four DORA metrics — deployment frequency
 
 ### Project performance
 
-**Prompt**: "Show me DORA metrics for the backend project over the last 30 days"
+**Prompt**: "Show me the deployment frequency for the backend project over January"
 
 ```text
 dora_metrics.project → project_id: "my-group/backend",
-  metric: "all", start_date: "2024-01-01", end_date: "2024-01-31"
+  metric: "deployment_frequency", start_date: "2024-01-01", end_date: "2024-01-31"
 ```
 
-Returns: deployment frequency, lead time for changes, time to restore service, and change failure rate.
+Returns: one series of daily values for the requested metric. `metric` is required and takes one of `deployment_frequency`, `lead_time_for_changes`, `time_to_restore_service` or `change_failure_rate`, so the four metrics are four calls.
 
 ### Group-level metrics
 
-**Prompt**: "Compare DORA metrics across all projects in the platform group"
+**Prompt**: "Compare the monthly change failure rate across all projects in the platform group"
 
 ```text
 dora_metrics.group → group_id: "platform",
-  metric: "all", interval: "monthly"
+  metric: "change_failure_rate", interval: "monthly"
 ```
 
-Returns: aggregated metrics for the entire group, useful for engineering leadership dashboards.
+Returns: the metric aggregated for the entire group per interval, useful for engineering leadership dashboards.
 
 ## Dynamic-first CI/CD calls
 

@@ -54,12 +54,14 @@ sequenceDiagram
     participant GL as GitLab API
 
     User->>AI: "Show open MRs in my-project"
-    AI->>MCP: tools/call: gitlab_merge_request {action: list, project_id: "my-project"}
+    AI->>MCP: tools/call: gitlab_execute_action {action: "merge_request.list", params: {project_id: "my-project", state: "opened"}}
     MCP->>GL: GET /api/v4/projects/my-project/merge_requests?state=opened
     GL-->>MCP: 200 OK [{id: 1, title: "..."}]
     MCP-->>AI: {content: [structured JSON + markdown]}
     AI-->>User: "Found 3 open merge requests..."
 ```
+
+The call above is the default dynamic surface; with `GITLAB_MCP_TOOL_SURFACE=meta` the same request is `gitlab_merge_request` with `{action: "list", params: {...}}`.
 
 **Characteristics:**
 
@@ -106,9 +108,12 @@ Start HTTP mode with:
 
 ```bash
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
-# Or without --gitlab-url (clients send GITLAB-URL header per-request)
-./gitlab-mcp-server --http --http-addr=0.0.0.0:8080
+# Or, for a single-user local deployment only, let each request name its own
+# instance in the GITLAB-URL header (the server refuses to start with neither flag)
+./gitlab-mcp-server --http --http-addr=127.0.0.1:8080 --allow-any-gitlab-url
 ```
+
+`--gitlab-url` is required in HTTP mode unless `--allow-any-gitlab-url` is passed. It can be repeated to publish several instances, in which case the `GITLAB-URL` header selects among them and is required.
 
 See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for detailed configuration.
 
@@ -128,16 +133,16 @@ Because all surfaces share the same catalog entry, schemas, read-only filtering,
 
 ### Tier-gating
 
-Catalog entries are also tier-aware: each action and input/output schema is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it. At startup the server resolves the active tier (`GITLAB_TIER` / `--tier`, or auto-detection via `GET /license`) and calls `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`) to drop premium/ultimate-only actions and to prune per-field schema entries that are gated by edition. This keeps meta-tools, individual tools, and the dynamic surface consistent: a Premium-only action is hidden everywhere once the tier resolves to `free`.
+Catalog entries are also tier-aware: each action and input/output schema is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it. When a server is built (at startup in stdio mode, per token+URL pool entry in HTTP mode) the tier is resolved (`GITLAB_TIER` / `--tier`, or auto-detection via `GET /license`, falling back to `free`), the catalog filter drops premium/ultimate-only actions above it, and `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`) prunes the per-field schema entries that are gated by edition. This keeps meta-tools, individual tools, and the dynamic surface consistent: a Premium-only action is hidden everywhere once the tier resolves to `free`.
 
 ```mermaid
 graph LR
-    catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Enterprise"]
-    catalog --> individual["Individual tools<br/>gitlab_issue_list, gitlab_project_create, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Enterprise"]
-    catalog --> dynamic["Dynamic tools<br/>gitlab_find_action + gitlab_execute_action<br/>+ orbit.* domain IDs on GitLab.com Enterprise"]
+    catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Premium/Ultimate"]
+    catalog --> individual["Individual tools<br/>gitlab_issue_list, gitlab_project_create, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Premium/Ultimate"]
+    catalog --> dynamic["Dynamic tools<br/>gitlab_find_action + gitlab_execute_action<br/>+ orbit.* domain IDs on GitLab.com Premium/Ultimate"]
 ```
 
-Orbit is projected through the same catalog as every other domain: in meta mode it appears as the `gitlab_orbit` meta-tool with six actions; in individual mode it appears as six `gitlab_orbit_*` tools; in dynamic mode its actions are discoverable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query`, and `orbit.graph_status` through `gitlab_find_action`/`gitlab_execute_action`.
+Orbit is projected through the same catalog as every other domain, gated to a `https://gitlab.com` connection on the Premium or Ultimate tier: in meta mode it appears as the `gitlab_orbit` meta-tool with six actions; in individual mode it appears as six `gitlab_orbit_*` tools; in dynamic mode its actions are discoverable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query`, and `orbit.graph_status` through `gitlab_find_action`/`gitlab_execute_action`.
 
 ### Dynamic toolset (default)
 
@@ -157,7 +162,7 @@ Dynamic mode is the default low-token surface and is documented in [Dynamic tool
 
 ### Meta-tool mode
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add Enterprise/Premium tools for {stats.meta.self_managed_enterprise} total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for {stats.meta.gitlab_com} total. Each meta-tool groups related operations:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} domain-level meta-tools** instead of the individual catalog. The Premium tier adds 6 meta-tools for 38 total, Ultimate 11 more for {stats.meta.self_managed_enterprise} total on a self-managed instance, and GitLab.com on Premium or Ultimate adds `gitlab_orbit` (GitLab.com's Knowledge Graph feature) for {stats.meta.gitlab_com} total. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD
@@ -166,9 +171,9 @@ graph TD
     A --> D[create]
     A --> E[update]
     A --> F[delete]
-    A --> G[add_watcher]
-    A --> H[bulk_update]
-    A --> I[wizard_create]
+    A --> G[move]
+    A --> H[subscribe]
+    A --> I[note_create]
 ```
 
 The AI sends an `action` parameter to select the operation and nests the operation's own parameters under `params` (meta-tools accept only those two top-level keys):
@@ -181,7 +186,7 @@ The AI sends an `action` parameter to select the operation and nests the operati
     "params": {
       "project_id": "my-org/backend",
       "title": "Fix N+1 query in /users",
-      "labels": "bug,performance"
+      "labels": ["bug", "performance"]
     }
   }
 }
@@ -204,6 +209,7 @@ Interactive creation flows that collect user input step-by-step:
 - **Project creation wizard** — guided project setup
 - **Issue creation wizard** — structured issue filing
 - **Merge request wizard** — assisted MR creation
+- **Release creation wizard**: tag, name and notes, then confirmation
 
 Requires the AI client to support MCP elicitation capability.
 
@@ -211,10 +217,10 @@ Requires the AI client to support MCP elicitation capability.
 
 {stats.resources} read-only MCP resources that provide contextual data:
 
-- Server configuration and version
-- Current user profile
-- Project information templates
-- GitLab instance capabilities
+- Current user profile and accessible groups
+- Project, group, issue, merge request, pipeline and repository templates
+- The surface-aware `gitlab://tools` manifest and per-action schemas
+- Static workflow guides (Git workflow, MR hygiene, code review, conventional commits, pipeline troubleshooting)
 
 ### Prompts
 
@@ -234,8 +240,10 @@ Successful tool calls return a dual-format response:
 ```json
 {
   "structuredContent": {
-    "type": "gitlab_issue",
-    "data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
+    "iid": 42,
+    "title": "Fix N+1 query",
+    "state": "opened",
+    "web_url": "https://gitlab.example.com/my-org/backend/-/issues/42",
     "next_steps": ["View issue details", "Add labels", "Assign to user"]
   },
   "content": [
@@ -247,7 +255,7 @@ Successful tool calls return a dual-format response:
 }
 ```
 
-- **`structuredContent`** — Typed JSON for the AI to parse and reason about, includes `next_steps` hints, and conforms to the tool's declared output schema when one is present
+- **`structuredContent`** — The handler's typed output serialized as JSON (the fields above are a subset of the issue output), for the AI to parse and reason about; it includes `next_steps` hints and conforms to the tool's declared output schema when one is present
 - **`content`** — Formatted Markdown for human display
 
 This dual format ensures the AI can make follow-up decisions while presenting clean output to the user. Tool execution errors set `isError: true` and can return only Markdown content so clients do not treat the error as a successful structured result.
@@ -288,5 +296,5 @@ The [full ADR index](https://github.com/jmrplens/gitlab-mcp-server/blob/main/doc
 ## Source reference
 
 :::note[Developer Documentation]
-For the complete technical reference, see [`docs/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md) in the repository.
+For the complete technical reference, see [`docs/concepts/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md) in the repository.
 :::

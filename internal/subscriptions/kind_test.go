@@ -485,9 +485,9 @@ func TestKindCount_MatchesEveryDocumentThatCitesIt(t *testing.T) {
 		phrase string
 	}{
 		{"docs/reference/capabilities/subscriptions.md", fmt.Sprintf("%d kinds of resource", count)},
-		{"README.md", fmt.Sprintf("%d single-object kinds", count)},
-		{"site/src/content/docs/capabilities/subscriptions.mdx", fmt.Sprintf("%d single-object resource kinds", count)},
-		{"site/src/content/docs/es/capabilities/subscriptions.mdx", fmt.Sprintf("%d tipos de recurso de objeto único", count)},
+		{"README.md", fmt.Sprintf("%d resource kinds, single objects plus three single-parent lists", count)},
+		{"site/src/content/docs/capabilities/subscriptions.mdx", fmt.Sprintf("%d resource kinds, single objects plus three single-parent lists", count)},
+		{"site/src/content/docs/es/capabilities/subscriptions.mdx", fmt.Sprintf("%d tipos de recurso, objetos únicos más tres listas de un solo padre", count)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.file, func(t *testing.T) {

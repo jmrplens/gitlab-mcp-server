@@ -1,14 +1,15 @@
 ---
 title: Política de privacidad
-description: Política de privacidad de GitLab MCP Server — sin telemetría, sin analítica, sin backend; los datos fluyen solo entre tu máquina y la instancia de GitLab que configures.
+description: "Política de privacidad de GitLab MCP Server: sin analítica, sin backend, telemetría solo si la activas y solo hacia un colector que ejecutas tú; los datos fluyen entre tu máquina y la instancia de GitLab que configures."
 datePublished: "2026-07-08"
 ---
 
 GitLab MCP Server es un servidor Model Context Protocol **local**. Se ejecuta
 íntegramente en tu máquina y actúa como puente entre tu cliente MCP (Claude
 Desktop, Claude Code, Cursor, VS Code, …) y la instancia de GitLab que
-configures. No tiene telemetría, ni analítica, ni informes de errores, ni
-backend propio.
+configures. No tiene analítica, ni informes de errores, ni backend propio; la
+telemetría existe solo como exportación opcional a un colector que ejecutas tú,
+y se describe más abajo.
 
 Hay un camino distinto que se describe aparte más abajo: el endpoint público
 alojado en `mcp.jmrp.io/gitlab`, donde el software se ejecuta en la máquina de
@@ -18,14 +19,46 @@ otra persona y no en la tuya. Véase [Endpoint alojado](#endpoint-alojado).
 
 ## Qué recopilamos
 
-**Nada.** El servidor no tiene telemetría, ni analítica, ni informes de
-errores, ni backend propio. Cuando lo ejecutas tú — que es como esta
+**Nada.** El servidor no tiene analítica, ni informes de errores, ni backend
+propio. Cuando lo ejecutas tú — que es como esta
 documentación recomienda usarlo — el mantenedor nunca recibe, almacena ni
 tiene acceso a tus datos, credenciales o información de uso.
 
 Eso es una afirmación sobre el software, y se cumple allí donde lo ejecutes.
 No es una afirmación sobre el [endpoint alojado](#endpoint-alojado), donde ese
 mismo software corre en una máquina que opera el mantenedor.
+
+### OpenTelemetry, si la activas
+
+El servidor puede exportar trazas, métricas y logs, y esta sección existe para
+que el párrafo anterior siga siendo exactamente cierto en lugar de convertirse
+en un tecnicismo.
+
+Está **desactivada por defecto**. Cuando la activas, la telemetría va a un
+colector que **tú** configuras y ejecutas. No hay ningún camino por el que
+pudiera llegar al mantenedor: el único valor por defecto que tienen los
+exportadores es su propio `https://localhost:4318`, tu máquina, donde la
+exportación falla, y lo dice en el log de tu propio servidor, salvo que
+ejecutes ahí un colector. Ninguna ruta del código lleva la dirección de nadie
+más. Activarla es una decisión que tomas sobre tu propio despliegue y tus
+propios usuarios.
+
+Lo que registra describe operaciones, nunca su contenido: el método invocado,
+la acción del catálogo, si tuvo éxito y cuánto tardó. Los argumentos de las
+herramientas, sus resultados, el contenido de los recursos, las consultas de
+búsqueda, los cuerpos de respuesta de GitLab y las credenciales quedan
+excluidos por diseño y no por un ajuste, porque no existe ningún ajuste que los
+incluyera.
+
+Quién hizo una llamada se registra solo si lo pides, mediante
+`--telemetry-identity`. El valor por defecto no registra a nadie. Un ajuste
+intermedio registra un digest por proceso que permite distinguir el tráfico de
+un llamante del de otro sin nombrar a nadie. La identidad completa está
+disponible para una organización que audita a sus propios usuarios en su
+propio colector.
+
+El detalle completo, incluido lo que exporta cada modo, está en
+[OpenTelemetry](/gitlab-mcp-server/es/operations/telemetry/).
 
 ## Flujos de datos
 
@@ -39,9 +72,12 @@ mismo software corre en una máquina que opera el mantenedor.
   (en GitLab.com) o por las políticas de tu organización (en instancias
   self-managed).
 
-La instancia de GitLab que configures es el único host con el que contacta el
-servidor. No hay comprobación de actualizaciones, ni clave de licencia que
-validar, ni telemetría, así que no existe ningún otro destino de red.
+La instancia de GitLab que configures es el único destino, con una excepción
+opcional que controlas tú: la telemetría, cuando la activas, exporta datos de
+operaciones al colector que configures, descrito en su propia sección más
+arriba. Más allá de eso el servidor no contacta con nada más: no hay
+comprobación de actualizaciones, ni ping a ningún registro, ni ningún valor por
+defecto que alcance otro host.
 
 La comprobación de actualizaciones es lo que cambió, y esta página sería
 engañosa si se limitara a dejar de mencionarlo. Las versiones hasta la v2.7.5 incluidas llevaban una
@@ -98,7 +134,8 @@ memoria durante el TTL configurado y nunca se persisten a disco.
 ## Retención y compartición de datos
 
 El servidor no retiene nada tras finalizar y no comparte datos con terceros
-más allá de la instancia de GitLab que configures explícitamente.
+más allá de la instancia de GitLab que configures explícitamente y, si activas
+la telemetría, el colector que configures explícitamente.
 
 ## Cambios y contacto
 

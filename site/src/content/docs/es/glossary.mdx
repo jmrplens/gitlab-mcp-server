@@ -145,7 +145,7 @@ Una **superficie de herramientas** es el conjunto de herramientas MCP que un cli
 | Meta-herramientas           | {stats.meta.base} herramientas de dominio (más con Enterprise) | `GITLAB_MCP_TOOL_SURFACE=meta`                           |
 | Individual                  | {stats.tools.free}–{stats.tools.gitlab_com}                    | `GITLAB_MCP_TOOL_SURFACE=individual`                     |
 
-Las tres son proyecciones del mismo [catálogo de acciones](#catálogo-canónico-de-acciones), así que difieren en empaquetado y coste de tokens, nunca en capacidad. Ver [visión general de herramientas](/gitlab-mcp-server/tools/overview/).
+Las tres son proyecciones del mismo [catálogo de acciones](#catálogo-canónico-de-acciones), así que difieren en empaquetado y coste de tokens, nunca en capacidad. Ver [visión general de herramientas](/gitlab-mcp-server/es/tools/overview/).
 
 ## Catálogo canónico de acciones
 
@@ -157,11 +157,11 @@ Un **ID canónico de acción** identifica una operación, escrito `domain.action
 
 ## Meta-herramienta
 
-Una **meta-herramienta** es una herramienta MCP a nivel de dominio que agrupa operaciones relacionadas tras una sola herramienta con un parámetro `action`. `gitlab_issue`, por ejemplo, atiende `list`, `get`, `create`, `update` y `delete`. Reducen el número de herramientas visibles en más de un 95% manteniendo cada operación accesible como acción. Ver [meta-herramientas](/gitlab-mcp-server/tools/meta-tools/).
+Una **meta-herramienta** es una herramienta MCP a nivel de dominio que agrupa operaciones relacionadas tras una sola herramienta con un parámetro `action`. `gitlab_issue`, por ejemplo, atiende `list`, `get`, `create`, `update` y `delete`. Reducen el número de herramientas visibles en más de un 95% manteniendo cada operación accesible como acción. Ver [meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/).
 
 ## Modo dinámico
 
-El **modo dinámico** es la superficie predeterminada, y expone solo `gitlab_find_action` y `gitlab_execute_action`. El asistente busca en el catálogo la operación que necesita, recibe su esquema exacto y la ejecuta. Cuesta una llamada de descubrimiento por tarea y mantiene el contexto de arranque unas {footprint.individual.ultimate.reduction_factor_vs_dynamic}× menor que registrar cada herramienta por separado. Ver [conjunto dinámico](/gitlab-mcp-server/tools/dynamic-tools/).
+El **modo dinámico** es la superficie predeterminada, y expone solo `gitlab_find_action` y `gitlab_execute_action`. El asistente busca en el catálogo la operación que necesita, recibe su esquema exacto y la ejecuta. Cuesta una llamada de descubrimiento por tarea y mantiene el contexto de arranque unas {footprint.individual.ultimate.reduction_factor_vs_dynamic}× menor que registrar cada herramienta por separado. Ver [conjunto dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/).
 
 ## Gating por tier
 
@@ -177,7 +177,7 @@ El **modo solo lectura** (`GITLAB_READ_ONLY=true`) omite del catálogo registrad
 
 ## Elicitación
 
-La **elicitación** es una capacidad MCP que permite al servidor pedir datos al usuario mediante un formulario estructurado a mitad de conversación, en lugar de exigir todos los parámetros por adelantado. GitLab MCP Server la usa en flujos interactivos de creación y recurre a herramientas parametrizadas estándar en clientes que no la soportan. Ver [elicitación](/gitlab-mcp-server/capabilities/elicitation/).
+La **elicitación** es una capacidad MCP que permite al servidor pedir datos al usuario mediante un formulario estructurado a mitad de conversación, en lugar de exigir todos los parámetros por adelantado. GitLab MCP Server la usa en flujos interactivos de creación y recurre a herramientas parametrizadas estándar en clientes que no la soportan. Ver [elicitación](/gitlab-mcp-server/es/capabilities/elicitation/).
 
 ## Superficie de capacidades
 
@@ -197,7 +197,7 @@ El **transporte stdio** es el predeterminado: el cliente de IA arranca el servid
 
 ## Transporte HTTP
 
-El **transporte HTTP** es el modo multiusuario: un proceso atiende a muchos clientes por red, cada uno autenticándose con su propio token de GitLab. Las sesiones se aíslan en un pool LRU acotado indexado por un hash de token y URL de GitLab, así que no se comparte estado entre clientes. Ver [modo servidor HTTP](/gitlab-mcp-server/operations/http-server/).
+El **transporte HTTP** es el modo multiusuario: un proceso atiende a muchos clientes por red, cada uno autenticándose con su propio token de GitLab. Las sesiones se aíslan en un pool LRU acotado indexado por un hash de token y URL de GitLab, así que no se comparte estado entre clientes. Ver [modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
 
 ## Tokens de esquema de herramientas
 

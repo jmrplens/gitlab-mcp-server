@@ -1,14 +1,14 @@
 ---
 title: Orbit
-description: Seis herramientas MCP de solo lectura para la API experimental Knowledge Graph de GitLab.com, disponibles solo en GitLab.com Ultimate.
+description: Seis herramientas MCP de solo lectura para la API experimental Knowledge Graph de GitLab.com, disponibles solo en GitLab.com con nivel Premium o Ultimate.
 datePublished: "2026-05-06"
 faq:
   - q: "¿Qué es Orbit en GitLab MCP Server?"
-    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el catálogo Enterprise/Premium está habilitado con Ultimate: sus seis acciones son las entradas orbit.* del catálogo en la superficie dinámica predeterminada, la meta-herramienta gitlab_orbit con GITLAB_MCP_TOOL_SURFACE=meta o seis herramientas gitlab_orbit_* con GITLAB_MCP_TOOL_SURFACE=individual."
+    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el nivel resuelto es Premium o Ultimate: sus seis acciones son las entradas orbit.* del catálogo en la superficie dinámica predeterminada, la meta-herramienta gitlab_orbit con GITLAB_MCP_TOOL_SURFACE=meta o seis herramientas gitlab_orbit_* con GITLAB_MCP_TOOL_SURFACE=individual."
   - q: "¿Orbit está disponible en GitLab autoalojado?"
-    a: "No. Orbit solo está disponible cuando GitLab MCP Server se conecta a `https://gitlab.com`. Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado, porque la API experimental Knowledge Graph subyacente está alojada en GitLab.com. No existe ningún flag que añada Orbit a una conexión autoalojada."
+    a: "No. Orbit solo está disponible cuando GitLab MCP Server se conecta a `https://gitlab.com`. Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso en un nivel Premium o Ultimate, porque la API experimental Knowledge Graph subyacente está alojada en GitLab.com. No existe ningún flag que añada Orbit a una conexión autoalojada."
   - q: "¿Qué licencia y configuración requiere Orbit?"
-    a: "Orbit requiere GitLab Ultimate en una conexión a GitLab.com. Actívalo con `GITLAB_TIER=ultimate` en modo stdio o `--tier=ultimate` en modo HTTP. La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue funcionando en modo stdio como alternativa, pero está deprecada; el modo HTTP solo lee `--tier`. Cuando se cumplen estas condiciones, las seis acciones de Orbit están disponibles como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` en la superficie dinámica predeterminada, como la meta-herramienta `gitlab_orbit` con `GITLAB_MCP_TOOL_SURFACE=meta`, o como seis herramientas `gitlab_orbit_*` con `GITLAB_MCP_TOOL_SURFACE=individual`."
+    a: "Orbit requiere un nivel Premium o Ultimate en una conexión a GitLab.com. Actívalo con `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate` en modo stdio, o `--tier=premium` / `--tier=ultimate` en modo HTTP; cuando no se define ninguno, el nivel se detecta desde la licencia de la instancia. La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue funcionando como alternativa cuando `GITLAB_TIER` no está definido, pero está deprecada; el modo HTTP lee ambas variables de su entorno cuando no se pasa `--tier`. Cuando se cumplen estas condiciones, las seis acciones de Orbit están disponibles como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` en la superficie dinámica predeterminada, como la meta-herramienta `gitlab_orbit` con `GITLAB_MCP_TOOL_SURFACE=meta`, o como seis herramientas `gitlab_orbit_*` con `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "¿Orbit es de solo lectura?"
     a: "Sí. Las seis herramientas Orbit son de solo lectura. `status`, `schema`, `tools`, `dsl` y `graph_status` solo inspeccionan salud, ontología, manifiesto, DSL y estado de indexación, y `query` ejecuta objetos de consulta de solo lectura sobre el Knowledge Graph contra el índice. Ninguna acción de Orbit modifica datos de GitLab, así que Orbit es seguro de exponer incluso en despliegues cautelosos."
   - q: "¿Cuáles son las cuatro variantes de query_type de Orbit?"
@@ -19,26 +19,26 @@ faq:
 
 import FAQ from "../../../../components/FAQ.astro";
 
-Orbit expone la API experimental Knowledge Graph de GitLab.com mediante **seis herramientas MCP de solo lectura** —`status`, `schema`, `tools`, `dsl`, `query` y `graph_status`—. Solo está disponible cuando el servidor se conecta a `https://gitlab.com` y el catálogo Enterprise/Premium está habilitado con Ultimate (`GITLAB_TIER=ultimate`, o `--tier=ultimate` en modo HTTP). La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue funcionando en modo stdio como alternativa, pero está deprecada; el modo HTTP solo lee `--tier`. Orbit nunca escribe: cada herramienta inspecciona salud, esquema o datos indexados, o ejecuta una consulta de solo lectura sobre el grafo.
+Orbit expone la API experimental Knowledge Graph de GitLab.com mediante **seis herramientas MCP de solo lectura** —`status`, `schema`, `tools`, `dsl`, `query` y `graph_status`—. Solo está disponible cuando el servidor se conecta a `https://gitlab.com` y el nivel resuelto es Premium o Ultimate (`GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`, `--tier=premium` o `--tier=ultimate` en modo HTTP, o el nivel detectado desde la licencia de la instancia). La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue funcionando como alternativa cuando `GITLAB_TIER` no está definido, pero está deprecada; el modo HTTP lee ambas variables de su entorno cuando no se pasa `--tier`. Orbit nunca escribe: cada herramienta inspecciona salud, esquema o datos indexados, o ejecuta una consulta de solo lectura sobre el grafo.
 
 :::note[Referencia técnica]
-Para la referencia generada completa, consulta [`docs/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/orbit.md) en el repositorio.
+Para la referencia completa de las herramientas, consulta [`docs/reference/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/orbit.md) en el repositorio.
 :::
 
 ## ¿Cuándo está disponible Orbit?
 
-Orbit solo se registra en conexiones a GitLab.com Ultimate. Requiere el host `https://gitlab.com` **y** el catálogo Enterprise/Premium habilitado con Ultimate. En la superficie dinámica predeterminada sus seis acciones son las entradas `orbit.*` del catálogo, accesibles con `gitlab_find_action` y `gitlab_execute_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` es la única herramienta `gitlab_orbit` con seis acciones; con `GITLAB_MCP_TOOL_SURFACE=individual` son seis herramientas `gitlab_orbit_*`. Todas las herramientas Orbit son de solo lectura.
+Orbit solo se registra en conexiones a GitLab.com con nivel Premium o Ultimate. Requiere el host `https://gitlab.com` **y** un nivel resuelto de Premium o Ultimate. En la superficie dinámica predeterminada sus seis acciones son las entradas `orbit.*` del catálogo, accesibles con `gitlab_find_action` y `gitlab_execute_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` es la única herramienta `gitlab_orbit` con seis acciones; con `GITLAB_MCP_TOOL_SURFACE=individual` son seis herramientas `gitlab_orbit_*`. Todas las herramientas Orbit son de solo lectura.
 
 | Requisito                            | Valor                                               |
 | ------------------------------------ | --------------------------------------------------- |
 | Host de GitLab                       | `https://gitlab.com`                                |
-| Catálogo                             | Enterprise/Premium                                  |
+| Nivel                                | Premium o Ultimate                                  |
 | Superficie dinámica (predeterminada) | Acciones `orbit.*` mediante `gitlab_execute_action` |
 | Modo meta-herramientas               | `gitlab_orbit` con seis acciones                    |
 | Modo individual                      | Seis herramientas `gitlab_orbit_*`                  |
 | Comportamiento de escritura          | Solo lectura                                        |
 
-Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado.
+Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso en un nivel Premium o Ultimate.
 
 ## Acciones
 
