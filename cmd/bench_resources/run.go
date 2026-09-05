@@ -25,6 +25,11 @@ import (
 // it exists to fail a wedged run rather than to police latency.
 const callTimeout = 5 * time.Minute
 
+// settleCeiling bounds the wait for a resident set to stop growing. A
+// variable so a test can reach the ceiling without spending three seconds
+// on a process that never settles.
+var settleCeiling = 3 * time.Second
+
 // runner holds what every scenario needs: the binary under measurement and the
 // two stand-in services.
 type runner struct {
@@ -32,7 +37,17 @@ type runner struct {
 	stub           *stubGitLab
 	otlp           *otlpSink
 	sampleInterval time.Duration
-	progress       func(format string, args ...any)
+	// progress reports per client and per round, only when asked; report
+	// prints the lines a run always shows, one per series step, and may be
+	// nil in a runner that is not driving a terminal.
+	progress func(format string, args ...any)
+	report   func(format string, args ...any)
+
+	// profilesDir is where the series writes its profiles, empty to write
+	// none; budgetMiB is the resident set the series will not plan a step
+	// beyond, zero for no budget.
+	profilesDir string
+	budgetMiB   float64
 
 	// serverInfo is what the measured build says about itself. Only the HTTP
 	// scenarios can ask, since /health is an HTTP endpoint, and the answer is
@@ -309,10 +324,9 @@ func settledRSS(s *sampler) uint64 {
 	const (
 		step      = 50 * time.Millisecond
 		tolerance = 0.01
-		ceiling   = 3 * time.Second
 	)
 	previous := uint64(0)
-	deadline := time.Now().Add(ceiling)
+	deadline := time.Now().Add(settleCeiling)
 	for time.Now().Before(deadline) {
 		time.Sleep(step)
 		current := sampleRSS(s)

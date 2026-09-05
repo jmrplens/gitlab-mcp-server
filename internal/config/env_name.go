@@ -46,6 +46,7 @@ var prefixedNames = []string{
 	"OAUTH_CACHE_TTL",
 	"OAUTH_CLIENT_UID",
 	"POOL_IDLE_TIMEOUT",
+	"PPROF_ADDR",
 	"PUBLIC_URL",
 	"RATE_LIMIT_BURST",
 	"RATE_LIMIT_RPS",

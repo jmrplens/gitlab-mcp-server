@@ -26,6 +26,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strings"
 	"sync"
@@ -56,11 +57,30 @@ func main() {
 	flag.String("gitlab-url", "", "accepted and ignored")
 	flag.String("tool-surface", "", "accepted and ignored")
 	flag.Int("rate-limit-rps", 0, "accepted and ignored")
+	flag.Int("max-http-clients", 0, "accepted and ignored")
 	telemetry := flag.Bool("telemetry", false, "send one export to OTEL_EXPORTER_OTLP_ENDPOINT, as the real server's exporters would")
+	pprofAddr := flag.String("pprof-addr", "", "serve net/http/pprof on this address, on a listener of its own, as the real server does")
 	flag.Parse()
 
 	if *telemetry {
 		exportTelemetry(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	}
+	if *pprofAddr != "" {
+		// The real thing rather than a stand-in for it: the series reads CPU
+		// and heap profiles and the goroutine total off this listener, and a
+		// canned answer would let the harness's parsing drift from what the
+		// runtime actually prints.
+		listener, err := net.Listen("tcp", *pprofAddr)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "standin: pprof:", err)
+			os.Exit(1)
+		}
+		mux := http.NewServeMux()
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		go func() {
+			_ = (&http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}).Serve(listener)
+		}()
 	}
 
 	if *httpMode {

@@ -4,8 +4,10 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -126,6 +128,68 @@ func TestWriteRun_ThenReadRun_RoundTrips(t *testing.T) {
 	}
 }
 
+// TestReadRun_AcceptsEverySchemaThisBuildDraws verifies the reader takes
+// both the schema-1 record the published figures were measured under, which
+// carries no series, and a schema-2 record that carries only a series, so a
+// filtered series run has a record of its own to render.
+func TestReadRun_AcceptsEverySchemaThisBuildDraws(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{name: "schema 1 without series", content: `{"schema":1,"scenarios":[{"id":"x"}]}`},
+		{name: "schema 2 with a series only", content: `{"schema":2,"scenarios":[],"series":[{"id":"http-dynamic-series","steps":[{"clients":1}]}]}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "record.json")
+			//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
+				t.Fatalf("writing the fixture: %v", err)
+			}
+			if _, err := readRun(path); err != nil {
+				t.Errorf("readRun refused a record this build draws: %v", err)
+			}
+		})
+	}
+}
+
+// TestWriteRun_ThenReadRun_KeepsTheSeries verifies the series survives the
+// file, stop included, since the renderers read every field of it back.
+func TestWriteRun_ThenReadRun_KeepsTheSeries(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "record.json")
+	run := sampleSeriesRun()
+	if err := writeRun(path, run); err != nil {
+		t.Fatalf("writeRun: %v", err)
+	}
+	got, err := readRun(path)
+	if err != nil {
+		t.Fatalf("readRun: %v", err)
+	}
+	if got.Schema != resultSchema || len(got.Series) != len(run.Series) {
+		t.Fatalf("read schema %d with %d series, wrote schema %d with %d", got.Schema, len(got.Series), run.Schema, len(run.Series))
+	}
+	if !reflect.DeepEqual(got.Series[2], run.Series[2]) {
+		t.Errorf("the stopped series did not survive the round trip:\n got %+v\nwant %+v", got.Series[2], run.Series[2])
+	}
+	if got.Series[0].Stop != nil || got.Series[0].Skipped != nil {
+		t.Errorf("a complete series read back with a stop: %+v", got.Series[0])
+	}
+}
+
+// TestWriteRun_EncodingFailure_IsReported drives the one failure the
+// encoder has through its seam, since a record of plain numbers and strings
+// never produces it.
+func TestWriteRun_EncodingFailure_IsReported(t *testing.T) {
+	previous := marshalRecord
+	marshalRecord = func(any, string, string) ([]byte, error) { return nil, errors.New("cannot encode") }
+	t.Cleanup(func() { marshalRecord = previous })
+	err := writeRun(filepath.Join(t.TempDir(), "record.json"), sampleRun())
+	if err == nil || !strings.Contains(err.Error(), "encode results") {
+		t.Errorf("writeRun = %v, want the encoding failure", err)
+	}
+}
+
 // TestReadRun_RefusesUnusableRecords verifies the reader fails loudly on a
 // record this build cannot draw, rather than rendering a chart from fields it
 // guessed at: a schema from another version, and a run with nothing in it.
@@ -136,6 +200,7 @@ func TestReadRun_RefusesUnusableRecords(t *testing.T) {
 	}{
 		{name: "future schema", content: `{"schema":99,"scenarios":[{"id":"x"}]}`},
 		{name: "no scenarios", content: `{"schema":1,"scenarios":[]}`},
+		{name: "nothing at all under schema 2", content: `{"schema":2,"scenarios":[],"series":[]}`},
 		{name: "not json", content: `{`},
 	}
 	for _, tc := range tests {
@@ -210,6 +275,46 @@ func sampleRun() *Run {
 			scenario("http-individual", transportHTTP, surfaceIndividual, 4),
 		},
 	}
+}
+
+// sampleSeriesRun is a record with three series in it, shaped like a real
+// one: the meta series ran every step, the dynamic one stopped on the
+// budget, and the individual one on the latency ceiling. Listed out of
+// surface order on purpose, so the ordering is asserted rather than assumed.
+func sampleSeriesRun() *Run {
+	step := func(clients int, peak, cpu, p50, p99 float64) SeriesStep {
+		return SeriesStep{
+			Clients: clients, RSSMeanMiB: peak - 20, RSSPeakMiB: peak, CPUMsPerCall: cpu, Calls: 400 * clients,
+			CallP50Ms: p50, CallP99Ms: p99, ListP50Ms: p50 / 2, ListP99Ms: p99 / 2, Goroutines: 20 + clients,
+			Pool:     PoolCounters{Entries: clients, Capacity: 20},
+			Profiles: StepProfiles{CPU: "x/1.cpu.pb.gz", Heap: "x/1.heap.pb.gz"},
+		}
+	}
+	run := sampleRun()
+	run.Series = []SeriesScenario{
+		{
+			ID: "http-meta-series", Transport: transportHTTP, Surface: surfaceMeta, Parallel: 4, StepSeconds: 10,
+			Clients: []int{1, 5, 20}, BudgetMiB: 4000, StoppedAt: 20,
+			Steps: []SeriesStep{step(1, 200, 1, 10, 20), step(5, 360, 1.1, 11, 25), step(20, 900, 1.4, 15, 40)},
+		},
+		{
+			ID: "http-individual-series", Transport: transportHTTP, Surface: surfaceIndividual, Parallel: 2, StepSeconds: 10,
+			Clients: []int{1, 5, 20}, BudgetMiB: 4000, StoppedAt: 5, Skipped: []int{20},
+			Stop:       &SeriesStop{Kind: stopLatency, P99Ms: 31000},
+			StopReason: "stopped at 5 credentials: tools/call p99 reached 31000 ms, above the 30000 ms ceiling",
+			Steps:      []SeriesStep{step(1, 330, 2, 100, 400), step(5, 500, 4, 2000, 31000)},
+		},
+		{
+			ID: "http-dynamic-series", Transport: transportHTTP, Surface: surfaceDynamic, Parallel: 4, StepSeconds: 10,
+			Clients: []int{1, 5, 20}, BudgetMiB: 4000, StoppedAt: 5, Skipped: []int{20},
+			Stop:       &SeriesStop{Kind: stopBudget, NextClients: 20, EstimateMiB: 4300},
+			StopReason: "stopped at 5 credentials: the next step (20) was estimated at 4300 MiB against a budget of 4000 MiB",
+			Steps:      []SeriesStep{step(1, 220, 3, 20, 40), step(5, 500, 3.2, 25, 60)},
+		},
+		// A series that measured nothing is not drawn, whatever its surface.
+		{ID: "http-meta-series-empty", Transport: transportHTTP, Surface: surfaceMeta},
+	}
+	return run
 }
 
 // TestWriteRun_ReportsWhereItCouldNotWrite covers the two filesystem

@@ -166,6 +166,7 @@ func TestNiceStep_RoundsToOneTwoOrFive(t *testing.T) {
 		{raw: 3, want: 5},
 		{raw: 7, want: 10},
 		{raw: 23, want: 50},
+		{raw: 100, want: 100},
 		{raw: 120, want: 200},
 	}
 	for _, tc := range tests {
@@ -204,6 +205,99 @@ func TestXMLEscape_MarkupInLabels_IsNeutralized(t *testing.T) {
 	if !strings.Contains(got, "&amp;") {
 		t.Errorf("xmlEscape did not escape the ampersand: %q", got)
 	}
+}
+
+// TestRenderBars_RaggedSeries_DrawsWhatItHas verifies a series shorter than
+// the category list, and a High shorter than its Values, draw the bars they
+// have and no others, and that a spec with nothing positive in it still
+// renders on a usable axis rather than dividing by zero.
+func TestRenderBars_RaggedSeries_DrawsWhatItHas(t *testing.T) {
+	svg := renderBars(testPalette(), barSpec{
+		Title: "Ragged", Categories: []string{"a", "b", "c"},
+		Series: []barSeries{
+			{Label: "short", Values: []float64{1, 2}},
+			// One tail above its value, one below it, and none for the third
+			// bar: only the first is drawn.
+			{Label: "half tails", Values: []float64{3, 4, 5}, High: []float64{6, 1}},
+		},
+	})
+	// The plot ground and the two legend swatches are positioned rects too.
+	if got := strings.Count(svg, `<rect x=`) - 1 - 2; got != 6 {
+		t.Errorf("drew %d bars, want the five values plus one tail", got)
+	}
+
+	empty := renderBars(testPalette(), barSpec{
+		Title: "Nothing", Categories: []string{"a"},
+		Series: []barSeries{{Label: "zeros", Values: []float64{0}}},
+	})
+	if !strings.HasPrefix(empty, "<svg") || !strings.Contains(empty, "</svg>") {
+		t.Error("a spec with no positive value did not render a document")
+	}
+}
+
+// TestRenderLines_LogAxes_DashedPairsAndMarkers verifies the additions the
+// series figures need: the X axis laid out by decades and labeled at the
+// series' own points, a log Y axis, a dashed companion in its partner's
+// color, a marker at the count a series stopped at, and a spec with one
+// point or none that still renders.
+func TestRenderLines_LogAxes_DashedPairsAndMarkers(t *testing.T) {
+	p := testPalette()
+	svg := renderLines(p, lineSpec{
+		Title: "Series", XAxis: "credentials", YAxis: "ms", LogX: true, LogY: true, Format: msLabel,
+		Series: []lineSeries{
+			{Label: "dynamic p50", Group: "dynamic", X: []float64{1, 10, 100, 1000}, Y: []float64{10, 12, 30, 900}},
+			{Label: "dynamic p99", Group: "dynamic", X: []float64{1, 10, 100, 1000}, Y: []float64{20, 40, 90, 3000}, Dashed: true},
+			{Label: "meta p50", Group: "meta", X: []float64{1, 10}, Y: []float64{5, 6}},
+		},
+		Markers: []lineMarker{{X: 100, Label: "dynamic: stopped at 100"}},
+	})
+
+	for _, want := range []string{
+		`stroke-dasharray="6 4"`, // the dashed p99
+		`stroke-dasharray="4 3"`, // its legend entry
+		`stroke-dasharray="3 3"`, // the marker rule
+		"dynamic: stopped at 100",
+		">1000<", ">100<", ">10<", // x labels at the points, and decade grid labels
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(svg, want) {
+				t.Errorf("the figure does not contain %q", want)
+			}
+		})
+	}
+	// Grouping: the two dynamic lines share the first color and meta takes
+	// the second, so the third palette color is never used.
+	if strings.Contains(svg, p.Series[2]) {
+		t.Error("the third series color was used, so the pair did not share its group's color")
+	}
+	if strings.Count(svg, `stroke="`+p.Series[0]+`" stroke-width="2.5" stroke-linejoin`) != 2 {
+		t.Error("the two dynamic lines do not share the first color")
+	}
+
+	t.Run("deterministic", func(t *testing.T) {
+		spec := lineSpec{Title: "t", LogX: true, Series: []lineSeries{{Label: "a", X: []float64{1, 1000}, Y: []float64{1, 2}}}}
+		first, second := renderLines(p, spec), renderLines(p, spec)
+		if first != second {
+			t.Error("two renderings of the same spec differ")
+		}
+	})
+	t.Run("one point", func(t *testing.T) {
+		one := renderLines(p, lineSpec{Title: "one", LogX: true, Series: []lineSeries{{Label: "a", X: []float64{5}, Y: []float64{7}}}})
+		if !strings.Contains(one, ">5<") || !strings.Contains(one, "<circle") {
+			t.Error("a single point was not drawn in the middle of the axis")
+		}
+	})
+	t.Run("no series", func(t *testing.T) {
+		if none := renderLines(p, lineSpec{Title: "none", LogY: true}); !strings.HasPrefix(none, "<svg") {
+			t.Error("an empty spec did not render a document")
+		}
+	})
+	t.Run("nothing positive on a log axis", func(t *testing.T) {
+		zeros := renderLines(p, lineSpec{Title: "zero", LogY: true, Series: []lineSeries{{Label: "a", X: []float64{1, 2}, Y: []float64{0, 0}}}})
+		if !strings.HasPrefix(zeros, "<svg") {
+			t.Error("a log axis over zeros did not render")
+		}
+	})
 }
 
 // TestLogScale_ExtremeInputs_Terminates verifies the decade walk ends for

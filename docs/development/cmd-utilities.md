@@ -1174,28 +1174,35 @@ go run ./cmd/bench_resources/ -quick -json /tmp/x.json
 
 #### Flags
 
-| Flag               | Type       | Default                                                      | Description                                                                          |
-| ------------------ | ---------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `-binary`          | `string`   | `""`                                                         | Server binary to measure; empty builds `./cmd/server` into a temporary directory     |
-| `-json`            | `string`   | `site/src/data/resource-benchmark.json`                      | Measurement record to write, and to render from                                      |
-| `-doc-charts`      | `string`   | `docs/reference/benchmarks`                                  | Directory for the Markdown documentation's SVG charts                                |
-| `-site-charts`     | `string`   | `site/public/benchmarks`                                     | Directory for the site's SVG charts                                                  |
-| `-doc-page`        | `string`   | `docs/reference/resource-benchmark.md`                       | Markdown page whose generated block is rewritten                                     |
-| `-site-page`       | `string`   | `site/src/content/docs/operations/resource-benchmark.mdx`    | English site page whose generated block is rewritten                                 |
-| `-site-page-es`    | `string`   | `site/src/content/docs/es/operations/resource-benchmark.mdx` | Spanish site page whose generated block is rewritten                                 |
-| `-scenarios`       | `string`   | `""`                                                         | Comma-separated scenario ids to measure; empty runs the whole matrix                 |
-| `-rounds`          | `int`      | `3`                                                          | Measured rounds per method                                                           |
-| `-sample-interval` | `duration` | `100ms`                                                      | How often the resident set is sampled                                                |
-| `-render`          | `bool`     | `false`                                                      | Skip measurement: redraw charts and tables from the committed record                 |
-| `-check`           | `bool`     | `false`                                                      | Verify the committed charts and tables match the committed record; implies `-render` |
-| `-quick`           | `bool`     | `false`                                                      | Short smoke matrix, for verifying a change to this command                           |
-| `-v`               | `bool`     | `false`                                                      | Print progress for every client and round                                            |
+| Flag               | Type       | Default                                                      | Description                                                                                                                                   |
+| ------------------ | ---------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-binary`          | `string`   | `""`                                                         | Server binary to measure; empty builds `./cmd/server` into a temporary directory                                                              |
+| `-json`            | `string`   | `site/src/data/resource-benchmark.json`                      | Measurement record to write, and to render from                                                                                               |
+| `-doc-charts`      | `string`   | `docs/reference/benchmarks`                                  | Directory for the Markdown documentation's SVG charts                                                                                         |
+| `-site-charts`     | `string`   | `site/public/benchmarks`                                     | Directory for the site's SVG charts                                                                                                           |
+| `-doc-page`        | `string`   | `docs/reference/resource-benchmark.md`                       | Markdown page whose generated block is rewritten                                                                                              |
+| `-site-page`       | `string`   | `site/src/content/docs/operations/resource-benchmark.mdx`    | English site page whose generated block is rewritten                                                                                          |
+| `-site-page-es`    | `string`   | `site/src/content/docs/es/operations/resource-benchmark.mdx` | Spanish site page whose generated block is rewritten                                                                                          |
+| `-scenarios`       | `string`   | `""`                                                         | Comma-separated scenario ids to measure; empty runs the whole matrix                                                                          |
+| `-rounds`          | `int`      | `3`                                                          | Measured rounds per method                                                                                                                    |
+| `-sample-interval` | `duration` | `100ms`                                                      | How often the resident set is sampled                                                                                                         |
+| `-render`          | `bool`     | `false`                                                      | Skip measurement: redraw charts and tables from the committed record                                                                          |
+| `-check`           | `bool`     | `false`                                                      | Verify the committed charts and tables match the committed record; implies `-render`                                                          |
+| `-quick`           | `bool`     | `false`                                                      | Short smoke matrix, for verifying a change to this command                                                                                    |
+| `-v`               | `bool`     | `false`                                                      | Print progress for every client and round                                                                                                     |
+| `-clients`         | `string`   | `""`                                                         | Comma-separated credential counts for the concurrency series, ascending; empty uses `1,2,5,10,20,50,100,200,500,1000` (`1,2,5` with `-quick`) |
+| `-step-duration`   | `duration` | `10s`                                                        | Steady phase per series step (`2s` with `-quick` unless given)                                                                                |
+| `-memory-budget`   | `int`      | `0`                                                          | Resident set, in MiB, beyond which a series step is not started; `0` takes 80% of the host's available memory                                 |
+| `-profiles`        | `string`   | `bench/profiles`                                             | Directory the series writes its CPU and heap profiles under; empty writes none                                                                |
+| `-no-render`       | `bool`     | `false`                                                      | Measure and write the record and profiles, then stop: for a host with no repository to render into                                            |
 
-A partial matrix (`-scenarios`, `-quick`) is refused unless `-json` names a record of its own, so it cannot overwrite the published one.
+A partial matrix (`-scenarios`, `-quick`, `-clients`) is refused unless `-json` names a record of its own, so it cannot overwrite the published one.
+
+With `-no-render` and `-binary` the driver reads nothing from a checkout, so a prebuilt driver and server can measure the series on a host with no Go toolchain; the record is then copied back and rendered with `-render`. The server is started with `--pprof-addr` on a loopback port the driver picks, which is where the per-step profiles and goroutine counts come from.
 
 #### Output
 
-The measurement record, the SVG chart pairs under the two chart directories, and the generated blocks of the three documentation pages. A full run takes several minutes: every scenario builds a tool catalog per client, which is the cost being measured.
+The measurement record, the SVG chart pairs under the two chart directories, and the generated blocks of the three documentation pages; and, for the series, one CPU and one heap profile per step under the profiles directory, which git ignores. A full run takes several minutes for the point scenarios, since every one builds a tool catalog per client, and then as long as the host's memory lets the series run.
 
 #### Make targets
 

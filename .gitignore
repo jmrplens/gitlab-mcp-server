@@ -176,6 +176,13 @@ test/e2e/.bitbucket-admin-pass
 # than relied on being cleaned up by hand.
 /tmp_*
 
+# Profiles the resource benchmark's concurrency series captures, one CPU and
+# one heap profile per step under bench/profiles/<scenario>/. They are binary
+# and hundreds of kilobytes each, so they stay beside the record on the
+# machine that measured and are summarized into the analysis document rather
+# than committed.
+/bench/
+
 # PyPI wheelhouse assembled by scripts/build_pypi.py (generated per release)
 /pypi/dist/
 

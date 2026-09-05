@@ -9,3 +9,8 @@ pnpm-lock.yaml
 # would flatten; markdownlint owns the rest of the markdown there. Keeping
 # both authorities on the same files made each formatter dirty the other.
 src/content/docs/**/*.mdx
+# The benchmark record is written by cmd/bench_resources with encoding/json's
+# indentation and checked against the rendered pages by `-check`; prettier
+# would collapse its short numeric arrays and make the generator's own output
+# fail the lint it cannot satisfy.
+src/data/resource-benchmark.json

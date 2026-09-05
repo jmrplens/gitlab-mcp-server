@@ -37,6 +37,11 @@ const (
 // themeCSS is where the chart palette is read from.
 const themeCSS = "site/src/styles/theme.css"
 
+// writeOutput lands a generated artifact. A variable so a test can drive the
+// write failing on a path that was just read, which a filesystem the tests
+// own, run as root, never produces on its own.
+var writeOutput = os.WriteFile
+
 // renderAll draws the figures and rewrites the generated blocks.
 func renderAll(opts options, root string, run *Run) error {
 	palettes, err := loadPalettes(readFileString(resolve(root, themeCSS)))
@@ -142,7 +147,7 @@ func writeFile(path string, content []byte, check bool) (bool, error) {
 	if check {
 		return true, nil
 	}
-	if writeErr := os.WriteFile(path, content, 0o600); writeErr != nil {
+	if writeErr := writeOutput(path, content, 0o600); writeErr != nil {
 		return false, fmt.Errorf("write %s: %w", path, writeErr)
 	}
 	return true, nil
@@ -165,7 +170,7 @@ func writeSection(path, start, end, content string, check bool) (bool, error) {
 		return true, nil
 	}
 	//#nosec G703 -- the path is this command's own flag, and the file was just read from it
-	if writeErr := os.WriteFile(path, []byte(updated), 0o600); writeErr != nil {
+	if writeErr := writeOutput(path, []byte(updated), 0o600); writeErr != nil {
 		return false, fmt.Errorf("write %s: %w", path, writeErr)
 	}
 	return true, nil
@@ -220,7 +225,8 @@ func shortCommit(commit string) string {
 }
 
 // tableBlocks renders the three tables with headings at the given level, so
-// the same content fits under a Markdown page's H3 and a site page's H2.
+// the same content fits under a Markdown page's H3 and a site page's H2,
+// followed by the concurrency series when the record holds one.
 func tableBlocks(run *Run, l labels, heading string) string {
 	var b strings.Builder
 	tables := []struct {
@@ -234,7 +240,79 @@ func tableBlocks(run *Run, l labels, heading string) string {
 	for _, entry := range tables {
 		fmt.Fprintf(&b, "%s %s\n\n%s\n\n", heading, l.TableCaption[entry.key], strings.TrimRight(entry.table, "\n"))
 	}
+	b.WriteString(seriesBlocks(run, l, heading))
 	return b.String()
+}
+
+// seriesBlocks renders the concurrency series: one heading, then per series
+// a subheading naming its settings, its per-step table and the sentence
+// saying where it stopped. Nothing at all for a record without one, so a
+// page rendered from the schema-1 record is unchanged.
+func seriesBlocks(run *Run, l labels, heading string) string {
+	series := orderedSeries(run)
+	if len(series) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s\n\n", heading, l.TableCaption["series"])
+	for _, s := range series {
+		budget := l.SeriesNoBudget
+		if s.BudgetMiB > 0 {
+			budget = fmt.Sprintf(l.SeriesBudgetClause, s.BudgetMiB)
+		}
+		fmt.Fprintf(&b, "%s# %s\n\n", heading, fmt.Sprintf(l.SeriesCaption, s.Transport, s.Surface, s.Parallel, s.StepSeconds, budget))
+		fmt.Fprintf(&b, "%s\n\n%s\n\n", strings.TrimRight(seriesTable(s, l), "\n"), seriesSentence(s, l))
+	}
+	return b.String()
+}
+
+// seriesTable is one series' steps, one row per credential count.
+func seriesTable(s SeriesScenario, l labels) string {
+	alignments := []docgen.Alignment{
+		docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
+		docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
+	}
+	rows := make([][]string, 0, len(s.Steps))
+	for _, step := range s.Steps {
+		rows = append(rows, []string{
+			strconv.Itoa(step.Clients),
+			mib(step.RSSMeanMiB),
+			mib(step.RSSPeakMiB),
+			cpuPerCallLabel(step.CPUMsPerCall),
+			strconv.Itoa(step.Calls),
+			ms(step.CallP50Ms),
+			ms(step.CallP99Ms),
+			ms(step.ListP50Ms),
+			ms(step.ListP99Ms),
+			strconv.Itoa(step.Goroutines),
+		})
+	}
+	return docgen.RenderMarkdownTable(l.SeriesHead, alignments, rows)
+}
+
+// seriesSentence says where a series ended, in the page's language: every
+// planned step, or the count it stopped at and why.
+func seriesSentence(s SeriesScenario, l labels) string {
+	if s.Stop == nil {
+		return fmt.Sprintf(l.SeriesComplete, s.StoppedAt)
+	}
+	switch s.Stop.Kind {
+	case stopBudget:
+		return fmt.Sprintf(l.SeriesStopBudget, s.StoppedAt, s.Stop.NextClients, s.Stop.EstimateMiB, s.BudgetMiB)
+	case stopLatency:
+		return fmt.Sprintf(l.SeriesStopLatency, s.StoppedAt, s.Stop.P99Ms, latencyCeiling.Milliseconds())
+	default:
+		return fmt.Sprintf(l.SeriesStopFailure, s.StoppedAt, s.Stop.NextClients, s.Stop.Error)
+	}
+}
+
+// cpuPerCallLabel renders processor milliseconds per call for a table, at
+// the precision a sub-millisecond call needs.
+func cpuPerCallLabel(value float64) string {
+	if value == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.3f", value)
 }
 
 // summaryTable is memory, goroutines and processor time per scenario.

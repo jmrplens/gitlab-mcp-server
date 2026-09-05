@@ -326,3 +326,161 @@ func TestCallDetail_TranslatesOnlyWhatItKnows(t *testing.T) {
 		}
 	}
 }
+
+// TestOrderedSeries_SurfaceOrderAndNoEmptyOnes verifies the series are
+// drawn in the order the documentation introduces the surfaces, and that
+// one with no steps is left out rather than drawn as a line of nothing.
+func TestOrderedSeries_SurfaceOrderAndNoEmptyOnes(t *testing.T) {
+	var got []string
+	for _, series := range orderedSeries(sampleSeriesRun()) {
+		got = append(got, series.Surface)
+	}
+	if !reflect.DeepEqual(got, surfaceOrder) {
+		t.Errorf("orderedSeries = %v, want %v", got, surfaceOrder)
+	}
+	if series := orderedSeries(sampleRun()); len(series) != 0 {
+		t.Errorf("a record with no series yielded %d", len(series))
+	}
+}
+
+// TestSeriesMemorySpec_BudgetThresholdAndStopMarkers verifies the memory
+// figure draws one line per surface from the peaks, the budget as the
+// threshold rule, and a marker for every series that stopped early.
+func TestSeriesMemorySpec_BudgetThresholdAndStopMarkers(t *testing.T) {
+	run := sampleSeriesRun()
+	spec := seriesMemorySpec(run, englishLabels())
+
+	if !spec.LogX || spec.LogY {
+		t.Errorf("axes LogX=%v LogY=%v, want a log X over a linear Y", spec.LogX, spec.LogY)
+	}
+	if len(spec.Series) != 3 {
+		t.Fatalf("%d series, want one per surface", len(spec.Series))
+	}
+	dynamic := spec.Series[0]
+	if dynamic.Label != surfaceDynamic || !reflect.DeepEqual(dynamic.X, []float64{1, 5}) || !reflect.DeepEqual(dynamic.Y, []float64{220, 500}) {
+		t.Errorf("dynamic line = %+v, want the peaks at 1 and 5 credentials", dynamic)
+	}
+	if spec.Threshold == nil || spec.Threshold.Value != 4000 || !strings.Contains(spec.Threshold.Label, "4000") {
+		t.Errorf("threshold = %+v, want the 4000 MiB budget", spec.Threshold)
+	}
+	wantMarkers := []lineMarker{
+		{X: 5, Label: "dynamic: stopped at 5"},
+		{X: 5, Label: "individual: stopped at 5"},
+	}
+	if !reflect.DeepEqual(spec.Markers, wantMarkers) {
+		t.Errorf("markers = %+v, want %+v", spec.Markers, wantMarkers)
+	}
+
+	t.Run("no budget draws no threshold", func(t *testing.T) {
+		unbudgeted := sampleSeriesRun()
+		for i := range unbudgeted.Series {
+			unbudgeted.Series[i].BudgetMiB = 0
+		}
+		if unbudgetedSpec := seriesMemorySpec(unbudgeted, englishLabels()); unbudgetedSpec.Threshold != nil {
+			t.Errorf("threshold = %+v on series that had no budget", unbudgetedSpec.Threshold)
+		}
+	})
+}
+
+// TestSeriesLatencySpec_PairsMedianAndTailPerSurface verifies the latency
+// figure carries two lines per surface, the tail dashed and grouped with its
+// median so they share a color, on log axes.
+func TestSeriesLatencySpec_PairsMedianAndTailPerSurface(t *testing.T) {
+	spec := seriesLatencySpec(sampleSeriesRun(), englishLabels())
+
+	if !spec.LogX || !spec.LogY {
+		t.Errorf("axes LogX=%v LogY=%v, want both logarithmic", spec.LogX, spec.LogY)
+	}
+	if len(spec.Series) != 6 {
+		t.Fatalf("%d series, want a median and a tail per surface", len(spec.Series))
+	}
+	for i := 0; i < len(spec.Series); i += 2 {
+		median, tail := spec.Series[i], spec.Series[i+1]
+		t.Run(median.Group, func(t *testing.T) {
+			if median.Dashed || !tail.Dashed {
+				t.Errorf("median dashed=%v tail dashed=%v, want only the tail dashed", median.Dashed, tail.Dashed)
+			}
+			if median.Group == "" || median.Group != tail.Group {
+				t.Errorf("groups %q and %q, want the pair grouped by surface", median.Group, tail.Group)
+			}
+			if !strings.HasSuffix(median.Label, " p50") || !strings.HasSuffix(tail.Label, " p99") {
+				t.Errorf("labels %q and %q, want p50 and p99", median.Label, tail.Label)
+			}
+			for j := range median.Y {
+				if tail.Y[j] < median.Y[j] {
+					t.Errorf("tail %v below median %v at point %d", tail.Y[j], median.Y[j], j)
+				}
+			}
+		})
+	}
+}
+
+// TestSeriesCPUSpec_OneLinePerSurface verifies the CPU figure draws the
+// per-call processor time of each surface over the credential count.
+func TestSeriesCPUSpec_OneLinePerSurface(t *testing.T) {
+	spec := seriesCPUSpec(sampleSeriesRun(), englishLabels())
+	if len(spec.Series) != 3 || !spec.LogX {
+		t.Fatalf("spec %+v, want three lines over a log X", spec)
+	}
+	if meta := spec.Series[1]; meta.Label != surfaceMeta || !reflect.DeepEqual(meta.Y, []float64{1, 1.1, 1.4}) {
+		t.Errorf("meta line = %+v, want the CPU per call of its three steps", meta)
+	}
+	if spec.Format(1.234) != "1.23" {
+		t.Errorf("format(1.234) = %q, want two decimals", spec.Format(1.234))
+	}
+}
+
+// TestBuildFigures_WithSeries_AddsTheThreeSeriesFigures verifies the figure
+// set grows by the three series figures when a record holds a series, in a
+// stable order and under the names the pages embed, and that every figure
+// renders.
+func TestBuildFigures_WithSeries_AddsTheThreeSeriesFigures(t *testing.T) {
+	want := []string{"memory", "memory-ramp", "startup", "latency", "series-memory", "series-latency", "series-cpu"}
+	figures := buildFigures(sampleSeriesRun(), englishLabels())
+	var got []string
+	for _, fig := range figures {
+		got = append(got, fig.Name)
+		if svg := fig.Render(testPalette()); !strings.HasPrefix(svg, "<svg") {
+			t.Errorf("%s did not render", fig.Name)
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("figures = %v, want %v", got, want)
+	}
+	for _, l := range []labels{englishLabels(), spanishLabels()} {
+		t.Run(l.Code, func(t *testing.T) {
+			for _, name := range want[4:] {
+				t.Run(name, func(t *testing.T) {
+					if l.FigureAlt[name] == "" {
+						t.Errorf("the %s bundle has no alternative text for %s", l.Code, name)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestLatencySpec_MissingMethod_DrawsZero verifies a scenario that never
+// measured one of the three methods gets a zero bar for it rather than a
+// shifted one: the bars are positional, so dropping the entry would move
+// the next method's numbers under the wrong label.
+func TestLatencySpec_MissingMethod_DrawsZero(t *testing.T) {
+	run := sampleRun()
+	for i := range run.Scenarios {
+		var kept []MethodLatency
+		for _, latency := range run.Scenarios[i].Latency {
+			if latency.Method != methodToolsCall {
+				kept = append(kept, latency)
+			}
+		}
+		run.Scenarios[i].Latency = kept
+	}
+	spec := latencySpec(run, englishLabels())
+	for _, series := range spec.Series {
+		t.Run(series.Label, func(t *testing.T) {
+			if len(series.Values) != 3 || series.Values[1] != 0 || series.High[1] != 0 {
+				t.Errorf("series %+v, want a zero in the tools/call position", series)
+			}
+		})
+	}
+}

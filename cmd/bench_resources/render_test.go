@@ -4,8 +4,10 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -476,7 +478,228 @@ func TestShortCommit_TrimsToEightCharacters(t *testing.T) {
 	}
 }
 
-// TestTableCells_ZeroIsNotAvailable checks the two table formatters print n/a
+// TestSeriesBlocks_TablesAndStopSentencesInEachLanguage verifies the
+// generated block gains a concurrency section when the record holds a
+// series: a subheading per series naming its settings and budget, a row per
+// step, and a sentence saying where it stopped, in the page's language, and
+// nothing at all for a record without one.
+func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
+	if got := seriesBlocks(sampleRun(), englishLabels(), "###"); got != "" {
+		t.Errorf("a record with no series produced %q", got)
+	}
+
+	english := docBlock(sampleSeriesRun(), englishLabels())
+	for _, want := range []string{
+		"### Concurrency series",
+		"#### http, dynamic surface: 4 in flight per credential, 10 s per step, memory budget 4000 MiB",
+		"#### http, meta surface",
+		"| Credentials |",
+		"Every planned step ran, up to 20 credentials.",
+		"Stopped at 5 credentials: the next step (20) was estimated at 4300 MiB against a budget of 4000 MiB.",
+		"Stopped at 5 credentials: the tools/call p99 reached 31000 ms, above the 30000 ms ceiling.",
+		`<img alt="Lines on a log scale of credentials showing each surface's peak resident memory per step`,
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(english, want) {
+				t.Errorf("the English block does not contain %q", want)
+			}
+		})
+	}
+	if strings.Contains(english, "\n\n\n") {
+		t.Error("the generated block has a run of blank lines, which markdownlint refuses")
+	}
+	// The cells are padded to the column, so the row for twenty credentials
+	// is matched by shape rather than by a literal.
+	if !regexp.MustCompile(`(?m)^\|\s+20 \|\s+880 \|\s+900 \|\s+1\.400 \|\s+8000 \|`).MatchString(english) {
+		t.Error("the meta series table has no row for its twenty-credential step")
+	}
+
+	spanish := siteBlock(sampleSeriesRun(), spanishLabels())
+	for _, want := range []string{
+		"### Serie de concurrencia",
+		"presupuesto de memoria de 4000 MiB",
+		"Detenida en 5 credenciales: el siguiente paso (20) se estimó en 4300 MiB frente a un presupuesto de 4000 MiB.",
+		"Detenida en 5 credenciales: el p99 de tools/call alcanzó 31000 ms, por encima del techo de 30000 ms.",
+		"Se ejecutaron todos los pasos previstos, hasta 20 credenciales.",
+		`<ChartPair name="series-memory" lang="es"`,
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(spanish, want) {
+				t.Errorf("the Spanish block does not contain %q", want)
+			}
+		})
+	}
+	for _, english := range []string{"Stopped at", "Every planned step", "memory budget", "Credentials |"} {
+		t.Run(english, func(t *testing.T) {
+			if strings.Contains(spanish, english) {
+				t.Errorf("the Spanish block carries the English %q", english)
+			}
+		})
+	}
+}
+
+// TestSeriesSentence_EveryKindOfEnding verifies the sentence under a series
+// table covers every way a series ends, including a failure and a series
+// that ran with no budget at all.
+func TestSeriesSentence_EveryKindOfEnding(t *testing.T) {
+	l := englishLabels()
+	cases := []struct {
+		name string
+		s    SeriesScenario
+		want string
+	}{
+		{name: "complete", s: SeriesScenario{StoppedAt: 1000}, want: "Every planned step ran, up to 1000 credentials."},
+		{
+			name: "budget", s: SeriesScenario{StoppedAt: 200, BudgetMiB: 48000, Stop: &SeriesStop{Kind: stopBudget, NextClients: 500, EstimateMiB: 61000}},
+			want: "Stopped at 200 credentials: the next step (500) was estimated at 61000 MiB against a budget of 48000 MiB.",
+		},
+		{
+			name: "latency", s: SeriesScenario{StoppedAt: 500, Stop: &SeriesStop{Kind: stopLatency, P99Ms: 33000}},
+			want: "Stopped at 500 credentials: the tools/call p99 reached 33000 ms, above the 30000 ms ceiling.",
+		},
+		{
+			name: "failure", s: SeriesScenario{StoppedAt: 100, Stop: &SeriesStop{Kind: stopFailure, NextClients: 200, Error: "too many open files"}},
+			want: "Stopped at 100 credentials: admitting the credentials of the next step (200) failed: too many open files.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := seriesSentence(tc.s, l); got != tc.want {
+				t.Errorf("seriesSentence = %q, want %q", got, tc.want)
+			}
+		})
+	}
+	t.Run("no budget in the caption", func(t *testing.T) {
+		run := sampleSeriesRun()
+		run.Series = run.Series[:1]
+		run.Series[0].BudgetMiB = 0
+		if got := seriesBlocks(run, l, "###"); !strings.Contains(got, "10 s per step, no memory budget") {
+			t.Errorf("the caption does not say the series ran with no budget: %q", got)
+		}
+	})
+}
+
+// TestRenderAll_ReportsWhatItCannotWriteOrCheck covers the four ways the
+// renderer stops with the artifact named: a site chart directory that cannot
+// be created, a documentation chart directory that cannot be created, a page
+// with no markers, and a -check over artifacts that were never written.
+func TestRenderAll_ReportsWhatItCannotWriteOrCheck(t *testing.T) {
+	block := func(t *testing.T, root, path string) {
+		t.Helper()
+		full := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+			t.Fatalf("create the parent of %s: %v", path, err)
+		}
+		//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+		if err := os.WriteFile(full, []byte("in the way"), 0o600); err != nil {
+			t.Fatalf("block %s: %v", path, err)
+		}
+	}
+	cases := []struct {
+		name    string
+		prepare func(t *testing.T, root string, opts *options)
+		want    string
+	}{
+		{
+			name: "site charts cannot be created",
+			prepare: func(t *testing.T, root string, opts *options) {
+				t.Helper()
+				block(t, root, opts.siteCharts)
+			},
+			want: "site charts (en)",
+		},
+		{
+			name: "documentation charts cannot be created",
+			prepare: func(t *testing.T, root string, opts *options) {
+				t.Helper()
+				block(t, root, opts.docCharts)
+			},
+			want: "documentation charts",
+		},
+		{
+			name: "a page without markers",
+			prepare: func(t *testing.T, root string, opts *options) {
+				t.Helper()
+				//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+				if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(opts.docPage)), []byte("no markers\n"), 0o600); err != nil {
+					t.Fatalf("rewrite the page: %v", err)
+				}
+			},
+			want: "generated section in docs/page.md",
+		},
+		{
+			name:    "checking before anything was written",
+			prepare: func(_ *testing.T, _ string, opts *options) { opts.check = true },
+			want:    "stale",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root, opts := renderTree(t)
+			tc.prepare(t, root, &opts)
+			err := renderAll(opts, root, sampleRun())
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("renderAll = %v, want an error saying %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestWriteCharts_ReportsWhereItCouldNotWrite covers a chart directory that
+// is a file and a chart file that cannot be written.
+func TestWriteCharts_ReportsWhereItCouldNotWrite(t *testing.T) {
+	palettes := map[string]palette{schemeLight: testPalette(), schemeDark: darkTestPalette()}
+
+	t.Run("directory is a file", func(t *testing.T) {
+		blocker := filepath.Join(t.TempDir(), "charts")
+		//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+		if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+			t.Fatalf("write the blocking file: %v", err)
+		}
+		if _, err := writeCharts(blocker, sampleRun(), englishLabels(), palettes, false); err == nil || !strings.Contains(err.Error(), "create") {
+			t.Errorf("writeCharts = %v, want the create failure", err)
+		}
+	})
+
+	t.Run("a chart cannot be written", func(t *testing.T) {
+		previous := writeOutput
+		writeOutput = func(string, []byte, os.FileMode) error { return errors.New("disk full") }
+		t.Cleanup(func() { writeOutput = previous })
+		_, err := writeCharts(filepath.Join(t.TempDir(), "charts"), sampleRun(), englishLabels(), palettes, false)
+		if err == nil || !strings.Contains(err.Error(), "disk full") {
+			t.Errorf("writeCharts = %v, want the write failure", err)
+		}
+	})
+}
+
+// TestWriteSection_ChangedUnderCheck_ReportsWithoutWriting verifies -check
+// reports a block that would change and leaves the file alone, and that a
+// write that fails is reported as such.
+func TestWriteSection_ChangedUnderCheck_ReportsWithoutWriting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "page.md")
+	original := "before\n\n" + docStartMark + "\n\nold\n\n" + docEndMark + "\n\nafter\n"
+	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatalf("writing the fixture: %v", err)
+	}
+
+	changed, err := writeSection(path, docStartMark, docEndMark, "new", true)
+	if err != nil || !changed {
+		t.Errorf("writeSection -check = (%v, %v), want a reported change", changed, err)
+	}
+	if got := readFileForTest(t, path); got != original {
+		t.Error("-check rewrote the page")
+	}
+
+	previous := writeOutput
+	writeOutput = func(string, []byte, os.FileMode) error { return errors.New("read-only") }
+	t.Cleanup(func() { writeOutput = previous })
+	if _, writeErr := writeSection(path, docStartMark, docEndMark, "new", false); writeErr == nil || !strings.Contains(writeErr.Error(), "read-only") {
+		t.Errorf("writeSection = %v, want the write failure", writeErr)
+	}
+}
+
+// TestTableCells_ZeroIsNotAvailable checks the table formatters print n/a
 // for a figure that was not measured rather than a zero a reader would take
 // for a measurement.
 func TestTableCells_ZeroIsNotAvailable(t *testing.T) {
@@ -490,6 +713,8 @@ func TestTableCells_ZeroIsNotAvailable(t *testing.T) {
 		{name: "mib measured", render: mib, value: 63.4, want: "63"},
 		{name: "ms unmeasured", render: ms, value: 0, want: "n/a"},
 		{name: "ms measured", render: ms, value: 12.6, want: "13"},
+		{name: "cpu per call unmeasured", render: cpuPerCallLabel, value: 0, want: "n/a"},
+		{name: "cpu per call measured", render: cpuPerCallLabel, value: 1.2346, want: "1.235"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

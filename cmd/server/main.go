@@ -473,6 +473,9 @@ FLAGS
                             probes that instead, an https one pinned to -tls-cert when given before it
   -tool-search string       Search tools by name/description and exit
   -log-level string         Logging verbosity: debug|info|warn|error (default info)
+  -pprof-addr string        Serve Go's profiling handlers (net/http/pprof) on this loopback address, e.g.
+                            127.0.0.1:6060, on a listener of their own, started before the transport.
+                            Empty (default) serves nothing; an address that is not loopback is refused
 
  Transport
   -transport string         Transport to serve: stdio|http|auto. Empty defers to -http; given both, -transport
@@ -603,6 +606,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_TELEMETRY_TOOL_NAME    Whether gen_ai.tool.name is a metric dimension: auto|on|off
                                     (default auto)
   GITLAB_MCP_LOG_LEVEL              Logging: debug/info/warn/error (default info)
+  GITLAB_MCP_PPROF_ADDR             Loopback address for Go's profiling handlers, e.g. 127.0.0.1:6060
+                                    (default empty: nothing served). Both transports
 
 ENVIRONMENT VARIABLES (HTTP mode)
   Every HTTP flag that has a variable, above or below, reads it when the flag
@@ -732,6 +737,17 @@ func hostsOf(urls []string) []string {
 // (no GITLAB_TOKEN required). A nil hcfg starts stdio mode using
 // environment-variable configuration (GITLAB_TOKEN required).
 func runWithContext(ctx context.Context, hcfg *httpConfig) error {
+	// First of all, before telemetry and before either transport, so that a
+	// profile of startup can be taken while startup is happening; and refused
+	// here, at startup, when the address is not loopback, because the failure
+	// mode of a profile listener on the network is a copy of the process's
+	// memory handed to whoever asks. See pprof.go.
+	profiles, pprofErr := startPprofListener(ctx, pprofListenAddr())
+	if pprofErr != nil {
+		return pprofErr
+	}
+	defer profiles.stop()
+
 	// One place for both transports, because telemetry is a property of the
 	// process rather than of how it is spoken to, and because a second copy of
 	// this would eventually disagree with the first about shutdown ordering.

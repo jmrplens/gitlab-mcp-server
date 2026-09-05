@@ -20,6 +20,13 @@ import (
 	"time"
 )
 
+// runtimeGOOS is the operating system the platform branches below key on. A
+// variable so a test on one platform can walk the branches of another: the
+// sysctl and ps fallbacks are only ever taken on macOS, and a test that
+// could not reach them would leave them as the one part of this command
+// nobody had run.
+var runtimeGOOS = runtime.GOOS
+
 // hostInfo collects what the running machine will admit to.
 func hostInfo() HostInfo {
 	info := HostInfo{
@@ -37,12 +44,12 @@ func hostInfo() HostInfo {
 // cpuModel reads the processor name, from /proc on Linux and from sysctl on
 // macOS.
 func cpuModel() string {
-	if runtime.GOOS == "linux" {
+	if runtimeGOOS == "linux" {
 		if model := parseCPUModel(readFileString("/proc/cpuinfo")); model != "" {
 			return model
 		}
 	}
-	if runtime.GOOS == "darwin" {
+	if runtimeGOOS == "darwin" {
 		if out, err := probe("sysctl", "-n", "machdep.cpu.brand_string"); err == nil {
 			return out
 		}
@@ -88,10 +95,10 @@ func parseCPUModel(cpuinfo string) string {
 // totalMemoryGiB reports installed memory, which bounds what any measurement
 // here could possibly have needed.
 func totalMemoryGiB() float64 {
-	if runtime.GOOS == "linux" {
+	if runtimeGOOS == "linux" {
 		return round(parseMemTotalKiB(readFileString("/proc/meminfo")) / (1024 * 1024))
 	}
-	if runtime.GOOS == "darwin" {
+	if runtimeGOOS == "darwin" {
 		if out, err := probe("sysctl", "-n", "hw.memsize"); err == nil {
 			if bytes, parseErr := strconv.ParseFloat(out, 64); parseErr == nil {
 				return round(bytes / (1024 * 1024 * 1024))
@@ -101,12 +108,33 @@ func totalMemoryGiB() float64 {
 	return 0
 }
 
+// availableMemoryMiB reports what the kernel says could be given to a new
+// process without swapping, which is what the series budgets against.
+//
+// Linux only, from MemAvailable, which accounts for reclaimable cache; the
+// free figure alone would under-report by whatever the page cache holds.
+// Elsewhere this answers zero, and the series then runs with no budget and
+// says so in its notes rather than inventing one from installed memory,
+// which says nothing about what is in use.
+func availableMemoryMiB() float64 {
+	if runtimeGOOS != "linux" {
+		return 0
+	}
+	return round(parseMeminfoKiB(readFileString("/proc/meminfo"), "MemAvailable:") / 1024)
+}
+
 // parseMemTotalKiB extracts MemTotal from /proc/meminfo content, in kibibytes.
 func parseMemTotalKiB(meminfo string) float64 {
+	return parseMeminfoKiB(meminfo, "MemTotal:")
+}
+
+// parseMeminfoKiB extracts one field of /proc/meminfo content, in kibibytes,
+// zero when the field is absent or unreadable.
+func parseMeminfoKiB(meminfo, field string) float64 {
 	scanner := bufio.NewScanner(strings.NewReader(meminfo))
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
-		if len(fields) >= 2 && fields[0] == "MemTotal:" {
+		if len(fields) >= 2 && fields[0] == field {
 			if value, err := strconv.ParseFloat(fields[1], 64); err == nil {
 				return value
 			}

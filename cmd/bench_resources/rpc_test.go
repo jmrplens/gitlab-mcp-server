@@ -5,8 +5,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -323,6 +325,138 @@ func TestStdioRPC_ContextCancelled_ReturnsPromptly(t *testing.T) {
 
 // itoa renders an id for the fixtures above.
 func itoa(value int64) string { return strconv.FormatInt(value, 10) }
+
+// TestRequestBody_UnencodableParams_IsReported verifies a parameter the
+// encoder cannot serialize fails at the request rather than at the wire,
+// which is the one failure requestBody has.
+func TestRequestBody_UnencodableParams_IsReported(t *testing.T) {
+	_, err := requestBody(1, "tools/call", map[string]any{"bad": make(chan int)})
+	if err == nil || !strings.Contains(err.Error(), "encode tools/call request") {
+		t.Errorf("requestBody = %v, want the encoding failure", err)
+	}
+}
+
+// TestHTTPRPC_EveryFailureIsNamed covers the failures between building a
+// request and reading a usable answer: parameters that cannot be encoded, an
+// endpoint that is not a URL, nothing listening, a body cut short, and an
+// event stream with no message in it.
+func TestHTTPRPC_EveryFailureIsNamed(t *testing.T) {
+	truncated := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		_, _ = io.WriteString(w, "short")
+	}))
+	defer truncated.Close()
+	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "event: ping\n\n")
+	}))
+	defer empty.Close()
+
+	cases := []struct {
+		name     string
+		endpoint string
+		params   map[string]any
+		want     string
+	}{
+		{name: "unencodable params", endpoint: truncated.URL, params: map[string]any{"bad": make(chan int)}, want: "encode"},
+		{name: "endpoint is not a url", endpoint: "http://bad host", want: "build tools/list request"},
+		{name: "nothing listening", endpoint: "http://127.0.0.1:1", want: "tools/list:"},
+		{name: "body cut short", endpoint: truncated.URL, want: "read tools/list response"},
+		{name: "event stream with no message", endpoint: empty.URL, want: "no data line"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newHTTPRPC(tc.endpoint, "token")
+			defer client.close()
+			_, err := client.call(context.Background(), "tools/list", tc.params)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("call = %v, want an error saying %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestEventStreamPayload_LineTooLong_IsReported verifies a line longer than
+// the scanner's ceiling is reported rather than read as an empty stream: the
+// ceiling exists so a runaway response cannot take the driver's memory, and
+// the report is what tells the operator that is what happened.
+func TestEventStreamPayload_LineTooLong_IsReported(t *testing.T) {
+	body := append([]byte("data: "), bytes.Repeat([]byte("x"), 33<<20)...)
+	if _, err := eventStreamPayload(body); err == nil || !strings.Contains(err.Error(), "read event stream") {
+		t.Errorf("eventStreamPayload = %v, want the scanner's refusal", err)
+	}
+}
+
+// failingReader is a server output that fails on the first read, which is
+// what a broken pipe looks like to the demultiplexer.
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) { return 0, errors.New("pipe broken") }
+
+// TestStdioRPC_Failures covers what the stdio client does when the
+// server's side goes wrong: lines that are not responses are skipped, a
+// read error is remembered and every later call gets it, a closed input
+// fails the write, and a response carrying an error is a failed call.
+func TestStdioRPC_Failures(t *testing.T) {
+	t.Run("skips what is not a response and remembers the read error", func(t *testing.T) {
+		toClient, fromServer := io.Pipe()
+		toServer, fromClient := io.Pipe()
+		go func() {
+			buffer := make([]byte, 4096)
+			_, _ = toServer.Read(buffer)
+			_, _ = io.WriteString(fromServer, "not json at all\n")
+			_, _ = io.WriteString(fromServer, `{"jsonrpc":"2.0","method":"notifications/progress"}`+"\n")
+			_, _ = io.WriteString(fromServer, `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"refused"}}`+"\n")
+			_ = fromServer.Close()
+		}()
+		client := newStdioRPC(fromClient, toClient)
+		defer client.close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := client.call(ctx, "tools/list", nil); err == nil || !strings.Contains(err.Error(), "refused") {
+			t.Errorf("call = %v, want the server's refusal", err)
+		}
+		<-client.done
+		if _, err := client.call(ctx, "tools/list", nil); err == nil || !strings.Contains(err.Error(), "closed its output") {
+			t.Errorf("a call after the server left = %v, want the remembered failure", err)
+		}
+	})
+
+	t.Run("a read error is the failure", func(t *testing.T) {
+		_, fromClient := io.Pipe()
+		client := newStdioRPC(fromClient, failingReader{})
+		defer client.close()
+		<-client.done
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := client.call(ctx, "tools/list", nil); err == nil || !strings.Contains(err.Error(), "pipe broken") {
+			t.Errorf("call = %v, want the read error", err)
+		}
+	})
+
+	t.Run("a closed input fails the write", func(t *testing.T) {
+		toClient, _ := io.Pipe()
+		_, fromClient := io.Pipe()
+		client := newStdioRPC(fromClient, toClient)
+		client.close()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := client.call(ctx, "tools/list", nil); err == nil || !strings.Contains(err.Error(), "write to the server") {
+			t.Errorf("call = %v, want the write failure", err)
+		}
+	})
+
+	t.Run("unencodable params", func(t *testing.T) {
+		toClient, _ := io.Pipe()
+		_, fromClient := io.Pipe()
+		client := newStdioRPC(fromClient, toClient)
+		defer client.close()
+		if _, err := client.call(context.Background(), "tools/call", map[string]any{"bad": make(chan int)}); err == nil {
+			t.Error("call accepted parameters it cannot encode")
+		}
+	})
+}
 
 // TestCommandProcess_RefusesPipesAlreadyWired covers the two ways exec.Cmd
 // declines to hand out a pipe: a stream the caller already assigned.

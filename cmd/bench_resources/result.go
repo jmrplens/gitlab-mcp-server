@@ -18,10 +18,18 @@ import (
 	"time"
 )
 
-// resultSchema is the version of the JSON shape below. A reader that finds a
-// number it does not know refuses rather than drawing a chart from fields it
-// guessed at.
-const resultSchema = 1
+// resultSchema is the version of the JSON shape below, the one a measurement
+// writes. A reader that finds a number it does not know refuses rather than
+// drawing a chart from fields it guessed at.
+//
+// Schema 2 added the concurrency series as a top-level list beside the
+// scenarios. Nothing a schema-1 record carries changed shape, so the reader
+// still accepts one: the published figures were measured under schema 1 and
+// stay published until the series is measured on a host that can hold it.
+const resultSchema = 2
+
+// readableSchemas are the versions this build can draw.
+var readableSchemas = []int{1, resultSchema}
 
 // Run is one benchmark session: what was measured, on what, and with which
 // knobs.
@@ -36,6 +44,108 @@ type Run struct {
 	Host        HostInfo   `json:"host"`
 	Settings    Settings   `json:"settings"`
 	Scenarios   []Scenario `json:"scenarios"`
+	// Series are the concurrency series, one per surface, kept apart from the
+	// scenarios because nothing that reads a scenario knows what to do with a
+	// list of steps: the point tables and figures iterate Scenarios, and a
+	// series entry among them would be drawn as a point with no numbers.
+	Series []SeriesScenario `json:"series,omitempty"`
+}
+
+// SeriesScenario is one concurrency series: one HTTP process on one surface,
+// given more and more distinct credentials, and measured at each count.
+//
+// The list of counts is the plan; Steps is what actually ran, in the same
+// order, and Skipped is the rest. When the two differ, Stop says why: the
+// series refuses to take the host down, so a step whose resident set is
+// estimated beyond the memory budget is never started, and a step whose
+// tool calls take longer than the ceiling is the last one run.
+type SeriesScenario struct {
+	ID        string `json:"id"`
+	Transport string `json:"transport"`
+	Surface   string `json:"surface"`
+	// Parallel is requests in flight per credential during a step's steady
+	// phase.
+	Parallel int `json:"parallel"`
+	// StepSeconds is the length of every step's steady phase.
+	StepSeconds float64 `json:"step_seconds"`
+	// Clients is the planned list of credential counts.
+	Clients []int `json:"clients"`
+	// BudgetMiB is the resident set the series would not plan a step beyond;
+	// zero when the host did not report its available memory.
+	BudgetMiB float64 `json:"budget_mib"`
+	// StoppedAt is the last credential count that ran.
+	StoppedAt int `json:"stopped_at"`
+	// StopReason is the sentence the record and the terminal carry, empty
+	// when every planned step ran. Stop is the same fact for the renderers,
+	// which write it in each page's language.
+	StopReason string       `json:"stop_reason"`
+	Stop       *SeriesStop  `json:"stop,omitempty"`
+	Skipped    []int        `json:"skipped,omitempty"`
+	Steps      []SeriesStep `json:"steps"`
+	Notes      []string     `json:"notes,omitempty"`
+}
+
+// The reasons a series stops early.
+const (
+	stopBudget  = "budget"
+	stopLatency = "latency"
+	stopFailure = "failure"
+)
+
+// SeriesStop is why a series stopped before its last planned count.
+type SeriesStop struct {
+	Kind string `json:"kind"`
+	// NextClients is the count that was not started: the step estimated over
+	// the budget, or the one whose credentials could not be admitted.
+	NextClients int `json:"next_clients,omitempty"`
+	// EstimateMiB is what the next step was expected to reach, for a budget
+	// stop.
+	EstimateMiB float64 `json:"estimate_mib,omitempty"`
+	// P99Ms is the tools/call tail that crossed the ceiling, for a latency
+	// stop.
+	P99Ms float64 `json:"p99_ms,omitempty"`
+	// Error is what failed, for a failure stop.
+	Error string `json:"error,omitempty"`
+}
+
+// SeriesStep is one credential count, measured over its steady phase.
+type SeriesStep struct {
+	Clients int `json:"clients"`
+	// RSSMeanMiB and RSSPeakMiB are the resident set over the steady phase,
+	// sampled the way every other scenario samples it.
+	RSSMeanMiB float64 `json:"rss_mean_mib"`
+	RSSPeakMiB float64 `json:"rss_peak_mib"`
+	// CPUMsPerCall is the processor time the server consumed during the
+	// phase divided by the calls that completed, in milliseconds.
+	CPUMsPerCall float64 `json:"cpu_ms_per_call"`
+	// Calls is every tools/call and tools/list that completed in the phase.
+	Calls     int     `json:"calls"`
+	ListP50Ms float64 `json:"list_p50_ms"`
+	ListP99Ms float64 `json:"list_p99_ms"`
+	CallP50Ms float64 `json:"call_p50_ms"`
+	CallP99Ms float64 `json:"call_p99_ms"`
+	// Goroutines is read from the profile listener at the end of the phase,
+	// which unlike the traceback signal leaves the process alive.
+	Goroutines int          `json:"goroutines"`
+	Pool       PoolCounters `json:"pool"`
+	Profiles   StepProfiles `json:"profiles"`
+	Notes      []string     `json:"notes,omitempty"`
+}
+
+// PoolCounters is what the driver knows about the server's pool without an
+// endpoint to ask: it created one entry per credential, and it sized the
+// pool to hold every step, so nothing was evicted between them.
+type PoolCounters struct {
+	Entries  int `json:"entries"`
+	Capacity int `json:"capacity"`
+}
+
+// StepProfiles are the profiles captured during a step, as paths relative
+// to the profiles directory; empty when a profile could not be taken, with
+// the reason among the step's notes.
+type StepProfiles struct {
+	CPU  string `json:"cpu"`
+	Heap string `json:"heap"`
 }
 
 // ServerInfo identifies the build that was measured, as the binary itself
@@ -228,10 +338,15 @@ func mibOf(bytes uint64) float64 {
 	return round(float64(bytes) / (1024 * 1024))
 }
 
+// marshalRecord encodes the record. A variable so a test can drive the one
+// failure the encoder has, which a Run of plain numbers and strings never
+// produces on its own.
+var marshalRecord = json.MarshalIndent
+
 // writeRun writes the record as indented JSON with a trailing newline, the
 // shape every other committed JSON artifact in this repository has.
 func writeRun(path string, run *Run) error {
-	data, err := json.MarshalIndent(run, "", "  ")
+	data, err := marshalRecord(run, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode results: %w", err)
 	}
@@ -255,10 +370,10 @@ func readRun(path string) (*Run, error) {
 	if unmarshalErr := json.Unmarshal(data, &run); unmarshalErr != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, unmarshalErr)
 	}
-	if run.Schema != resultSchema {
-		return nil, fmt.Errorf("%s: schema %d, this build reads %d", path, run.Schema, resultSchema)
+	if !slices.Contains(readableSchemas, run.Schema) {
+		return nil, fmt.Errorf("%s: schema %d, this build reads %v", path, run.Schema, readableSchemas)
 	}
-	if len(run.Scenarios) == 0 {
+	if len(run.Scenarios) == 0 && len(run.Series) == 0 {
 		return nil, fmt.Errorf("%s: no scenarios recorded", path)
 	}
 	return &run, nil
