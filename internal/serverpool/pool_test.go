@@ -1190,6 +1190,7 @@ func TestStartRevalidation_TriggersRevalidation(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // the wait below can end the test early, and the sweep must not outlive it
 	pool.StartRevalidation(ctx)
 
 	// Wait for the first tick to complete, rather than for a span the sweep

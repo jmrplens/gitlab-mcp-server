@@ -570,9 +570,11 @@ func TestSubscribe_IdleSession_KeepsWatchingWhileItsStreamIsOpen(t *testing.T) {
 	}
 	waitForPolls(t, backend, 3)
 
-	// Several leases of silence on a session that sends nothing else.
+	// Several leases of silence on a session that sends nothing else. The
+	// baseline counts reads of the watched pipeline only, the same counter
+	// the wait below watches, so nothing but polling can move it.
 	time.Sleep(lease + slow/4)
-	afterLease := backend.calls()
+	afterLease := backend.hits.Load()
 
 	// Three more reads at the base period arrive within milliseconds; a
 	// watch demoted to the slow interval would need three of those, seconds
@@ -633,17 +635,20 @@ func TestSubscribe_ActiveSession_WatcherStaysFast(t *testing.T) {
 		}
 	}
 	busy(8) // four lease periods
-	stillActive := backend.calls()
+	stillActive := backend.hits.Load()
 
-	// Keep the session busy while waiting for three more reads. At the base
-	// period they arrive within milliseconds; a watch demoted to the slow
-	// interval would need seconds, so the deadline is the assertion and the
-	// machine's speed is not.
+	// Keep the session busy while waiting for three more reads of the
+	// watched pipeline. At the base period they arrive within milliseconds;
+	// a watch demoted to the slow interval would need seconds, so the
+	// deadline is the assertion and the machine's speed is not. Only reads
+	// of the pipeline count: the busy traffic itself reaches GitLab, and
+	// counting it would let the renewal calls stand in for the polling they
+	// are supposed to keep alive.
 	deadline := time.Now().Add(slow / 2)
-	for backend.calls()-stillActive < 3 {
+	for backend.hits.Load()-stillActive < 3 {
 		if time.Now().After(deadline) {
-			t.Fatalf("GitLab was called %d more times in %v after the lease would have run out; "+
-				"activity on the session did not renew the watch", backend.calls()-stillActive, slow/2)
+			t.Fatalf("the pipeline was read %d more times in %v after the lease would have run out; "+
+				"activity on the session did not renew the watch", backend.hits.Load()-stillActive, slow/2)
 		}
 		busy(1)
 	}
