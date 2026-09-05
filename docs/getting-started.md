@@ -181,7 +181,7 @@ yours, and [IDE Configuration](guides/ide-configuration.md) has the full set.
 You need two values:
 
 1. **GitLab URL** — your instance base URL, for example `https://gitlab.example.com`. On GitLab.com you can leave it out.
-2. **Personal Access Token** — a `glpat-...` token with the `api` scope, created under **User settings > Access tokens**. A `read_api` token also works for reads: in HTTP mode the server serves it a read-only tool surface, while on stdio the write actions stay listed and GitLab refuses them with 403.
+2. **Personal Access Token** — a `glpat-...` token with the `api` scope, created under **User settings > Access tokens**. A `read_api` token also works for reads: the server detects the scope at startup and serves a read-only tool surface for it, on stdio as in HTTP mode, and `gitlab_find_action` reports a write action as withheld by the token rather than missing.
 
 If you would rather not paste a token into a config file at all, the HTTP mode
 supports OAuth against your GitLab instance instead: see [OAuth App

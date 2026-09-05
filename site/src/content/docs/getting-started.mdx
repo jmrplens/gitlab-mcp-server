@@ -37,7 +37,7 @@ head:
             "@type": "HowToStep",
             "position": 1,
             "name": "Create a personal access token",
-            "text": "In GitLab, go to Preferences, then Access Tokens, and create a new token with the api scope. Copy it — you need it for configuration. For a read-only setup, use a token with the read_api scope and set GITLAB_READ_ONLY=true, which disables all mutating tools.",
+            "text": "In GitLab, go to Preferences, then Access Tokens, and create a new token with the api scope. Copy it — you need it for configuration. For a read-only setup, use a token with the read_api scope: the server detects it and serves only the read actions.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#creating-a-personal-access-token"
           },
           {
@@ -65,7 +65,7 @@ head:
       }
 faq:
   - q: "What GitLab token scope does GitLab MCP Server need?"
-    a: "GitLab MCP Server needs a Personal Access Token with the api scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the read_api scope and set GITLAB_READ_ONLY=true, which disables every mutating tool. Create tokens under GitLab, then Preferences, then Access Tokens."
+    a: "GitLab MCP Server needs a Personal Access Token with the api scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the read_api scope: the server detects the scope at startup and serves only the read actions, and GITLAB_READ_ONLY=true does the same for a token that could write. Create tokens under GitLab, then Preferences, then Access Tokens."
   - q: "How do I connect GitLab MCP Server to a self-managed GitLab instance?"
     a: "Point GITLAB_URL at your instance, for example GITLAB_URL=https://gitlab.example.com. GITLAB_URL defaults to https://gitlab.com, so you set it only for self-managed Community or Enterprise Edition instances. If the instance uses a self-signed or internal CA certificate, also set GITLAB_SKIP_TLS_VERIFY=true to bypass certificate verification on a trusted network."
   - q: "Which tool mode does GitLab MCP Server use by default?"
@@ -105,7 +105,7 @@ Before you begin, make sure you have:
 3. Copy the token — you'll need it for configuration
 
 :::tip
-For read-only setups, you can use a token with `read_api` scope and enable `GITLAB_READ_ONLY=true`. This disables all mutating tools.
+For read-only setups, use a token with the `read_api` scope: the server detects the scope at startup and serves only the read actions, on stdio as in HTTP mode. `GITLAB_READ_ONLY=true` does the same for a token that could write.
 :::
 
 ## Quick install

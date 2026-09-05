@@ -54,7 +54,9 @@ action.**
   `serverpool.applyScopeReadOnly` sets `ServerConfig.ReadOnly` on the pool
   entry when `gitlabclient.WriteCapable` reports the token's scopes cannot
   mutate. The entry is per token, so one client's `read_api` credential never
-  narrows another's.
+  narrows another's. [Since 2.8.0 stdio applies the same narrowing once at
+  startup, through `gitlabclient.NarrowToTokenScope`, which the pool's
+  `applyScopeReadOnly` delegates to.]
 - `oauth.RequiredScope` keeps its name but changes role: it is what the
   `WWW-Authenticate` challenge **recommends** on a 401, not what admission
   requires. The `insufficient_scope` 403 names `MinimumScope` instead: RFC 6750

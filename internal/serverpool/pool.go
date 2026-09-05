@@ -869,13 +869,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 // The narrowing is per pool entry, and an entry is per token, so one client's
 // read_api token cannot narrow another client's api token.
 func applyScopeReadOnly(entryCfg *config.ServerConfig) {
-	if entryCfg.ReadOnly || gitlabclient.WriteCapable(entryCfg.TokenScopes) {
-		return
-	}
-	entryCfg.ReadOnly = true
-	entryCfg.ReadOnlyFromTokenScope = true
-	slog.Info("token cannot write; serving a read-only tool surface for it",
-		"scopes", entryCfg.TokenScopes)
+	gitlabclient.NarrowToTokenScope(entryCfg)
 }
 
 // tierSource returns the label used in logs for how the licensing tier was

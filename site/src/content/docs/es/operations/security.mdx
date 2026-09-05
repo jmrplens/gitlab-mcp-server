@@ -6,7 +6,7 @@ faq:
   - q: "¿Cómo protege GitLab MCP Server mi token en modo stdio?"
     a: "En modo stdio el token de GitLab **nunca sale del proceso local del servidor**. Se carga desde el entorno y se usa exclusivamente para llamadas a la API de GitLab —nunca se envía al cliente MCP ni se incluye en las salidas de herramientas. El servidor se ejecuta como proceso local comunicándose por stdin/stdout, así que no se abren puertos de red, y solo necesita un token con los scopes requeridos para las operaciones que pretendas usar."
   - q: "¿Qué scopes de token debería usar?"
-    a: "Usa los **scopes mínimos** para tu flujo: `read_api` para operaciones de solo lectura, `api` para operaciones completas de crear/actualizar/eliminar, y `read_repository` o `write_repository` para acceso o modificación de archivos del repositorio. Si solo necesitas operaciones de lectura, usa `read_api` y habilita además `GITLAB_READ_ONLY=true` como defensa en profundidad. Al iniciar, el servidor detecta los scopes de tu token y desactiva las herramientas que requieren scopes que el token no posee."
+    a: "Usa los **scopes mínimos** para tu flujo: `read_api` para operaciones de solo lectura, `api` para operaciones completas de crear/actualizar/eliminar, y `read_repository` o `write_repository` para acceso o modificación de archivos del repositorio. Si solo necesitas operaciones de lectura, usa `read_api`: al iniciar, el servidor detecta los scopes de tu token, sirve solo las acciones de lectura a un token que no puede escribir y desactiva las herramientas que requieren scopes que el token no posee. `GITLAB_READ_ONLY=true` mantiene en solo lectura también un token que podría escribir, como defensa en profundidad."
   - q: "¿Cuál es la diferencia entre el modo solo lectura y el modo seguro?"
     a: "El **modo solo lectura** (`GITLAB_READ_ONLY=true`) no registra ninguna herramienta de escritura, así que solo están disponibles list, get y search —una garantía firme a nivel de servidor. El **modo seguro** (`GITLAB_SAFE_MODE=true`) sí registra las herramientas de escritura pero las intercepta y devuelve una vista previa JSON estructurada del nombre, los parámetros y las anotaciones en lugar de ejecutarlas. Si ambos están activos, el modo solo lectura tiene precedencia y las herramientas de escritura se desactivan por completo."
   - q: "¿Cómo verifico la integridad de un binario descargado?"
@@ -95,7 +95,7 @@ Usa los scopes mínimos requeridos para tu flujo de trabajo:
 | `write_repository` | Modificación de archivos del repositorio              |
 
 :::tip
-Si solo necesitas operaciones de lectura, usa el scope `read_api` y habilita `GITLAB_READ_ONLY=true` como defensa en profundidad.
+Si solo necesitas operaciones de lectura, usa el scope `read_api`: el servidor lo detecta al arrancar y sirve solo las acciones de lectura, tanto en stdio como en modo HTTP. `GITLAB_READ_ONLY=true` mantiene en solo lectura también un token que podría escribir, como defensa en profundidad.
 :::
 
 ### Filtrado de herramientas por scopes
