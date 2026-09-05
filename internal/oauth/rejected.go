@@ -110,12 +110,13 @@ func (r *RejectedTokens) RecordKind(gitlabURL, token string, kind RejectionKind)
 	if len(r.entries) >= r.max {
 		r.evictLocked()
 	}
-	// Still full after evicting means every entry is live. Skipping the
-	// insert is the safe direction: the rate limiter is the layer that
-	// actually bounds a flood, and this cache only saves it upstream calls.
-	if len(r.entries) >= r.max {
-		return
-	}
+	// evictLocked frees a slot on every full map: it drops what has expired
+	// and, when nothing has, the live entry nearest expiry, so the insert
+	// never grows the map past max. A second "still full" check used to sit
+	// here, unreachable for that reason, with a rationale ("every entry is
+	// live, skip the insert") describing a case the eviction had already
+	// handled. The bound it seemed to add is the one
+	// TestRejectedTokens_AtCapacity_StaysBounded pins.
 	r.entries[key] = rejection{expiresAt: time.Now().Add(r.ttl), kind: kind}
 }
 

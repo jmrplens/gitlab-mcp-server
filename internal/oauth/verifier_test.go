@@ -1517,6 +1517,10 @@ func TestVerificationRedirect_Policy(t *testing.T) {
 		{name: "ipv6 zone literal spelled as a subdomain", origin: "https://gitlab.example.com/api/v4/user", dest: "https://[::1%25.gitlab.example.com]/api/v4/user", wantErr: true},
 		{name: "ipv6 zone literal on a plain http instance", origin: "http://gitlab.internal/api/v4/user", dest: "http://[::1%25.gitlab.internal]:9102/api/v4/user", wantErr: true},
 		{name: "the instance is itself an ipv6 literal", origin: "https://[2001:db8::1]/api/v4/user", dest: "https://[2001:db8::1]/api/v4/user/"},
+		// A Location of "https:///x" parses to a URL with no host at all. It
+		// is nowhere, so it is not the instance, and the policy must say so
+		// rather than let net/http try to dial an empty address.
+		{name: "destination without a host", origin: "https://gitlab.example.com/api/v4/user", dest: "https:///api/v4/user", wantErr: true},
 		{name: "ten hops already made", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user", hops: 10, wantErr: true},
 	}
 
