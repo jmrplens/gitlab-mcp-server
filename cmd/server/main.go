@@ -1332,12 +1332,13 @@ var stdioStartupDrainTimeout = 5 * time.Second //nolint:gochecknoglobals // test
 // exist for the day one of those facts changes, and would otherwise never
 // run.
 var (
-	newGitLabClient      = gitlabclient.NewClient            //nolint:gochecknoglobals // test seam
-	buildDynamicCatalog  = dynamiccatalog.Build              //nolint:gochecknoglobals // test seam
-	buildActionCatalog   = gitlabtools.BuildActionCatalog    //nolint:gochecknoglobals // test seam
-	filterActionCatalog  = gitlabtools.FilterActionCatalog   //nolint:gochecknoglobals // test seam
-	registerAllMeta      = gitlabtools.RegisterAllMeta       //nolint:gochecknoglobals // test seam
-	addStandaloneCatalog = dynamictools.AddStandaloneCatalog //nolint:gochecknoglobals // test seam
+	newGitLabClient         = gitlabclient.NewClient              //nolint:gochecknoglobals // test seam
+	buildDynamicCatalog     = dynamiccatalog.Build                //nolint:gochecknoglobals // test seam
+	buildActionCatalog      = gitlabtools.BuildActionCatalog      //nolint:gochecknoglobals // test seam
+	sharedMetaCatalog       = gitlabtools.SharedMetaCatalog       //nolint:gochecknoglobals // test seam
+	sharedIndividualCatalog = gitlabtools.SharedIndividualCatalog //nolint:gochecknoglobals // test seam
+	registerAllMeta         = gitlabtools.RegisterAllMeta         //nolint:gochecknoglobals // test seam
+	addStandaloneCatalog    = dynamictools.AddStandaloneCatalog   //nolint:gochecknoglobals // test seam
 )
 
 // prepareStdioCatalog runs everything stdio startup needs GitLab for, registers
@@ -1881,6 +1882,7 @@ func (sh *serverShell) register(ctx context.Context) error {
 			Tools:      manifestTools,
 			Catalog:    surfaceCatalog,
 			MetaRoutes: metaSchemaRoutes,
+			ShareKey:   manifestShareKey(sh.toolSurface, sh.capabilitySurface, cfg, surfaceCatalog),
 		}
 		if sh.subs != nil {
 			manifestOpts.SubscribableURITemplates = subscriptions.Templates()
@@ -1893,6 +1895,26 @@ func (sh *serverShell) register(ctx context.Context) error {
 	// reads it.
 	sh.identifier.set(gitlabtools.NewCallIdentifier(surfaceCatalog, sh.toolSurface))
 	return nil
+}
+
+// manifestShareKey names the gitlab://tools manifest one configuration
+// serves, so every pool entry of that configuration registers one snapshot
+// instead of building its own, or "" when the catalog was not shared and the
+// manifest must stay private to this server.
+//
+// The key is the shared catalog's identity plus everything else the manifest
+// reads: the surface (which decides the entry shape), the narrowing that
+// decides which registered tools are visible after applyToolVisibilityConfig
+// (the same key the catalogs use), the meta parameter-schema mode (the meta
+// dispatchers' own input schemas are in the manifest), and the capability
+// surface (the subscriptions section). The tier is implied by the catalog.
+func manifestShareKey(toolSurface, capabilitySurface string, cfg *config.ServerConfig, surfaceCatalog *actioncatalog.Catalog) string {
+	origin := surfaceCatalog.SharedOrigin()
+	if origin == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s|%p|%s|schema=%s|capability=%s",
+		toolSurface, origin, gitlabtools.CatalogFilterKey(cfg), cfg.MetaParamSchema, capabilitySurface)
 }
 
 func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
@@ -2033,15 +2055,15 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		var metaWithheld gitlabtools.WithheldActions
 		filteredCatalog := prebuiltCatalog
 		if filteredCatalog == nil {
-			actionCatalog, catalogErr := buildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
+			// Built and filtered once per configuration and shared, then
+			// bound to this entry's client: the catalog is the whole cost of a
+			// pool entry, and every entry of one configuration needs the same
+			// one. A catalog that cannot be built is an error for the entry,
+			// not a server with no meta-tools.
+			var catalogErr error
+			filteredCatalog, metaWithheld, catalogErr = sharedMetaCatalog(client, cfg)
 			if catalogErr != nil {
-				slog.Warn("failed to build meta action catalog", "error", catalogErr)
-				actionCatalog = actioncatalog.NewCatalog()
-			}
-			var filterErr error
-			filteredCatalog, metaWithheld, filterErr = filterActionCatalog(actionCatalog, cfg)
-			if filterErr != nil {
-				return serverSurfaceRegistration{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
+				return serverSurfaceRegistration{}, catalogErr
 			}
 		}
 		gitlabtools.RegisterMetaCatalog(server, filteredCatalog)
@@ -2061,10 +2083,6 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		// catalog can no longer map the operator's entries to anything.
 		var individualExcluded []string
 		if individualCatalog == nil {
-			built, catalogErr := buildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
-			if catalogErr != nil {
-				return serverSurfaceRegistration{}, fmt.Errorf("build individual action catalog: %w", catalogErr)
-			}
 			// Excluded in the catalog, as on the other two surfaces, rather
 			// than by name after registration. Removing by registered name
 			// worked for exactly one of the three spellings an operator
@@ -2073,8 +2091,13 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			// removed nothing and warned about nothing.
 			// removeExcludedTools still runs afterwards, for the standalone
 			// tools registered outside the catalog.
-			individualExcluded = built.ExcludedActionIDs(cfg.ExcludeTools)
-			individualCatalog = gitlabtools.ExcludeFromCatalog(built, cfg.ExcludeTools)
+			// Built once per configuration and shared, then bound to this
+			// entry's client, like the other two surfaces.
+			var catalogErr error
+			individualCatalog, individualExcluded, catalogErr = sharedIndividualCatalog(client, cfg)
+			if catalogErr != nil {
+				return serverSurfaceRegistration{}, catalogErr
+			}
 		} else {
 			// A caller-supplied catalog is whatever it was given, so this is
 			// the best available answer; the only caller that supplies one is

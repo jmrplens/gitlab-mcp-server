@@ -4,7 +4,9 @@ import (
 	"context"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -43,6 +45,14 @@ type ToolSurfaceResourceOptions struct {
 	// offered (CAPABILITY_SURFACE=minimal), and the manifest then omits the
 	// section rather than advertising a capability the server would refuse.
 	SubscribableURITemplates []string
+	// ShareKey, when set, names the configuration the manifest describes,
+	// and the snapshot built for it is cached for the process and served by
+	// every server registered under the same key. The caller must include
+	// in it everything the manifest depends on other than the credential:
+	// the surface, the shared catalog's identity, the narrowing that
+	// decides which tools are visible, the meta parameter-schema mode and
+	// the capability surface. Empty builds a private snapshot.
+	ShareKey string
 }
 
 // ToolSurfaceVisibleTool summarizes one MCP tool currently advertised
@@ -279,14 +289,36 @@ type toolSnapshot struct {
 // Use [ToolSurfaceResourceOptions] to pass the active tool surface;
 // see [newToolSurfaceSnapshot] for the projection rules.
 func RegisterToolSurfaceResources(server *mcp.Server, opts ToolSurfaceResourceOptions) {
-	snapshot := newToolSurfaceSnapshot(opts)
+	snapshot := toolSurfaceSnapshotFor(opts)
 	registerToolManifestIndex(server, snapshot)
 	registerToolManifestTemplate(server, snapshot)
 }
 
+// sharedToolSurfaceSnapshots holds one snapshot per share key.
+var sharedToolSurfaceSnapshots sync.Map // string -> *toolSurfaceSnapshot
+
+// toolSurfaceSnapshotFor returns the snapshot for opts: the one cached under
+// opts.ShareKey when a key was given, built by the first caller for it, and
+// a private one otherwise. Two servers that race to build one key both
+// build; the first to store wins and the other's copy is dropped.
+func toolSurfaceSnapshotFor(opts ToolSurfaceResourceOptions) *toolSurfaceSnapshot {
+	if opts.ShareKey == "" {
+		snapshot := newToolSurfaceSnapshot(opts)
+		return &snapshot
+	}
+	if cached, ok := sharedToolSurfaceSnapshots.Load(opts.ShareKey); ok {
+		snapshot, _ := cached.(*toolSurfaceSnapshot)
+		return snapshot
+	}
+	built := newToolSurfaceSnapshot(opts)
+	actual, _ := sharedToolSurfaceSnapshots.LoadOrStore(opts.ShareKey, &built)
+	snapshot, _ := actual.(*toolSurfaceSnapshot)
+	return snapshot
+}
+
 // registerToolManifestIndex registers the static catalog resource that
 // lists the active surface and every executable entry.
-func registerToolManifestIndex(server *mcp.Server, snapshot toolSurfaceSnapshot) {
+func registerToolManifestIndex(server *mcp.Server, snapshot *toolSurfaceSnapshot) {
 	server.AddResource(&mcp.Resource{
 		URI:         toolsManifestURI,
 		Name:        "tool_manifest",
@@ -303,7 +335,7 @@ func registerToolManifestIndex(server *mcp.Server, snapshot toolSurfaceSnapshot)
 // registerToolManifestTemplate registers the URI-template resource that
 // returns the call shape and input schema for one entry from the
 // surface manifest.
-func registerToolManifestTemplate(server *mcp.Server, snapshot toolSurfaceSnapshot) {
+func registerToolManifestTemplate(server *mcp.Server, snapshot *toolSurfaceSnapshot) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: toolsManifestTemplateURI,
 		Name:        "tool_detail",
@@ -833,12 +865,12 @@ func dedupeDynamicStrings(values []string) []string {
 }
 
 // dynamicActionSchema returns the JSON Schema (as a generic map) for
-// the params object of one dynamic action. The schema is cloned via
-// [toolutil.CloneMetaSchemaRoutes] so per-action edits do not leak
-// between sibling actions. When the action has no captured InputSchema
-// a permissive fallback object schema is returned.
+// the params object of one dynamic action. The route's own schema is
+// never edited: the enriched form is derived from it. When the action
+// has no captured InputSchema a permissive fallback object schema is
+// returned.
 func dynamicActionSchema(action actioncatalog.Action) map[string]any {
-	route := toolutil.CloneMetaSchemaRoutes(map[string]toolutil.ActionMap{action.ToolName: {action.Name: action.Route}})[action.ToolName][action.Name]
+	route := action.Route
 	if route.InputSchema == nil {
 		schema := map[string]any{
 			"type":                 "object",
@@ -847,13 +879,23 @@ func dynamicActionSchema(action actioncatalog.Action) map[string]any {
 		}
 		return enrichDynamicSchema(schema, action)
 	}
-	return enrichDynamicSchema(route.InputSchema, action)
+	// Derived rather than copied and edited: for an action of a shared
+	// catalog the result is built once for the process (see
+	// [toolutil.DeriveSchema]), and the manifest of every server carries the
+	// same map. The guidance and the destructive flag are in the transform
+	// name because they are in the result.
+	transform := "manifest-dynamic|destructive=" + strconv.FormatBool(route.Destructive) + "|guidance=" + toolutil.ParameterGuidanceIdentity(route.ParameterGuidance)
+	derived := toolutil.DeriveSchema(route.InputSchema, transform, func() any {
+		return enrichDynamicSchema(toolutil.CloneSchemaMap(route.InputSchema), action)
+	})
+	schema, _ := derived.(map[string]any)
+	return schema
 }
 
-// cloneMetaSchemaRoutes creates a shallow snapshot of route maps so
-// resource handlers do not observe later registration changes from
-// other server builds. It is a thin wrapper around
-// [toolutil.CloneMetaSchemaRoutes] that exists for testability.
+// cloneMetaSchemaRoutes creates a snapshot of the route maps so resource
+// handlers do not observe later registration changes from other server
+// builds; the schemas inside are shared and frozen. It is a thin wrapper
+// around [toolutil.CloneMetaSchemaRoutes] that exists for testability.
 func cloneMetaSchemaRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
 	return toolutil.CloneMetaSchemaRoutes(routes)
 }

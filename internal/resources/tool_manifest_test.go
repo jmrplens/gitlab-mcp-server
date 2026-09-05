@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -901,5 +902,67 @@ func TestToolManifest_AliasEntriesDeclareAliasOf(t *testing.T) {
 	}
 	if !maps.Equal(aliasOf, want) {
 		t.Errorf("alias_of map = %v, want exactly %v", aliasOf, want)
+	}
+}
+
+// TestToolSurfaceSnapshotFor_ShareKeyReusesOneSnapshot verifies the manifest
+// snapshot is built once per share key and served to every server that
+// registers under it, while options without a key get a private snapshot
+// every time.
+func TestToolSurfaceSnapshotFor_ShareKeyReusesOneSnapshot(t *testing.T) {
+	t.Parallel()
+
+	shared := ToolSurfaceResourceOptions{Surface: toolSurfaceDynamic, ShareKey: "snapshot|" + t.Name()}
+	first := toolSurfaceSnapshotFor(shared)
+	if first != toolSurfaceSnapshotFor(shared) {
+		t.Fatal("two registrations under one share key built two snapshots, want one")
+	}
+	if cached, ok := sharedToolSurfaceSnapshots.Load(shared.ShareKey); !ok || cached != first {
+		t.Fatal("the shared snapshot is not the cached one")
+	}
+	private := ToolSurfaceResourceOptions{Surface: toolSurfaceDynamic}
+	firstPrivate := toolSurfaceSnapshotFor(private)
+	secondPrivate := toolSurfaceSnapshotFor(private)
+	if firstPrivate == secondPrivate {
+		t.Fatal("options without a share key shared a snapshot")
+	}
+}
+
+// TestDynamicActionSchema_SharedRouteDerivesOnce verifies the manifest's
+// per-action schema is derived once for an action of a shared catalog, with
+// the guidance and the destructive markers in it and the route's own schema
+// untouched, and privately for an action nobody shared.
+func TestDynamicActionSchema_SharedRouteDerivesOnce(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{"type": "object", "properties": map[string]any{"project_id": map[string]any{"type": "string"}}}
+	toolutil.ShareSchema(schema)
+	action := actioncatalog.Action{
+		ID:   "project.delete",
+		Name: "delete",
+		Route: toolutil.ActionRoute{
+			InputSchema:       schema,
+			Destructive:       true,
+			ParameterGuidance: map[string]toolutil.ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
+		},
+	}
+	first := dynamicActionSchema(action)
+	second := dynamicActionSchema(action)
+	if reflect.ValueOf(first).UnsafePointer() != reflect.ValueOf(second).UnsafePointer() {
+		t.Fatal("dynamicActionSchema(shared action) built two schemas, want one")
+	}
+	if first["x_destructive"] != true || first["x_parameter_guidance"] == nil {
+		t.Errorf("derived schema = %#v, want the destructive and guidance markers", first)
+	}
+	if _, leaked := schema["x_destructive"]; leaked {
+		t.Fatal("the route's own schema was enriched in place")
+	}
+
+	private := action
+	private.Route.InputSchema = map[string]any{"type": "object"}
+	firstPrivate := dynamicActionSchema(private)
+	secondPrivate := dynamicActionSchema(private)
+	if reflect.ValueOf(firstPrivate).UnsafePointer() == reflect.ValueOf(secondPrivate).UnsafePointer() {
+		t.Fatal("dynamicActionSchema(private action) shared a schema nobody registered")
 	}
 }

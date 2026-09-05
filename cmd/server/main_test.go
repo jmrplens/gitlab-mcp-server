@@ -20,6 +20,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"math/big"
@@ -2648,83 +2649,67 @@ func TestCreateServer_ARegistrationFailure_IsReturned(t *testing.T) {
 }
 
 // TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported
-// covers each surface's answer to a catalog it cannot build. The dynamic and
-// individual surfaces refuse outright; the meta surface warns and registers
-// an empty catalog, so a build failure there is only fatal when the filter
-// that follows fails as well.
+// covers each surface's answer to a catalog it cannot build: all three
+// refuse, naming the surface. The meta surface used to warn and register an
+// empty catalog instead, which handed a client a server whose meta-tools were
+// all missing and whose log said why only once; the shared catalog reports
+// the failure to the entry that needs it.
 func TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported(t *testing.T) {
-	forced := errors.New("forced catalog failure")
 	client := newMockGitLabClient(t)
 	cases := []struct {
 		name    string
 		surface string
-		arrange func(t *testing.T)
+		// arrange makes the surface's catalog fail and returns the failure.
+		arrange func(t *testing.T) error
 		wantErr string
-		wantLog string
 	}{
 		{
 			name:    "dynamic refuses",
 			surface: config.ToolSurfaceDynamic,
-			arrange: func(t *testing.T) { t.Helper(); failDynamicCatalog(t, nil) },
+			arrange: func(t *testing.T) error { t.Helper(); return failDynamicCatalog(t, nil) },
 			wantErr: "build dynamic action catalog",
 		},
 		{
 			name:    "individual refuses",
 			surface: config.ToolSurfaceIndividual,
-			arrange: func(t *testing.T) {
+			arrange: func(t *testing.T) error {
 				t.Helper()
-				original := buildActionCatalog
-				t.Cleanup(func() { buildActionCatalog = original })
-				buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
-					return nil, forced
+				forced := errors.New("forced catalog failure")
+				original := sharedIndividualCatalog
+				t.Cleanup(func() { sharedIndividualCatalog = original })
+				sharedIndividualCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, []string, error) {
+					return nil, nil, fmt.Errorf("build individual action catalog: %w", forced)
 				}
+				return forced
 			},
 			wantErr: "build individual action catalog",
 		},
 		{
-			name:    "meta warns and carries on with an empty catalog",
+			name:    "meta refuses",
 			surface: config.ToolSurfaceMeta,
-			arrange: func(t *testing.T) {
+			arrange: func(t *testing.T) error {
 				t.Helper()
-				original := buildActionCatalog
-				t.Cleanup(func() { buildActionCatalog = original })
-				buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
-					return nil, forced
+				forced := errors.New("forced catalog failure")
+				original := sharedMetaCatalog
+				t.Cleanup(func() { sharedMetaCatalog = original })
+				sharedMetaCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
+					return nil, tools.WithheldActions{}, fmt.Errorf("filter meta action catalog: %w", forced)
 				}
-			},
-			wantLog: "failed to build meta action catalog",
-		},
-		{
-			name:    "meta refuses when the filter fails too",
-			surface: config.ToolSurfaceMeta,
-			arrange: func(t *testing.T) {
-				t.Helper()
-				original := filterActionCatalog
-				t.Cleanup(func() { filterActionCatalog = original })
-				filterActionCatalog = func(*actioncatalog.Catalog, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
-					return nil, tools.WithheldActions{}, forced
-				}
+				return forced
 			},
 			wantErr: "filter meta action catalog",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			logged := testutil.CaptureSlog(t)
-			tc.arrange(t)
+			forced := tc.arrange(t)
 			server := mcp.NewServer(&mcp.Implementation{Name: "surface", Version: "0"}, nil)
 			cfg := &config.ServerConfig{ToolSurface: tc.surface}
 
 			_, err := registerConfiguredToolSurfaceWithCatalog(server, client, cfg, tc.surface, nil)
 
-			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
-				t.Errorf("error = %v, want it to carry %q", err, tc.wantErr)
-			}
-			if tc.wantErr == "" && err != nil {
-				t.Errorf("error = %v, want the surface to carry on", err)
-			}
-			if tc.wantLog != "" && !strings.Contains(logged.String(), tc.wantLog) {
-				t.Errorf("log = %q, want it to carry %q", logged.String(), tc.wantLog)
+			if !errors.Is(err, forced) || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error = %v, want the forced failure carrying %q", err, tc.wantErr)
 			}
 		})
 	}
@@ -10313,4 +10298,38 @@ func blockedHTTPServerOn(t *testing.T, listener net.Listener) *http.Server {
 		t.Fatal("the blocking handler never ran, so nothing was in flight to drain")
 	}
 	return httpServer
+}
+
+// TestManifestShareKey_NamesTheSharedCatalogAndItsNarrowing verifies the key
+// the tool manifest is shared under: nothing for a catalog nobody shared, so
+// that server keeps a private manifest, and for a shared one the surface, the
+// origin, the narrowing, the parameter-schema mode and the capability surface,
+// so two configurations that would list different tools never share one.
+func TestManifestShareKey_NamesTheSharedCatalogAndItsNarrowing(t *testing.T) {
+	cfg := &config.ServerConfig{Tier: edition.Free, ReadOnly: true, MetaParamSchema: "compact"}
+	if got := manifestShareKey(config.ToolSurfaceMeta, config.CapabilitySurfaceFull, cfg, actioncatalog.NewCatalog()); got != "" {
+		t.Errorf("manifestShareKey(private catalog) = %q, want empty", got)
+	}
+	shared, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	got := manifestShareKey(config.ToolSurfaceMeta, config.CapabilitySurfaceFull, cfg, shared)
+	parts := map[string]string{
+		"surface":            "meta|",
+		"origin":             fmt.Sprintf("%p", shared.SharedOrigin()),
+		"narrowing":          tools.CatalogFilterKey(cfg),
+		"schema mode":        "schema=compact",
+		"capability surface": "capability=" + config.CapabilitySurfaceFull,
+	}
+	for name, part := range parts {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(got, part) {
+				t.Errorf("manifestShareKey() = %q, want it to carry %q", got, part)
+			}
+		})
+	}
+	if other := manifestShareKey(config.ToolSurfaceMeta, config.CapabilitySurfaceMinimal, cfg, shared); other == got {
+		t.Error("two capability surfaces produced one manifest key")
+	}
 }
