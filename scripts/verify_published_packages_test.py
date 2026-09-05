@@ -185,6 +185,15 @@ def wheel(version, payload):
     return blob.getvalue()
 
 
+def nupkg(rid, payload):
+    """A .nupkg shaped like a published runtime-identifier package."""
+    blob = io.BytesIO()
+    with zipfile.ZipFile(blob, "w") as zf:
+        zf.writestr(f"tools/any/{rid}/DotnetToolSettings.xml", "<DotNetCliTool Version=\"2\" />")
+        zf.writestr(f"tools/any/{rid}/gitlab-mcp-server", payload)
+    return blob.getvalue()
+
+
 class MismatchIsNotRetriedTest(unittest.TestCase):
     """The finding this job exists to make is never waited out.
 
@@ -247,6 +256,43 @@ class MismatchIsNotRetriedTest(unittest.TestCase):
         self.assertTrue([p for p in problems if "carries sha256" in p], problems)
         self.assertEqual(opener.count(wheel_url), 1)
         self.assertEqual(budget.waits, 0)
+
+    def test_a_wrong_nuget_binary_is_reported_on_the_first_look(self):
+        """Every runtime package serves a binary the release never signed,
+        while the pointer lists the version, so the one finding is the digest."""
+        index = f"{vpp.NUGET_FLAT}/{vpp.NUGET_ID}/index.json"
+        script = {index: [b'{"versions": ["0.9.0", "%s"]}' % self.VERSION.encode()]}
+        urls = {}
+        for rid in vpp.NUGET_ASSETS:
+            url = vpp.nuget_package_url(f"{vpp.NUGET_ID}.{rid}", self.VERSION)
+            urls[rid] = url
+            script[url] = [nupkg(rid, self.served)]
+        opener = FakeOpener(script)
+        vpp.urllib.request.urlopen = opener
+
+        budget = vpp.RetryBudget(seconds=600, delay=20, sleep=lambda _: self.fail("a mismatch was retried"))
+        problems = []
+        vpp.check_nuget(self.VERSION, self.digests, problems, budget)
+
+        mismatches = [p for p in problems if "carries sha256" in p]
+        self.assertEqual(len(mismatches), len(vpp.NUGET_ASSETS), problems)
+        self.assertEqual(len(problems), len(mismatches), "the listed pointer version is not a finding")
+        for rid, url in urls.items():
+            self.assertEqual(opener.count(url), 1, f"{rid} was downloaded more than once")
+        self.assertEqual(budget.waits, 0)
+
+    def test_an_unlisted_nuget_pointer_is_a_finding(self):
+        """The runtime packages match, but nothing points at them."""
+        index = f"{vpp.NUGET_FLAT}/{vpp.NUGET_ID}/index.json"
+        script = {index: [b'{"versions": ["0.9.0"]}']}
+        for rid in vpp.NUGET_ASSETS:
+            script[vpp.nuget_package_url(f"{vpp.NUGET_ID}.{rid}", self.VERSION)] = [nupkg(rid, self.signed)]
+        vpp.urllib.request.urlopen = FakeOpener(script)
+
+        problems = []
+        vpp.check_nuget(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("is not listed on nuget.org", problems[0])
 
 
 if __name__ == "__main__":

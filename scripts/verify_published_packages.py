@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare what npm and PyPI actually serve with the release's signed checksums.
+"""Compare what npm, PyPI and NuGet actually serve with the release's signed checksums.
 
 Usage:
     python3 scripts/verify_published_packages.py <version> <checksums.txt>
@@ -13,13 +13,15 @@ Why this exists. The npm and PyPI packages are validated before publishing and
 then **re-assembled** by the publish step, so the bytes that were validated are
 not the bytes that went out; and of the six per-platform binaries, only the
 runner's own is ever executed by any check. A stale or swapped binary for the
-other five reaches two immutable registries with nothing in the pipeline
-looking at it again. This runs after both publishes, in a job holding no
-publishing credential, and reads the packages back out of the registries.
+other five reaches immutable registries with nothing in the pipeline looking
+at it again. This runs after the publishes, in a job holding no publishing
+credential, and reads the packages back out of the registries. NuGet joined
+later with the same shape: six runtime-identifier packages each carrying one
+binary, read back from the flat container the SDK itself installs from.
 
-Standard library only, and anonymous: it talks to registry.npmjs.org and
-pypi.org and needs no credential of any kind, so it is also the out-of-band
-check to run days later.
+Standard library only, and anonymous: it talks to registry.npmjs.org, pypi.org
+and api.nuget.org and needs no credential of any kind, so it is also the
+out-of-band check to run days later.
 
 Retries. This job gates the ones that advertise the release, so it is the
 strictest gate in the pipeline, and it runs minutes after the uploads it reads
@@ -74,6 +76,20 @@ WHEEL_ASSETS = {
     "macosx_11_0_arm64": "gitlab-mcp-server-darwin-arm64",
     "win_amd64": "gitlab-mcp-server-windows-amd64.exe",
     "win_arm64": "gitlab-mcp-server-windows-arm64.exe",
+}
+
+# NuGet: the pointer package id, and runtime identifier -> release asset name.
+# The same table lives in scripts/build_nuget.py, repeated for the reason the
+# npm one is.
+NUGET_ID = "gitlab-mcp-server"
+NUGET_FLAT = "https://api.nuget.org/v3-flatcontainer"
+NUGET_ASSETS = {
+    "linux-x64": "gitlab-mcp-server-linux-amd64",
+    "linux-arm64": "gitlab-mcp-server-linux-arm64",
+    "osx-x64": "gitlab-mcp-server-darwin-amd64",
+    "osx-arm64": "gitlab-mcp-server-darwin-arm64",
+    "win-x64": "gitlab-mcp-server-windows-amd64.exe",
+    "win-arm64": "gitlab-mcp-server-windows-arm64.exe",
 }
 
 TIMEOUT = 120
@@ -164,7 +180,7 @@ def sha256(data):
 
 def released_digests(checksums_path):
     """Parse `sha256  name` lines from the release's signed checksums.txt."""
-    wanted = set(NPM_ASSETS.values()) | set(WHEEL_ASSETS.values())
+    wanted = set(NPM_ASSETS.values()) | set(WHEEL_ASSETS.values()) | set(NUGET_ASSETS.values())
     digests = {}
     with open(checksums_path, encoding="utf-8") as fh:
         for line in fh:
@@ -207,6 +223,32 @@ def wheel_binary(url, version, budget=None):
             if name.startswith(prefix) and os.path.basename(name).startswith("gitlab-mcp-server"):
                 return zf.read(name)
     raise LookupError(f"{url} ships no binary under {PYPI_NORM}-{version}.data/scripts/")
+
+
+def nuget_package_url(pkg_id, version):
+    """The flat-container download of one package, the URL the SDK itself
+    installs from. Ids and versions are lower-cased there."""
+    pkg_id = pkg_id.lower()
+    version = version.lower()
+    return f"{NUGET_FLAT}/{pkg_id}/{version}/{pkg_id}.{version}.nupkg"
+
+
+def nuget_versions(pkg_id, budget=None):
+    """The versions the flat container lists for a package id."""
+    index = json.loads(fetch(f"{NUGET_FLAT}/{pkg_id.lower()}/index.json", budget))
+    return [v.lower() for v in index.get("versions", [])]
+
+
+def nuget_binary(rid, version, budget=None):
+    """Download the published runtime package and return its binary bytes."""
+    url = nuget_package_url(f"{NUGET_ID}.{rid}", version)
+    blob = fetch(url, budget)
+    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+        prefix = f"tools/any/{rid}/"
+        for name in zf.namelist():
+            if name.startswith(prefix) and os.path.basename(name) in ("gitlab-mcp-server", "gitlab-mcp-server.exe"):
+                return zf.read(name), url
+    raise LookupError(f"{url} ships no gitlab-mcp-server binary under {prefix}")
 
 
 def check_npm(version, digests, problems, budget=None):
@@ -265,12 +307,46 @@ def check_pypi(version, digests, problems, budget=None):
         problems.append(f"pypi: no wheel published for {', '.join(missing)}")
 
 
+def check_nuget(version, digests, problems, budget=None):
+    # The pointer carries no binary, so its check is that the version is
+    # listed at all: a runtime package nobody points at is not installable,
+    # and a pointer published without its runtime packages installs nothing.
+    try:
+        versions = nuget_versions(NUGET_ID, budget)
+    except (urllib.error.URLError, ValueError) as exc:
+        problems.append(f"nuget {NUGET_ID}: could not list the published versions: {exc}")
+    else:
+        if version.lower() not in versions:
+            problems.append(f"nuget {NUGET_ID}: version {version} is not listed on nuget.org")
+        else:
+            print(f"  ok  nuget {NUGET_ID:<32} lists {version}")
+    for rid, asset in NUGET_ASSETS.items():
+        want = digests.get(asset)
+        if want is None:
+            problems.append(f"nuget {rid}: checksums.txt does not name the release asset {asset}")
+            continue
+        try:
+            binary, url = nuget_binary(rid, version, budget)
+        except (urllib.error.URLError, LookupError, zipfile.BadZipFile) as exc:
+            problems.append(f"nuget {rid}: could not read the published package: {exc}")
+            continue
+        # Past this point the bytes are in hand, so nothing below is retried.
+        got = sha256(binary)
+        if got != want:
+            problems.append(
+                f"nuget {rid}: {url} carries sha256 {got}, but the signed checksums.txt says {asset} is {want}"
+            )
+        else:
+            print(f"  ok  nuget {rid:<32} matches {asset}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("version", help="release version without the leading v, e.g. 2.7.6")
     parser.add_argument("checksums", help="path to the release's checksums.txt (or a directory holding it)")
-    parser.add_argument("--skip-npm", action="store_true", help="check PyPI only")
-    parser.add_argument("--skip-pypi", action="store_true", help="check npm only")
+    parser.add_argument("--skip-npm", action="store_true", help="do not check npm")
+    parser.add_argument("--skip-pypi", action="store_true", help="do not check PyPI")
+    parser.add_argument("--skip-nuget", action="store_true", help="do not check NuGet")
     parser.add_argument(
         "--retry-budget",
         type=float,
@@ -301,6 +377,8 @@ def main():
         check_npm(args.version, digests, problems, budget)
     if not args.skip_pypi:
         check_pypi(args.version, digests, problems, budget)
+    if not args.skip_nuget:
+        check_nuget(args.version, digests, problems, budget)
 
     if problems:
         print(f"\nFAILED ({len(problems)}):")

@@ -4,10 +4,11 @@
 #
 # `make check-server-json` validates the manifest against the registry schema.
 # A schema cannot see that a package declared as registryType "mcpb" points at a
-# raw ELF binary, that an OCI tag was never pushed, or that an OCI entry carries
-# a field the registry rejects only at publish time. Those are exactly the
-# mistakes that leave a directory listing scoring the server on an artifact no
-# client can install, so they get their own gate.
+# raw ELF binary, that an OCI tag was never pushed, that an OCI entry carries
+# a field the registry rejects only at publish time, or that a NuGet version
+# was published without the README the registry reads its ownership token
+# from. Those are exactly the mistakes that leave a directory listing scoring
+# the server on an artifact no client can install, so they get their own gate.
 #
 # Usage: validate-server-json-packages.sh [server.json]
 #
@@ -390,6 +391,85 @@ while IFS=$'\t' read -r identifier version; do
   fi
 done < <(jq -r '.packages[] | select(.registryType == "pypi") | [.identifier, (.version // "null")] | @tsv' "$SERVER_JSON")
 
+# --- nuget packages: the registry validates ownership through an
+# "mcp-name: <server-name>" token in the published version's README, read
+# from the ReadmeUriTemplate resource of the v3 feed (the flat container's
+# /readme endpoint), and requires registryBaseUrl to be exactly the nuget.org
+# v3 index. fileSha256 is rejected server-side like the other non-mcpb types.
+# A version the feed does not list yet is a note rather than a failure, the
+# way the npm branch treats a published version that predates mcpName: the
+# entry is correct from the release that publishes it, and this gate runs on
+# main before that release exists.
+NUGET_INDEX_URL="https://api.nuget.org/v3/index.json"
+NUGET_FLAT_URL="https://api.nuget.org/v3-flatcontainer"
+while IFS=$'\t' read -r identifier version base_url; do
+  [[ -z "$identifier" ]] && continue
+  checked=$((checked + 1))
+  echo "nuget package: $identifier@$version"
+
+  banned=$(jq -r --arg id "$identifier" \
+    '[.packages[] | select(.registryType == "nuget" and .identifier == $id) | to_entries[]
+      | select(.key == "fileSha256") | .key] | join(", ")' "$SERVER_JSON")
+  if [[ -n "$banned" ]]; then
+    fail "carries field(s) the registry rejects for nuget packages: $banned"
+  fi
+
+  if [[ "$base_url" != "$NUGET_INDEX_URL" ]]; then
+    fail "registryBaseUrl is \"$base_url\"; the registry accepts only $NUGET_INDEX_URL for nuget entries"
+    continue
+  fi
+
+  if [[ -z "$version" || "$version" == "null" ]]; then
+    fail "declares no version (the registry requires one for nuget entries)"
+    continue
+  fi
+
+  lower_id=$(tr '[:upper:]' '[:lower:]' <<<"$identifier")
+  lower_version=$(tr '[:upper:]' '[:lower:]' <<<"$version")
+  # A 404 here is the expected state before the first release that publishes
+  # the package, so curl's own error line is not worth printing for it.
+  if ! index=$(curl "${CURL_META[@]}" -fsSL "${NUGET_FLAT_URL}/${lower_id}/index.json" 2>/dev/null); then
+    echo "  NOTE: $identifier is not on nuget.org yet; the registry accepts this entry starting with the release that publishes it"
+    continue
+  fi
+  if ! jq -e --arg v "$lower_version" '.versions | map(ascii_downcase) | index($v) != null' <<<"$index" >/dev/null; then
+    echo "  NOTE: nuget.org lists $identifier but not $version yet; the registry accepts this entry starting with the release that publishes it"
+    continue
+  fi
+
+  if ! readme=$(curl "${CURL_META[@]}" -fsSL "${NUGET_FLAT_URL}/${lower_id}/${lower_version}/readme"); then
+    fail "published version $version carries no README (the registry's ownership check reads it)"
+    continue
+  fi
+  if ! grep -qE "(^|[[:space:]])mcp-name: ${server_name}([[:space:]]|<|-->|$)" <<<"$readme"; then
+    fail "published README lacks the \"mcp-name: ${server_name}\" ownership token the registry validates"
+    continue
+  fi
+
+  nupkg="$WORKDIR/${lower_id}.nupkg"
+  if ! curl "${CURL_DOWNLOAD[@]}" -fsSL -o "$nupkg" \
+    "${NUGET_FLAT_URL}/${lower_id}/${lower_version}/${lower_id}.${lower_version}.nupkg"; then
+    fail "version $version is listed but its package could not be downloaded"
+    continue
+  fi
+  if ! python3 -c '
+import sys, zipfile
+path, pkg_id = sys.argv[1], sys.argv[2]
+if not zipfile.is_zipfile(path):
+    sys.exit("not a zip archive")
+with zipfile.ZipFile(path) as pkg:
+    names = pkg.namelist()
+    for needed in (pkg_id + ".nuspec", "tools/net10.0/any/DotnetToolSettings.xml", ".mcp/server.json"):
+        if needed not in names:
+            sys.exit("package carries no " + needed)
+' "$nupkg" "$identifier"; then
+    fail "not a valid .NET tool package with an MCP manifest"
+    continue
+  fi
+
+  echo "  OK: published version carries the mcp-name ownership token, the tool manifest and .mcp/server.json"
+done < <(jq -r '.packages[] | select(.registryType == "nuget") | [.identifier, (.version // "null"), (.registryBaseUrl // "")] | @tsv' "$SERVER_JSON")
+
 # --- release immutability ----------------------------------------------------
 # Every other artefact this script checks is pinned by a hash or an immutable
 # registry version. The GitHub Release is not: unless immutable releases are
@@ -420,7 +500,7 @@ if [[ -n "$release_version" && "$release_version" != "null" ]]; then
 fi
 
 if [[ "$checked" -eq 0 ]]; then
-  echo "ERROR: no mcpb, oci, npm or pypi packages found in $SERVER_JSON" >&2
+  echo "ERROR: no mcpb, oci, npm, pypi or nuget packages found in $SERVER_JSON" >&2
   exit 1
 fi
 

@@ -613,6 +613,154 @@
           ]
         }
       ]
+    },
+    {
+      "registryType": "nuget",
+      "registryBaseUrl": "https://api.nuget.org/v3/index.json",
+      "identifier": "gitlab-mcp-server",
+      "version": "2.7.5",
+      "runtimeHint": "dnx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "GITLAB_URL",
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
+        },
+        {
+          "name": "GITLAB_TOKEN",
+          "description": "GitLab Personal Access Token (glpat-...)",
+          "isRequired": true,
+          "isSecret": true,
+          "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
+        },
+        {
+          "name": "GITLAB_MCP_SKIP_TLS_VERIFY",
+          "description": "Skip TLS certificate verification for self-signed certs (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_TOOL_SURFACE",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
+          "isRequired": false,
+          "default": "dynamic",
+          "choices": [
+            "meta",
+            "individual",
+            "dynamic"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_CAPABILITY_SURFACE",
+          "description": "Resource and prompt catalog selector: full or minimal (default: full); resource subscriptions require full",
+          "isRequired": false,
+          "default": "full",
+          "choices": [
+            "full",
+            "minimal"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_META_PARAM_SCHEMA",
+          "description": "Meta-tool input schema detail: opaque, compact, or full (default: opaque)",
+          "isRequired": false,
+          "default": "opaque",
+          "choices": [
+            "opaque",
+            "compact",
+            "full"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_TIER",
+          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
+          "isRequired": false,
+          "choices": [
+            "free",
+            "ce",
+            "premium",
+            "ultimate"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_READ_ONLY",
+          "description": "Read-only mode: disables all mutating tools (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_SAFE_MODE",
+          "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_EMBEDDED_RESOURCES",
+          "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
+          "isRequired": false,
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_EXCLUDE_TOOLS",
+          "description": "Comma-separated tool names to exclude from registration (e.g. gitlab_admin,gitlab_runner)",
+          "isRequired": false,
+          "placeholder": "gitlab_admin,gitlab_runner"
+        },
+        {
+          "name": "GITLAB_MCP_IGNORE_SCOPES",
+          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
+          "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
+          "isRequired": false,
+          "default": "2147483648"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
+          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "isRequired": false,
+          "placeholder": "/path/to/exports:/another/path/to/exports"
+        },
+        {
+          "name": "GITLAB_MCP_RATE_LIMIT_RPS",
+          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "isRequired": false,
+          "default": "0",
+          "format": "number"
+        },
+        {
+          "name": "GITLAB_MCP_RATE_LIMIT_BURST",
+          "description": "Token-bucket burst size when GITLAB_MCP_RATE_LIMIT_RPS is greater than 0 (default: 40)",
+          "isRequired": false,
+          "default": "40",
+          "format": "number"
+        },
+        {
+          "name": "GITLAB_MCP_LOG_LEVEL",
+          "description": "Logging verbosity (default: info)",
+          "isRequired": false,
+          "default": "info",
+          "choices": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        }
+      ]
     }
   ],
   "remotes": [
