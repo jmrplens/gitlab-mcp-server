@@ -190,7 +190,7 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 // name because they are part of the result: two specs over one type with
 // different overrides must not share a schema.
 func specInputSchema(schema map[string]any, overrides []InputSchemaOverride) map[string]any {
-	derived := DeriveSchema(schema, "spec|"+inputSchemaOverridesKey(overrides), func() any {
+	build := func() any {
 		out := schema
 		if out != nil {
 			out = cloneSchemaMap(out)
@@ -200,26 +200,40 @@ func specInputSchema(schema map[string]any, overrides []InputSchemaOverride) map
 		applyCanonicalParamFormats(out)
 		applyCanonicalParamRanges(out)
 		return out
-	})
+	}
+	key, nameable := inputSchemaOverridesKey(overrides)
+	if !nameable {
+		// Overrides the encoder refuses have no name, and the memo they
+		// would go into lives for the process, so any name invented for them
+		// would outlive whatever it was invented from. Derive privately
+		// instead, which is what every schema nobody registered gets.
+		out, _ := build().(map[string]any)
+		return out
+	}
+	derived := DeriveSchema(schema, "spec|"+key, build)
 	out, _ := derived.(map[string]any)
 	return out
 }
 
 // inputSchemaOverridesKey renders overrides deterministically for a transform
-// name. JSON is deterministic here because map keys are sorted by the
-// encoder, and the values are plain JSON Schema fragments.
-func inputSchemaOverridesKey(overrides []InputSchemaOverride) string {
+// name, reporting false for a set the encoder refuses. JSON is deterministic
+// here because map keys are sorted by the encoder, and the values are plain
+// JSON Schema fragments, which is also why the refusal is unreachable in
+// practice.
+//
+// It used to name a refused set by the address of the slice, which is exactly
+// the hazard [ParameterGuidanceIdentity] was rewritten to avoid: the slice is
+// collectable, the memo entry written under its address is not, and the next
+// slice the allocator puts at that address would be served this one's schema.
+func inputSchemaOverridesKey(overrides []InputSchemaOverride) (string, bool) {
 	if len(overrides) == 0 {
-		return ""
+		return "", true
 	}
 	data, err := json.Marshal(overrides)
 	if err != nil {
-		// Unreachable for JSON Schema fragments, which is what the values
-		// are; fall back to a name that never matches so the schema is
-		// derived privately rather than shared under a wrong key.
-		return fmt.Sprintf("unencodable:%p", overrides)
+		return "", false
 	}
-	return string(data)
+	return string(data), true
 }
 
 // NewReadActionSpec creates a read-only, idempotent action specification.

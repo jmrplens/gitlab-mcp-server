@@ -1435,21 +1435,55 @@ func TestDefaultScopeParameterGuidance_UnknownName_ReturnsZero(t *testing.T) {
 
 // TestInputSchemaOverridesKey_NamesTheOverrides verifies the part of the
 // spec transform name that comes from the overrides: none is empty, a set is
-// its JSON, and a set the encoder refuses gets a name that matches nothing.
+// its JSON, and a set the encoder refuses has no name at all.
 func TestInputSchemaOverridesKey_NamesTheOverrides(t *testing.T) {
 	t.Parallel()
 
-	if got := inputSchemaOverridesKey(nil); got != "" {
-		t.Errorf("inputSchemaOverridesKey(nil) = %q, want empty", got)
+	if got, nameable := inputSchemaOverridesKey(nil); got != "" || !nameable {
+		t.Errorf("inputSchemaOverridesKey(nil) = %q, %t; want an empty name", got, nameable)
 	}
 	overrides := []InputSchemaOverride{{PropertyPath: "state", Values: map[string]any{"enum": []any{"opened"}}}}
-	if got := inputSchemaOverridesKey(overrides); got != `[{"PropertyPath":"state","Values":{"enum":["opened"]}}]` {
-		t.Errorf("inputSchemaOverridesKey(overrides) = %q", got)
+	if got, nameable := inputSchemaOverridesKey(overrides); got != `[{"PropertyPath":"state","Values":{"enum":["opened"]}}]` || !nameable {
+		t.Errorf("inputSchemaOverridesKey(overrides) = %q, %t", got, nameable)
 	}
-	unencodable := []InputSchemaOverride{{Values: map[string]any{"fn": func() {}}}}
-	if got := inputSchemaOverridesKey(unencodable); !strings.HasPrefix(got, "unencodable:") {
-		t.Errorf("inputSchemaOverridesKey(unencodable) = %q, want the unencodable name", got)
+	if got, nameable := inputSchemaOverridesKey(unencodableOverrides()); nameable || got != "" {
+		t.Errorf("inputSchemaOverridesKey(unencodable) = %q, %t; want no name", got, nameable)
 	}
+}
+
+// TestSpecInputSchema_UnencodableOverridesDerivePrivately verifies the one
+// set of overrides that cannot be named: the schema is derived on every call
+// and nothing is written into a memo that outlives the overrides it came
+// from. Naming such a set by the address of its slice, which is what this
+// replaced, would hand the next slice at that address this one's schema.
+func TestSpecInputSchema_UnencodableOverridesDerivePrivately(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"state": map[string]any{"type": "string"}},
+	}
+	ShareSchema(schema)
+
+	overrides := unencodableOverrides()
+	first := specInputSchema(schema, overrides)
+	second := specInputSchema(schema, overrides)
+	if sameMap(first, second) {
+		t.Fatal("unencodable overrides shared one derived schema, want a private one per call")
+	}
+	if SchemaShared(first) {
+		t.Error("a schema derived under no name was registered as shared")
+	}
+	if _, ok := first["properties"].(map[string]any)["state"]; !ok {
+		t.Errorf("derived schema = %#v, want the input's properties", first)
+	}
+}
+
+// unencodableOverrides returns overrides the JSON encoder refuses, which is
+// what makes them unnameable. Unreachable from a real action spec, whose
+// override values are JSON Schema fragments.
+func unencodableOverrides() []InputSchemaOverride {
+	return []InputSchemaOverride{{Values: map[string]any{"fn": func() {}}}}
 }
 
 // TestNewActionSpec_SharedInputSchemaDerivesOnce verifies specs built over a
