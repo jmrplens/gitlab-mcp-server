@@ -47,20 +47,23 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 
 ### audit_1to1
 
-Consolidated 1:1 SDK↔API parity audit. It combines three gap streams behind a single `-scope` flag: struct field mapping (R-INPUT/R-OUTPUT), action coverage (R-ACTION), and discovery metadata (R-META). When all three scopes run (the default), it produces a merged per-package backlog. It replaces the former `audit_struct_completeness`, `audit_action_coverage`, `audit_metadata_completeness`, and `gen_1to1_backlog` binaries.
+Consolidated 1:1 SDK↔API parity audit. It combines four gap streams behind a single `-scope` flag: struct field mapping (R-INPUT/R-OUTPUT), action coverage (R-ACTION), discovery metadata (R-META), and enum values (R-ENUM). When all four scopes run (the default), it produces a merged per-package backlog. It replaces the former `audit_struct_completeness`, `audit_action_coverage`, `audit_metadata_completeness`, and `gen_1to1_backlog` binaries.
 
-A fourth scope, `sdk`, differs from those three in both its universe and its severity, and is described under [SDK parity gate](#sdk-parity-gate) below.
+A fifth scope, `sdk`, differs from the first three in both its universe and its severity, and is described under [SDK parity gate](#sdk-parity-gate) below. The enum stream shares that severity: it is merged into the backlog like the candidate streams, and folded into the `sdk` gate so a finding fails the build. It is described under [Enum values](#enum-values-r-enum).
 
 #### Usage
 
 ```bash
-# Run all three scopes and write a merged backlog
+# Run all four streams and write a merged backlog
 go run ./cmd/audit_1to1/
 
 # Single-scope run, gaps only, to stdout
 go run ./cmd/audit_1to1/ -scope=structs -gaps-only -output=-
 
-# SDK parity gate: exits non-zero on a finding
+# Enum value rule on its own: exits non-zero on a finding
+go run ./cmd/audit_1to1/ -scope=enums -gaps-only
+
+# SDK parity gate (services, raw GraphQL, enum values): exits non-zero on a finding
 go run ./cmd/audit_1to1/ -scope=sdk -gaps-only
 
 # Validate that every doc/api citation behind the adjudication tables is still
@@ -70,19 +73,19 @@ go run ./cmd/audit_1to1/ -validate-docs
 
 #### Flags
 
-| Flag             | Type       | Default                    | Description                                                                                                                                        |
-| ---------------- | ---------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-gaps-only`     | `bool`     | `false`                    | Only include entries with at least one finding                                                                                                     |
-| `-output`        | `string`   | `-`                        | Path to write the JSON report, or `-` for stdout                                                                                                   |
-| `-scope`         | `string`   | `structs,actions,metadata` | A single `{structs,actions,metadata,sdk}` scope, or exactly the first three (default, merged backlog); any other combination is rejected           |
-| `-validate-docs` | `bool`     | `false`                    | Instead of the audit, verify every `doc/api/<area>.md` citation in the adjudication tables is still fetchable (exits non-zero on a stale citation) |
-| `-refresh`       | `bool`     | `false`                    | With `-validate-docs`, force re-fetch of cited docs even when cached and fresh                                                                     |
-| `-offline`       | `bool`     | `false`                    | With `-validate-docs`, use only cached docs; do not fetch                                                                                          |
-| `-max-age`       | `duration` | `168h`                     | With `-validate-docs`, re-download cached docs older than this (default 7 days)                                                                    |
+| Flag             | Type       | Default                          | Description                                                                                                                                        |
+| ---------------- | ---------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-gaps-only`     | `bool`     | `false`                          | Only include entries with at least one finding                                                                                                     |
+| `-output`        | `string`   | `-`                              | Path to write the JSON report, or `-` for stdout                                                                                                   |
+| `-scope`         | `string`   | `structs,actions,metadata,enums` | A single `{structs,actions,metadata,enums,sdk}` scope, or exactly the first four (default, merged backlog); any other combination is rejected      |
+| `-validate-docs` | `bool`     | `false`                          | Instead of the audit, verify every `doc/api/<area>.md` citation in the adjudication tables is still fetchable (exits non-zero on a stale citation) |
+| `-refresh`       | `bool`     | `false`                          | With `-validate-docs`, force re-fetch of cited docs even when cached and fresh                                                                     |
+| `-offline`       | `bool`     | `false`                          | With `-validate-docs`, use only cached docs; do not fetch                                                                                          |
+| `-max-age`       | `duration` | `168h`                           | With `-validate-docs`, re-download cached docs older than this (default 7 days)                                                                    |
 
 #### Output
 
-JSON. A single-scope run produces that auditor's native shape. An all-scopes run produces a merged backlog containing `schema_version`, a `summary` block (9 counters), and a `packages[]` array. `-validate-docs` emits `{schema_version, checked, ok, stale[]}`.
+JSON. A single-scope run produces that auditor's native shape. An all-scopes run produces a merged backlog containing `schema_version`, a `summary` block (11 counters), and a `packages[]` array in which each package carries its `struct`, `actions`, `metadata` and `enums` sections. `-validate-docs` emits `{schema_version, checked, ok, stale[]}`.
 
 #### SDK parity gate
 
@@ -96,16 +99,33 @@ The `sdk` scope enumerates the services from client-go's `Client` struct instead
 
 It carries a second rule for the same reason. [ADR-0006](adr/adr-0006-raw-graphql-for-uncovered-domains.md) admits raw `GraphQL.Do()` for domains **without** a client-go service wrapper; the wrapper appearing later is what retires that exemption, and nothing was checking. Every raw-GraphQL operation whose package maps to a client-go service is therefore held to a decision too, `KEEP` or `MIGRATE`, in `graphqlDecisions`. The unit is the **operation**, not the package: several packages use GraphQL for one operation and the SDK for the rest, so a package-level verdict would be mostly noise.
 
-Both tables are checked for staleness in the same run: a declaration for a service the tree now calls, a declaration for a service upstream removed, or a decision for an operation that no longer exists is itself a finding.
+The gate also carries the enum value rule described next, so one `-scope=sdk` run answers every question whose universe is the SDK rather than our call sites.
 
-Unlike the other scopes this one **exits non-zero** on a finding, and is deliberately kept out of the merged backlog so `plan/1to1-backlog.json` keeps its shape for the tooling that reads it.
+All three tables are checked for staleness in the same run: a declaration for a service the tree now calls, a declaration for a service upstream removed, a decision for an operation that no longer exists, or an enum exemption that excuses nothing is itself a finding.
 
-Report keys: `schema_version`, `client_go_path`, a `summary` block (8 counters), `services[]`, `graphql_operations[]`, and `stale_declarations[]`. With `-gaps-only` the two arrays hold only findings.
+Unlike the candidate scopes this one **exits non-zero** on a finding, and is deliberately kept out of the merged backlog so `plan/1to1-backlog.json` keeps its shape for the tooling that reads it.
+
+Report keys: `schema_version`, `client_go_path`, a `summary` block (12 counters), `services[]`, `graphql_operations[]`, `enum_fields[]`, and `stale_declarations[]`. With `-gaps-only` the three arrays hold only findings.
+
+#### Enum values (R-ENUM)
+
+`-scope=enums`, and folded into `-scope=sdk`. The struct rule projects a client-go enum type (`type XxxValue string`, or an integer kind, with a `const` block of values) to a scalar in its field comparison, so a field of that type counts as covered the moment a same-named scalar exists on our side, and the **values** the SDK declares for it are never read. A constant added upstream was therefore invisible while the field stayed covered; the Dependency Firewall ecosystems were guarded against exactly that by a hand-written test that named each of the eleven constants, a list a twelfth constant would pass unchanged.
+
+The enum rule reads the values instead. For every client-go enum type it finds the fields of that type an action exposes, through the same (MCP struct, SDK struct) pairs the struct rule diffs, and compares the SDK's constant set with the values our surface offers:
+
+- **`enum`** — the schema property (or an array property's `items`) carries an `enum` list. Compared both ways: a value the SDK declares that the list lacks is **missing**, a value the list carries that the SDK does not declare is **extra**.
+- **`description`** — the property has no enum and its description names at least one of the values, as whole tokens (`0=No access, 30=Developer`, `cargo, composer, or npm`). Prose can only confirm a value, so it is compared one way: unmentioned SDK values are missing, and nothing is extra. A sentence that names values in order to exclude them (`60=Admin is not valid`) is skipped.
+- **`none`** — nothing on the surface says what the values are. For an **input** every SDK value is missing, since a model has to choose one and nothing says what the choices are. For an **output** the field is counted as `unsurfaced_output_fields` and not reported: the output relays whatever GitLab answers, and its schema is reflected from the response struct, whose fields carry no descriptions. The rule holds an output to its values only where a description or an enum surfaces them, which is where a stale list would mislead.
+
+A documented per-endpoint subset (the branch protection levels are `0`, `30`, `40` and `60` out of the ten `AccessLevelValue` constants) and a documented value the SDK has no constant for (`epic` as an events `target_type`) are both recorded in `acceptedEnumGaps` in `cmd/audit_1to1/internal/enums/exemptions.go`, keyed `<pkg>.<MCPType>.<tag>` for a whole field or `<pkg>.<MCPType>.<tag>=<value>` for one value, each with the `doc/api` page or the upstream-bugs entry that justifies it. An exemption that excuses nothing is stale and fails the gate, so the table cannot outlive the gaps it describes. The SDK gaps behind the extra values are recorded in [upstream-bugs.md](upstream-bugs.md).
+
+Report keys: `schema_version`, `client_go_path`, a `summary` block (`sdk_enums`, `fields`, `fields_with_gaps`, `unsurfaced_output_fields`, `missing_values`, `extra_values`, `stale_exemptions` and `packages`), `packages[]` with one finding per (action, field), and `stale_exemptions[]`. With `-gaps-only` only the fields with a finding are listed.
 
 #### Make targets
 
 - `make audit-1to1` — writes `plan/1to1-backlog.json`, then runs `audit-1to1-sdk`.
-- `make audit-1to1-sdk` — the SDK parity gate; fails the build on a finding.
+- `make audit-1to1-sdk` — the SDK parity gate, enum values included; fails the build on a finding.
+- `make audit-1to1-enums` — the enum value rule alone; fails the build on a finding.
 - `make audit-1to1-validate-docs` — validates the doc/api citations (CI gate).
 - `make audit-struct-completeness` — legacy wrapper running `-scope=structs`.
 - `make audit-action-coverage` — legacy wrapper running `-scope=actions`.

@@ -87,6 +87,7 @@ readable without opening the tracker:
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
 | 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | No | No | No | No | Yes |
+| 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -296,6 +297,51 @@ field becomes an input field and there was one fewer than the API documents.
 **Effort**: small for the attribute (one field plus a test). The enablement
 endpoint is a new method with its own result type, and would let a tool answer
 "is the firewall even on here" without inferring it from a 404.
+
+### Enum constants lag the documented value sets
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. The handlers forward the string a caller passes, so the
+  schema enums offer the documented values whether or not a constant exists,
+  and each such value is recorded in `acceptedEnumGaps` in
+  `cmd/audit_1to1/internal/enums/exemptions.go` so the enum rule can tell a
+  documented extra from an invented one. Each entry retires when the constant
+  lands upstream: the rule then reports the exemption as stale.
+
+**What**: four value types in `types.go` and `todos.go` declare fewer
+constants than the GitLab API documents for the parameters they type, and one
+parameter is typed with the wrong value type altogether.
+
+- `EventTypeValue` lacks `approved`, which
+  [the user contribution events](https://docs.gitlab.com/user/profile/contributions_calendar/#user-contribution-events)
+  list among the action types the events API filters on.
+- `EventTargetTypeValue` lacks `epic`, which the
+  [events API](https://docs.gitlab.com/api/events/) lists as a `target_type`
+  since GitLab 17.3.
+- `TodoAction` lacks `unmergeable`, `merge_train_removed` and
+  `member_access_requested`, all listed by the
+  [to-do items API](https://docs.gitlab.com/api/todos/) as `action` filter
+  values.
+- `DeploymentStatusValue` lacks `blocked`, which the
+  [deployments API](https://docs.gitlab.com/api/deployments/) lists as a
+  `status` filter value (the list options type the filter as `*string`, so it
+  is only the constant that is missing).
+- `EditProjectOptions.CIRestrictPipelineCancellationRole` is typed
+  `*AccessControlValue`, whose constants are the feature-visibility set
+  (`disabled`, `private`, `enabled`, `public`), while the
+  [projects API](https://docs.gitlab.com/api/projects/) documents the parameter
+  as `developer`, `maintainer` or `no_one`. A caller using the constants sends
+  a value GitLab rejects.
+
+**Found from**: the 1:1 audit's enum rule (`make audit-1to1-enums`), which
+holds every schema enum to the constants of the SDK type behind the field and
+reported these as values offered that the SDK does not declare.
+
+**Effort**: small. One constant each, and a dedicated value type for the
+cancellation role; none of them changes a signature.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
