@@ -187,3 +187,59 @@ func TestValidateEmbeddedResource_RefusesDeclarationsThatCannotWork(t *testing.T
 		})
 	}
 }
+
+// TestResourceParamValue_RendersEachType covers every branch of the parameter
+// renderer: the types that carry an identifier, an integral float that reads as
+// an integer, a fractional and an out-of-range float that keep their decimal
+// form, and the values that are deliberately not identifiers (nil, a blank
+// string, a bool) and so give nothing to substitute.
+func TestResourceParamValue_RendersEachType(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		value  any
+		want   string
+		wantOK bool
+	}{
+		{name: "nil is not a value", value: nil, want: "", wantOK: false},
+		{name: "a string is trimmed", value: "  x/y  ", want: "x/y", wantOK: true},
+		{name: "a blank string is not a value", value: "   ", want: "", wantOK: false},
+		{name: "an integral float reads as an integer", value: float64(42), want: "42", wantOK: true},
+		{name: "a fractional float keeps its decimal", value: 3.5, want: "3.5", wantOK: true},
+		{name: "a float too large to be an id keeps its form", value: 1e15, want: "1000000000000000", wantOK: true},
+		{name: "an int", value: 7, want: "7", wantOK: true},
+		{name: "an int64", value: int64(9000000000), want: "9000000000", wantOK: true},
+		{name: "a bool is not a value", value: true, want: "", wantOK: false},
+		{name: "another type is rendered by fmt", value: uint(5), want: "5", wantOK: true},
+		{name: "another type that renders blank is not a value", value: emptyStringer{}, want: "", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := resourceParamValue(tt.value)
+			if got != tt.want || ok != tt.wantOK {
+				t.Errorf("resourceParamValue(%#v) = %q, %v; want %q, %v", tt.value, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+// emptyStringer renders as whitespace, so it reaches the default branch of
+// resourceParamValue and is trimmed away to nothing.
+type emptyStringer struct{}
+
+func (emptyStringer) String() string { return "  " }
+
+// TestWithEmbeddedResource_DeclaresTheTemplateAndPolicy verifies the spec
+// builder sets the always-embed policy and stores the template trimmed, so a
+// declaration padded with whitespace still validates and expands.
+func TestWithEmbeddedResource_DeclaresTheTemplateAndPolicy(t *testing.T) {
+	t.Parallel()
+	spec := ActionSpec{Name: "get"}.WithEmbeddedResource("  gitlab://project/{project_id}  ")
+	if spec.EmbeddedResourcePolicy != ActionSpecEmbeddedAlways {
+		t.Errorf("policy = %q, want %q", spec.EmbeddedResourcePolicy, ActionSpecEmbeddedAlways)
+	}
+	if spec.EmbeddedResource != "gitlab://project/{project_id}" {
+		t.Errorf("template = %q, want it trimmed", spec.EmbeddedResource)
+	}
+}
