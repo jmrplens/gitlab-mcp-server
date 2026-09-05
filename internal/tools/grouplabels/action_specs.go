@@ -14,7 +14,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupLabelReadSpec("group_label_list", toolutil.RouteAction(client, List), "gitlab_group_label_list"),
-		groupLabelReadSpec("group_label_get", toolutil.RouteAction(client, Get), "gitlab_group_label_get"),
+		groupLabelReadSpec("group_label_get", toolutil.RouteAction(client, Get), "gitlab_group_label_get").
+			WithEmbeddedResource("gitlab://group/{group_id}/label/{label_id}"),
 		groupLabelCreateSpec("group_label_create", toolutil.RouteAction(client, Create), "gitlab_group_label_create"),
 		groupLabelUpdateSpec("group_label_update", toolutil.RouteAction(client, Update), "gitlab_group_label_update"),
 		groupLabelDeleteSpec("group_label_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_label_delete"),

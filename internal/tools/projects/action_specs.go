@@ -53,7 +53,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.ActionSpec {
 	specs := []toolutil.ActionSpec{
 		projectCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_project_create"),
-		projectGetSpec(projectGetRoute(client)),
+		projectGetSpec(projectGetRoute(client)).
+			WithEmbeddedResource("gitlab://project/{project_id}"),
 		projectReadSpec("list", toolutil.RouteAction(client, List), toolProjectList),
 		projectDestructiveUpdateSpec("delete", toolutil.DestructiveAction(client, Delete), toolProjectDelete),
 		projectMutationSpec("restore", toolutil.RouteAction(client, Restore), "gitlab_project_restore"),

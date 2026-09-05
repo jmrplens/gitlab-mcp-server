@@ -22,7 +22,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		environmentReadSpec("list", toolutil.RouteAction(client, List), "gitlab_environment_list"),
-		environmentReadSpec("get", environmentGetRoute(client), "gitlab_environment_get"),
+		environmentReadSpec("get", environmentGetRoute(client), "gitlab_environment_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/environment/{environment_id}"),
 		environmentCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_environment_create"),
 		environmentUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_environment_update"),
 		environmentDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_environment_delete"),

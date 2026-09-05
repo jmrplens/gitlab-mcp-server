@@ -30,6 +30,10 @@ type ActionSpec struct {
 	ContentKind            string
 	NotFoundPolicy         string
 	EmbeddedResourcePolicy string
+	// EmbeddedResource is the canonical gitlab:// URI template of the entity a
+	// get-style action returns, expanded from the call's parameters and
+	// embedded in the result under the embedded-resource policy.
+	EmbeddedResource       string
 	RichResultPolicy       string
 	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string
@@ -132,6 +136,7 @@ type ActionSpecOptions struct {
 	ContentKind            string
 	NotFoundPolicy         string
 	EmbeddedResourcePolicy string
+	EmbeddedResource       string
 	RichResultPolicy       string
 	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string
@@ -169,6 +174,7 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		ContentKind:            strings.TrimSpace(opts.ContentKind),
 		NotFoundPolicy:         strings.TrimSpace(opts.NotFoundPolicy),
 		EmbeddedResourcePolicy: strings.TrimSpace(opts.EmbeddedResourcePolicy),
+		EmbeddedResource:       strings.TrimSpace(opts.EmbeddedResource),
 		RichResultPolicy:       strings.TrimSpace(opts.RichResultPolicy),
 		SchemaValidationNotes:  normalizeActionSpecNotes(opts.SchemaValidationNotes),
 		RuntimeValidationNotes: normalizeActionSpecNotes(opts.RuntimeValidationNotes),
@@ -254,6 +260,7 @@ func actionSpecOptionsFromSpec(spec ActionSpec) ActionSpecOptions {
 		ContentKind:            spec.ContentKind,
 		NotFoundPolicy:         spec.NotFoundPolicy,
 		EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
+		EmbeddedResource:       spec.EmbeddedResource,
 		RichResultPolicy:       spec.RichResultPolicy,
 		SchemaValidationNotes:  spec.SchemaValidationNotes,
 		RuntimeValidationNotes: spec.RuntimeValidationNotes,
@@ -676,6 +683,9 @@ func validateActionSpecPolicies(spec ActionSpec) error {
 		return err
 	}
 	if err := validateOptionalActionSpecPolicy(spec.Name, "embedded resource policy", spec.EmbeddedResourcePolicy, actionSpecEmbeddedResourcePolicies()); err != nil {
+		return err
+	}
+	if err := validateEmbeddedResource(spec); err != nil {
 		return err
 	}
 	if err := validateOptionalActionSpecPolicy(spec.Name, "rich result policy", spec.RichResultPolicy, actionSpecRichResultPolicies()); err != nil {

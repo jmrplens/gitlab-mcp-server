@@ -41,6 +41,7 @@ type Action struct {
 	ContentKind            string
 	NotFoundPolicy         string
 	EmbeddedResourcePolicy string
+	EmbeddedResource       string
 	RichResultPolicy       string
 	SchemaValidationNotes  []string
 	RuntimeValidationNotes []string

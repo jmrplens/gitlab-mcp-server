@@ -27,7 +27,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_milestone_list — list project milestones with optional filters.
 		milestoneReadSpec("milestone_list", toolutil.RouteAction(client, List), "gitlab_milestone_list"),
 		// gitlab_milestone_get — fetch a milestone by IID (returns a structured not-found result on 404).
-		milestoneReadSpec("milestone_get", milestoneGetRoute(client), "gitlab_milestone_get"),
+		milestoneReadSpec("milestone_get", milestoneGetRoute(client), "gitlab_milestone_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/milestone/{milestone_iid}"),
 		// gitlab_milestone_create — create a new milestone.
 		milestoneCreateSpec("milestone_create", toolutil.RouteAction(client, Create), "gitlab_milestone_create"),
 		// gitlab_milestone_update — update an existing milestone.

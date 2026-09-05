@@ -65,6 +65,10 @@ func Decorated(ctx context.Context, client *gitlabclient.Client, input Input) (O
 	return read(ctx, client)
 }
 
+func Chained(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return read(ctx, client)
+}
+
 func Literal(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
 	return read(ctx, client)
 }
@@ -134,6 +138,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		toolutil.NewReadActionSpec("direct", toolutil.RouteAction(client, Direct), toolutil.ActionSpecOptions{}),
 		helperSpec("helper", toolutil.RouteAction(client, ViaHelper)),
 		toolutil.NewReadActionSpec("decorated", toolutil.RouteAction(client, Decorated).WithTags("fixture"), toolutil.ActionSpecOptions{}),
+		helperSpec("chained", toolutil.RouteAction(client, Chained)).WithEmbeddedResource("gitlab://project/{id}"),
 		toolutil.ActionSpec{Name: "literal", Route: toolutil.RouteAction(client, Literal)},
 		variableSpec(client),
 		toolutil.NewReadActionSpec(constantName, routeFor(client), toolutil.ActionSpecOptions{}),
@@ -263,6 +268,7 @@ func TestResolver_CollectSites_EveryConstructionShape(t *testing.T) {
 		{action: "direct", handler: "Direct"},
 		{action: "helper", handler: "ViaHelper"},
 		{action: "decorated", handler: "Decorated"},
+		{action: "chained", handler: "Chained"},
 		{action: "literal", handler: "Literal"},
 		{action: "variable", handler: "Variable"},
 		{action: "constant", handler: "Constant"},

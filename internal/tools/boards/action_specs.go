@@ -92,7 +92,8 @@ var boardMetaByTool = map[string]boardMeta{
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		boardReadSpec("board_list", toolutil.RouteAction(client, ListBoards), "gitlab_board_list"),
-		boardReadSpec("board_get", toolutil.RouteAction(client, GetBoard), "gitlab_board_get"),
+		boardReadSpec("board_get", toolutil.RouteAction(client, GetBoard), "gitlab_board_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/board/{board_id}"),
 		boardCreateSpec("board_create", toolutil.RouteAction(client, CreateBoard), "gitlab_board_create"),
 		boardUpdateSpec("board_update", toolutil.RouteAction(client, UpdateBoard), "gitlab_board_update"),
 		boardDeleteSpec("board_delete", toolutil.DestructiveVoidAction(client, DeleteBoard), "gitlab_board_delete"),

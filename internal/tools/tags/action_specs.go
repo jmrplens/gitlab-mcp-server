@@ -24,7 +24,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_tag_create — create a new tag from a branch, tag, or commit.
 		tagSpec("create", toolutil.RouteAction(client, Create), "gitlab_tag_create", false, false),
 		// gitlab_tag_get — fetch a single tag by name (returns a structured not-found result on 404).
-		tagSpec("get", tagGetRoute(client), "gitlab_tag_get", true, true),
+		tagSpec("get", tagGetRoute(client), "gitlab_tag_get", true, true).
+			WithEmbeddedResource("gitlab://project/{project_id}/tag/{tag_name}"),
 		// gitlab_tag_list — list tags for a project with optional search and pagination.
 		tagSpec("list", toolutil.RouteAction(client, List), "gitlab_tag_list", true, true),
 		// gitlab_tag_delete — delete a tag (destructive).

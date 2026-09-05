@@ -24,7 +24,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_branch_create — create a new branch from a ref.
 		branchSpec("create", toolutil.RouteAction(client, Create), "gitlab_branch_create", false, false),
 		// gitlab_branch_get — fetch a single branch by name (returns a structured not-found result on 404).
-		branchSpec("get", branchGetRoute(client), "gitlab_branch_get", true, true),
+		branchSpec("get", branchGetRoute(client), "gitlab_branch_get", true, true).
+			WithEmbeddedResource("gitlab://project/{project_id}/branch/{branch_name}"),
 		// gitlab_branch_list — list branches for a project with optional search and pagination.
 		branchSpec("list", toolutil.RouteAction(client, List), "gitlab_branch_list", true, true),
 		// gitlab_branch_delete — delete a single branch by name (destructive).

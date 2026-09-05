@@ -16,7 +16,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupMilestoneReadSpec("group_milestone_list", toolutil.RouteAction(client, List), "gitlab_group_milestone_list"),
-		groupMilestoneReadSpec("group_milestone_get", toolutil.RouteAction(client, Get), "gitlab_group_milestone_get"),
+		groupMilestoneReadSpec("group_milestone_get", toolutil.RouteAction(client, Get), "gitlab_group_milestone_get").
+			WithEmbeddedResource("gitlab://group/{group_id}/milestone/{milestone_iid}"),
 		groupMilestoneCreateSpec("group_milestone_create", toolutil.RouteAction(client, Create), "gitlab_group_milestone_create"),
 		groupMilestoneUpdateSpec("group_milestone_update", toolutil.RouteAction(client, Update), "gitlab_group_milestone_update"),
 		groupMilestoneDeleteSpec("group_milestone_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_milestone_delete"),

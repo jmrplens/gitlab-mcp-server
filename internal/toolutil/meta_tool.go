@@ -66,6 +66,10 @@ type ActionRoute struct {
 	Tags              []string
 	Usage             string
 	RelatedActions    []string
+	// EmbeddedResource is the canonical resource URI template the dispatchers
+	// expand from the call's parameters and embed in a successful result. The
+	// catalog sets it from the action's spec when the spec's policy embeds.
+	EmbeddedResource string
 }
 
 // ParameterGuidance carries compact model-facing hints for parameters that are
@@ -2309,6 +2313,7 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		if callResult.IsError {
 			return callResult, nil, nil
 		}
+		EmbedCanonicalResource(callResult, route.EmbeddedResource, input.Params, result)
 		return callResult, enrichWithHints(result, callResult), nil
 	}
 }

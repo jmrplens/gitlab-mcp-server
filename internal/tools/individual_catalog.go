@@ -227,6 +227,7 @@ func actionSpecFromCatalogAction(action actioncatalog.Action) toolutil.ActionSpe
 		ContentKind:            action.ContentKind,
 		NotFoundPolicy:         action.NotFoundPolicy,
 		EmbeddedResourcePolicy: action.EmbeddedResourcePolicy,
+		EmbeddedResource:       action.EmbeddedResource,
 		RichResultPolicy:       action.RichResultPolicy,
 		SchemaValidationNotes:  action.SchemaValidationNotes,
 		RuntimeValidationNotes: action.RuntimeValidationNotes,
@@ -277,6 +278,7 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		if callResult != nil && callResult.IsError {
 			return callResult, nil, nil
 		}
+		toolutil.EmbedCanonicalResource(callResult, action.Route.EmbeddedResource, input, result)
 		return toolutil.WithHints(callResult, result, nil)
 	}
 }
