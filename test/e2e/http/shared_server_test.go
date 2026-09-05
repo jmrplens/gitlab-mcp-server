@@ -455,3 +455,194 @@ func TestSharedServer_AnEvictedCredentialsListenIsEnded(t *testing.T) {
 		t.Errorf("the stream closed without the listen's completion result; frames: %v", seen)
 	}
 }
+
+// namedGitLab is an instance that says which one it is, so a response can be
+// traced back to the GitLab that produced it.
+func namedGitLab(t *testing.T, name string) *httptest.Server {
+	t.Helper()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"version":"17.0.0","revision":%q}`, name)
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"id":1,"username":%q}`, name)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestSharedServer_TwoPublishedInstancesShareOneShape is the riskiest part of
+// the design driven on the wire.
+//
+// The instance URL is deliberately not in the shape key: two instances of one
+// tier are served the same catalog, and what differs between them is the client,
+// which is per credential regardless. That is what makes a deployment publishing
+// several instances the one that gains most from the sharing, and it is also
+// what makes a mistake here send a caller's request to an instance they never
+// named. Nothing else drives two credentials at two published instances through
+// one server.
+//
+// The server the shape is registered with carries the credential-less client for
+// its instance class, whose base URL is the synthetic gitlab.invalid. A response
+// naming that host would mean a handler answered from the registration client
+// rather than from the request's own.
+func TestSharedServer_TwoPublishedInstancesShareOneShape(t *testing.T) {
+	first := namedGitLab(t, "first-instance")
+	second := namedGitLab(t, "second-instance")
+
+	srv := startServer(t, nil,
+		"--gitlab-url="+first.URL,
+		"--gitlab-url="+second.URL,
+	)
+
+	instances := []struct {
+		name     string
+		token    string
+		gitlab   *httptest.Server
+		revision string
+	}{
+		{name: "the first published instance", token: "glpat-at-the-first", gitlab: first, revision: "first-instance"},
+		{name: "the second published instance", token: "glpat-at-the-second", gitlab: second, revision: "second-instance"},
+	}
+
+	for _, tt := range instances {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_execute_action",` +
+				`"arguments":{"action":"server.status","params":{}},` +
+				`"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
+			got := srv.do(t, request{
+				body: body,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":    tt.token,
+					"GITLAB-URL":       tt.gitlab.URL,
+					"Mcp-Param-Action": "server.status",
+				},
+			})
+			if got.status != http.StatusOK {
+				t.Fatalf("server.status = %d: %s", got.status, got.body)
+			}
+			payload := jsonRPCPayload(t, got.body)
+			if !strings.Contains(payload, tt.gitlab.URL) {
+				t.Errorf("the answer does not name the instance this credential asked for (%s):\n%s", tt.gitlab.URL, payload)
+			}
+			if !strings.Contains(payload, tt.revision) {
+				t.Errorf("the answer did not come from %s, whose revision is %q:\n%s", tt.gitlab.URL, tt.revision, payload)
+			}
+			for _, other := range instances {
+				if other.revision != tt.revision && strings.Contains(payload, other.revision) {
+					t.Errorf("the answer names the other published instance %q:\n%s", other.revision, payload)
+				}
+			}
+			if strings.Contains(payload, "gitlab.invalid") {
+				t.Errorf("the answer names the synthetic host the shape is registered against:\n%s", payload)
+			}
+		})
+	}
+
+	// One server for both instances is the property under test: with a server
+	// per instance there would be no per-request client resolution to get wrong.
+	if builds := countShapeBuilds(srv.logs()); builds != 1 {
+		t.Errorf("the server built %d configuration shapes for two published instances of one tier, want 1", builds)
+	}
+}
+
+// TestSharedServer_PerCredentialLimitsProveTheBindingRunsOutermost asserts the
+// middleware order the real wiring produces, through what that order decides.
+//
+// The credential binding is added last of the receiving middlewares, which makes
+// it run first, because the telemetry, rate-limit, listen-ceiling and
+// subscription middlewares each ask which credential a request belongs to.
+// Moving it inward is silent: every tenant would then draw on the shell's own
+// default bucket and counter, and nothing would fail to compile or answer. The
+// only test of that ordering was one that assembled a chain of its own, which
+// proves the middleware and not the wiring.
+//
+// Each half here is a consequence only the real order can produce. The
+// subscription half is covered by the two owner tests above, where one
+// credential's watcher must not notify another's session, and the telemetry half
+// is visible only through an exporter, which is the collector module's subject.
+func TestSharedServer_PerCredentialLimitsProveTheBindingRunsOutermost(t *testing.T) {
+	const (
+		firstToken  = "glpat-first-tenant"
+		secondToken = "glpat-second-tenant"
+		uri         = "gitlab://project/123"
+	)
+
+	t.Run("the rate-limit bucket is the credential's own", func(t *testing.T) {
+		gitlab := startTwoTenantGitLab(t, firstToken, secondToken)
+		srv := startServer(t, nil,
+			"--gitlab-url="+gitlab.URL,
+			"--rate-limit-rps=1",
+			"--rate-limit-burst=1",
+		)
+
+		var drained bool
+		for range 15 {
+			if isRateLimited(findActionAs(t, srv, firstToken).body) {
+				drained = true
+				break
+			}
+		}
+		if !drained {
+			t.Fatal("15 calls at one request per second never drained a bucket of one, so nothing was limited")
+		}
+
+		if got := findActionAs(t, srv, secondToken); isRateLimited(got.body) {
+			t.Errorf("a second credential was refused by the first one's exhausted bucket: %s\n"+
+				"the binding is running inside the rate limit, so every tenant shares the shell's default bucket", got.body)
+		}
+	})
+
+	t.Run("the listen ceiling is the credential's own", func(t *testing.T) {
+		gitlab := startTwoTenantGitLab(t, firstToken, secondToken)
+		srv := startServer(t, map[string]string{"GITLAB_MCP_MAX_LISTEN_STREAMS": "1"},
+			"--gitlab-url="+gitlab.URL,
+			"--capability-surface=full",
+		)
+
+		held := openListen(t, srv, firstToken, uri, 1)
+		if _, seen, ok := held.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second); !ok {
+			t.Fatalf("the first stream was never acknowledged; frames: %v", seen)
+		}
+
+		refused := openListen(t, srv, firstToken, uri, 2)
+		if _, seen, ok := refused.awaitFrame(t, "too many open subscriptions/listen streams", 20*time.Second); !ok {
+			t.Errorf("a second stream for the same credential was accepted past a ceiling of one; frames: %v", seen)
+		}
+
+		other := openListen(t, srv, secondToken, uri, 3)
+		frame, seen, ok := other.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second)
+		if !ok {
+			t.Fatalf("a second credential's first stream was refused by the first credential's ceiling; frames: %v\n"+
+				"the binding is running inside the listen ceiling, so every tenant shares one counter", seen)
+		}
+		if strings.Contains(frame, "too many open") {
+			t.Errorf("the second credential was refused: %s", frame)
+		}
+	})
+}
+
+// findActionAs drives one gitlab_find_action call as the given credential.
+func findActionAs(t *testing.T, srv *server, token string) response {
+	t.Helper()
+	return srv.do(t, request{
+		body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action",` +
+			`"arguments":{"query":"list projects"},` +
+			`"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`,
+		headers: map[string]string{"PRIVATE-TOKEN": token},
+	})
+}
+
+// isRateLimited reports whether a response is the limiter's refusal, by its
+// JSON-RPC code as well as its text.
+func isRateLimited(body string) bool {
+	return strings.Contains(strings.ToLower(body), "rate limit") || strings.Contains(body, "-42900")
+}
