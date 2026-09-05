@@ -469,6 +469,16 @@ func classifyDep(line string, direct, indirect *int) {
 	}
 }
 
+// roundedAverage is lines per file rounded to the nearest whole line, and 0
+// when there are no files. Integer division would truncate, and the README
+// presents the figure as an approximation, so 577.96 has to read ~578.
+func roundedAverage(lines, files int) int {
+	if files <= 0 {
+		return 0
+	}
+	return (lines + files/2) / files
+}
+
 // renderStats builds the Markdown tables for the <!-- START STATS --> section.
 func renderStats(s *repoStats) string {
 	totalFiles := s.SourceFiles + s.UnitTestFiles + s.E2ETestFiles
@@ -483,14 +493,8 @@ func renderStats(s *repoStats) string {
 	if srcFuncs > 0 {
 		testPerFunc = float64(s.TestFuncs) / float64(srcFuncs)
 	}
-	avgSrc := 0
-	if s.SourceFiles > 0 {
-		avgSrc = s.SourceLines / s.SourceFiles
-	}
-	avgTest := 0
-	if s.UnitTestFiles > 0 {
-		avgTest = s.UnitTestLines / s.UnitTestFiles
-	}
+	avgSrc := roundedAverage(s.SourceLines, s.SourceFiles)
+	avgTest := roundedAverage(s.UnitTestLines, s.UnitTestFiles)
 	commentPct := 0.0
 	if s.SourceLines > 0 {
 		commentPct = float64(s.CommentLines) / float64(s.SourceLines) * 100

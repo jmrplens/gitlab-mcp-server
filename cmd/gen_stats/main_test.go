@@ -597,6 +597,31 @@ func TestRenderStats_ZeroStats_GuardsDivisions(t *testing.T) {
 	}
 }
 
+// TestRoundedAverage_RoundsToNearestLine pins that the per-file averages
+// round rather than truncate: 369,897 lines over 640 files is 577.96, which
+// the README used to print as ~577.
+func TestRoundedAverage_RoundsToNearestLine(t *testing.T) {
+	tests := []struct {
+		name  string
+		lines int
+		files int
+		want  int
+	}{
+		{name: "exact division", lines: 1000, files: 10, want: 100},
+		{name: "fraction above a half rounds up", lines: 369897, files: 640, want: 578},
+		{name: "fraction below a half rounds down", lines: 2309, files: 4, want: 577},
+		{name: "exactly a half rounds up", lines: 3, files: 2, want: 2},
+		{name: "no files is zero, not a division by zero", lines: 500, files: 0, want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := roundedAverage(tt.lines, tt.files); got != tt.want {
+				t.Errorf("roundedAverage(%d, %d) = %d, want %d", tt.lines, tt.files, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestFmtInt_AddsThousandsSeparators verifies the integer formatter inserts
 // comma separators at the expected positions.
 func TestFmtInt_AddsThousandsSeparators(t *testing.T) {

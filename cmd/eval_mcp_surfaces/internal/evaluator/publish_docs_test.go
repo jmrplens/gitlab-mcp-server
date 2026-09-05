@@ -1347,6 +1347,12 @@ func TestPublishDocSections_HaveAHomeInTheCommittedDocuments(t *testing.T) {
 	for _, key := range []string{publishSectionMeta, publishSectionDynamic, publishSectionEnterpriseMeta, publishSectionEnterpriseDynamic} {
 		t.Run(key, func(t *testing.T) {
 			section := publishDocSectionForKey(key)
+			// The unknown section carries empty markers, and an empty string
+			// is contained in every document, so a key the lookup does not
+			// know would pass the checks below without validating anything.
+			if section.Key != key {
+				t.Fatalf("publishDocSectionForKey(%q) returned the %q section", key, section.Key)
+			}
 			for _, marker := range []string{section.ResultsStartMarker, section.ResultsEndMarker} {
 				if !strings.Contains(string(results), marker) {
 					t.Errorf("%s has no %s marker for the %q section", defaultPublishResultsDoc, marker, key)
