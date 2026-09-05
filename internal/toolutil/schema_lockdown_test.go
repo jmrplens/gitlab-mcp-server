@@ -281,7 +281,7 @@ func TestLockedDownSchema_SharesDerivationsAndKeepsWhatItCannotRender(t *testing
 		t.Errorf("lockedDownSchema(nil) = %#v, want nil", got)
 	}
 	unrenderable := func() {}
-	if got := lockedDownSchema(unrenderable); got == nil {
+	if lockedDownSchema(unrenderable) == nil {
 		t.Error("lockedDownSchema(func) = nil, want the input kept")
 	}
 

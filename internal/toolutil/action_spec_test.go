@@ -6,8 +6,22 @@ import (
 	"testing"
 )
 
-// TestNewActionSpec_DeepClonesMetadata verifies NewActionSpec when deep clones metadata.
-func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
+// TestNewActionSpec_ClonesItsOwnMetadataAndSharesRouteGuidance verifies where
+// the line falls between the metadata NewActionSpec copies and the metadata it
+// leaves shared with the route it was given.
+//
+// Copied, so an edit to the caller's slice or map after the call cannot reach
+// the spec: the aliases, tags, related actions, compatibility policy,
+// validation notes, individual-tool overrides, and the spec's own parameter
+// guidance. The input schema is not copied but derived, which has the same
+// effect here: the spec carries the schema with the canonical enums and the
+// overrides applied, not the caller's map.
+//
+// Shared with the route: the route's own parameter guidance map. It is frozen
+// metadata, reachable from a catalog every server in the process is bound to,
+// so nothing may write into it; the source guard in internal/tools refuses an
+// indexed write into a route's guidance or schemas for that reason.
+func TestNewActionSpec_ClonesItsOwnMetadataAndSharesRouteGuidance(t *testing.T) {
 	inputSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{

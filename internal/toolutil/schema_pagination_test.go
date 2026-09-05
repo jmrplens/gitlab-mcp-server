@@ -26,7 +26,7 @@ func TestPaginationEnrichedSchema_SharesDerivationsAndKeepsWhatItCannotRender(t 
 	if got := paginationEnrichedSchema(nil); got != nil {
 		t.Errorf("paginationEnrichedSchema(nil) = %#v, want nil", got)
 	}
-	if got := paginationEnrichedSchema(func() {}); got == nil {
+	if paginationEnrichedSchema(func() {}) == nil {
 		t.Error("paginationEnrichedSchema(func) = nil, want the input kept")
 	}
 

@@ -10329,7 +10329,7 @@ func TestManifestShareKey_NamesTheSharedCatalogAndItsNarrowing(t *testing.T) {
 			}
 		})
 	}
-	if other := manifestShareKey(config.ToolSurfaceMeta, config.CapabilitySurfaceMinimal, cfg, shared); other == got {
+	if manifestShareKey(config.ToolSurfaceMeta, config.CapabilitySurfaceMinimal, cfg, shared) == got {
 		t.Error("two capability surfaces produced one manifest key")
 	}
 }

@@ -6199,7 +6199,7 @@ func TestRegistryShapeFor_SharedCatalogReusesOneShape(t *testing.T) {
 	if first != second {
 		t.Fatal("two catalogs bound from one origin got two shapes, want one")
 	}
-	if withAliases := registryShapeFor(shared, actionAliases()); withAliases == first {
+	if registryShapeFor(shared, actionAliases()) == first {
 		t.Fatal("a registry with extra aliases took the cached shape, want its own")
 	}
 	private := actioncatalog.FromActionMaps(map[string]toolutil.ActionMap{
