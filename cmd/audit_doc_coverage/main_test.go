@@ -973,7 +973,9 @@ func TestSortedUnique_Scenarios_DedupesAndSorts(t *testing.T) {
 // the repo).
 func TestResolveOutputPath_ByPathKind(t *testing.T) {
 	root := filepath.Join("home", "user", "repo")
-	abs := filepath.Join(string(filepath.Separator)+"tmp", "out.json")
+	// A rooted path on every platform: "/tmp" is not absolute on Windows,
+	// where an absolute path needs a volume, and would be joined onto root.
+	abs := filepath.Join(t.TempDir(), "out.json")
 	cases := []struct {
 		name  string
 		input string

@@ -151,7 +151,7 @@ func TestRun_Write_UnwritableTree_ReturnsError(t *testing.T) {
 					t.Fatalf("write blocker: %v", err)
 				}
 			},
-			wantErr: []string{"create ", filepath.Dir(first), "not a directory"},
+			wantErr: []string{"create ", filepath.Dir(first), notADirectoryText()},
 		},
 		{
 			name: "asset path is a directory",
@@ -215,20 +215,35 @@ func chdirIntoRootlessDir(t *testing.T) {
 	t.Chdir(dir)
 }
 
+// notADirectoryText is the operating system's wording for a directory being
+// created below a regular file: ENOTDIR on unix, and on Windows the
+// path-not-found error that stands in for it.
+func notADirectoryText() string {
+	if runtime.GOOS == "windows" {
+		return "cannot find the path specified"
+	}
+	return "not a directory"
+}
+
 // chdirIntoRemovedDir makes a directory the working directory and then
 // removes it, so os.Getwd fails with ENOENT regardless of privilege.
+//
+// Windows refuses to remove a process's working directory, and macOS keeps
+// answering getcwd from the path it remembers, so on neither can the failure
+// be produced this way: both skip rather than report the operating system's
+// design as a defect here.
 func chdirIntoRemovedDir(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows getcwd does not fail when the current directory is removed")
-	}
 	gone := filepath.Join(t.TempDir(), "gone")
 	if err := os.Mkdir(gone, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	t.Chdir(gone)
 	if err := os.RemoveAll(gone); err != nil {
-		t.Fatalf("remove working directory: %v", err)
+		t.Skipf("this platform will not remove the working directory: %v", err)
+	}
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("this platform's getcwd still answers after the working directory is removed")
 	}
 }
 

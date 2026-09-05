@@ -294,10 +294,11 @@ func resolve(root, path string) string {
 }
 
 // rel renders a path for a message, relative to the module root when it is
-// inside it.
+// inside it, spelled the way the repository spells it: with slashes, on
+// every platform.
 func rel(root, path string) string {
 	if relative, err := filepath.Rel(root, path); err == nil {
-		return relative
+		return filepath.ToSlash(relative)
 	}
 	return path
 }

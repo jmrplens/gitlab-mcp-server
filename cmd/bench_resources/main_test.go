@@ -196,8 +196,9 @@ func TestResolveAndRel_RoundTrip(t *testing.T) {
 	}
 
 	// An absolute flag value is left alone, which is what lets a smoke run
-	// write outside the repository.
-	outside := "/tmp/bench.json"
+	// write outside the repository. Built from a temporary directory so it
+	// is rooted on every platform: "/tmp" carries no volume on Windows.
+	outside := filepath.Join(t.TempDir(), "bench.json")
 	if got := resolve(root, outside); got != outside {
 		t.Errorf("resolve rewrote an absolute path: %q", got)
 	}

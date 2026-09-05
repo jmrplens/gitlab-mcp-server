@@ -116,7 +116,9 @@ func TestToolExecutionMode_ReflectsDryRunExecuteAndExternalModes(t *testing.T) {
 // TestDefaultArtifactPaths_UseEvaluationDirectories verifies generated report,
 // trace, and terminal paths stay under the ignored evaluation output tree.
 func TestDefaultArtifactPaths_UseEvaluationDirectories(t *testing.T) {
-	if got := defaultOutputPath("openai:gpt/test model"); !strings.HasPrefix(got, defaultEvalDir+string(filepath.Separator)) || !strings.Contains(got, "openai-gpt-test-model") {
+	// The paths are built with filepath, so they carry the platform's
+	// separator; the prefix they must sit under is spelled with slashes.
+	if got := filepath.ToSlash(defaultOutputPath("openai:gpt/test model")); !strings.HasPrefix(got, defaultEvalDir+"/") || !strings.Contains(got, "openai-gpt-test-model") {
 		t.Fatalf("defaultOutputPath() = %q", got)
 	}
 	if got := defaultComparisonOutputPath(); !strings.Contains(got, filepath.Join(defaultEvalDir, "comparison")) || !strings.HasSuffix(got, "-summary.md") {
@@ -283,7 +285,7 @@ func TestDefaultTerminalLogPath_UsesIgnoredTerminalDirectory(t *testing.T) {
 
 // TestDefaultOutputPath_UsesIgnoredDistDirectory verifies DefaultOutputPath uses ignored dist directory.
 func TestDefaultOutputPath_UsesIgnoredDistDirectory(t *testing.T) {
-	got := defaultOutputPath("claude/sonnet:4 6")
+	got := filepath.ToSlash(defaultOutputPath("claude/sonnet:4 6"))
 	if !strings.HasPrefix(got, "dist/evaluation/mcp-surfaces/model-") {
 		t.Fatalf("defaultOutputPath() = %q, want dist evaluation path", got)
 	}
