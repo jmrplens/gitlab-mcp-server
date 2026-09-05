@@ -428,3 +428,12 @@ func TestMetaSchema_FullModeAdvertisesOneOf(t *testing.T) {
 		})
 	}
 }
+
+// TestMetaParamSchema_ReportsTheSelectedMode verifies the package's reader
+// of the meta parameter-schema mode follows its scoped setter.
+func TestMetaParamSchema_ReportsTheSelectedMode(t *testing.T) {
+	defer SetMetaParamSchemaScoped("compact")()
+	if got := MetaParamSchema(); got != "compact" {
+		t.Errorf("MetaParamSchema() = %q, want compact", got)
+	}
+}

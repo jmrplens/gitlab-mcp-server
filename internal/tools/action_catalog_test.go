@@ -891,6 +891,44 @@ func TestActionAnnotations_AdditiveActionsAreNotIdempotent(t *testing.T) {
 // depends only on the projection options, so tests share one build per
 // option set.
 
+// TestBuildActionCatalog_ReturnsABoundCopyOfTheSharedCatalog verifies the
+// public builder hands every caller its own catalog bound from one shared
+// origin, and that a call carrying spec-group overrides, which the cache
+// cannot key, builds a private catalog with no origin.
+func TestBuildActionCatalog_ReturnsABoundCopyOfTheSharedCatalog(t *testing.T) {
+	first, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(first) error = %v", err)
+	}
+	second, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(second) error = %v", err)
+	}
+	if first == second || first.SharedOrigin() == nil || first.SharedOrigin() != second.SharedOrigin() {
+		t.Fatal("two calls did not return distinct catalogs bound from one shared origin")
+	}
+	if first.SharedOrigin() == first {
+		t.Fatal("BuildActionCatalog() handed out the shared origin itself, want a bound copy")
+	}
+
+	overridden, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: edition.Free, SpecGroups: []ActionSpecGroup{{
+		ToolName:     "gitlab_test_override",
+		OwnerPackage: "tests",
+		Actions:      []toolutil.ActionSpec{toolutil.NewReadActionSpec("list", toolutil.RouteAction(nil, testListAction), toolutil.ActionSpecOptions{OwnerPackage: "tests"})},
+	}}})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(overrides) error = %v", err)
+	}
+	if overridden.SharedOrigin() != nil {
+		t.Fatal("a catalog built with spec-group overrides reported a shared origin")
+	}
+}
+
+// testListAction is a typed handler for catalogs built with overrides.
+func testListAction(context.Context, *gitlabclient.Client, struct{}) (struct{}, error) {
+	return struct{}{}, nil
+}
+
 // sharedCatalogKey identifies one cacheable nil-client catalog projection.
 type sharedCatalogKey struct {
 	tier       edition.Tier
@@ -899,8 +937,8 @@ type sharedCatalogKey struct {
 }
 
 var (
-	sharedCatalogsMu sync.Mutex
-	sharedCatalogs   = map[sharedCatalogKey]*actioncatalog.Catalog{}
+	testCatalogsMu sync.Mutex
+	testCatalogs   = map[sharedCatalogKey]*actioncatalog.Catalog{}
 )
 
 // cacheableCatalogOptions reports whether opts only carries the fields the
@@ -914,16 +952,16 @@ func cacheableCatalogOptions(opts ActionCatalogOptions) bool {
 // opts, building it on first use.
 func sharedActionCatalog(opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
 	key := sharedCatalogKey{tier: opts.Tier, enterprise: opts.Enterprise, includeMCP: opts.IncludeMCP}
-	sharedCatalogsMu.Lock()
-	defer sharedCatalogsMu.Unlock()
-	if cached, ok := sharedCatalogs[key]; ok {
+	testCatalogsMu.Lock()
+	defer testCatalogsMu.Unlock()
+	if cached, ok := testCatalogs[key]; ok {
 		return cached.Clone(), nil
 	}
 	catalog, err := BuildActionCatalog(nil, opts)
 	if err != nil {
 		return nil, err
 	}
-	sharedCatalogs[key] = catalog
+	testCatalogs[key] = catalog
 	return catalog.Clone(), nil
 }
 

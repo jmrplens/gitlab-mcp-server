@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +31,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/files"
@@ -4666,4 +4668,24 @@ func BenchmarkRegisterAll_Ultimate_Cached(b *testing.B) {
 		server := mcp.NewServer(&mcp.Implementation{Name: "bench", Version: "0"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: cache})
 		RegisterAll(server, client, edition.Ultimate)
 	}
+}
+
+// TestRegisterAll_PanicsWhenTheCatalogCannotBeBuilt verifies startup fails
+// fast on a catalog that cannot be built rather than booting a server with
+// no tools, through the seam that stands in for a failure no real input can
+// cause.
+func TestRegisterAll_PanicsWhenTheCatalogCannotBeBuilt(t *testing.T) {
+	forced := errors.New("forced catalog failure")
+	original := sharedBaseCatalog
+	t.Cleanup(func() { sharedBaseCatalog = original })
+	sharedBaseCatalog = func(bool, ActionCatalogOptions) (*actioncatalog.Catalog, error) { return nil, forced }
+
+	defer func() {
+		recovered := recover()
+		err, _ := recovered.(error)
+		if err == nil || !errors.Is(err, forced) || !strings.Contains(err.Error(), "build individual action catalog") {
+			t.Fatalf("RegisterAll() panic = %v, want the forced failure named as the individual catalog's", recovered)
+		}
+	}()
+	RegisterAll(mcp.NewServer(&mcp.Implementation{Name: "failing", Version: "0"}, nil), nil, edition.Free)
 }

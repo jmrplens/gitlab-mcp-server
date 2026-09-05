@@ -26,8 +26,37 @@ import (
 // the standalone writes, the interactive creation flows among them, kept their
 // real handlers. Read-only mode never had that gap, because the standalone
 // builder takes it as an option.
+//
+// The catalog is assembled once per distinct configuration and shared (see
+// [gitlabtools.ShareCatalog]); what is returned is that catalog bound to
+// client. The standalone actions are built with the unbound client the shared
+// copy is built with, and bound with everything else.
 func Build(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, gitlabtools.WithheldActions, error) {
-	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
+	dotcom := client.IsGitLabDotCom()
+	key := "dynamic|" + gitlabtools.BaseCatalogKey(cfg.Tier, dotcom, true) + "|" + gitlabtools.CatalogFilterKey(cfg)
+	catalog, withheld, err := gitlabtools.ShareCatalog(key, func() (*actioncatalog.Catalog, gitlabtools.WithheldActions, error) {
+		return build(gitlabtools.UnboundClient(dotcom), dotcom, cfg)
+	})
+	if err != nil {
+		return nil, gitlabtools.WithheldActions{}, err
+	}
+	return catalog.BindTo(client), withheld, nil
+}
+
+// Test seams. None of these can fail from any input the server takes: the
+// specs are compiled in, the filter adds groups the base already validated,
+// and the standalone specs are fixed. The branches reporting their failure
+// exist for the day that changes, and would otherwise never run.
+var (
+	sharedBaseCatalog    = gitlabtools.SharedBaseCatalog     //nolint:gochecknoglobals // test seam
+	filterActionCatalog  = gitlabtools.FilterActionCatalog   //nolint:gochecknoglobals // test seam
+	addStandaloneCatalog = dynamictools.AddStandaloneCatalog //nolint:gochecknoglobals // test seam
+)
+
+// build assembles the dynamic catalog for cfg from the shared base catalog,
+// with the standalone actions bound to client.
+func build(client *gitlabclient.Client, dotcom bool, cfg *config.ServerConfig) (*actioncatalog.Catalog, gitlabtools.WithheldActions, error) {
+	catalog, err := sharedBaseCatalog(dotcom, gitlabtools.ActionCatalogOptions{
 		Tier:       cfg.Tier,
 		IncludeMCP: true,
 	})
@@ -36,11 +65,11 @@ func Build(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalo
 	}
 	filterCfg := *cfg
 	filterCfg.SafeMode = false
-	filtered, withheld, filterErr := gitlabtools.FilterActionCatalog(catalog, &filterCfg)
+	filtered, withheld, filterErr := filterActionCatalog(catalog, &filterCfg)
 	if filterErr != nil {
 		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
 	}
-	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
+	withStandalone, standaloneErr := addStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
 		ReadOnly:     cfg.ReadOnly,
 		ExcludeTools: cfg.ExcludeTools,
 	})

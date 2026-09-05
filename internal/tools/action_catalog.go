@@ -5,6 +5,7 @@ import (
 	"maps"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
@@ -61,7 +62,28 @@ func (opts ActionCatalogOptions) effectiveTier() edition.Tier {
 // Returns a wrapped error for any group construction, addition, or
 // validation failure so callers can present a clear "build catalog
 // group" / "add catalog group" / "validate action catalog" message.
+//
+// The catalog is built once per tier and instance class for the process and
+// shared (see [SharedBaseCatalog]); what this returns is that shared catalog
+// bound to client, so its handlers run under client's credential and its
+// metadata is the same the next caller gets. Only a call carrying
+// opts.SpecGroups, which is a test override with no cheap identity, builds a
+// private catalog bound as it is built.
 func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+	if len(opts.SpecGroups) > 0 {
+		return buildActionCatalog(client, opts)
+	}
+	shared, err := sharedBaseCatalog(client.IsGitLabDotCom(), opts)
+	if err != nil {
+		return nil, err
+	}
+	return shared.BindTo(client), nil
+}
+
+// buildActionCatalog builds a catalog from scratch with its handlers bound to
+// client. It is the whole cost of a catalog, around 1.5 seconds and tens of
+// megabytes, which is why [BuildActionCatalog] pays it once per configuration.
+func buildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
 	tier := opts.effectiveTier()
 	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, tier.IsEnterprise()), opts.SpecGroups)
 	specGroups = filterActionSpecGroupsByTier(specGroups, tier)
@@ -150,7 +172,10 @@ func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil
 // pruneSchemaFieldsByTier removes from schema the top-level properties whose
 // per-field tier (from rt's `tier:` struct tags) exceeds the instance tier. The
 // input schema is returned unchanged when nothing must be dropped, avoiding an
-// allocation and preserving the cached shared map.
+// allocation and preserving the cached shared map; otherwise the pruned form
+// is derived from it, once per process for a shared schema (see
+// [toolutil.DeriveSchema]), with the tier, the leniency and the type in the
+// transform name since all three decide the result.
 func pruneSchemaFieldsByTier(schema map[string]any, rt reflect.Type, tier edition.Tier, lenientExtra bool) map[string]any {
 	if schema == nil {
 		return nil
@@ -168,7 +193,12 @@ func pruneSchemaFieldsByTier(schema map[string]any, rt reflect.Type, tier editio
 	if len(drop) == 0 {
 		return schema
 	}
-	return pruneSchemaProperties(schema, drop, lenientExtra)
+	transform := "prune|tier=" + tier.String() + "|lenient=" + strconv.FormatBool(lenientExtra) + "|type=" + toolutil.TypeIdentity(rt)
+	derived := toolutil.DeriveSchema(schema, transform, func() any {
+		return pruneSchemaProperties(schema, drop, lenientExtra)
+	})
+	pruned, _ := derived.(map[string]any)
+	return pruned
 }
 
 // pruneSchemaProperties returns a shallow clone of a JSON Schema object with the
