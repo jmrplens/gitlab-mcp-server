@@ -10,7 +10,10 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
@@ -632,5 +635,102 @@ func TestServerShapeKey_NamesTheFieldsItHashes(t *testing.T) {
 				t.Errorf("the shape key %q does not name %q", key, field)
 			}
 		})
+	}
+}
+
+// shapedPoolGitLab is a GitLab that answers everything a shaped pool asks of it:
+// the credential probe and identity lookup that build an entry, the version
+// endpoint, and one project a subscription can watch.
+func shapedPoolGitLab(t *testing.T) string {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":42,"username":"testuser"}`))
+	})
+	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"test"}`))
+	})
+	mux.HandleFunc("GET /api/v4/projects/42", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":42,"name":"proj","path_with_namespace":"g/p","web_url":"https://example.invalid/g/p"}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned drives the
+// pool and the shape registry wired to each other, which is the only place the
+// teardown of a pooled credential exists.
+//
+// Each half of that teardown looks covered from a distance and is not: the tests
+// that appear to exercise it call sessions.forgetOwner and credentials.remove
+// themselves, so deleting either call from the wiring left the whole cmd/server
+// suite green. What an evicted credential must leave behind is nothing: no
+// session the gate would still accept, no watchers polling GitLab for a token
+// the pool no longer holds, and no listen stream held open with nobody to fill
+// it.
+func TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned(t *testing.T) {
+	gitlab := shapedPoolGitLab(t)
+	binding, pool := newShapedServerPool(t.Context(), &config.Config{
+		GitLabURL:         gitlab,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+		IgnoreScopes:      true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	})
+	t.Cleanup(pool.Close)
+
+	entry, err := pool.GetOrCreateEntry("glpat-evicted", gitlab, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v", err)
+	}
+	state := binding.credentials.get(entry.Owner())
+	if state == nil {
+		t.Fatal("the pool's insert callback filed no state for the entry it built")
+	}
+
+	// A session, a watcher and an open listen stream: the three things the
+	// entry owns that outlive the request that created them.
+	session, _ := connectedSessions(t)
+	binding.sessions.record(session, entry.Owner())
+	if got := binding.sessions.ownerOf(session); got != entry.Owner() {
+		t.Fatalf("ownerOf = %q before the eviction, want the entry's owner", got)
+	}
+	const uri = "gitlab://project/42"
+	if subErr := state.subs.manager.Subscribe(t.Context(), session, uri); subErr != nil {
+		t.Fatalf("Subscribe: %v", subErr)
+	}
+	streamCtx, cancelStream := context.WithCancel(t.Context())
+	t.Cleanup(cancelStream)
+	_, release := state.streams.arm([]string{uri}, entry.Owner(), cancelStream)
+	t.Cleanup(release)
+
+	// The entry is in use while it holds those, which is what keeps the idle
+	// sweep off a client that subscribed and then waited.
+	if !binding.credentials.inUse(entry) {
+		t.Error("an entry with a watcher and an open stream was reported idle; the sweep would evict it")
+	}
+
+	pool.EvictServer(entry.Server())
+
+	if got := binding.sessions.ownerOf(session); got != "" {
+		t.Errorf("ownerOf = %q after the eviction, want none: the gate would go on accepting that session", got)
+	}
+	if got := binding.credentials.get(entry.Owner()); got != nil {
+		t.Error("the evicted entry's state is still filed; it keeps a GitLab client and a watcher set reachable")
+	}
+	waitFor(t, func() bool { return state.subs.manager.Len() == 0 && streamCtx.Err() != nil })
+	if got := state.subs.manager.Len(); got != 0 {
+		t.Errorf("watchers = %d after the eviction, want 0; they poll GitLab for a credential the pool dropped", got)
+	}
+	if streamCtx.Err() == nil {
+		t.Error("the evicted credential's listen stream was left open, so its client is neither served nor told")
+	}
+	if binding.credentials.inUse(entry) {
+		t.Error("an entry the pool no longer holds is still reported in use")
 	}
 }

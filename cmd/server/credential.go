@@ -40,6 +40,12 @@ type credentialState struct {
 	// subs holds this credential's watchers, or nil on a capability surface
 	// that offers no subscriptions.
 	subs *subscriptionRuntime
+	// streams is the shared server's registry of open subscriptions/listen
+	// requests, which this credential's own are ended through when the pool
+	// drops it. It is the shape's registry rather than a per-credential one
+	// because a listen belongs to a session on this server, not to a watcher;
+	// each stream records its owner.
+	streams *listenStreams
 }
 
 // close releases what the entry owns, for a credential the pool has evicted.
@@ -48,20 +54,50 @@ type credentialState struct {
 // had a server of its own, eviction dropped only the pool's reference and a
 // live session kept working; on a shared server it cannot, because the same
 // eviction forgets which credential that session belongs to and every later
-// notification for it would be filtered away in silence. Stopping the watchers
-// turns that into the ending the specification asks for: each open
-// subscriptions/listen gets its completion result through
-// [listenStreams.stoppedFor], and the next request re-initializes.
+// notification for it would be filtered away in silence.
+//
+// Stopping the watchers is not by itself the ending the specification asks for,
+// and believing it was is what left an evicted client silent. Manager.Close is
+// the one stop path that fires no OnStop, by contract and deliberately: the
+// three endings it does announce are ones the subscriber did not ask for, and a
+// manager being closed used to mean its whole server was going away. So nothing
+// reached [listenStreams.stoppedFor], and the open subscriptions/listen was
+// neither closed nor completed. Ending this credential's streams here is what
+// turns eviction back into an ending the client is told about: each stream gets
+// its completion result and the next request re-initializes.
 //
 // [github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions.Manager.Close]
 // waits for every watcher goroutine to unwind, so it must never run on the
 // caller's goroutine here: eviction happens under the pool's write lock, which
-// the callback contract forbids blocking.
+// the callback contract forbids blocking. The streams are ended on that same
+// goroutine, after the watchers, so a poll that is still in flight cannot
+// notify a stream that has already been told it is over.
 func (s *credentialState) close() {
-	if s == nil || s.subs == nil {
+	if s == nil {
 		return
 	}
-	go s.subs.close()
+	subs, streams, owner := s.subs, s.streams, s.owner
+	go func() {
+		subs.close()
+		streams.closeOwner(owner)
+	}()
+}
+
+// busy reports whether this credential is doing work the pool cannot see.
+//
+// A watcher polls GitLab on its own, and an open subscriptions/listen is a
+// request the client is holding rather than one it repeats, so neither refreshes
+// the pool entry that owns them. Idle eviction asks this before dropping an
+// entry, which is what stops a client that subscribed and then waited from being
+// evicted for waiting. See [github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool.WithInUse].
+func (s *credentialState) busy() bool {
+	if s == nil {
+		return false
+	}
+	if s.listen.count() > 0 {
+		return true
+	}
+	return s.subs != nil && s.subs.manager.Len() > 0
 }
 
 // credentialStateKey carries the pool entry a request belongs to.
@@ -129,6 +165,21 @@ func (c *credentialStates) get(owner string) *credentialState {
 	}
 	typed, _ := state.(*credentialState)
 	return typed
+}
+
+// inUse answers the pool's idle sweep: an entry whose credential still has work
+// running is not idle, whatever its timestamp says.
+//
+// It is the registry rather than the entry that is asked, because the work in
+// question (watchers, open listen streams) belongs to the per-credential state
+// this holds and the pool knows nothing about it. An entry this registry has
+// never heard of, or one already removed, is idle by this measure and the pool's
+// own timestamp decides.
+//
+// It runs under the pool's write lock, so it reads two counters and nothing
+// more. See [github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool.WithInUse].
+func (c *credentialStates) inUse(entry *serverpool.Entry) bool {
+	return c.get(entry.Owner()).busy()
 }
 
 // remove drops an evicted entry's state and releases what it held.
@@ -233,6 +284,7 @@ func (sh *serverShell) newCredentialState(entry *serverpool.Entry) *credentialSt
 		limiter: toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
 		listen:  &listenCounter{},
 		subs:    sh.subs.newRuntime(entry.Owner(), entry.Client()),
+		streams: sh.streams,
 	}
 	if state.subs != nil {
 		state.subs.notifier.attach(sh.server)

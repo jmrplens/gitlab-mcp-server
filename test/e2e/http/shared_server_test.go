@@ -365,3 +365,93 @@ func TestSharedServer_ARevokedCredentialReceivesNothing(t *testing.T) {
 		}
 	}
 }
+
+// awaitEnd waits for the server to end this stream, returning every frame that
+// arrived before it did.
+//
+// The stream's reader goroutine closes the frame channel when the response body
+// ends, which is what the SDK's listen handler returning produces on the wire.
+func (s *listenStream) awaitEnd(t *testing.T, within time.Duration) ([]string, bool) {
+	t.Helper()
+
+	var seen []string
+	deadline := time.After(within)
+	for {
+		select {
+		case frame, open := <-s.frames:
+			if !open {
+				return seen, true
+			}
+			seen = append(seen, frame)
+		case err := <-s.failure:
+			t.Fatalf("reading the listen stream: %v", err)
+		case <-deadline:
+			return seen, false
+		}
+	}
+}
+
+// TestSharedServer_AnEvictedCredentialsListenIsEnded pins what a client is told
+// when the pool drops the entry its subscription belongs to.
+//
+// Eviction stops that credential's watchers, and stopping them is silent by
+// design: Manager.Close is the one path that fires no OnStop, because the three
+// endings it does announce are ones the subscriber did not ask for and a closed
+// manager used to mean a server going away. On a shared server it means one
+// tenant leaving, and without the stream teardown the client's open
+// subscriptions/listen was left open and silent for the rest of its life. It
+// still held its slot in the process-wide stream ceiling too, while the entry
+// rebuilt for the same credential got a fresh counter of its own.
+//
+// The pressure is --max-http-clients=1, because that is the eviction path a test
+// can drive in a second: the idle sweep takes --pool-idle-timeout and never
+// fires here at all any more, since an entry with a live subscription is no
+// longer counted as idle.
+func TestSharedServer_AnEvictedCredentialsListenIsEnded(t *testing.T) {
+	const (
+		subscribedToken = "glpat-subscribed-then-evicted"
+		arrivingToken   = "glpat-arrives-and-takes-the-slot"
+		uri             = "gitlab://project/123"
+	)
+
+	gitlab := startTwoTenantGitLab(t, subscribedToken, arrivingToken)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.URL,
+		"--capability-surface=full",
+		"--max-http-clients=1",
+	)
+
+	subscribed := openListen(t, srv, subscribedToken, uri, 1)
+	if _, seen, ok := subscribed.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second); !ok {
+		t.Fatalf("the listen was never acknowledged; frames: %v", seen)
+	}
+
+	// One more credential than the pool may hold, which evicts the one that is
+	// not making requests: exactly the client whose only activity is the
+	// subscription above.
+	arriving := srv.do(t, request{
+		body:    toolsListBody,
+		headers: map[string]string{"PRIVATE-TOKEN": arrivingToken},
+	})
+	if arriving.status != http.StatusOK {
+		t.Fatalf("the arriving credential was answered %d: %s", arriving.status, arriving.body)
+	}
+
+	seen, ended := subscribed.awaitEnd(t, 30*time.Second)
+	if !ended {
+		t.Fatalf("the evicted credential's listen was left open: its watchers are gone, so it is served nothing "+
+			"and told nothing.\nframes: %v\nserver output:\n%s", seen, srv.logs())
+	}
+	// The SDK writes the listen's result when its handler's context ends, which
+	// is the graceful completion the specification asks for. Its absence would
+	// mean the stream was torn down rather than ended.
+	var completed bool
+	for _, frame := range seen {
+		if strings.Contains(frame, `"result"`) && strings.Contains(frame, `"id":1`) {
+			completed = true
+		}
+	}
+	if !completed {
+		t.Errorf("the stream closed without the listen's completion result; frames: %v", seen)
+	}
+}

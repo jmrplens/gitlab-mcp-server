@@ -318,10 +318,22 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 		// reachable. Forgetting the sessions with it is what stops an evicted
 		// credential's session ID from being accepted by the entry that
 		// replaced it.
+		//
+		// remove is also what tells this credential's clients that it is over:
+		// it stops the watchers and ends the listen streams they are holding
+		// open, so an eviction is an ending they are told about rather than a
+		// stream that goes quiet. See [credentialState.close].
 		serverpool.WithOnEvict(func(entry *serverpool.Entry) {
 			credentials.remove(entry.Owner())
 			sessions.forgetOwner(entry.Owner())
 		}),
+		// An entry whose only activity is an open subscription is not idle.
+		// Its watcher polls GitLab directly and its listen stream is one
+		// request the client never repeats, so neither refreshes the pool
+		// entry, and --pool-idle-timeout used to evict such a client for
+		// waiting. Size pressure and a revoked credential still evict it, and
+		// the callback above is what tells it.
+		serverpool.WithInUse(credentials.inUse),
 		serverpool.WithRevalidateInterval(cfg.RevalidateInterval),
 		serverpool.WithIdleTimeout(cfg.PoolIdleTimeout),
 		// Entry construction is bounded by the server's lifetime rather than

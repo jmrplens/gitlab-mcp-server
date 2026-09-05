@@ -108,17 +108,24 @@ func TestCredentialStates_AddGetRemove_TracksThePool(t *testing.T) {
 	})
 }
 
-// TestCredentialStates_Remove_StopsTheCredentialsWatchers covers what eviction
-// releases.
+// TestCredentialStates_Remove_StopsTheWatchersAndEndsTheStreams covers what
+// eviction releases, and what it tells the client.
 //
 // While each credential had a server of its own, eviction dropped only the
 // pool's reference and a live session kept working. On a shared server it
 // cannot: the same eviction forgets which credential that session belongs to,
 // so every later notification for it would be filtered away in silence.
-// Stopping the watchers turns that into the ending the specification asks for,
-// and it has to happen off the caller's goroutine because Manager.Close waits
-// for every watcher to unwind while eviction holds the pool's write lock.
-func TestCredentialStates_Remove_StopsTheCredentialsWatchers(t *testing.T) {
+//
+// Stopping the watchers is only half of the ending. Manager.Close is the one
+// stop path that fires no OnStop, so nothing reaches listenStreams.stoppedFor
+// and the client's open subscriptions/listen was left neither closed nor
+// completed: a stream that stayed open and silent for the rest of its life,
+// which is precisely the outcome ADR-0020 rejects. Ending this credential's
+// streams is what makes the eviction an ending it is told about.
+//
+// All of it happens off the caller's goroutine, because Manager.Close waits for
+// every watcher to unwind while eviction holds the pool's write lock.
+func TestCredentialStates_Remove_StopsTheWatchersAndEndsTheStreams(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
 	client := subscriptionGitLabClient(t, gitlab.URL)
 	runtime := newTestRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
@@ -131,17 +138,86 @@ func TestCredentialStates_Remove_StopsTheCredentialsWatchers(t *testing.T) {
 		t.Fatalf("watchers = %d before the eviction, want 1", runtime.manager.Len())
 	}
 
+	// Real contexts, because ending a stream means cancelling the one the SDK's
+	// listen handler is blocked on: that is what makes it write the completion
+	// result the client is owed.
+	streams := newListenStreams()
+	mineCtx, cancelMine := context.WithCancel(t.Context())
+	t.Cleanup(cancelMine)
+	_, releaseMine := streams.arm([]string{uri}, "owner-evicted", cancelMine)
+	t.Cleanup(releaseMine)
+	theirsCtx, cancelTheirs := context.WithCancel(t.Context())
+	t.Cleanup(cancelTheirs)
+	_, releaseTheirs := streams.arm([]string{uri}, "owner-still-pooled", cancelTheirs)
+	t.Cleanup(releaseTheirs)
+
 	states := &credentialStates{}
 	state := credentialTestState(t, "owner-evicted")
 	state.subs = runtime
+	state.streams = streams
 	states.add(state)
 
 	states.remove("owner-evicted")
 
-	waitFor(t, func() bool { return runtime.manager.Len() == 0 })
+	waitFor(t, func() bool { return runtime.manager.Len() == 0 && mineCtx.Err() != nil })
 	if got := runtime.manager.Len(); got != 0 {
 		t.Errorf("watchers = %d after the credential was evicted, want 0; "+
 			"they would poll GitLab for a credential the pool no longer holds", got)
+	}
+	if mineCtx.Err() == nil {
+		t.Error("the evicted credential's listen stream was left open; its client is served nothing and told nothing")
+	}
+	if theirsCtx.Err() != nil {
+		t.Error("another credential's listen stream was ended by this one's eviction")
+	}
+}
+
+// TestCredentialState_Busy_ReportsTheWorkThePoolCannotSee covers what exempts
+// an entry from idle eviction.
+//
+// The pool measures idleness by when it last handed an entry out, and a
+// credential whose only activity is a subscription produces no such hit: the
+// watcher polls GitLab directly and the listen is one request the client holds
+// open rather than repeats. Reading lastUsed alone therefore evicted a client
+// that was being served correctly, and ended its subscriptions under it.
+func TestCredentialState_Busy_ReportsTheWorkThePoolCannotSee(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	client := subscriptionGitLabClient(t, gitlab.URL)
+
+	watching := credentialTestState(t, "owner-watching")
+	watching.subs = newTestRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
+	t.Cleanup(watching.subs.close)
+	if err := watching.subs.manager.Subscribe(t.Context(), testSession, "gitlab://project/42/pipeline/99"); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	listening := credentialTestState(t, "owner-listening")
+	if !listening.listen.acquire(2) {
+		t.Fatal("the listen counter refused the first stream")
+	}
+
+	quiet := credentialTestState(t, "owner-quiet")
+	quiet.subs = newTestRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
+	t.Cleanup(quiet.subs.close)
+
+	tests := []struct {
+		name  string
+		state *credentialState
+		want  bool
+	}{
+		{name: "a credential with a watcher", state: watching, want: true},
+		{name: "a credential holding an open listen stream", state: listening, want: true},
+		{name: "a credential with neither", state: quiet},
+		{name: "a credential on a surface with no subscriptions", state: credentialTestState(t, "owner-minimal")},
+		{name: "an owner the registry never held", state: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.state.busy(); got != tt.want {
+				t.Errorf("busy() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

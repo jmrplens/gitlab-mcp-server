@@ -1528,6 +1528,12 @@ type serverShell struct {
 	// subs is nil on the minimal capability surface, which registers no
 	// subscribable resource.
 	subs *subscriptionShape
+	// streams holds the open subscriptions/listen requests of every credential
+	// this server serves, so that shutdown and eviction can end them. It is
+	// never nil: a surface with no subscriptions still has listen streams
+	// carrying list-changed notifications, which the SDK holds open just the
+	// same. See [subscriptionShape.streamRegistry].
+	streams *listenStreams
 	// gate holds every catalog-dependent method back until register returns.
 	gate *readinessGate
 	// identifier is what telemetry resolves a tools/call against; register
@@ -1696,7 +1702,7 @@ func newServerShell(
 		SchemaCache: sharedSchemaCache,
 	})
 
-	subs.attach(ctx, server, shell.subscriptionRuntimeFor)
+	streams := subs.attach(ctx, server, shell.subscriptionRuntimeFor)
 
 	// First, therefore innermost: the SDK wraps the current handler on each
 	// call, so the last middleware added is the one that runs first. See
@@ -1798,6 +1804,7 @@ func newServerShell(
 	shell.toolSurface = toolSurface
 	shell.capabilitySurface = capabilitySurface
 	shell.subs = subs
+	shell.streams = streams
 	shell.gate = gate
 	shell.identifier = identifier
 	shell.shared = settings.credentials != nil

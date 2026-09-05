@@ -1352,6 +1352,81 @@ func TestListenStreams_CloseAll_EndsEveryStreamItHolds(t *testing.T) {
 	}
 }
 
+// TestListenStreams_CloseOwner_EndsOnlyThatCredentialsStreams covers what an
+// evicted credential's clients are told.
+//
+// Eviction stops the credential's watchers through Manager.Close, which fires no
+// OnStop by contract, so nothing reaches stoppedFor and the open
+// subscriptions/listen was left neither closed nor completed: the client went on
+// holding a stream that would never speak again. This is what ends them, and it
+// ends the list-changed ones too, since those name no URI and nothing else could
+// ever close them. What it must not touch is another credential's stream on the
+// same shared server.
+func TestListenStreams_CloseOwner_EndsOnlyThatCredentialsStreams(t *testing.T) {
+	streams := newListenStreams()
+
+	cases := []struct {
+		name      string
+		owner     string
+		uris      []string
+		wantEnded bool
+	}{
+		{
+			name:      "the evicted credential's resource stream",
+			owner:     "owner-evicted",
+			uris:      []string{"gitlab://project/42/pipeline/99"},
+			wantEnded: true,
+		},
+		{
+			name:      "the evicted credential's list-changed stream, which names no URI",
+			owner:     "owner-evicted",
+			wantEnded: true,
+		},
+		{
+			name:  "another credential's stream over the same URI",
+			owner: "owner-still-pooled",
+			uris:  []string{"gitlab://project/42/pipeline/99"},
+		},
+	}
+
+	ended := make([]bool, len(cases))
+	for i, tc := range cases {
+		_, release := streams.arm(tc.uris, tc.owner, func() { ended[i] = true })
+		t.Cleanup(release)
+	}
+
+	streams.closeOwner("owner-evicted")
+
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if ended[i] != tc.wantEnded {
+				t.Errorf("stream ended = %v, want %v", ended[i], tc.wantEnded)
+			}
+		})
+	}
+}
+
+// TestListenStreams_CloseOwner_WithoutAnOwner_EndsNothing covers the guard in
+// front of it.
+//
+// Every stream on a single-credential server carries the empty owner, which is
+// also what an unattributed request would produce, so treating "" as a match
+// would let one mistake end every open subscription in the process.
+func TestListenStreams_CloseOwner_WithoutAnOwner_EndsNothing(t *testing.T) {
+	streams := newListenStreams()
+	ended := false
+	_, release := streams.arm([]string{"uri"}, "", func() { ended = true })
+	t.Cleanup(release)
+
+	streams.closeOwner("")
+	var absent *listenStreams
+	absent.closeOwner("owner")
+
+	if ended {
+		t.Error("closeOwner(\"\") ended a stream; on stdio that is every stream there is")
+	}
+}
+
 // TestListenStreams_ArmedAfterCloseAll_EndsImmediately verifies a listen that
 // arrives during the drain is ended rather than filed away.
 //

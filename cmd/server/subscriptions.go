@@ -601,6 +601,44 @@ func (s *listenStreams) stoppedFor(owner, uri string, _ error) {
 	}
 }
 
+// closeOwner ends every open listen stream one credential holds, whatever it
+// asked to be notified about.
+//
+// It is what the pool's eviction calls, and it is the difference between a
+// client being told and a client going quiet. Stopping the watchers cannot do
+// it: [github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions.Manager.Close]
+// is by contract the one stop path that fires no OnStop, so nothing reaches
+// [listenStreams.stoppedFor] and the stream stays open and silent for the rest
+// of its life. A stream carrying only list-changed subscriptions is ended too:
+// its credential is gone, so the alternative is a stream whose slot in the
+// process-wide ceiling is held by an entry that no longer exists.
+//
+// An empty owner ends nothing. That is stdio and the single-credential server,
+// where every stream carries it and nothing evicts anything.
+func (s *listenStreams) closeOwner(owner string) {
+	if s == nil || owner == "" {
+		return
+	}
+
+	s.mu.Lock()
+	var owned []*listenStream
+	for stream := range s.streams {
+		if stream.owner != owner {
+			continue
+		}
+		owned = append(owned, stream)
+		delete(s.streams, stream)
+	}
+	s.mu.Unlock()
+
+	// Outside the lock, like every other cancel here: the SDK's handler
+	// unwinds through the unsubscribe path, and writes the completion result
+	// the specification asks for as it goes.
+	for _, stream := range owned {
+		stream.cancel()
+	}
+}
+
 // closeAll ends every open listen stream.
 //
 // Called on shutdown, where the alternative is not exiting: the SDK's listen
@@ -951,7 +989,13 @@ func (s *subscriptionShape) streamRegistry() *listenStreams {
 }
 
 // attach installs the middlewares the subscription machinery needs on the
-// shared server, and arranges for shutdown to reach the open listen streams.
+// shared server, arranges for shutdown to reach the open listen streams, and
+// returns the registry holding them.
+//
+// The registry is returned because eviction needs it as much as shutdown does:
+// a credential the pool drops has to have its own streams ended, and on the
+// minimal capability surface there is no shape to hold that registry, only the
+// standalone one built here.
 //
 // The stream-registry half runs even on a nil shape, which is why this is not
 // the usual early return: see [subscriptionShape.streamRegistry].
@@ -959,7 +1003,7 @@ func (s *subscriptionShape) streamRegistry() *listenStreams {
 // The server is not stored here any more. A notifier belongs to one credential
 // and is created with its runtime, so [subscriptionShape.attachRuntime] is what
 // points each one at the server it sends through.
-func (s *subscriptionShape) attach(ctx context.Context, server *mcp.Server, runtimeFor func(context.Context) *subscriptionRuntime) {
+func (s *subscriptionShape) attach(ctx context.Context, server *mcp.Server, runtimeFor func(context.Context) *subscriptionRuntime) *listenStreams {
 	streams := s.streamRegistry()
 	middlewares := make([]mcp.Middleware, 0, 2)
 	if s != nil {
@@ -978,6 +1022,7 @@ func (s *subscriptionShape) attach(ctx context.Context, server *mcp.Server, runt
 		streams.closeAll()
 	}()
 	server.AddReceivingMiddleware(middlewares...)
+	return streams
 }
 
 // renewOnActivity returns middleware that keeps a session's subscriptions

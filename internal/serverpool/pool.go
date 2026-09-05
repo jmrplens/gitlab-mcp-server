@@ -243,8 +243,11 @@ type ServerPool struct {
 	//
 	// It runs while the pool's write lock is held, so it must be cheap and
 	// must not call back into the pool.
-	onInsert           func(*Entry)
-	onEvict            func(*Entry)
+	onInsert func(*Entry)
+	onEvict  func(*Entry)
+	// inUse answers whether an entry is doing work the pool cannot see, for
+	// idle eviction alone. See [WithInUse].
+	inUse              func(*Entry) bool
 	revalidateInterval time.Duration
 	idleTimeout        time.Duration
 	maxCredentialAge   time.Duration
@@ -293,6 +296,26 @@ type Option func(*ServerPool)
 // re-enter the pool.
 func WithOnEvict(fn func(*Entry)) Option {
 	return func(p *ServerPool) { p.onEvict = fn }
+}
+
+// WithInUse registers a callback that reports whether an entry is still doing
+// work of its own, which exempts it from idle eviction.
+//
+// The pool measures idleness by when an entry was last handed out, and that is
+// the whole truth only while every piece of work a credential has running also
+// passes through the pool. It does not: an open subscriptions/listen is a
+// watcher polling GitLab directly, so a client that subscribed and then went
+// quiet refreshes nothing here, and after --pool-idle-timeout it was evicted
+// with its subscriptions ended under it while it was being served correctly.
+//
+// It is consulted by idle eviction only. Size pressure and a credential GitLab
+// has refused both have to evict something, so there the entry goes and
+// [WithOnEvict] is what tells its client.
+//
+// Like the other callbacks it runs under the pool's write lock: it must be a
+// cheap read, must not block, and must not re-enter the pool.
+func WithInUse(fn func(*Entry) bool) Option {
+	return func(p *ServerPool) { p.inUse = fn }
 }
 
 // WithOnInsert registers a callback invoked with each server the pool has just
@@ -1110,9 +1133,22 @@ func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 	}()
 }
 
-// evictIdle removes every entry whose last use is older than the idle timeout.
-// Eviction only drops the pool's reference: live sessions already holding the
-// server keep working, mirroring [ServerPool.Close].
+// evictIdle removes every entry whose last use is older than the idle timeout
+// and that the caller does not report as still in use.
+//
+// Eviction ends what the entry owns: [WithOnEvict] is where the caller stops
+// the credential's watchers and closes the streams it holds open, because the
+// server that answered for it is shared and the entry is what said which
+// credential a session belonged to. It is not the reference-drop it used to be
+// when each credential had a server to itself.
+//
+// Which is why "idle" cannot be read off lastUsed alone. That timestamp is
+// refreshed by pool hits, and a credential whose only activity is an open
+// subscriptions/listen never produces one: its watcher polls GitLab directly.
+// After --pool-idle-timeout such a client looked exactly like an abandoned one.
+// [WithInUse] is how the caller answers that, and it is consulted here alone:
+// under size pressure and on a credential GitLab has refused, something has to
+// go, and there the ending is announced instead.
 func (p *ServerPool) evictIdle() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -1123,6 +1159,13 @@ func (p *ServerPool) evictIdle() {
 	cutoff := time.Now().Add(-p.idleTimeout)
 	for key, entry := range p.entries {
 		if entry.lastUsed.After(cutoff) {
+			continue
+		}
+		if p.inUse != nil && p.inUse(entry) {
+			// Kept, and its clock restarted: an entry doing work the pool
+			// cannot see is not idle, and rechecking it every sweep would
+			// otherwise cost a callback per sweep for as long as the work runs.
+			entry.lastUsed = time.Now()
 			continue
 		}
 		gitlabURL, enterprise := entryConfigLogValues(entry)

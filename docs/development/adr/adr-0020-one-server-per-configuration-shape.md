@@ -199,15 +199,32 @@ authenticated as, which is the same check as before on a recorded fact instead
 of an inferred one. The sending middleware reads it to decide who a
 notification is for.
 
-Evicting an entry also stops its watchers, on a goroutine of its own because
-`Manager.Close` waits for them and the pool's callbacks run under its write
-lock. While each credential had a server of its own, eviction dropped only the
-pool's reference and a live session kept working; on a shared server it cannot,
-because the same eviction forgets which credential that session belongs to and
-every later notification for it would be filtered away in silence. Stopping the
-watchers turns that into the ending the specification asks for: each open
-`subscriptions/listen` gets its completion result, and the next request
+Evicting an entry also ends what that credential owned, on a goroutine of its
+own because `Manager.Close` waits for the watchers and the pool's callbacks run
+under its write lock. While each credential had a server of its own, eviction
+dropped only the pool's reference and a live session kept working; on a shared
+server it cannot, because the same eviction forgets which credential that
+session belongs to and every later notification for it would be filtered away in
+silence.
+
+Ending it has two halves, and the first implementation had only one. Stopping
+the watchers is silent by contract: `Manager.Close` is the one stop path that
+fires no `OnStop`, since the endings it announces are the ones a subscriber did
+not ask for and a closed manager used to mean the whole server going away. So
+nothing reached `listenStreams.stoppedFor` and the client's open
+`subscriptions/listen` was left neither closed nor completed, which is the
+outcome this decision calls the worse one. The eviction therefore closes that
+credential's own streams as well, by owner, which is what makes the SDK write
+the completion result the specification asks for; the next request
 re-initializes.
+
+The other half is not evicting in the first place. `lastUsed` is refreshed by
+pool hits, and a credential whose only activity is a subscription produces none:
+its watcher polls GitLab directly and its listen is one request the client holds
+open rather than repeats. `serverpool.WithInUse` is what the idle sweep asks
+before dropping such an entry, and it is asked there alone. Size pressure and a
+credential GitLab has refused still evict, and the teardown above is what tells
+the client.
 
 ### The invariant
 
@@ -284,10 +301,20 @@ writing.
   is small next to the poll it reports, and it happens only for
   resource-updated notifications.
 - NEG-003: Evicting a pool entry now ends its subscriptions rather than letting
-  them run until the session closes. A client holding only a long-lived listen
-  stream and making no other request can therefore be idle-evicted after
-  `--pool-idle-timeout` and told to re-subscribe. The alternative was worse:
-  going quiet without saying so.
+  them run until the session closes, and a client that is evicted is told to
+  re-subscribe. The alternative was worse: going quiet without saying so.
+
+  Two things follow from that, and both are load-bearing. A credential whose
+  only activity is a subscription no longer looks idle: its watcher polls
+  GitLab directly and its listen is one request the client never repeats, so
+  `lastUsed` never moves and `--pool-idle-timeout` would have evicted a client
+  that was being served correctly. `serverpool.WithInUse` is what the pool asks
+  before an idle sweep, and it is asked on that path alone, because size
+  pressure and a revoked credential have to evict something. And ending the
+  watchers is not by itself ending the subscription: `Manager.Close` is the one
+  stop path that fires no `OnStop`, so nothing reaches `listenStreams.stoppedFor`
+  and the client's stream would stay open and silent. The eviction closes that
+  credential's streams itself, which is what produces the completion result.
 - NEG-004: The shape registry is a second cache beside the pool, with its own
   lifetime. A shape is dropped when its registration fails and otherwise lives
   for the process, which is bounded by the number of distinct configurations a

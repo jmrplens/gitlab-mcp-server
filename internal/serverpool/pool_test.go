@@ -1509,6 +1509,90 @@ func TestEvictIdle_HitRefreshesLastUsed(t *testing.T) {
 	}
 }
 
+// TestEvictIdle_AnEntryReportedInUse_IsKeptAndItsClockRestarted covers
+// [WithInUse], which is what stops the sweep from evicting a credential that is
+// being served.
+//
+// lastUsed answers "when was this entry last handed out", and that is the whole
+// truth only while everything a credential has running goes through the pool. An
+// open subscriptions/listen does not: the watcher behind it polls GitLab
+// directly and the client never repeats the request, so the entry looks
+// abandoned for as long as the subscription lasts and was evicted at
+// --pool-idle-timeout with its subscriptions ended under it.
+//
+// The clock is restarted rather than the entry merely skipped, so that a long
+// subscription costs one callback per sweep rather than one per sweep for every
+// entry it has outlived.
+func TestEvictIdle_AnEntryReportedInUse_IsKeptAndItsClockRestarted(t *testing.T) {
+	// The owner is minted per entry and opaque, so the callback is told which
+	// entry is which by renaming one of them to this.
+	const inUseOwner = "owner-with-an-open-subscription"
+
+	cfg := testConfig(stubGitLabBase)
+	var asked []string
+	pool := New(cfg, testFactory(), WithIdleTimeout(30*time.Minute),
+		WithInUse(func(entry *Entry) bool {
+			asked = append(asked, entry.Owner())
+			return entry.Owner() == inUseOwner
+		}))
+
+	for _, token := range []string{"subscribed-token", "abandoned-token"} {
+		t.Run(token, func(t *testing.T) {
+			if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+				t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+			}
+		})
+	}
+
+	pool.mu.Lock()
+	subscribed := pool.entries[sessionKey("subscribed-token", stubGitLabBase)]
+	abandoned := pool.entries[sessionKey("abandoned-token", stubGitLabBase)]
+	subscribed.owner = inUseOwner
+	stale := time.Now().Add(-time.Hour)
+	subscribed.lastUsed = stale
+	abandoned.lastUsed = stale
+	pool.mu.Unlock()
+
+	pool.evictIdle()
+
+	if pool.Size() != 1 {
+		t.Fatalf("pool.Size() = %d, want 1: the entry with an open subscription must survive the sweep", pool.Size())
+	}
+	if _, ok := pool.entries[sessionKey("subscribed-token", stubGitLabBase)]; !ok {
+		t.Error("the entry reported in use was evicted; its client's subscriptions end with it")
+	}
+	if len(asked) != 2 {
+		t.Errorf("the sweep asked about %d entries, want 2: every candidate must be offered", len(asked))
+	}
+	pool.mu.Lock()
+	kept := subscribed.lastUsed
+	pool.mu.Unlock()
+	if !kept.After(stale) {
+		t.Error("the kept entry's clock was not restarted, so every later sweep asks about it again")
+	}
+}
+
+// TestEvictIdle_WithNoInUseCallback_EvictsAsBefore covers the nil callback,
+// which is every pool but the HTTP deployment's: the pool's own tests, and
+// stdio, wire none.
+func TestEvictIdle_WithNoInUseCallback_EvictsAsBefore(t *testing.T) {
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, testFactory(), WithIdleTimeout(30*time.Minute))
+
+	if _, err := pool.GetOrCreate("token", stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate error: %v", err)
+	}
+	pool.mu.Lock()
+	pool.entries[sessionKey("token", stubGitLabBase)].lastUsed = time.Now().Add(-time.Hour)
+	pool.mu.Unlock()
+
+	pool.evictIdle()
+
+	if pool.Size() != 0 {
+		t.Errorf("pool.Size() = %d, want 0 with no in-use callback wired", pool.Size())
+	}
+}
+
 // TestEvictIdle_DisabledKeepsEverything verifies that a zero timeout turns the
 // sweep off, leaving the LRU bound as the only reclamation path.
 func TestEvictIdle_DisabledKeepsEverything(t *testing.T) {
