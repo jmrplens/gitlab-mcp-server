@@ -33,11 +33,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -80,6 +80,11 @@ func serverBinary(t *testing.T) string {
 		}
 		builtDir = dir
 		out := filepath.Join(dir, "gitlab-mcp-server")
+		if runtime.GOOS == "windows" {
+			// exec refuses a file with no executable extension there, and
+			// go build -o writes exactly the name it is given.
+			out += ".exe"
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/server")
@@ -180,12 +185,19 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 	bin := serverBinary(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
+	prepareForTermination(cmd)
 	cmd.Dir = dir
 
 	environ := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
 	for k, v := range env {
 		environ = append(environ, k+"="+v)
 	}
+	// os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows, and the
+	// server resolves its home through it: the env file it loads and the home
+	// directory it drops as an implicit allow-list root both hang off that
+	// answer. Mirror the effective HOME into the platform's own variable, or a
+	// test that sets HOME configures a home the server never looks at.
+	environ = withPlatformHome(environ)
 	cmd.Env = environ
 
 	stdin, err := cmd.StdinPipe()
@@ -505,8 +517,8 @@ func (s *session) terminate(t *testing.T, within time.Duration) bool {
 func (s *session) terminateAndWait(t *testing.T, within time.Duration) (code int, exited bool) {
 	t.Helper()
 
-	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		t.Fatalf("sending SIGTERM: %v", err)
+	if err := signalTermination(s.cmd.Process); err != nil {
+		t.Fatalf("sending %s: %v", terminationSignalName, err)
 	}
 	return s.waitExit(t, within)
 }

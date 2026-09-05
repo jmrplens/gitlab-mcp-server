@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -78,6 +79,11 @@ func serverBinary(t *testing.T) string {
 		}
 		builtDir = dir
 		out := filepath.Join(dir, "gitlab-mcp-server")
+		if runtime.GOOS == "windows" {
+			// exec refuses a file with no executable extension there, and
+			// go build -o writes exactly the name it is given.
+			out += ".exe"
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/server")
@@ -195,6 +201,7 @@ func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...s
 	args := append([]string{"--http", "--http-addr=" + addr}, withInstancePolicy(flags)...)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
+	prepareForTermination(cmd)
 	cmd.Env = append(configFreeEnviron(),
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",

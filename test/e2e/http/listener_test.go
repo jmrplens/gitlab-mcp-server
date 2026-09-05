@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,6 +70,7 @@ func startServerWithClient(t *testing.T, client *http.Client, baseURL string, fl
 	bin := serverBinary(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, append([]string{"--http"}, withInstancePolicy(flags)...)...)
+	prepareForTermination(cmd)
 	cmd.Env = append(os.Environ(),
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
@@ -127,12 +129,22 @@ func TestListener_UnixSocket_ServesMCP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the socket was not created: %v", err)
 	}
-	if info.Mode()&fs.ModeSocket == 0 {
-		t.Fatal("--http-addr with a path did not bind a socket")
-	}
-	// The documented default: owner and group, nobody else.
-	if perm := info.Mode().Perm(); perm != 0o660 {
-		t.Errorf("socket mode = %#o, want %#o", perm, 0o660)
+	if runtime.GOOS == "windows" {
+		// Windows binds AF_UNIX sockets but has no POSIX mode to put on them:
+		// access follows the directory's ACL. The server says so at startup,
+		// and that warning is what a Windows deployment gets instead of the
+		// mode, so it is what this leg asserts.
+		if !strings.Contains(srv.logs(), "not enforceable on Windows") {
+			t.Errorf("the server did not warn that the socket mode is not enforceable on Windows:\n%s", srv.logs())
+		}
+	} else {
+		if info.Mode()&fs.ModeSocket == 0 {
+			t.Fatal("--http-addr with a path did not bind a socket")
+		}
+		// The documented default: owner and group, nobody else.
+		if perm := info.Mode().Perm(); perm != 0o660 {
+			t.Errorf("socket mode = %#o, want %#o", perm, 0o660)
+		}
 	}
 
 	// It is a real endpoint, not just an open socket: an unauthenticated MCP
@@ -155,6 +167,9 @@ func TestListener_UnixSocket_ServesMCP(t *testing.T) {
 // It is read as octal the way chmod is, so "0600" must not be mistaken for
 // decimal 600 — a mode nobody asked for.
 func TestListener_UnixSocketMode_IsHonored(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX permission bits on AF_UNIX sockets; the server warns instead, which TestListener_UnixSocket_ServesMCP asserts there")
+	}
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 
 	for _, tc := range []struct {
@@ -195,9 +210,13 @@ func TestListener_UnixSocketMode_IsHonored(t *testing.T) {
 func TestListener_InvalidSocketMode_StopsStartup(t *testing.T) {
 	for _, mode := range []string{"rw-rw----", "0899", "0", "7777"} {
 		t.Run(mode, func(t *testing.T) {
+			// A path of its own rather than one under /tmp: the assertion is
+			// that nothing appears there, and a socket left by another run of
+			// this test would turn that into a false failure.
+			socketPath := filepath.Join(t.TempDir(), "should-never-be-created.sock")
 			out, err := runServerExpectingExit(t, serverBinary(t),
 				"--http", "--allow-any-gitlab-url",
-				"--http-addr=/tmp/should-never-be-created.sock",
+				"--http-addr="+socketPath,
 				"--http-socket-mode="+mode,
 			)
 			if err == nil {
@@ -206,7 +225,7 @@ func TestListener_InvalidSocketMode_StopsStartup(t *testing.T) {
 			if !strings.Contains(out, "--http-socket-mode") {
 				t.Errorf("the refusal must name the flag; output:\n%s", out)
 			}
-			if _, statErr := os.Lstat("/tmp/should-never-be-created.sock"); statErr == nil {
+			if _, statErr := os.Lstat(socketPath); statErr == nil {
 				t.Error("a rejected mode must not leave a socket behind")
 			}
 		})

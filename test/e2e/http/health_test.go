@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -109,8 +108,8 @@ func TestHealth_Draining_AnswersServiceUnavailableBeforeTheListenerCloses(t *tes
 	s := shutdownStartServer(t, "--allow-any-gitlab-url", "--drain-delay="+delay.String())
 
 	signaled := time.Now()
-	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		t.Fatalf("sending SIGTERM: %v", err)
+	if err := signalTermination(s.cmd.Process); err != nil {
+		t.Fatalf("sending %s: %v", terminationSignalName, err)
 	}
 
 	// The flip lands within milliseconds; the deadline is generous because a

@@ -3947,6 +3947,35 @@ func TestAllowedHosts_EmptyHost(t *testing.T) {
 	}
 }
 
+// TestAllowedHosts_UnixSocket_SkipsValidation pins that a listener on a
+// unix socket gets no Host allow-list, whatever form its path takes.
+//
+// The native form matters: on Windows it carries a drive letter, and
+// SplitHostPort read that letter as the host, so a socket server there
+// refused every request whose Host was not "C". The POSIX and relative
+// forms passed before by accident, having no colon to split on, and are
+// pinned so the decision no longer depends on that.
+func TestAllowedHosts_UnixSocket_SkipsValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		addr string
+	}{
+		{name: "an absolute POSIX path", addr: "/run/gitlab-mcp/mcp.sock"},
+		{name: "a relative path", addr: "./mcp.sock"},
+		{name: "the platform's native form", addr: filepath.Join(t.TempDir(), "mcp.sock")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if hosts := allowedHosts(tt.addr); hosts != nil {
+				t.Errorf("allowedHosts(%q) = %v, want nil: a socket client's Host header is arbitrary", tt.addr, hosts)
+			}
+		})
+	}
+}
+
 // TestBuildServerCard_ReturnsValidJSON verifies that [buildServerCard] produces
 // valid JSON containing serverInfo, authentication, and a non-empty tools array
 // with meta-tools when MetaTools=true.

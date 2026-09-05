@@ -3331,7 +3331,18 @@ func parseLogLevel(s string) slog.Level {
 // allowedHosts computes the set of valid Host header values based on the
 // listen address. Returns nil when binding to all interfaces (0.0.0.0/::),
 // which skips host validation — suitable for reverse-proxy deployments.
+//
+// A unix socket gets nil as well, and explicitly. The check exists against
+// DNS rebinding, which needs a browser to reach the listener by name, and no
+// name resolves to a file on disk; the Host a socket client sends is whatever
+// its HTTP library needs to build a request, "unix" as often as not. Deriving
+// a set from the path used to work on Linux only by accident, because
+// SplitHostPort found no colon there; on Windows it found the drive letter's,
+// and a server on C:\...\mcp.sock served nothing but a client naming host "C".
 func allowedHosts(addr string) map[string]bool {
+	if isUnixSocketAddr(addr) {
+		return nil
+	}
 	host, _, _ := net.SplitHostPort(addr)
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		return nil
