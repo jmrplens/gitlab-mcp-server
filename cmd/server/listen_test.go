@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -182,8 +183,11 @@ func TestClearStaleSocket_ADeadSocketThatCannotBeRemoved_IsReported(t *testing.T
 	if err == nil {
 		t.Fatal("clearStaleSocket() reported success for a socket it could not remove")
 	}
-	if !strings.Contains(err.Error(), "removing stale socket") || !strings.Contains(err.Error(), path) {
-		t.Errorf("error = %q, want the unlink failure naming %s", err, path)
+	// The path is rendered with %q, which escapes the backslashes of a
+	// Windows path, so the expectation is the quoted form rather than the
+	// raw one.
+	if !strings.Contains(err.Error(), "removing stale socket") || !strings.Contains(err.Error(), strconv.Quote(path)) {
+		t.Errorf("error = %q, want the unlink failure naming %s", err, strconv.Quote(path))
 	}
 }
 
