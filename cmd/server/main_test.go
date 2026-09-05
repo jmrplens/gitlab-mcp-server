@@ -2381,6 +2381,517 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	})
 }
 
+// failDynamicCatalog makes the dynamic catalog build fail for the test's
+// duration and returns the error it fails with.
+func failDynamicCatalog(t *testing.T, builds *atomic.Int64) error {
+	t.Helper()
+	forced := errors.New("forced catalog failure")
+	original := buildDynamicCatalog
+	t.Cleanup(func() { buildDynamicCatalog = original })
+	buildDynamicCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
+		if builds != nil {
+			builds.Add(1)
+		}
+		return nil, tools.WithheldActions{}, forced
+	}
+	return forced
+}
+
+// heldOpenStdin points os.Stdin at a pipe whose write end stays open, so the
+// SDK never reads EOF and only the server's own decisions can end a session.
+func heldOpenStdin(t *testing.T) {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	original := os.Stdin
+	os.Stdin = reader
+	t.Cleanup(func() {
+		os.Stdin = original
+		_ = writer.Close()
+		_ = reader.Close()
+	})
+}
+
+// TestRunStdio_ClientAndShellFailures_AreReportedBeforeServing covers the two
+// startup failures stdio mode reports before it ever answers a handshake: a
+// GitLab client that cannot be built, and a server shell refused over a
+// malformed description substitution. The first is forced through its seam,
+// because the configuration already refuses every URL the client would; the
+// second is the real parser refusing a real value.
+func TestRunStdio_ClientAndShellFailures_AreReportedBeforeServing(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	cases := []struct {
+		name    string
+		arrange func(t *testing.T)
+		want    string
+	}{
+		{
+			name: "the client cannot be built",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := newGitLabClient
+				t.Cleanup(func() { newGitLabClient = original })
+				newGitLabClient = func(*config.Config) (*gitlabclient.Client, error) {
+					return nil, errors.New("forced client failure")
+				}
+			},
+			want: "creating gitlab client: forced client failure",
+		},
+		{
+			name:    "the shell refuses a malformed substitution",
+			arrange: func(t *testing.T) { t.Helper(); t.Setenv(gatewaycompat.EnvVar, "=x") },
+			want:    "creating MCP server",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", gitlab.URL)
+			t.Setenv("GITLAB_TOKEN", testToken)
+			t.Setenv("TOOL_SURFACE", config.ToolSurfaceDynamic)
+			tc.arrange(t)
+
+			err := runStdio(t.Context())
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("runStdio() = %v, want an error carrying %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestRunStdio_ACatalogThatCannotBeBuilt_StopsTheServer covers what happens
+// to a stdio session whose catalog fails to build while the handshake is
+// already being answered: serving is cancelled rather than left holding every
+// other method forever, and the startup error, not the shutdown it caused, is
+// what runStdio returns. The client's pipe is held open so nothing but that
+// decision can end the session.
+func TestRunStdio_ACatalogThatCannotBeBuilt_StopsTheServer(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	t.Setenv("GITLAB_URL", gitlab.URL)
+	t.Setenv("GITLAB_TOKEN", testToken)
+	t.Setenv("TOOL_SURFACE", config.ToolSurfaceDynamic)
+	forced := failDynamicCatalog(t, nil)
+	heldOpenStdin(t)
+
+	done := make(chan error, 1)
+	go func() { done <- runStdio(context.Background()) }()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, forced) || !strings.Contains(err.Error(), "registering the tool catalog") {
+			t.Errorf("runStdio() = %v, want the catalog failure wrapped as the startup error", err)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("runStdio kept serving after its catalog failed to build")
+	}
+}
+
+// TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain covers the bound
+// on the wait for startup work: a client that leaves while the catalog is
+// still being built is not held for the whole build, only for the drain,
+// which is shortened here below the build's own duration. The catalog build
+// is the one piece of startup no cancellation cuts short, so the test then
+// waits for that goroutine itself, so it cannot write into a later test's
+// logger.
+func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	t.Setenv("GITLAB_URL", gitlab.URL)
+	t.Setenv("GITLAB_TOKEN", testToken)
+	t.Setenv("TOOL_SURFACE", config.ToolSurfaceDynamic)
+	restoreDrain := stdioStartupDrainTimeout
+	stdioStartupDrainTimeout = time.Millisecond
+	t.Cleanup(func() { stdioStartupDrainTimeout = restoreDrain })
+
+	var mu sync.Mutex
+	var messages []string
+	capture := levelCapturingHandler{threshold: slog.LevelDebug, mu: &mu, messages: &messages}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(capture))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	logged := func(message string) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Contains(messages, message)
+	}
+
+	// A closed pipe: EOF at once, so serving ends while the build is running.
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	_ = writer.Close()
+	original := os.Stdin
+	os.Stdin = reader
+	t.Cleanup(func() {
+		os.Stdin = original
+		_ = reader.Close()
+	})
+
+	if runErr := runStdio(context.Background()); runErr != nil {
+		t.Fatalf("runStdio() = %v, want a clean stop when the client leaves", runErr)
+	}
+	if !logged("startup work had not finished when serving ended") {
+		t.Error("runStdio returned without noting that startup was still running")
+	}
+
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	for !logged("tool catalog ready") {
+		if time.Now().After(deadline) {
+			t.Fatal("the startup goroutine never finished its catalog build")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestStartPooledRegistration_AFailedBuild_FailsTheGateAndEvicts covers the
+// failure the post-insert hook exists for: a catalog that cannot be built
+// for a pooled credential fails the requests parked on its gate and evicts
+// the entry, so the next request for that credential rebuilds instead of
+// being handed a server with no tools.
+func TestStartPooledRegistration_AFailedBuild_FailsTheGateAndEvicts(t *testing.T) {
+	forced := failDynamicCatalog(t, nil)
+	client := newMockGitLabClient(t)
+	shell, err := newServerShell(t.Context(), client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic})
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	var pending sync.Map
+	pending.Store(shell.server, shell)
+	evicted := make(chan struct{})
+
+	startPooledRegistration(t.Context(), &pending, shell.server, func() { close(evicted) })
+
+	select {
+	case <-evicted:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("the entry was not evicted after its catalog failed to build")
+	}
+	if cause := shell.gate.failed(); !errors.Is(cause, forced) {
+		t.Errorf("gate failure = %v, want the build's own error", cause)
+	}
+}
+
+// TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted covers the same
+// failure on the wire: the request that triggered the build is answered with
+// the retry-able refusal rather than an empty catalog, and the next request
+// for the same credential builds again instead of finding the poisoned entry
+// cached.
+func TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted(t *testing.T) {
+	var builds atomic.Int64
+	failDynamicCatalog(t, &builds)
+	gitlab := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(gitlab.URL, true))
+	defer shutdown()
+
+	for attempt := range 2 {
+		resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+		body := readAndCloseBody(t, resp)
+		if !strings.Contains(body, "retry it") {
+			t.Errorf("request %d = %d %q, want the catalog refusal asking for a retry", attempt, resp.StatusCode, body)
+		}
+	}
+	if builds.Load() != 2 {
+		t.Errorf("the catalog was built %d time(s) for two requests, want 2: a failed entry must be evicted, not cached", builds.Load())
+	}
+}
+
+// TestCreateServer_ARegistrationFailure_IsReturned covers the two callers
+// that want a finished server and get a failure instead: createServer itself,
+// and the server card built on top of it.
+func TestCreateServer_ARegistrationFailure_IsReturned(t *testing.T) {
+	forced := failDynamicCatalog(t, nil)
+	client := newMockGitLabClient(t)
+
+	if _, err := createServer(t.Context(), client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic}); !errors.Is(err, forced) {
+		t.Errorf("createServer() error = %v, want the registration failure", err)
+	}
+
+	gitlab := newMockGitLabServer(t)
+	_, cardErr := buildServerCard(t.Context(), &config.Config{GitLabURL: gitlab.URL, ToolSurface: config.ToolSurfaceDynamic})
+	if !errors.Is(cardErr, forced) || !strings.Contains(cardErr.Error(), "creating server-card MCP server") {
+		t.Errorf("buildServerCard() error = %v, want the registration failure named as the card server's", cardErr)
+	}
+}
+
+// TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported
+// covers each surface's answer to a catalog it cannot build. The dynamic and
+// individual surfaces refuse outright; the meta surface warns and registers
+// an empty catalog, so a build failure there is only fatal when the filter
+// that follows fails as well.
+func TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported(t *testing.T) {
+	forced := errors.New("forced catalog failure")
+	client := newMockGitLabClient(t)
+	cases := []struct {
+		name    string
+		surface string
+		arrange func(t *testing.T)
+		wantErr string
+		wantLog string
+	}{
+		{
+			name:    "dynamic refuses",
+			surface: config.ToolSurfaceDynamic,
+			arrange: func(t *testing.T) { t.Helper(); failDynamicCatalog(t, nil) },
+			wantErr: "build dynamic action catalog",
+		},
+		{
+			name:    "individual refuses",
+			surface: config.ToolSurfaceIndividual,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := buildActionCatalog
+				t.Cleanup(func() { buildActionCatalog = original })
+				buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+					return nil, forced
+				}
+			},
+			wantErr: "build individual action catalog",
+		},
+		{
+			name:    "meta warns and carries on with an empty catalog",
+			surface: config.ToolSurfaceMeta,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := buildActionCatalog
+				t.Cleanup(func() { buildActionCatalog = original })
+				buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+					return nil, forced
+				}
+			},
+			wantLog: "failed to build meta action catalog",
+		},
+		{
+			name:    "meta refuses when the filter fails too",
+			surface: config.ToolSurfaceMeta,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := filterActionCatalog
+				t.Cleanup(func() { filterActionCatalog = original })
+				filterActionCatalog = func(*actioncatalog.Catalog, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
+					return nil, tools.WithheldActions{}, forced
+				}
+			},
+			wantErr: "filter meta action catalog",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := testutil.CaptureSlog(t)
+			tc.arrange(t)
+			server := mcp.NewServer(&mcp.Implementation{Name: "surface", Version: "0"}, nil)
+			cfg := &config.ServerConfig{ToolSurface: tc.surface}
+
+			_, err := registerConfiguredToolSurfaceWithCatalog(server, client, cfg, tc.surface, nil)
+
+			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Errorf("error = %v, want it to carry %q", err, tc.wantErr)
+			}
+			if tc.wantErr == "" && err != nil {
+				t.Errorf("error = %v, want the surface to carry on", err)
+			}
+			if tc.wantLog != "" && !strings.Contains(logged.String(), tc.wantLog) {
+				t.Errorf("log = %q, want it to carry %q", logged.String(), tc.wantLog)
+			}
+		})
+	}
+}
+
+// TestDoToolSearch_ACatalogThatCannotBeBuilt_IsReported covers the search
+// refusing over a catalog it cannot assemble, on the two surfaces that build
+// one: the meta registration failing, and the dynamic catalog failing at
+// either of its two steps.
+func TestDoToolSearch_ACatalogThatCannotBeBuilt_IsReported(t *testing.T) {
+	forced := errors.New("forced catalog failure")
+	cases := []struct {
+		name    string
+		surface string
+		arrange func(t *testing.T)
+		want    string
+	}{
+		{
+			name:    "meta registration fails",
+			surface: config.ToolSurfaceMeta,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := registerAllMeta
+				t.Cleanup(func() { registerAllMeta = original })
+				registerAllMeta = func(*mcp.Server, *gitlabclient.Client, edition.Tier) error { return forced }
+			},
+			want: "forced catalog failure",
+		},
+		{
+			name:    "the dynamic catalog fails to build",
+			surface: config.ToolSurfaceDynamic,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := buildActionCatalog
+				t.Cleanup(func() { buildActionCatalog = original })
+				buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+					return nil, forced
+				}
+			},
+			want: "build action catalog",
+		},
+		{
+			name:    "the standalone actions fail to join it",
+			surface: config.ToolSurfaceDynamic,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := addStandaloneCatalog
+				t.Cleanup(func() { addStandaloneCatalog = original })
+				addStandaloneCatalog = func(*actioncatalog.Catalog, *gitlabclient.Client, dynamictools.StandaloneOptions) (*actioncatalog.Catalog, error) {
+					return nil, forced
+				}
+			},
+			want: "add standalone dynamic actions",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.arrange(t)
+			err := doToolSearch("issue", tc.surface, edition.Free)
+			if !errors.Is(err, forced) || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("doToolSearch() = %v, want %q wrapping the forced failure", err, tc.want)
+			}
+		})
+	}
+}
+
+// inspectionFailures are the three in-memory steps every catalog inspection
+// takes, each made to fail through its seam, with the wording the caller
+// under test must attach.
+func inspectionFailures(t *testing.T, forced error) []struct {
+	name    string
+	arrange func(t *testing.T)
+} {
+	t.Helper()
+	return []struct {
+		name    string
+		arrange func(t *testing.T)
+	}{
+		{name: "server connect", arrange: func(t *testing.T) {
+			t.Helper()
+			original := connectInspectionServer
+			t.Cleanup(func() { connectInspectionServer = original })
+			connectInspectionServer = func(*mcp.Server, context.Context, mcp.Transport) (*mcp.ServerSession, error) {
+				return nil, forced
+			}
+		}},
+		{name: "client connect", arrange: func(t *testing.T) {
+			t.Helper()
+			original := connectInspectionClient
+			t.Cleanup(func() { connectInspectionClient = original })
+			connectInspectionClient = func(*mcp.Client, context.Context, mcp.Transport) (*mcp.ClientSession, error) {
+				return nil, forced
+			}
+		}},
+		{name: "list tools", arrange: func(t *testing.T) {
+			t.Helper()
+			original := listInspectionTools
+			t.Cleanup(func() { listInspectionTools = original })
+			listInspectionTools = func(*mcp.ClientSession, context.Context) (*mcp.ListToolsResult, error) {
+				return nil, forced
+			}
+		}},
+	}
+}
+
+// TestDoToolSearch_InMemoryFailures_AreWrapped covers the search's own
+// in-memory session failing at each step, which no input reaches and which
+// the search reports rather than printing an empty listing over.
+func TestDoToolSearch_InMemoryFailures_AreWrapped(t *testing.T) {
+	forced := errors.New("forced inspection failure")
+	for _, tc := range inspectionFailures(t, forced) {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.arrange(t)
+			err := doToolSearch("issue", config.ToolSurfaceMeta, edition.Free)
+			if !errors.Is(err, forced) || !strings.Contains(err.Error(), "error") {
+				t.Errorf("doToolSearch() = %v, want the %s failure wrapped", err, tc.name)
+			}
+		})
+	}
+}
+
+// TestRemoveExcludedTools_InMemoryFailures_RemoveNothing covers the
+// exclusion pass unable to list the server's tools: it removes nothing and
+// says why, because guessing at names to remove would be worse than
+// leaving an exclusion unapplied and reported.
+func TestRemoveExcludedTools_InMemoryFailures_RemoveNothing(t *testing.T) {
+	forced := errors.New("forced inspection failure")
+	for _, tc := range inspectionFailures(t, forced) {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := testutil.CaptureSlog(t)
+			tc.arrange(t)
+			server := mcp.NewServer(&mcp.Implementation{Name: "exclusions", Version: "0"}, nil)
+
+			removed := removeExcludedTools(t.Context(), server, []string{"gitlab_issue_list"})
+
+			if removed != 0 {
+				t.Errorf("removeExcludedTools() = %d, want 0 when the listing failed", removed)
+			}
+			if !strings.Contains(logged.String(), "removeExcludedTools: "+tc.name+" failed") {
+				t.Errorf("log = %q, want the %s failure reported", logged.String(), tc.name)
+			}
+		})
+	}
+}
+
+// TestBuildServerCard_InMemoryFailures_AreWrapped covers the card builder's
+// session failing at each of its six steps, each named in the error so the
+// 503 the endpoint answers with can be traced to the listing that failed.
+func TestBuildServerCard_InMemoryFailures_AreWrapped(t *testing.T) {
+	forced := errors.New("forced inspection failure")
+	gitlab := newMockGitLabServer(t)
+	cfg := &config.Config{GitLabURL: gitlab.URL, ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: config.CapabilitySurfaceFull}
+
+	cases := inspectionFailures(t, forced)
+	cases = append(cases,
+		struct {
+			name    string
+			arrange func(t *testing.T)
+		}{name: "list resources", arrange: func(t *testing.T) {
+			t.Helper()
+			original := listInspectionResources
+			t.Cleanup(func() { listInspectionResources = original })
+			listInspectionResources = func(*mcp.ClientSession, context.Context) (*mcp.ListResourcesResult, error) {
+				return nil, forced
+			}
+		}},
+		struct {
+			name    string
+			arrange func(t *testing.T)
+		}{name: "list resource templates", arrange: func(t *testing.T) {
+			t.Helper()
+			original := listInspectionResourceTemplates
+			t.Cleanup(func() { listInspectionResourceTemplates = original })
+			listInspectionResourceTemplates = func(*mcp.ClientSession, context.Context) (*mcp.ListResourceTemplatesResult, error) {
+				return nil, forced
+			}
+		}},
+		struct {
+			name    string
+			arrange func(t *testing.T)
+		}{name: "list prompts", arrange: func(t *testing.T) {
+			t.Helper()
+			original := listInspectionPrompts
+			t.Cleanup(func() { listInspectionPrompts = original })
+			listInspectionPrompts = func(*mcp.ClientSession, context.Context) (*mcp.ListPromptsResult, error) {
+				return nil, forced
+			}
+		}},
+	)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.arrange(t)
+			_, err := buildServerCard(t.Context(), cfg)
+			if !errors.Is(err, forced) || !strings.Contains(err.Error(), tc.name) {
+				t.Errorf("buildServerCard() = %v, want the %s failure named", err, tc.name)
+			}
+		})
+	}
+}
+
 // TestNewDepthLimitedBody_ADisabledLimit_PassesTheBodyThrough pins that a
 // zero or negative ceiling means no wrapper at all rather than a wrapper that
 // refuses everything, and that a body already refused keeps refusing on every

@@ -1231,7 +1231,7 @@ func runStdio(ctx context.Context) error {
 	toolutil.SetActionTimeout(cfg.ActionTimeout)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
-	client, err := gitlabclient.NewClient(cfg)
+	client, err := newGitLabClient(cfg)
 	if err != nil {
 		return fmt.Errorf("creating gitlab client: %w", err)
 	}
@@ -1297,7 +1297,28 @@ func runStdio(ctx context.Context) error {
 // work that is still in flight. It is a backstop against a request that never
 // returns, not a budget: the wait begins by canceling that work, so anything
 // honoring its context is already on its way out.
-const stdioStartupDrainTimeout = 5 * time.Second
+//
+// A var only so a test can shorten it below the time a catalog takes to
+// build, which is the one piece of startup work no cancellation cuts short;
+// nothing at runtime writes it.
+var stdioStartupDrainTimeout = 5 * time.Second //nolint:gochecknoglobals // test seam
+
+// Catalog construction hooks, replaceable in tests.
+//
+// None of these can be made to fail from any input the server takes: the
+// action specs are compiled in and validated by their own tests, the scope
+// filter has no failing path, and the GitLab client refuses only a URL the
+// configuration already refused. The branches that report their failure
+// exist for the day one of those facts changes, and would otherwise never
+// run.
+var (
+	newGitLabClient      = gitlabclient.NewClient            //nolint:gochecknoglobals // test seam
+	buildDynamicCatalog  = dynamiccatalog.Build              //nolint:gochecknoglobals // test seam
+	buildActionCatalog   = gitlabtools.BuildActionCatalog    //nolint:gochecknoglobals // test seam
+	filterActionCatalog  = gitlabtools.FilterActionCatalog   //nolint:gochecknoglobals // test seam
+	registerAllMeta      = gitlabtools.RegisterAllMeta       //nolint:gochecknoglobals // test seam
+	addStandaloneCatalog = dynamictools.AddStandaloneCatalog //nolint:gochecknoglobals // test seam
+)
 
 // prepareStdioCatalog runs everything stdio startup needs GitLab for, registers
 // the tool catalog, and opens the readiness gate.
@@ -1976,7 +1997,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		var withheld gitlabtools.WithheldActions
 		if actionCatalog == nil {
 			var catalogErr error
-			actionCatalog, withheld, catalogErr = dynamiccatalog.Build(client, cfg)
+			actionCatalog, withheld, catalogErr = buildDynamicCatalog(client, cfg)
 			if catalogErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
 			}
@@ -1992,13 +2013,13 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		var metaWithheld gitlabtools.WithheldActions
 		filteredCatalog := prebuiltCatalog
 		if filteredCatalog == nil {
-			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
+			actionCatalog, catalogErr := buildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
 			if catalogErr != nil {
 				slog.Warn("failed to build meta action catalog", "error", catalogErr)
 				actionCatalog = actioncatalog.NewCatalog()
 			}
 			var filterErr error
-			filteredCatalog, metaWithheld, filterErr = gitlabtools.FilterActionCatalog(actionCatalog, cfg)
+			filteredCatalog, metaWithheld, filterErr = filterActionCatalog(actionCatalog, cfg)
 			if filterErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
 			}
@@ -2020,7 +2041,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		// catalog can no longer map the operator's entries to anything.
 		var individualExcluded []string
 		if individualCatalog == nil {
-			built, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
+			built, catalogErr := buildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
 			if catalogErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("build individual action catalog: %w", catalogErr)
 			}
@@ -3899,27 +3920,27 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		return nil, fmt.Errorf("creating server-card MCP server: %w", err)
 	}
 
-	st, ct := mcp.NewInMemoryTransports()
+	st, ct := newInspectionTransports()
 	// The 30-second ceiling derives from the server's lifecycle context, so
 	// a shutdown that begins while the card is still being built cancels
 	// the build instead of waiting behind it.
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	serverSession, err := srv.Connect(ctx, st, nil)
+	serverSession, err := connectInspectionServer(srv, ctx, st)
 	if err != nil {
 		return nil, fmt.Errorf("server connect: %w", err)
 	}
 	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "server-card-builder", Version: "0"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	session, err := connectInspectionClient(mcpClient, ctx, ct)
 	if err != nil {
 		return nil, fmt.Errorf("client connect: %w", err)
 	}
 	defer session.Close()
 
-	toolsResult, err := session.ListTools(ctx, nil)
+	toolsResult, err := listInspectionTools(session, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list tools: %w", err)
 	}
@@ -3961,7 +3982,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		Icons       []mcp.Icon       `json:"icons,omitempty"`
 	}
 
-	resourcesResult, err := session.ListResources(ctx, nil)
+	resourcesResult, err := listInspectionResources(session, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list resources: %w", err)
 	}
@@ -3993,7 +4014,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		Meta mcp.Meta `json:"_meta,omitempty"`
 	}
 
-	templatesResult, err := session.ListResourceTemplates(ctx, nil)
+	templatesResult, err := listInspectionResourceTemplates(session, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list resource templates: %w", err)
 	}
@@ -4027,7 +4048,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 
 	cardPrompts := []serverCardPrompt{}
 	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) == config.CapabilitySurfaceFull {
-		promptsResult, promptsErr := session.ListPrompts(ctx, nil)
+		promptsResult, promptsErr := listInspectionPrompts(session, ctx)
 		if promptsErr != nil {
 			return nil, fmt.Errorf("list prompts: %w", promptsErr)
 		}
@@ -4150,6 +4171,19 @@ var (
 	listInspectionTools = func(session *mcp.ClientSession, ctx context.Context) (*mcp.ListToolsResult, error) {
 		return session.ListTools(ctx, nil)
 	}
+	// The three listings the server card reads after the tools, hooked the
+	// same way and for the same reason: an in-memory session does not fail
+	// on its own, so the branches reporting one that did are otherwise
+	// never run.
+	listInspectionResources = func(session *mcp.ClientSession, ctx context.Context) (*mcp.ListResourcesResult, error) {
+		return session.ListResources(ctx, nil)
+	}
+	listInspectionResourceTemplates = func(session *mcp.ClientSession, ctx context.Context) (*mcp.ListResourceTemplatesResult, error) {
+		return session.ListResourceTemplates(ctx, nil)
+	}
+	listInspectionPrompts = func(session *mcp.ClientSession, ctx context.Context) (*mcp.ListPromptsResult, error) {
+		return session.ListPrompts(ctx, nil)
+	}
 )
 
 // listRegisteredTools connects an in-memory MCP client to server and returns
@@ -4222,9 +4256,9 @@ func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []stri
 		excludeSet[name] = struct{}{}
 	}
 
-	st, ct := mcp.NewInMemoryTransports()
+	st, ct := newInspectionTransports()
 
-	serverSession, err := server.Connect(ctx, st, nil)
+	serverSession, err := connectInspectionServer(server, ctx, st)
 	if err != nil {
 		slog.ErrorContext(ctx, "removeExcludedTools: server connect failed", "error", err)
 		return 0
@@ -4232,14 +4266,14 @@ func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []stri
 	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "exclude-filter", Version: "0"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	session, err := connectInspectionClient(mcpClient, ctx, ct)
 	if err != nil {
 		slog.ErrorContext(ctx, "removeExcludedTools: client connect failed", "error", err)
 		return 0
 	}
 	defer session.Close()
 
-	result, err := session.ListTools(ctx, nil)
+	result, err := listInspectionTools(session, ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "removeExcludedTools: list tools failed", "error", err)
 		return 0
@@ -4290,7 +4324,7 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 	// fourth case to refuse.
 	switch config.EffectiveToolSurface(true, toolSurface) {
 	case config.ToolSurfaceMeta:
-		if err := gitlabtools.RegisterAllMeta(server, nil, tier); err != nil {
+		if err := registerAllMeta(server, nil, tier); err != nil {
 			return err
 		}
 	case config.ToolSurfaceIndividual:
@@ -4303,23 +4337,23 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	}
 
-	st, ct := mcp.NewInMemoryTransports()
+	st, ct := newInspectionTransports()
 	ctx := context.Background()
 
-	serverSession, err := server.Connect(ctx, st, nil)
+	serverSession, err := connectInspectionServer(server, ctx, st)
 	if err != nil {
 		return fmt.Errorf("connect error: %w", err)
 	}
 	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "search-client", Version: "0"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	session, err := connectInspectionClient(mcpClient, ctx, ct)
 	if err != nil {
 		return fmt.Errorf("connect error: %w", err)
 	}
 	defer session.Close()
 
-	result, err := session.ListTools(ctx, nil)
+	result, err := listInspectionTools(session, ctx)
 	if err != nil {
 		return fmt.Errorf("list tools error: %w", err)
 	}
@@ -4358,14 +4392,14 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 }
 
 func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
-	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
+	catalog, err := buildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
 		Tier:       tier,
 		IncludeMCP: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build action catalog: %w", err)
 	}
-	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(catalog, nil, dynamictools.StandaloneOptions{})
+	withStandalone, standaloneErr := addStandaloneCatalog(catalog, nil, dynamictools.StandaloneOptions{})
 	if standaloneErr != nil {
 		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
