@@ -137,6 +137,7 @@ const SECTIONS = [
 			"install/docker",
 			"install/npm",
 			"install/pypi",
+			"install/nuget",
 			"claude-desktop",
 			"install/agent-plugin",
 			"install/hosted",

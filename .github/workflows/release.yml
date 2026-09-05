@@ -17,17 +17,17 @@
 # the publishers take that build from a workflow artifact, pack it, validate
 # it and run their publish commands dry. Skipped is exactly what cannot be
 # undone: the image push and its signatures, the GitHub release and the
-# attestations, the npm and PyPI uploads, the tap push, the registry publish,
-# the commit to main and the winget submission; verify-published has nothing
-# to read and says so. REHEARSAL is the switch and RELEASE_TAG is the version
+# attestations, the npm, PyPI and NuGet uploads, the tap push, the registry
+# publish, the commit to main and the winget submission; verify-published has
+# nothing to read and says so. REHEARSAL is the switch and RELEASE_TAG is the version
 # either way, so a step reads one variable and does not care how it was
 # started. The tree is always the triggering commit, never the tag named: a
 # rehearsal is of the code about to be released, and the first one, run
 # against v2.7.5's tree, found half the scripts this workflow calls missing.
 #
 # One job per credential. Until 2.7.5 a single `release` job held the OIDC
-# identity that npm, PyPI, cosign, the MCP Registry and the attestation store
-# all trust, a write-scoped GITHUB_TOKEN, the Homebrew tap deploy key and the
+# identity that npm, PyPI, NuGet, cosign, the MCP Registry and the attestation
+# store all trust, a write-scoped GITHUB_TOKEN, the Homebrew tap deploy key and the
 # main-branch deploy key — and ran code resolved at run time in the middle of
 # it. Anything with execution in that job owned every channel this project
 # publishes through. Now GoReleaser builds and attests, and each publisher runs
@@ -41,9 +41,11 @@
 #     them, because installers and package managers match names literally;
 #   * server.json's OCI entry is stamped with the digest the docker job pushed,
 #     never with a tag alone;
-#   * npm publishes the platform packages before the launcher that pins them;
-#   * the MCP Registry publish runs after npm and after the image push, because
-#     it validates both by fetching them.
+#   * npm publishes the platform packages before the launcher that pins them,
+#     and NuGet pushes the runtime-identifier packages before the pointer that
+#     names them;
+#   * the MCP Registry publish runs after npm, PyPI, NuGet and the image push,
+#     because it validates every one of those entries by fetching them.
 name: Release
 
 on:
@@ -406,7 +408,7 @@ jobs:
       # raw.githubusercontent.com/anchore/syft/main/install.sh and runs it with
       # sh, so the code executing in this job came from a branch head. This job
       # mints the release signature and holds the OIDC identity npm, PyPI,
-      # cosign and the attestation store trust, which is exactly where nothing
+      # NuGet, cosign and the attestation store trust, which is exactly where nothing
       # may be resolved at run time. The bytes are pinned by SHA256 here;
       # cosign additionally proves they came from anchore's release workflow.
       # Its certificate identity ends in refs/heads/main because syft releases
@@ -654,6 +656,91 @@ jobs:
           packages-dir: pypi/dist
           skip-existing: true
 
+  nuget:
+    name: "🟪 Publish to NuGet"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [preflight, release]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      # The SDK's first-use banner and telemetry notice go to stdout, which
+      # is the stream the validator's handshake has to find pure JSON-RPC on.
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    environment: release
+    permissions:
+      contents: read # download the published release assets
+      id-token: write # nuget.org trusted publishing (NuGet/login)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Take the rehearsal's own build
+        if: env.REHEARSAL == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal
+
+      - name: Fetch and verify release binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
+        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
+
+      # An exact SDK version rather than 10.0.x: dnx's behaviour is an SDK
+      # property (10.0.400 installs without asking when stdin is not a
+      # terminal and accepts --yes without needing it, which the docs rely
+      # on), and the digest `make validate-nuget` pins is the container image
+      # of this same SDK. Bump the two together.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.400"
+
+      # A pointer package plus six runtime-identifier packages, each carrying
+      # the native binary as the tool's entry point (the .NET 10 tool layout).
+      # Validated before the push because a pushed NuGet version can be
+      # unlisted but never replaced: manifests, ownership token, binary magic
+      # and executable bit for all six, then a real `dotnet tool install`, a
+      # `dnx` run and an MCP handshake for the runner's own platform.
+      - name: Build and validate NuGet packages
+        run: make validate-nuget-local NUGET_BINARIES=dist
+
+      # nuget.org trusted publishing: the job's OIDC token is exchanged for an
+      # API key that lives one hour and can be minted once per token, under
+      # the account-level policy that names this repository, this workflow
+      # file and the `release` environment (docs/development/repository-
+      # settings.md records it). The user input is the nuget.org profile
+      # name, which is public, so it is a literal rather than a secret. This
+      # step runs in a rehearsal too: it pushes nothing and proves the policy
+      # matches the identity this job presents.
+      - name: NuGet login (OIDC to a temporary API key)
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: jmrplens
+
+      # --no-assemble pushes the tree the validation step opened, and the
+      # script pushes the runtime packages before the pointer, so an install
+      # racing the publish never resolves a pointer whose packages are not
+      # there yet. --skip-duplicate makes a re-run of this job land on a
+      # version already pushed without failing.
+      - name: Publish to NuGet
+        env:
+          # Withheld from a rehearsal: the dry run never reads it, so the step
+          # has no reason to hold the key and is not given it.
+          NUGET_API_KEY: ${{ env.REHEARSAL != 'true' && steps.nuget-login.outputs.NUGET_API_KEY || '' }}
+        run: |
+          set -euo pipefail
+          if [ "$REHEARSAL" = "true" ]; then
+            bash scripts/publish-nuget.sh dist "${RELEASE_TAG#v}" --no-assemble --dry-run
+          else
+            bash scripts/publish-nuget.sh dist "${RELEASE_TAG#v}" --no-assemble
+          fi
+
   homebrew:
     name: "🍺 Homebrew tap"
     runs-on: ubuntu-latest
@@ -666,9 +753,9 @@ jobs:
     # fastest path from a tag to a running binary on someone's machine, so
     # leaving this job on [release] alone made the tap the one channel that
     # advertised a version before anything had read the registries back. The
-    # accepted cost is that a release whose npm or PyPI publish failed now
-    # leaves the tap on the previous version, which is the correct outcome for
-    # a release that is not fully out.
+    # accepted cost is that a release whose npm, PyPI or NuGet publish failed
+    # now leaves the tap on the previous version, which is the correct outcome
+    # for a release that is not fully out.
     needs: [preflight, release, verify-published]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
@@ -727,15 +814,16 @@ jobs:
     name: "🗂️ Publish to MCP Registry"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # npm and pypi because the registry validates those package entries by
-    # fetching the versions this release published: a pypi entry is checked by
-    # GETting pypi.org/pypi/<name>/<version>/json, so racing the upload spends
+    # npm, pypi and nuget because the registry validates those package entries
+    # by fetching the versions this release published: a pypi entry is checked
+    # by GETting pypi.org/pypi/<name>/<version>/json and a nuget entry by
+    # reading the version's README off the v3 feed, so racing the upload spends
     # the retry budget on a version that is not there yet. docker because it
     # validates the OCI entry by fetching the image tag and digest.
-    # verify-published because this job is what points installers at the npm
-    # and PyPI packages: the listing must not advertise bytes nobody compared
-    # with the signed checksums.
-    needs: [preflight, release, npm, pypi, docker, verify-published]
+    # verify-published because this job is what points installers at the npm,
+    # PyPI and NuGet packages: the listing must not advertise bytes nobody
+    # compared with the signed checksums.
+    needs: [preflight, release, npm, pypi, nuget, docker, verify-published]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
@@ -818,21 +906,26 @@ jobs:
             if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
               break
             fi
-            # The registry validates the npm and pypi entries by fetching the
-            # versions those jobs published minutes ago, and the oci entry by
-            # fetching the image tag the docker job pushed. Retry only errors
-            # the registry itself labels transient, plus a not-yet-visible npm
-            # or PyPI version, which is indistinguishable from registry-side
-            # propagation lag. Strings are quoted from the v1.8.1 validators
-            # (internal/validators/registries/{npm,pypi,oci}.go); a genuine
-            # "not found (status: 404)" is deliberately absent, so a truly
-            # unpublished package fails fast.
+            # The registry validates the npm, pypi and nuget entries by
+            # fetching the versions those jobs published minutes ago, and the
+            # oci entry by fetching the image tag the docker job pushed. Retry
+            # only errors the registry itself labels transient, plus a
+            # not-yet-visible npm, PyPI or NuGet version, which is
+            # indistinguishable from registry-side propagation lag. Strings
+            # are quoted from the v1.8.1 validators
+            # (internal/validators/registries/{npm,pypi,nuget,oci}.go); a
+            # genuine "not found (status: 404)" is deliberately absent, so a
+            # truly unpublished package fails fast. "wait for validation to
+            # complete" is the nuget validator's wording for a package or
+            # version the feed does not list yet: nuget.org runs its own
+            # validation on every push before the version becomes visible,
+            # which takes minutes, so it is lag by construction.
             # The OCI validator's own 404 text — "does not exist in the
             # registry" — is absent for the same reason: the image is pushed by
             # the docker job this one depends on, so its absence is a broken
             # release rather than propagation lag, and retrying it would spend
             # ten minutes hiding that.
-            if grep -qE "take a moment to appear|retry later|retry shortly|validation timed out" mcp-publisher-publish.log; then
+            if grep -qE "take a moment to appear|retry later|retry shortly|validation timed out|wait for validation to complete" mcp-publisher-publish.log; then
               echo "::notice::Registry-side validation not yet consistent (attempt ${attempt}); retrying in 60s"
               sleep 60
               continue
@@ -852,7 +945,7 @@ jobs:
     name: "🔬 Verify published packages"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [preflight, npm, pypi]
+    needs: [preflight, npm, pypi, nuget]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:
@@ -877,11 +970,11 @@ jobs:
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh --checksums-only "${RELEASE_TAG#v}" dist
 
-      # Downloads what npm and PyPI actually serve and compares the embedded
-      # binaries with the signed checksums.txt. The publishers re-assemble
-      # their packages after validating them, so this is the only step that
-      # inspects the bytes a user installs, and it runs in a job holding no
-      # publishing credential of any kind.
+      # Downloads what npm, PyPI and NuGet actually serve and compares the
+      # embedded binaries with the signed checksums.txt. The publishers
+      # re-assemble their packages after validating them, so this is the only
+      # step that inspects the bytes a user installs, and it runs in a job
+      # holding no publishing credential of any kind.
       #
       # The retry budget is the same allowance the mcp-registry publish step
       # gives itself, and for the same reason: this runs minutes after the
@@ -898,7 +991,7 @@ jobs:
       - name: Nothing to verify in a rehearsal
         if: env.REHEARSAL == 'true'
         run: |
-          echo "::notice::rehearsal: nothing was published, so there is nothing on npm or PyPI to compare with the checksums; this comparison runs on the next real release"
+          echo "::notice::rehearsal: nothing was published, so there is nothing on npm, PyPI or NuGet to compare with the checksums; this comparison runs on the next real release"
 
   commit-manifests:
     name: "📝 Commit manifests to main"
@@ -906,14 +999,14 @@ jobs:
     timeout-minutes: 15
     # Last, deliberately. The commit lands the stamped server.json on main, and
     # a push to main runs check-server-json-packages, which fetches every
-    # package the manifest declares. Committing before npm and PyPI have
+    # package the manifest declares. Committing before npm, PyPI and NuGet have
     # published would fail that gate on a version that is merely not there yet.
     # Depending on the publishers also preserves the old single-job semantics:
     # a failed publish aborted before the commit ever happened. verify-published
     # is listed for the same reason and not left to transitivity through
     # mcp-registry: if what the registries serve does not match the signed
     # checksums, main must not gain a manifest advertising it.
-    needs: [preflight, release, docker, npm, pypi, homebrew, mcp-registry, verify-published]
+    needs: [preflight, release, docker, npm, pypi, nuget, homebrew, mcp-registry, verify-published]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release

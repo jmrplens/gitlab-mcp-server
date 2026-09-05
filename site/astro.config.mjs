@@ -335,6 +335,7 @@ const jsonLd = JSON.stringify({
 				// the source repository does.
 				"https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server",
 				"https://pypi.org/project/jmrplens-gitlab-mcp-server/",
+				"https://www.nuget.org/packages/gitlab-mcp-server",
 				"https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v2",
 				"https://deps.dev/go/github.com%2Fjmrplens%2Fgitlab-mcp-server%2Fv2",
 				"https://libraries.io/go/github.com%2Fjmrplens%2Fgitlab-mcp-server",
@@ -642,6 +643,11 @@ export default defineConfig({
 							slug: "install/pypi",
 							label: "PyPI, uvx and pipx",
 							translations: { es: "PyPI, uvx y pipx" },
+						},
+						{
+							slug: "install/nuget",
+							label: "NuGet and dnx",
+							translations: { es: "NuGet y dnx" },
 						},
 						{
 							slug: "claude-desktop",

@@ -98,6 +98,30 @@ pip install jmrplens-gitlab-mcp-server     # or into the active environment (pip
 
 Like npm, the Linux wheels need glibc (manylinux); on musl systems such as Alpine use the Docker image instead.
 
+### NuGet / dnx (any platform)
+
+The server is also published on NuGet.org as [`gitlab-mcp-server`](https://www.nuget.org/packages/gitlab-mcp-server), a .NET tool in the layout the .NET 10 SDK uses for tools that ship a native executable: a pointer package names one package per runtime identifier, each carrying the same binary, and the SDK runs it directly. It needs the .NET 10 SDK or newer; no .NET code runs once the server is up.
+
+```bash
+dnx gitlab-mcp-server                      # zero install; clients launch it directly
+dotnet tool install -g gitlab-mcp-server   # or install globally (dotnet tool)
+# Linux packages need glibc; on musl systems such as Alpine use the Docker image instead
+```
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "dnx",
+      "args": ["gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
+Two `dnx` habits worth knowing: it parses its own options anywhere on the line, so arguments meant for the server go after `--` (`dnx gitlab-mcp-server -- --version`; without the separator `--version` is `dnx`'s own option and prints its usage), and it installs the tool without asking when its standard input is not a terminal, which is how a client starts it, so the configuration above needs no extra flag.
+
 ### One-line installer (native binary)
 
 ```bash

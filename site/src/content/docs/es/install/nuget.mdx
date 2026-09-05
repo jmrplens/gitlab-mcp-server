@@ -1,0 +1,194 @@
+---
+title: NuGet y dnx
+description: Instala GitLab MCP Server desde NuGet.org como una herramienta .NET cuyo punto de entrada es el binario nativo, ejecútalo con dnx sin instalar nada o ponlo en tu PATH con dotnet tool install.
+datePublished: "2026-09-05"
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+GitLab MCP Server está publicado en NuGet.org como
+[`gitlab-mcp-server`](https://www.nuget.org/packages/gitlab-mcp-server).
+Es una herramienta .NET con la disposición que el SDK de .NET 10 introdujo
+para las herramientas que distribuyen un ejecutable específico de cada
+plataforma: el punto de entrada es el mismo binario nativo en Go que
+distribuyen todos los demás canales, `dotnet tool install` y `dnx` eligen
+el paquete de tu sistema operativo y arquitectura, y no se ejecuta código
+.NET una vez arranca el servidor.
+
+## Qué obtienes
+
+Siete paquetes, publicados juntos en cada release:
+
+- **`gitlab-mcp-server`** es el paquete puntero. Declara el comando
+  `gitlab-mcp-server` y nombra, para cada identificador de runtime, el
+  paquete que lo lleva. También contiene el README del paquete y un
+  `.mcp/server.json`, que es de donde NuGet.org genera su fragmento de
+  instalación.
+- **`gitlab-mcp-server.<rid>`** son los paquetes que llevan el binario en
+  sí, uno por identificador de runtime: `linux-x64`, `linux-arm64`,
+  `osx-x64`, `osx-arm64`, `win-x64` y `win-arm64`. El SDK instala
+  exactamente uno, el que corresponde a tu máquina, y ejecuta el binario
+  directamente (`Runner="executable"` en el manifiesto de la herramienta,
+  así que no hay ningún host de .NET por medio).
+
+| Plataforma          | Identificador de runtime |
+| ------------------- | ------------------------ |
+| Linux x64 (glibc)   | `linux-x64`              |
+| Linux arm64 (glibc) | `linux-arm64`            |
+| macOS Intel         | `osx-x64`                |
+| macOS Apple Silicon | `osx-arm64`              |
+| Windows x64         | `win-x64`                |
+| Windows ARM64       | `win-arm64`              |
+
+Requisitos: el **SDK de .NET 10** o superior. La disposición por
+identificador de runtime es la versión 2 del manifiesto de herramientas, que
+los SDK anteriores no leen, y el propio `dnx` llegó con .NET 10. En Linux
+los binarios necesitan glibc; en sistemas musl como Alpine, usa en su lugar
+la [imagen Docker](/gitlab-mcp-server/es/install/docker/).
+
+## Instalación
+
+<Tabs syncKey="dotnetpkg">
+<TabItem label="dnx">
+
+Sin instalar nada: `dnx` descarga los dos paquetes a la caché de NuGet en
+la primera ejecución y ejecuta la herramienta. Los clientes pueden lanzarlo
+así directamente.
+
+```bash
+dnx gitlab-mcp-server
+```
+
+Dos cosas de `dnx` con las que es fácil tropezar:
+
+- **Interpreta sus propias opciones en cualquier posición de la línea.**
+  Los argumentos destinados al servidor van después de `--`:
+  `dnx gitlab-mcp-server -- --version` imprime la versión del servidor,
+  mientras que `dnx gitlab-mcp-server --version` se lee como la opción
+  `--version <VERSION>` del propio `dnx` e imprime su ayuda.
+- **No pregunta nada cuando su entrada estándar no es una terminal.** La
+  documentación de Microsoft muestra `dnx <paquete> --yes` para saltarse la
+  pregunta "¿descargar esta herramienta?"; un cliente MCP conecta tuberías,
+  así que la pregunta nunca aparece y el flag es innecesario (el SDK de
+  .NET 10.0.400 lo acepta de todos modos, así que una plantilla de cliente
+  que lo añada no hace daño). En una terminal, la primera ejecución pregunta
+  una vez.
+
+</TabItem>
+<TabItem label="dotnet tool">
+
+```bash
+dotnet tool install -g gitlab-mcp-server
+```
+
+El SDK deja un shim `gitlab-mcp-server` en `~/.dotnet/tools` (un enlace
+simbólico al almacén de herramientas en Linux y macOS), directorio que el
+instalador del SDK ya puso en tu PATH.
+
+</TabItem>
+</Tabs>
+
+Comprueba la instalación:
+
+```bash
+gitlab-mcp-server --version
+# gitlab-mcp-server 2.8.0 (commit: ...)
+```
+
+Con `dnx` no queda ningún comando en tu PATH;
+`dnx gitlab-mcp-server -- --version` hace la misma comprobación. Si lo
+arrancas en una terminal sin `GITLAB_URL` y `GITLAB_TOKEN` definidos, el
+binario imprime qué es y los dos valores que necesita, y después espera a
+que pulses Enter. Es la pantalla de primer arranque, no un error: un cliente
+MCP conecta tuberías en lugar de una terminal y nunca la ve. No hay
+asistente de configuración; la configuración va en el JSON de tu cliente,
+más abajo.
+
+## Configura tu cliente
+
+La forma portable no necesita instalar nada. Apunta el cliente a `dnx`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "dnx",
+      "args": ["gitlab-mcp-server"],
+      "env": {
+        "GITLAB_URL": "https://gitlab.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+Tras `dotnet tool install -g`, usa el comando en su lugar:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "gitlab-mcp-server",
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+`GITLAB_TOKEN` es el único valor obligatorio: un token de acceso personal con
+el scope `api` (`read_api` también sirve; acompáñalo de `GITLAB_MCP_READ_ONLY=true`,
+porque sobre stdio el servidor no recorta la superficie de herramientas al
+scope del token). `GITLAB_URL` usa por defecto `https://gitlab.com`; añádela
+a `env` solo para una instancia autogestionada. Un cliente que no herede el
+PATH de tu shell puede necesitar la ruta completa al comando;
+`which gitlab-mcp-server` (o `where gitlab-mcp-server` en Windows) la
+imprime. Para fijar una release con `dnx` en lugar de seguir la más
+reciente, nómbrala en el argumento: `"gitlab-mcp-server@2.8.0"`.
+
+Una precaución para una máquina en la que la CLI de .NET nunca se ha
+ejecutado: su texto de bienvenida del primer uso sale por la salida
+estándar, que es el flujo por el que va el protocolo MCP. Ejecuta
+`dotnet --version` una vez en una terminal antes del primer arranque desde
+el cliente, o añade `"DOTNET_NOLOGO": "1"` al bloque `env`.
+
+Las rutas de archivo y las formas de cada cliente (VS Code usa `servers` con
+`"type": "stdio"`, Zed usa `context_servers`) están en las
+<a href="/gitlab-mcp-server/es/getting-started/#configuración-manual">pestañas por cliente del Inicio rápido</a>.
+
+## Actualizar y desinstalar
+
+El servidor nunca comprueba si hay actualizaciones ni reemplaza su propio
+binario; aquí lo gestiona el SDK, igual que cada canal gestiona lo que
+instaló. Cada release mueve el puntero y sus seis paquetes de runtime juntos
+a una misma versión, así que un puntero nunca resuelve un binario de otra
+release.
+
+<Tabs syncKey="dotnetpkg">
+<TabItem label="dnx">
+
+`dnx` resuelve la versión contra NuGet.org en cada arranque, así que un
+`dnx gitlab-mcp-server` sin versión sigue cada release según se publica, y
+la descarga se omite cuando la versión resuelta ya está en la caché de
+NuGet. La otra cara de la moneda: cada arranque necesita que NuGet.org sea
+accesible, incluso para una versión ya en caché, así que a una máquina que
+a veces está sin conexión le conviene más `dotnet tool install`. Para
+quedarte en una release, nómbrala: `dnx gitlab-mcp-server@2.8.0` (`@latest`
+no es una versión de NuGet y se rechaza).
+
+No se instaló nada, así que no hay nada que desinstalar más allá de la
+entrada en la configuración de tu cliente (y los paquetes en caché bajo
+`~/.nuget`, si quieres eliminarlos).
+
+</TabItem>
+<TabItem label="dotnet tool">
+
+```bash
+dotnet tool update -g gitlab-mcp-server
+dotnet tool uninstall -g gitlab-mcp-server
+```
+
+</TabItem>
+</Tabs>
+
+El resto de canales se comparan en la [vista general de instalación](/gitlab-mcp-server/es/install/overview/).

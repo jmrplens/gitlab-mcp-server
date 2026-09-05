@@ -19,19 +19,20 @@ Every channel ends with the same program: one `gitlab-mcp-server` binary that yo
 | [Docker](#docker)                               | A container image, stdio or HTTP                  | Docker             | Pull a newer tag                                    | linux/amd64 and linux/arm64                     |
 | [npm and npx](#npm-and-npx)                     | A launcher package carrying the binary            | Node.js 18+        | `npm update -g`                                     | Linux (glibc), macOS, Windows; x64 and arm64    |
 | [PyPI, uvx and pipx](#pypi-uvx-and-pipx)        | A platform wheel carrying the binary              | Python 3.9+ or uv  | `pipx upgrade`, `uv tool upgrade`, `pip install -U` | Linux (glibc), macOS, Windows; x86_64 and arm64 |
+| [NuGet and dnx](#nuget-and-dnx)                 | A .NET tool whose entry point is the binary       | .NET 10 SDK        | `dotnet tool update -g`                             | Linux (glibc), macOS, Windows; x64 and arm64    |
 | [Claude Desktop (.mcpb)](#claude-desktop-mcpb)  | A desktop extension with the binary inside        | Claude Desktop     | Install the newer extension version                 | macOS (universal) and Windows (x64 binary)      |
 | [Agent Plugins](#agent-plugins)                 | A plugin manifest that runs the container image   | A host + Docker    | Pull a newer tag                                    | Wherever the host and Docker run                |
 | [Hosted endpoint](#hosted-endpoint)             | Nothing installed; an HTTP endpoint on GitLab.com | A GitLab.com token | Nothing to upgrade                                  | Any HTTP-capable client                         |
 
-Not sure? Docker or the one-line installer for a first try, Homebrew or winget if you already use them, npm or PyPI if your client launches servers with `npx` or `uvx`, the `.mcpb` for Claude Desktop, and the hosted endpoint to look before installing anything.
+Not sure? Docker or the one-line installer for a first try, Homebrew or winget if you already use them, npm, PyPI or NuGet if your client launches servers with `npx`, `uvx` or `dnx`, the `.mcpb` for Claude Desktop, and the hosted endpoint to look before installing anything.
 
 ---
 
 ## What every channel shares
 
-- **The binary is the same everywhere.** Homebrew and winget point at the GitHub Release assets, pinned by the SHA-256 values in that release's `checksums.txt`; the `.mcpb` is assembled in the build job from the same outputs, and the npm and PyPI packages are assembled afterwards in separate jobs that download the published release assets and check them against the signed `checksums.txt` before packing. `gitlab-mcp-server --version` prints `gitlab-mcp-server <version> (commit: <commit>)` on every channel, which is the quickest way to see what a client is actually running.
+- **The binary is the same everywhere.** Homebrew and winget point at the GitHub Release assets, pinned by the SHA-256 values in that release's `checksums.txt`; the `.mcpb` is assembled in the build job from the same outputs, and the npm, PyPI and NuGet packages are assembled afterwards in separate jobs that download the published release assets and check them against the signed `checksums.txt` before packing. `gitlab-mcp-server --version` prints `gitlab-mcp-server <version> (commit: <commit>)` on every channel, which is the quickest way to see what a client is actually running.
 - **Two values configure it.** `GITLAB_TOKEN` is the only required setting: a Personal Access Token (`glpat-...`) with the `api` scope. A `read_api` token also works: the server detects the scope at startup and serves a read-only surface for it, on stdio as in HTTP mode, so `GITLAB_MCP_READ_ONLY=true` is only needed to keep an `api` token from writing. `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance. Everything else is optional and listed in the [configuration reference](../reference/configuration.md).
-- **The server never updates itself.** There is no update check and no in-place binary replacement on any channel. Upgrades come from whichever channel installed it: `brew upgrade`, `winget upgrade`, `npm update -g`, a newer image tag, a newer Claude Desktop extension, or a fresh download. An earlier self-update subsystem was removed; package managers own the files they install.
+- **The server never updates itself.** There is no update check and no in-place binary replacement on any channel. Upgrades come from whichever channel installed it: `brew upgrade`, `winget upgrade`, `npm update -g`, `dotnet tool update -g`, a newer image tag, a newer Claude Desktop extension, or a fresh download. An earlier self-update subsystem was removed; package managers own the files they install.
 - **There is no setup wizard.** Started in a terminal, or double-clicked on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set, the binary prints what it is and the two values it needs to stderr, then waits for Enter so a console window does not vanish before you read it. An MCP client never sees that screen, because a client connects pipes rather than a terminal. Configuration lives in the client's own JSON; see [Configure your client](#configure-your-client).
 - **The current release is v2.7.5** (2026-08-27). Every registry below carries that version, and the Docker `latest` tag resolves to it. Facts in this guide that depend on the live registries were checked on 2026-09-01.
 
@@ -136,7 +137,7 @@ sha256sum --check --ignore-missing checksums.txt
 
 Two further artifacts are produced by the release workflow for **releases after v2.7.5**: one SPDX SBOM per binary (`<asset>.sbom.json`) and a SLSA build provenance attestation stored by GitHub, which `gh attestation verify <file> -R jmrplens/gitlab-mcp-server` checks. Both steps landed after the v2.7.5 tag, so that release carries neither; on v2.7.5 the checksum and signature above are the verification. Steps and background are in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity).
 
-Releases are created as drafts and published only after every asset is attached **and attested**, so a release you can see is never a partial one. Everything published downstream — npm, PyPI, the Homebrew formula, the MCP Registry entry — is built from those published assets after their signature has been checked, and a separate job reads the npm and PyPI packages back out of the registries and compares the binaries inside them with the same signed `checksums.txt`. Nothing that advertises the version runs before that comparison passes: the Homebrew tap, the MCP Registry entry and the manifest commit to `main` all wait on it.
+Releases are created as drafts and published only after every asset is attached **and attested**, so a release you can see is never a partial one. Everything published downstream — npm, PyPI, NuGet, the Homebrew formula, the MCP Registry entry — is built from those published assets after their signature has been checked, and a separate job reads the npm, PyPI and NuGet packages back out of the registries and compares the binaries inside them with the same signed `checksums.txt`. Nothing that advertises the version runs before that comparison passes: the Homebrew tap, the MCP Registry entry and the manifest commit to `main` all wait on it.
 
 ### Upgrade and uninstall
 
@@ -334,6 +335,37 @@ The Linux wheels need glibc; on musl systems such as Alpine use the [Docker imag
 
 ---
 
+## NuGet and dnx
+
+```bash
+dnx gitlab-mcp-server                       # zero install; clients launch it directly
+dotnet tool install -g gitlab-mcp-server    # global install, on PATH as gitlab-mcp-server
+```
+
+[`gitlab-mcp-server`](https://www.nuget.org/packages/gitlab-mcp-server) on NuGet.org is a .NET tool in the layout the .NET 10 SDK introduced for tools whose entry point is a native executable (tool manifest version 2): the pointer package `gitlab-mcp-server` declares the command and names one package per runtime identifier, and the six `gitlab-mcp-server.<rid>` packages (`linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, `win-x64`, `win-arm64`) each carry the release binary for that platform, which the SDK runs directly with no .NET host in between. Nothing in the packages is .NET code, so no .NET runtime is involved once the server is up; the SDK is needed to install or run it, and it has to be .NET 10 or newer, since older SDKs do not read this manifest version. The packages are pushed under NuGet.org's trusted publishing, so the release holds no NuGet credential.
+
+The Linux packages need glibc; on musl systems such as Alpine use the [Docker image](#docker) instead.
+
+A client launches it with `dnx`, the SDK's tool runner, which downloads the two packages it needs into the NuGet cache on the first run:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "dnx",
+      "args": ["gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
+Two `dnx` habits worth knowing. It parses its own options anywhere on the command line, so arguments meant for the server go after `--`: `dnx gitlab-mcp-server -- --version` prints the server's version, while `dnx gitlab-mcp-server --version` is read as `dnx`'s own `--version <VERSION>` option and prints its usage. And it asks nothing when its standard input is not a terminal, which is how a client starts it, so the configuration above needs no extra flag; Microsoft's documentation shows `dnx <package> --yes` for the interactive prompt, which the .NET 10.0.400 SDK accepts but a client never needs. On a machine where the .NET CLI has never run, its first-use welcome text goes to standard output, the stream MCP runs on: run `dotnet --version` once in a terminal first, or add `"DOTNET_NOLOGO": "1"` to `env`.
+
+**Upgrade and uninstall.** `dotnet tool update -g gitlab-mcp-server` and `dotnet tool uninstall -g gitlab-mcp-server` for a global install. `dnx` installs nothing beyond the NuGet cache and resolves the version against NuGet.org on every launch, so an unpinned `dnx gitlab-mcp-server` follows each release as it is published, and needs NuGet.org reachable each time, cached or not; to stay on one release name it in the argument, `dnx gitlab-mcp-server@2.8.0`. These are ordinary SDK commands.
+
+---
+
 ## Claude Desktop (.mcpb)
 
 Download [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb), open it with Claude Desktop (double-click it, or drag it onto the Settings window), review the install dialog and fill in the settings. The bundle contains a macOS universal binary and a Windows executable, so it needs no Docker, Node.js or Python; its manifest (v0.4, `server.type: binary`) declares `darwin` and `win32` and Claude Desktop 0.10.0 or newer. There is no Linux entry, and the Windows binary is amd64 only, so a Windows arm64 machine receives the x64 executable.
@@ -410,7 +442,7 @@ There is nothing to upgrade or uninstall: remove the entry from your client's co
 
 ## Configure your client
 
-Every stdio channel is configured the same way: the client starts `gitlab-mcp-server` (or `npx`, `uvx`, or `docker`) and passes `GITLAB_TOKEN` in its environment. The generic shape, used by Claude Desktop, Cursor, Windsurf, Kiro and Cline, is:
+Every stdio channel is configured the same way: the client starts `gitlab-mcp-server` (or `npx`, `uvx`, `dnx`, or `docker`) and passes `GITLAB_TOKEN` in its environment. The generic shape, used by Claude Desktop, Cursor, Windsurf, Kiro and Cline, is:
 
 ```json
 {

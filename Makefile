@@ -12,7 +12,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -897,6 +897,62 @@ publish-pypi-dry:
 publish-pypi:
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
 	scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
+
+## gen-nuget: assemble the NuGet distribution (a pointer package plus six
+## runtime-identifier packages) from release binaries. The .NET 10 tool
+## layout: the pointer names a package per runtime identifier, each of which
+## carries the native binary as the command's entry point. Packs with the
+## standard library, so no .NET SDK is needed here.
+##   make gen-nuget NUGET_BINARIES=dist
+gen-nuget:
+	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required"; exit 1; }
+	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
+	python3 scripts/build_nuget.py --binaries "$(NUGET_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
+
+## validate-nuget: build the packages and validate them inside a clean .NET
+## SDK container: OPC layout, nuspec metadata, tool manifests, ownership
+## token, binary magic and executable bit for all six, plus a real
+## `dotnet tool install`, a `dnx` run and an MCP initialize handshake for the
+## container's native platform. The image is pinned by digest because dnx's
+## behaviour is an SDK property (10.0.400 is what was verified); bump the
+## digest deliberately.
+##   make validate-nuget NUGET_BINARIES=dist
+NUGET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0@sha256:e1ffd2a92ae84c1291bc1b6887501f8af98e6331e7af6d4c8d37168c5e87a64c
+validate-nuget:
+	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-nuget-local)"; exit 1; }
+	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
+	@VER=$$(tr -d '[:space:]' < VERSION); \
+	docker run --rm \
+		-v "$(CURDIR):/work" -v "$(abspath $(NUGET_BINARIES)):/binaries:ro" \
+		-e DOTNET_NOLOGO=1 -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+		-w /work $(NUGET_SDK_IMAGE) sh -euc ' \
+			apt-get -qq update && apt-get -qq install -y --no-install-recommends python3 >/dev/null && \
+			python3 scripts/build_nuget.py --binaries /binaries --version '"$$VER"' && \
+			python3 scripts/validate_nuget.py --packages nuget/dist --version '"$$VER"
+
+## validate-nuget-local: same validation without Docker, for the ephemeral CI
+## runner (already disposable; the .NET 10 SDK must be on PATH). Builds the
+## packages from NUGET_BINARIES, then validates.
+validate-nuget-local:
+	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required"; exit 1; }
+	@command -v dotnet >/dev/null || { echo "ERROR: the .NET 10 SDK is required (or use validate-nuget)"; exit 1; }
+	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
+	@VER=$$(tr -d '[:space:]' < VERSION); \
+	python3 scripts/build_nuget.py --binaries "$(NUGET_BINARIES)" --version "$$VER" && \
+	python3 scripts/validate_nuget.py --packages nuget/dist --version "$$VER"
+
+## publish-nuget-dry: assemble and validate the NuGet packages without pushing.
+publish-nuget-dry:
+	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
+	scripts/publish-nuget.sh "$(NUGET_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
+
+## publish-nuget: assemble, validate and push the NuGet packages out of band.
+## Auth via NUGET_API_KEY (an API key from nuget.org). The release workflow
+## pushes under the nuget.org trusted publishing policy instead, with a
+## one-hour key minted from its OIDC identity; this is the only tokened path.
+publish-nuget:
+	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
+	scripts/publish-nuget.sh "$(NUGET_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
 
 ## publish-lobehub: push the current version of the existing LobeHub listing.
 ## Reads lhm.plugin.json (version kept in sync by scripts/update-server-json-sha.sh

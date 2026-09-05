@@ -229,7 +229,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)
 2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.sigstore.json`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — the Homebrew formula, winget, the installers and `scripts/fetch-release-assets.sh` look assets up by exact name and will not find a decorated one
-3. The full chain (draft-then-publish, `.mcpb` bundle, npm and PyPI trusted publishers, Homebrew tap, winget, `server.json` stamping, and how to rehearse it with `gh workflow run release.yml --ref <branch>`) is documented under "Release process" in `CLAUDE.md`
+3. The full chain (draft-then-publish, `.mcpb` bundle, npm, PyPI and NuGet trusted publishers, Homebrew tap, winget, `server.json` stamping, and how to rehearse it with `gh workflow run release.yml --ref <branch>`) is documented under "Release process" in `CLAUDE.md`
 
 ### Git Workflow
 

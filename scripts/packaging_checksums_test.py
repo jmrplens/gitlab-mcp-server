@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Tests that the npm and PyPI builders refuse unverified release binaries.
+"""Tests that the npm, PyPI and NuGet builders refuse unverified release binaries.
 
-Both distributions used to be assembled from an unverified copy of the build
-directory: six files of the right size with the right first bytes passed every
-check either validator made, and five of the six were never executed by
-anything before reaching an immutable registry. The builders now compare each
-binary with the release's own cosign-signed checksums.txt.
+The first two distributions used to be assembled from an unverified copy of
+the build directory: six files of the right size with the right first bytes
+passed every check either validator made, and five of the six were never
+executed by anything before reaching an immutable registry. The builders now
+compare each binary with the release's own cosign-signed checksums.txt, and
+the NuGet builder was written to the same contract.
 
 Run with:
 
@@ -162,6 +163,49 @@ class BuildPypiTest(BuilderChecksumTestCase):
             ("no checksums.txt at all", dict(with_checksums=False), (), 1, "checksums.txt"),
             ("a binary that does not match", dict(tamper="gitlab-mcp-server-windows-arm64.exe"), (),
              1, "gitlab-mcp-server-windows-arm64.exe"),
+            ("matching checksums", dict(), (), 0, ""),
+            ("explicit opt-out", dict(with_checksums=False), ("--allow-unverified",), 0, ""),
+        ]
+        for name, fixture, extra, want_code, want_text in cases:
+            with self.subTest(name):
+                shutil.rmtree(self.binaries, ignore_errors=True)
+                shutil.rmtree(self.out, ignore_errors=True)
+                write_fixture(self.binaries, **fixture)
+                result = self.run_builder(*extra)
+                output = result.stdout + result.stderr
+                self.assertEqual(result.returncode != 0, want_code != 0, output)
+                if want_text:
+                    self.assertIn(want_text, output)
+
+    def test_records_what_it_verified(self):
+        write_fixture(self.binaries)
+        self.assertEqual(self.run_builder().returncode, 0)
+        manifest = self.manifest()
+        self.assertTrue(manifest["verified"])
+        self.assertEqual(manifest["version"], self.version)
+        self.assertEqual(len(manifest["binaries"]), len(ASSETS))
+
+
+class BuildNugetTest(BuilderChecksumTestCase):
+    """Verifies scripts/build_nuget.py will not put an unverified binary in a package."""
+
+    def run_builder(self, *extra):
+        return subprocess.run(
+            [
+                sys.executable, os.path.join(ROOT, "scripts", "build_nuget.py"),
+                "--binaries", self.binaries,
+                "--version", self.version,
+                "--out", self.out,
+                *extra,
+            ],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+
+    def test_refuses_binaries_it_cannot_verify(self):
+        cases = [
+            ("no checksums.txt at all", dict(with_checksums=False), (), 1, "checksums.txt"),
+            ("a binary that does not match", dict(tamper="gitlab-mcp-server-darwin-arm64"), (),
+             1, "gitlab-mcp-server-darwin-arm64"),
             ("matching checksums", dict(), (), 0, ""),
             ("explicit opt-out", dict(with_checksums=False), ("--allow-unverified",), 0, ""),
         ]

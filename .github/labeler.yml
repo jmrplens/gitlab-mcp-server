@@ -80,10 +80,11 @@ ci:
           - .coderabbit.yaml
           - sonar-project.properties
 
-# What users install, across six channels. This label marks the pull requests
-# whose mistakes cannot be taken back: a published npm version and a PyPI file
-# name are permanent, an OCI tag and a release asset are what an installer
-# resolves, and server.json is what the MCP Registry hands to clients.
+# What users install, across seven channels. This label marks the pull requests
+# whose mistakes cannot be taken back: a published npm version, a PyPI file
+# name and a NuGet version are permanent, an OCI tag and a release asset are
+# what an installer resolves, and server.json is what the MCP Registry hands
+# to clients.
 distribution:
   - changed-files:
       - any-glob-to-any-file:
@@ -103,12 +104,15 @@ distribution:
           - mcpb/**
           - npm/**
           - pypi/**
+          - nuget/**
           - scripts/build-mcpb.sh
           - scripts/build-npm.mjs
           - scripts/build_pypi.py
+          - scripts/build_nuget.py
           - scripts/publish-*
           - scripts/validate-npm.mjs
           - scripts/validate_pypi.py
+          - scripts/validate_nuget.py
           - scripts/validate-server-json-packages.sh
           - scripts/check-openplugin.sh
           - scripts/update-homebrew-tap.sh
@@ -120,8 +124,8 @@ distribution:
           - scripts/install.ps1
 
 # The same label .github/dependabot.yml asks for, so a client-go bump made by
-# hand and one opened by Dependabot land in the same filter. npm/ and pypi/ are
-# not here: those manifests are stamped by the release, not resolved.
+# hand and one opened by Dependabot land in the same filter. npm/, pypi/ and
+# nuget/ are not here: those manifests are stamped by the release, not resolved.
 dependencies:
   - changed-files:
       - any-glob-to-any-file:

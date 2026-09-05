@@ -179,6 +179,9 @@ test/e2e/.bitbucket-admin-pass
 # PyPI wheelhouse assembled by scripts/build_pypi.py (generated per release)
 /pypi/dist/
 
+# NuGet packages assembled by scripts/build_nuget.py (generated per release)
+/nuget/dist/
+
 # Python bytecode. Committed bytecode is code nobody reviews that the
 # interpreter may load in preference to the source beside it, which is the
 # shape of problem the rest of this repository's supply-chain work exists to
