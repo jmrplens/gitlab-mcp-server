@@ -23,7 +23,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		pipelineReadSpec("list", toolutil.RouteAction(client, List), "gitlab_pipeline_list"),
-		pipelineReadSpec("get", pipelineGetRoute(client), "gitlab_pipeline_get"),
+		pipelineReadSpec("get", pipelineGetRoute(client), "gitlab_pipeline_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/pipeline/{pipeline_id}"),
 		pipelineUpdateSpec("cancel", toolutil.RouteAction(client, Cancel), "gitlab_pipeline_cancel"),
 		pipelineUpdateSpec("retry", toolutil.RouteAction(client, Retry), "gitlab_pipeline_retry"),
 		pipelineDeleteSpec("delete", toolutil.RouteAction(client, DeleteOutput), "gitlab_pipeline_delete"),

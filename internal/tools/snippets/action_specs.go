@@ -23,7 +23,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		snippetReadSpec("list", toolutil.RouteAction(client, List), "gitlab_snippet_list"),
 		snippetReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_snippet_list_all"),
-		snippetReadSpec("get", snippetGetRoute(client), "gitlab_snippet_get"),
+		snippetReadSpec("get", snippetGetRoute(client), "gitlab_snippet_get").
+			WithEmbeddedResource("gitlab://snippet/{snippet_id}"),
 		snippetReadSpec("content", toolutil.RouteAction(client, Content), "gitlab_snippet_content"),
 		snippetReadSpec("file_content", toolutil.RouteAction(client, FileContent), "gitlab_snippet_file_content"),
 		snippetCreateSpec("create", createRoute, "gitlab_snippet_create"),
@@ -31,7 +32,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		snippetDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_snippet_delete"),
 		snippetReadSpec("explore", toolutil.RouteAction(client, Explore), "gitlab_snippet_explore"),
 		snippetReadSpec("project_list", toolutil.RouteAction(client, ProjectList), "gitlab_project_snippet_list"),
-		snippetReadSpec("project_get", toolutil.RouteAction(client, ProjectGet), "gitlab_project_snippet_get"),
+		snippetReadSpec("project_get", toolutil.RouteAction(client, ProjectGet), "gitlab_project_snippet_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/snippet/{snippet_id}"),
 		snippetReadSpec("project_content", toolutil.RouteAction(client, ProjectContent), "gitlab_project_snippet_content"),
 		snippetCreateSpec("project_create", projectCreateRoute, "gitlab_project_snippet_create"),
 		snippetUpdateSpec("project_update", toolutil.RouteAction(client, ProjectUpdate), "gitlab_project_snippet_update"),

@@ -228,15 +228,34 @@ Not-found responses have `IsError: true` but include actionable hints so the AI 
 
 A get result can attach an additional content block of type `resource` (`mcp.EmbeddedResource`) carrying the canonical MCP resource URI for the entity returned. This lets clients that only render `Content` blocks (and ignore `StructuredContent`) still surface a stable, dereferenceable identifier the user or LLM can pass to `resources/read`, follow-up tool calls, or UI deep-links.
 
-One action embeds today, on every surface (`toolutil.EmbedResourceJSON` has a single call site, in the issue Markdown formatter):
+An action declares the resource it returns on its `ActionSpec`: `EmbeddedResourcePolicy` (`none`, `optional` or `always`) says whether to embed, and `EmbeddedResource` is the canonical `gitlab://` URI template, written with the action's own parameter names. The catalog validator refuses a template whose variables the action does not accept, and the dispatchers of all three surfaces expand the template from the call's parameters after a successful result, so a get embeds the same block whether it was reached as an individual tool, through a meta-tool `action`, or through `gitlab_execute_action`. Values are path-escaped, so `project_id: "group/project"` lands as `gitlab://project/group%2Fproject`, the form the resource templates accept. The twenty-two actions that declare one (`TestEmbeddedResource_EveryGetThatHasAResourceDeclaresIt` pins the list):
 
-| Action      | Canonical URI                                     |
-| ----------- | ------------------------------------------------- |
-| `issue.get` | `gitlab://project/{project_id}/issue/{issue_iid}` |
+| Action                           | Canonical URI                                                |
+| -------------------------------- | ------------------------------------------------------------ |
+| `project.get`                    | `gitlab://project/{project_id}`                              |
+| `project.board_get`              | `gitlab://project/{project_id}/board/{board_id}`             |
+| `project.label_get`              | `gitlab://project/{project_id}/label/{label_id}`             |
+| `project.milestone_get`          | `gitlab://project/{project_id}/milestone/{milestone_iid}`    |
+| `group.get`                      | `gitlab://group/{group_id}`                                  |
+| `group.group_label_get`          | `gitlab://group/{group_id}/label/{label_id}`                 |
+| `group.group_milestone_get`      | `gitlab://group/{group_id}/milestone/{milestone_iid}`        |
+| `issue.get`                      | `gitlab://project/{project_id}/issue/{issue_iid}`            |
+| `merge_request.get`              | `gitlab://project/{project_id}/mr/{merge_request_iid}`       |
+| `pipeline.get`                   | `gitlab://project/{project_id}/pipeline/{pipeline_id}`       |
+| `job.get`                        | `gitlab://project/{project_id}/job/{job_id}`                 |
+| `branch.get`                     | `gitlab://project/{project_id}/branch/{branch_name}`         |
+| `tag.get`                        | `gitlab://project/{project_id}/tag/{tag_name}`               |
+| `release.get`                    | `gitlab://project/{project_id}/release/{tag_name}`           |
+| `repository.commit_get`          | `gitlab://project/{project_id}/commit/{sha}`                 |
+| `environment.get`                | `gitlab://project/{project_id}/environment/{environment_id}` |
+| `environment.deployment_get`     | `gitlab://project/{project_id}/deployment/{deployment_id}`   |
+| `feature_flags.feature_flag_get` | `gitlab://project/{project_id}/feature_flag/{name}`          |
+| `access.deploy_key_get`          | `gitlab://project/{project_id}/deploy_key/{deploy_key_id}`   |
+| `wiki.get`                       | `gitlab://project/{project_id}/wiki/{slug}`                  |
+| `snippet.get`                    | `gitlab://snippet/{snippet_id}`                              |
+| `snippet.project_get`            | `gitlab://project/{project_id}/snippet/{snippet_id}`         |
 
-Every other action's `ActionSpec` carries an embedded-resource policy (`none`, `optional` or `always`) that the catalog validates and projects but does not yet act on, so the get actions whose resources exist under `gitlab://` (project, group, merge request, pipeline, job, branch, tag, release, label, milestone, board, deployment, environment, feature flag, deploy key, snippet, wiki page) currently return no embedded block.
-
-The embedded resource carries `MIMEType: "application/json"` and a `Text` payload equal to the JSON-marshaled output struct — duplicating `StructuredContent` so simpler clients lose nothing. Not-found responses do **not** embed (the entity does not exist).
+The embedded resource carries `MIMEType: "application/json"` and a `Text` payload equal to the JSON-marshaled output struct — duplicating `StructuredContent` so simpler clients lose nothing. Error and not-found responses do **not** embed (the entity does not exist), and neither does a call that omitted one of the template's parameters.
 
 This behaviour is enabled by default and can be disabled globally with `GITLAB_MCP_EMBEDDED_RESOURCES=false` (env var, both transports) or `--embedded-resources=false` (HTTP-mode flag) as a kill-switch for clients that don't tolerate duplicate content blocks.
 

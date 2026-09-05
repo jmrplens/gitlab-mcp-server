@@ -44,7 +44,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_group_list — list groups visible to the authenticated user.
 		groupReadSpec("list", toolutil.RouteAction(client, List), "gitlab_group_list"),
 		// gitlab_group_get — fetch a single group by ID or path (returns a structured not-found result on 404).
-		groupReadSpec("get", groupGetRoute(client), "gitlab_group_get"),
+		groupReadSpec("get", groupGetRoute(client), "gitlab_group_get").
+			WithEmbeddedResource("gitlab://group/{group_id}"),
 		// gitlab_group_create — create a new top-level group or subgroup.
 		groupCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_group_create"),
 		// gitlab_group_update — update an existing group.

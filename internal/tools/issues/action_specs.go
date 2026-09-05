@@ -149,6 +149,8 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	options := issueOptions(individualTool)
 	switch individualTool {
 	case "gitlab_issue_get":
+		options.EmbeddedResourcePolicy = toolutil.ActionSpecEmbeddedAlways
+		options.EmbeddedResource = "gitlab://project/{project_id}/issue/{issue_iid}"
 		options.Usage = "Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number. Prefer issue.get over issue.list when the target issue is already known."
 		options.Aliases = []string{"get issue", "show issue details", "fetch issue"}
 		options.RelatedActions = []string{actionIssueList, actionIssueUpdate, "issue.delete", "issue.notes_list"}

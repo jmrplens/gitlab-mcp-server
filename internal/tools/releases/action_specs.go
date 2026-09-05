@@ -22,7 +22,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		releaseCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_release_create"),
-		releaseReadSpec("get", releaseGetRoute(client), "gitlab_release_get"),
+		releaseReadSpec("get", releaseGetRoute(client), "gitlab_release_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/release/{tag_name}"),
 		releaseReadSpec("get_latest", toolutil.RouteAction(client, GetLatest), "gitlab_release_latest"),
 		releaseReadSpec("list", toolutil.RouteAction(client, List), "gitlab_release_list"),
 		releaseUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_release_update"),

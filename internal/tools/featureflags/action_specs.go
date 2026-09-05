@@ -22,7 +22,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		featureFlagReadSpec("feature_flag_list", toolutil.RouteAction(client, ListFeatureFlags), "gitlab_feature_flag_list"),
-		featureFlagReadSpec("feature_flag_get", toolutil.RouteAction(client, GetFeatureFlag), "gitlab_feature_flag_get"),
+		featureFlagReadSpec("feature_flag_get", toolutil.RouteAction(client, GetFeatureFlag), "gitlab_feature_flag_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/feature_flag/{name}"),
 		featureFlagCreateSpec("feature_flag_create", toolutil.RouteAction(client, CreateFeatureFlag), "gitlab_feature_flag_create"),
 		featureFlagUpdateSpec("feature_flag_update", toolutil.RouteAction(client, UpdateFeatureFlag), "gitlab_feature_flag_update"),
 		featureFlagDeleteSpec("feature_flag_delete", toolutil.DestructiveVoidAction(client, DeleteFeatureFlag), "gitlab_feature_flag_delete"),

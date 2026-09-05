@@ -19,7 +19,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		deploymentReadSpec("deployment_list", toolutil.RouteAction(client, List), "gitlab_deployment_list"),
-		deploymentReadSpec("deployment_get", deploymentGetRoute(client), "gitlab_deployment_get"),
+		deploymentReadSpec("deployment_get", deploymentGetRoute(client), "gitlab_deployment_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/deployment/{deployment_id}"),
 		deploymentCreateSpec("deployment_create", toolutil.RouteAction(client, Create), "gitlab_deployment_create"),
 		deploymentUpdateSpec("deployment_update", toolutil.RouteAction(client, Update), "gitlab_deployment_update"),
 		deploymentDeleteSpec("deployment_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_deployment_delete"),

@@ -59,7 +59,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				},
 			}),
 		// gitlab_mr_get — fetch a single MR (returns a structured not-found result on 404).
-		mergeRequestReadSpec("get", mergeRequestGetRoute(client), "gitlab_mr_get"),
+		mergeRequestReadSpec("get", mergeRequestGetRoute(client), "gitlab_mr_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/mr/{merge_request_iid}"),
 		// gitlab_mr_list — list project MRs.
 		mergeRequestReadSpec("list", toolutil.RouteAction(client, List), "gitlab_mr_list"),
 		// gitlab_mr_list_global — list MRs across all projects visible to the caller.

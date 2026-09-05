@@ -28,7 +28,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_label_list — list project labels with optional search and pagination.
 		labelReadSpec("label_list", toolutil.RouteAction(client, List), "gitlab_label_list"),
 		// gitlab_label_get — fetch a label by ID or name (returns a structured not-found result on 404).
-		labelReadSpec("label_get", labelGetRoute(client), "gitlab_label_get"),
+		labelReadSpec("label_get", labelGetRoute(client), "gitlab_label_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/label/{label_id}"),
 		// gitlab_label_create — create a new project label.
 		labelCreateSpec("label_create", toolutil.RouteAction(client, Create), "gitlab_label_create"),
 		// gitlab_label_update — update an existing project label.

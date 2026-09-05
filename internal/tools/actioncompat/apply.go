@@ -128,6 +128,7 @@ func cloneSpecWithCompatibility(spec toolutil.ActionSpec, compatibility toolutil
 		ContentKind:            spec.ContentKind,
 		NotFoundPolicy:         spec.NotFoundPolicy,
 		EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
+		EmbeddedResource:       spec.EmbeddedResource,
 		RichResultPolicy:       spec.RichResultPolicy,
 		SchemaValidationNotes:  append([]string(nil), spec.SchemaValidationNotes...),
 		RuntimeValidationNotes: append([]string(nil), spec.RuntimeValidationNotes...),

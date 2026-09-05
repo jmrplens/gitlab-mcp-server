@@ -227,12 +227,11 @@ func FormatMarkdown(i Output) string {
 	return b.String()
 }
 
+// formatGetMarkdownResult renders a single issue. The canonical resource is
+// not embedded here: the issue.get spec declares it and the dispatchers embed
+// it, the same way as for every other get action.
 func formatGetMarkdownResult(out getOutput) *mcp.CallToolResult {
-	result := toolutil.ToolResultAnnotated(FormatMarkdown(out.Output), toolutil.ContentDetail)
-	if out.ProjectID > 0 && out.IID > 0 {
-		toolutil.EmbedResourceJSON(result, fmt.Sprintf("gitlab://project/%d/issue/%d", out.ProjectID, out.IID), out.Output)
-	}
-	return result
+	return toolutil.ToolResultAnnotated(FormatMarkdown(out.Output), toolutil.ContentDetail)
 }
 
 // FormatListMarkdown renders a list of issues as a Markdown table.

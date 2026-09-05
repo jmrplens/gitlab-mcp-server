@@ -23,7 +23,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_wiki_list — list wiki pages for a project with optional content.
 		wikiReadSpec("list", toolutil.RouteAction(client, List), "gitlab_wiki_list"),
 		// gitlab_wiki_get — fetch a single wiki page by slug (returns a structured not-found result on 404).
-		wikiReadSpec("get", wikiGetRoute(client), "gitlab_wiki_get"),
+		wikiReadSpec("get", wikiGetRoute(client), "gitlab_wiki_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/wiki/{slug}"),
 		// gitlab_wiki_create — create a new wiki page.
 		wikiCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_wiki_create"),
 		// gitlab_wiki_update — update an existing wiki page by slug.

@@ -26,6 +26,11 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			errs = append(errs, fmt.Errorf("action spec %q was not projected to a route", spec.Name))
 			continue
 		}
+		// The dispatchers see the route, not the spec, so the template travels
+		// on it; a policy that never embeds leaves the route without one.
+		if spec.EmbeddedResourcePolicy != "" && spec.EmbeddedResourcePolicy != toolutil.ActionSpecEmbeddedNone {
+			route.EmbeddedResource = spec.EmbeddedResource
+		}
 		actions = append(actions, Action{
 			Name:                   spec.Name,
 			Route:                  route,
@@ -43,6 +48,7 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 			ContentKind:            spec.ContentKind,
 			NotFoundPolicy:         spec.NotFoundPolicy,
 			EmbeddedResourcePolicy: spec.EmbeddedResourcePolicy,
+			EmbeddedResource:       spec.EmbeddedResource,
 			RichResultPolicy:       spec.RichResultPolicy,
 			SchemaValidationNotes:  append([]string(nil), spec.SchemaValidationNotes...),
 			RuntimeValidationNotes: append([]string(nil), spec.RuntimeValidationNotes...),

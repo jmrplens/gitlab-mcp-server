@@ -213,11 +213,18 @@ func TestActionSpecs_DeleteErrorPropagates(t *testing.T) {
 }
 
 // TestActionSpecs_GetEmbedsCanonicalResource preserves the rich individual
-// result shape that gitlab_issue_get exposed before catalog projection.
+// result shape that gitlab_issue_get exposed before catalog projection: the
+// spec declares the canonical resource, and the dispatchers embed it the way
+// [toolutil.EmbedCanonicalResource] does here with the call's parameters.
 func TestActionSpecs_GetEmbedsCanonicalResource(t *testing.T) {
 	byTool := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))
+	spec := byTool["gitlab_issue_get"]
+	if spec.EmbeddedResourcePolicy != toolutil.ActionSpecEmbeddedAlways || spec.EmbeddedResource != "gitlab://project/{project_id}/issue/{issue_iid}" {
+		t.Fatalf("issue.get embedded resource = policy %q template %q", spec.EmbeddedResourcePolicy, spec.EmbeddedResource)
+	}
 
-	raw, err := byTool["gitlab_issue_get"].Route.Handler(t.Context(), map[string]any{"project_id": testProjectID, "issue_iid": 10})
+	params := map[string]any{"project_id": testProjectID, "issue_iid": 10}
+	raw, err := spec.Route.Handler(t.Context(), params)
 	if err != nil {
 		t.Fatalf("Route.Handler(gitlab_issue_get) error: %v", err)
 	}
@@ -229,6 +236,7 @@ func TestActionSpecs_GetEmbedsCanonicalResource(t *testing.T) {
 	if result == nil {
 		t.Fatal("MarkdownForResult(getOutput) returned nil")
 	}
+	toolutil.EmbedCanonicalResource(result, spec.EmbeddedResource, params, out)
 	var found *mcp.EmbeddedResource
 	for _, content := range result.Content {
 		if embedded, isEmbedded := content.(*mcp.EmbeddedResource); isEmbedded {

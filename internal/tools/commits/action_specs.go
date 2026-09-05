@@ -21,7 +21,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		commitCreateSpec("commit_create", toolutil.RouteAction(client, Create), "gitlab_commit_create"),
 		commitReadSpec("commit_list", toolutil.RouteAction(client, List), "gitlab_commit_list"),
-		commitReadSpec("commit_get", toolutil.RouteAction(client, Get), "gitlab_commit_get"),
+		commitReadSpec("commit_get", toolutil.RouteAction(client, Get), "gitlab_commit_get").
+			WithEmbeddedResource("gitlab://project/{project_id}/commit/{sha}"),
 		commitReadSpec("commit_diff", toolutil.RouteAction(client, Diff), "gitlab_commit_diff"),
 		commitReadSpec("commit_refs", toolutil.RouteAction(client, GetRefs), "gitlab_commit_refs"),
 		commitReadSpec("commit_comments", toolutil.RouteAction(client, GetComments), "gitlab_commit_comments"),

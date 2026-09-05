@@ -80,7 +80,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_job_list_project — list jobs across a project.
 		jobReadSpec("list_project", toolutil.RouteAction(client, ListProject), "gitlab_job_list_project"),
 		// gitlab_job_get — fetch a single job by ID (returns a structured not-found result on 404).
-		jobGetSpec(toolutil.RouteAction(client, Get)),
+		jobGetSpec(toolutil.RouteAction(client, Get)).
+			WithEmbeddedResource("gitlab://project/{project_id}/job/{job_id}"),
 		// gitlab_job_trace — read a job's log output.
 		jobReadSpec("trace", toolutil.RouteAction(client, Trace), "gitlab_job_trace"),
 		// gitlab_job_cancel — cancel a running job.
