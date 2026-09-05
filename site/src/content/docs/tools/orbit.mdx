@@ -1,14 +1,14 @@
 ---
 title: Orbit
-description: Six read-only MCP tools for GitLab.com's experimental Knowledge Graph API, available only on GitLab.com Ultimate.
+description: Six read-only MCP tools for GitLab.com's experimental Knowledge Graph API, available only on GitLab.com with a Premium or Ultimate tier.
 datePublished: "2026-05-06"
 faq:
   - q: "What are the four Orbit query_type variants?"
     a: "The `query` action accepts a JSON query object whose `query_type` selects one of four variants: **traversal** (walk nodes by entity, `node_ids`, `filters`, or `id_range`), **aggregation** (group and aggregate over nodes), **neighbors** (expand a bounded node's neighbors), and **path_finding** (find paths between two or more bounded nodes, `max_depth` 1 to 3). All four share the single `query_type` discriminator and diverge only on their sibling keys."
   - q: "Is Orbit available on self-managed GitLab?"
-    a: "No. Orbit is available **only** when GitLab MCP Server connects to `https://gitlab.com`. Self-managed GitLab instances do not register Orbit tools, even when the Enterprise/Premium catalog is enabled, because the underlying experimental Knowledge Graph API is hosted on GitLab.com. There is no flag that adds Orbit to a self-managed connection."
+    a: "No. Orbit is available **only** when GitLab MCP Server connects to `https://gitlab.com`. Self-managed GitLab instances do not register Orbit tools, even on a Premium or Ultimate tier, because the underlying experimental Knowledge Graph API is hosted on GitLab.com. There is no flag that adds Orbit to a self-managed connection."
   - q: "What license and configuration does Orbit require?"
-    a: "Orbit requires GitLab Ultimate on a GitLab.com connection. Enable it with `GITLAB_TIER=ultimate` in stdio mode or `--tier=ultimate` in HTTP mode. The legacy `GITLAB_ENTERPRISE=true` environment variable still works in stdio mode as a fallback but is deprecated; HTTP mode reads `--tier` only. When these conditions are met, Orbit's six actions are reachable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` and `orbit.graph_status` on the default dynamic surface, as the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or as six `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
+    a: "Orbit requires a Premium or Ultimate tier on a GitLab.com connection. Enable it with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate` in stdio mode, or `--tier=premium` / `--tier=ultimate` in HTTP mode; when neither is set the tier is detected from the instance license. The legacy `GITLAB_ENTERPRISE=true` environment variable still works as a fallback when `GITLAB_TIER` is unset but is deprecated; HTTP mode reads both variables from its environment when `--tier` is not passed. When these conditions are met, Orbit's six actions are reachable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` and `orbit.graph_status` on the default dynamic surface, as the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or as six `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "Is Orbit read-only?"
     a: "Yes. All six Orbit tools are read-only. `status`, `schema`, `tools`, `dsl`, and `graph_status` only inspect health, ontology, manifest, DSL, and indexing state, and `query` runs read-only Knowledge Graph query objects against the index. No Orbit action mutates GitLab data, so Orbit is safe to expose even in cautious deployments."
   - q: "How do I learn the exact parameters for an Orbit action?"
@@ -17,26 +17,26 @@ faq:
 
 import FAQ from "../../../components/FAQ.astro";
 
-Orbit exposes GitLab.com's experimental Knowledge Graph API through **six read-only MCP tools** — `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`. It is available **only** when the server connects to `https://gitlab.com` and the Enterprise/Premium catalog is enabled with Ultimate (`GITLAB_TIER=ultimate`, or `--tier=ultimate` in HTTP mode). The legacy `GITLAB_ENTERPRISE=true` environment variable still works in stdio mode as a fallback but is deprecated; HTTP mode reads `--tier` only. Orbit never writes: every tool inspects health, schema, or indexed data, or runs a read-only graph query.
+Orbit exposes GitLab.com's experimental Knowledge Graph API through **six read-only MCP tools** — `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`. It is available **only** when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate (`GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`, `--tier=premium` or `--tier=ultimate` in HTTP mode, or the tier detected from the instance license). The legacy `GITLAB_ENTERPRISE=true` environment variable still works as a fallback when `GITLAB_TIER` is unset but is deprecated; HTTP mode reads both variables from its environment when `--tier` is not passed. Orbit never writes: every tool inspects health, schema, or indexed data, or runs a read-only graph query.
 
 :::note[Technical reference]
-For the complete generated tool reference, see [`docs/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/orbit.md) in the repository.
+For the complete tool reference, see [`docs/reference/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/orbit.md) in the repository.
 :::
 
 ## When is Orbit available?
 
-Orbit registers only on GitLab.com Ultimate connections. It requires the `https://gitlab.com` host **and** the Enterprise/Premium catalog enabled with Ultimate. On the default dynamic surface its six actions are the `orbit.*` catalog entries reached through `gitlab_find_action` and `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` it is the single `gitlab_orbit` tool with six actions; with `GITLAB_MCP_TOOL_SURFACE=individual` it is six `gitlab_orbit_*` tools. Every Orbit tool is read-only.
+Orbit registers only on GitLab.com connections with a Premium or Ultimate tier. It requires the `https://gitlab.com` host **and** a resolved tier of Premium or Ultimate. On the default dynamic surface its six actions are the `orbit.*` catalog entries reached through `gitlab_find_action` and `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` it is the single `gitlab_orbit` tool with six actions; with `GITLAB_MCP_TOOL_SURFACE=individual` it is six `gitlab_orbit_*` tools. Every Orbit tool is read-only.
 
 | Requirement               | Value                                         |
 | ------------------------- | --------------------------------------------- |
 | GitLab host               | `https://gitlab.com`                          |
-| Catalog                   | Enterprise/Premium                            |
+| Tier                      | Premium or Ultimate                           |
 | Dynamic surface (default) | `orbit.*` actions via `gitlab_execute_action` |
 | Meta-tool mode            | `gitlab_orbit` with six actions               |
 | Individual mode           | Six `gitlab_orbit_*` tools                    |
 | Write behavior            | Read-only                                     |
 
-Self-managed GitLab instances do not register Orbit tools, even when the Enterprise/Premium catalog is enabled.
+Self-managed GitLab instances do not register Orbit tools, even on a Premium or Ultimate tier.
 
 ## Actions
 

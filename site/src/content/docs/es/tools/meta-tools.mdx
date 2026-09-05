@@ -10,7 +10,7 @@ faq:
   - q: "¿Cómo encuentro los parámetros exactos de una acción?"
     a: "Por defecto, `GITLAB_MCP_META_PARAM_SCHEMA=opaque` mantiene pequeño el schema de cada meta-herramienta, así que la forma exacta de `params` se descubre a través del manifiesto de herramientas. Lee `gitlab://tools` para listar las herramientas visibles y entradas ejecutables de la superficie activa, y luego lee `gitlab://tools/{id}` —por ejemplo `gitlab://tools/gitlab_merge_request.create`— para obtener la forma de llamada aceptada y el JSON Schema de una acción. Estos recursos de manifiesto siguen disponibles incluso con `GITLAB_MCP_CAPABILITY_SURFACE=minimal`. Los despliegues dinámicos pueden usar en su lugar `gitlab_find_action` para schemas inline."
   - q: "¿Cómo habilito las meta-herramientas Enterprise?"
-    a: "El catálogo Enterprise/Premium eleva el número de meta-herramientas de {{meta.base}} a {{meta.self_managed_enterprise}} en una instancia autoalojada, añadiendo herramientas para funciones de GitLab Premium y Ultimate. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP, usa `--tier=premium` (o `--tier=ultimate`) para forzar el catálogo, u omítelo para permitir autodetección CE/EE por entrada token+URL. La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue respetándose en modo stdio como alternativa cuando el tier no está definido, pero está deprecada; el modo HTTP solo lee `--tier`. Habilitar el tier también añade rutas solo enterprise (como iterations, project mirrors y SSH certificates) a las meta-herramientas base existentes."
+    a: "El catálogo Enterprise/Premium eleva el número de meta-herramientas de {{meta.base}} a 38 en Premium y a {{meta.self_managed_enterprise}} en Ultimate en una instancia autoalojada, añadiendo herramientas para funciones de GitLab Premium y Ultimate. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP, usa `--tier=premium` (o `--tier=ultimate`) para forzar el catálogo, u omítelo para permitir la autodetección desde la licencia de la instancia por entrada token+URL. La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue respetándose como alternativa cuando `GITLAB_TIER` no está definido, pero está deprecada; el modo HTTP lee esas mismas dos variables de su entorno cuando no se pasa `--tier`. Habilitar el tier también añade rutas solo enterprise (como iterations, project mirrors y SSH certificates) a las meta-herramientas base existentes."
   - q: "¿Por qué algunos clientes necesitan el modo meta-herramientas?"
     a: "Algunos clientes de IA imponen límites en el número de herramientas; por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas. El modo meta-herramientas mantiene la lista visible de herramientas dentro de esas restricciones porque consolida cientos de operaciones en {{meta.base}} herramientas de dominio base (o {{meta.self_managed_enterprise}}/{{meta.gitlab_com}} con el catálogo Enterprise). Si en su lugar seleccionas herramientas individuales con `GITLAB_MCP_TOOL_SURFACE=individual`, los clientes con dichos límites solo verán un subconjunto del conjunto completo de herramientas individuales, ocultando algunas operaciones."
   - q: "¿Qué son las meta-herramientas de GitLab MCP Server?"
@@ -42,7 +42,7 @@ Las meta-herramientas existen para encajar una superficie completa de la API de 
 
 Las meta-herramientas reducen el recuento de herramientas en **más del 95%** mientras preservan el 100% de la funcionalidad. Cada operación de herramienta individual está disponible como una acción dentro de una de las meta-herramientas de dominio.
 
-El helper de actualización `gitlab_server` puede aparecer por separado para acciones de mantenimiento del servidor y no está incluido en los conteos {stats.meta.base}/{stats.meta.self_managed_enterprise}/{stats.meta.gitlab_com} del catálogo de acciones GitLab.
+La herramienta de diagnóstico `gitlab_server` (acciones de solo lectura `status` y `health_check`) se registra por separado y no está incluida en los conteos {stats.meta.base}/{stats.meta.self_managed_enterprise}/{stats.meta.gitlab_com} del catálogo de acciones GitLab.
 
 :::note[Compatibilidad con clientes]
 Algunos clientes de IA imponen límites en el número de herramientas (por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas). El modo meta-herramientas ({stats.meta.base} herramientas base, {stats.meta.self_managed_enterprise} herramientas enterprise autoalojadas o {stats.meta.gitlab_com} herramientas GitLab.com Enterprise con Orbit) funciona dentro de estas restricciones. Si seleccionas herramientas individuales con `GITLAB_MCP_TOOL_SURFACE=individual`, los clientes con dichos límites solo verán un subconjunto del conjunto completo de herramientas individuales.
@@ -108,7 +108,7 @@ Ejemplos de lectura de recursos:
 }
 ```
 
-La respuesta del detalle por acción incluye el schema de `params` y la forma de llamada final. Estos recursos siguen disponibles para meta-herramientas cuando `GITLAB_MCP_CAPABILITY_SURFACE=minimal` está habilitado, mientras se omiten recursos opcionales de GitLab, prompts y guías de flujo. Los despliegues dinámicos pueden seguir usando `gitlab_find_action` para schemas inline; los despliegues de meta-herramientas pueden mantener `GITLAB_MCP_META_PARAM_SCHEMA=opaque` y leer `gitlab://tools/{id}` en vez de incluir schemas en `tools/list`. Hoy `compact` ocupa unas 8 veces lo que `opaque` y `full` unas 17 veces; vuelve a medirlo con `go run ./cmd/audit_tokens --compare-schemas`.
+La respuesta del detalle por acción incluye el schema de `params` y la forma de llamada final. Estos recursos siguen disponibles para meta-herramientas cuando `GITLAB_MCP_CAPABILITY_SURFACE=minimal` está habilitado, mientras se omiten recursos opcionales de GitLab, prompts y guías de flujo. Los despliegues dinámicos pueden seguir usando `gitlab_find_action` para schemas inline; los despliegues de meta-herramientas pueden mantener `GITLAB_MCP_META_PARAM_SCHEMA=opaque` y leer `gitlab://tools/{id}` en vez de incluir schemas en `tools/list`. Hoy `compact` ocupa unas 8 veces lo que `opaque` y `full` unas 18 veces; vuelve a medirlo con `go run ./cmd/audit_tokens --compare-schemas`.
 
 ## Ejemplos de uso
 
@@ -123,8 +123,8 @@ La respuesta del detalle por acción incluye el schema de `params` y la forma de
       "project_id": "my-group/my-project",
       "title": "Update API documentation",
       "description": "The REST API docs are missing the new v2 endpoints",
-      "labels": "documentation,api",
-      "assignee_ids": "42",
+      "labels": ["documentation", "api"],
+      "assignee_ids": [42],
       "milestone_id": 7
     }
   }
@@ -156,7 +156,7 @@ La respuesta del detalle por acción incluye el schema de `params` y la forma de
   "arguments": {
     "action": "code",
     "params": {
-      "search": "func handleWebhook",
+      "query": "func handleWebhook",
       "project_id": "my-group/my-project"
     }
   }
@@ -177,7 +177,7 @@ La respuesta del detalle por acción incluye el schema de `params` y la forma de
 }
 ```
 
-`gitlab_orbit` solo se registra para conexiones GitLab.com Enterprise/Premium y expone seis acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`.
+`gitlab_orbit` solo se registra para conexiones con `https://gitlab.com` en el nivel Premium o Ultimate y expone seis acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`.
 
 ## Referencia de meta-herramientas clave
 
@@ -276,7 +276,7 @@ Gestión de páginas wiki.
 
 ## Modo Enterprise
 
-El catálogo Enterprise/Premium habilita {stats.meta.self_managed_enterprise - stats.meta.base} meta-herramientas adicionales que exponen funciones de GitLab Premium y Ultimate. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP, usa `--tier=premium` (o `--tier=ultimate`) para forzar el catálogo, u omítelo para permitir autodetección CE/EE por entrada token+URL. La variable heredada `GITLAB_ENTERPRISE=true` sigue respetándose en modo stdio como alternativa cuando `GITLAB_TIER` no está definido, pero está deprecada. El modo HTTP no tiene equivalente: lee `--tier` y nada más. El tier también poda entradas de esquema por campo mediante `pruneSchemaFieldsByTier` (ver `internal/tools/action_catalog.go`). Además, se añaden rutas de acción solo enterprise a las meta-herramientas base existentes:
+El catálogo Enterprise/Premium habilita {stats.meta.self_managed_enterprise - stats.meta.base} meta-herramientas adicionales que exponen funciones de GitLab Premium y Ultimate: seis llegan con Premium (38 herramientas) y once más con Ultimate ({stats.meta.self_managed_enterprise}). En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP, usa `--tier=premium` (o `--tier=ultimate`) para forzar el catálogo, u omítelo para permitir la autodetección desde la licencia de la instancia por entrada token+URL. La variable booleana heredada `GITLAB_ENTERPRISE=true` sigue respetándose como alternativa cuando `GITLAB_TIER` no está definido, pero está deprecada. El modo HTTP también lee ambas variables de su entorno, pero solo cuando `--tier` no se pasa en la línea de comandos. El tier también poda entradas de esquema por campo mediante `pruneSchemaFieldsByTier` (ver `internal/tools/action_catalog.go`). Además, se añaden rutas de acción solo enterprise a las meta-herramientas base existentes:
 
 - **Iterations** → enrutadas a través de `gitlab_issue`
 - **Project mirrors** → enrutadas a través de `gitlab_project`
@@ -291,14 +291,14 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 ## Configuración
 
-| Variable                        | Predeterminado    | Descripción                                                                                                                                                                               |
-| ------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_MCP_TOOL_SURFACE`       | `meta`            | Selector canónico para este modo: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras una herramienta MCP por operación de GitLab.                                    |
-| `GITLAB_MCP_META_TOOLS`         | heredado          | Selector de compatibilidad deprecado: `true` mapea a `meta`, y `false` mapea a `individual` cuando `GITLAB_MCP_TOOL_SURFACE` no está definido.                                            |
-| `GITLAB_MCP_CAPABILITY_SURFACE` | `full`            | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene el manifiesto `gitlab://tools`, y omite recursos opcionales, guías y prompts.                           |
-| `GITLAB_MCP_META_PARAM_SCHEMA`  | `opaque`          | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los schemas exactos están disponibles con `gitlab://tools/{id}`.                  |
-| `GITLAB_TIER`                   | _(autodetectado)_ | Selector de edición: `free`/`ce`, `premium` o `ultimate`. Cuando se omite, el tier se detecta desde `GET /license` (por defecto `free`). Reemplaza al flag deprecado `GITLAB_ENTERPRISE`. |
-| `--tier`                        | _(autodetectado)_ | Flag de edición en modo HTTP: `free`/`ce`, `premium` o `ultimate`. Reemplaza al conmutador deprecado `GITLAB_ENTERPRISE`, que el modo HTTP no lee.                                        |
+| Variable                        | Predeterminado    | Descripción                                                                                                                                                                                                        |
+| ------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GITLAB_MCP_TOOL_SURFACE`       | `dynamic`         | Selector canónico: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras deliberadamente una herramienta MCP por operación de GitLab; sin definir, se usa la superficie dinámica predeterminada. |
+| `GITLAB_MCP_META_TOOLS`         | heredado          | Selector de compatibilidad deprecado, leído solo cuando `GITLAB_MCP_TOOL_SURFACE` no está definido: `true` mapea a `meta`, `false` a `individual`, y `dynamic` también se acepta.                                  |
+| `GITLAB_MCP_CAPABILITY_SURFACE` | `full`            | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene el manifiesto `gitlab://tools`, y omite recursos opcionales, guías y prompts.                                                    |
+| `GITLAB_MCP_META_PARAM_SCHEMA`  | `opaque`          | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los schemas exactos están disponibles con `gitlab://tools/{id}`.                                           |
+| `GITLAB_TIER`                   | _(autodetectado)_ | Selector de edición: `free`/`ce`, `premium` o `ultimate`. Cuando se omite, el tier se detecta desde `GET /license` (por defecto `free`). Reemplaza al flag deprecado `GITLAB_ENTERPRISE`.                          |
+| `--tier`                        | _(autodetectado)_ | Flag de edición en modo HTTP: `free`/`ce`, `premium` o `ultimate`. Cuando no se pasa, se usa en su lugar `GITLAB_TIER` (o el deprecado `GITLAB_ENTERPRISE`) del entorno.                                           |
 
 ## Metadatos de descubrimiento
 
@@ -309,5 +309,5 @@ Cada acción de meta-herramienta lleva metadatos de descubrimiento (alias, uso, 
 ## Referencia de la fuente
 
 :::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/meta-tools.md) en el repositorio.
+Para la referencia técnica completa, consulta [`docs/concepts/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/meta-tools.md) en el repositorio.
 :::

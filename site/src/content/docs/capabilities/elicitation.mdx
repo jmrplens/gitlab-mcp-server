@@ -6,9 +6,9 @@ faq:
   - q: "What is MCP elicitation?"
     a: "Elicitation is an MCP capability that lets GitLab MCP Server **pause and ask the user for input through structured forms** rendered by the client. It powers wizard-style creation of complex resources such as issues, merge requests, releases, and projects. Rather than requiring all parameters upfront, the server collects fields one step at a time, validates each answer, adapts later questions to earlier ones, and confirms before creating the resource."
   - q: "Which interactive wizard tools are available?"
-    a: "GitLab MCP Server provides four elicitation wizards: `gitlab_interactive_issue_create` (project selection, labels, assignment), `gitlab_interactive_mr_create` (branch selection and options), `gitlab_interactive_release_create` (tag and milestone selection), and `gitlab_interactive_project_create` (namespace selection and configuration). Each confirms with the user before performing the final GitLab API call."
+    a: "GitLab MCP Server provides four elicitation wizards: `gitlab_interactive_issue_create` (title, description, labels, confidentiality), `gitlab_interactive_mr_create` (source and target branch, title, description, labels, remove-source-branch and squash options), `gitlab_interactive_release_create` (tag name, release name, description), and `gitlab_interactive_project_create` (name, description, visibility, README initialization, default branch). The issue, MR and release wizards take the target `project_id` as a tool parameter, and each confirms with the user before performing the final GitLab API call."
   - q: "What happens when a client does not support elicitation?"
-    a: "GitLab MCP Server gracefully degrades to standard parameterized tools. The assistant supplies all parameters directly in a single call instead of using the wizard flow. Functionality is fully preserved — only the step-by-step experience is lost. For example, calling `gitlab_issue` with `action: create` and passing every field at once produces the same result without elicitation support."
+    a: "GitLab MCP Server gracefully degrades to standard parameterized tools. The assistant supplies all parameters directly in a single call instead of using the wizard flow. Functionality is fully preserved — only the step-by-step experience is lost. For example, running `issue.create` through `gitlab_execute_action` on the default surface (or `gitlab_issue` with `action: create` when `GITLAB_MCP_TOOL_SURFACE=meta`) and passing every field at once produces the same result without elicitation support."
   - q: "Which MCP clients support elicitation?"
     a: "Elicitation is supported by **Claude Desktop** and **Claude Code**. **VS Code Copilot** and **Cursor** do not yet support it, so on those clients GitLab MCP Server falls back to standard parameterized creation tools. Because client capability support changes frequently, confirm the current state against the specific client's documentation."
 ---
@@ -59,12 +59,14 @@ Because multi-round-trip prompts travel inside the tool result, elicitation keep
 
 GitLab MCP Server provides four wizard-style creation tools. Each guides the user through the fields a resource needs and confirms before performing the final API call.
 
-| Tool                                | Description                                                                |
-| ----------------------------------- | -------------------------------------------------------------------------- |
-| `gitlab_interactive_issue_create`   | Step-by-step issue creation with project selection, labels, and assignment |
-| `gitlab_interactive_mr_create`      | Guided merge request creation with branch selection and options            |
-| `gitlab_interactive_release_create` | Release creation wizard with tag and milestone selection                   |
-| `gitlab_interactive_project_create` | Project creation with namespace selection and configuration                |
+| Tool                                | Description                                                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_interactive_issue_create`   | Step-by-step issue creation: title, description, labels, confidentiality, confirmation                              |
+| `gitlab_interactive_mr_create`      | Guided merge request creation: branches, title, description, labels, remove-source and squash options, confirmation |
+| `gitlab_interactive_release_create` | Release creation wizard: tag name, release name, description, confirmation                                          |
+| `gitlab_interactive_project_create` | Project creation: name, description, visibility, README initialization, default branch, confirmation                |
+
+The issue, merge request and release wizards take the target `project_id` as a tool parameter; the prompts collect the remaining fields. These four tools are registered by name on the meta and individual surfaces; on the default dynamic surface they are reached through `gitlab_execute_action` with the catalog IDs `interactive.issue_create`, `interactive.mr_create`, `interactive.release_create` and `interactive.project_create`, which `gitlab_find_action` returns.
 
 ### Why use a wizard instead of a single tool call?
 
@@ -91,7 +93,7 @@ Elicitation requires the MCP client to declare support for the capability:
 When elicitation is not available, the server falls back to standard parameterized tools. The AI assistant provides all parameters directly, without the interactive wizard flow. Functionality is preserved — only the interactive experience is reduced.
 
 :::tip
-Even without elicitation support, you can use the standard creation tools (e.g., `gitlab_issue` with `action: create`) by providing all parameters in a single call.
+Even without elicitation support, you can use the standard creation actions (`issue.create` through `gitlab_execute_action` on the default surface, or `gitlab_issue` with `action: create` when `GITLAB_MCP_TOOL_SURFACE=meta`) by providing all parameters in a single call.
 :::
 
 <FAQ />

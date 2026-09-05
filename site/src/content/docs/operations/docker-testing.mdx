@@ -62,10 +62,10 @@ go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 ```
 
-For manual Enterprise setup, replace the compose commands with the EE image and set the edition flag during provisioning:
+For manual Enterprise setup, replace the compose commands with the EE image, hand the activation code to the container, and set the edition flag during provisioning:
 
 ```bash
-env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
 GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
 env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
 ```

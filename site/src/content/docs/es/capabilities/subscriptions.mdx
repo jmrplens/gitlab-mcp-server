@@ -6,7 +6,7 @@ faq:
   - q: "¿Qué son las suscripciones a recursos MCP?"
     a: "Un cliente pide al servidor vigilar un recurso con `resources/subscribe`, y el servidor envía `notifications/resources/updated` cuando su contenido cambia. GitLab MCP Server lo atiende mediante **sondeo**: un vigilante relee la URI suscrita a través del mismo handler que usa `resources/read` y notifica solo cuando el contenido cambió de verdad. GitLab no ofrece ningún canal push que un servidor local pueda consumir, así que el sondeo con límites explícitos es la implementación honesta."
   - q: "¿A qué recursos se puede suscribir?"
-    a: "26 tipos de recurso de objeto único: un proyecto o grupo; un pipeline, su lista de jobs, el último pipeline, un job concreto; un merge request con sus discusiones y notas; un issue; un deployment, environment o feature flag; una release, tag o rama; un milestone o label (de proyecto o grupo); un board; una deploy key; un snippet; una página wiki; y un archivo del repositorio. **Las colecciones se rechazan** — suscribirse a una lista de issues notificaría cambios que el suscriptor nunca pidió."
+    a: "26 tipos de recurso, objetos únicos más tres listas de un solo padre: un proyecto o grupo; un pipeline, su lista de jobs, el último pipeline, un job concreto; un merge request con sus discusiones y notas; un issue; un deployment, environment o feature flag; una release, tag o rama; un milestone o label (de proyecto o grupo); un board; una deploy key; un snippet; una página wiki; y un archivo del repositorio. **Las colecciones se rechazan** — suscribirse a una lista de issues notificaría cambios que el suscriptor nunca pidió."
   - q: "¿Con qué rapidez llegan las notificaciones?"
     a: "La latencia es la cadencia de sondeo: **5 segundos** mientras el recurso está activo (un pipeline en ejecución, un merge request abierto), **15 segundos** por defecto, **60 segundos** una vez asentado y **10 minutos** tras degradarse la concesión por 30 minutos de inactividad de la sesión. Cualquier petición en la sesión restaura la velocidad completa. El `_meta` de cada notificación informa del estado del vigilante y su cadencia actual."
   - q: "¿Cuánto cuesta vigilar contra mi límite de peticiones de GitLab?"
@@ -23,7 +23,7 @@ Las suscripciones se anuncian con `GITLAB_MCP_CAPABILITY_SURFACE=full` (el valor
 
 ## ¿Qué se puede vigilar?
 
-26 tipos de recurso de objeto único — objetos con un ciclo de vida que merece seguirse:
+26 tipos de recurso: objetos únicos con un ciclo de vida que merece seguirse, más tres listas de un solo padre (los jobs de un pipeline, las discusiones de un merge request y sus notas):
 
 | Grupo           | Recursos suscribibles                                                                        |
 | --------------- | -------------------------------------------------------------------------------------------- |

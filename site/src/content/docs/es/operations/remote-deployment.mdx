@@ -24,7 +24,7 @@ import FAQ from "../../../../components/FAQ.astro";
 
 :::
 
-[Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) documenta el
+[Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) documenta el
 transporte opción por opción. Esta página es la otra mitad: cómo levantarlo para
 otras personas, en una máquina que se queda encendida, accesible desde algún
 sitio que no sea el portátil de quien lo administra.
@@ -211,7 +211,7 @@ un aviso y deja que decida la ACL del directorio. Usa allí un listener TCP.
 </TabItem>
 </Tabs>
 
-### Tres cosas que todo gestor de servicios se equivoca
+### Tres cosas en las que todo gestor de servicios se equivoca
 
 - **Declara el transporte.** `--transport auto` lee el descriptor de fichero 0 y
   elige HTTP solo cuando la entrada estándar es `/dev/null`. El
@@ -239,7 +239,7 @@ mano.
 ## Ejecutarlo con Docker
 
 La imagen y su línea de órdenes están descritas en
-[Docker](/gitlab-mcp-server/install/docker/). Lo que sigue es la forma de
+[Docker](/gitlab-mcp-server/es/install/docker/). Lo que sigue es la forma de
 despliegue.
 
 ```bash
@@ -402,15 +402,16 @@ responde:
 | ----------------------------------------------------- | --------- |
 | `/gitlab/health`, `/health`                           | `200`     |
 | `/gitlab/server-card`, `/server-card`                 | `200`     |
-| `/.well-known/oauth-protected-resource`               | `200`     |
+| `/.well-known/oauth-protected-resource`               | `404`     |
 | `/.well-known/oauth-protected-resource/gitlab`        | `200`     |
 | `/gitlab/.well-known/oauth-protected-resource/gitlab` | `404`     |
 
 `/health` y la tarjeta del servidor se montan bajo el prefijo además de en la
-raíz; los metadatos OAuth no, y el desafío `401` apunta a la forma de la raíz
-del host. Un proxy que solo enruta `/gitlab` responde `404` al documento que
-todo cliente OAuth pide primero, y el descubrimiento falla antes de llegar
-siquiera al endpoint MCP.
+raíz; los metadatos OAuth no, y el desafío `401` apunta a la forma derivada. La
+forma escueta tampoco se sirve: es el documento del recurso que _es_ el origen,
+y un servidor que vive bajo una ruta no lo es. Un proxy que solo enruta
+`/gitlab` responde `404` al documento que todo cliente OAuth pide primero, y el
+descubrimiento falla antes de llegar siquiera al endpoint MCP.
 
 :::
 
@@ -857,18 +858,30 @@ confirmar que ambos planes alternativos también fijan.
 
 ### Actualizaciones progresivas, sondas y salida
 
-**Saca la instancia de la rotación antes de señalarla.** El proceso no da ninguna
-señal de vaciado propia: con `SIGTERM` cierra primero el listener, así que
-`/health` deja de responder de inmediato en lugar de informar de mala salud, y
-nunca devuelve `503` de camino a la salida. Las peticiones en vuelo tienen
-después hasta 15 segundos para terminar antes de que se cierren las conexiones
-restantes.
+**Anuncia el drenaje antes de cerrar el listener.** Con `SIGTERM` el proceso se
+marca primero como drenando: desde ese momento `/health` responde `503` con
+`"status": "draining"` y `Cache-Control: no-store`. Por defecto el listener se
+cierra justo después, así que un balanceador que sondea `/health` suele notar
+el listener cerrado y no el `503`, una sonda más tarde, y toda petición que
+envió en esa ventana falló. Arranca cada instancia con `--drain-delay` fijado en
+al menos un intervalo de sondeo (`--drain-delay=10s` para una sonda de 5
+segundos que tolera dos fallos): el listener se mantiene abierto ese tiempo
+respondiendo `503`, el balanceador retira el backend, y solo entonces se cierra
+el listener y las peticiones en vuelo reciben sus 15 segundos para terminar
+antes de que se cierren las conexiones restantes. Un balanceador que no pueda
+sondear sigue funcionando a la antigua: retira el backend a mano, deja drenar
+los streams y después señala.
 
 **`/health` es la sonda, y es honesta sobre lo que sabe.** Sin credencial, sin
-ida y vuelta a GitLab, `200` con `status`, `version`, `commit`, `started_at` y
-`uptime_seconds`. `status` es la constante `ok`; el estado HTTP es el que lleva
-la señal de vida. A propósito no comprueba si GitLab está accesible, y no hay un
-endpoint de disponibilidad aparte.
+ida y vuelta a GitLab, `200` con `status`, `version`, `commit`, `build`,
+`config_digest`, `started_at` y `uptime_seconds`. `status` es `ok` mientras
+sirve y `draining` una vez solicitada la parada; el estado HTTP lleva el mismo
+veredicto. `build` es la etiqueta para un cuadro de mando, la release más
+cercana más el commit corto. `config_digest` es la comprobación de flota: todas
+las instancias detrás de un balanceador deben publicar el mismo, o una de ellas
+sirve un catálogo distinto a los clientes que le lleguen y nada más lo nota. A
+propósito no comprueba si GitLab está accesible, y no hay un endpoint de
+disponibilidad aparte.
 
 **Dale a la flota una dirección de salida fija.** GitLab aplica sus propios
 límites de tasa y cualquier lista blanca de IP por dirección de origen. Unas
@@ -891,9 +904,9 @@ mantiene en una.
 
 ## Para seguir leyendo
 
-- [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para cada opción, el pool de servidores y las reglas de derivación de OAuth
-- [Seguridad](/gitlab-mcp-server/operations/security/) para el modelo de amenazas, CORS y la lista de comprobación de fortificación
-- [OpenTelemetry](/gitlab-mcp-server/operations/telemetry/) para lo que una instancia puede contar sobre sí misma
-- [Solución de problemas](/gitlab-mcp-server/operations/troubleshooting/) para síntomas y sus causas habituales
+- [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para cada opción, el pool de servidores y las reglas de derivación de OAuth
+- [Seguridad](/gitlab-mcp-server/es/operations/security/) para el modelo de amenazas, CORS y la lista de comprobación de fortificación
+- [OpenTelemetry](/gitlab-mcp-server/es/operations/telemetry/) para lo que una instancia puede contar sobre sí misma
+- [Solución de problemas](/gitlab-mcp-server/es/operations/troubleshooting/) para síntomas y sus causas habituales
 
 <FAQ />

@@ -31,9 +31,10 @@ const DefaultResourceDocumentation = "https://jmrp.io/docs/gitlab-mcp-server/ope
 // because three positional strings on one constructor would be easy to pass in
 // the wrong order.
 //
-// Documentation defaults to this project's OAuth setup guide when empty, since
-// a client that finds no guidance at all is worse off than one sent to generic
-// instructions. Policy and TermsOfService have no such default: they describe a
+// Documentation defaults to this project's HTTP server mode page when empty
+// (the OAuth setup guide's path is not served on the documentation site),
+// since a client that finds no guidance at all is worse off than one sent to
+// generic instructions. Policy and TermsOfService have no such default: they describe a
 // specific deployment's undertakings, and this project cannot make them on an
 // operator's behalf.
 type ResourceLinks struct {

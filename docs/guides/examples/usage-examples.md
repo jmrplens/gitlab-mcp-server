@@ -91,7 +91,7 @@ User: "List my projects"
 #### Create a Branch and MR
 
 ```text
-1. gitlab_branch_create(project_id="42", branch="feature/new-login", ref="main")
+1. gitlab_branch_create(project_id="42", branch_name="feature/new-login", ref="main")
 2. gitlab_file_create(project_id="42", branch="feature/new-login", ...)
 3. gitlab_mr_create(project_id="42", source_branch="feature/new-login", target_branch="main", title="Add new login page")
 ```
@@ -157,7 +157,7 @@ Prompt: daily_standup(project_id="42") → Your standup summary
 Prompt: team_overview(group_id="7")        → Team member workloads
 Prompt: reviewer_workload(group_id="7")    → Review distribution analysis
 Prompt: group_mr_dashboard(group_id="7")   → All group MRs with filters
-Prompt: user_activity_report(group_id="7", username="johndoe") → Individual report
+Prompt: user_activity_report(username="johndoe") → Individual report
 ```
 
 ### 7. Project Health Monitoring
@@ -214,7 +214,7 @@ Use this flow when startup context or visible tool count matters. It reaches the
 
 ## Meta-Tool Discovery
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, 32 domain-level meta-tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, 32 domain-level meta-tools (38 on Premium, 49 on self-managed Ultimate, 50 on GitLab.com Premium/Ultimate with Orbit) provide domain dispatcher tools:
 
 ```text
 Resource: gitlab://tools/gitlab_project

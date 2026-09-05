@@ -8,7 +8,7 @@ faq:
   - q: "Do I need to know the tool names to use GitLab MCP Server?"
     a: "No. In the default dynamic surface you describe what you want and the assistant calls `gitlab_find_action` to locate the matching action and its exact schema, then `gitlab_execute_action` to run it. Tool names such as `gitlab_issue` only become visible if you switch to `GITLAB_MCP_TOOL_SURFACE=meta` or `GITLAB_MCP_TOOL_SURFACE=individual`, which trade startup context for a browsable tool list."
   - q: "How do I tell the assistant which GitLab project to use?"
-    a: "Pass the project path in `project_id`, in `group/project` form — for example `my-group/backend`. Numeric project IDs work too. If you are working inside a checked-out repository, `gitlab_discover_project` maps the git remote URL to the right GitLab project so you do not have to state it at all."
+    a: "Pass the project path in `project_id`, in `group/project` form — for example `my-group/backend`. Numeric project IDs work too. If you are working inside a checked-out repository, the project discovery action maps the git remote URL to the right GitLab project so you do not have to state it at all: `discover_project.resolve` through `gitlab_execute_action` on the default surface, or the standalone `gitlab_discover_project` tool with `GITLAB_MCP_TOOL_SURFACE=meta` or `individual`."
   - q: "Will an AI assistant change my GitLab data without asking?"
     a: "Not without a safeguard being turned off. Destructive actions require explicit confirmation before they execute, `GITLAB_READ_ONLY=true` removes every mutating action from the catalog entirely, and `GITLAB_SAFE_MODE=true` intercepts mutations and returns a JSON preview of what would happen instead of applying it. Read operations such as listing and searching are always safe."
 ---
@@ -66,7 +66,7 @@ The assistant first runs `project.label_list` to show existing labels, then `pro
 
 **Prompt**: "Show me the progress on the Sprint 14 milestone in my-project"
 
-The assistant runs `project.milestone_get` (`gitlab_project` with `action: milestone_get` on the meta surface), returning completion percentage, open/closed issue counts, and due date.
+The assistant runs `project.milestone_get` (`gitlab_project` with `action: milestone_get` on the meta surface), returning the milestone's state, dates and web URL, and `project.milestone_issues` for the issues still open in it.
 
   </TabItem>
   <TabItem label="Code Review">
@@ -84,7 +84,7 @@ The assistant runs `merge_request.list` (`gitlab_merge_request` with `action: li
 
 **Prompt**: "What's the status of the latest pipeline in my-project?"
 
-The assistant runs `pipeline.list` (`gitlab_pipeline` with `action: list` on the meta surface), returning the most recent pipeline's status, duration, and stages.
+The assistant runs `pipeline.latest` (`gitlab_pipeline` with `action: latest` on the meta surface), returning the most recent pipeline's status, ref, duration, and web URL.
 
   </TabItem>
   <TabItem label="Releases">

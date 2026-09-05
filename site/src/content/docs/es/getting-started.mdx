@@ -310,7 +310,7 @@ Comprobar la descarga contra `checksums.txt` y su firma Cosign, actualizar y des
 
 No hay asistente de configuración. La configuración MCP va en el propio archivo JSON de tu cliente, que es lo que documenta <a href="#configuración-manual">Configuración manual</a> más abajo, y un asistente que escribe un dotfile en una máquina no podía ponerla ahí.
 
-Ejecutar el binario en una terminal sin `GITLAB_TOKEN` ni `GITLAB_URL` definidos, o hacer doble clic sobre él, imprime qué es el servidor, los dos valores que necesita y dónde está documentado el JSON de cada cliente, y después espera a que pulses Enter para que una ventana abierta con doble clic en Windows no se cierre antes de que puedas leerla. Un cliente MCP nunca ve esa pantalla: un cliente conecta tuberías en lugar de una terminal, así que el servidor arranca con normalidad.
+Ejecutar el binario en una terminal sin `GITLAB_TOKEN` y `GITLAB_URL` definidos (basta con que falte una de las dos), o hacer doble clic sobre él, imprime qué es el servidor, los dos valores que necesita y dónde está documentado el JSON de cada cliente, y después espera a que pulses Enter para que una ventana abierta con doble clic en Windows no se cierre antes de que puedas leerla. Un cliente MCP nunca ve esa pantalla: un cliente conecta tuberías en lugar de una terminal, así que el servidor arranca con normalidad.
 
 :::tip[Mantener el token fuera del JSON del cliente]
 Es el archivo en el que escribe cada comando de registro de esta página. El servidor lee `~/.gitlab-mcp-server.env` para los valores que no tenga ya en su entorno, un `CLAVE=valor` por línea, así que nada necesita un bloque `env` en la configuración del cliente:
@@ -707,10 +707,8 @@ No necesitas configurar nada para obtener el catálogo de dos herramientas: la s
 
 Las meta-herramientas reducen el número de herramientas visibles en más de un 95% respecto a las herramientas individuales, y el coste en tokens de los esquemas en torno a tres cuartas partes, sin perder funcionalidad. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
 
-Combina el modo dinámico con `GITLAB_MCP_CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y `gitlab://tools`, y omitir recursos opcionales, guías y prompts cuando necesites el contexto MCP inicial más pequeño. Dynamic conserva schemas inline mediante `gitlab_find_action`.
+Combina el modo dinámico con `GITLAB_MCP_CAPABILITY_SURFACE=minimal` para mantener solo el manifiesto `gitlab://tools` (y su plantilla `gitlab://tools/{id}`), y omitir recursos opcionales, guías de flujo y prompts cuando necesites el contexto MCP inicial más pequeño. Dynamic conserva schemas inline mediante `gitlab_find_action`.
 :::
-
-<FAQ />
 
 ## Próximos pasos
 
@@ -719,6 +717,8 @@ Combina el modo dinámico con `GITLAB_MCP_CAPABILITY_SURFACE=minimal` para mante
 - [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Los despachadores consolidados por dominio de `GITLAB_MCP_TOOL_SURFACE=meta`
 - [Arquitectura](/gitlab-mcp-server/es/architecture/) — Comprende cómo funciona el servidor internamente
 - [Referencia de herramientas](/gitlab-mcp-server/es/tools/overview/) — Explora todas las herramientas disponibles por dominio
+
+<FAQ />
 
 ## Referencia de la fuente
 

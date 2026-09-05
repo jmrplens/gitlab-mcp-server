@@ -25,8 +25,9 @@ measured on both transports across the settings that move them.
 - **The first call of each credential pays for registration**, and it is
   seconds, not milliseconds. No later call pays it again, though on
   `individual` a warm `tools/list` still takes seconds on its own.
-- **The tool surface barely changes the memory and completely changes the
-  responses**: a `tools/list` is 12 KB on `dynamic` and 3.1 MB on `individual`.
+- **The tool surface changes the responses far more than the memory**: per
+  credential the difference is a factor of two, while a `tools/list` is 12 KB
+  on `dynamic` and 3.1 MB on `individual`.
 
 </Aside>
 

@@ -4,21 +4,20 @@ description: Autocompletado de argumentos MCP que sugiere proyectos, ramas, usua
 datePublished: "2026-04-21"
 faq:
   - q: "¿Qué es el autocompletado MCP?"
-    a: "El autocompletado son **sugerencias de relleno en tiempo real para los parámetros de las herramientas**. Escribes unos pocos caracteres y GitLab MCP Server consulta GitLab mediante el método MCP `completion/complete`, devolviendo proyectos, ramas, usuarios, etiquetas y más coincidentes. Esto convierte una búsqueda de varios pasos —como llamar a `list_projects` para encontrar un ID antes de crear una incidencia— en una única selección interactiva. GitLab MCP Server admite {{completions}} tipos de argumentos de autocompletado entre completadores globales y por proyecto."
+    a: "El autocompletado son **sugerencias de relleno en tiempo real para los parámetros de las herramientas**. Escribes unos pocos caracteres y GitLab MCP Server consulta GitLab mediante el método MCP `completion/complete`, devolviendo proyectos, ramas, usuarios, etiquetas y más coincidentes. Esto convierte una búsqueda de varios pasos —como llamar a `project.list` para encontrar un ID antes de crear una incidencia— en una única selección interactiva. GitLab MCP Server completa 18 nombres de argumento entre completadores globales y por proyecto."
   - q: "¿Qué tipos de argumentos admiten autocompletado?"
-    a: "GitLab MCP Server admite {{completions}} tipos de argumentos de autocompletado. Los cuatro completadores globales no necesitan contexto de proyecto: `project`, `group`, `user` y `namespace`. Los restantes completadores por proyecto buscan dentro de un proyecto seleccionado: `branch`, `tag`, `milestone`, `label`, `merge_request`, `issue`, `pipeline`, `environment`, `release`, `wiki_slug`, `version`, `runner` y `board`. Cada sugerencia se obtiene en directo de la API de búsqueda de GitLab, así que los resultados reflejan el estado actual de la instancia."
+    a: "GitLab MCP Server completa 18 nombres de argumento. Tres completadores globales no necesitan contexto de proyecto: `project_id`, `group_id` y `username`. Los completadores por proyecto resuelven contra el `project_id` ya indicado en la misma petición: `branch`, `source_branch`, `target_branch`, `from`, `to`, `ref`, `tag`, `merge_request_iid`, `issue_iid`, `pipeline_id`, `sha`, `label`, `milestone_id`, `milestone` (que recurre a `group_id` para los prompts de milestones de grupo) y `job_id` (que además necesita `pipeline_id`). Cada sugerencia se obtiene en directo de GitLab, así que los resultados reflejan el estado actual de la instancia."
   - q: "¿Cómo mejora el autocompletado la precisión del asistente de IA?"
-    a: "El autocompletado recorta las llamadas fallidas de cuatro maneras: elimina errores tipográficos porque el asistente elige entre sugerencias validadas; reduce los viajes de ida y vuelta al quitar la necesidad de llamar a `list_projects` antes de `create_issue`; aporta contexto al emparejar IDs con nombres; y ofrece búsqueda en tiempo real actualizada a medida que se escribe. El efecto neto es menos errores por identificadores no válidos."
+    a: "El autocompletado recorta las llamadas fallidas de cuatro maneras: elimina errores tipográficos porque el asistente elige entre sugerencias validadas; reduce los viajes de ida y vuelta al quitar la necesidad de ejecutar `project.list` antes de `issue.create`; devuelve los valores desnudos que una llamada necesita (rutas, IIDs, refs); y ofrece búsqueda en tiempo real actualizada a medida que se escribe. El efecto neto es menos errores por identificadores no válidos."
   - q: "¿Qué ocurre si mi cliente MCP no admite autocompletado?"
     a: "El autocompletado requiere que el cliente MCP admita el método de protocolo `completion/complete`. Si tu cliente carece de él, GitLab MCP Server simplemente no ofrece sugerencias y la funcionalidad de las herramientas no se ve afectada. Aún puedes descubrir valores válidos ejecutando la acción de listado del dominio (`project.list`, `branch.list` o `project.label_list` mediante `gitlab_execute_action` en la superficie predeterminada, o la acción `list` de la meta-herramienta correspondiente con `GITLAB_MCP_TOOL_SURFACE=meta`) y luego proporcionar el valor elegido directamente."
 ---
 
-import stats from "../../../../data/stats.json";
 import FAQ from "../../../../components/FAQ.astro";
 
 El autocompletado proporciona **sugerencias de relleno en tiempo real para los parámetros de las herramientas**. En lugar de memorizar IDs de proyectos, nombres de ramas o logins de usuario, escribes unos pocos caracteres y GitLab MCP Server consulta GitLab para encontrar valores coincidentes, devolviéndolos a través del método de protocolo MCP `completion/complete`. Esto transforma una búsqueda de varios pasos en una única selección interactiva.
 
-GitLab MCP Server admite **{stats.completions} tipos de argumentos de autocompletado**, organizados en completadores globales que funcionan en cualquier sitio y completadores por proyecto que buscan dentro de un proyecto elegido. Cada sugerencia se obtiene en directo, así que los resultados siempre reflejan el estado actual de la instancia de GitLab conectada.
+GitLab MCP Server completa **18 nombres de argumento** (los argumentos de prompt y los parámetros de URI de recurso que reconoce el handler de `completion/complete`), organizados en completadores globales que funcionan en cualquier sitio y completadores por proyecto que buscan dentro de un proyecto elegido. Cada sugerencia se obtiene en directo, con como máximo una llamada a GitLab por petición y hasta 10 valores devueltos, así que los resultados siempre reflejan el estado actual de la instancia de GitLab conectada.
 
 ## ¿Qué problema resuelve el autocompletado?
 
@@ -26,7 +25,7 @@ Sin autocompletado, proporcionar un identificador implica buscarlo primero — y
 
 ```text
 Sin autocompletado:
-  Usuario: "Crear issue en el proyecto..." → ¿Cuál es el ID? → Primero hay que llamar a list_projects
+  Usuario: "Crear issue en el proyecto..." → ¿Cuál es el ID? → Primero hay que ejecutar project.list
 
 Con autocompletado:
   El usuario escribe: "mcp" → El servidor sugiere: "group/gitlab-mcp-server", "group/redmine-mcp-server"
@@ -55,47 +54,44 @@ sequenceDiagram
 
 ## ¿Qué tipos de argumentos admiten autocompletado?
 
-GitLab MCP Server admite **{stats.completions} tipos de argumentos de autocompletado**, organizados en completadores globales y por proyecto. Los completadores globales resuelven valores que existen a nivel de toda la instancia, mientras que los completadores por proyecto requieren un contexto de proyecto y buscan solo dentro de ese proyecto.
+GitLab MCP Server completa **18 nombres de argumento**, organizados en completadores globales y por proyecto. Los completadores globales resuelven valores que existen a nivel de toda la instancia, mientras que los completadores por proyecto toman el `project_id` ya resuelto en la misma petición y buscan solo dentro de ese proyecto. Los argumentos de prompt (`ref/prompt`) reciben el conjunto completo; las plantillas de URI de recurso (`ref/resource`) completan `project_id`, `group_id`, `merge_request_iid` e `issue_iid`.
 
 ### Completadores globales
 
 Funcionan sin contexto de proyecto:
 
-| Argumento   | Completa                       | Ejemplo               |
-| ----------- | ------------------------------ | --------------------- |
-| `project`   | Nombres/rutas de proyectos     | `my-group/my-project` |
-| `group`     | Nombres/rutas de grupos        | `engineering`         |
-| `user`      | Nombres/logins de usuarios     | `john.doe`            |
-| `namespace` | Namespaces (grupos + usuarios) | `my-group`            |
+| Argumento    | Completa                             | Ejemplo               |
+| ------------ | ------------------------------------ | --------------------- |
+| `project_id` | Rutas de proyecto, por ruta o nombre | `my-group/my-project` |
+| `group_id`   | Rutas de grupo, por nombre           | `engineering`         |
+| `username`   | Nombres de usuario de GitLab         | `john.doe`            |
 
 ### Completadores por proyecto
 
-Requieren un contexto de proyecto y buscan dentro de ese proyecto:
+Requieren un `project_id` en la misma petición y buscan dentro de ese proyecto:
 
-| Argumento       | Completa                    | Ejemplo           |
-| --------------- | --------------------------- | ----------------- |
-| `branch`        | Nombres de ramas            | `feature/login`   |
-| `tag`           | Nombres de tags             | `v1.2.0`          |
-| `milestone`     | Títulos de milestones       | `Sprint 14`       |
-| `label`         | Nombres de etiquetas        | `priority::high`  |
-| `merge_request` | IIDs de MRs                 | `42`              |
-| `issue`         | IIDs de issues              | `100`             |
-| `pipeline`      | IDs de pipelines            | `12345`           |
-| `environment`   | Nombres de entornos         | `production`      |
-| `release`       | Nombres de tags de releases | `v2.0.0`          |
-| `wiki_slug`     | Slugs de páginas wiki       | `getting-started` |
-| `version`       | IDs de versiones/milestones | `v1.0`            |
-| `runner`        | Descripciones de runners    | `shared-runner-1` |
-| `board`         | Nombres de tableros         | `Development`     |
+| Argumento                                  | Completa                                            | Ejemplo                   |
+| ------------------------------------------ | --------------------------------------------------- | ------------------------- |
+| `branch`, `source_branch`, `target_branch` | Nombres de ramas                                    | `feature/login`           |
+| `from`, `to`, `ref`                        | Nombres de ramas y tags                             | `v1.2.0`, `feature/login` |
+| `tag`                                      | Nombres de tags                                     | `v1.2.0`                  |
+| `merge_request_iid`                        | IIDs de MRs abiertas                                | `42`                      |
+| `issue_iid`                                | IIDs de issues abiertos                             | `100`                     |
+| `pipeline_id`                              | IDs de pipelines recientes                          | `12345`                   |
+| `sha`                                      | SHAs de commits recientes                           | `ddcc2f13`                |
+| `label`                                    | Nombres de etiquetas                                | `priority::high`          |
+| `milestone_id`                             | IDs de milestones                                   | `7`                       |
+| `milestone`                                | Títulos de milestones (recurre a `group_id`)        | `Sprint 14`               |
+| `job_id`                                   | IDs de jobs de un pipeline (necesita `pipeline_id`) | `501`                     |
 
 ## ¿Cómo mejora el autocompletado la precisión de la IA?
 
 El autocompletado reduce errores en las llamadas a herramientas de la IA de varias formas concretas. En conjunto, recortan el número de llamadas fallidas por identificadores no válidos:
 
 1. **Elimina errores tipográficos** — El asistente selecciona de sugerencias validadas en lugar de escribir valores exactos.
-2. **Reduce viajes de ida y vuelta** — No es necesario llamar a `list_projects` antes de `create_issue`.
-3. **Proporciona contexto** — Las sugerencias incluyen IDs junto con nombres, asegurando valores correctos.
-4. **Búsqueda en tiempo real** — Los resultados se actualizan mientras el usuario escribe, potenciados por la API de búsqueda de GitLab.
+2. **Reduce viajes de ida y vuelta** — No es necesario ejecutar `project.list` antes de `issue.create`.
+3. **Devuelve valores desnudos** — Las sugerencias son las cadenas literales que acepta una llamada (rutas, IIDs, refs), nunca etiquetas decoradas, así que una elección puede pasarse tal cual.
+4. **Búsqueda en tiempo real** — Los resultados se actualizan mientras el usuario escribe, sin caché, así que nunca se sugiere una rama borrada.
 
 :::tip
 El autocompletado funciona mejor cuando el cliente MCP soporta el método de protocolo `completion/complete`. Si tu cliente no soporta autocompletado, aún puedes descubrir valores ejecutando la acción de listado del dominio: `project.list`, `branch.list` o `project.label_list` mediante `gitlab_execute_action` en la superficie predeterminada, o la acción `list` de la meta-herramienta correspondiente con `GITLAB_MCP_TOOL_SURFACE=meta`.

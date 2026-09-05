@@ -132,6 +132,8 @@ GITLAB_SKIP_TLS_VERIFY=true
 Desactivar la verificación TLS elimina la protección contra ataques de intermediario (man-in-the-middle). Usa esto solo en entornos de desarrollo con certificados autofirmados. Nunca desactives la verificación TLS en producción.
 :::
 
+En modo HTTP, `--auth-mode=oauth` rechaza `--skip-tls-verify` para una instancia que no sea loopback: los tokens bearer se reenvían a esa instancia en cada llamada, y un certificado sin verificar permitiría a cualquier host que respondiera en su dirección recogerlos. En su lugar, instala la CA en el almacén de confianza del sistema o apunta `SSL_CERT_FILE` a un bundle de CA.
+
 ## Modo de solo lectura
 
 Habilita el modo de solo lectura para prevenir cualquier operación de escritura:
@@ -184,15 +186,15 @@ Authorization: Bearer <gitlab-personal-access-token>
 
 El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
 
-- Cada token obtiene su propia instancia aislada del servidor MCP
+- Cada par de token y URL de GitLab obtiene su propia instancia aislada del servidor MCP
 - Las sesiones son independientes — un usuario no puede acceder al contexto de otro
-- Las sesiones inactivas expiran después de `--session-timeout` (por defecto: 30 minutos)
-- El máximo de sesiones concurrentes se controla con `--max-http-clients` (por defecto: 100)
+- Las sesiones inactivas expiran después de `--session-timeout` (por defecto: 30 minutos) con `--stateless=false`; el transporte sin estado por defecto termina la sesión de cada POST con su respuesta
+- Las entradas del pool están acotadas por `--max-http-clients` (por defecto: 100), que limita entradas token+URL, no sesiones ni peticiones concurrentes
 
 ### Recomendaciones para modo HTTP
 
 - Termina TLS en un proxy inverso, o en el propio servidor con `--tls-cert`/`--tls-key`; si el proxy comparte máquina, `--http-addr=/run/…/server.sock` elimina el salto en lugar de cifrarlo
-- Configura `--trusted-proxy-header` con la cabecera que tu proxy establece (ej. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) junto con `--trusted-proxies`, las direcciones o rangos CIDR desde los que conecta el proxy, para que el rate limiter integrado vea las IPs reales de los clientes. **La cabecera solo se cree en una conexión que venga de una dirección de la lista**; desde cualquier otro origen se ignora y se carga al propio origen, así que un cliente que llegue al listener directamente no puede elegir la dirección a la que se cargan sus fallos. Una opción sin la otra impide el arranque. Para `X-Forwarded-For`, el servidor lee desde la derecha, saltando los saltos que están a su vez en la lista, y carga al primero que no lo esté; un salto que no sea una dirección carga al origen de la conexión.
+- Configura `--trusted-proxy-header` con la cabecera que tu proxy establece (ej. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) junto con `--trusted-proxies`, las direcciones o rangos CIDR desde los que conecta el proxy, para que el limitador de fallos de autenticación (diez fallos por dirección y minuto, respondidos con `429`) cargue a las direcciones reales de los clientes y no a la del proxy; el limitador de tasa por llamada se indexa por token y no necesita ninguna dirección. **La cabecera solo se cree en una conexión que venga de una dirección de la lista**; desde cualquier otro origen se ignora y se carga al propio origen, así que un cliente que llegue al listener directamente no puede elegir la dirección a la que se cargan sus fallos. Una opción sin la otra impide el arranque. Para `X-Forwarded-For`, el servidor lee desde la derecha, saltando los saltos que están a su vez en la lista, y carga al primero que no lo esté; un salto que no sea una dirección carga al origen de la conexión.
 - Habilita la limitación de peticiones en el proxy
 - Restringe el acceso a redes de confianza
 - Monitoriza las métricas de sesiones para detectar patrones inusuales
@@ -333,7 +335,7 @@ Un reporte útil incluye la versión afectada (`gitlab-mcp-server --version`), e
 ### Modo HTTP
 
 - ☐ Termina TLS — proxy inverso, `--tls-cert`/`--tls-key`, o un socket unix hacia un proxy del mismo host
-- ☐ Configura `--trusted-proxy-header` y `--trusted-proxies` para un rate limiting preciso
+- ☐ Configura `--trusted-proxy-header` y `--trusted-proxies` para que los fallos de autenticación se carguen a las direcciones reales de los clientes
 - ☐ Configura apropiadamente `--session-timeout` y `--max-http-clients`
 - ☐ Habilita la limitación de peticiones
 - ☐ Restringe el acceso de red a clientes de confianza
@@ -356,5 +358,5 @@ Un reporte útil incluye la versión afectada (`gitlab-mcp-server --version`), e
 ## Referencia de la fuente
 
 :::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/security.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/security.md) en el repositorio.
+Para la referencia técnica completa, consulta [`docs/concepts/security.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/security.md) en el repositorio.
 :::

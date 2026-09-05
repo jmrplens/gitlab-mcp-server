@@ -42,9 +42,9 @@ Para ejecutar la cobertura Enterprise/Premium contra GitLab EE, define `ENTERPRI
 make test-e2e-docker-enterprise
 ```
 
-Ese objetivo se ejecuta con los build tags `e2e enterprise`, asi compila los archivos comunes de harness y los tests Enterprise/Premium de `test/e2e/suite/*_ee_test.go`. Los tests solo CE viven en `test/e2e/suite/*_ce_test.go` y quedan en `make test-e2e-docker`, mientras las fixtures Enterprise pueden ajustarse de forma independiente.
+Ese objetivo se ejecuta con los build tags `e2e enterprise`, así que compila los archivos comunes de harness y los tests Enterprise/Premium de `test/e2e/suite/*_ee_test.go`. Los tests solo CE viven en `test/e2e/suite/*_ce_test.go` y quedan en `make test-e2e-docker`, mientras las fixtures Enterprise pueden ajustarse de forma independiente.
 
-Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecucion correcta exporta la licencia reutilizable generada a `test/e2e/.enterprise-license`. Las siguientes ejecuciones Enterprise prefieren ese cache local ignorado por Git y lo instalan mediante la License API, asi no consumen otra vez el activation code.
+Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecución correcta exporta la licencia reutilizable generada a `test/e2e/.enterprise-license`. Las siguientes ejecuciones Enterprise prefieren ese cache local ignorado por Git y lo instalan mediante la License API, así no consumen otra vez el activation code.
 
 ## Flujo manual
 
@@ -62,10 +62,10 @@ go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 ```
 
-Para preparar Enterprise manualmente, usa la imagen EE en los comandos de compose y activa el flag durante el provisionamiento:
+Para preparar Enterprise manualmente, sustituye los comandos de compose por la imagen EE, entrega el activation code al contenedor y activa el flag de edición durante el provisionamiento:
 
 ```bash
-env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
 GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
 env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
 ```

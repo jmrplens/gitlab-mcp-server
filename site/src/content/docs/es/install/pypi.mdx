@@ -151,8 +151,9 @@ Tras instalar con pipx, uv tool o pip, usa el comando nativo en su lugar:
 ```
 
 `GITLAB_TOKEN` es el único valor obligatorio: un token de acceso personal con
-el scope `api` (`read_api` también sirve y da una superficie de herramientas
-de solo lectura). `GITLAB_URL` usa por defecto `https://gitlab.com`; añádela
+el scope `api` (`read_api` también sirve; acompáñalo de `GITLAB_READ_ONLY=true`,
+porque sobre stdio el servidor no recorta la superficie de herramientas al
+scope del token). `GITLAB_URL` usa por defecto `https://gitlab.com`; añádela
 a `env` solo para una instancia autogestionada. Un cliente que no herede el
 PATH de tu shell puede necesitar la ruta completa al comando;
 `which gitlab-mcp-server` (o `where gitlab-mcp-server` en Windows) la

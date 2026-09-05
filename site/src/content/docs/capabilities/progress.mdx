@@ -1,27 +1,27 @@
 ---
 title: Progress
-description: Real-time MCP progress notifications that report page-by-page and step-by-step status for long-running GitLab operations.
+description: Real-time MCP progress notifications that report step-by-step, streaming and polling status for long-running GitLab operations.
 datePublished: "2026-04-21"
 faq:
   - q: "What are MCP progress notifications?"
-    a: "Progress notifications are **real-time status messages** that GitLab MCP Server sends during long-running operations so MCP clients can show progress to the user. When a tool runs multiple steps or processes large datasets (paginated retrieval, bulk operations, CSV imports), the server emits `notifications/progress` messages reporting the current step, the total when known, and a human-readable description. Progress is best-effort, so clients that cannot display it ignore the messages and the tool still completes."
+    a: "Progress notifications are **real-time status messages** that GitLab MCP Server sends during long-running operations so MCP clients can show progress to the user. When a tool runs multiple steps, streams a large payload or polls GitLab (file uploads, package publishing, the pipeline and job wait actions, the interactive wizards), the server emits `notifications/progress` messages reporting the current step, the total when known, and a human-readable description. Progress is best-effort, so clients that cannot display it ignore the messages and the tool still completes."
   - q: "When does GitLab MCP Server send progress updates?"
-    a: "GitLab MCP Server sends progress updates for operations that may take several seconds: **paginated list retrieval** (page-by-page fetch progress), **bulk operations** (per-item progress, such as a bulk issue update), and **CSV imports** (per-row progress). Each notification carries a `progressToken` correlating it to the original tool call."
+    a: "GitLab MCP Server sends progress updates for operations that may take several seconds: **file uploads** (`project.upload`, step by step), **package publishing** (byte-counted while the file streams), the **wait actions** that poll GitLab until a pipeline or job settles, and the four **interactive wizards** (one step per prompt, then the final creation). Each notification carries a `progressToken` correlating it to the original tool call; a call without a token gets no notifications and behaves identically otherwise."
   - q: "What does a progress notification contain?"
-    a: 'A progress notification follows the JSON-RPC `notifications/progress` format and carries four fields in its `params`: `progressToken` (a correlation ID linking the update to the original tool call), `progress` (the current step number), `total` (the total number of steps, when known), and `message` (a human-readable description such as `"Fetching page 2 of 4..."`). Clients use these to render progress bars or status text.'
+    a: 'A progress notification follows the JSON-RPC `notifications/progress` format and carries four fields in its `params`: `progressToken` (the correlation ID the client supplied with the tool call), `progress` (how far the work has come, a value that only increases; step-based tools count from 0), `total` (the total amount of work, when known), and `message` (a human-readable description such as `"Uploading file to GitLab..."`). Clients use these to render progress bars or status text.'
   - q: "What happens if my client does not support progress notifications?"
     a: "Progress notifications are best-effort. If the MCP client does not support progress display, the notifications are silently ignored and the tool still completes normally with its full result. No configuration is needed and no functionality is lost — progress is purely a user-experience enhancement on top of the normal tool response."
 ---
 
 import FAQ from "../../../components/FAQ.astro";
 
-GitLab MCP Server sends **real-time progress notifications during long-running operations**, so MCP clients can display progress indicators to the user instead of an opaque wait. When a tool spans multiple steps or processes large datasets, the server emits `notifications/progress` messages that report how far along the work is.
+GitLab MCP Server sends **real-time progress notifications during long-running operations**, so MCP clients can display progress indicators to the user instead of an opaque wait. When a tool spans multiple steps, streams a large payload or polls GitLab, the server emits `notifications/progress` messages that report how far along the work is.
 
 Progress is **best-effort**: it enhances the user experience but is never required for correctness. Clients that cannot display progress silently ignore the notifications, and the tool still returns its full result normally.
 
 ## How does progress reporting work?
 
-When a tool performs multiple steps or processes large datasets, the server sends `notifications/progress` messages to the client as the work advances. Each message is correlated to the original tool call, so the client can attach the update to the right request and render a progress indicator while the final result is still being assembled.
+When a tool performs multiple steps, streams a large payload or polls GitLab, the server sends `notifications/progress` messages to the client as the work advances. The client supplies a progress token with the tool call; each message carries that token, so the client can attach the update to the right request and render a progress indicator while the final result is still being assembled. A call without a token gets no notifications and behaves identically otherwise.
 
 ```mermaid
 sequenceDiagram
@@ -30,27 +30,26 @@ sequenceDiagram
     participant S as MCP Server
     participant GL as GitLab API
 
-    U->>AI: "List all project issues"
-    AI->>S: gitlab_issue list
-    S-->>AI: Progress: "Fetching page 1..." (25%)
-    S->>GL: GET /projects/42/issues?page=1
-    S-->>AI: Progress: "Fetching page 2..." (50%)
-    S->>GL: GET /projects/42/issues?page=2
-    S-->>AI: Progress: "Fetching page 3..." (75%)
-    S->>GL: GET /projects/42/issues?page=3
-    S-->>AI: Progress: "Complete" (100%)
-    S-->>AI: Tool result with all issues
+    U->>AI: "Upload build-artifact.zip to my-project"
+    AI->>S: project.upload (with progressToken)
+    S-->>AI: Progress 1/3: "Preparing upload..."
+    S-->>AI: Progress 2/3: "Uploading file to GitLab..."
+    S->>GL: POST /projects/42/uploads
+    GL-->>S: Upload metadata
+    S-->>AI: Progress 3/3: "Upload complete"
+    S-->>AI: Tool result with the upload URL
 ```
 
 ## When does the server send progress updates?
 
-Progress reporting is used for operations that may take several seconds. In each case the notification describes what the server is currently doing, so the user sees motion rather than a stalled call.
+Progress reporting is used for operations that may take several seconds. In each case the notification describes what the server is currently doing, so the user sees motion rather than a stalled call. Simple single-request tools such as `branch.list` complete too quickly to report anything.
 
-| Operation                    | Progress Detail                             |
-| ---------------------------- | ------------------------------------------- |
-| **Paginated list retrieval** | Page-by-page fetch progress                 |
-| **Bulk operations**          | Per-item progress (e.g., bulk issue update) |
-| **CSV import**               | Per-row import progress                     |
+| Operation               | Progress Detail                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| **File upload**         | Three steps for `project.upload`: prepare, stream to GitLab, complete           |
+| **Package publishing**  | Byte-counted while the package file streams to the registry                     |
+| **Wait actions**        | Each poll of `pipeline.wait` and `job.wait` until the pipeline or job settles   |
+| **Interactive wizards** | One step per prompt in the four `gitlab_interactive_*` flows, then the creation |
 
 ## How do clients display progress?
 
@@ -70,19 +69,19 @@ Progress notifications follow the MCP protocol's JSON-RPC format. The `params` o
   "method": "notifications/progress",
   "params": {
     "progressToken": "tool-call-123",
-    "progress": 50,
-    "total": 100,
-    "message": "Fetching page 2 of 4..."
+    "progress": 1,
+    "total": 3,
+    "message": "Uploading file to GitLab..."
   }
 }
 ```
 
-| Field           | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `progressToken` | Correlation ID linking progress to the original tool call |
-| `progress`      | Current step number                                       |
-| `total`         | Total number of steps (when known)                        |
-| `message`       | Human-readable description of the current step            |
+| Field           | Description                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `progressToken` | Correlation ID linking progress to the original tool call, supplied by the client                         |
+| `progress`      | Progress so far; step-based tools count from 0 (step 1 of 3 sends `0`), and the value only ever increases |
+| `total`         | Total amount of work (when known)                                                                         |
+| `message`       | Human-readable description of the current step                                                            |
 
 :::note
 Progress notifications are best-effort. If the MCP client does not support progress display, notifications are silently ignored and the tool still completes normally.

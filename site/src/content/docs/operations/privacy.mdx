@@ -1,14 +1,15 @@
 ---
 title: Privacy Policy
-description: GitLab MCP Server privacy policy — no telemetry, no analytics, no backend; data flows only between your machine and the GitLab instance you configure.
+description: "GitLab MCP Server privacy policy: no analytics, no backend, telemetry only if you turn it on and only to a collector you run; data flows between your machine and the GitLab instance you configure."
 datePublished: "2026-07-08"
 ---
 
 GitLab MCP Server is a **local** Model Context Protocol server. It runs
 entirely on your machine and acts as a bridge between your MCP client (Claude
 Desktop, Claude Code, Cursor, VS Code, …) and the GitLab instance you
-configure. It has no telemetry, no analytics, no crash reporting, and no
-backend of its own.
+configure. It has no analytics, no crash reporting, and no backend of its
+own; telemetry exists only as an opt-in export to a collector you run, and is
+described below.
 
 One path is different and is described separately below: the public hosted
 endpoint at `mcp.jmrp.io/gitlab`, where the software runs on someone else's
@@ -18,14 +19,42 @@ Last updated: 2026-08-06
 
 ## What we collect
 
-**Nothing.** The server has no telemetry, no analytics, no crash reporting,
-and no backend of its own. When you run it yourself — which is how this
-documentation recommends using it — the maintainer never receives, stores, or
-has access to any of your data, credentials, or usage information.
+**Nothing.** The server has no analytics, no crash reporting, and no backend
+of its own. When you run it yourself — which is how this documentation
+recommends using it — the maintainer never receives, stores, or has access to
+any of your data, credentials, or usage information.
 
 That is a statement about the software, and it holds wherever you run it. It
 is not a statement about the [hosted endpoint](#hosted-endpoint), where the
 same software runs on a machine the maintainer operates.
+
+### OpenTelemetry, if you turn it on
+
+The server can export traces, metrics and logs, and this section exists so the
+paragraph above stays exactly true rather than becoming a technicality.
+
+It is **off by default**. When you enable it, the telemetry goes to a collector
+**you** configure and run. There is no path by which it could reach the
+maintainer: the only default the exporters have is their own
+`https://localhost:4318`, your machine, where the export fails, and says so in
+your own server log, unless you run a collector there. Nothing in any code path
+carries anyone else's address. Turning it on is a decision you make about your
+own deployment and your own users.
+
+What it records describes operations, never their contents: the method called,
+the catalog action, whether it succeeded, and how long it took. Tool arguments,
+tool results, resource contents, search queries, GitLab response bodies and
+credentials are excluded by design and not by a setting, because there is no
+setting that would include them.
+
+Who made a call is recorded only if you ask for it, through
+`--telemetry-identity`. The default records nobody. A middle setting records a
+per-process digest that lets you tell one caller's traffic from another's
+without naming anyone. Full identity is available for an organization auditing
+its own users on its own collector.
+
+The full detail, including what each mode exports, is in
+[OpenTelemetry](/gitlab-mcp-server/operations/telemetry/).
 
 ## Data flows
 
@@ -38,9 +67,11 @@ same software runs on a machine the maintainer operates.
   GitLab.com) or by your organization's own policies (for self-managed
   instances).
 
-The GitLab instance you configure is the only host the server contacts. There
-is no update check, no licence key to validate, and no telemetry, so there are
-no other network destinations at all.
+Your GitLab instance is the only destination, with one opt-in exception you
+control: telemetry, when you enable it, exports operation data to the collector
+you configure, described in its own section above. Beyond that the server
+contacts nothing else: there is no update check, no registry ping and no
+default that reaches any other host.
 
 The update check is the part that changed, and this page would be misleading
 if it simply stopped mentioning it. Releases up to and including v2.7.5 shipped a built-in
@@ -97,7 +128,8 @@ TTL and are never persisted to disk.
 ## Data retention and sharing
 
 The server retains nothing after it exits and shares data with no third
-parties beyond the GitLab instance you explicitly configure.
+parties beyond the GitLab instance you explicitly configure and, if you enable
+telemetry, the collector you explicitly configure.
 
 ## Changes and contact
 
