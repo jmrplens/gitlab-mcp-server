@@ -123,14 +123,33 @@ func runnerOptions(actionName, individualTool string) toolutil.ActionSpecOptions
 }
 
 // runnerListInputSchemaOverrides returns input-schema enum overrides for the
-// runner list actions (list, list_all, list_project, list_group). Returns nil
-// for all other actions.
+// runner list actions (list, list_all, list_project, list_group) and for the
+// runner jobs action. Returns nil for all other actions.
+//
+// The deprecated scope filter accepts a different documented set per endpoint:
+// the admin list_all endpoint also takes the legacy specific/shared type
+// values, the owned and project endpoints take only the status values, and the
+// group endpoint has no scope parameter at all.
 func runnerListInputSchemaOverrides(actionName string) []toolutil.InputSchemaOverride {
 	switch actionName {
-	case "list", "list_all", "list_project", "list_group":
+	case "jobs":
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("status", "created", "waiting_for_resource", "preparing", "waiting_for_callback", "pending", "running", "success", "failed", "canceling", "canceled", "skipped", "manual", "scheduled"),
+		}
+	case "list", "list_project":
+		return append(runnerListFilterOverrides(), toolutil.SchemaEnumOverride("scope", "active", "paused", "online", "offline"))
+	case "list_all":
+		return append(runnerListFilterOverrides(), toolutil.SchemaEnumOverride("scope", "specific", "shared", "active", "paused", "online", "offline"))
+	case "list_group":
+		return runnerListFilterOverrides()
 	default:
 		return nil
 	}
+}
+
+// runnerListFilterOverrides returns the type and status enum overrides shared
+// by every runner list action.
+func runnerListFilterOverrides() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("type", map[string]any{
 			"enum":        []any{"instance_type", "group_type", "project_type"},

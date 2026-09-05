@@ -20,7 +20,7 @@ type GetByIDInput struct {
 
 // GetByFingerprintInput is the input for getting a key by fingerprint.
 type GetByFingerprintInput struct {
-	Fingerprint string `json:"fingerprint" jsonschema:"SSH key fingerprint (e.g. SHA256:abc123 or MD5:aa:bb:cc),required"`
+	Fingerprint string `json:"fingerprint" jsonschema:"SSH key fingerprint, either the SHA256 form (for example SHA256:abc123) or the legacy MD5 hex-pair form (for example MD5:aa:bb:cc),required"`
 }
 
 // Output types.

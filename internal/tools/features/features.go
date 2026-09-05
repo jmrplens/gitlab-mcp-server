@@ -67,7 +67,7 @@ type SetInput struct {
 	User         string `json:"user,omitempty"           jsonschema:"GitLab username"`
 	Group        string `json:"group,omitempty"          jsonschema:"GitLab group path"`
 	Namespace    string `json:"namespace,omitempty"      jsonschema:"GitLab namespace path"`
-	Project      string `json:"project,omitempty"        jsonschema:"GitLab project path (namespace/project)"`
+	Project      string `json:"project,omitempty"        jsonschema:"Project path, namespace and project joined by a slash, such as gitlab-org/gitlab-foss. Separate several paths with commas"`
 	Repository   string `json:"repository,omitempty"     jsonschema:"GitLab repository path"`
 	Force        bool   `json:"force,omitempty"          jsonschema:"Force the change even if the flag is read-only"`
 }

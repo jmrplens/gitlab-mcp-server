@@ -235,6 +235,12 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 			},
 		}
 		options.IndividualTool.Description = "Run a manual CI job with optional variable overrides. Returns: the started job state. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_trace."
+		// The central variable_type enum covers only a top-level parameter;
+		// each job_variables_attributes[] element carries its own copy
+		// (gl.JobVariableOptions.VariableType, a gl.VariableTypeValue).
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("job_variables_attributes.variable_type", "env_var", "file"),
+		}
 	case "gitlab_job_keep_artifacts":
 		options.Usage = "Prevent a CI job's artifacts from expiring by project_id and job_id. Use this to retain build outputs indefinitely by clearing the artifact expire_at. Requires Maintainer+."
 		options.Aliases = []string{"keep job artifacts", "retain artifacts", "prevent artifact expiry"}

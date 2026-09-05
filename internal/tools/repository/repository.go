@@ -176,7 +176,7 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 // ContributorsInput defines parameters for listing repository contributors.
 type ContributorsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order by: name, email, or commits (default: commits)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order by: name, email, or commits (number of commits). Contributors are ordered by commit date when omitted"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc (default: asc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput

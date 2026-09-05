@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -108,6 +110,9 @@ func decorateWikiMeta(options *toolutil.ActionSpecOptions, individualTool string
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
+	if len(meta.overrides) > 0 {
+		options.InputSchemaOverrides = append([]toolutil.InputSchemaOverride(nil), meta.overrides...)
+	}
 }
 
 // wikiActionMetaEntry is the discovery metadata for one wiki action.
@@ -116,6 +121,24 @@ type wikiActionMetaEntry struct {
 	aliases     []string
 	related     []string
 	description string
+	overrides   []toolutil.InputSchemaOverride
+}
+
+// wikiFormatValues is every page format the Wikis API accepts, taken from the
+// client-go constants so the list moves with the SDK. Create and update share
+// it; an unknown format is otherwise forwarded and answered with a 400.
+//
+// GitLab API docs: https://docs.gitlab.com/api/wikis/#create-a-new-wiki-page
+var wikiFormatValues = []string{
+	string(gl.WikiFormatMarkdown),
+	string(gl.WikiFormatRDoc),
+	string(gl.WikiFormatASCIIDoc),
+	string(gl.WikiFormatOrg),
+}
+
+// wikiFormatOverride constrains the format parameter to [wikiFormatValues].
+func wikiFormatOverride() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("format", wikiFormatValues...)}
 }
 
 // wikiActionMeta maps each individual wiki tool to its discovery metadata.
@@ -140,6 +163,7 @@ var wikiActionMeta = map[string]wikiActionMetaEntry{
 		related: []string{actionWikiList, actionWikiGet, actionWikiUpdate},
 		description: "Create a new wiki page. Returns: the created page with title, slug, format, content, and encoding. " +
 			"See also: gitlab_wiki_get, gitlab_wiki_update, gitlab_wiki_list.",
+		overrides: wikiFormatOverride(),
 	},
 	"gitlab_wiki_update": {
 		usage:   "Update an existing wiki page identified by slug. Provide at least one of title, content, or format to change.",
@@ -147,6 +171,7 @@ var wikiActionMeta = map[string]wikiActionMetaEntry{
 		related: []string{actionWikiGet, actionWikiList, "wiki.delete"},
 		description: "Update an existing wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. " +
 			"See also: gitlab_wiki_get, gitlab_wiki_delete, gitlab_wiki_list.",
+		overrides: wikiFormatOverride(),
 	},
 	"gitlab_wiki_delete": {
 		usage:   "Permanently delete a wiki page by slug. Destructive. Requires Maintainer or Owner role and confirmation of the project and slug.",

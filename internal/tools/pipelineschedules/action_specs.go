@@ -274,6 +274,12 @@ func pipelineScheduleOptions(actionName, individualTool string) toolutil.ActionS
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{},
 	}
 	decorateScheduleMeta(&options, individualTool)
+	if actionName == "schedule_list" {
+		// gl.PipelineScheduleScopeValue: the only two scopes the list endpoint accepts.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("scope", "active", "inactive"),
+		}
+	}
 	if actionName == "schedule_create_variable" || actionName == "schedule_edit_variable" {
 		options.ParameterGuidance["value"] = toolutil.ParameterGuidance{
 			SemanticRole: "pipeline_schedule_variable_value",

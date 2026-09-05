@@ -92,4 +92,15 @@ func decorateTodoMeta(options *toolutil.ActionSpecOptions, individualTool string
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
+	if individualTool == "gitlab_todo_list" {
+		// Fixed filter vocabularies from https://docs.gitlab.com/api/todos/
+		// (GET /todos). The docs list more actions and target types than
+		// client-go's TodoAction/TodoTargetType constants, and the handler
+		// forwards the strings verbatim, so the documented set is the enum.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("action", "assigned", "mentioned", "build_failed", "marked", "approval_required", "unmergeable", "directly_addressed", "merge_train_removed", "member_access_requested"),
+			toolutil.SchemaEnumOverride("state", "pending", "done"),
+			toolutil.SchemaEnumOverride("type", "Issue", "MergeRequest", "Commit", "Epic", "DesignManagement::Design", "AlertManagement::Alert", "Project", "Namespace", "Vulnerability", "WikiPage::Meta"),
+		}
+	}
 }

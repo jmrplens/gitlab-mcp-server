@@ -13,7 +13,7 @@ import (
 // MarkInput is the input for marking a migration as successful.
 type MarkInput struct {
 	Version  int64  `json:"version" jsonschema:"Migration version number to mark as successful,required"`
-	Database string `json:"database,omitempty" jsonschema:"Database name (optional, e.g. main or ci)"`
+	Database string `json:"database,omitempty" jsonschema:"Database the migration belongs to. Defaults to main"`
 }
 
 // MarkOutput is the output for marking a migration as successful.

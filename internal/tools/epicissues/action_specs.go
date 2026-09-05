@@ -132,6 +132,11 @@ func epicIssueUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			ExampleBinding: `params.relative_position:"BEFORE"`,
 		},
 	}
+	// The GraphQL RelativePositionType enum behind the reorder mutation has
+	// exactly these two values, and the handler refuses anything else.
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaEnumOverride("relative_position", "BEFORE", "AFTER"),
+	}
 	options.IndividualTool.Description = "Reorder an issue within a group epic by moving it before or after another linked issue. Returns: the epic's child issues in their updated order. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_issue_remove."
 	return toolutil.NewUpdateActionSpec("epic_issue_update", toolutil.RouteAction(client, UpdateOrder), options)
 }

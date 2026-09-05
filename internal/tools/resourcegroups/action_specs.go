@@ -115,22 +115,27 @@ func resourceGroupOptions(actionName, individualTool string) toolutil.ActionSpec
 			ExampleBinding: `params.key:"production"`,
 		}
 	}
+	var overrides []toolutil.InputSchemaOverride
 	if actionName == "resource_group_edit" {
 		guidance["process_mode"] = toolutil.ParameterGuidance{
 			SemanticRole:   "resource_group_process_mode",
 			ValueSource:    "Requested process mode (unordered, oldest_first, newest_first, newest_ready_first).",
 			ExampleBinding: `params.process_mode:"newest_first"`,
 		}
+		overrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("process_mode", "unordered", "oldest_first", "newest_first", "newest_ready_first"),
+		}
 	}
 
 	return toolutil.ActionSpecOptions{
-		Aliases:           append([]string{individualTool}, meta.aliases...),
-		Tags:              []string{"ci", "pipeline", "resource_group"},
-		Usage:             meta.usage,
-		RelatedActions:    meta.related,
-		ParameterGuidance: guidance,
-		OpenWorld:         true,
-		OwnerPackage:      "resourcegroups",
+		Aliases:              append([]string{individualTool}, meta.aliases...),
+		Tags:                 []string{"ci", "pipeline", "resource_group"},
+		Usage:                meta.usage,
+		RelatedActions:       meta.related,
+		ParameterGuidance:    guidance,
+		InputSchemaOverrides: overrides,
+		OpenWorld:            true,
+		OwnerPackage:         "resourcegroups",
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:        individualTool,
 			Title:       toolutil.TitleFromName(individualTool),

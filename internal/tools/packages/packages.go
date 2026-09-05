@@ -583,7 +583,7 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 type FileListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	PackageID toolutil.StringOrInt `json:"package_id" jsonschema:"Package ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order package files by: created_at, file_name, or id"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order package files by: id (default), file_name, or created_at"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput

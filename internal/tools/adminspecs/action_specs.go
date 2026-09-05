@@ -339,7 +339,77 @@ func adminOptions(individualTool string) toolutil.ActionSpecOptions {
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	decorateAdminMeta(&options, individualTool)
+	if overrides := adminInputSchemaOverrides(individualTool); len(overrides) > 0 {
+		options.InputSchemaOverrides = overrides
+	}
 	return options
+}
+
+// adminInputSchemaOverrides returns the JSON Schema patches for admin actions
+// whose parameters GitLab restricts to a closed set, or whose description read
+// as a value list when the value is free-form. Every enum is taken from the
+// GitLab API documentation, or from the `values:` list the API enforces when
+// the documentation names none (bulk import statuses), never from the SDK,
+// which types all of these as plain strings. Descriptions are replaced only
+// where the struct tag disagreed with GitLab.
+func adminInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverride {
+	switch individualTool {
+	case "gitlab_create_broadcast_message", "gitlab_update_broadcast_message":
+		// Docs: https://docs.gitlab.com/api/broadcast_messages/
+		// API: lib/api/admin/broadcast_messages.rb restricts both to the
+		// System::BroadcastMessage enums; the docs list the themes, and
+		// dark/light were missing from the struct tag.
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("broadcast_type", "banner", "notification"),
+			toolutil.SchemaPropertyOverride("theme", map[string]any{
+				"enum":        []any{"indigo", "light-indigo", "blue", "light-blue", "green", "light-green", "red", "light-red", "dark", "light"},
+				"description": "Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.",
+			}),
+		}
+	case "gitlab_list_bulk_imports", "gitlab_list_bulk_import_entities":
+		// Docs: https://docs.gitlab.com/api/bulk_imports/ say only "Import status";
+		// API: lib/api/bulk_imports.rb enforces BulkImport.all_human_statuses and
+		// BulkImports::Entity.all_human_statuses, the same six states in both.
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("status", "created", "started", "finished", "timeout", "failed", "canceled"),
+		}
+	case "gitlab_start_bulk_import":
+		// Docs: https://docs.gitlab.com/api/bulk_imports/#start-a-new-group-or-project-migration
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("entities.source_type", "group_entity", "project_entity"),
+		}
+	case "gitlab_list_custom_attributes", "gitlab_get_custom_attribute", "gitlab_set_custom_attribute", "gitlab_delete_custom_attribute":
+		// Docs: https://docs.gitlab.com/api/custom_attributes/ (users, groups, projects);
+		// resource_type selects the endpoint family and the handler rejects any other value.
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("resource_type", "user", "group", "project"),
+		}
+	case "gitlab_mark_migration":
+		// Docs: https://docs.gitlab.com/api/database_migrations/ document no
+		// value list: the API accepts whatever Gitlab::Database.all_database_names
+		// holds on that instance, so no enum. The tag's "e.g. main or ci" read as one.
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("database", map[string]any{
+				"description": "Database the migration belongs to. Defaults to main.",
+			}),
+		}
+	case "gitlab_set_feature_flag":
+		// Docs: https://docs.gitlab.com/api/features/#set-or-create-a-feature
+		// key: "percentage_of_actors or percentage_of_time (default)";
+		// project: a path, or several separated by commas, so no enum.
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("key", "percentage_of_actors", "percentage_of_time"),
+			toolutil.SchemaPropertyOverride("project", map[string]any{
+				"description": "Project path such as gitlab-org/gitlab-foss. Separate several paths with commas.",
+			}),
+		}
+	case "gitlab_import_from_github", "gitlab_import_from_bitbucket_server":
+		// Docs: https://docs.gitlab.com/api/import/ (same row on both endpoints).
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("timeout_strategy", "optimistic", "pessimistic"),
+		}
+	}
+	return nil
 }
 
 // adminActionMetaEntry is the discovery metadata for one admin action.

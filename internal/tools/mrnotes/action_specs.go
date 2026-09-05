@@ -145,6 +145,10 @@ func decorateMRNoteMeta(options *toolutil.ActionSpecOptions, individualTool stri
 			},
 		}
 		options.IndividualTool.Description = "List all notes (comments) on a merge request. Returns: notes with author, body, system/internal flags, and pagination metadata. See also: gitlab_mr_note_get, gitlab_mr_note_create, gitlab_mr_discussion_list."
+		// https://docs.gitlab.com/api/notes/ (list all merge request notes): notes order by created_at or updated_at only.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("order_by", "created_at", "updated_at"),
+		}
 	case "gitlab_mr_note_get":
 		options.Usage = "Get one merge request note by params.note_id. Use when the task references a specific comment or note ID on an MR."
 		options.Aliases = []string{"get mr comment", "show merge request note", "fetch mr note"}

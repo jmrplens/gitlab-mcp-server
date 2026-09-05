@@ -130,7 +130,7 @@ type CreateInput struct {
 	ApprovalsBeforeMerge                      int64  `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before merge (deprecated: use Merge Request Approvals API)"`
 	MergeRequestTitleRegex                    string `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
-	ReviewerAssignmentStrategy                string `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)"`
+	ReviewerAssignmentStrategy                string `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then"`
 
 	// Feature toggles
 	IssuesEnabled              *bool  `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature (deprecated: use issues_access_level)"`
@@ -495,7 +495,7 @@ type UpdateInput struct {
 	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   tier:"premium" jsonschema:"Number of approvals required before merge"`
 	MergeRequestTitleRegex                    string               `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string               `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
-	ReviewerAssignmentStrategy                string               `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)"`
+	ReviewerAssignmentStrategy                string               `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then"`
 
 	// Basic metadata (additive 1:1 SDK parity)
 	Path              string   `json:"path,omitempty" jsonschema:"New project path slug"`
@@ -2510,7 +2510,7 @@ func DeleteHook(ctx context.Context, client *gitlabclient.Client, input DeleteHo
 type TriggerTestHookInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID to test,required"`
-	Event     string               `json:"event" jsonschema:"Event type to trigger (push_events, issues_events, merge_requests_events, tag_push_events, note_events, job_events, pipeline_events, wiki_page_events, releases_events, emoji_events),required"`
+	Event     string               `json:"event" jsonschema:"Event type to trigger: push_events, tag_push_events, issues_events, confidential_issues_events, note_events, merge_requests_events, job_events, pipeline_events, wiki_page_events, releases_events, milestone_events, emoji_events, resource_access_token_events, or resource_deploy_token_events,required"`
 }
 
 // TriggerTestHookOutput holds the result of triggering a test webhook.

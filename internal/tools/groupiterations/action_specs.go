@@ -38,6 +38,9 @@ func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 						ExampleBinding: `params.search:"sprint"`,
 					},
 				},
+				InputSchemaOverrides: []toolutil.InputSchemaOverride{
+					toolutil.SchemaEnumOverride("state", "opened", "upcoming", "current", "closed", "all"),
+				},
 				OpenWorld:    true,
 				Edition:      "premium",
 				OwnerPackage: "groupiterations",

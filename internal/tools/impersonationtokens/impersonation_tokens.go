@@ -57,7 +57,7 @@ type RevokeOutput struct {
 // filter), exposing both offset and keyset pagination.
 type ListInput struct {
 	UserID  int64  `json:"user_id" jsonschema:"GitLab user ID,required"`
-	State   string `json:"state,omitempty" jsonschema:"Filter by state: all/active/inactive"`
+	State   string `json:"state,omitempty" jsonschema:"Filter by state: all, active, or inactive"`
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput

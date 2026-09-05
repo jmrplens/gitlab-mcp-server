@@ -26,7 +26,7 @@ type ListInput struct {
 type CreateInput struct {
 	ProjectID                   toolutil.StringOrInt         `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
 	PackageNamePattern          string                       `json:"package_name_pattern"                    jsonschema:"Package name pattern with optional wildcards (e.g. @my-scope/my-pkg*),required"`
-	PackageType                 string                       `json:"package_type"                            jsonschema:"Package type (npm, pypi, maven, generic, etc.),required"`
+	PackageType                 string                       `json:"package_type"                            jsonschema:"Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list,required"`
 	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
 	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
 }
@@ -36,7 +36,7 @@ type UpdateInput struct {
 	ProjectID                   toolutil.StringOrInt         `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
 	RuleID                      int64                        `json:"rule_id"                                 jsonschema:"Package protection rule ID,required"`
 	PackageNamePattern          string                       `json:"package_name_pattern,omitempty"          jsonschema:"Package name pattern with optional wildcards"`
-	PackageType                 string                       `json:"package_type,omitempty"                  jsonschema:"Package type (npm, pypi, maven, generic, etc.)"`
+	PackageType                 string                       `json:"package_type,omitempty"                  jsonschema:"Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list"`
 	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
 	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
 }

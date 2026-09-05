@@ -182,6 +182,64 @@ func TestActionSpecs_SortEnum(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_FilterEnums verifies that create and update constrain every
+// enum-typed filter field to exactly the values its GraphQL enum documents, and
+// that no other action carries a filter override.
+func TestActionSpecs_FilterEnums(t *testing.T) {
+	want := map[string][]any{
+		"filters.assignee_wildcard_id":                 {"ANY", "ME", "NONE"},
+		"filters.health_status_filter":                 {"ANY", "NONE", "atRisk", "needsAttention", "onTrack"},
+		"filters.hierarchy_filters.parent_wildcard_id": {"ANY", "NONE"},
+		"filters.iteration_wildcard_id":                {"ANY", "CURRENT", "NONE"},
+		"filters.milestone_wildcard_id":                {"ANY", "NONE", "STARTED", "UPCOMING"},
+		"filters.state":                                {"all", "closed", "locked", "opened"},
+		"filters.subscribed":                           {"EXPLICITLY_SUBSCRIBED", "EXPLICITLY_UNSUBSCRIBED"},
+		"filters.weight_wildcard_id":                   {"ANY", "NONE"},
+	}
+	for name, spec := range specsByName(t) {
+		wantOverrides := name == "work_item_saved_view_create" || name == "work_item_saved_view_update"
+		t.Run(name, func(t *testing.T) {
+			got := collectFilterEnums(t, spec)
+			if !wantOverrides {
+				if len(got) != 0 {
+					t.Errorf("filter overrides = %v, want none", got)
+				}
+				return
+			}
+			if len(got) != len(want) {
+				t.Errorf("filter override paths = %d, want %d: %v", len(got), len(want), got)
+			}
+			for path, values := range want {
+				t.Run(path, func(t *testing.T) {
+					if !slices.Equal(got[path], values) {
+						t.Errorf("enum = %v, want %v", got[path], values)
+					}
+				})
+			}
+		})
+	}
+}
+
+// collectFilterEnums returns the enum carried by every filters.* override on
+// spec, keyed by property path, and fails the test for an override that
+// carries none.
+func collectFilterEnums(t *testing.T, spec toolutil.ActionSpec) map[string][]any {
+	t.Helper()
+	got := map[string][]any{}
+	for _, override := range spec.InputSchemaOverrides {
+		if !strings.HasPrefix(override.PropertyPath, "filters.") {
+			continue
+		}
+		enum, ok := override.Values["enum"].([]any)
+		if !ok {
+			t.Errorf("override %q carries no enum: %v", override.PropertyPath, override.Values)
+			continue
+		}
+		got[override.PropertyPath] = enum
+	}
+	return got
+}
+
 // TestWorkItemSortValues_Shape verifies that the enum list holds only uppercase
 // strings, since the deprecated lowercase aliases are deliberately excluded.
 func TestWorkItemSortValues_Shape(t *testing.T) {

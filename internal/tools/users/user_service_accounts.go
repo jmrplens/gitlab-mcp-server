@@ -37,7 +37,7 @@ type CreateServiceAccountInput struct {
 
 // ListServiceAccountsInput holds parameters for listing service accounts.
 type ListServiceAccountsInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Field to order by (id/username/name)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Field to order by: id (default) or username"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction (asc/desc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput

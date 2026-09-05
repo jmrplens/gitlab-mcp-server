@@ -19,8 +19,8 @@ type ListInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
 	DeploymentID int64                `json:"deployment_id" jsonschema:"Deployment ID,required"`
 
-	State                  string                     `json:"state,omitempty"           jsonschema:"Filter by state: opened, closed, merged, all"`
-	OrderBy                string                     `json:"order_by,omitempty"        jsonschema:"Order by: created_at or updated_at"`
+	State                  string                     `json:"state,omitempty"           jsonschema:"Filter by state: opened, closed, locked, merged, or all (default all)"`
+	OrderBy                string                     `json:"order_by,omitempty"        jsonschema:"Order by: created_at, updated_at, merged_at, label_priority, priority, milestone_due, popularity, or title (default created_at)"`
 	Sort                   string                     `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc"`
 	Approved               string                     `json:"approved,omitempty"        jsonschema:"Filter by approval status: yes or no"`
 	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty" jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
@@ -35,7 +35,7 @@ type ListInput struct {
 	Labels                 []string                   `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
 	NotLabels              []string                   `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
 	Milestone              string                     `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
-	Scope                  string                     `json:"scope,omitempty"           jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Scope                  string                     `json:"scope,omitempty"           jsonschema:"Filter by scope: created_by_me, assigned_to_me, reviews_for_me, or all"`
 	Search                 string                     `json:"search,omitempty"          jsonschema:"Search in title and description"`
 	SourceBranch           string                     `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
 	TargetBranch           string                     `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
@@ -50,7 +50,7 @@ type ListInput struct {
 	UpdatedBefore          string                     `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
 	Draft                  *bool                      `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
 	NonArchived            *bool                      `json:"non_archived,omitempty"    jsonschema:"Return merge requests from non-archived projects only. Default is true"`
-	In                     string                     `json:"in,omitempty"              jsonschema:"Modify the scope of the search attribute (title, description, or title,description)"`
+	In                     string                     `json:"in,omitempty"              jsonschema:"Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description"`
 
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput

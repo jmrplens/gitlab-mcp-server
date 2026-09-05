@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 13,712 |
-| Unit test functions                                   | 13,135 |
+| Total test functions                                  | 13,715 |
+| Unit test functions                                   | 13,138 |
 | E2E test functions                                    |    577 |
 | cmd test functions                                    |  2,192 |
 | Test files (internal/)                                |    502 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,361 | 82.9% |
+| `TestFunc_Scenario` (2-part)           | 11,364 | 82.9% |
 | `TestFunc` (no underscore)             |    968 |  7.1% |
 | `TestFunc_Scenario_Expected` (3+ part) |  1,383 | 10.1% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,197 |        133 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            305 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (176) |          8,441 |        355 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (176) |          8,444 |        355 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            577 |        224 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,192 |        137 | server entry point and developer command utilities                                              |
-| **Total**               |     **13,712** |    **863** |                                                                                                 |
+| **Total**               |     **13,715** |    **863** |                                                                                                 |
 
 ### Core Packages
 
@@ -62,7 +62,7 @@
 | clientcompat  |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                            |
 | cmdutil       |         8 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                          |
 | completions   |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                           |
-| config        |        99 |    97.5% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
+| config        |        99 |    97.1% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
 | edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation   |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
@@ -72,7 +72,7 @@
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
 | prompts       |       275 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
 | resources     |       180 |    99.4% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
-| serverpool    |        93 |    98.3% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                                                                    |
+| serverpool    |        93 |    98.2% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                                                                    |
 | subscriptions |        90 |    98.5% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        37 |    89.6% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
@@ -90,7 +90,7 @@
 | users             |   210 |   100.0% |    38 |
 | dynamic           |   162 |    99.8% |     2 |
 | jobs              |   149 |    99.6% |    17 |
-| packages          |   131 |    98.9% |     9 |
+| packages          |   131 |    99.0% |     9 |
 | search            |   118 |   100.0% |    10 |
 | commits           |   114 |    99.8% |    13 |
 | resourceevents    |   114 |   100.0% |    17 |
@@ -236,7 +236,7 @@
 | namespaces              |        37 |          1 |    99.2% |         4 |
 | notifications           |        29 |          1 |   100.0% |         6 |
 | orbit                   |        57 |          4 |   100.0% |         6 |
-| packages                |       131 |          6 |    98.9% |         9 |
+| packages                |       131 |          6 |    99.0% |         9 |
 | pages                   |        54 |          2 |   100.0% |         9 |
 | pipelines               |       110 |          3 |   100.0% |        12 |
 | pipelineschedules       |        94 |          2 |    99.7% |        11 |
@@ -287,12 +287,12 @@
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
 | users                   |       210 |          7 |   100.0% |        38 |
-| vulnerabilities         |        61 |          3 |   100.0% |         8 |
+| vulnerabilities         |        62 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
-| wikis                   |        60 |          2 |   100.0% |         6 |
+| wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |        95 |          3 |   100.0% |         6 |
-| workitemsavedviews      |        49 |          4 |   100.0% |         7 |
-| **Total**               | **8,441** |    **355** |          | **1,175** |
+| workitemsavedviews      |        50 |          4 |   100.0% |         7 |
+| **Total**               | **8,444** |    **355** |          | **1,175** |
 
 </details>
 
@@ -310,7 +310,7 @@
 | cmd/audit_1to1/internal/shared                 |    96.0% |
 | cmd/audit_1to1/internal/structs                |    99.0% |
 | cmd/audit_catalog_first                        |    93.3% |
-| cmd/audit_discovery_completeness               |    92.7% |
+| cmd/audit_discovery_completeness               |    92.3% |
 | cmd/audit_doc_coverage                         |    91.7% |
 | cmd/audit_doc_tool_names                       |    96.5% |
 | cmd/audit_dynamic_aliases                      |    77.4% |
@@ -358,7 +358,7 @@
 | clientcompat  |   100.0% |
 | cmdutil       |   100.0% |
 | completions   |   100.0% |
-| config        |    97.5% |
+| config        |    97.1% |
 | edition       |    87.0% |
 | elicitation   |    98.3% |
 | gatewaycompat |    99.4% |
@@ -368,7 +368,7 @@
 | progress      |    83.8% |
 | prompts       |   100.0% |
 | resources     |    99.4% |
-| serverpool    |    98.3% |
+| serverpool    |    98.2% |
 | subscriptions |    98.5% |
 | telemetry     |    93.1% |
 | testutil      |    89.6% |
@@ -499,7 +499,7 @@
 | namespaces              |    99.2% |
 | notifications           |   100.0% |
 | orbit                   |   100.0% |
-| packages                |    98.9% |
+| packages                |    99.0% |
 | pages                   |   100.0% |
 | pipelines               |   100.0% |
 | pipelineschedules       |    99.7% |

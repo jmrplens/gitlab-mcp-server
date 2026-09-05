@@ -49,6 +49,9 @@ func enterpriseUserReadSpec(name string, route toolutil.ActionRoute, individualT
 		options.Aliases = []string{individualTool, "list enterprise users", "show enterprise users", "browse enterprise users"}
 		options.RelatedActions = []string{actionEnterpriseUserGet, actionEnterpriseUserDisable2FA, actionEnterpriseUserDelete}
 		options.IndividualTool.Description = "List enterprise users for a top-level group with filtering and pagination. Returns: enterprise users with full profile fields (identities, SCIM identities, custom attributes, sign-in metadata, license seat usage) and pagination metadata. See also: gitlab_get_enterprise_user, gitlab_disable_2fa_enterprise_user, gitlab_delete_enterprise_user."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("two_factor", "enabled", "disabled"),
+		}
 	case "gitlab_get_enterprise_user":
 		options.Usage = "Get one enterprise user by group_id plus user_id. Use after a list result or when the prompt already names a concrete enterprise user."
 		options.Aliases = []string{individualTool, "get enterprise user", "show enterprise user details", "fetch enterprise user"}

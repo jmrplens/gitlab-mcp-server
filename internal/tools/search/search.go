@@ -459,7 +459,7 @@ func Notes(ctx context.Context, client *gitlabclient.Client, input NotesInput) (
 // ProjectsInput defines parameters for searching projects.
 // Scope: group_id (optional) — omit for global search.
 type ProjectsInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id,omitempty" jsonschema:"Group ID or URL-encoded path (optional, omit for global search)"`
+	GroupID toolutil.StringOrInt `json:"group_id,omitempty" jsonschema:"Group ID or URL-encoded path. Omit for a global search"`
 	Query   string               `json:"query"              jsonschema:"Search query string,required"`
 	TypeInput
 	toolutil.PaginationInput

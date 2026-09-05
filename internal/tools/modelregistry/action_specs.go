@@ -32,7 +32,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				},
 				"model_version_id": {
 					SemanticRole:   "model_version_id",
-					ValueSource:    "Numeric model package version identifier.",
+					ValueSource:    "Numeric model version ID from the model version URL, or a candidate run ID prefixed with candidate: such as candidate:5.",
 					ExampleBinding: `params.model_version_id:"7"`,
 				},
 				"path": {

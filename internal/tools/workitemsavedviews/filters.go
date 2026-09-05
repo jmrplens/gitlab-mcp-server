@@ -23,7 +23,7 @@ var timeLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"}
 // GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#workitemsavedviewfilterinput
 type Filters struct {
 	AssigneeUsernames          []string            `json:"assignee_usernames,omitempty"            jsonschema:"Usernames of the assignees to match"`
-	AssigneeWildcardID         string              `json:"assignee_wildcard_id,omitempty"          jsonschema:"Assignee wildcard filter: ANY or NONE"`
+	AssigneeWildcardID         string              `json:"assignee_wildcard_id,omitempty"          jsonschema:"Assignee wildcard filter: ANY, ME, or NONE"`
 	AuthorUsername             string              `json:"author_username,omitempty"               jsonschema:"Username of the work item author"`
 	ClosedAfter                string              `json:"closed_after,omitempty"                  jsonschema:"Match work items closed after this timestamp (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
 	ClosedBefore               string              `json:"closed_before,omitempty"                 jsonschema:"Match work items closed before this timestamp (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
@@ -56,7 +56,7 @@ type Filters struct {
 	ReleaseTag                 []string            `json:"release_tag,omitempty"                   jsonschema:"Release tags to match"`
 	ReleaseTagWildcardID       string              `json:"release_tag_wildcard_id,omitempty"       jsonschema:"Release tag wildcard filter: NONE or ANY"`
 	Search                     string              `json:"search,omitempty"                        jsonschema:"Free-text search term"`
-	State                      string              `json:"state,omitempty"                         jsonschema:"Work item state: opened, closed, or all"`
+	State                      string              `json:"state,omitempty"                         jsonschema:"Work item state: opened, closed, locked, or all"`
 	Status                     *StatusFilter       `json:"status,omitempty"                        jsonschema:"Filter by the work item status widget value"`
 	Subscribed                 string              `json:"subscribed,omitempty"                    jsonschema:"Subscription state of the authenticated user: EXPLICITLY_SUBSCRIBED, EXPLICITLY_UNSUBSCRIBED"`
 	Types                      []string            `json:"types,omitempty"                         jsonschema:"Work item type names to match, e.g. ISSUE, TASK, EPIC"`

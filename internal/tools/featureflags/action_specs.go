@@ -75,11 +75,19 @@ func decorateFeatureFlagMeta(options *toolutil.ActionSpecOptions, individualTool
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
-	if individualTool == "gitlab_feature_flag_list" {
+	switch individualTool {
+	case "gitlab_feature_flag_list":
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("scope", map[string]any{
 				"enum": []any{"enabled", "disabled"},
 			}),
+		}
+	case "gitlab_feature_flag_create", "gitlab_feature_flag_update":
+		// GitLab validates a strategy's stickiness against
+		// Operations::FeatureFlags::Strategy::STICKINESS_SETTINGS; the API
+		// reference itself leaves strategy parameters undocumented.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("strategies.parameters.stickiness", "default", "userId", "sessionId", "random"),
 		}
 	}
 }

@@ -2260,6 +2260,10 @@
       "properties": {
         "auth_method": {
           "description": "Authentication method (password or ssh_public_key)",
+          "enum": [
+            "ssh_public_key",
+            "password"
+          ],
           "type": "string"
         },
         "enabled": {
@@ -11325,6 +11329,10 @@
       "properties": {
         "broadcast_type": {
           "description": "Type: banner or notification",
+          "enum": [
+            "banner",
+            "notification"
+          ],
           "type": "string"
         },
         "dismissable": {
@@ -11365,7 +11373,19 @@
           "type": "string"
         },
         "theme": {
-          "description": "Theme: indigo, light-indigo, blue, light-blue, green, light-green, red, light-red",
+          "description": "Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.",
+          "enum": [
+            "indigo",
+            "light-indigo",
+            "blue",
+            "light-blue",
+            "green",
+            "light-green",
+            "red",
+            "light-red",
+            "dark",
+            "light"
+          ],
           "type": "string"
         }
       },
@@ -11587,7 +11607,11 @@
                       "type": "integer"
                     },
                     "type": {
-                      "description": "Line type (new, old, or expanded).",
+                      "description": "Line type: new for a line added by the change, old otherwise. Omit for an unchanged context line.",
+                      "enum": [
+                        "new",
+                        "old"
+                      ],
                       "type": "string"
                     }
                   },
@@ -11613,7 +11637,11 @@
                       "type": "integer"
                     },
                     "type": {
-                      "description": "Line type (new, old, or expanded).",
+                      "description": "Line type: new for a line added by the change, old otherwise. Omit for an unchanged context line.",
+                      "enum": [
+                        "new",
+                        "old"
+                      ],
                       "type": "string"
                     }
                   },
@@ -11645,7 +11673,12 @@
               "type": "string"
             },
             "position_type": {
-              "description": "Position type (text or image)",
+              "description": "Position type: text for a line comment, image for an image coordinate comment, or file for a whole-file comment",
+              "enum": [
+                "text",
+                "image",
+                "file"
+              ],
               "type": "string"
             },
             "start_sha": {
@@ -13741,7 +13774,7 @@
           "type": "string"
         },
         "package_type": {
-          "description": "Package type (npm, pypi, maven, generic, etc.)",
+          "description": "Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list",
           "type": "string"
         },
         "project_id": {
@@ -16280,6 +16313,11 @@
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
+          "enum": [
+            "user",
+            "group",
+            "project"
+          ],
           "type": "string"
         }
       },
@@ -22716,6 +22754,13 @@
         },
         "dismissal_reason": {
           "description": "Dismissal reason: ACCEPTABLE_RISK, FALSE_POSITIVE, MITIGATING_CONTROL, USED_IN_TESTS, NOT_APPLICABLE",
+          "enum": [
+            "ACCEPTABLE_RISK",
+            "FALSE_POSITIVE",
+            "MITIGATING_CONTROL",
+            "NOT_APPLICABLE",
+            "USED_IN_TESTS"
+          ],
           "type": "string"
         },
         "id": {
@@ -23089,7 +23134,7 @@
           "type": "string"
         },
         "model_version_id": {
-          "description": "Model version ID (numeric or string like candidate:5)",
+          "description": "Model version ID. Either the numeric version ID from the model version URL or a candidate run ID prefixed with candidate: such as candidate:5",
           "type": "string"
         },
         "path": {
@@ -23621,6 +23666,10 @@
       "properties": {
         "auth_method": {
           "description": "Authentication method (password or ssh_public_key)",
+          "enum": [
+            "ssh_public_key",
+            "password"
+          ],
           "type": "string"
         },
         "enabled": {
@@ -23768,7 +23817,13 @@
           "type": "string"
         },
         "process_mode": {
-          "description": "Process mode (newest_first, oldest_first, unordered)",
+          "description": "Process mode: unordered, oldest_first, newest_first, or newest_ready_first",
+          "enum": [
+            "unordered",
+            "oldest_first",
+            "newest_first",
+            "newest_ready_first"
+          ],
           "type": "string"
         },
         "project_id": {
@@ -27553,6 +27608,10 @@
         },
         "relative_position": {
           "description": "Position relative to adjacent item: BEFORE or AFTER",
+          "enum": [
+            "BEFORE",
+            "AFTER"
+          ],
           "type": "string"
         }
       },
@@ -28998,7 +29057,13 @@
                     "type": "string"
                   },
                   "stickiness": {
-                    "description": "Stickiness attribute used to bucket users (default, user, session, cookie)",
+                    "description": "Stickiness attribute used to bucket users for the flexibleRollout strategy: default, userId, sessionId, or random",
+                    "enum": [
+                      "default",
+                      "userId",
+                      "sessionId",
+                      "random"
+                    ],
                     "type": "string"
                   },
                   "user_ids": {
@@ -29837,7 +29902,13 @@
                     "type": "string"
                   },
                   "stickiness": {
-                    "description": "Stickiness attribute used to bucket users (default, user, session, cookie)",
+                    "description": "Stickiness attribute used to bucket users for the flexibleRollout strategy: default, userId, sessionId, or random",
+                    "enum": [
+                      "default",
+                      "userId",
+                      "sessionId",
+                      "random"
+                    ],
                     "type": "string"
                   },
                   "user_ids": {
@@ -32752,6 +32823,11 @@
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
+          "enum": [
+            "user",
+            "group",
+            "project"
+          ],
           "type": "string"
         }
       },
@@ -35897,7 +35973,7 @@
       "additionalProperties": false,
       "properties": {
         "fingerprint": {
-          "description": "SSH key fingerprint (e.g. SHA256:abc123 or MD5:aa:bb:cc)",
+          "description": "SSH key fingerprint, either the SHA256 form (for example SHA256:abc123) or the legacy MD5 hex-pair form (for example MD5:aa:bb:cc)",
           "type": "string"
         }
       },
@@ -38335,7 +38411,15 @@
           "type": "string"
         },
         "template_type": {
-          "description": "Template type: dockerfiles, gitignores, gitlab_ci_ymls, licenses",
+          "description": "Template family in the request path: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests",
+          "enum": [
+            "dockerfiles",
+            "gitignores",
+            "gitlab_ci_ymls",
+            "licenses",
+            "issues",
+            "merge_requests"
+          ],
           "type": "string"
         }
       },
@@ -49632,7 +49716,22 @@
           "type": "integer"
         },
         "trigger": {
-          "description": "Event type to test (push_events, tag_push_events, issues_events, confidential_issues_events, note_events, merge_requests_events, job_events, pipeline_events, wiki_page_events, releases_events, emoji_events, resource_access_token_events)",
+          "description": "Event type to test: push_events, tag_push_events, issues_events, confidential_issues_events, note_events, merge_requests_events, job_events, pipeline_events, wiki_page_events, releases_events, milestone_events, emoji_events, or resource_access_token_events",
+          "enum": [
+            "push_events",
+            "tag_push_events",
+            "issues_events",
+            "confidential_issues_events",
+            "note_events",
+            "merge_requests_events",
+            "job_events",
+            "pipeline_events",
+            "wiki_page_events",
+            "releases_events",
+            "milestone_events",
+            "emoji_events",
+            "resource_access_token_events"
+          ],
           "type": "string"
         }
       },
@@ -49913,7 +50012,7 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order invited groups by field (name, path, id)",
+          "description": "Column to order invited groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored",
           "type": "string"
         },
         "page": {
@@ -51361,7 +51460,18 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin for group LDAP)",
+          "description": "Default access level for members of the LDAP group: 0 (No access), 5 (Minimal access), 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner)",
+          "enum": [
+            0,
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "group_id": {
@@ -52869,7 +52979,7 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID to assign (Premium/Ultimate). The role's base access level must match access_level",
+          "description": "Custom member role ID to assign. Ultimate only. The role's base access level must match access_level",
           "type": "integer"
         },
         "user_id": {
@@ -53119,7 +53229,7 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID to assign (Premium/Ultimate). The role's base access level must match access_level",
+          "description": "Custom member role ID to assign. Ultimate only. The role's base access level must match access_level",
           "type": "integer"
         },
         "user_id": {
@@ -56738,6 +56848,13 @@
       "properties": {
         "environment": {
           "description": "Environment tier (production, staging, testing, development, other)",
+          "enum": [
+            "production",
+            "staging",
+            "testing",
+            "development",
+            "other"
+          ],
           "type": "string"
         },
         "group_id": {
@@ -57183,6 +57300,13 @@
         },
         "name": {
           "description": "Environment tier to protect (production, staging, testing, development, other)",
+          "enum": [
+            "production",
+            "staging",
+            "testing",
+            "development",
+            "other"
+          ],
           "type": "string"
         },
         "required_approval_count": {
@@ -57319,6 +57443,13 @@
         },
         "environment": {
           "description": "Environment tier to unprotect (production, staging, testing, development, other)",
+          "enum": [
+            "production",
+            "staging",
+            "testing",
+            "development",
+            "other"
+          ],
           "type": "string"
         },
         "group_id": {
@@ -57497,6 +57628,13 @@
         },
         "environment": {
           "description": "Environment tier (production, staging, testing, development, other)",
+          "enum": [
+            "production",
+            "staging",
+            "testing",
+            "development",
+            "other"
+          ],
           "type": "string"
         },
         "group_id": {
@@ -57505,6 +57643,13 @@
         },
         "name": {
           "description": "New environment tier (production, staging, testing, development, other)",
+          "enum": [
+            "production",
+            "staging",
+            "testing",
+            "development",
+            "other"
+          ],
           "type": "string"
         },
         "required_approval_count": {
@@ -58973,12 +59118,12 @@
           ]
         },
         "created_after": {
-          "description": "Return users created after this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)",
+          "description": "Return users created after the specified time. Format: ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)",
           "format": "date-time",
           "type": "string"
         },
         "created_before": {
-          "description": "Return users created before this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)",
+          "description": "Return users created before the specified time. Format: ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)",
           "format": "date-time",
           "type": "string"
         },
@@ -60503,6 +60648,10 @@
         },
         "state": {
           "description": "Filter by token state: active or inactive",
+          "enum": [
+            "active",
+            "inactive"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -61053,7 +61202,16 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
+          "description": "Order by field: id, name, path, created_at, updated_at, star_count, or last_activity_at. Default is created_at",
+          "enum": [
+            "id",
+            "name",
+            "path",
+            "created_at",
+            "updated_at",
+            "star_count",
+            "last_activity_at"
+          ],
           "type": "string"
         },
         "page": {
@@ -61261,7 +61419,13 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order shared groups by field (name, path, id)",
+          "description": "Order shared groups by field: name, path, id, or similarity (similarity only applies with search). Default is name",
+          "enum": [
+            "name",
+            "path",
+            "id",
+            "similarity"
+          ],
           "type": "string"
         },
         "page": {
@@ -62589,7 +62753,7 @@
           "type": "string"
         },
         "order_by": {
-          "description": "Order candidate parent groups by field (name, path, id)",
+          "description": "Column to order candidate parent groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored",
           "type": "string"
         },
         "page": {
@@ -63671,7 +63835,7 @@
           "type": "string"
         },
         "ip_restriction_ranges": {
-          "description": "Comma-separated CIDR ranges allowed to access the group (Premium/Ultimate)",
+          "description": "Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only",
           "type": "string"
         },
         "lfs_enabled": {
@@ -65709,6 +65873,12 @@
         },
         "format": {
           "description": "Content format: markdown (default), rdoc, asciidoc, or org",
+          "enum": [
+            "markdown",
+            "rdoc",
+            "asciidoc",
+            "org"
+          ],
           "type": "string"
         },
         "group_id": {
@@ -65839,6 +66009,12 @@
         },
         "format": {
           "description": "Content format: markdown, rdoc, asciidoc, or org",
+          "enum": [
+            "markdown",
+            "rdoc",
+            "asciidoc",
+            "org"
+          ],
           "type": "string"
         },
         "group_id": {
@@ -66183,6 +66359,10 @@
         },
         "timeout_strategy": {
           "description": "Timeout strategy (optimistic or pessimistic)",
+          "enum": [
+            "optimistic",
+            "pessimistic"
+          ],
           "type": "string"
         }
       },
@@ -66285,6 +66465,10 @@
         },
         "timeout_strategy": {
           "description": "Timeout strategy (optimistic or pessimistic)",
+          "enum": [
+            "optimistic",
+            "pessimistic"
+          ],
           "type": "string"
         }
       },
@@ -66513,6 +66697,11 @@
             },
             "merge_method": {
               "description": "Override merge method (merge, rebase_merge, ff)",
+              "enum": [
+                "merge",
+                "rebase_merge",
+                "ff"
+              ],
               "type": "string"
             },
             "merge_requests_access_level": {
@@ -66554,6 +66743,11 @@
             },
             "visibility": {
               "description": "Override visibility level (private, internal, public)",
+              "enum": [
+                "private",
+                "internal",
+                "public"
+              ],
               "type": "string"
             },
             "wiki_access_level": {
@@ -83366,6 +83560,10 @@
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
+          "enum": [
+            "created_at",
+            "updated_at"
+          ],
           "type": "string"
         },
         "page": {
@@ -91210,6 +91408,10 @@
               },
               "variable_type": {
                 "description": "Variable type (env_var or file, default: env_var)",
+                "enum": [
+                  "env_var",
+                  "file"
+                ],
                 "type": "string"
               }
             },
@@ -94446,6 +94648,14 @@
         },
         "status": {
           "description": "Filter by entity status: created, started, finished, timeout, failed, canceled",
+          "enum": [
+            "created",
+            "started",
+            "finished",
+            "timeout",
+            "failed",
+            "canceled"
+          ],
           "type": "string"
         }
       },
@@ -94853,6 +95063,14 @@
         },
         "status": {
           "description": "Filter by status: created, started, finished, timeout, failed, canceled",
+          "enum": [
+            "created",
+            "started",
+            "finished",
+            "timeout",
+            "failed",
+            "canceled"
+          ],
           "type": "string"
         }
       },
@@ -96001,6 +96219,11 @@
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
+          "enum": [
+            "user",
+            "group",
+            "project"
+          ],
           "type": "string"
         }
       },
@@ -96184,6 +96407,10 @@
       "properties": {
         "approved": {
           "description": "Filter by approval status: yes or no",
+          "enum": [
+            "yes",
+            "no"
+          ],
           "type": "string"
         },
         "approved_by_ids": {
@@ -96256,7 +96483,7 @@
           ]
         },
         "in": {
-          "description": "Modify the scope of the search attribute (title, description, or title,description)",
+          "description": "Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description",
           "type": "string"
         },
         "labels": {
@@ -96299,7 +96526,17 @@
           ]
         },
         "order_by": {
-          "description": "Order by: created_at or updated_at",
+          "description": "Order by: created_at, updated_at, merged_at, label_priority, priority, milestone_due, popularity, or title (default created_at)",
+          "enum": [
+            "created_at",
+            "updated_at",
+            "merged_at",
+            "label_priority",
+            "priority",
+            "milestone_due",
+            "popularity",
+            "title"
+          ],
           "type": "string"
         },
         "page": {
@@ -96334,7 +96571,13 @@
           "type": "string"
         },
         "scope": {
-          "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "description": "Filter by scope: created_by_me, assigned_to_me, reviews_for_me, or all",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "reviews_for_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -96354,7 +96597,14 @@
           "type": "string"
         },
         "state": {
-          "description": "Filter by state: opened, closed, merged, all",
+          "description": "Filter by state: opened, closed, locked, merged, or all (default all)",
+          "enum": [
+            "opened",
+            "closed",
+            "locked",
+            "merged",
+            "all"
+          ],
           "type": "string"
         },
         "target_branch": {
@@ -97734,6 +97984,10 @@
         },
         "two_factor": {
           "description": "Filter by 2FA status: enabled or disabled",
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
           "type": "string"
         },
         "username": {
@@ -100043,6 +100297,13 @@
         },
         "state": {
           "description": "Filter by state: opened, upcoming, current, closed, all",
+          "enum": [
+            "opened",
+            "upcoming",
+            "current",
+            "closed",
+            "all"
+          ],
           "type": "string"
         }
       },
@@ -101015,7 +101276,11 @@
           "type": "string"
         },
         "state": {
-          "description": "Filter by state (active, inactive)",
+          "description": "Filter by token state: active or inactive",
+          "enum": [
+            "active",
+            "inactive"
+          ],
           "type": "string"
         }
       },
@@ -101692,7 +101957,12 @@
           "type": "string"
         },
         "state": {
-          "description": "Filter by state: all/active/inactive",
+          "description": "Filter by state: all, active, or inactive",
+          "enum": [
+            "all",
+            "active",
+            "inactive"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -104176,6 +104446,22 @@
         },
         "package_manager": {
           "description": "Filter by package manager (bundler, composer, conan, go, gradle, maven, npm, nuget, pip, pipenv, pnpm, yarn, sbt, setuptools)",
+          "enum": [
+            "bundler",
+            "composer",
+            "conan",
+            "go",
+            "gradle",
+            "maven",
+            "npm",
+            "nuget",
+            "pip",
+            "pipenv",
+            "pnpm",
+            "yarn",
+            "sbt",
+            "setuptools"
+          ],
           "type": "string"
         },
         "page": {
@@ -104582,6 +104868,13 @@
         },
         "state": {
           "description": "Filter by state: opened, upcoming, current, closed, all",
+          "enum": [
+            "opened",
+            "upcoming",
+            "current",
+            "closed",
+            "all"
+          ],
           "type": "string"
         }
       },
@@ -105796,6 +106089,14 @@
         },
         "template_type": {
           "description": "Template family in the request path: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests",
+          "enum": [
+            "dockerfiles",
+            "gitignores",
+            "gitlab_ci_ymls",
+            "licenses",
+            "issues",
+            "merge_requests"
+          ],
           "type": "string"
         },
         "type": {
@@ -106685,7 +106986,11 @@
       "additionalProperties": false,
       "properties": {
         "order_by": {
-          "description": "Field to order by (id/username/name)",
+          "description": "Field to order by: id (default) or username",
+          "enum": [
+            "id",
+            "username"
+          ],
           "type": "string"
         },
         "page": {
@@ -110039,7 +110344,7 @@
           "type": "boolean"
         },
         "database": {
-          "description": "Database name (optional, e.g. main or ci)",
+          "description": "Database the migration belongs to. Defaults to main.",
           "type": "string"
         },
         "version": {
@@ -118876,7 +119181,11 @@
                       "type": "integer"
                     },
                     "type": {
-                      "description": "Line type (new, old, or expanded).",
+                      "description": "Line type: new for a line added by the change, old otherwise. Omit for an unchanged context line.",
+                      "enum": [
+                        "new",
+                        "old"
+                      ],
                       "type": "string"
                     }
                   },
@@ -118902,7 +119211,11 @@
                       "type": "integer"
                     },
                     "type": {
-                      "description": "Line type (new, old, or expanded).",
+                      "description": "Line type: new for a line added by the change, old otherwise. Omit for an unchanged context line.",
+                      "enum": [
+                        "new",
+                        "old"
+                      ],
                       "type": "string"
                     }
                   },
@@ -118934,7 +119247,12 @@
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: 'text' for line comments (default) or 'image' for coordinate comments.",
+              "description": "Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment.",
+              "enum": [
+                "text",
+                "image",
+                "file"
+              ],
               "type": "string"
             },
             "start_sha": {
@@ -131159,6 +131477,10 @@
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
+          "enum": [
+            "created_at",
+            "updated_at"
+          ],
           "type": "string"
         },
         "page": {
@@ -138204,7 +138526,12 @@
       "additionalProperties": false,
       "properties": {
         "order_by": {
-          "description": "Order package files by: created_at, file_name, or id",
+          "description": "Order package files by: id (default), file_name, or created_at",
+          "enum": [
+            "id",
+            "file_name",
+            "created_at"
+          ],
           "type": "string"
         },
         "package_id": {
@@ -138887,6 +139214,12 @@
         },
         "link_type": {
           "description": "Type of the release link: package, runbook, image, or other. Defaults to package.",
+          "enum": [
+            "package",
+            "runbook",
+            "image",
+            "other"
+          ],
           "type": "string"
         },
         "package_name": {
@@ -138903,6 +139236,10 @@
         },
         "status": {
           "description": "Package status: default or hidden",
+          "enum": [
+            "default",
+            "hidden"
+          ],
           "type": "string"
         },
         "tag_name": {
@@ -139070,6 +139407,10 @@
         },
         "status": {
           "description": "Package status: default or hidden",
+          "enum": [
+            "default",
+            "hidden"
+          ],
           "type": "string"
         }
       },
@@ -140976,6 +141317,10 @@
               },
               "variable_type": {
                 "description": "Variable type (env_var or file, default: env_var)",
+                "enum": [
+                  "env_var",
+                  "file"
+                ],
                 "type": "string"
               }
             },
@@ -141536,7 +141881,24 @@
           "type": "string"
         },
         "source": {
-          "description": "Filter by source (push, web, trigger, schedule, api, external, pipeline, chat, merge_request_event). Applies to the list fallback.",
+          "description": "Filter by pipeline source (api, chat, external, external_pull_request_event, merge_request_event, ondemand_dast_scan, ondemand_dast_validation, parent_pipeline, pipeline, push, schedule, security_orchestration_policy, trigger, web, webide). Applies to the list fallback.",
+          "enum": [
+            "api",
+            "chat",
+            "external",
+            "external_pull_request_event",
+            "merge_request_event",
+            "ondemand_dast_scan",
+            "ondemand_dast_validation",
+            "parent_pipeline",
+            "pipeline",
+            "push",
+            "schedule",
+            "security_orchestration_policy",
+            "trigger",
+            "web",
+            "webide"
+          ],
           "type": "string"
         },
         "status": {
@@ -141851,7 +142213,24 @@
           "type": "string"
         },
         "source": {
-          "description": "Filter by source (push, web, trigger, schedule, api, external, pipeline, chat, merge_request_event)",
+          "description": "Filter by pipeline source (api, chat, external, external_pull_request_event, merge_request_event, ondemand_dast_scan, ondemand_dast_validation, parent_pipeline, pipeline, push, schedule, security_orchestration_policy, trigger, web, webide)",
+          "enum": [
+            "api",
+            "chat",
+            "external",
+            "external_pull_request_event",
+            "merge_request_event",
+            "ondemand_dast_scan",
+            "ondemand_dast_validation",
+            "parent_pipeline",
+            "pipeline",
+            "push",
+            "schedule",
+            "security_orchestration_policy",
+            "trigger",
+            "web",
+            "webide"
+          ],
           "type": "string"
         },
         "status": {
@@ -142987,6 +143366,10 @@
         },
         "scope": {
           "description": "Filter by scope: active or inactive",
+          "enum": [
+            "active",
+            "inactive"
+          ],
           "type": "string"
         },
         "sort": {
@@ -147377,7 +147760,12 @@
           "type": "string"
         },
         "rule_type": {
-          "description": "Rule type (regular, code_owner)",
+          "description": "Rule type: any_approver (the pre-configured default rule with approvals_required 0), regular (an ordinary approval rule), or report_approver (reserved for rules GitLab creates from merge request approval policies, do not send it)",
+          "enum": [
+            "any_approver",
+            "regular",
+            "report_approver"
+          ],
           "type": "string"
         },
         "user_ids": {
@@ -149916,7 +150304,11 @@
           "type": "string"
         },
         "reviewer_assignment_strategy": {
-          "description": "Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)",
+          "description": "Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then",
+          "enum": [
+            "disabled",
+            "code_owners"
+          ],
           "type": "string"
         },
         "security_and_compliance_access_level": {
@@ -151412,7 +151804,11 @@
           "type": "string"
         },
         "reviewer_assignment_strategy": {
-          "description": "Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)",
+          "description": "Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then",
+          "enum": [
+            "disabled",
+            "code_owners"
+          ],
           "type": "string"
         },
         "security_and_compliance_access_level": {
@@ -157436,7 +157832,23 @@
       "additionalProperties": false,
       "properties": {
         "event": {
-          "description": "Event type to trigger (push_events, issues_events, merge_requests_events, tag_push_events, note_events, job_events, pipeline_events, wiki_page_events, releases_events, emoji_events)",
+          "description": "Event type to trigger: push_events, tag_push_events, issues_events, confidential_issues_events, note_events, merge_requests_events, job_events, pipeline_events, wiki_page_events, releases_events, milestone_events, emoji_events, resource_access_token_events, or resource_deploy_token_events",
+          "enum": [
+            "push_events",
+            "tag_push_events",
+            "issues_events",
+            "confidential_issues_events",
+            "note_events",
+            "merge_requests_events",
+            "job_events",
+            "pipeline_events",
+            "wiki_page_events",
+            "releases_events",
+            "milestone_events",
+            "emoji_events",
+            "resource_access_token_events",
+            "resource_deploy_token_events"
+          ],
           "type": "string"
         },
         "hook_id": {
@@ -160692,7 +161104,7 @@
       "additionalProperties": false,
       "properties": {
         "project_id": {
-          "description": "Full project path (namespace/project). The target branch rules GraphQL query requires the full path and does not accept a numeric ID",
+          "description": "Full project path such as my-group/my-project. The target branch rules GraphQL query requires the full path and does not accept a numeric ID",
           "type": "string"
         }
       },
@@ -167450,6 +167862,10 @@
         },
         "state": {
           "description": "Token state filter: active or inactive",
+          "enum": [
+            "active",
+            "inactive"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -168633,6 +169049,12 @@
             "properties": {
               "action": {
                 "description": "File action: create, update, delete, move",
+                "enum": [
+                  "create",
+                  "update",
+                  "delete",
+                  "move"
+                ],
                 "type": "string"
               },
               "content": {
@@ -172829,6 +173251,12 @@
         },
         "ci_pipeline_variables_minimum_override_role": {
           "description": "Minimum role allowed to override pipeline variables (developer, maintainer, owner, no_one_allowed)",
+          "enum": [
+            "owner",
+            "maintainer",
+            "developer",
+            "no_one_allowed"
+          ],
           "type": "string"
         },
         "ci_push_repository_for_job_token_allowed": {
@@ -172840,6 +173268,11 @@
         },
         "ci_restrict_pipeline_cancellation_role": {
           "description": "Role required to cancel pipelines/jobs (developer, maintainer, no_one)",
+          "enum": [
+            "developer",
+            "maintainer",
+            "no_one"
+          ],
           "type": "string"
         },
         "ci_separated_caches": {
@@ -173268,7 +173701,11 @@
           ]
         },
         "reviewer_assignment_strategy": {
-          "description": "Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)",
+          "description": "Strategy used to automatically assign reviewers to merge requests: disabled or code_owners. The former dap_powered value was removed in GitLab 19.4 and only appears in responses of projects configured before then",
+          "enum": [
+            "disabled",
+            "code_owners"
+          ],
           "type": "string"
         },
         "security_and_compliance_access_level": {
@@ -180901,7 +181338,13 @@
                 "type": "string"
               },
               "link_type": {
-                "description": "Type of the link: package, runbook, image, or other. Use package for package registry assets.",
+                "description": "Type of the link: other, runbook, image, or package. Defaults to other, or to package when the URL points at the generic package registry. Use package for package registry assets.",
+                "enum": [
+                  "other",
+                  "runbook",
+                  "image",
+                  "package"
+                ],
                 "type": "string"
               },
               "name": {
@@ -181445,7 +181888,11 @@
           "type": "boolean"
         },
         "order_by": {
-          "description": "Order by field (released_at, created_at)",
+          "description": "Order by field: released_at (default) or created_at",
+          "enum": [
+            "released_at",
+            "created_at"
+          ],
           "type": "string"
         },
         "page": {
@@ -183508,7 +183955,12 @@
       "additionalProperties": false,
       "properties": {
         "order_by": {
-          "description": "Order by: name, email, or commits (default: commits)",
+          "description": "Order by: name, email, or commits (number of commits). Contributors are ordered by commit date when omitted",
+          "enum": [
+            "name",
+            "email",
+            "commits"
+          ],
           "type": "string"
         },
         "page": {
@@ -185853,6 +186305,11 @@
         },
         "state": {
           "description": "State: enabled, disabled, or dry_run",
+          "enum": [
+            "disabled",
+            "enabled",
+            "dry_run"
+          ],
           "type": "string"
         }
       },
@@ -186888,6 +187345,11 @@
         },
         "state": {
           "description": "New state: enabled, disabled, or dry_run",
+          "enum": [
+            "disabled",
+            "enabled",
+            "dry_run"
+          ],
           "type": "string"
         }
       },
@@ -187419,7 +187881,22 @@
           "type": "string"
         },
         "status": {
-          "description": "Job status filter: running, success, failed, canceled",
+          "description": "Job status filter: created, waiting_for_resource, preparing, waiting_for_callback, pending, running, success, failed, canceling, canceled, skipped, manual, or scheduled",
+          "enum": [
+            "created",
+            "waiting_for_resource",
+            "preparing",
+            "waiting_for_callback",
+            "pending",
+            "running",
+            "success",
+            "failed",
+            "canceling",
+            "canceled",
+            "skipped",
+            "manual",
+            "scheduled"
+          ],
           "type": "string"
         }
       },
@@ -187907,7 +188384,13 @@
           "type": "integer"
         },
         "scope": {
-          "description": "Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead",
+          "description": "Deprecated runner scope filter: active, paused, online, or offline. Prefer type and status instead",
+          "enum": [
+            "active",
+            "paused",
+            "online",
+            "offline"
+          ],
           "type": "string"
         },
         "sort": {
@@ -188117,7 +188600,15 @@
           "type": "integer"
         },
         "scope": {
-          "description": "Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead",
+          "description": "Deprecated runner scope filter: specific, shared, active, paused, online, or offline. Prefer type and status instead",
+          "enum": [
+            "specific",
+            "shared",
+            "active",
+            "paused",
+            "online",
+            "offline"
+          ],
           "type": "string"
         },
         "sort": {
@@ -188630,7 +189121,13 @@
           "type": "string"
         },
         "scope": {
-          "description": "Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead",
+          "description": "Deprecated runner scope filter: active, paused, online, or offline. Prefer type and status instead",
+          "enum": [
+            "active",
+            "paused",
+            "online",
+            "offline"
+          ],
           "type": "string"
         },
         "sort": {
@@ -189863,6 +190360,10 @@
           "properties": {
             "http_method": {
               "description": "HTTP method to use for the upload (PUT or POST. Default PUT)",
+              "enum": [
+                "PUT",
+                "POST"
+              ],
               "type": "string"
             },
             "url": {
@@ -189877,6 +190378,10 @@
         },
         "upload_http_method": {
           "description": "Deprecated: use upload.http_method. HTTP method to use for the upload (PUT or POST)",
+          "enum": [
+            "PUT",
+            "POST"
+          ],
           "type": "string"
         },
         "upload_url": {
@@ -192698,7 +193203,7 @@
       "additionalProperties": false,
       "properties": {
         "group_id": {
-          "description": "Group ID or URL-encoded path (optional, omit for global search)",
+          "description": "Group ID or URL-encoded path. Omit for a global search",
           "type": "string"
         },
         "page": {
@@ -194246,6 +194751,11 @@
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
+          "enum": [
+            "user",
+            "group",
+            "project"
+          ],
           "type": "string"
         },
         "value": {
@@ -194313,6 +194823,10 @@
         },
         "key": {
           "description": "Gate key (percentage_of_actors or percentage_of_time)",
+          "enum": [
+            "percentage_of_actors",
+            "percentage_of_time"
+          ],
           "type": "string"
         },
         "name": {
@@ -194324,7 +194838,7 @@
           "type": "string"
         },
         "project": {
-          "description": "GitLab project path (namespace/project)",
+          "description": "Project path such as gitlab-org/gitlab-foss. Separate several paths with commas.",
           "type": "string"
         },
         "repository": {
@@ -198481,6 +198995,10 @@
       "properties": {
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
+          "enum": [
+            "created_at",
+            "updated_at"
+          ],
           "type": "string"
         },
         "page": {
@@ -199130,6 +199648,12 @@
             "properties": {
               "action": {
                 "description": "File action: create, update, delete, move",
+                "enum": [
+                  "create",
+                  "update",
+                  "delete",
+                  "move"
+                ],
                 "type": "string"
               },
               "content": {
@@ -199366,6 +199890,10 @@
               },
               "source_type": {
                 "description": "Source type: group_entity or project_entity",
+                "enum": [
+                  "group_entity",
+                  "project_entity"
+                ],
                 "type": "string"
               }
             },
@@ -200760,7 +201288,12 @@
       "additionalProperties": false,
       "properties": {
         "order_by": {
-          "description": "Order tags by field (name, updated)",
+          "description": "Order tags by name, updated (default), or version, which sorts by semantic version number",
+          "enum": [
+            "name",
+            "updated",
+            "version"
+          ],
           "type": "string"
         },
         "page": {
@@ -201409,7 +201942,18 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Filter by action: assigned, mentioned, build_failed, marked, approval_required, directly_addressed",
+          "description": "Filter by action: assigned, mentioned, build_failed, marked, approval_required, unmergeable, directly_addressed, merge_train_removed, member_access_requested",
+          "enum": [
+            "assigned",
+            "mentioned",
+            "build_failed",
+            "marked",
+            "approval_required",
+            "unmergeable",
+            "directly_addressed",
+            "merge_train_removed",
+            "member_access_requested"
+          ],
           "type": "string"
         },
         "author_id": {
@@ -201457,10 +202001,26 @@
         },
         "state": {
           "description": "Filter by state: pending or done (default: pending)",
+          "enum": [
+            "pending",
+            "done"
+          ],
           "type": "string"
         },
         "type": {
-          "description": "Filter by target type: Issue, MergeRequest, DesignManagement::Design, AlertManagement::Alert",
+          "description": "Filter by target type: Issue, MergeRequest, Commit, Epic, DesignManagement::Design, AlertManagement::Alert, Project, Namespace, Vulnerability, WikiPage::Meta",
+          "enum": [
+            "Issue",
+            "MergeRequest",
+            "Commit",
+            "Epic",
+            "DesignManagement::Design",
+            "AlertManagement::Alert",
+            "Project",
+            "Namespace",
+            "Vulnerability",
+            "WikiPage::Meta"
+          ],
           "type": "string"
         }
       },
@@ -202725,6 +203285,10 @@
       "properties": {
         "broadcast_type": {
           "description": "Type: banner or notification",
+          "enum": [
+            "banner",
+            "notification"
+          ],
           "type": "string"
         },
         "dismissable": {
@@ -202769,7 +203333,19 @@
           "type": "string"
         },
         "theme": {
-          "description": "Theme color",
+          "description": "Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.",
+          "enum": [
+            "indigo",
+            "light-indigo",
+            "blue",
+            "light-blue",
+            "green",
+            "light-green",
+            "red",
+            "light-red",
+            "dark",
+            "light"
+          ],
           "type": "string"
         }
       },
@@ -203852,7 +204428,7 @@
           "type": "string"
         },
         "package_type": {
-          "description": "Package type (npm, pypi, maven, generic, etc.)",
+          "description": "Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list",
           "type": "string"
         },
         "project_id": {
@@ -206545,6 +207121,12 @@
         },
         "format": {
           "description": "Content format: markdown (default), rdoc, asciidoc, or org",
+          "enum": [
+            "markdown",
+            "rdoc",
+            "asciidoc",
+            "org"
+          ],
           "type": "string"
         },
         "project_id": {
@@ -206832,6 +207414,12 @@
         },
         "format": {
           "description": "Content format: markdown, rdoc, asciidoc, or org",
+          "enum": [
+            "markdown",
+            "rdoc",
+            "asciidoc",
+            "org"
+          ],
           "type": "string"
         },
         "project_id": {
@@ -207003,7 +207591,12 @@
               ]
             },
             "assignee_wildcard_id": {
-              "description": "Assignee wildcard filter: ANY or NONE",
+              "description": "Assignee wildcard filter: ANY, ME, or NONE",
+              "enum": [
+                "ANY",
+                "ME",
+                "NONE"
+              ],
               "type": "string"
             },
             "author_username": {
@@ -207110,6 +207703,13 @@
             },
             "health_status_filter": {
               "description": "Health status to match: onTrack, needsAttention, atRisk, ANY, or NONE",
+              "enum": [
+                "ANY",
+                "NONE",
+                "atRisk",
+                "needsAttention",
+                "onTrack"
+              ],
               "type": "string"
             },
             "hierarchy_filters": {
@@ -207135,6 +207735,10 @@
                 },
                 "parent_wildcard_id": {
                   "description": "Parent wildcard filter: NONE or ANY",
+                  "enum": [
+                    "ANY",
+                    "NONE"
+                  ],
                   "type": "string"
                 }
               },
@@ -207193,6 +207797,11 @@
             },
             "iteration_wildcard_id": {
               "description": "Iteration wildcard filter: NONE, ANY, CURRENT",
+              "enum": [
+                "ANY",
+                "CURRENT",
+                "NONE"
+              ],
               "type": "string"
             },
             "label_name": {
@@ -207217,6 +207826,12 @@
             },
             "milestone_wildcard_id": {
               "description": "Milestone wildcard filter: NONE, ANY, STARTED, UPCOMING",
+              "enum": [
+                "ANY",
+                "NONE",
+                "STARTED",
+                "UPCOMING"
+              ],
               "type": "string"
             },
             "my_reaction_emoji": {
@@ -207490,7 +208105,13 @@
               "type": "string"
             },
             "state": {
-              "description": "Work item state: opened, closed, or all",
+              "description": "Work item state: opened, closed, locked, or all",
+              "enum": [
+                "all",
+                "closed",
+                "locked",
+                "opened"
+              ],
               "type": "string"
             },
             "status": {
@@ -207513,6 +208134,10 @@
             },
             "subscribed": {
               "description": "Subscription state of the authenticated user: EXPLICITLY_SUBSCRIBED, EXPLICITLY_UNSUBSCRIBED",
+              "enum": [
+                "EXPLICITLY_SUBSCRIBED",
+                "EXPLICITLY_UNSUBSCRIBED"
+              ],
               "type": "string"
             },
             "types": {
@@ -207539,6 +208164,10 @@
             },
             "weight_wildcard_id": {
               "description": "Weight wildcard filter: NONE or ANY",
+              "enum": [
+                "ANY",
+                "NONE"
+              ],
               "type": "string"
             },
             "work_item_type_ids": {
@@ -208210,7 +208839,12 @@
               ]
             },
             "assignee_wildcard_id": {
-              "description": "Assignee wildcard filter: ANY or NONE",
+              "description": "Assignee wildcard filter: ANY, ME, or NONE",
+              "enum": [
+                "ANY",
+                "ME",
+                "NONE"
+              ],
               "type": "string"
             },
             "author_username": {
@@ -208317,6 +208951,13 @@
             },
             "health_status_filter": {
               "description": "Health status to match: onTrack, needsAttention, atRisk, ANY, or NONE",
+              "enum": [
+                "ANY",
+                "NONE",
+                "atRisk",
+                "needsAttention",
+                "onTrack"
+              ],
               "type": "string"
             },
             "hierarchy_filters": {
@@ -208342,6 +208983,10 @@
                 },
                 "parent_wildcard_id": {
                   "description": "Parent wildcard filter: NONE or ANY",
+                  "enum": [
+                    "ANY",
+                    "NONE"
+                  ],
                   "type": "string"
                 }
               },
@@ -208400,6 +209045,11 @@
             },
             "iteration_wildcard_id": {
               "description": "Iteration wildcard filter: NONE, ANY, CURRENT",
+              "enum": [
+                "ANY",
+                "CURRENT",
+                "NONE"
+              ],
               "type": "string"
             },
             "label_name": {
@@ -208424,6 +209074,12 @@
             },
             "milestone_wildcard_id": {
               "description": "Milestone wildcard filter: NONE, ANY, STARTED, UPCOMING",
+              "enum": [
+                "ANY",
+                "NONE",
+                "STARTED",
+                "UPCOMING"
+              ],
               "type": "string"
             },
             "my_reaction_emoji": {
@@ -208697,7 +209353,13 @@
               "type": "string"
             },
             "state": {
-              "description": "Work item state: opened, closed, or all",
+              "description": "Work item state: opened, closed, locked, or all",
+              "enum": [
+                "all",
+                "closed",
+                "locked",
+                "opened"
+              ],
               "type": "string"
             },
             "status": {
@@ -208720,6 +209382,10 @@
             },
             "subscribed": {
               "description": "Subscription state of the authenticated user: EXPLICITLY_SUBSCRIBED, EXPLICITLY_UNSUBSCRIBED",
+              "enum": [
+                "EXPLICITLY_SUBSCRIBED",
+                "EXPLICITLY_UNSUBSCRIBED"
+              ],
               "type": "string"
             },
             "types": {
@@ -208746,6 +209412,10 @@
             },
             "weight_wildcard_id": {
               "description": "Weight wildcard filter: NONE or ANY",
+              "enum": [
+                "ANY",
+                "NONE"
+              ],
               "type": "string"
             },
             "work_item_type_ids": {

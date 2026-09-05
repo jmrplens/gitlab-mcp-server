@@ -117,7 +117,7 @@ type DeleteInput struct {
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Search    string               `json:"search,omitempty" jsonschema:"Search query to filter tags by name"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order tags by field (name, updated)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order tags by name, updated (default), or version, which sorts by semantic version number"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput

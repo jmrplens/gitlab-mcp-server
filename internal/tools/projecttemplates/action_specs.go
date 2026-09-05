@@ -39,6 +39,11 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 				ExampleBinding: `params.template_type:"licenses"`,
 			},
 		},
+		// https://docs.gitlab.com/api/project_templates/ documents the same six
+		// families for both the list and the get endpoint.
+		InputSchemaOverrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("template_type", "dockerfiles", "gitignores", "gitlab_ci_ymls", "licenses", "issues", "merge_requests"),
+		},
 	}
 	if actionName == "project_template_get" {
 		opts.Usage = "Get one project-scoped template (license, gitignore, Dockerfile, .gitlab-ci.yml) by template_type and key, returning its full rendered content."

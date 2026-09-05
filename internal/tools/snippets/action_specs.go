@@ -67,6 +67,11 @@ func snippetCreateSpec(name string, route toolutil.ActionRoute, individualTool s
 func snippetUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := snippetOptions(individualTool)
 	decorateSnippetMeta(&options, individualTool)
+	// Both update routes take the same files[] shape, whose action is one of
+	// the four values the Snippets API documents (create, update, delete, move).
+	options.InputSchemaOverrides = append(options.InputSchemaOverrides,
+		toolutil.SchemaEnumOverride("files.action", "create", "update", "delete", "move"),
+	)
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 

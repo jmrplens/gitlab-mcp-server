@@ -94,7 +94,7 @@ type GetLatestInput struct {
 // ListInput defines parameters for listing releases.
 type ListInput struct {
 	ProjectID              toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy                string               `json:"order_by,omitempty" jsonschema:"Order by field (released_at, created_at)"`
+	OrderBy                string               `json:"order_by,omitempty" jsonschema:"Order by field: released_at (default) or created_at"`
 	Sort                   string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	IncludeHTMLDescription bool                 `json:"include_html_description,omitempty" jsonschema:"Include the description_html field rendered from the Markdown description"`
 	toolutil.PaginationInput

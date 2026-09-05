@@ -55,6 +55,14 @@ func groupLDAPOptions(individualTool string) toolutil.ActionSpecOptions {
 		options.Usage = "Add an LDAP group link to a group by CN or filter (Premium/Ultimate). After adding links you can trigger gitlab_group_ldap_sync to apply membership immediately."
 		options.Aliases = []string{"add ldap link", "create group ldap mapping", "link ldap group"}
 		options.RelatedActions = []string{actionGroupLDAPLinkList, actionGroupLDAPSync, "group.ldap_link_delete"}
+		// group_access is numeric only here (the handler passes the integer
+		// through unchanged), and the LDAP group links API documents exactly
+		// these levels, so a closed integer enum is accurate.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("group_access", map[string]any{
+				"enum": []any{0, 5, 10, 15, 20, 25, 30, 40, 50},
+			}),
+		}
 		options.IndividualTool.Description = "Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_sync, gitlab_group_ldap_link_delete."
 	case "gitlab_group_ldap_sync":
 		options.Usage = "Trigger an LDAP synchronization for a group's LDAP group links (Premium/Ultimate). Use after adding or editing LDAP links, or when group membership looks stale, to reconcile members against LDAP now. The API accepts the request and runs the sync asynchronously in the background."

@@ -16,6 +16,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			InputSchemaOverrides: []toolutil.InputSchemaOverride{
 				toolutil.SchemaApproverIDsOverride("approver_ids"),
 				toolutil.SchemaApproverIDsOverride("approved_by_ids"),
+				toolutil.SchemaEnumOverride("state", "opened", "closed", "locked", "merged", "all"),
+				toolutil.SchemaEnumOverride("order_by", "created_at", "updated_at", "merged_at", "label_priority", "priority", "milestone_due", "popularity", "title"),
+				toolutil.SchemaEnumOverride("approved", "yes", "no"),
+				toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "reviews_for_me", "all"),
 			},
 			IndividualTool: toolutil.IndividualToolSpec{
 				Name:        "gitlab_list_deployment_merge_requests",

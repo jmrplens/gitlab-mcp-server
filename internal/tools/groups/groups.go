@@ -964,7 +964,7 @@ type UpdateInput struct {
 	ExperimentFeaturesEnabled       *bool                          `json:"experiment_features_enabled,omitempty"        jsonschema:"Enable experimental features"`
 	ExtraSharedRunnersMinutesLimit  *int64                         `json:"extra_shared_runners_minutes_limit,omitempty" jsonschema:"Extra shared runner compute-minutes (administrators only)"`
 	FileTemplateProjectID           *int64                         `json:"file_template_project_id,omitempty"           jsonschema:"Project ID providing file templates for this group (Premium/Ultimate)"`
-	IPRestrictionRanges             string                         `json:"ip_restriction_ranges,omitempty"              jsonschema:"Comma-separated CIDR ranges allowed to access the group (Premium/Ultimate)"`
+	IPRestrictionRanges             string                         `json:"ip_restriction_ranges,omitempty"              jsonschema:"Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only"`
 	AllowedEmailDomainsList         string                         `json:"allowed_email_domains_list,omitempty"         jsonschema:"Comma-separated list of email domains allowed for members (Premium/Ultimate)"`
 	LockMathRenderingLimitsEnabled  *bool                          `json:"lock_math_rendering_limits_enabled,omitempty" jsonschema:"Prevent subgroups from changing the math rendering limits setting"`
 	MaxArtifactsSize                *int64                         `json:"max_artifacts_size,omitempty"                 jsonschema:"Maximum job artifacts size in MB (administrators only)"`
@@ -1495,7 +1495,7 @@ type SharedWithListInput struct {
 	Search               string               `json:"search,omitempty"         jsonschema:"Filter shared groups by name or path"`
 	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the share grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
 	Visibility           string               `json:"visibility,omitempty"     jsonschema:"Filter by visibility (public, internal, private)"`
-	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Order shared groups by field (name, path, id)"`
+	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Order shared groups by field: name, path, id, or similarity (similarity only applies with search). Default is name"`
 	Sort                 string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"    jsonschema:"Group IDs to exclude from the results"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
@@ -1563,7 +1563,7 @@ type InvitedListInput struct {
 	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
 	Relation             []string             `json:"relation,omitempty"       jsonschema:"Filter by relation (direct, inherited)"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
-	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Order invited groups by field (name, path, id)"`
+	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Column to order invited groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored"`
 	Sort                 string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -1623,7 +1623,7 @@ func InvitedList(ctx context.Context, client *gitlabclient.Client, input Invited
 type TransferLocationsListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id"         jsonschema:"Group ID or URL-encoded path,required"`
 	Search  string               `json:"search,omitempty" jsonschema:"Filter candidate parent groups by name or path"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Order candidate parent groups by field (name, path, id)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order candidate parent groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput

@@ -456,6 +456,16 @@ func applyGroupInputEnums(individualTool string, options *toolutil.ActionSpecOpt
 				"enum": []any{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "similarity"},
 			}),
 		)
+	case "gitlab_group_shared_projects_list":
+		options.InputSchemaOverrides = append(
+			options.InputSchemaOverrides,
+			toolutil.SchemaEnumOverride("order_by", "id", "name", "path", "created_at", "updated_at", "star_count", "last_activity_at"),
+		)
+	case "gitlab_group_shared_with_list":
+		options.InputSchemaOverrides = append(
+			options.InputSchemaOverrides,
+			toolutil.SchemaEnumOverride("order_by", "name", "path", "id", "similarity"),
+		)
 	case "gitlab_group_create":
 		options.InputSchemaOverrides = append(options.InputSchemaOverrides, groupCreateUpdateEnumOverrides(false)...)
 	case "gitlab_group_update":
@@ -740,6 +750,14 @@ func applyGroupHookSubOpMetadata(individualTool string, options *toolutil.Action
 		options.Usage = "Trigger a test event for a group webhook by hook_id and trigger event type (push_events, pipeline_events, etc.). Use to verify webhook delivery. Requires Owner role."
 		options.Aliases = []string{"test group webhook", "trigger group hook test", "send test event to group webhook", "fire test event for group hook"}
 		options.IndividualTool.Description = "Trigger a test event for a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_get, gitlab_group_hook_resend_event."
+		// The event names GitLab accepts on POST /groups/:id/hooks/:hook_id/test/:trigger.
+		options.InputSchemaOverrides = append(
+			options.InputSchemaOverrides,
+			toolutil.SchemaEnumOverride("trigger",
+				"push_events", "tag_push_events", "issues_events", "confidential_issues_events", "note_events",
+				"merge_requests_events", "job_events", "pipeline_events", "wiki_page_events", "releases_events",
+				"milestone_events", "emoji_events", "resource_access_token_events"),
+		)
 	case toolGroupHookResend:
 		options.Usage = "Resend a specific previously-delivered group hook event by hook_id and hook_event_id. Use to retry a failed webhook delivery. Requires Owner role."
 		options.Aliases = []string{"resend group hook event", "retry group webhook delivery", "redeliver group hook event", "replay group webhook event"}

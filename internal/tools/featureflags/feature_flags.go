@@ -88,7 +88,7 @@ type StrategyParameterInput struct {
 	UserIDs    string `json:"user_ids,omitempty" jsonschema:"Comma-separated user IDs for the userWithId strategy"`
 	Percentage string `json:"percentage,omitempty" jsonschema:"Percentage of users to include for the gradualRolloutUserId strategy (e.g. 25)"`
 	Rollout    string `json:"rollout,omitempty" jsonschema:"Rollout duration (0-100) for the gradualRolloutUserId strategy"`
-	Stickiness string `json:"stickiness,omitempty" jsonschema:"Stickiness attribute used to bucket users (default, user, session, cookie)"`
+	Stickiness string `json:"stickiness,omitempty" jsonschema:"Stickiness attribute used to bucket users for the flexibleRollout strategy: default, userId, sessionId, or random"`
 }
 
 // StrategyInput represents a strategy for create/update operations.

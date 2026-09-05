@@ -86,6 +86,9 @@ func repositoryOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Usage = "List who has committed to the repository and how much, with per-author commit counts and line stats. Use to surface top authors or attribute ownership of a codebase."
 		options.Aliases = []string{"list repository authors", "show commit counts per author", "who contributed to this repo", "top committers"}
 		options.RelatedActions = []string{actionRepositoryTree, "commit.list"}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("order_by", "name", "email", "commits"),
+		}
 		options.IndividualTool.Description = "List repository contributors. Returns: each contributor's name, email, commit count, additions, deletions, and pagination metadata. See also: gitlab_repository_tree, gitlab_commit_list."
 	case "gitlab_repository_merge_base":
 		options.Usage = "Find the most recent common ancestor commit shared by two or more refs. Use to compute a fork point before diffing or to understand branch divergence."

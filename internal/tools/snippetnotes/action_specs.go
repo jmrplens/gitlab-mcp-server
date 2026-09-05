@@ -150,6 +150,10 @@ func decorateSnippetNoteMeta(options *toolutil.ActionSpecOptions, individualTool
 				CommonConfusions: []string{"Combine order_by with sort. Pass the field name, not a phrase like 'newest first'."},
 			},
 		}
+		options.InputSchemaOverrides = append(
+			options.InputSchemaOverrides,
+			toolutil.SchemaEnumOverride("order_by", "created_at", "updated_at"),
+		)
 		options.IndividualTool.Description = "List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_snippet_get."
 	case "gitlab_snippet_note_get":
 		options.Usage = "Get one snippet note by params.note_id. Use when the task references a specific comment or note ID on a snippet."

@@ -138,7 +138,10 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 				"format":      "uri",
 				"pattern":     "^(https?|ftp)://",
 			}),
-			toolutil.SchemaPropertyOverride("links.link_type", map[string]any{"description": "Type of the link: package, runbook, image, or other. Use package for package registry assets."}),
+			toolutil.SchemaPropertyOverride("links.link_type", map[string]any{
+				"enum":        []any{"other", "runbook", "image", "package"},
+				"description": "Type of the link: other, runbook, image, or package. Defaults to other, or to package when the URL points at the generic package registry. Use package for package registry assets.",
+			}),
 		}
 	}
 	if description := releaseLinkDescriptions[actionName]; description != "" {

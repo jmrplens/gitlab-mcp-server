@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -185,6 +186,33 @@ func TestActionSpecs_RichMetadata(t *testing.T) {
 	}
 	if opts.IndividualTool.Description != "" {
 		t.Errorf("unknown tool Description mutated: %q", opts.IndividualTool.Description)
+	}
+}
+
+// TestActionSpecs_FormatEnum verifies that create and update constrain format
+// to the four page formats the Wikis API accepts, and that no other wiki
+// action carries a format override.
+func TestActionSpecs_FormatEnum(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := wikiSpecsByTool(t, ActionSpecs(client))
+	want := []any{"markdown", "rdoc", "asciidoc", "org"}
+	for name, spec := range byTool {
+		wantOverride := name == "gitlab_wiki_create" || name == "gitlab_wiki_update"
+		t.Run(name, func(t *testing.T) {
+			has := false
+			for _, override := range spec.InputSchemaOverrides {
+				if override.PropertyPath != "format" {
+					continue
+				}
+				has = true
+				if enum, ok := override.Values["enum"].([]any); !ok || !slices.Equal(enum, want) {
+					t.Errorf("format enum = %v, want %v", override.Values["enum"], want)
+				}
+			}
+			if has != wantOverride {
+				t.Errorf("format override present = %v, want %v", has, wantOverride)
+			}
+		})
 	}
 }
 

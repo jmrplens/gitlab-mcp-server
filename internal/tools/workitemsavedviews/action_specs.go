@@ -73,7 +73,7 @@ func createSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts.Usage = "Create a work item saved view under a group or project namespace. Provide namespace_path, name, and sort. Add filters to store the query the view represents, description for context, is_private=false to share it, and display_settings only when the consuming UI needs them. An omitted display_settings is stored as an empty object."
 	opts.Aliases = append(opts.Aliases, "create work item saved view", "save a work item filter", "store a named work item query")
 	opts.RelatedActions = []string{actionList, actionUpdate, actionGet}
-	opts.InputSchemaOverrides = sortEnumOverride()
+	opts.InputSchemaOverrides = mutationSchemaOverrides()
 	opts.IndividualTool.Description = "Create a work item saved view under a namespace. Returns: the created view with id, global id, name, private flag, subscription state, sort order, filters, and display settings. " + experimentalNote + " See also: gitlab_work_item_saved_view_list, gitlab_work_item_saved_view_update, gitlab_work_item_saved_view_get."
 	return toolutil.NewCreateActionSpec("work_item_saved_view_create", route, opts)
 }
@@ -84,7 +84,7 @@ func updateSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts.Usage = "Update a work item saved view by its numeric saved_view_id. Every field is optional and an omitted one is left unchanged. Supplying filters replaces the stored filter set wholesale, so read the current one with work_item_saved_view.get first when the intent is to add a condition rather than replace the query."
 	opts.Aliases = append(opts.Aliases, "update work item saved view", "rename saved view", "change saved view filters")
 	opts.RelatedActions = []string{actionGet, actionList, actionDelete}
-	opts.InputSchemaOverrides = sortEnumOverride()
+	opts.InputSchemaOverrides = mutationSchemaOverrides()
 	opts.IndividualTool.Description = "Update a work item saved view by numeric ID. Returns: the updated view with id, global id, name, private flag, subscription state, sort order, filters, and display settings. " + experimentalNote + " See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list, gitlab_work_item_saved_view_delete."
 	return toolutil.NewUpdateActionSpec("work_item_saved_view_update", route, opts)
 }
@@ -152,6 +152,42 @@ func sortEnumOverride() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": workItemSortValues}),
 	}
+}
+
+// filterEnumOverrides constrains the eight filter fields whose GraphQL type is
+// an enum to exactly the values that enum documents, so a view GitLab would
+// reject is refused at the schema instead of stored and answered with an opaque
+// argument error. Create and update share the Filters shape, so every path
+// exists on both.
+//
+// GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#workitemsavedviewfilterinput
+func filterEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		// https://docs.gitlab.com/api/graphql/reference/#assigneewildcardid
+		toolutil.SchemaEnumOverride("filters.assignee_wildcard_id", "ANY", "ME", "NONE"),
+		// https://docs.gitlab.com/api/graphql/reference/#healthstatusfilter
+		toolutil.SchemaEnumOverride("filters.health_status_filter", "ANY", "NONE", "atRisk", "needsAttention", "onTrack"),
+		// https://docs.gitlab.com/api/graphql/reference/#workitemparentwildcardid
+		toolutil.SchemaEnumOverride("filters.hierarchy_filters.parent_wildcard_id", "ANY", "NONE"),
+		// https://docs.gitlab.com/api/graphql/reference/#iterationwildcardid
+		toolutil.SchemaEnumOverride("filters.iteration_wildcard_id", "ANY", "CURRENT", "NONE"),
+		// https://docs.gitlab.com/api/graphql/reference/#milestonewildcardid
+		toolutil.SchemaEnumOverride("filters.milestone_wildcard_id", "ANY", "NONE", "STARTED", "UPCOMING"),
+		// The filter's state is IssuableState, not WorkItemState, so the values
+		// are lowercase and include locked.
+		// https://docs.gitlab.com/api/graphql/reference/#issuablestate
+		toolutil.SchemaEnumOverride("filters.state", "all", "closed", "locked", "opened"),
+		// https://docs.gitlab.com/api/graphql/reference/#subscriptionstatus
+		toolutil.SchemaEnumOverride("filters.subscribed", "EXPLICITLY_SUBSCRIBED", "EXPLICITLY_UNSUBSCRIBED"),
+		// https://docs.gitlab.com/api/graphql/reference/#weightwildcardid
+		toolutil.SchemaEnumOverride("filters.weight_wildcard_id", "ANY", "NONE"),
+	}
+}
+
+// mutationSchemaOverrides is the full override set create and update share: the
+// sort enum plus the enum-typed filter fields.
+func mutationSchemaOverrides() []toolutil.InputSchemaOverride {
+	return append(sortEnumOverride(), filterEnumOverrides()...)
 }
 
 // savedViewOptions returns the metadata every saved view action shares.

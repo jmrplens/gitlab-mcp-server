@@ -57,6 +57,12 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 	if actionName == "service_account_create" || actionName == "service_account_update" {
 		options.Usage += " Omit email unless the task gives an explicit valid email address."
 	}
+	if actionName == "service_account_pat_list" {
+		// https://docs.gitlab.com/api/service_accounts/#list-all-personal-access-tokens-for-a-project-service-account
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("state", "active", "inactive"),
+		}
+	}
 	if actionName == "service_account_pat_create" || actionName == "service_account_pat_rotate" {
 		options.Usage += " Omit expires_at unless the task gives an explicit expiry date. If provided, use YYYY-MM-DD within the instance maximum token lifetime."
 	}

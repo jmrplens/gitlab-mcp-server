@@ -53,7 +53,32 @@ func groupProtectedEnvOptions(individualTool string) toolutil.ActionSpecOptions 
 		},
 	}
 	decorateGroupProtectedEnvMeta(&options, individualTool)
+	options.InputSchemaOverrides = groupProtectedEnvTierOverrides(individualTool)
 	return options
+}
+
+// environmentTiers are the deployment tiers a group-level protected environment
+// is addressed by (https://docs.gitlab.com/api/group_protected_environments/):
+// every endpoint names the environment by tier, never by a free-form name.
+var environmentTiers = []string{"production", "staging", "testing", "development", "other"}
+
+// groupProtectedEnvTierOverrides constrains each tier-valued parameter of a
+// group protected environment action to the documented deployment tiers: the
+// environment being addressed and, on protect and update, the name being set.
+func groupProtectedEnvTierOverrides(individualTool string) []toolutil.InputSchemaOverride {
+	switch individualTool {
+	case "gitlab_group_protected_environment_get", "gitlab_group_protected_environment_unprotect":
+		return []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("environment", environmentTiers...)}
+	case "gitlab_group_protected_environment_protect":
+		return []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("name", environmentTiers...)}
+	case "gitlab_group_protected_environment_update":
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("environment", environmentTiers...),
+			toolutil.SchemaEnumOverride("name", environmentTiers...),
+		}
+	default:
+		return nil
+	}
 }
 
 // decorateGroupProtectedEnvMeta replaces the generic shared Usage, the

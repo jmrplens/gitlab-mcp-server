@@ -23,7 +23,7 @@ type DiffLineRangeInput struct {
 // multi-line diff comment range.
 type DiffLinePositionInput struct {
 	LineCode string `json:"line_code,omitempty" jsonschema:"Line code identifying this line in the diff."`
-	Type     string `json:"type,omitempty"      jsonschema:"Line type (new, old, or expanded)."`
+	Type     string `json:"type,omitempty"      jsonschema:"Line type: new for a line added by the change, old otherwise. Omit for an unchanged context line."`
 	OldLine  int    `json:"old_line,omitempty"  jsonschema:"Line number in the old file for this endpoint."`
 	NewLine  int    `json:"new_line,omitempty"  jsonschema:"Line number in the new file for this endpoint."`
 }
@@ -39,7 +39,7 @@ type DiffPosition struct {
 	NewPath      string              `json:"new_path"            jsonschema:"File path after the change,required"`
 	OldLine      int                 `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
 	NewLine      int                 `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
-	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: 'text' for line comments (default) or 'image' for coordinate comments."`
+	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment."`
 	LineRange    *DiffLineRangeInput `json:"line_range,omitempty"    jsonschema:"Start/end line range for a multi-line text diff comment."`
 	Width        int                 `json:"width,omitempty"  jsonschema:"Image width in pixels (position_type=image)."`
 	Height       int                 `json:"height,omitempty" jsonschema:"Image height in pixels (position_type=image)."`
