@@ -8,7 +8,7 @@ faq:
   - q: "How do clients authenticate in HTTP mode?"
     a: "Clients send their GitLab Personal Access Token on every request using the `PRIVATE-TOKEN` header (recommended) or an `Authorization: Bearer` header; if both are present in legacy mode, `PRIVATE-TOKEN` wins (OAuth mode reads only the Bearer token). A server started with `--allow-any-gitlab-url` and no instance takes the target instance from a `GITLAB-URL` header, and one publishing several requires that header to choose among them. For production, `--auth-mode=oauth` enables RFC 9728–compliant OAuth 2.1 with PKCE, so clients discover the authorization server and authorize in the browser instead of copying tokens."
   - q: "Do HTTP mode clients share state or context?"
-    a: "No. HTTP mode uses a **bounded LRU pool** of MCP server instances keyed by the SHA-256 hash of each client's token **and** GitLab URL. Clients with the same token and same GitLab URL share one instance, while different tokens or different URLs get completely isolated instances. Raw tokens are never stored — only the SHA-256 hashes — and when the pool reaches `--max-http-clients` the least recently used entry is evicted."
+    a: "No. HTTP mode uses a **bounded LRU pool** of MCP server instances keyed by the SHA-256 hash of each client's token **and** GitLab URL. Clients with the same token and same GitLab URL share one instance, while different tokens or different URLs get completely isolated instances. Pool lookups use only the SHA-256 hashes, each entry's GitLab client keeps the credential it authenticates with while the entry lives, and when the pool reaches `--max-http-clients` the least recently used entry is evicted."
   - q: "Why do my MCP sessions drop or streams get cut off?"
     a: "Two independent layers govern lifetime: the **MCP session** idle timeout (`--session-timeout`, default `30m`) and the **HTTP idle connection** timeout (`--http-idle-timeout`, default `0` = disabled). Because `--http-idle-timeout` defaults to `0`, the HTTP layer does not close idle connections, so `--session-timeout` is the effective idle lifetime. If sessions drop early, a low `--http-idle-timeout` or a reverse-proxy read/idle timeout is usually closing long-lived SSE streams; raise the proxy timeout for long-running MCP streams."
 ---
@@ -332,7 +332,7 @@ graph TD
 
 - Clients with the **same token and same GitLab URL** share the same MCP server instance
 - Clients with **different tokens** or **different GitLab URLs** get completely isolated instances
-- Raw tokens are **never stored** — only SHA-256 hashes of token+URL are kept in memory
+- Pool lookups use **only SHA-256 hashes** of token+URL; the entry's GitLab client keeps the credential it authenticates with for as long as the entry lives, since it cannot call GitLab without it, and nothing is written to disk
 - When the pool reaches `--max-http-clients`, the least recently used entry is evicted
 
 ### Session lifecycle
