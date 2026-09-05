@@ -292,10 +292,10 @@ graph TD
 
 The pool key is `SHA-256(token + "\x00" + gitlabURL)`, never the raw values. This means:
 
-- Raw tokens and URLs are never stored in memory beyond the initial request
+- No lookup structure holds a raw token: the pool map and the OAuth identity and rejection caches are keyed by digest, so a scan of those structures yields no credential
+- The entry's GitLab client necessarily holds the credential it authenticates with, for as long as the entry lives (bounded by `--pool-idle-timeout`, the credential age limit and LRU eviction), because it cannot call GitLab without it. Nothing is written to disk
 - The same token against different GitLab instances produces different pool entries
 - Log messages show only the last 4 characters of the token (e.g., `...a1b2`) for debugging
-- Even if the pool's internal state were somehow exposed, tokens remain protected
 
 ## Client Authentication
 
@@ -550,7 +550,7 @@ curl http://localhost:8080/.well-known/oauth-protected-resource/gitlab
 
 **Token caching:**
 
-- Cache key: SHA-256 hash of the token (raw token never stored)
+- Cache key: SHA-256 digest of instance and token; the cached identity holds the user id, username, scopes and expiry, and no token material
 - Default TTL: 15 minutes (configurable via `--oauth-cache-ttl`)
 - Bounds: minimum 1 minute, maximum 2 hours
 - Expired entries are evicted on the next lookup, and a background sweep at a quarter of `--oauth-cache-ttl` (30-second floor) removes the ones that are never looked up again

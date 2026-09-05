@@ -8,7 +8,7 @@ faq:
   - q: "¿Cómo se autentican los clientes en el modo HTTP?"
     a: "Los clientes envían su Token de Acceso Personal de GitLab en cada petición usando la cabecera `PRIVATE-TOKEN` (recomendada) o una cabecera `Authorization: Bearer`; si ambas están presentes en modo legacy, `PRIVATE-TOKEN` tiene precedencia (el modo OAuth solo lee el token Bearer). Un servidor arrancado con `--allow-any-gitlab-url` y sin instancia toma la instancia destino de la cabecera `GITLAB-URL`, y uno que publica varias exige esa cabecera para elegir entre ellas. Para producción, `--auth-mode=oauth` habilita OAuth 2.1 con PKCE compatible con RFC 9728, de modo que los clientes descubren el servidor de autorización y autorizan en el navegador en lugar de copiar tokens."
   - q: "¿Los clientes del modo HTTP comparten estado o contexto?"
-    a: "No. El modo HTTP usa un **pool LRU limitado** de instancias de servidor MCP indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una instancia, mientras que tokens distintos o URLs distintas obtienen instancias completamente aisladas. Los tokens sin procesar nunca se almacenan —solo los hashes SHA-256— y cuando el pool alcanza `--max-http-clients` se desaloja la entrada menos usada recientemente."
+    a: "No. El modo HTTP usa un **pool LRU limitado** de instancias de servidor MCP indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una instancia, mientras que tokens distintos o URLs distintas obtienen instancias completamente aisladas. Las búsquedas en el pool usan solo los hashes SHA-256, el cliente de GitLab de cada entrada conserva la credencial con la que se autentica mientras la entrada vive, y cuando el pool alcanza `--max-http-clients` se desaloja la entrada menos usada recientemente."
   - q: "¿Por qué se caen mis sesiones MCP o se cortan los streams?"
     a: "Dos capas independientes gobiernan la vida útil: el timeout de inactividad de la **sesión MCP** (`--session-timeout`, por defecto `30m`) y el timeout de **conexión HTTP inactiva** (`--http-idle-timeout`, por defecto `0` = desactivado). Como `--http-idle-timeout` vale `0` por defecto, la capa HTTP no cierra conexiones inactivas, así que `--session-timeout` es la vida efectiva de inactividad. Si las sesiones caen pronto, un `--http-idle-timeout` bajo o un timeout de lectura/inactividad del proxy inverso suele cerrar los streams SSE de larga duración; aumenta el timeout del proxy para streams MCP largos."
 ---
@@ -332,7 +332,7 @@ graph TD
 
 - Los clientes con el **mismo token y la misma URL de GitLab** comparten la misma instancia del servidor MCP
 - Los clientes con **diferentes tokens** o **diferentes URLs de GitLab** obtienen instancias completamente aisladas
-- Los tokens sin procesar **nunca se almacenan** — solo se mantienen hashes SHA-256 de token+URL en memoria
+- Las búsquedas en el pool usan **solo hashes SHA-256** de token+URL; el cliente de GitLab de cada entrada conserva la credencial con la que se autentica mientras la entrada vive, porque no puede llamar a GitLab sin ella, y nada se escribe en disco
 - Cuando el pool alcanza `--max-http-clients`, la entrada menos usada recientemente es desalojada
 
 ### Ciclo de vida de la sesión

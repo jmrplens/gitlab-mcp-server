@@ -13,12 +13,14 @@ package httpe2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -1005,6 +1007,278 @@ func TestOAuth_ResourceDocumentationIsOperatorConfigurable(t *testing.T) {
 			t.Errorf("an unset flag published the test's value: %s", got.body)
 		}
 	})
+}
+
+// startApplicationFakeGitLab serves a GitLab whose /oauth/token/info names the
+// OAuth application each bearer was minted for, which is the only recipient
+// signal the instance offers: GitLab publishes no resource_indicators_supported,
+// so the "or otherwise verify that they are the intended recipient" alternative
+// the specification allows is a comparison against that uid (ADR-0019).
+//
+// The PAT endpoint answers 404 on purpose. A PAT answer ends introspection
+// before the OAuth endpoint is asked, and the OAuth endpoint is the one that
+// names the application. A token the map does not know is refused everywhere.
+func startApplicationFakeGitLab(t *testing.T, applicationFor map[string]string) *fakeGitLab {
+	t.Helper()
+
+	var mu sync.Mutex
+	calls := 0
+
+	bearer := func(r *http.Request) string {
+		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		return token
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		if _, known := applicationFor[bearer(r)]; !known {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"username":"pinned"}`))
+	})
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	mux.HandleFunc("/oauth/token/info", func(w http.ResponseWriter, r *http.Request) {
+		uid, known := applicationFor[bearer(r)]
+		if !known {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"scope":["api"],"expires_in":7200,"application":{"uid":%q}}`, uid)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	return &fakeGitLab{
+		url: srv.URL,
+		calls: func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return calls
+		},
+	}
+}
+
+// TestOAuth_RecipientRefusalNamesTheDocumentationPage pins the refusal a pinned
+// deployment gives a token from another OAuth application, on the wire.
+//
+// It is the one refusal whose remedy is not in the protocol. A missing
+// credential says authorize, an invalid token says reauthorize, a missing scope
+// names the scope; this one says "obtain a token from the application the
+// operator published", and which application that is lives on the page the
+// metadata document publishes as resource_documentation. RFC 6750's error_uri
+// is the parameter for exactly that, and the challenge now carries it, so the
+// holder is not sent to fetch a document to find a page.
+//
+// The page in the challenge is read out of the document rather than written
+// down here: the two are the same page or the challenge is a lie, and that is
+// the property under test. The refusal must also stay repeatable, because a
+// refusal that charged the address would let one misconfigured client lock a
+// shared address out for everybody holding a credential this deployment does
+// admit.
+func TestOAuth_RecipientRefusalNamesTheDocumentationPage(t *testing.T) {
+	const ours, theirs = "5a4f1c0e-ours", "9b8e7d6c-theirs"
+	gitlab := startApplicationFakeGitLab(t, map[string]string{
+		"gloas-ours":   ours,
+		"gloas-theirs": theirs,
+	})
+
+	deployments := []struct {
+		name string
+		// page is what the operator named, or "" for the project default.
+		page string
+	}{
+		{name: "the operator's own page", page: "https://example.com/our-oauth-app"},
+		{name: "the project page when none is named", page: ""},
+	}
+
+	for _, deployment := range deployments {
+		t.Run(deployment.name, func(t *testing.T) {
+			flags := []string{"--oauth-client-uid=" + ours}
+			if deployment.page != "" {
+				flags = append(flags, "--resource-documentation="+deployment.page)
+			}
+			srv := oauthServer(t, gitlab.url, flags...)
+
+			page := publishedResourceDocumentation(t, srv)
+			if deployment.page != "" && page != deployment.page {
+				t.Fatalf("resource_documentation = %q, want the operator's %q", page, deployment.page)
+			}
+
+			t.Run("a token from another application is refused with the page", func(t *testing.T) {
+				assertRecipientRefusal(t, srv, "gloas-theirs", page)
+			})
+			t.Run("a token from the pinned application is admitted", func(t *testing.T) {
+				assertTokenAdmitted(t, srv, "gloas-ours")
+			})
+			t.Run("the refusal costs the address nothing", func(t *testing.T) {
+				assertRefusalIsFree(t, srv, "gloas-theirs")
+			})
+		})
+	}
+}
+
+// publishedResourceDocumentation reads the page the metadata document names,
+// which is the page a recipient refusal must name too.
+func publishedResourceDocumentation(t *testing.T, srv *server) string {
+	t.Helper()
+
+	got := srv.do(t, request{method: http.MethodGet, path: metadataBasePath})
+	if got.status != http.StatusOK {
+		t.Fatalf("metadata status = %d, want 200: %s", got.status, got.body)
+	}
+	var document struct {
+		ResourceDocumentation string `json:"resource_documentation"`
+	}
+	if err := json.Unmarshal([]byte(got.body), &document); err != nil {
+		t.Fatalf("metadata is not JSON: %v", err)
+	}
+	if document.ResourceDocumentation == "" {
+		t.Fatal("the document publishes no resource_documentation, so there is no page for the challenge to name")
+	}
+	return document.ResourceDocumentation
+}
+
+// assertRecipientRefusal checks the 401 a pinned deployment gives a token from
+// another application: the RFC 6750 code, the error_uri naming page, and a
+// message that says what is true rather than that GitLab rejected the token.
+func assertRecipientRefusal(t *testing.T, srv *server, token, page string) {
+	t.Helper()
+
+	got := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer " + token}))
+	if got.status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401: %s", got.status, got.body)
+	}
+	challenge := got.header.Get("WWW-Authenticate")
+	if !strings.Contains(challenge, `error="invalid_token"`) {
+		t.Errorf("challenge %q lacks the RFC 6750 error code", challenge)
+	}
+	if !strings.Contains(challenge, `error_uri="`+page+`"`) {
+		t.Errorf("challenge %q does not name the page the document publishes, %q", challenge, page)
+	}
+	if !strings.Contains(got.body, "not issued to an OAuth application") {
+		t.Errorf("the refusal must say what is actually wrong; got: %s", got.body)
+	}
+	if strings.Contains(got.body, "expired") || strings.Contains(challenge, "expired") {
+		t.Error("the refusal claims GitLab rejected the token; it did not, and reauthorizing returns the same one")
+	}
+}
+
+// assertTokenAdmitted checks that a token reaches tools/list, which is what
+// admission means: not merely that the door opened.
+func assertTokenAdmitted(t *testing.T, srv *server, token string) {
+	t.Helper()
+
+	got := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer " + token}))
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", got.status, got.body)
+	}
+	if !strings.Contains(got.body, `"tools"`) {
+		t.Errorf("an admitted token must reach tools/list; body: %s", truncate(got.body))
+	}
+}
+
+// assertRefusalIsFree repeats a refusal past the authentication-failure budget
+// and fails if the address is ever locked out. A refusal that charged the
+// budget would let one misconfigured client lock a shared address out for
+// everybody holding a credential the deployment does admit.
+func assertRefusalIsFree(t *testing.T, srv *server, token string) {
+	t.Helper()
+
+	for attempt := range 12 {
+		got := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer " + token}))
+		if got.status == http.StatusTooManyRequests {
+			t.Fatalf("attempt %d was rate limited: a genuine token from another application was charged against the address", attempt+1)
+		}
+		if got.status != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: status = %d, want 401", attempt+1, got.status)
+		}
+	}
+}
+
+// TestOAuth_PublishedAuthorizationServerIsTheCanonicalIssuer pins the string
+// clients read out of authorization_servers.
+//
+// A client builds the authorization-server metadata URL from that value and
+// then, per the discovery page, checks that the document's issuer "MUST be
+// identical to the issuer identifier used to construct the well-known URL",
+// discarding the metadata otherwise. GitLab's issuer is the canonical form of
+// the instance URL: lowercase host, no default port, no trailing slash, the
+// relative root kept. Whatever spelling the operator typed, that is what has
+// to be published, or every client's discovery fails against a document that
+// is perfectly correct.
+func TestOAuth_PublishedAuthorizationServerIsTheCanonicalIssuer(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured string
+		want       string
+	}{
+		{name: "case, default port and trailing slash are canonicalized", configured: "https://GitLab.Example.com:443/", want: "https://gitlab.example.com"},
+		{name: "a relative URL root is kept, since it is part of the issuer", configured: "https://gitlab.example.com/gitlab/", want: "https://gitlab.example.com/gitlab"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := startServer(t, nil,
+				"--auth-mode=oauth",
+				"--gitlab-url="+tt.configured,
+				"--public-url="+publicURL,
+			)
+
+			got := srv.do(t, request{method: http.MethodGet, path: metadataBasePath})
+			if got.status != http.StatusOK {
+				t.Fatalf("metadata status = %d, want 200: %s", got.status, got.body)
+			}
+			var document struct {
+				AuthorizationServers []string `json:"authorization_servers"`
+			}
+			if err := json.Unmarshal([]byte(got.body), &document); err != nil {
+				t.Fatalf("metadata is not JSON: %v", err)
+			}
+			if !slices.Equal(document.AuthorizationServers, []string{tt.want}) {
+				t.Errorf("authorization_servers = %v, want [%q]: a client compares this against the issuer GitLab publishes", document.AuthorizationServers, tt.want)
+			}
+		})
+	}
+}
+
+// TestOAuth_RefusesToStartWithNoAuthorizationServerToPublish pins the
+// discovery page's requirement that the metadata document "MUST include the
+// authorization_servers field containing at least one authorization server".
+//
+// --allow-any-gitlab-url publishes no instance, which in legacy mode is a
+// choice about who selects the instance. In oauth mode it would be a document
+// naming nowhere to authorize, so the combination is refused before anything
+// listens rather than served as an empty list.
+func TestOAuth_RefusesToStartWithNoAuthorizationServerToPublish(t *testing.T) {
+	out, err := runServerExpectingExit(t, serverBinary(t),
+		"--http", "--http-addr=127.0.0.1:"+itoa(freePort(t)),
+		"--auth-mode=oauth",
+		"--allow-any-gitlab-url",
+		"--public-url="+publicURL,
+	)
+
+	if err == nil {
+		t.Fatalf("oauth mode started with no authorization server to publish; output:\n%s", out)
+	}
+	if !strings.Contains(out, "--gitlab-url") {
+		t.Errorf("the startup error should say what is missing; got:\n%s", out)
+	}
 }
 
 // TestOAuth_SkipTLSVerifyScope verifies where oauth mode will and will not

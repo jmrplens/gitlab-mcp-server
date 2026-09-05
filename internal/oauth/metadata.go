@@ -48,6 +48,23 @@ type ResourceLinks struct {
 	TermsOfService string
 }
 
+// DocumentationURL is the page the metadata document publishes as
+// resource_documentation: the operator's own when one was named, and
+// [DefaultResourceDocumentation] otherwise.
+//
+// It is a method rather than a line inside [NewProtectedResourceHandler]
+// because the same page is named a second time, as the RFC 6750 error_uri of
+// the refusal a pinned deployment gives a token from another application. That
+// refusal tells the holder to read the resource documentation; two call sites
+// resolving the default separately is how the challenge and the document would
+// come to name different pages.
+func (l ResourceLinks) DocumentationURL() string {
+	if l.Documentation == "" {
+		return DefaultResourceDocumentation
+	}
+	return l.Documentation
+}
+
 // NewProtectedResourceHandler returns an http.Handler that serves RFC 9728
 // Protected Resource Metadata. MCP clients use this endpoint to discover the
 // GitLab authorization server associated with this resource.
@@ -68,10 +85,6 @@ type ResourceLinks struct {
 // The handler is registered at the single path [MetadataPathFor] derives from
 // the resource identifier.
 func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes []string, links ResourceLinks) http.Handler {
-	documentationURL := links.Documentation
-	if documentationURL == "" {
-		documentationURL = DefaultResourceDocumentation
-	}
 	metadata := &oauthex.ProtectedResourceMetadata{
 		Resource: resourceURL,
 		// RFC 9728 defines authorization_servers as an array, so a
@@ -86,7 +99,7 @@ func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes
 		// directory or consent screen label this resource instead of
 		// showing only its URL.
 		ResourceName:          "GitLab MCP Server",
-		ResourceDocumentation: documentationURL,
+		ResourceDocumentation: links.DocumentationURL(),
 		// Both are omitempty, and both stay empty unless an operator names a
 		// page. A field pointing at a document that does not exist is worse
 		// than an absent optional field: a consent screen would render a dead

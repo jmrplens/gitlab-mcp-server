@@ -309,7 +309,34 @@ A personal access token used as Bearer has none of this: it lives until its own 
 | Token revoked on GitLab          | Next request after cache expiry returns 401                 |
 | Background cleanup               | Expired cache entries evicted periodically                  |
 
-The cache stores only successful verifications, keyed by a SHA-256 hash — raw tokens are never stored. `--oauth-cache-ttl` (default 15m, range 1m–2h) bounds how long a revoked token keeps working.
+The cache stores only successful verifications, keyed by a SHA-256 digest of instance and token, and the cached identity holds no token material. `--oauth-cache-ttl` (default 15m, range 1m–2h) bounds how long a revoked token keeps working, and the token's own expiry shortens it further when the instance reports one.
+
+---
+
+## Admitting only your own application
+
+By default the server admits any credential the instance accepts: a token from
+your application, a token from any other OAuth application on the same GitLab,
+or a personal access token. GitLab's authorization server publishes no
+`resource_indicators_supported`, so RFC 8707 audience restriction is not
+available and the server cannot tell from the token alone which application it
+was issued to; the reasoning is
+[ADR-0019](../development/adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md).
+
+`--oauth-client-uid` (env `GITLAB_MCP_OAUTH_CLIENT_UID`) turns on the check the
+specification allows instead. Its value is the **Application ID** from Step 1,
+the same string clients configure as `clientId`: GitLab reports it as
+`application.uid` when the server introspects a token, and only tokens naming
+one of the listed applications are admitted. List several, comma-separated,
+when `--gitlab-url` publishes several instances, since each has its own
+application.
+
+Turning it on refuses personal access tokens, which belong to no application,
+so it is not a default. A refused token is answered `401` with
+`error="invalid_token"` and an `error_uri` naming the page published as
+`resource_documentation`, which is where a person finding that response should
+be told which application to use: point `--resource-documentation` at your own
+page when you pin.
 
 ---
 
@@ -349,4 +376,4 @@ The cache stores only successful verifications, keyed by a SHA-256 hash — raw 
 - [GitLab: Configure GitLab as an OAuth 2.0 provider](https://docs.gitlab.com/ee/integration/oauth_provider.html) — official GitLab OAuth Application docs
 - [RFC 9728: OAuth 2.0 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728) — the specification implemented by `--auth-mode=oauth`
 - [OAuth 2.1 Authorization Framework (draft)](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-12) — the latest OAuth specification (mandates PKCE)
-- [MCP Specification: Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization) — MCP protocol authorization requirements
+- [MCP Specification: Authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization) — MCP protocol authorization requirements, with the [authorization-server discovery](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/authorization-server-discovery), [client registration](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration) and [security considerations](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations) sub-pages this server was verified against

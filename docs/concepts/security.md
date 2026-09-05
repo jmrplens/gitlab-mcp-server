@@ -85,6 +85,59 @@ the pin. The full reasoning, with the live evidence that GitLab publishes no
 `resource_indicators_supported`, is
 [ADR-0019](../development/adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md).
 
+### What the authorization sub-pages ask of a resource server (verified 2026-09-05)
+
+The three sub-pages of the 2026-07-28 authorization specification
+(authorization-server discovery, client registration, security considerations)
+were read clause by clause against this server on that date, after the main
+authorization page and the Streamable HTTP transport had been. Of their
+normative sentences, the ones that bind a **resource server** are these, and
+this is where each is met:
+
+- RFC 9728 protected-resource metadata with at least one `authorization_servers`
+  entry: served at the path §3 derives from `--public-url`; a deployment with no
+  instance to publish (`--allow-any-gitlab-url`) refuses to start in oauth mode
+  rather than publish an empty list. The published value is the canonical form
+  of the instance URL (lowercase host, no default port, no trailing slash, any
+  relative root kept), because a client builds the authorization-server
+  metadata URL from it and must find an `issuer` identical to it.
+- One of the two discovery mechanisms: both are served, `resource_metadata` in
+  every `401` challenge and the well-known document, with `scope` in the
+  challenge as the discovery page permits.
+- OAuth 2.1 §5.2 validation of every inbound token before the request is
+  processed: verified against the instance the request selected, expiry taken
+  from the token itself, scope checked at the door and per action, and every
+  method that can reach a session authenticated, stateful `GET` and `DELETE`
+  included.
+- Audience binding and the passthrough prohibition: the documented deviation
+  above, with `--oauth-client-uid` as the specification's "otherwise verify"
+  alternative.
+- Secure token handling: the identity cache was found to hold the raw bearer
+  beside its digest key, unread by anything, and no longer does. Tokens reach
+  logs as their last four characters only, and the only accepted transmission
+  method is the `Authorization` header, which `bearer_methods_supported` states.
+
+Everything else on those pages binds the client (PKCE with `S256`, the
+`resource` parameter, `state`, the `iss` check, registration state kept per
+authorization server, registered redirect URIs) or the authorization server
+(client ID metadata documents, dynamic registration, exact redirect URI
+validation, refresh-token rotation, short-lived tokens). This server registers
+no clients, issues no tokens and forwards nothing to a third-party
+authorization server, so the confused-deputy clause on proxy servers holding a
+static client ID does not apply to it.
+
+GitLab.com's authorization-server metadata on that date: `code_challenge_methods_supported`
+(`plain`, `S256`) is published in both the OAuth and the OpenID documents, so
+the PKCE gate every MCP client must apply passes; `registration_endpoint` is
+published; `resource_indicators_supported`,
+`client_id_metadata_document_supported`,
+`authorization_response_iss_parameter_supported` and every DPoP field are
+absent. That absence is also why the RFC 9728 fields for DPoP-bound tokens,
+mutual-TLS-bound tokens, authorization details and signed metadata are not
+published in this server's document: each would state a capability the
+authorization server does not offer, and an omitted optional field is the
+truthful value for all of them.
+
 ## Cross-Origin Protection
 
 Every non-safe request (`POST`, `DELETE`) that a **browser** makes from another origin is rejected with `403` before authentication or MCP dispatch:
@@ -252,7 +305,7 @@ When running with `--http`:
 When running with `--auth-mode=oauth`, the server validates every request's Bearer token against the GitLab `/api/v4/user` endpoint before processing:
 
 - **Token verification** — Each token is validated by calling GitLab's user API. Invalid or expired tokens receive HTTP 401
-- **Identity caching** — Verified token identities are cached in-memory using SHA-256 hashed keys (raw tokens are never stored). Cache TTL is configurable via `--oauth-cache-ttl` (default 15m, range 1m–2h)
+- **Identity caching** — Verified token identities are cached in-memory under a SHA-256 digest of instance and token; the cached identity holds the user id, username, scopes and expiry, and no token material. Cache TTL is configurable via `--oauth-cache-ttl` (default 15m, range 1m–2h), and never outlives the token's own expiry when the instance reports one
 - **Bearer only** — only the standard `Authorization: Bearer` scheme is accepted; the legacy `PRIVATE-TOKEN` header is rejected with HTTP 401 in this mode (it remains accepted in legacy mode)
 - **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
 - **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
@@ -275,25 +328,28 @@ Neither cache records an upstream failure. A timeout, a `5xx`, or a `429` from G
 
 The [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750) error code in `WWW-Authenticate` is the difference between a client reauthorizing, asking for more scope, or simply retrying:
 
-| Condition                       | Status | Challenge                                            |
-| ------------------------------- | ------ | ---------------------------------------------------- |
-| No credential at all            | `401`  | no `error` code (RFC 6750 §3.1), `resource_metadata` |
-| GitLab rejected the token       | `401`  | `error="invalid_token"` with a description           |
-| Token lacks the required scope  | `403`  | `error="insufficient_scope"`, `scope="<required>"`   |
-| Address over the failure budget | `429`  | none; `Retry-After`                                  |
-| GitLab throttled or unreachable | `503`  | **none**; `Retry-After`                              |
+| Condition                                                                      | Status | Challenge                                                              |
+| ------------------------------------------------------------------------------ | ------ | ---------------------------------------------------------------------- |
+| No credential at all                                                           | `401`  | no `error` code (RFC 6750 §3.1), `resource_metadata`                   |
+| GitLab rejected the token                                                      | `401`  | `error="invalid_token"` with a description                             |
+| Token lacks the required scope                                                 | `403`  | `error="insufficient_scope"`, `scope="<required>"`                     |
+| Token from an application the deployment does not admit (`--oauth-client-uid`) | `401`  | `error="invalid_token"`, `error_uri` naming the resource documentation |
+| Address over the failure budget                                                | `429`  | none; `Retry-After`                                                    |
+| GitLab throttled or unreachable                                                | `503`  | **none**; `Retry-After`                                                |
 
 The last row matters more than it looks. Reporting a throttled GitLab as `invalid_token` makes a well-behaved MCP client discard a good credential and start a fresh authorization flow — generating more upstream traffic at exactly the moment the instance asked for less, and asking the user to re-approve an application that was never the problem. A `503` carries no challenge, propagates GitLab's own `Retry-After` when it sent one, and says plainly that the token has not been rejected.
 
+The recipient-pin row is the one refusal whose remedy is not in the protocol: obtaining a token from the application the operator published, which is what the page named as `resource_documentation` describes. Its challenge therefore also carries RFC 6750's `error_uri`, set to that same page, so the holder is not sent to fetch the metadata document to find it. It is kept off the failure budget and cached as its own kind of refusal, because GitLab rejected nothing and reauthorizing returns the same token.
+
 See [HTTP Server Mode — OAuth Mode](../guides/http-server-mode.md#oauth-mode) for the full architecture and flow diagram, and [OAuth App Setup](../guides/oauth-app-setup.md) for creating GitLab OAuth applications.
 
-| Threat                 | Mitigation                                                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Token replay           | TTL-based expiration; tokens re-verified after cache expires                                                                                    |
-| Cache key leakage      | SHA-256 hashing of raw tokens; original tokens never stored                                                                                     |
-| Brute force            | Per-address failure budget (10/minute) plus a rejected-token cache, so repeated attempts never reach GitLab                                     |
-| Upstream amplification | A repeated token is answered from memory, and the failure budget caps the rest: at most ten distinct-token verifications per address per window |
-| Memory dump            | Only SHA-256 hashes and user metadata stored; no raw tokens in cache                                                                            |
+| Threat                 | Mitigation                                                                                                                                                                                                            |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token replay           | TTL-based expiration; tokens re-verified after cache expires                                                                                                                                                          |
+| Cache key leakage      | Keys are SHA-256 digests of instance and token, and the cached identity carries no token material                                                                                                                     |
+| Brute force            | Per-address failure budget (10/minute) plus a rejected-token cache, so repeated attempts never reach GitLab                                                                                                           |
+| Upstream amplification | A repeated token is answered from memory, and the failure budget caps the rest: at most ten distinct-token verifications per address per window                                                                       |
+| Memory dump            | The identity and rejection caches hold digests and user metadata only; the pooled GitLab client holds its credential for the entry's lifetime, since it cannot call GitLab without it, and nothing is written to disk |
 
 ## PAT Scope-Based Tool Filtering
 

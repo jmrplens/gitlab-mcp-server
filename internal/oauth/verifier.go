@@ -312,8 +312,18 @@ func sameVerificationHost(origin, dest *url.URL) bool {
 // The returned verifier populates [auth.TokenInfo] with:
 //   - UserID: the GitLab user's numeric ID (as string)
 //   - Extra["username"]: the GitLab user's login name
-//   - Extra["token"]: the raw token (for downstream GitLab client creation)
-//   - Expiration: now + cacheTTL (so the SDK middleware honors TTL)
+//   - Expiration: now + cacheTTL, shortened to the token's own expiry when the
+//     instance reports one (so the SDK middleware honors both)
+//
+// The raw token is deliberately not carried in Extra. It used to be, "for
+// downstream GitLab client creation", but nothing downstream ever read it: the
+// pool takes the credential from the request header, and the SDK reads only
+// UserID, Scopes and Expiration. What carrying it did do was put every verified
+// bearer, in the clear, into the [TokenCache] for the length of the TTL, while
+// this package's own documentation promised the cache held no raw token
+// material. The MCP security considerations name "tokens cached or logged on
+// the server" as the theft surface; the cache is keyed by digest so that a
+// memory dump yields no credential, and the value has to keep that promise too.
 func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, cache *TokenCache, clientUIDs ...string) auth.TokenVerifier {
 	return NewGitLabVerifierFor(
 		func(*http.Request) (string, error) { return gitlabURL, nil },
@@ -454,9 +464,10 @@ func admitToken(cache *TokenCache, gitlabURL, token string, cacheTTL time.Durati
 		UserID:     strconv.Itoa(user.ID),
 		Scopes:     result.scopes,
 		Expiration: time.Now().Add(ttl),
+		// The username only. The raw token stays out on purpose; see the
+		// doc comment on [NewGitLabVerifier].
 		Extra: map[string]any{
 			"username": user.Username,
-			"token":    token,
 		},
 	}
 

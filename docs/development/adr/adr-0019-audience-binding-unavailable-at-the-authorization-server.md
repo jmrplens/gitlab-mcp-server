@@ -175,14 +175,33 @@ sets `--oauth-client-uid`.
   defines no field for a recipient pin, so a client cannot discover the
   requirement in advance and learns about it from the `401`. That answer now
   names the cause and points at `resource_documentation`, which is as close to
-  discovery as the RFC allows.
+  discovery as the RFC allows. [Since 2026-09-05 the `401` names that page
+  directly, as the RFC 6750 `error_uri` of its challenge, resolved from the
+  same value the metadata document publishes as `resource_documentation`.
+  Before that the message said the page was named in the challenge while the
+  challenge named only `resource_metadata`, a document the holder had to fetch
+  to find it.]
 
 ### Neutral
 
 - NEU-001: If GitLab adds `resource_indicators_supported`, decisions 1 and 2
   are superseded: the `resource` parameter becomes the mechanism and the
   application pin becomes redundant. That is the revisit trigger: watch the
-  authorization-server metadata document, not a release note.
+  authorization-server metadata document, not a release note. [Re-checked
+  2026-09-05 against the same URL: the same eighteen keys, still no
+  `resource_indicators_supported`. The same document is the trigger for three
+  neighbouring decisions taken while reading the authorization sub-pages
+  clause by clause: `client_id_metadata_document_supported` is absent (the
+  client-registration page's preferred mechanism; a resource server neither
+  publishes nor consumes it, so nothing changes here when it appears),
+  `authorization_response_iss_parameter_supported` is absent (the mix-up
+  mitigation is the client's `iss` check, and RFC 9728 gives a resource server
+  no field for it), and `dpop_signing_alg_values_supported` is absent (the RFC
+  9728 DPoP, mutual-TLS and authorization-details fields are left out of the
+  protected-resource document because each would state a capability GitLab
+  does not offer, and would go in the day it does). `code_challenge_methods_supported`
+  is present in both the OAuth and the OpenID documents, so the PKCE gate
+  every MCP client must apply passes against GitLab.]
 
 ## Alternatives Considered
 
