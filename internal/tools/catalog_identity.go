@@ -3,11 +3,11 @@ package tools
 import (
 	"encoding/json"
 	"strings"
-	"sync"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // actionArgumentName is the JSON field both dispatching surfaces carry the
@@ -58,13 +58,9 @@ func NewCallIdentifier(catalog *actioncatalog.Catalog, surface string) mcpotel.C
 	// shared catalog can use one; built from the origin, whose actions carry
 	// the same names, so the maps hold nothing bound to a credential.
 	key := identifierKey{origin: origin, surface: surface}
-	if cached, ok := sharedIdentifiers.Load(key); ok {
-		identifier, _ := cached.(mcpotel.CallIdentifier)
-		return identifier
-	}
-	actual, _ := sharedIdentifiers.LoadOrStore(key, newCallIdentifier(origin.Actions(), surface))
-	identifier, _ := actual.(mcpotel.CallIdentifier)
-	return identifier
+	return sharedIdentifiers.Load(key, func() mcpotel.CallIdentifier {
+		return newCallIdentifier(origin.Actions(), surface)
+	})
 }
 
 // identifierKey names one shared identifier: the shared catalog it resolves
@@ -75,7 +71,9 @@ type identifierKey struct {
 }
 
 // sharedIdentifiers holds one identifier per shared catalog and surface.
-var sharedIdentifiers sync.Map // identifierKey -> mcpotel.CallIdentifier
+// Single-flight, so a startup burst of servers for one configuration indexes
+// the actions once rather than once each.
+var sharedIdentifiers toolutil.OnceMap[identifierKey, mcpotel.CallIdentifier]
 
 // newCallIdentifier builds the resolver from a plain slice of actions.
 //

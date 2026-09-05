@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -294,26 +293,23 @@ func RegisterToolSurfaceResources(server *mcp.Server, opts ToolSurfaceResourceOp
 	registerToolManifestTemplate(server, snapshot)
 }
 
-// sharedToolSurfaceSnapshots holds one snapshot per share key.
-var sharedToolSurfaceSnapshots sync.Map // string -> *toolSurfaceSnapshot
+// sharedToolSurfaceSnapshots holds one snapshot per share key. Single-flight,
+// so a startup burst of servers under one key projects the surface once
+// rather than once each and discards all but one of the snapshots.
+var sharedToolSurfaceSnapshots toolutil.OnceMap[string, *toolSurfaceSnapshot]
 
 // toolSurfaceSnapshotFor returns the snapshot for opts: the one cached under
-// opts.ShareKey when a key was given, built by the first caller for it, and
-// a private one otherwise. Two servers that race to build one key both
-// build; the first to store wins and the other's copy is dropped.
+// opts.ShareKey when a key was given, built by the first caller for it while
+// every concurrent caller for that key waits, and a private one otherwise.
 func toolSurfaceSnapshotFor(opts ToolSurfaceResourceOptions) *toolSurfaceSnapshot {
 	if opts.ShareKey == "" {
 		snapshot := newToolSurfaceSnapshot(opts)
 		return &snapshot
 	}
-	if cached, ok := sharedToolSurfaceSnapshots.Load(opts.ShareKey); ok {
-		snapshot, _ := cached.(*toolSurfaceSnapshot)
-		return snapshot
-	}
-	built := newToolSurfaceSnapshot(opts)
-	actual, _ := sharedToolSurfaceSnapshots.LoadOrStore(opts.ShareKey, &built)
-	snapshot, _ := actual.(*toolSurfaceSnapshot)
-	return snapshot
+	return sharedToolSurfaceSnapshots.Load(opts.ShareKey, func() *toolSurfaceSnapshot {
+		built := newToolSurfaceSnapshot(opts)
+		return &built
+	})
 }
 
 // registerToolManifestIndex registers the static catalog resource that

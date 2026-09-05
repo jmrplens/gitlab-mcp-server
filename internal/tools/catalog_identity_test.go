@@ -25,12 +25,12 @@ func TestNewCallIdentifier_SharedCatalogReusesOneResolver(t *testing.T) {
 	}
 	key := identifierKey{origin: origin, surface: config.ToolSurfaceDynamic}
 	first := NewCallIdentifier(shared, config.ToolSurfaceDynamic)
-	cached, ok := sharedIdentifiers.Load(key)
+	cached, ok := sharedIdentifiers.Peek(key)
 	if !ok {
 		t.Fatal("NewCallIdentifier(shared catalog) left nothing in the cache")
 	}
 	second := NewCallIdentifier(shared.SharedOrigin().BindTo(nil), config.ToolSurfaceDynamic)
-	for name, identifier := range map[string]mcpotel.CallIdentifier{"first": first, "second": second, "cached": cached.(mcpotel.CallIdentifier)} {
+	for name, identifier := range map[string]mcpotel.CallIdentifier{"first": first, "second": second, "cached": cached} {
 		t.Run(name, func(t *testing.T) {
 			identity, found := identifier.Identify("gitlab_execute_action", rawArgs(t, map[string]any{"action": "issue.list"}))
 			if !found || identity.ActionID != "issue.list" {
@@ -52,7 +52,7 @@ func TestNewCallIdentifier_SharedCatalogReusesOneResolver(t *testing.T) {
 	if identity, found := resolver.Identify("gitlab_issue", rawArgs(t, map[string]any{"action": "list"})); !found || identity.ActionID != "issue.list" {
 		t.Errorf("private resolver Identify(gitlab_issue list) = %+v, %t, want issue.list", identity, found)
 	}
-	if _, leaked := sharedIdentifiers.Load(identifierKey{origin: private, surface: config.ToolSurfaceMeta}); leaked {
+	if _, leaked := sharedIdentifiers.Peek(identifierKey{origin: private, surface: config.ToolSurfaceMeta}); leaked {
 		t.Fatal("NewCallIdentifier(private catalog) cached a resolver under a catalog nobody shared")
 	}
 }

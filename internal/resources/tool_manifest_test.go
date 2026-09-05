@@ -917,7 +917,7 @@ func TestToolSurfaceSnapshotFor_ShareKeyReusesOneSnapshot(t *testing.T) {
 	if first != toolSurfaceSnapshotFor(shared) {
 		t.Fatal("two registrations under one share key built two snapshots, want one")
 	}
-	if cached, ok := sharedToolSurfaceSnapshots.Load(shared.ShareKey); !ok || cached != first {
+	if cached, ok := sharedToolSurfaceSnapshots.Peek(shared.ShareKey); !ok || cached != first {
 		t.Fatal("the shared snapshot is not the cached one")
 	}
 	private := ToolSurfaceResourceOptions{Surface: toolSurfaceDynamic}

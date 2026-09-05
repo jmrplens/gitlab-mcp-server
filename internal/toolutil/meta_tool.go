@@ -393,6 +393,13 @@ func (route ActionRoute) withBoundHandler(handler ActionFunc) ActionRoute {
 // binder installed, compared by identity rather than by the code it runs,
 // because the compiler gives an inlined copy of a function literal a closure
 // of its own.
+//
+// A route with no binder at all passes here, because this compares the two
+// halves against each other and there is nothing to compare. Whether a route
+// is allowed to have no binder is a question about where the route lives, and
+// is answered where that is known: the catalog requires one of every action
+// but the dynamic controllers, which close over a registry rather than a
+// client.
 func ValidateRouteBinding(route ActionRoute) error {
 	if route.Bind == nil || route.Handler == nil {
 		return nil
@@ -478,21 +485,32 @@ func DestructiveFunc[T, R any](fn func(ctx context.Context, input T) (R, error))
 
 // outputSchemaCache stores reflected output schemas by Go type to avoid
 // regenerating identical JSON Schemas for every route registration.
+//
+// Single-flight, and that matters here rather than being tidiness: the map a
+// build produces is registered with [ShareSchema] and lives for the process,
+// so two configurations reflecting one type at the same moment used to
+// register two identical maps, both permanent, and the loser's copy was still
+// returned and embedded in its catalog's routes. Every transform downstream
+// then memoized twice, which is a silent partial loss of exactly the sharing
+// these caches exist for.
 var (
-	outputSchemaCache sync.Map // reflect.Type → map[string]any
-	inputSchemaCache  sync.Map // reflect.Type → map[string]any
+	outputSchemaCache OnceMap[reflect.Type, map[string]any]
+	inputSchemaCache  OnceMap[reflect.Type, map[string]any]
 )
 
 // schemaForType generates a JSON Schema map for the given reflect.Type
-// and caches the result. Returns nil on error (best-effort).
+// and caches the result. Returns nil on error (best-effort); the failure is
+// memoized with everything else, since reflecting one type is deterministic
+// and a retry would fail the same way.
 func schemaForType(rt reflect.Type) map[string]any {
 	if rt.Kind() == reflect.Pointer {
 		rt = rt.Elem()
 	}
-	if cached, ok := outputSchemaCache.Load(rt); ok {
-		m, _ := cached.(map[string]any)
-		return m
-	}
+	return outputSchemaCache.Load(rt, func() map[string]any { return buildSchemaForType(rt) })
+}
+
+// buildSchemaForType reflects one type into a shared JSON Schema map.
+func buildSchemaForType(rt reflect.Type) map[string]any {
 	schema, err := jsonschema.ForType(rt, nil)
 	if err != nil {
 		return nil
@@ -509,7 +527,6 @@ func schemaForType(rt reflect.Type) map[string]any {
 	// Cached for the process, so shared: every transform of it can be
 	// memoized by its address (see ShareSchema).
 	ShareSchema(m)
-	outputSchemaCache.Store(rt, m)
 	return m
 }
 
@@ -529,14 +546,19 @@ func normalizeSchemaDescriptions(node any) {
 	}
 }
 
+// inputSchemaForType returns the reflected input schema for a type: the
+// output schema with the write-only secret fields marked and the required
+// list replaced by the one the Go tags declare. Shared and single-flighted
+// for the reason [outputSchemaCache] gives.
 func inputSchemaForType(rt reflect.Type) map[string]any {
 	if rt.Kind() == reflect.Pointer {
 		rt = rt.Elem()
 	}
-	if cached, ok := inputSchemaCache.Load(rt); ok {
-		m, _ := cached.(map[string]any)
-		return m
-	}
+	return inputSchemaCache.Load(rt, func() map[string]any { return buildInputSchemaForType(rt) })
+}
+
+// buildInputSchemaForType builds what [inputSchemaForType] memoizes.
+func buildInputSchemaForType(rt reflect.Type) map[string]any {
 	baseSchema := schemaForType(rt)
 	if baseSchema == nil {
 		return nil
@@ -549,7 +571,6 @@ func inputSchemaForType(rt reflect.Type) map[string]any {
 		delete(schema, "required")
 	}
 	ShareSchema(schema)
-	inputSchemaCache.Store(rt, schema)
 	return schema
 }
 
@@ -2289,8 +2310,9 @@ func metaSchemaCompileKey(name string, routes ActionMap) string {
 }
 
 // metaEnvelopes holds one compact or full envelope per distinct routes map,
-// keyed by [metaEnvelopeKey].
-var metaEnvelopes sync.Map // string -> map[string]any
+// keyed by [metaEnvelopeKey]. Single-flight, so a startup burst of servers
+// for one configuration builds one envelope per key rather than one each.
+var metaEnvelopes OnceMap[string, map[string]any]
 
 // metaEnvelopeKey names a compact or full envelope by what it embeds: the
 // mode, and every action with the identity of its params schema. A schema
@@ -2330,17 +2352,11 @@ func metaEnvelopeFor(routes ActionMap, mode string) map[string]any {
 	if !ok {
 		return BuildMetaToolSchema(routes, mode)
 	}
-	if cached, hit := metaEnvelopes.Load(key); hit {
-		envelope, _ := cached.(map[string]any)
-		return envelope
-	}
-	built := BuildMetaToolSchema(routes, mode)
-	actual, loaded := metaEnvelopes.LoadOrStore(key, built)
-	if !loaded {
+	return metaEnvelopes.Load(key, func() map[string]any {
+		built := BuildMetaToolSchema(routes, mode)
 		ShareSchema(built)
-	}
-	envelope, _ := actual.(map[string]any)
-	return envelope
+		return built
+	})
 }
 
 // FormatResultFunc converts an action result into an MCP call tool result.
