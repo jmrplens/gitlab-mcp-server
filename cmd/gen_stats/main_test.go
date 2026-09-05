@@ -8,6 +8,8 @@
 package main
 
 import (
+	"errors"
+	"go/ast"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -891,4 +893,72 @@ func splitTableRow(line string) []string {
 		cells = append(cells, strings.TrimSpace(part))
 	}
 	return cells
+}
+
+// TestRunMain_ReturnsTheExitCodeForRunsOutcome verifies the dispatch: a run
+// that succeeds exits 0, and one that fails exits 1 after reporting the error.
+func TestRunMain_ReturnsTheExitCodeForRunsOutcome(t *testing.T) {
+	tests := []struct {
+		name   string
+		runErr error
+		want   int
+	}{
+		{name: "a successful run exits zero", runErr: nil, want: 0},
+		{name: "a failing run exits one", runErr: errors.New("boom"), want: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runStats = func(bool) error { return tt.runErr }
+			t.Cleanup(func() { runStats = run })
+			if got := runMain([]string{"gen_stats", "--check"}); got != tt.want {
+				t.Errorf("runMain() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMain_HandsTheExitCodeToOsExit verifies main wires runMain's result to the
+// exit seam. os.Args is replaced so the flag set parses no test flags.
+func TestMain_HandsTheExitCodeToOsExit(t *testing.T) {
+	runStats = func(bool) error { return nil }
+	t.Cleanup(func() { runStats = run })
+	oldArgs := os.Args
+	os.Args = []string{"gen_stats"}
+	t.Cleanup(func() { os.Args = oldArgs })
+	var got int
+	osExit = func(code int) { got = code }
+	t.Cleanup(func() { osExit = os.Exit })
+
+	main()
+
+	if got != 0 {
+		t.Errorf("main() exited %d, want 0", got)
+	}
+}
+
+// TestCountStructType_CountsOnlyStructTypeSpecs verifies the struct counter and
+// its guard: a struct type declaration is counted, a non-struct type is not,
+// and a spec that is not a type declaration at all is passed over.
+func TestCountStructType_CountsOnlyStructTypeSpecs(t *testing.T) {
+	t.Run("a struct type is counted", func(t *testing.T) {
+		var s repoStats
+		countStructType(&ast.TypeSpec{Name: ast.NewIdent("T"), Type: &ast.StructType{Fields: &ast.FieldList{}}}, &s)
+		if s.StructTypes != 1 {
+			t.Errorf("StructTypes = %d, want 1", s.StructTypes)
+		}
+	})
+	t.Run("a non-struct type is not counted", func(t *testing.T) {
+		var s repoStats
+		countStructType(&ast.TypeSpec{Name: ast.NewIdent("T"), Type: ast.NewIdent("int")}, &s)
+		if s.StructTypes != 0 {
+			t.Errorf("StructTypes = %d, want 0", s.StructTypes)
+		}
+	})
+	t.Run("a spec that is not a type declaration is skipped", func(t *testing.T) {
+		var s repoStats
+		countStructType(&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent("x")}}, &s)
+		if s.StructTypes != 0 {
+			t.Errorf("StructTypes = %d, want 0", s.StructTypes)
+		}
+	})
 }

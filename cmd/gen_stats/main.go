@@ -48,15 +48,32 @@ const (
 	scannerBufSize = 512 * 1024
 )
 
+// Seams over os.Exit and run, so a test can observe the exit code runMain
+// returns and drive both of its branches without regenerating the real README
+// or ending the test process.
+var (
+	osExit   = os.Exit
+	runStats = run
+)
+
 // main regenerates the README stats section and exits non-zero on failure.
 // With --check it verifies the section is current without writing.
 func main() {
-	check := flag.Bool("check", false, "verify README stats section is current without writing")
-	flag.Parse()
-	if err := run(*check); err != nil {
+	osExit(runMain(os.Args))
+}
+
+// runMain parses the flags and dispatches to run, returning the process exit
+// code. It takes its arguments explicitly, the way run takes its options, so a
+// test can drive every exit path.
+func runMain(args []string) int {
+	fs := flag.NewFlagSet(args[0], flag.ExitOnError)
+	check := fs.Bool("check", false, "verify README stats section is current without writing")
+	fs.Parse(args[1:]) //nolint:errcheck // ExitOnError handles parse failures
+	if err := runStats(*check); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 // run collects repository statistics and replaces the README stats section.
@@ -356,17 +373,25 @@ func scanGoDecls(path string, isE2E, isTest bool, s *repoStats) error {
 				continue
 			}
 			for _, spec := range d.Specs {
-				ts, ok := spec.(*ast.TypeSpec)
-				if !ok {
-					continue
-				}
-				if _, isStruct := ts.Type.(*ast.StructType); isStruct {
-					s.StructTypes++
-				}
+				countStructType(spec, s)
 			}
 		}
 	}
 	return nil
+}
+
+// countStructType increments the struct counter when spec declares a struct
+// type. The specs of a type declaration are always TypeSpecs, so the assertion
+// is a guard rather than a filter; it is a function of its own only so a test
+// can drive that guard with a spec that is not one.
+func countStructType(spec ast.Spec, s *repoStats) {
+	ts, ok := spec.(*ast.TypeSpec)
+	if !ok {
+		return
+	}
+	if _, isStruct := ts.Type.(*ast.StructType); isStruct {
+		s.StructTypes++
+	}
 }
 
 func updateFunctionStats(name string, isE2E, isTest bool, s *repoStats) {
