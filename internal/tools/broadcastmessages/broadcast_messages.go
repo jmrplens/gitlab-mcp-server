@@ -213,7 +213,7 @@ type UpdateInput struct {
 	StartsAt           string  `json:"starts_at,omitempty" jsonschema:"Start time in ISO 8601 format"`
 	EndsAt             string  `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
 	Font               string  `json:"font,omitempty" jsonschema:"Font for the message"`
-	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target"`
+	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)"`
 	TargetPath         string  `json:"target_path,omitempty" jsonschema:"Target path to show message on"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`

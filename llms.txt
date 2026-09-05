@@ -231,9 +231,9 @@ Prompts:
 
 - [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): 151 KB, ~39k tokens. Every tool and action with its description, without the per-action JSON schemas. The largest of these that still loads into a context window
 - [Meta-tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt): 2.0 MB, ~534k tokens. Full schemas for the dynamic and meta-tool surfaces only
-- [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): 873 KB, ~224k tokens. Full schemas for the one-tool-per-operation surface only
+- [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): 875 KB, ~224k tokens. Full schemas for the one-tool-per-operation surface only
 - [Resources and prompts reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-resources-prompts.txt): 29 KB, ~7k tokens. MCP resource and prompt definitions only
-- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 2.9 MB, ~765k tokens. The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead
+- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 2.9 MB, ~766k tokens. The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead
 - [Architecture](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md): Internal architecture and catalog-first runtime overview
 - [Output format](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/output-format.md): Markdown and structured output conventions
 - [Troubleshooting](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md): Common setup and runtime issues

@@ -2832,7 +2832,7 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 type ShareProjectInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id"   jsonschema:"Project ID or URL-encoded path,required"`
 	GroupID     int64                `json:"group_id"     jsonschema:"Group ID to share with,required"`
-	GroupAccess int                  `json:"group_access" jsonschema:"Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares,required"`
+	GroupAccess int                  `json:"group_access" jsonschema:"Access level for the group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner),required"`
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the share (YYYY-MM-DD)"`
 }
 

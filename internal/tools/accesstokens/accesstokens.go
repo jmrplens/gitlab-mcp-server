@@ -139,7 +139,7 @@ type ProjectListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	State     string               `json:"state,omitempty" jsonschema:"Token state filter: active, inactive"`
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, expires_at, last_used_at)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }

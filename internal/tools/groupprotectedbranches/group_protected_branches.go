@@ -99,8 +99,8 @@ type ProtectInput struct {
 	GroupID                   toolutil.StringOrInt    `json:"group_id"                            jsonschema:"Group ID or URL-encoded path,required"`
 	Name                      string                  `json:"name"                                jsonschema:"Branch name or wildcard to protect,required"`
 	PushAccessLevel           *int                    `json:"push_access_level,omitempty"         jsonschema:"Push access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)"`
-	MergeAccessLevel          *int                    `json:"merge_access_level,omitempty"        jsonschema:"Merge access level"`
-	UnprotectAccessLevel      *int                    `json:"unprotect_access_level,omitempty"    jsonschema:"Unprotect access level"`
+	MergeAccessLevel          *int                    `json:"merge_access_level,omitempty"        jsonschema:"Merge access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)"`
+	UnprotectAccessLevel      *int                    `json:"unprotect_access_level,omitempty"    jsonschema:"Unprotect access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)"`
 	AllowForcePush            *bool                   `json:"allow_force_push,omitempty"          jsonschema:"Allow force push"`
 	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" jsonschema:"Require code owner approval"`
 	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Users/groups allowed to push"`

@@ -192,7 +192,7 @@ func RequestGroup(ctx context.Context, client *gitlabclient.Client, input Reques
 type ApproveProjectInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
-	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer)"`
+	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30"`
 }
 
 // ApproveProject approves a project access request.
@@ -226,7 +226,7 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 type ApproveGroupInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
-	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner)"`
+	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30"`
 }
 
 // ApproveGroup approves a group access request.

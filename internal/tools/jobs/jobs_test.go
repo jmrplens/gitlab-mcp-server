@@ -6,6 +6,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,56 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestRawHelpers_UnescapablePath_FailBeforeTheRequest verifies both raw
+// helpers refuse a path the client cannot unescape, and never reach the
+// server with it. The public handlers escape every identifier before building
+// a path, so the branch is reached by calling the helpers directly.
+func TestRawHelpers_UnescapablePath_FailBeforeTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("handler called, want the request to fail while it is built")
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	const badPath = "projects/%zz/jobs"
+
+	t.Run("list", func(t *testing.T) {
+		jobs, resp, err := rawListJobs(t.Context(), client, badPath, nil)
+		if err == nil || jobs != nil || resp != nil {
+			t.Fatalf("rawListJobs = %v/%v/%v, want only an error", jobs, resp, err)
+		}
+	})
+	t.Run("get", func(t *testing.T) {
+		job, resp, err := rawGetJob(t.Context(), client, badPath)
+		if err == nil || job != nil || resp != nil {
+			t.Fatalf("rawGetJob = %v/%v/%v, want only an error", job, resp, err)
+		}
+	})
+}
+
+// TestJobTrace_ReadFailure_IsReported verifies a trace body that fails
+// mid-read with something other than an end of file is reported as an error
+// rather than returned as a shorter log. client-go hands Trace an in-memory
+// reader that cannot fail that way, so the failure comes through the seam.
+func TestJobTrace_ReadFailure_IsReported(t *testing.T) {
+	original := readFull
+	t.Cleanup(func() { readFull = original })
+	readFull = func(io.Reader, []byte) (int, error) { return 3, errors.New("stream reset") }
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathJobTrace {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set(testHeaderContentType, "text/plain")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("partial log"))
+	}))
+
+	_, err := Trace(t.Context(), client, TraceInput{ProjectID: "42", JobID: 100})
+	if err == nil || !strings.Contains(err.Error(), "stream reset") {
+		t.Fatalf("Trace() error = %v, want the read failure", err)
+	}
+}
 
 const (
 	// pathPipelineJobs identifies the path pipeline jobs constant used by this package.

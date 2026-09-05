@@ -479,8 +479,12 @@ func applyGroupInputEnums(individualTool string, options *toolutil.ActionSpecOpt
 // (present only on UpdateInput) is appended.
 func groupCreateUpdateEnumOverrides(includeUpdateOnly bool) []toolutil.InputSchemaOverride {
 	overrides := []toolutil.InputSchemaOverride{
+		// doc/api/groups.md "Create a group" lists administrator (users with
+		// Admin Mode enabled) beside noone, maintainer and developer; the same
+		// validator serves update. client-go also declares owner, which the
+		// doc does not list for either endpoint.
 		toolutil.SchemaPropertyOverride("project_creation_level", map[string]any{
-			"enum": []any{"noone", "maintainer", "developer"},
+			"enum": []any{"noone", "maintainer", "developer", "administrator"},
 		}),
 		toolutil.SchemaPropertyOverride("subgroup_creation_level", map[string]any{
 			"enum": []any{"owner", "maintainer"},

@@ -105,6 +105,15 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.Tags = append(options.Tags, scope+"_access_tokens")
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"active", "inactive"}}),
+			// The three token lists sort by a named order rather than a
+			// direction (doc/api/personal_access_tokens.md,
+			// project_access_tokens.md and group_access_tokens.md all document
+			// the same eight values; client-go's AccessTokenSort declares
+			// them). Declared here because the central `sort` enum would
+			// otherwise inject asc/desc, which none of these endpoints accept.
+			toolutil.SchemaEnumOverride("sort",
+				"created_asc", "created_desc", "expires_asc", "expires_desc",
+				"last_used_asc", "last_used_desc", "name_asc", "name_desc"),
 		}
 	}
 	options.RelatedActions = accessTokenRelatedActions(scope)
