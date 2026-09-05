@@ -567,3 +567,64 @@ func TestIndividualInputSchema_SharedRouteDerivesOnce(t *testing.T) {
 		t.Fatal("individualInputSchema(private route) shared a schema nobody registered")
 	}
 }
+
+// sharedSchemaRequiredInput and sharedSchemaOptionalInput differ only in
+// whether the field is required, so two routes reflected from them derive
+// different required lists from one input schema. They exist for
+// [TestIndividualInputSchema_KeepsRoutesOverOneSharedSchemaApart], and are
+// two types rather than one because the derivation is keyed on the type.
+type sharedSchemaRequiredInput struct {
+	Name string `json:"name"`
+}
+
+type sharedSchemaOptionalInput struct {
+	Name string `json:"name,omitempty"`
+}
+
+// TestIndividualInputSchema_KeepsRoutesOverOneSharedSchemaApart pins the
+// transform name the individual derivation is memoized under.
+//
+// A reflected type's schema is memoized per type, so every action declared
+// over one input struct holds the very same map, and [DeriveSchema] keys on
+// that map's address: the transform name is the only thing left that tells
+// two such actions' derived schemas apart. Replacing it with a constant
+// leaves this package, internal/tools, internal/tools/dynamic and
+// internal/resources green while serving a destructive action the parameters
+// of the read-only one it shares an input struct with, confirmation property
+// and all.
+//
+// Both components of the name are pinned: the destructive flag, which decides
+// the confirm property, and the input type, which decides the required list.
+func TestIndividualInputSchema_KeepsRoutesOverOneSharedSchemaApart(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"name": map[string]any{"type": "string"}},
+	}
+	ShareSchema(schema)
+
+	plain := individualInputSchema(ActionRoute{InputSchema: schema})
+	destructive := individualInputSchema(ActionRoute{InputSchema: schema, Destructive: true})
+	if sameMap(plain, destructive) {
+		t.Fatal("two routes differing only in Destructive derived one schema, want one each")
+	}
+	if _, confirmable := plain["properties"].(map[string]any)["confirm"]; confirmable {
+		t.Errorf("the non-destructive route was served the confirmation property: %#v", plain)
+	}
+	if _, confirmable := destructive["properties"].(map[string]any)["confirm"]; !confirmable {
+		t.Errorf("the destructive route was served no confirmation property: %#v", destructive)
+	}
+
+	required := individualInputSchema(ActionRoute{InputSchema: schema, InputType: reflect.TypeFor[sharedSchemaRequiredInput]()})
+	optional := individualInputSchema(ActionRoute{InputSchema: schema, InputType: reflect.TypeFor[sharedSchemaOptionalInput]()})
+	if sameMap(required, optional) {
+		t.Fatal("two routes differing only in InputType derived one schema, want one each")
+	}
+	if names, _ := required["required"].([]any); len(names) != 1 || names[0] != "name" {
+		t.Errorf("required list of the required-field type = %v, want [name]", required["required"])
+	}
+	if names, listed := optional["required"]; listed {
+		t.Errorf("required list of the optional-field type = %v, want none", names)
+	}
+}

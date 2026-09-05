@@ -390,3 +390,57 @@ func TestMetaActionSchema_SharedRouteDerivesOnce(t *testing.T) {
 		t.Fatalf("the route's own schema was mutated: %#v", schema)
 	}
 }
+
+// TestMetaActionSchema_KeepsRoutesOverOneSharedSchemaApart pins the transform
+// name the meta params derivation is memoized under.
+//
+// A reflected type's schema is memoized per type, so every action declared
+// over one input struct holds the very same map, and [DeriveSchema] keys on
+// that map's address: the transform name is the only thing left that tells
+// two such actions' derived schemas apart. The four geo actions are the live
+// example, one input struct between them differing only in Destructive, so a
+// name that dropped the flag would hand the model a destructive action's
+// parameters with no confirm property and no x_destructive marker. Replacing
+// the name with a constant leaves this package, internal/tools,
+// internal/tools/dynamic and internal/resources green.
+//
+// Both components of the name are pinned: the destructive flag and the
+// parameter guidance, the latter by content, so that two routes spelling one
+// guidance share a derivation while two spelling different guidance do not.
+func TestMetaActionSchema_KeepsRoutesOverOneSharedSchemaApart(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{"type": "object", "properties": map[string]any{"project_id": map[string]any{"type": "string"}}}
+	ShareSchema(schema)
+
+	plain := MetaActionSchema(ActionRoute{InputSchema: schema})
+	destructive := MetaActionSchema(ActionRoute{InputSchema: schema, Destructive: true})
+	if sameMap(plain, destructive) {
+		t.Fatal("two routes differing only in Destructive derived one schema, want one each")
+	}
+	if _, confirmable := plain["properties"].(map[string]any)["confirm"]; confirmable || plain["x_destructive"] != nil {
+		t.Errorf("the non-destructive route was served the confirmation property: %#v", plain)
+	}
+	if _, confirmable := destructive["properties"].(map[string]any)["confirm"]; !confirmable || destructive["x_destructive"] != true {
+		t.Errorf("the destructive route was served no confirmation property: %#v", destructive)
+	}
+
+	guided := MetaActionSchema(ActionRoute{
+		InputSchema:       schema,
+		ParameterGuidance: map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
+	})
+	otherGuidance := MetaActionSchema(ActionRoute{
+		InputSchema:       schema,
+		ParameterGuidance: map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_group"}},
+	})
+	if sameMap(guided, plain) || sameMap(guided, otherGuidance) {
+		t.Fatal("routes differing only in ParameterGuidance derived one schema, want one each")
+	}
+	sameGuidance := MetaActionSchema(ActionRoute{
+		InputSchema:       schema,
+		ParameterGuidance: map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
+	})
+	if !sameMap(guided, sameGuidance) {
+		t.Fatal("two routes spelling one guidance derived two schemas, want the guidance named by its content")
+	}
+}
