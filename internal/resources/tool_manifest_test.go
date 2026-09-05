@@ -14,6 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -371,6 +372,21 @@ func readToolManifest(t *testing.T, session *mcp.ClientSession, uri string) Tool
 		t.Fatalf("unmarshal manifest: %v", uErr)
 	}
 	return manifest
+}
+
+// readResourceText reads a resource and returns its body as served, for a
+// comparison that must not be laundered by decoding: two bodies differing
+// only in key order decode alike and are not the same bytes on the wire.
+func readResourceText(t *testing.T, session *mcp.ClientSession, uri string) string {
+	t.Helper()
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		t.Fatalf("read %s: %v", uri, err)
+	}
+	if len(result.Contents) != 1 {
+		t.Fatalf("read %s returned %d contents, want 1", uri, len(result.Contents))
+	}
+	return result.Contents[0].Text
 }
 
 // readToolDetail reads a per-entry tool manifest detail and decodes it
@@ -925,6 +941,60 @@ func TestToolSurfaceSnapshotFor_ShareKeyReusesOneSnapshot(t *testing.T) {
 	secondPrivate := toolSurfaceSnapshotFor(private)
 	if firstPrivate == secondPrivate {
 		t.Fatal("options without a share key shared a snapshot")
+	}
+}
+
+// TestToolManifest_SharedSnapshotServesTheSameBytesAsAPrivateOne is the wire
+// proof for the manifest resources. Two servers registered under one share key
+// are served the snapshot the first of them built, and a third server with no
+// key builds its own from the same catalog: all three answer gitlab://tools
+// and gitlab://tools/{id} with the same bytes.
+//
+// The third server is what makes the first two mean anything. Two servers
+// sharing a snapshot trivially answer alike, since they are reading one
+// object; only a server that built its own can show that the shared object is
+// what a server would have built.
+func TestToolManifest_SharedSnapshotServesTheSameBytesAsAPrivateOne(t *testing.T) {
+	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	options := func(shareKey string) ToolSurfaceResourceOptions {
+		return ToolSurfaceResourceOptions{
+			Surface:  toolSurfaceDynamic,
+			ShareKey: shareKey,
+			Catalog:  catalog,
+			Tools: []*mcp.Tool{
+				{Name: "gitlab_execute_action", Title: "Execute"},
+				{Name: "gitlab_find_action", Title: "Find"},
+			},
+		}
+	}
+	shareKey := "manifest|" + t.Name()
+	sessions := map[string]*mcp.ClientSession{
+		"first under the share key":  toolManifestSession(t, options(shareKey)),
+		"second under the share key": toolManifestSession(t, options(shareKey)),
+		"private, no share key":      toolManifestSession(t, options("")),
+	}
+
+	var indexWant, detailWant string
+	const detailURI = "gitlab://tools/issue.list"
+	for name, session := range sessions {
+		index := readResourceText(t, session, "gitlab://tools")
+		detail := readResourceText(t, session, detailURI)
+		if indexWant == "" {
+			indexWant, detailWant = index, detail
+			if !strings.Contains(index, `"issue.list"`) {
+				t.Fatalf("gitlab://tools from the %s server does not list issue.list, so the comparison proves nothing", name)
+			}
+			continue
+		}
+		if index != indexWant {
+			t.Errorf("gitlab://tools from the %s server differs from the first server's", name)
+		}
+		if detail != detailWant {
+			t.Errorf("%s from the %s server differs from the first server's", detailURI, name)
+		}
 	}
 }
 

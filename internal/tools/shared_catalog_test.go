@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -463,6 +464,64 @@ func TestSharedMetaCatalog_ConcurrentEntriesBuildSafely(t *testing.T) {
 		if !bytes.Equal(lists[i], lists[0]) {
 			t.Fatalf("entry %d lists different tools from entry 0", i)
 		}
+	}
+}
+
+// TestSharedMetaCatalog_SafeModePreviewsOnEveryServerOfOneKey drives safe mode
+// to the wire on two servers built from one shared safe-mode catalog: each
+// calls a mutating action through its own MCP session, each receives a preview
+// naming the action, and neither instance is asked for anything.
+//
+// Safe mode is a rewrite of the catalog rather than a wrapper on the server,
+// so a catalog shared between pool entries is exactly where it could go wrong:
+// one entry previewing and another executing would be invisible to a test that
+// builds one server.
+func TestSharedMetaCatalog_SafeModePreviewsOnEveryServerOfOneKey(t *testing.T) {
+	cfg := &config.ServerConfig{Tier: edition.Free, SafeMode: true, ExcludeTools: []string{"safe-" + t.Name()}}
+	var requests [2]atomic.Int32
+	catalogs := make([]*actioncatalog.Catalog, len(requests))
+	clients := make([]*gitlabclient.Client, len(requests))
+	for i := range requests {
+		counting := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requests[i].Add(1)
+			respondJSON(w, http.StatusOK, `{"id":1}`)
+		})
+		clients[i] = testutil.NewTestClient(t, counting)
+		catalog, _, err := SharedMetaCatalog(clients[i], cfg)
+		if err != nil {
+			t.Fatalf("SharedMetaCatalog(%d) error = %v", i, err)
+		}
+		catalogs[i] = catalog
+	}
+	if catalogs[0].SharedOrigin() == nil || catalogs[0].SharedOrigin() != catalogs[1].SharedOrigin() {
+		t.Fatal("the two safe-mode servers did not get catalogs bound from one shared origin")
+	}
+
+	for i := range catalogs {
+		t.Run("server "+strconv.Itoa(i), func(t *testing.T) {
+			server := newListingServer()
+			RegisterMetaCatalog(server, catalogs[i])
+			RegisterMetaStandaloneTools(server, clients[i])
+			result := callTool(t, server, "gitlab_issue", json.RawMessage(`{"action":"create","params":{"project_id":"1","title":"t"}}`))
+			if result.IsError {
+				t.Fatalf("gitlab_issue create returned an error result: %q", extractText(t, result))
+			}
+			var preview struct {
+				Status string `json:"status"`
+				Mode   string `json:"mode"`
+				Tool   string `json:"tool"`
+			}
+			text := extractText(t, result)
+			if err := json.Unmarshal([]byte(text), &preview); err != nil {
+				t.Fatalf("gitlab_issue create returned %q, which is not a preview: %v", text, err)
+			}
+			if preview.Status != "blocked" || preview.Mode != "safe" || preview.Tool != "issue.create" {
+				t.Errorf("gitlab_issue create returned %+v, want a blocked safe-mode preview naming issue.create", preview)
+			}
+			if reached := requests[i].Load(); reached != 0 {
+				t.Errorf("server %d made %d requests to GitLab, want none in safe mode", i, reached)
+			}
+		})
 	}
 }
 

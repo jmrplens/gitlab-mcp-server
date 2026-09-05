@@ -765,6 +765,97 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 	}
 }
 
+// TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
+// half of the tier filter, across the three tiers built in one process.
+//
+// Output pruning differs from input pruning in both directions and both are
+// pinned here. It is lenient: the model-facing schema stops advertising a
+// field above the instance tier, but the schema still accepts it, because
+// GitLab returns those keys on lower tiers with default values and the server
+// must not reject its own tool output over them. And it is per tier from one
+// shared base: the three catalogs derive from the same reflected map, which is
+// registered as process-lived, so a tier that prunes must derive a new map
+// rather than write into the one every other tier is reading.
+//
+// issue.get carries one field of each paid tier at the top level of its output
+// (weight is Premium, health_status is Ultimate), which is what makes it the
+// action to ask.
+func TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier(t *testing.T) {
+	const id = actioncatalog.ActionID("issue.get")
+	catalogs := map[edition.Tier]*actioncatalog.Catalog{
+		edition.Free:     mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true}),
+		edition.Premium:  mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true}),
+		edition.Ultimate: mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true}),
+	}
+	cases := []struct {
+		tier       edition.Tier
+		wantWeight bool // the Premium output field
+		wantHealth bool // the Ultimate output field
+	}{
+		{tier: edition.Free},
+		{tier: edition.Premium, wantWeight: true},
+		{tier: edition.Ultimate, wantWeight: true, wantHealth: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tier.String(), func(t *testing.T) {
+			schema := actionOutputSchema(t, catalogs[tc.tier], id)
+			properties, _ := schema["properties"].(map[string]any)
+			if _, has := properties["weight"]; has != tc.wantWeight {
+				t.Errorf("%s output schema advertises weight = %t on %s, want %t", id, has, tc.tier, tc.wantWeight)
+			}
+			if _, has := properties["health_status"]; has != tc.wantHealth {
+				t.Errorf("%s output schema advertises health_status = %t on %s, want %t", id, has, tc.tier, tc.wantHealth)
+			}
+			// Whatever this tier stopped advertising, it must still accept:
+			// the instance sends those keys anyway.
+			pruned := !tc.wantWeight || !tc.wantHealth
+			if extra, _ := schema["additionalProperties"].(bool); pruned && !extra {
+				t.Errorf("%s output schema on %s has additionalProperties = %v, want true so the fields it stopped advertising still validate", id, tc.tier, schema["additionalProperties"])
+			}
+			// Input pruning is the strict one: a lower-tier client must not
+			// be invited to send a parameter its instance rejects, so the
+			// input schema is not loosened the way the output schema is.
+			if extra, _ := actionInputSchema(t, catalogs[tc.tier], id)["additionalProperties"].(bool); extra {
+				t.Errorf("%s input schema on %s has additionalProperties = true, want input pruning to stay strict", id, tc.tier)
+			}
+		})
+	}
+	// One process, three tiers, one reflected base: the Ultimate catalog must
+	// still carry what the Free build pruned, and no two tiers may be reading
+	// the same output map.
+	free := actionOutputSchema(t, catalogs[edition.Free], id)
+	ultimate := actionOutputSchema(t, catalogs[edition.Ultimate], id)
+	if fmt.Sprintf("%p", free) == fmt.Sprintf("%p", ultimate) {
+		t.Fatal("the Free and Ultimate output schemas are one map, so one tier's pruning is the other's schema")
+	}
+	if _, has := ultimate["properties"].(map[string]any)["health_status"]; !has {
+		t.Error("the Ultimate output schema lost health_status, so a lower tier's pruning reached the shared base")
+	}
+}
+
+// actionOutputSchema returns the named action's output schema from a catalog.
+func actionOutputSchema(t *testing.T, catalog *actioncatalog.Catalog, id actioncatalog.ActionID) map[string]any {
+	t.Helper()
+	action, ok := catalog.Action(id)
+	if !ok {
+		t.Fatalf("%s missing from catalog", id)
+	}
+	if action.Route.OutputSchema == nil {
+		t.Fatalf("%s has no output schema", id)
+	}
+	return action.Route.OutputSchema
+}
+
+// actionInputSchema returns the named action's input schema from a catalog.
+func actionInputSchema(t *testing.T, catalog *actioncatalog.Catalog, id actioncatalog.ActionID) map[string]any {
+	t.Helper()
+	action, ok := catalog.Action(id)
+	if !ok {
+		t.Fatalf("%s missing from catalog", id)
+	}
+	return action.Route.InputSchema
+}
+
 // assertLandmarkTiers checks one landmark action against the three tier
 // catalogs: present on Free and Premium exactly as declared, always on Ultimate.
 func assertLandmarkTiers(t *testing.T, free, premium, ultimate *actioncatalog.Catalog, id actioncatalog.ActionID, freeOK, premiumOK bool) {

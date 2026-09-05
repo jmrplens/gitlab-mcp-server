@@ -47,6 +47,62 @@ func TestBuild_ReadOnlyWithholdsWritesAndSaysWhose(t *testing.T) {
 	}
 }
 
+// TestBuild_ACacheHitStillCarriesTheScopeCause verifies the bookkeeping a
+// second pool entry receives. A read_api credential is admitted and served a
+// read-only surface, and the dynamic surface answers a request for one of the
+// removed actions with the cause instead of "unknown action, did you mean":
+// the older message listed real read-only actions, from which a model
+// concluded the server lacked the capability rather than that the credential
+// was narrow.
+//
+// The second Build is the point. It is a cache hit, and the withheld lists
+// come back beside the cached catalog rather than from the build that filled
+// it; a cache that returned the catalog and dropped the bookkeeping would pass
+// every test that only ever built once.
+func TestBuild_ACacheHitStillCarriesTheScopeCause(t *testing.T) {
+	t.Parallel()
+
+	narrowed := func() *config.ServerConfig {
+		return &config.ServerConfig{
+			Tier:                   edition.Free,
+			ReadOnly:               true,
+			ReadOnlyFromTokenScope: true,
+			TokenScopes:            []string{"read_api"},
+			ExcludeTools:           []string{"scope-" + t.Name()},
+		}
+	}
+	first, firstWithheld, err := Build(nil, narrowed())
+	if err != nil {
+		t.Fatalf("Build(first) error = %v", err)
+	}
+	second, secondWithheld, err := Build(nil, narrowed())
+	if err != nil {
+		t.Fatalf("Build(second) error = %v", err)
+	}
+	if first.SharedOrigin() == nil || first.SharedOrigin() != second.SharedOrigin() {
+		t.Fatal("the second Build did not hit the cache, so it proves nothing about a cached one")
+	}
+	for name, withheld := range map[string]gitlabtools.WithheldActions{"first build": firstWithheld, "cache hit": secondWithheld} {
+		t.Run(name, func(t *testing.T) {
+			if !slices.Contains(withheld.ByTokenScope, "issue.create") {
+				t.Errorf("withheld.ByTokenScope = %v, want it to name issue.create as removed by the credential", withheld.ByTokenScope)
+			}
+			if len(withheld.ByOperator) != 0 {
+				t.Errorf("withheld.ByOperator = %v, want nothing: the credential narrowed this catalog, not the operator", withheld.ByOperator)
+			}
+			if slices.Contains(withheld.ByTokenScope, "issue.list") {
+				t.Errorf("withheld.ByTokenScope = %v, want the reads kept rather than withheld", withheld.ByTokenScope)
+			}
+		})
+	}
+	if _, ok := second.Action("issue.list"); !ok {
+		t.Error("issue.list is missing from the cached read-only catalog")
+	}
+	if _, ok := second.Action("issue.create"); ok {
+		t.Error("issue.create survived in the cached read-only catalog")
+	}
+}
+
 // TestBuild_SafeModePreviewsCoverTheStandaloneActions verifies that in safe
 // mode every write in the built catalog answers with a preview, the standalone
 // actions included.
