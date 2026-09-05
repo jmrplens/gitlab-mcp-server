@@ -452,6 +452,17 @@ The house rule: a package touched by a change is driven to **100% statement cove
 - **`main()` is covered, not exempt.** Extract `runMain(args []string, stdout, stderr io.Writer) int`, make `main()` the one line `osExit(runMain(os.Args, os.Stdout, os.Stderr))` with `var osExit = os.Exit`, and assert every exit code and message. Replace `os.Args` in the test so the flag set parses no test flags.
 - **Never lift the number by other means.** No weakened assertions, no `//nolint`, no coverage pragmas, no branches deleted to make the figure. A provably dead branch is removed as a code change with its own justification, or made reachable by extracting it into a function a test can call directly.
 
+### Case completeness, not only line coverage
+
+Statement coverage says a line ran, not that a decision was taken both ways or that a test would notice it changing; `cmd/gen_stats` at 100% still had ten single-valued conditions and five unreached mutants. For every decision in the changed code derive the case table first: true and false for each condition with the boundary and its neighbours, the MC/DC minimal set (N+1 cases) for `&&`/`||`/`!` compounds so each operand flips the outcome on its own, one failing case per `if err != nil`, one case per switch arm and the default, zero/one/many for loops with each early exit, and the empty, boundary, nil and cancelled inputs. Then measure and prove it:
+
+```bash
+make coverage-conditions PKG=./internal/foo   # gobco: nothing reported is the target
+make coverage-mutants PKG=./internal/foo      # gremlins: Lived 0 and Not covered 0 is the gate
+```
+
+A lived mutant is fixed by strengthening the assertion, never by excluding it. The `increase-test-coverage` skill carries the full method and the tools' limits.
+
 ## Interaction With User
 
 - **Always present the plan before implementing** — show per-package targets and test cases
