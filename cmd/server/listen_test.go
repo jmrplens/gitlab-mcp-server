@@ -159,6 +159,34 @@ func TestClearStaleSocket_DeadSocketIsRemoved(t *testing.T) {
 	}
 }
 
+// TestClearStaleSocket_ADeadSocketThatCannotBeRemoved_IsReported covers the
+// unlink failing after the probe proved the socket dead. The tests hold every
+// permission, so the unlink is failed through its seam; what is asserted is
+// that the failure names the path and reaches the operator instead of the
+// bind failing a moment later on a file the log never mentioned.
+func TestClearStaleSocket_ADeadSocketThatCannotBeRemoved_IsReported(t *testing.T) {
+	path := filepath.Join(socketDir(t), "stuck.sock")
+	listener := listenUnixForTest(t, path)
+	if unix, ok := listener.(*net.UnixListener); ok {
+		unix.SetUnlinkOnClose(false)
+	} else {
+		t.Fatalf("listener type = %T, want *net.UnixListener", listener)
+	}
+	_ = listener.Close()
+
+	original := removeStaleSocket
+	t.Cleanup(func() { removeStaleSocket = original })
+	removeStaleSocket = func(string) error { return errors.New("operation not permitted") }
+
+	err := clearStaleSocket(t.Context(), path)
+	if err == nil {
+		t.Fatal("clearStaleSocket() reported success for a socket it could not remove")
+	}
+	if !strings.Contains(err.Error(), "removing stale socket") || !strings.Contains(err.Error(), path) {
+		t.Errorf("error = %q, want the unlink failure naming %s", err, path)
+	}
+}
+
 // TestClearStaleSocket_LiveSocketIsRefused is the counterweight: an
 // unconditional remove would let a second instance hijack the socket a
 // running server is still serving, leaving it holding a listener nobody can
