@@ -10,6 +10,7 @@
 // and, when --gitlab-url was omitted, the GITLAB-URL header are
 // client-controlled. Nothing here is reachable per request, so a client cannot
 // influence any of it for itself or for anyone else.
+
 package main
 
 import (

@@ -22,6 +22,7 @@
 // decision anyone made. Git's safe.directory ownership check, direnv's
 // per-directory "direnv allow" and VS Code Workspace Trust are three
 // independent tools that reached the same conclusion.
+
 package config
 
 import (

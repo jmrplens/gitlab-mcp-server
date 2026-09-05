@@ -124,8 +124,6 @@ func (k Kind) String() string {
 	return "unknown"
 }
 
-// Template returns the URI template this kind's resource is registered
-// under, or "" for [KindUnknown].
 // Templates returns the URI template of every subscribable kind, sorted,
 // for surfaces that advertise what can be watched (the gitlab://tools
 // manifest). Deriving the list here rather than copying it means the

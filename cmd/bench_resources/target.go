@@ -10,6 +10,7 @@
 // On stdio every client is its own process with its own catalog, so N clients
 // are N processes. On HTTP one process serves everyone and the pool holds one
 // entry per credential, so N clients are N tokens against one process.
+
 package main
 
 import (

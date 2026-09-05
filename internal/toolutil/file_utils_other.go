@@ -3,6 +3,7 @@
 // file_utils_other.go carries the leaf-open primitives for platforms with no
 // O_NOFOLLOW, where the surrounding Lstat and post-open Stat checks in
 // file_utils.go are all the containment there is.
+
 package toolutil
 
 import "os"

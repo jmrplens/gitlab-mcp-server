@@ -3,6 +3,7 @@
 // differently on each tool surface, the guidance is assembled per surface
 // rather than written once: a single hardcoded text would name individual-mode
 // tools to a dynamic-mode model that cannot see any of them.
+
 package main
 
 import (

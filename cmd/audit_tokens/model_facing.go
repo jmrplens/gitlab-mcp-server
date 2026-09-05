@@ -7,6 +7,7 @@
 // them overstated the figure the footprint exists to report, and by a lot: 16%
 // of the individual tool surface, 12% of the dynamic one, and 53% of the
 // shared resource and prompt surface.
+
 package main
 
 import (

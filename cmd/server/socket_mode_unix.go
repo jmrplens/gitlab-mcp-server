@@ -43,6 +43,7 @@
 // unlink-on-close would remove that name rather than the published one. It is
 // switched off and the published path is removed on Close instead, and only
 // when it is still the same inode this process created.
+
 package main
 
 import (

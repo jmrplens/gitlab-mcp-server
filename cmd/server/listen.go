@@ -7,6 +7,7 @@
 // in the first place, no bridge, no docker-proxy hop, and no certificate to
 // issue or rotate. The socket is the cheaper answer where it applies, so
 // --http-addr accepts a filesystem path as well as host:port.
+
 package main
 
 import (

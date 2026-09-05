@@ -7,6 +7,7 @@
 // latency, its rate limits and its network into every figure, and two people
 // re-measuring would compare their GitLab installations rather than this
 // server.
+
 package main
 
 import (

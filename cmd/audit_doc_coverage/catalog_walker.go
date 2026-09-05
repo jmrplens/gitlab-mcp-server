@@ -5,6 +5,7 @@
 // self-managed-enterprise tier, then snapshots every action's
 // IndividualTool.Name, owning group, tier, and destructive flag into a
 // flat lookup table for the auditor's main comparison loop.
+
 package main
 
 import (

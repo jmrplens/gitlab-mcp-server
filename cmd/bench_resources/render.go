@@ -6,6 +6,7 @@
 // re-renders from the committed record and compares, which turns "the chart
 // matches the numbers" from a promise into a gate; -render redraws after a
 // change to the figures without spending minutes re-measuring.
+
 package main
 
 import (
