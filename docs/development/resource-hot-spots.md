@@ -8,10 +8,13 @@ changed so that most of it is now shared between credentials, and what is
 left. The numbers come from the concurrency series of the
 [resource benchmark](../reference/resource-benchmark.md), which steps one HTTP
 process through credential counts and writes a CPU and a heap profile at each
-step; this page reads those profiles. The measurements marked as taken on the
-TrueNAS host were taken before the change and will be joined by an after
-series from the same host when it is re-run there; the before and after pairs
-below were taken on the development machine described with them.
+step; this page reads those profiles.
+
+Every measurement on this page is from one host and one pair of commits: an
+Intel i5-14400 with 16 threads and 62 GiB, kernel 6.12, Go 1.27.1, running the
+before series from `afecf6ce` (the commit this work branched from) and the
+after series from `53eb2204` (the last commit of the branch). Both binaries
+were built from a clean tree at those commits.
 
 ## What a pool entry was made of
 
@@ -20,22 +23,26 @@ work every one of those servers built everything it needed from scratch: the
 tool catalog, the schemas the tools carry, the search index of the dynamic
 surface, the `gitlab://tools` manifest. The resident set therefore grew as a
 straight line in the number of pooled credentials, and the slope was the size
-of one of those builds. Measured on an i5-14400 with 62 GiB (kernel
-6.12, Go 1.27.1), one HTTP process per surface, four requests in flight per
-credential:
+of one of those builds. One HTTP process per surface, four requests in flight
+per credential on `dynamic` and `meta` and two on `individual`, least-squares
+slope through the peak resident set of every step:
 
-| Surface      | Resident set per credential | Where the series stopped                      |
-| ------------ | --------------------------: | --------------------------------------------- |
-| `dynamic`    |                     130 MiB | 13.2 GiB at 100 credentials, budget exhausted |
-| `meta`       |                      63 MiB | 12.9 GiB at 200 credentials, budget exhausted |
-| `individual` |                      90 MiB | 9.4 GiB at 100 credentials, budget exhausted  |
+| Surface      | Resident set per credential | Where the series stopped                                   |
+| ------------ | --------------------------: | ---------------------------------------------------------- |
+| `dynamic`    |                   130.9 MiB | 12.9 GiB at 100 credentials, the next step over the budget |
+| `meta`       |                    63.5 MiB | 12.6 GiB at 200 credentials, the next step over the budget |
+| `individual` |                    90.8 MiB | 9.2 GiB at 100 credentials, the next step over the budget  |
 
-Processor time per call was flat across the series, about 8 ms on `dynamic`
-and `meta` and 150 ms on `individual`, the latter dominated by marshalling its
-3 MB `tools/list`; latency grew with the total load. About a fifth of the CPU
-at a hundred credentials was the garbage collector scanning the heap
-(`scanObjectsSmall`, `tryDeferToSpanScan`, `scanSpan`), which is memory
-showing up as time.
+The budget was 15.8 GiB, and each series stopped when the next step's estimate
+exceeded it rather than on a failure.
+
+Processor time per call was flat on `dynamic` and `meta`, 7.5 to 8.1 ms and
+8.3 to 7.9 ms from the first step to the last. On `individual` it was not: it
+climbed 43%, from 106 ms at one credential to 152 ms at a hundred, dominated
+by marshalling its 3 MB `tools/list`. Latency grew with the total load. About
+a fifth of the CPU at a hundred credentials was the garbage collector scanning
+the heap (`scanObjectsSmall`, `tryDeferToSpanScan`, `scanSpan`), which is
+memory showing up as time.
 
 The heap profile at the top step named one function on every surface:
 
@@ -82,6 +89,15 @@ used, and only for schemas registered as process-lived: a schema nobody
 registered is transformed privately, exactly as before, and the memo cannot
 leak because it never holds a key whose object could be freed.
 
+The parameter guidance a transform name also depends on is the exception, and
+it is named by a digest of its content. Nothing pins a guidance map for the
+process the way `ShareSchema` pins a schema, so its address is exactly the
+kind of key the paragraph above rules out: a route from a catalog nobody
+retained would leave a permanent memo entry keyed by an address the allocator
+can hand out again. The digest is over a handful of short strings per route,
+not over a schema, so it does not bring back the walk that made a content key
+wrong for the schemas.
+
 **The handlers.** A catalog shared between credentials must not share the
 handlers, which capture the GitLab client. Two designs were considered. One
 resolves the client from the request context at call time, leaving every
@@ -100,9 +116,11 @@ directly, since binding would then rebuild the constructor's plain handler
 and drop the replacement. Twenty such sites existed, nineteen turning a 404
 into a structured not-found result and one binding the elicitation flows;
 all now go through `WrapHandler` or `WithBoundHandler`, `ValidateRouteBinding`
-refuses a catalog whose handler is not the one its binder installed, and a
-source-level test refuses the assignment in any package under
-`internal/tools`. The validation compares closure identity rather than code,
+refuses a catalog whose handler is not the one its binder installed,
+`Catalog.Validate` refuses one whose action has no binder at all, and a
+source-level test refuses the assignment, and any write into a route's
+guidance or schema maps, in every package under `internal/tools`. The
+validation compares closure identity rather than code,
 because the compiler gives an inlined copy of a function literal a closure of
 its own.
 
@@ -138,17 +156,36 @@ so what a user is served is a filter over that one immutable catalog at
 request time, never a copy built per user. One frozen catalog per
 configuration, views filtered per credential.
 
-| Component                                                                                                                                                                         | What is shared, and by what key                                                                                                                                                                                                                                                                                                                                                                                                  |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `toolutil.ShareSchema`, `toolutil.DeriveSchema` (`internal/toolutil/schema_share.go`)                                                                                             | The registry of process-lived schemas (the reflected type schemas, the compiled tool schemas, every route schema of a shared catalog, and every derivation of one) and the memo of named transforms over them, keyed by input address and transform name. Every transform is idempotent and its output is registered, so reapplying it to its output returns the output; a clone chain in the catalog build collapses to one map |
-| `NewActionSpec`, tier pruning, `IndividualToolFromActionSpec`, `MetaActionSchema`, the dynamic and manifest schema readers, `LockdownInputSchemas`, `EnrichPaginationConstraints` | Each derives its result through `DeriveSchema` instead of mutating a copy; the transform names carry every parameter the result depends on (overrides, tier, type, destructive flag, guidance identity)                                                                                                                                                                                                                          |
-| `ActionRoute.Bind`, `BindTo`, `WrapHandler`, `WithBoundHandler`, `ValidateRouteBinding`                                                                                           | The seam between shared metadata and a per-client handler, set by the eight typed constructors and by `WithSafeModePreviews`                                                                                                                                                                                                                                                                                                     |
-| `actioncatalog.Catalog.MarkShared`, `SharedOrigin`, `BindTo`; accessors no longer deep-copy                                                                                       | A catalog cached for the process is marked shared and its schemas registered; a bound catalog remembers its origin, which keys every client-independent derivation                                                                                                                                                                                                                                                               |
-| `tools.ShareCatalog`, `SharedBaseCatalog`, `SharedMetaCatalog`, `SharedIndividualCatalog`, `dynamiccatalog.Build`                                                                 | One catalog per key, built with `tools.UnboundClient` for the instance class. Base key: tier, GitLab.com or self-managed, maintenance group. Surface keys add the narrowing: exclusions, token scopes sorted and whether they were detected, read-only mode and its cause, safe mode. `BuildActionCatalog(client, opts)` returns the shared base bound to the client; only a call carrying spec-group overrides builds privately |
-| `dynamic.registryShapeFor`; the find and execute input schemas built once                                                                                                         | One registry shape per shared catalog origin; handlers per registry over the bound catalog                                                                                                                                                                                                                                                                                                                                       |
-| `resources.ToolSurfaceResourceOptions.ShareKey`, `cmd/server.manifestShareKey`                                                                                                    | One manifest snapshot per surface, origin, narrowing, parameter-schema mode and capability surface                                                                                                                                                                                                                                                                                                                               |
-| `tools.NewCallIdentifier`                                                                                                                                                         | One telemetry resolver per shared origin and surface                                                                                                                                                                                                                                                                                                                                                                             |
-| `gitlabclient.NewUnboundClient`                                                                                                                                                   | The credential-less client a shared catalog is built with: it answers the instance class and refuses every request with `ErrUnboundClient`, so a handler served from the shared copy by mistake fails closed instead of running under someone else's token                                                                                                                                                                       |
+| Component                                                                                                                                                                         | What is shared, and by what key                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `toolutil.ShareSchema`, `toolutil.DeriveSchema` (`internal/toolutil/schema_share.go`)                                                                                             | The registry of process-lived schemas (the reflected type schemas, the compiled tool schemas, every route schema of a shared catalog, and every derivation of one) and the memo of named transforms over them, keyed by input address and transform name. Every transform is idempotent and its output is registered, so reapplying it to its output returns the output; a clone chain in the catalog build collapses to one map                                                                                                                                                                                                                                                                                                                            |
+| `NewActionSpec`, tier pruning, `IndividualToolFromActionSpec`, `MetaActionSchema`, the dynamic and manifest schema readers, `LockdownInputSchemas`, `EnrichPaginationConstraints` | Each derives its result through `DeriveSchema` instead of mutating a copy; the transform names carry every parameter the result depends on (overrides, tier, type, destructive flag, and a digest of the parameter guidance)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `ActionRoute.Bind`, `BindTo`, `WrapHandler`, `WithBoundHandler`, `ValidateRouteBinding`                                                                                           | The seam between shared metadata and a per-client handler, set by the seven typed constructors that take a client and by `WithSafeModePreviews`. A catalog route must carry it: `Catalog.Validate` refuses an action without one, the dynamic controllers excepted, since their handlers close over the registry rather than a client                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `actioncatalog.Catalog.MarkShared`, `SharedOrigin`, `BindTo`; accessors no longer deep-copy                                                                                       | A catalog cached for the process is marked shared and its schemas registered; a bound catalog remembers its origin, which keys every client-independent derivation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `tools.ShareCatalog`, `SharedBaseCatalog`, `SharedMetaCatalog`, `SharedIndividualCatalog`, `dynamiccatalog.Build`                                                                 | One catalog per key, built with `tools.UnboundClient` for the instance class. Base key: tier, GitLab.com or self-managed, maintenance group. The meta and dynamic keys add the whole narrowing (`CatalogFilterKey`): exclusions, the token scopes the scope filter can act on, read-only mode and its cause, safe mode. The individual key adds the exclusions and nothing else, because that surface applies the scopes, read-only mode and safe mode when it registers rather than when it builds; its manifest key adds the filter key back, since what a manifest lists is what the server ended up serving. `BuildActionCatalog(client, opts)` returns the shared base bound to the client; only a call carrying spec-group overrides builds privately |
+| `dynamic.registryShapeFor`; the find and execute input schemas built once                                                                                                         | One registry shape per shared catalog origin; handlers per registry over the bound catalog                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `resources.ToolSurfaceResourceOptions.ShareKey`, `cmd/server.manifestShareKey`                                                                                                    | One manifest snapshot per surface, origin, narrowing, parameter-schema mode and capability surface                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `tools.NewCallIdentifier`                                                                                                                                                         | One telemetry resolver per shared origin and surface                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `gitlabclient.NewUnboundClient`                                                                                                                                                   | The credential-less client a shared catalog is built with: it answers the instance class and refuses every request with `ErrUnboundClient`, so a handler served from the shared copy by mistake fails closed instead of running under someone else's token                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+
+None of these caches evicts, and three of them (the registry shape, the
+manifest snapshot and the telemetry resolver) name a catalog by its address,
+so eviction cannot be added to the catalog cache either: a recycled address
+would be served the previous catalog's shape, manifest and resolver. What
+takes the place of eviction is a key space bounded by configuration, which is
+why the scope component of `CatalogFilterKey` is not the token's scope list
+but the part of it the scope filter can act on. The scopes of a token are
+chosen by whoever minted it, and a user can mint personal access tokens with
+arbitrary scope subsets; before the catalog was shared, that cost died with
+the pool entry, which is bounded.
+
+Every one of these caches builds each entry once, through
+`toolutil.OnceMap`, rather than letting the callers that lose the race build a
+copy each and drop all but one. That matters most where the loser's copy would
+not have been dropped: `schemaForType` and `inputSchemaForType` register what
+they build as process-lived, so two configurations reflecting one type at the
+same moment would both register a map, and the loser's would still be embedded
+in its catalog's routes.
 
 What is deliberately still private to a server: its tool table (the SDK's one
 entry per registered tool, with the closures that dispatch), the bound catalog
@@ -160,76 +197,75 @@ SDK caches resolution by pointer and those envelopes are served as maps.
 
 ## What this branch measured
 
-The same driver, on the development machine the change was made on: an AMD
-Ryzen 5 3550H with 8 threads and 60.8 GiB, kernel 6.1, Go 1.27.1, a slower
-host than the one above, so its per-call figures are higher and only its
-before and after pairs compare. One HTTP process per surface, credential
-counts 1, 2, 5, 10 and 20, ten seconds per step, four requests in flight per
-credential on `dynamic` and `meta` and two on `individual`; before is the base
-commit's binary, after is this branch. The slope is a least-squares line
-through the five steps. Beside the resident set, the in-use heap total of the
-profile at each step gives the live state per credential, which is the part
-of the slope that sharing can reach: the rest is what the requests in flight
-allocate while they are served.
+The same driver on the same host, from `53eb2204`. One HTTP process per
+surface, credential counts 1, 2, 5, 10, 20, 50, 100, 200, 500 and 1000, ten
+seconds per step, four requests in flight per credential on `dynamic` and
+`meta` and two on `individual`. The slope is a least-squares line through the
+peak resident set of every step, the same way the before figures above were
+computed:
 
-| Surface      | Peak resident set per credential, before |    after | Ratio | Live heap per credential, before |  after | Ratio | Peak at 20 credentials, before |   after |
-| ------------ | ---------------------------------------: | -------: | ----: | -------------------------------: | -----: | ----: | -----------------------------: | ------: |
-| `dynamic`    |                                133.4 MiB |  6.6 MiB |   20x |                          62.4 MB | 3.1 MB |   20x |                       2784 MiB | 319 MiB |
-| `meta`       |                                 78.0 MiB |  7.6 MiB |   10x |                          29.7 MB | 2.4 MB |   12x |                       1687 MiB | 320 MiB |
-| `individual` |                                107.4 MiB | 27.7 MiB |  3.9x |                          42.6 MB | 5.5 MB |  7.7x |                       2374 MiB | 853 MiB |
+| Surface      | Resident set per credential, before |     after | Ratio | Where the before series stopped | The after series at 1000 credentials | Fitted intercept, after |
+| ------------ | ----------------------------------: | --------: | ----: | ------------------------------- | ------------------------------------ | ----------------------: |
+| `dynamic`    |                           130.9 MiB |  4.10 MiB |   32x | 100 credentials, 12.9 GiB       | 4.0 GiB                              |                 263 MiB |
+| `meta`       |                            63.5 MiB |  5.44 MiB |   12x | 200 credentials, 12.6 GiB       | 5.7 GiB                              |                 139 MiB |
+| `individual` |                            90.8 MiB | 11.28 MiB |  8.1x | 100 credentials, 9.2 GiB        | 11.2 GiB                             |                 756 MiB |
 
-Processor time per call did not move, which is expected: 19.5 ms before and
-after on `dynamic` and `meta`, 348 and 342 ms on `individual`, the per-call
-work being the SDK's and the subject of the next section. What moved with the
-memory is latency under load, since the collector has less to scan:
-`tools/call` p50 at 20 credentials went from 571 to 346 ms on `dynamic`, 281
-to 267 ms on `meta` and 156 to 120 ms on `individual`.
+All three after series reached a thousand credentials, which no surface
+reached before. The after run had a larger budget than the before run (32.3
+against 15.8 GiB, the host having been freed up in between), so the stopping
+points are not a like-for-like limit; what makes the comparison hold anyway is
+that all three after series would have fit under the before run's budget too,
+with the largest of them, `individual`, ending at 11.2 GiB.
 
-The top of the after heap profile at 20 credentials on the dynamic surface,
-114.8 MB in use against 1260.9 MB before, by flat allocation:
+At 100 credentials, a step both runs took: 12.9 GiB to 704 MiB on `dynamic`,
+6.5 GiB to 698 MiB on `meta`, 9.2 GiB to 2.1 GiB on `individual`.
 
-| Rank | Function                                                   |    Flat | What it is                                                                                                                 |
-| ---: | ---------------------------------------------------------- | ------: | -------------------------------------------------------------------------------------------------------------------------- |
-|    1 | `segmentio/encoding/json.decoder.decodeMapStringInterface` | 14.5 MB | the SDK decoding the arguments and results of the calls in flight                                                          |
-|    2 | `reflect.mapassign_faststr0`                               | 10.5 MB | the maps those decodes build                                                                                               |
-|    3 | `encoding/json/jsontext.(*encoderState).reformatObject`    | 10.5 MB | response encoding buffers of the calls in flight                                                                           |
-|    4 | `bytes.Clone`                                              |  8.8 MB | request bodies in flight                                                                                                   |
-|    5 | `bytes.growSlice`                                          |  7.1 MB | encoder growth                                                                                                             |
-|    6 | `segmentio/encoding/json.decoder.decodeInterface`          |  7.0 MB | the same decodes                                                                                                           |
-|    7 | `toolutil.cloneSchemaMap`                                  |  6.0 MB | the shared derivations, built once for the process: the type caches, the spec and individual rewrites, the lockdown copies |
-|    8 | `encoding/json/jsontext.(*encoderState).reformatValue`     |  5.0 MB | response encoding                                                                                                          |
-|    9 | `dynamic.dedupeStrings`                                    |  4.0 MB | the one registry shape                                                                                                     |
-|   10 | `actioncatalog.(*Group).ActionMap`                         |  4.0 MB | per entry: the route maps the dynamic handlers dispatch through, 0.3 MB per credential                                     |
+Processor time per call did not move, which is expected, the per-call work
+being the SDK's and the subject of the next section: 7.5 ms at one credential
+to 8.8 ms at a thousand on `dynamic`, 8.2 to 7.4 ms on `meta`, 106 to 130 ms
+on `individual`. What the thousand-credential step does show is where the
+remaining cost is: on `individual`, `tools/list` p50 is 25.6 s, one 3 MB
+response marshalled per call, while `tools/call` p50 on the same step is
+122 ms.
 
-Below those, `dynamic.buildRegistryShape` at 12.5 MB cumulative is the one
-search index, `actioncatalog.(*Catalog).AddGroup` at 3.5 MB is the shared
-catalog build plus the bound copies, and `toolutil.cloneRouteStrings` at
-2.5 MB is the slices of the bound routes, per entry. Nothing in the profile
-copies a schema per server. The live residue per credential on this surface,
-about 3 MB, is the bound catalog descriptors, the handlers' route maps, the
-closures, and the server with its sessions.
+The heap profile of the after run at a thousand credentials on the dynamic
+surface holds 936 MB in use, and its top by flat allocation is this:
 
-The individual surface is where the resident slope stayed furthest from an
-order of magnitude, and its profile says why that is not something to share.
-`registerIndividualCatalogAction` accounts for 68 MB cumulative at 20
-credentials, of which 33.5 MB under `CompileToolSchemas` is the compiled
-schema cache the first entry built for the whole process, 12 MB under
-`mcp.AddTool` is the SDK's tool table (0.6 MB per credential), 8 MB is the
-`mcp.Tool` structs (0.4 MB) and 2 MB the handler closures: the tool table and
-closures the direction leaves per server, about 1.1 MB. The rest of the
-profile is `jsontext.reformatObject` and `reformatValue` at 51 MB and
-`reflect.New` at 28 MB, both under `encoding/json/v2` marshalling the 3 MB
-`tools/list` responses of the calls in flight, forty of them at once at this
-step. The slope that remains on this surface is the cost of the responses
-each credential keeps in flight, not of the credential, and it shrinks only
-by shrinking what a `tools/list` allocates, which is the pre-encoded list
+| Rank | Function                                                   |     Flat | What it is                                                                          |
+| ---: | ---------------------------------------------------------- | -------: | ----------------------------------------------------------------------------------- |
+|    1 | `actioncatalog.(*Group).ActionMap`                         | 185.1 MB | per credential: the route maps its dynamic handlers dispatch through                |
+|    2 | `segmentio/encoding/json.decoder.decodeMapStringInterface` | 114.1 MB | the SDK decoding the arguments and results of the calls in flight                   |
+|    3 | `toolutil.cloneRouteStrings`                               | 112.5 MB | per credential: the alias, tag and related-action slices of those same bound routes |
+|    4 | `segmentio/encoding/json.(*Decoder).readValue`             |  65.2 MB | the same decodes                                                                    |
+|    5 | `bytes.Clone`                                              |  53.8 MB | request bodies in flight                                                            |
+|    6 | `encoding/json/jsontext.(*encoderState).reformatObject`    |  46.2 MB | response encoding buffers of the calls in flight                                    |
+|    7 | `bytes.growSlice`                                          |  40.3 MB | encoder growth                                                                      |
+|    8 | `segmentio/encoding/json.decoder.decodeInterface`          |  40.0 MB | the same decodes                                                                    |
+|    9 | `resources.(*recorder).AddResourceTemplate`                |  22.5 MB | per credential: the resource and template records of its server                     |
+|   10 | `slices.Grow`                                              |  21.5 MB | encoder growth                                                                      |
+
+`Group.ActionMap` is 297 MB cumulative, the flat 185 MB plus the 112 MB of
+`cloneRouteStrings` under it: 0.3 MB per credential, which is what a bound
+catalog's descriptors cost. `toolutil.cloneSchemaMap` is 7.5 MB, eight tenths
+of one percent of the heap, and it is 7.5 MB in the profiles at 20 and at 100
+credentials too: the process-wide derivations, the type caches and the spec,
+individual and lockdown rewrites, built once for the process and not once per
+server. `dynamic.buildRegistryShape` is 8.0 MB cumulative, the one search
+index. Nothing in the profile copies a schema per server.
+
+The individual surface is where the slope stayed furthest from an order of
+magnitude, and its profile says why that is not something to share. At a
+thousand credentials it holds 2.76 GB in use, of which
+`registerIndividualCatalogAction` is 1.13 GB cumulative: the SDK's tool table,
+the `mcp.Tool` structs and the handler closures, about 1.1 MB per credential,
+which is exactly what the direction leaves per server. Most of the rest is the
+responses in flight: `jsontext.reformatValue` and `reformatObject` at 561 MB
+between them, `jsonschema.Schema.MarshalJSON` at 450 MB and `bytes.growSlice`
+at 228 MB, all of it `encoding/json/v2` marshalling the 3 MB `tools/list`
+responses of the calls in flight. What remains on this surface is the cost of
+what each credential keeps in flight, not of the credential, and it shrinks
+only by shrinking what a `tools/list` allocates, which is the pre-encoded list
 below.
-
-At the previous slopes the TrueNAS series stopped at 100 credentials on
-`dynamic` and `individual` and 200 on `meta` against a 16 GiB budget; at the
-new ones a thousand credentials project to about 7 GiB on `dynamic`, 8 GiB on
-`meta` and 28 GiB on `individual` under the same load, which is the series
-the host will be asked to run.
 
 ## What remains, per credential and per call
 
@@ -242,13 +278,15 @@ Per call, the cost is processor time, and it was not this work's target. The
 CPU profile of the before run at a hundred credentials on the dynamic surface
 says where the 8 ms per call go, which is what makes a few dozen credentials
 saturate a sixteen-thread host at about 1,500 calls a second. Inside
-`mcp.(*Server).callTool` (68.5% of all samples), `mcp.applySchema` is 42% of
-the total: the go-sdk validates the structured output of every call by
-marshalling the handler's result to JSON (`encoding/json/v2.marshalEncode`,
-35%) and decoding that JSON into `map[string]any`
-(`segmentio/encoding/json.Decoder.Decode`, 30%) before checking it against
-the output schema; the validation itself is not in the top of the profile, the
-two conversions are. `dynamic.(*Registry).Find`, the search scoring behind
+`mcp.(*Server).callTool` (68.5% of all samples), the go-sdk marshals the
+handler's result to JSON first, in `toolForErr` and before any validation
+begins (`encoding/json.Marshal`, 12.4% of the total), and then `mcp.applySchema`
+is 42.5% of the total: decoding that JSON into `map[string]any`
+(`internal/json.Unmarshal`, 28.6%), re-marshalling it when defaults were
+applied (10.6%), and the schema check itself
+(`jsonschema.(*Resolved).Validate`, 3.2%). The two conversions inside
+`applySchema` cost twelve times the check they serve.
+`dynamic.(*Registry).Find`, the search scoring behind
 `gitlab_find_action`, is 13.6%, and GC marking 12.6%. On the individual
 surface 84% of the CPU is `tools/list` marshalling the 3 MB response through
 `encoding/json/v2` reflection over the tool structs and their schema maps.
@@ -269,8 +307,8 @@ fixes what the options are:
   registered through `Server.AddTool` skips both conversions and both
   validations, input included, so it would have to validate the input itself.
 - `gitlab_execute_action` declares a permissive output envelope
-  (`ActionDispatchOutputSchema`). Dropping it removes the decode and the
-  validation, about 30% of the per-call CPU on that surface, at the cost of
+  (`ActionDispatchOutputSchema`). Dropping it removes everything `applySchema`
+  does, 42.5% of the per-call CPU in that profile, at the cost of
   the `outputSchema` in `tools/list`, which is a wire change and so a
   deliberate one. Validating each action's output shape once per action type
   off the hot path, and serving the envelope without a schema, keeps the
@@ -289,31 +327,55 @@ fixes what the options are:
 
 None of these is implemented here. They are phase three, with the expected
 effect recorded: dropping the execute output schema or validating off the hot
-path should take roughly a third off the dynamic surface's per-call CPU, and a
-pre-encoded individual list should take most of that surface's 150 ms per
-`tools/list`, which is what an agent client pays on every reconnect.
+path should take about two fifths off the dynamic surface's per-call CPU, and
+a pre-encoded individual list should take most of what that surface spends on
+a `tools/list`, which is what an agent client pays on every reconnect.
 
 ## How it is known that nothing changed on the wire
 
-- The golden snapshots `internal/tools/testdata/tools_individual.json` and
-  `tools_meta.json` (`TestToolSnapshots_Individual`, `TestToolSnapshots_Meta`)
-  pin every tool's name, description, annotations and both schemas on the two
-  surfaces with a golden, and pass unchanged.
+Everything below runs from a checkout, and that is the point of listing it:
+what is claimed here is what a reader can re-run.
+
+- The golden snapshots under `internal/tools/testdata/` pin every tool's name,
+  description, annotations and both schemas, and pass unchanged.
+  `tools_individual.json` and `tools_meta.json`
+  (`TestToolSnapshots_Individual`, `TestToolSnapshots_Meta`) cover the
+  individual surface and the meta surface in its default opaque mode;
+  `tools_meta_compact.json` and `tools_meta_full.json`
+  (`TestToolSnapshots_MetaParamSchemaModes`) cover the two modes that publish
+  the per-action envelopes, which the opaque golden cannot see. Regenerate any
+  of them with `UPDATE_TOOLSNAPS=true`.
 - `TestSharedIndividualCatalog_TwoServersListOneCatalogUnchanged` registers
-  two servers from one shared catalog, checks that every action's schema maps
-  are the same objects in both, that their `tools/list` responses are
-  byte-identical, and that no schema map in the catalog changed between the
-  build and the listing, by hashing every one before and after.
-  `TestSharedMetaCatalog_ConcurrentEntriesBuildSafely` builds several entries
-  at once from one fresh configuration under the race detector.
+  two servers from one shared catalog, under separate compiled-schema cache
+  keys so the comparison is of the maps rather than of one cached compiled
+  schema, and checks that their `tools/list` responses are byte-identical and
+  that no schema map in the catalog changed between the build and the listing,
+  by hashing every one before and after.
+  `TestSharedMetaCatalog_TwoClientsShareOneCatalogBoundToEach` is the
+  same-object check: every action of two catalogs bound from one origin
+  carries the same input schema map, by address.
+  `TestCatalog_BindTo_RebindsEveryHandlerAndSharesTheRest` is the same
+  statement at the catalog level.
+- `TestToolManifest_SharedSnapshotServesTheSameBytesAsAPrivateOne` reads
+  `gitlab://tools` and `gitlab://tools/{id}` from two servers sharing a
+  snapshot and from a third that built its own, and compares the bytes.
+  `TestSharedMetaCatalog_SafeModePreviewsOnEveryServerOfOneKey` calls a
+  mutating action on two servers of one shared safe-mode catalog and checks
+  that both preview and neither instance is asked for anything.
+  `TestBuild_ACacheHitStillCarriesTheScopeCause` checks that the second
+  `dynamiccatalog.Build` for a narrowed credential, which is a cache hit,
+  still reports what the credential withheld.
+- `TestSharedMetaCatalog_ConcurrentEntriesBuildSafely` builds several pool
+  entries at once from one fresh configuration. It is written for the race
+  detector, which no CI job runs: `make test-race` runs the unit suite under
+  it locally, and that is where this test earns its keep.
 - The two transport end-to-end modules (`make test-e2e-http`,
   `make test-e2e-stdio`) drive the real binary.
-- Before merging, the base binary and the changed binary were driven over
-  stdio through the same twenty-two requests on nine configurations (the
-  three surfaces, the three parameter-schema modes, read-only, safe mode with
-  exclusions, the minimal capability surface), covering `tools/list`, the
-  manifest and its details, the meta schema resources, `gitlab_find_action`,
-  one call on each surface and the resource, template and prompt listings.
-  The responses were byte-identical apart from the version string in
-  `initialize`. That is how the compact and full envelopes were found to
-  change under compilation, and why they are shared as maps.
+
+One check behind this work is not reproducible and is recorded as what it was.
+While the change was being made, the base binary and the changed binary were
+driven over stdio through the same requests on several configurations and their
+responses compared by hand. That exploratory comparison is what found the
+compact and full envelopes changing under compilation, and why they are shared
+as maps rather than compiled; the goldens above are what pins that finding from
+now on.
