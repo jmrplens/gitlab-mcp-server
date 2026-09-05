@@ -422,9 +422,10 @@ func collectExposedFields(pkgs []*packages.Package, sdkEnums map[string]sdkEnum)
 				if !ok {
 					continue
 				}
+				pkgPath, mcpType := mcpIdentity(pkg, pair)
 				field := exposedField{
-					PkgPath: pkg.PkgPath, Package: pkgName, Kind: pair.Kind,
-					MCPType: pair.MCPName, Tag: mcpTag,
+					PkgPath: pkgPath, Package: pkgName, Kind: pair.Kind,
+					MCPType: mcpType, Tag: mcpTag,
 					SDKType: pair.SDKName, SDKField: sdkField.name, Enum: enum,
 				}
 				// An output type built by several converters (union pairing)
@@ -438,6 +439,18 @@ func collectExposedFields(pkgs []*packages.Package, sdkEnums map[string]sdkEnum)
 		}
 	}
 	return out
+}
+
+// mcpIdentity returns the package path and type name the catalog index keys
+// the pair's MCP struct on: the reflect identity of its Go type, which for an
+// alias (type Output = toolutil.MergeRequestOutput) is the target type in the
+// target's package. Keying the exposed field by the alias name would never
+// meet that offer, and the field would fall out of the rule without a finding.
+func mcpIdentity(pkg *packages.Package, pair structs.Pair) (pkgPath, mcpType string) {
+	if named := pair.MCPNamed; named != nil && named.Obj().Pkg() != nil {
+		return named.Obj().Pkg().Path(), named.Obj().Name()
+	}
+	return pkg.PkgPath, pair.MCPName
 }
 
 // matchTag finds the MCP json tag an SDK tag maps to: the tag itself, or its

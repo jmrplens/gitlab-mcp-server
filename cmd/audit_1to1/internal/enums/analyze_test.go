@@ -248,6 +248,55 @@ func TestCollectExposedFields_Fixture_PairsEnumFieldsWithTheirMCPTag(t *testing.
 	}
 }
 
+// TestCollectExposedFields_Fixture_AnAliasedOutputIsKeyedByItsTarget pins the
+// identity an alias resolves to. A converter returning
+// `type Output = shapes.WidgetOutput` reflects as shapes.WidgetOutput, which is
+// what the catalog index keys the schema on; an exposed field keyed by the
+// alias name would never meet that offer, and the field would fall out of the
+// rule without a finding, which is how every aliased output was skipped before.
+func TestCollectExposedFields_Fixture_AnAliasedOutputIsKeyedByItsTarget(t *testing.T) {
+	root := fixtureModule(t, map[string]string{
+		"internal/shapes/shapes.go": `package shapes
+
+type WidgetOutput struct {
+	Color string ` + "`json:\"color\"`" + `
+}
+`,
+		"internal/tools/gadgets/gadgets.go": `package gadgets
+
+import (
+	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v2"
+
+	"example.com/fixture/internal/shapes"
+)
+
+type Output = shapes.WidgetOutput
+
+// toOutput pairs the aliased Output with the SDK result.
+func toOutput(w *gl.Widget) Output {
+	return Output{Color: string(w.Color)}
+}
+`,
+	})
+	pkgs, clientGo := loadFixture(t, root)
+	var got []exposedField
+	for _, field := range collectExposedFields(pkgs, collectSDKEnums(clientGo)) {
+		if field.Package == "gadgets" {
+			got = append(got, field)
+		}
+	}
+	targetPath := fixtureModulePath + "/internal/shapes"
+	want := []exposedField{
+		{PkgPath: targetPath, Package: "gadgets", Kind: kindOutput, MCPType: "WidgetOutput", Tag: "color", SDKType: "v2.Widget", SDKField: "Color", Enum: "ColorValue"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("collectExposedFields(gadgets) = %+v, want %+v", got, want)
+	}
+	if key := got[0].structKey(); key != targetPath+".WidgetOutput" {
+		t.Errorf("structKey = %q, want the alias target %q", key, targetPath+".WidgetOutput")
+	}
+}
+
 // TestBuildReport_Fixture_HoldsEachFieldToTheSDKValues runs the whole rule on
 // the fixture: an enum-sourced input with one missing and one extra value, a
 // clean enum-sourced list input, a description-sourced output that names

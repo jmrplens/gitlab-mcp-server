@@ -67,8 +67,8 @@ func TestLocalOrAliasNamedStruct_AliasOfNonStruct_IsNotAPair(t *testing.T) {
 		PkgPath:   pkgPath,
 		TypesInfo: &types.Info{Uses: map[*ast.Ident]types.Object{ident: aliasObj}},
 	}
-	if _, name, ok := localOrAliasNamedStruct(pkg, ident, alias); ok || name != "" {
-		t.Errorf("localOrAliasNamedStruct = %q/%v, want no pair for an alias of a slice", name, ok)
+	if named, _, name, ok := localOrAliasNamedStruct(pkg, ident, alias); ok || name != "" || named != nil {
+		t.Errorf("localOrAliasNamedStruct = %v/%q/%v, want no pair for an alias of a slice", named, name, ok)
 	}
 }
 
@@ -281,6 +281,16 @@ func TestCollectPairs_Repository_ListsThePairsTheDiffRunsOver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load packages: %v", err)
 	}
+	// Determinism is judged on the pairs' identities: a Pair carries go/types
+	// values, which are not what two runs have to agree on and which the
+	// deepequalerrors vet check refuses to compare.
+	identities := func(pairs []Pair) []string {
+		out := make([]string, 0, len(pairs))
+		for _, pair := range pairs {
+			out = append(out, pair.Kind+" "+pair.MCPName+" "+pair.SDKName)
+		}
+		return out
+	}
 	checked := 0
 	for _, pkg := range pkgs {
 		pr, ok := analyzePackage(pkg)
@@ -293,7 +303,7 @@ func TestCollectPairs_Repository_ListsThePairsTheDiffRunsOver(t *testing.T) {
 		if inputs != pr.InputPairs || outputs != pr.OutputPairs {
 			t.Errorf("%s: CollectPairs = %d inputs / %d outputs, analyzePackage = %d / %d", pr.Package, inputs, outputs, pr.InputPairs, pr.OutputPairs)
 		}
-		if again := CollectPairs(pkg); !reflect.DeepEqual(pairs, again) {
+		if again := CollectPairs(pkg); !reflect.DeepEqual(identities(pairs), identities(again)) {
 			t.Errorf("%s: CollectPairs is not deterministic", pr.Package)
 		}
 	}

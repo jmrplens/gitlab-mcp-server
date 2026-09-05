@@ -532,6 +532,11 @@ type Pair struct {
 	// MCPName and MCPType are the MCP-side struct.
 	MCPName string
 	MCPType *types.Struct
+	// MCPNamed is the named type behind MCPName once an alias is unwrapped.
+	// For a local struct it lives in the tool package; for an alias such as
+	// `type Output = toolutil.MergeRequestOutput` it is the target type, in
+	// the target's package, which is the identity reflect reports for it.
+	MCPNamed *types.Named
 	// SDKName and SDKType are the client-go struct, the name qualified with
 	// the last segment of its package path.
 	SDKName string
@@ -727,10 +732,11 @@ func appendGapIfAny(pr *packageReport, g gap) {
 
 // structPair links an MCP struct with the SDK struct it must mirror.
 type structPair struct {
-	mcpName string
-	mcpType *types.Struct
-	sdkName string
-	sdkType *types.Struct
+	mcpName  string
+	mcpType  *types.Struct
+	mcpNamed *types.Named
+	sdkName  string
+	sdkType  *types.Struct
 	// tag preference for the SDK side: url first for Options, json for results.
 	sdkURLTags bool
 }
@@ -739,7 +745,7 @@ type structPair struct {
 func (p structPair) exported(kind string) Pair {
 	return Pair{
 		Kind:    kind,
-		MCPName: p.mcpName, MCPType: p.mcpType,
+		MCPName: p.mcpName, MCPType: p.mcpType, MCPNamed: p.mcpNamed,
 		SDKName: p.sdkName, SDKType: p.sdkType,
 		SDKURLTags: p.sdkURLTags,
 	}
@@ -767,7 +773,7 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	}
 	resultExpr := fn.Type.Results.List[0].Type
 	resultType := pkg.TypesInfo.TypeOf(resultExpr)
-	mcpStruct, mcpName, ok := localOrAliasNamedStruct(pkg, resultExpr, resultType)
+	mcpNamed, mcpStruct, mcpName, ok := localOrAliasNamedStruct(pkg, resultExpr, resultType)
 	if !ok {
 		return
 	}
@@ -809,7 +815,7 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	}
 	key := [2]string{mcpName, sdkNamed.Obj().Name()}
 	out[key] = structPair{
-		mcpName: mcpName, mcpType: mcpStruct,
+		mcpName: mcpName, mcpType: mcpStruct, mcpNamed: mcpNamed,
 		sdkName: sdkTypeName(sdkNamed), sdkType: sdkStruct, sdkURLTags: false,
 	}
 }
@@ -835,7 +841,7 @@ func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]st
 		}
 		key := [2]string{mcpNamed.Obj().Name(), named.Obj().Name()}
 		out[key] = structPair{
-			mcpName: mcpNamed.Obj().Name(), mcpType: mcpStruct,
+			mcpName: mcpNamed.Obj().Name(), mcpType: mcpStruct, mcpNamed: mcpNamed,
 			sdkName: sdkTypeName(named), sdkType: st, sdkURLTags: true,
 		}
 		return true
@@ -1131,18 +1137,18 @@ func localNamedStruct(pkg *packages.Package, t types.Type) (*types.Named, *types
 //
 // resultExpr is the AST result-type expression (used to detect the alias);
 // resultType is its resolved go/types type (the alias target).
-func localOrAliasNamedStruct(pkg *packages.Package, resultExpr ast.Expr, resultType types.Type) (*types.Struct, string, bool) {
+func localOrAliasNamedStruct(pkg *packages.Package, resultExpr ast.Expr, resultType types.Type) (*types.Named, *types.Struct, string, bool) {
 	if named, st, ok := localNamedStruct(pkg, resultType); ok {
-		return st, named.Obj().Name(), true
+		return named, st, named.Obj().Name(), true
 	}
 	ident := identForExpr(resultExpr)
 	if ident == nil {
-		return nil, "", false
+		return nil, nil, "", false
 	}
 	aliasObj, isTypeName := pkg.TypesInfo.Uses[ident].(*types.TypeName)
 	if !isTypeName || !aliasObj.IsAlias() ||
 		aliasObj.Pkg() == nil || aliasObj.Pkg().Path() != pkg.PkgPath {
-		return nil, "", false
+		return nil, nil, "", false
 	}
 	// Go materializes type aliases as *types.Alias; unwrap to the target named
 	// struct (e.g. Output -> toolutil.MergeRequestOutput) before reading fields.
@@ -1154,11 +1160,14 @@ func localOrAliasNamedStruct(pkg *packages.Package, resultExpr ast.Expr, resultT
 	if ptr, isPtr := target.(*types.Pointer); isPtr {
 		target = ptr.Elem()
 	}
-	_, st, ok := derefNamedStruct(types.Unalias(target))
+	named, st, ok := derefNamedStruct(types.Unalias(target))
 	if !ok {
-		return nil, "", false
+		return nil, nil, "", false
 	}
-	return st, aliasObj.Name(), true
+	// The alias keeps its local name for the report, and the target type
+	// travels beside it: a rule that has to meet reflect on the same identity
+	// (the enum rule's catalog index) keys on the target, not on the alias.
+	return named, st, aliasObj.Name(), true
 }
 
 // identForExpr returns the identifier naming the type in a result expression,
