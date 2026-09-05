@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/actions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/enums"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/merge"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/metadata"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/sdk"
@@ -22,10 +24,24 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
+// Seams for what a test cannot otherwise reach: the process exit behind a
+// fatal error, a repository root that cannot be found, the analyzers whose
+// failures the real tree never produces, and the JSON encoder that never
+// fails on a report of strings and ints. Each is a variable a test restores.
+var (
+	fatalf         = cmdutil.Fatalf
+	repositoryRoot = cmdutil.RepositoryRoot
+	structsRun     = structs.Run
+	actionsRun     = actions.Run
+	enumsRun       = enums.Run
+	sdkRun         = sdk.Run
+	marshalIndent  = json.MarshalIndent
+)
+
 func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
-	scope := flag.String("scope", "structs,actions,metadata", "one of {structs,actions,metadata,sdk} for a single-scope report, or the first three (default) for the merged backlog; two-scope combinations are not supported")
+	scope := flag.String("scope", "structs,actions,metadata,enums", "one of {structs,actions,metadata,enums,sdk} for a single-scope report, or the first four (default) for the merged backlog; other combinations are not supported")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
 	refresh := flag.Bool("refresh", false, "with -validate-docs, force re-fetch of cited docs even when cached and fresh")
 	offline := flag.Bool("offline", false, "with -validate-docs, use only cached docs; do not fetch")
@@ -38,7 +54,7 @@ func main() {
 	}
 
 	if err := run(*scope, *gapsOnly, *outputPath); err != nil {
-		cmdutil.Fatalf("%v", err)
+		fatalf("%v", err)
 	}
 }
 
@@ -59,7 +75,7 @@ func run(scope string, gapsOnly bool, outputPath string) error {
 	case len(scopes) == 1:
 		content, clean, err = runSingle(scopes[0], gapsOnly)
 	default:
-		return fmt.Errorf("scope must be a single value or the merged trio %s (got %d: %s); other combinations are not supported",
+		return fmt.Errorf("scope must be a single value or the merged set %s (got %d: %s); other combinations are not supported",
 			strings.Join(mergedScopes, ","), len(scopes), strings.Join(scopes, ","))
 	}
 	if err != nil {
@@ -80,9 +96,10 @@ func run(scope string, gapsOnly bool, outputPath string) error {
 // validates the cited docs, writes the report, and exits non-zero when any
 // citation is stale so it can gate CI.
 func runValidateDocsMode(outputPath string, refresh, offline bool, maxAge time.Duration) {
-	root, err := cmdutil.RepositoryRoot(".")
+	root, err := repositoryRoot(".")
 	if err != nil {
-		cmdutil.Fatalf("find repository root: %v", err)
+		fatalf("find repository root: %v", err)
+		return
 	}
 	// Cancel the doc-fetch sweep on Ctrl+C so a slow validation aborts promptly.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -91,7 +108,7 @@ func runValidateDocsMode(outputPath string, refresh, offline bool, maxAge time.D
 	// must surface as a stale citation rather than be masked by a cached copy.
 	fetcher := apidocs.New(root, apidocs.Options{Refresh: refresh, Offline: offline, MaxAge: maxAge, Strict: true})
 	if validateErr := validateDocs(ctx, root, outputPath, fetcher); validateErr != nil {
-		cmdutil.Fatalf("%v", validateErr)
+		fatalf("%v", validateErr)
 	}
 }
 
@@ -112,74 +129,84 @@ func validateDocs(ctx context.Context, root, outputPath string, fetcher *apidocs
 	return nil
 }
 
-// runMerged runs all three analyzers and produces the merged backlog JSON via
-// the shared merge pipeline. The root is resolved once for the two filesystem
-// scanners (structs, actions); metadata uses the in-memory catalog.
+// runMerged runs all four analyzers and produces the merged backlog JSON via
+// the shared merge pipeline. The root is resolved once for the three
+// filesystem scanners (structs, actions, enums); metadata uses the in-memory
+// catalog alone, and enums reads it beside the tree.
 func runMerged(gapsOnly bool) ([]byte, error) {
-	root, err := cmdutil.RepositoryRoot(".")
+	root, err := repositoryRoot(".")
 	if err != nil {
 		return nil, fmt.Errorf("find repository root: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [1/3] analyzing struct field mapping (R-INPUT/R-OUTPUT)...")
-	structBytes, err := structs.Run(root, gapsOnly)
+	cmdutil.Progressf("audit_1to1: [1/4] analyzing struct field mapping (R-INPUT/R-OUTPUT)...")
+	structBytes, err := structsRun(root, gapsOnly)
 	if err != nil {
 		return nil, fmt.Errorf("struct report: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [2/3] analyzing action coverage (R-ACTION)...")
-	actionBytes, err := actions.Run(root, gapsOnly)
+	cmdutil.Progressf("audit_1to1: [2/4] analyzing action coverage (R-ACTION)...")
+	actionBytes, err := actionsRun(root, gapsOnly)
 	if err != nil {
 		return nil, fmt.Errorf("action report: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [3/3] analyzing discovery metadata (R-META)...")
+	cmdutil.Progressf("audit_1to1: [3/4] analyzing discovery metadata (R-META)...")
 	metadataBytes := metadata.Run(gapsOnly)
+	cmdutil.Progressf("audit_1to1: [4/4] analyzing enum values (R-ENUM)...")
+	// The merged backlog is a report, not a gate, so the enum stream's own
+	// verdict is not consulted here; -scope=sdk is where it fails the build.
+	enumBytes, _, err := enumsRun(root, gapsOnly)
+	if err != nil {
+		return nil, fmt.Errorf("enum report: %w", err)
+	}
 	cmdutil.Progressf("audit_1to1: merging backlog...")
-	return merge.BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes)
+	return merge.BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes, enumBytes)
 }
 
 // runSingle runs one analyzer and returns its native JSON shape plus whether
-// that scope's gate passes. Only sdk gates; the three candidate streams always
-// report clean, because a listed candidate is a backlog entry rather than a
-// defect.
+// that scope's gate passes. Only sdk and enums gate; the three candidate
+// streams always report clean, because a listed candidate is a backlog entry
+// rather than a defect.
 func runSingle(scope string, gapsOnly bool) (content []byte, clean bool, err error) {
 	switch scope {
-	case "structs", "actions", "sdk":
-		root, rootErr := cmdutil.RepositoryRoot(".")
+	case "structs", "actions", "enums", "sdk":
+		root, rootErr := repositoryRoot(".")
 		if rootErr != nil {
 			return nil, false, fmt.Errorf("find repository root: %w", rootErr)
 		}
 		switch scope {
 		case "structs":
-			content, err = structs.Run(root, gapsOnly)
+			content, err = structsRun(root, gapsOnly)
 			return content, true, err
 		case "actions":
-			content, err = actions.Run(root, gapsOnly)
+			content, err = actionsRun(root, gapsOnly)
 			return content, true, err
+		case "enums":
+			return enumsRun(root, gapsOnly)
 		default:
-			return sdk.Run(root, gapsOnly)
+			return sdkRun(root, gapsOnly)
 		}
 	case "metadata":
 		// The metadata analyzer reads the in-memory catalog, not the tree, so
-		// unlike the two filesystem scanners it has nothing to fail at.
+		// unlike the filesystem scanners it has nothing to fail at.
 		return metadata.Run(gapsOnly), true, nil
 	default:
-		return nil, false, fmt.Errorf("unknown scope %q (valid: structs, actions, metadata, sdk)", scope)
+		return nil, false, fmt.Errorf("unknown scope %q (valid: structs, actions, metadata, enums, sdk)", scope)
 	}
 }
 
-// mergedScopes is the trio the merged backlog is built from, sorted. The sdk
+// mergedScopes is the set the merged backlog is built from, sorted. The sdk
 // scope is deliberately not one of them: it gates rather than accumulating
 // candidates, and adding it would change the shape of plan/1to1-backlog.json.
-var mergedScopes = []string{"actions", "metadata", "structs"}
+var mergedScopes = []string{"actions", "enums", "metadata", "structs"}
 
-// isMergedScope reports whether scopes is exactly the merged trio, so a
-// three-value selection that merely happens to have three entries (say
-// structs,actions,sdk) is rejected instead of silently merging.
+// isMergedScope reports whether scopes is exactly the merged set, so a
+// selection that merely happens to have as many entries (say
+// structs,actions,metadata,sdk) is rejected instead of silently merging.
 func isMergedScope(scopes []string) bool {
 	return slices.Equal(scopes, mergedScopes)
 }
 
 // parseScope validates and normalizes the -scope flag. Returns the deduplicated,
-// sorted list of scopes. An empty value or "all" expands to the merged trio.
+// sorted list of scopes. An empty value or "all" expands to the merged set.
 func parseScope(s string) ([]string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "all" {
@@ -190,13 +217,13 @@ func parseScope(s string) ([]string, error) {
 	for raw := range strings.SplitSeq(s, ",") {
 		v := strings.TrimSpace(raw)
 		switch v {
-		case "structs", "actions", "metadata", "sdk":
+		case "structs", "actions", "metadata", "enums", "sdk":
 			if !seen[v] {
 				seen[v] = true
 				scopes = append(scopes, v)
 			}
 		default:
-			return nil, fmt.Errorf("invalid scope %q (valid: structs, actions, metadata, sdk, all)", v)
+			return nil, fmt.Errorf("invalid scope %q (valid: structs, actions, metadata, enums, sdk, all)", v)
 		}
 	}
 	sort.Strings(scopes)

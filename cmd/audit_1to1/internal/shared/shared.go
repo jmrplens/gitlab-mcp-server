@@ -41,6 +41,11 @@ func LoadToolPackages(root string) ([]*packages.Package, error) {
 	return result.pkgs, result.err
 }
 
+// loadPackages is the go/packages loader, a variable so a test can hand the
+// filter a package the real loader never produces: one under internal/tools
+// with no type information at all.
+var loadPackages = packages.Load
+
 // loadToolPackages performs the actual load; see LoadToolPackages.
 func loadToolPackages(root string) ([]*packages.Package, error) {
 	cfg := &packages.Config{
@@ -48,7 +53,7 @@ func loadToolPackages(root string) ([]*packages.Package, error) {
 			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports,
 		Dir: root,
 	}
-	loaded, err := packages.Load(cfg, "./internal/tools/...")
+	loaded, err := loadPackages(cfg, "./internal/tools/...")
 	if err != nil {
 		return nil, fmt.Errorf("load packages: %w", err)
 	}

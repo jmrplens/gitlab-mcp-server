@@ -21,6 +21,11 @@
 // operation and the SDK for the rest are the norm, so a package-level verdict
 // would be mostly noise.
 //
+// The enum rule (R-ENUM, package enums) is folded into this scope's summary
+// and gate for the same reason again: its universe is the constants client-go
+// declares, and a constant added upstream is invisible to the struct rule,
+// which projects an enum type to a scalar and calls the field covered.
+//
 // Unlike the three candidate-backlog scopes, this one is a gate: Run reports
 // whether the tree is clean, and the command exits non-zero when it is not.
 package sdk

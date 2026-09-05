@@ -42,6 +42,16 @@ type metaFinding struct {
 	Flags  []string `json:"flags"`
 }
 
+// enumReport mirrors the fields consumed from the enums scope.
+type enumReport struct {
+	Packages []struct {
+		Package       string          `json:"package"`
+		MissingValues int             `json:"missing_values"`
+		ExtraValues   int             `json:"extra_values"`
+		Findings      json.RawMessage `json:"findings"`
+	} `json:"packages"`
+}
+
 // --- Merged backlog output shapes ---
 
 // backlog is the merged per-package 1:1 audit backlog.
@@ -62,14 +72,25 @@ type backlogSummary struct {
 	MetaAliasesOnlyToolname       int `json:"meta_aliases_only_toolname"`
 	MetaEmptyRelated              int `json:"meta_empty_related"`
 	MetaWeakIndividualDescription int `json:"meta_weak_individual_description"`
+	EnumMissingValues             int `json:"enum_missing_values"`
+	EnumExtraValues               int `json:"enum_extra_values"`
 }
 
-// backlogPackage carries the three gap streams for one internal/tools package.
+// backlogPackage carries the four gap streams for one internal/tools package.
 type backlogPackage struct {
 	Package  string        `json:"package"`
 	Struct   *structGaps   `json:"struct,omitempty"`
 	Actions  []actionGap   `json:"actions,omitempty"`
 	Metadata *metadataGaps `json:"metadata,omitempty"`
+	Enums    *enumGaps     `json:"enums,omitempty"`
+}
+
+// enumGaps is the R-ENUM slice of one package: the value counts and the
+// findings passed through verbatim.
+type enumGaps struct {
+	MissingValues int             `json:"missing_values"`
+	ExtraValues   int             `json:"extra_values"`
+	Findings      json.RawMessage `json:"findings,omitempty"`
 }
 
 type structGaps struct {

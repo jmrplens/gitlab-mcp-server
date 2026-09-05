@@ -4,10 +4,13 @@
 package shared
 
 import (
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // writeModule creates a Go module under a temp dir with the given files
@@ -73,6 +76,30 @@ func TestLoadToolPackages_Module_ReturnsTypedToolPackagesOnce(t *testing.T) {
 	}
 	if len(second) != len(first) || &second[0] != &first[0] {
 		t.Error("second call did not return the memoized slice")
+	}
+}
+
+// TestLoadToolPackages_UntypedPackage_IsLeftOut verifies the filter's last
+// guard: a package under internal/tools that the loader hands back with no
+// type information is dropped rather than passed to an analyzer that would
+// dereference it. The real loader always attaches types when asked to, so
+// the case is reached through the loader seam.
+func TestLoadToolPackages_UntypedPackage_IsLeftOut(t *testing.T) {
+	original := loadPackages
+	t.Cleanup(func() { loadPackages = original })
+	loadPackages = func(*packages.Config, ...string) ([]*packages.Package, error) {
+		return []*packages.Package{
+			{PkgPath: "example.com/untyped/internal/tools/alpha"},
+			{PkgPath: "example.com/untyped/internal/tools/beta", Types: types.NewPackage("example.com/untyped/internal/tools/beta", "beta"), TypesInfo: &types.Info{}},
+		}, nil
+	}
+
+	pkgs, err := LoadToolPackages(filepath.Join(t.TempDir(), "untyped"))
+	if err != nil {
+		t.Fatalf("LoadToolPackages: %v", err)
+	}
+	if len(pkgs) != 1 || pkgs[0].PkgPath != "example.com/untyped/internal/tools/beta" {
+		t.Errorf("loaded %v, want only the typed beta package", pkgs)
 	}
 }
 

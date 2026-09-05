@@ -2,6 +2,7 @@ package actions
 
 import (
 	"encoding/json"
+	"errors"
 	"go/token"
 	"go/types"
 	"path/filepath"
@@ -12,6 +13,22 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
+
+// TestRun_MarshalFailure_IsReported reaches the encoding branch through the
+// seam, since a report of strings and ints never fails to encode on its own.
+func TestRun_MarshalFailure_IsReported(t *testing.T) {
+	original := marshalIndent
+	t.Cleanup(func() { marshalIndent = original })
+	marshalIndent = func(any, string, string) ([]byte, error) { return nil, errors.New("boom") }
+
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	if _, err = Run(root, true); err == nil || !strings.Contains(err.Error(), "marshal report: boom") {
+		t.Fatalf("Run = %v, want the marshal failure", err)
+	}
+}
 
 // TestSummarize_AggregatesServiceCounts verifies summary aggregation including
 // the services-with-gaps tally.

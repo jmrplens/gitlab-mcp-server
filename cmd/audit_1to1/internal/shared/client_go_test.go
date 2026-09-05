@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // TestShortPackage_ExtractsDomain verifies the internal/tools domain extraction
@@ -219,8 +221,13 @@ func sdkModule(t *testing.T, sdk string) string {
 	t.Helper()
 	return writeModule(t, map[string]string{
 		sdkPath: sdk,
-		"internal/tools/branches/branches.go": "package branches\n\nimport gl \"" + sdkImport + "\"\n\n" +
-			"// List calls one endpoint and leaves the other uncalled.\nfunc List(c *gl.Client) error { return c.Branches.ListBranches() }\n",
+		// Beside the SDK call, the handler makes a plain call and a call
+		// through a non-SDK selector, which the usage scanner has to pass
+		// over, and imports a package that is not client-go, which the
+		// root-package search has to pass over.
+		"internal/tools/branches/branches.go": "package branches\n\nimport (\n\t\"strings\"\n\n\tgl \"" + sdkImport + "\"\n)\n\n" +
+			"// List calls one endpoint and leaves the other uncalled.\nfunc List(c *gl.Client) error {\n\tname := label()\n\tif strings.TrimSpace(name) == \"\" {\n\t\treturn nil\n\t}\n\treturn c.Branches.ListBranches()\n}\n\n" +
+			"func label() string { return \"main\" }\n",
 	})
 }
 
@@ -252,6 +259,29 @@ func TestClientGoTypes_ImportGraph_FindsTheRootPackage(t *testing.T) {
 		}
 		if _, typesErr := ClientGoTypes(pkgs); typesErr == nil || !strings.Contains(typesErr.Error(), "client-go root package not found") {
 			t.Fatalf("ClientGoTypes = %v, want a not-found error", typesErr)
+		}
+	})
+
+	// The search walks each package's imports in map order, so the imports
+	// it has to pass over (a package that is not client-go, a client-go
+	// import with no type information, a client-go sub-package with no
+	// Client struct) are put one per package here, where slice order makes
+	// each of them the only import seen before the root is reached.
+	t.Run("passes_over_imports_that_are_not_the_root", func(t *testing.T) {
+		root := types.NewPackage(ClientGoPkgPath+"/v2", "gitlab")
+		client := types.NewTypeName(0, root, "Client", nil)
+		types.NewNamed(client, types.NewStruct(nil, nil), nil)
+		root.Scope().Insert(client)
+		sub := types.NewPackage(ClientGoPkgPath+"/v2/internal", "internal")
+		pkgs := []*packages.Package{
+			{PkgPath: "example.com/x/internal/tools/a", Imports: map[string]*packages.Package{"strings": {PkgPath: "strings", Types: types.NewPackage("strings", "strings")}}},
+			{PkgPath: "example.com/x/internal/tools/b", Imports: map[string]*packages.Package{ClientGoPkgPath + "/v2": {PkgPath: ClientGoPkgPath + "/v2"}}},
+			{PkgPath: "example.com/x/internal/tools/c", Imports: map[string]*packages.Package{sub.Path(): {PkgPath: sub.Path(), Types: sub}}},
+			{PkgPath: "example.com/x/internal/tools/d", Imports: map[string]*packages.Package{root.Path(): {PkgPath: root.Path(), Types: root}}},
+		}
+		got, err := ClientGoTypes(pkgs)
+		if err != nil || got != root {
+			t.Fatalf("ClientGoTypes = %v, %v; want the root package from the last import", got, err)
 		}
 	})
 }
@@ -378,16 +408,29 @@ func TestCollectServiceUsage_CallSites_RecordMethodsAndPackages(t *testing.T) {
 }
 
 // TestClientStruct_Package_RefusesANonStructClient verifies the struct lookup
-// itself, given a package whose Client is not a struct. The loader-backed cases
-// above cannot reach this branch, because such a package never resolves as the
-// client-go root in the first place.
+// itself, given a package whose Client is not a struct or is absent
+// altogether. The loader-backed cases above cannot reach these branches,
+// because such a package never resolves as the client-go root in the first
+// place.
 func TestClientStruct_Package_RefusesANonStructClient(t *testing.T) {
-	pkg := types.NewPackage(ClientGoPkgPath+"/v2", "gitlab")
+	withInterface := types.NewPackage(ClientGoPkgPath+"/v2", "gitlab")
 	iface := types.NewInterfaceType(nil, nil)
 	iface.Complete()
-	named := namedIn(pkg, "Client", iface)
-	pkg.Scope().Insert(named.Obj())
-	if _, err := ClientStruct(pkg); err == nil || !strings.Contains(err.Error(), "Client struct not found") {
-		t.Fatalf("ClientStruct = %v, want a not-found error", err)
+	named := namedIn(withInterface, "Client", iface)
+	withInterface.Scope().Insert(named.Obj())
+
+	cases := []struct {
+		name string
+		pkg  *types.Package
+	}{
+		{name: "client_is_an_interface", pkg: withInterface},
+		{name: "no_client_at_all", pkg: types.NewPackage(ClientGoPkgPath+"/v2", "gitlab")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ClientStruct(tc.pkg); err == nil || !strings.Contains(err.Error(), "Client struct not found") {
+				t.Fatalf("ClientStruct = %v, want a not-found error", err)
+			}
+		})
 	}
 }

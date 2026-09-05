@@ -9,12 +9,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 )
 
-const backlogNote = "Merged 1:1 audit backlog. Each stream is a candidate list; intentional renames (e.g. branch->branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package."
+const backlogNote = "Merged 1:1 audit backlog. The struct, action and metadata streams are candidate lists; intentional renames (e.g. branch->branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package. The enum stream is gated by -scope=sdk and is expected to be empty: an entry there is an SDK value we do not offer, or a value we offer that the SDK does not declare."
 
-// BuildBacklogFromPaths reads three report files and returns the merged backlog
+// BuildBacklogFromPaths reads four report files and returns the merged backlog
 // as indented JSON (with a trailing newline). This is the file-based path used
 // when the auditor reports already exist on disk (e.g. via the make target).
-func BuildBacklogFromPaths(structPath, actionPath, metadataPath string) ([]byte, error) {
+func BuildBacklogFromPaths(structPath, actionPath, metadataPath, enumPath string) ([]byte, error) {
 	var structRep structReport
 	if err := readJSON(structPath, &structRep); err != nil {
 		return nil, err
@@ -27,16 +27,20 @@ func BuildBacklogFromPaths(structPath, actionPath, metadataPath string) ([]byte,
 	if err := readJSON(metadataPath, &metaRep); err != nil {
 		return nil, err
 	}
-	return marshalBacklog(mergeBacklog(structRep, actionRep, metaRep))
+	var enumRep enumReport
+	if err := readJSON(enumPath, &enumRep); err != nil {
+		return nil, err
+	}
+	return marshalBacklog(mergeBacklog(structRep, actionRep, metaRep, enumRep))
 }
 
-// BuildBacklogFromBytes merges three in-memory report byte-slices and returns
+// BuildBacklogFromBytes merges four in-memory report byte-slices and returns
 // the merged backlog as indented JSON (with a trailing newline). This is the
-// in-process path: audit_1to1 runs the three analyzers, marshals each result,
+// in-process path: audit_1to1 runs the four analyzers, marshals each result,
 // and feeds the bytes here so the merged output is produced by exactly the same
 // merge pipeline as BuildBacklogFromPaths — guaranteeing byte-for-byte
 // equivalence with the file-based oracle.
-func BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes []byte) ([]byte, error) {
+func BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes, enumBytes []byte) ([]byte, error) {
 	var structRep structReport
 	if err := json.Unmarshal(structBytes, &structRep); err != nil {
 		return nil, fmt.Errorf("parse struct report: %w", err)
@@ -49,17 +53,22 @@ func BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes []byte) ([]by
 	if err := json.Unmarshal(metadataBytes, &metaRep); err != nil {
 		return nil, fmt.Errorf("parse metadata report: %w", err)
 	}
-	return marshalBacklog(mergeBacklog(structRep, actionRep, metaRep))
+	var enumRep enumReport
+	if err := json.Unmarshal(enumBytes, &enumRep); err != nil {
+		return nil, fmt.Errorf("parse enum report: %w", err)
+	}
+	return marshalBacklog(mergeBacklog(structRep, actionRep, metaRep, enumRep))
 }
 
 // mergeBacklog is the pure merge over the decoded input types. Both public
 // entry points funnel through here so the merge logic exists in exactly one
 // place.
-func mergeBacklog(structRep structReport, actionRep actionReport, metaRep metadataReport) backlog {
+func mergeBacklog(structRep structReport, actionRep actionReport, metaRep metadataReport, enumRep enumReport) backlog {
 	byPackage := map[string]*backlogPackage{}
 	mergeStruct(byPackage, structRep)
 	mergeActions(byPackage, actionRep)
 	mergeMetadata(byPackage, metaRep)
+	mergeEnums(byPackage, enumRep)
 
 	packages := make([]backlogPackage, 0, len(byPackage))
 	for _, pkg := range byPackage {
@@ -76,8 +85,13 @@ func mergeBacklog(structRep structReport, actionRep actionReport, metaRep metada
 	}
 }
 
+// marshalIndent is the JSON encoder, a variable so a test can reach the
+// encoding failure branch that a backlog of strings, ints and raw JSON never
+// produces.
+var marshalIndent = json.MarshalIndent
+
 func marshalBacklog(b backlog) ([]byte, error) {
-	content, err := json.MarshalIndent(b, "", "  ")
+	content, err := marshalIndent(b, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshal backlog: %w", err)
 	}
@@ -137,6 +151,23 @@ func mergeMetadata(byPackage map[string]*backlogPackage, rep metadataReport) {
 	}
 }
 
+// mergeEnums attaches the enum stream to the packages that carry a value gap.
+// A package listed with no findings (a full report of a clean package) is
+// left out, the way the metadata stream is.
+func mergeEnums(byPackage map[string]*backlogPackage, rep enumReport) {
+	for _, pkg := range rep.Packages {
+		if pkg.MissingValues == 0 && pkg.ExtraValues == 0 {
+			continue
+		}
+		entry := packageFor(byPackage, pkg.Package)
+		entry.Enums = &enumGaps{
+			MissingValues: pkg.MissingValues,
+			ExtraValues:   pkg.ExtraValues,
+			Findings:      pkg.Findings,
+		}
+	}
+}
+
 func packageFor(byPackage map[string]*backlogPackage, name string) *backlogPackage {
 	entry, ok := byPackage[name]
 	if !ok {
@@ -162,6 +193,10 @@ func summarizeBacklog(packages []backlogPackage) backlogSummary {
 			s.MetaAliasesOnlyToolname += pkg.Metadata.AliasesOnlyToolname
 			s.MetaEmptyRelated += pkg.Metadata.EmptyRelated
 			s.MetaWeakIndividualDescription += pkg.Metadata.WeakIndividualDescription
+		}
+		if pkg.Enums != nil {
+			s.EnumMissingValues += pkg.Enums.MissingValues
+			s.EnumExtraValues += pkg.Enums.ExtraValues
 		}
 	}
 	return s

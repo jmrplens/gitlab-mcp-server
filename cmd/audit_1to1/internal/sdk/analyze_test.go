@@ -7,6 +7,8 @@ package sdk
 
 import (
 	"encoding/json"
+	"errors"
+	"go/types"
 	"maps"
 	"os"
 	"path/filepath"
@@ -14,9 +16,95 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/enums"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
+
+// TestRun_SeamFailures_AreReported verifies the three failures the real tree
+// and the fixture module cannot produce surface through Run as errors rather
+// than as a clean report: a failing JSON encoder, a service enumeration that
+// fails after the root package resolved, and an enum rule that fails after
+// the same packages loaded.
+func TestRun_SeamFailures_AreReported(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	boom := errors.New("boom")
+	cases := []struct {
+		name    string
+		arrange func(t *testing.T)
+		wantErr string
+	}{
+		{
+			name: "marshal",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := marshalIndent
+				t.Cleanup(func() { marshalIndent = original })
+				marshalIndent = func(any, string, string) ([]byte, error) { return nil, boom }
+			},
+			wantErr: "marshal report: boom",
+		},
+		{
+			name: "service_enumeration",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := sdkServices
+				t.Cleanup(func() { sdkServices = original })
+				sdkServices = func(*types.Package) ([]sdkService, error) { return nil, boom }
+			},
+			wantErr: "boom",
+		},
+		{
+			name: "enum_rule",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := analyzeEnums
+				t.Cleanup(func() { analyzeEnums = original })
+				analyzeEnums = func(string, bool) (enums.Report, error) { return enums.Report{}, boom }
+			},
+			wantErr: "boom",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.arrange(t)
+			content, clean, runErr := Run(root, true)
+			if runErr == nil || !strings.Contains(runErr.Error(), tc.wantErr) {
+				t.Fatalf("Run = %v, want %q", runErr, tc.wantErr)
+			}
+			if clean || content != nil {
+				t.Errorf("failed run returned clean=%v content=%d bytes, want false and nil", clean, len(content))
+			}
+		})
+	}
+}
+
+// TestGapsOnlyFilters_MixedStatuses_KeepOnlyTheFindings verifies the two
+// gaps-only filters keep undeclared services and unadjudicated operations
+// and drop everything else, and return an empty (never nil) slice.
+func TestGapsOnlyFilters_MixedStatuses_KeepOnlyTheFindings(t *testing.T) {
+	services := keepUndeclaredServices([]sdkService{
+		{Service: "A", Status: statusCovered},
+		{Service: "B", Status: statusUndeclared},
+		{Service: "C", Status: statusDeclared},
+	})
+	if len(services) != 1 || services[0].Service != "B" {
+		t.Errorf("keepUndeclaredServices = %+v, want only B", services)
+	}
+	operations := keepUnadjudicatedOperations([]graphqlOperation{
+		{Operation: "x", Status: statusAdjudicated},
+		{Operation: "y", Status: statusUnadjudicated},
+	})
+	if len(operations) != 1 || operations[0].Operation != "y" {
+		t.Errorf("keepUnadjudicatedOperations = %+v, want only y", operations)
+	}
+	if got := keepUndeclaredServices(nil); got == nil || len(got) != 0 {
+		t.Errorf("keepUndeclaredServices(nil) = %#v, want an empty slice", got)
+	}
+}
 
 // fixtureSDK is a stand-in for the client-go root package. Its import path
 // carries the client-go path as an infix, which is what the resolver matches
@@ -85,7 +173,11 @@ func List(c *gl.Client) error {
 // the form a .Do-only scanner misses.
 func Mutate(c *gl.Client) error { return exec(c.GraphQL) }
 
+// exec touches the interface twice, so one function carries two sites.
 func exec(g gl.GraphQLInterface) error {
+	if g == nil {
+		return nil
+	}
 	return g.Do(gl.GraphQLQuery{Query: "mutation {}"}, nil)
 }
 `,
@@ -133,7 +225,7 @@ func fixtureReport(t *testing.T, root string, declaredBy map[string]declaration,
 	}
 	operations := buildGraphQLOperations(collectGraphQLSites(pkgs, graphQL), serviceIndex(services), aliases, decisions)
 	stale := mergeStale(staleServiceDeclarations(services, declaredBy), staleGraphQLDecisions(operations, decisions))
-	return report{Summary: summarize(services, operations, stale), Services: services, GraphQLOperations: operations, StaleDeclarations: stale}
+	return report{Summary: summarize(services, operations, enums.Summary{}, stale), Services: services, GraphQLOperations: operations, StaleDeclarations: stale}
 }
 
 // statusOf indexes a report's services by name for assertions.
