@@ -24,7 +24,7 @@ import (
 //
 // Twenty is enough that a per-credential registered surface is unmissable and
 // small enough that the run stays under a minute: each one costs a credential
-// probe, a licence lookup, a scope lookup and an identity lookup against the
+// probe, a license lookup, a scope lookup and an identity lookup against the
 // fake GitLab, plus an initialize and a tools/list.
 const heapCredentials = 20
 
@@ -95,7 +95,11 @@ func TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials(t *testing.T
 					builds, heapCredentials)
 			}
 
-			growth := int64(last) - int64(first)
+			// Signed, because the growth is a difference and can be negative:
+			// the readings are HeapAlloc, and a later one is often the smaller.
+			// Neither can approach the range of an int64, being the live heap
+			// of a process this test would have run out of memory to hold.
+			growth := int64(last) - int64(first) //nolint:gosec // both figures are a live heap, orders below 2^63
 			t.Logf("live heap on %s: %d bytes at 1 credential, %d at %d, growth %d bytes (%.1f MiB)",
 				surface, first, last, heapCredentials, growth, float64(growth)/(1<<20))
 			if growth > heapGrowthBudget {

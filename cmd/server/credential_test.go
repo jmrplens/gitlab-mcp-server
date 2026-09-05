@@ -138,7 +138,7 @@ func TestCredentialStates_Remove_StopsTheWatchersAndEndsTheStreams(t *testing.T)
 		t.Fatalf("watchers = %d before the eviction, want 1", runtime.manager.Len())
 	}
 
-	// Real contexts, because ending a stream means cancelling the one the SDK's
+	// Real contexts, because ending a stream means canceling the one the SDK's
 	// listen handler is blocked on: that is what makes it write the completion
 	// result the client is owed.
 	streams := newListenStreams()

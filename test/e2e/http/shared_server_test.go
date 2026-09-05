@@ -36,7 +36,8 @@ func listenBody(id int, uri string) string {
 		`"io.modelcontextprotocol/clientInfo":{"name":"probe","version":"1"}}`
 	return fmt.Sprintf(
 		`{"jsonrpc":"2.0","id":%d,"method":"subscriptions/listen","params":{"notifications":{"resourceSubscriptions":[%q]},%s}}`,
-		id, uri, meta)
+		id, uri, meta,
+	)
 }
 
 // listenStream is an open subscriptions/listen request and the frames it has
@@ -73,7 +74,10 @@ func openListen(t *testing.T, srv *server, token, uri string, id int) *listenStr
 	req.Header.Set("Mcp-Method", "subscriptions/listen")
 	req.Header.Set("PRIVATE-TOKEN", token)
 
-	resp, err := srv.httpClient().Do(req)
+	// The body outlives this function on purpose: a listen stays open, so the
+	// reader goroutine below owns it and closes it when the stream ends. Every
+	// path that does not reach that goroutine closes it here.
+	resp, err := srv.httpClient().Do(req) //nolint:bodyclose // closed by the reader goroutine, and on every early return
 	if err != nil {
 		cancel()
 		t.Fatalf("sending the listen for %s: %v", token, err)
