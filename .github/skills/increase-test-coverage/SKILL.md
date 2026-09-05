@@ -1,13 +1,13 @@
 ---
 name: increase-test-coverage
-description: 'Increase Go test coverage to 90%+ using a Research → Plan → Implement pipeline. Analyzes coverage gaps, generates table-driven tests with httptest mocks, and validates results with go test -coverprofile. Designed for Go MCP server projects using the official go-sdk and gitlab.com/gitlab-org/api/client-go/v2.'
+description: 'Increase Go test coverage to 100% per touched package using a Research → Plan → Implement pipeline, with seams for the branches real input cannot reach. Analyzes coverage gaps, generates table-driven tests with httptest mocks, and validates results with go test -coverprofile. Designed for Go MCP server projects using the official go-sdk and gitlab.com/gitlab-org/api/client-go/v2.'
 ---
 
 # Increase Test Coverage
 
 ## Primary Directive
 
-Systematically increase Go test coverage to **90%+ per package** using a structured Research → Plan → Implement pipeline. Generate comprehensive, buildable, passing tests that follow project conventions and use proper mocks for external dependencies.
+Systematically increase Go test coverage to **100% per touched package**, preexisting code included, using a structured Research → Plan → Implement pipeline; every function that stays below 100% is named in the report with its reason. Generate comprehensive, buildable, passing tests that follow project conventions and use proper mocks for external dependencies.
 
 All tests must:
 
@@ -74,7 +74,7 @@ Review the HTML report to visually identify uncovered code blocks.
 For each package, analyze:
 
 1. **Uncovered functions** — Functions with 0% coverage (highest priority)
-2. **Partially covered functions** — Functions below 90% (error paths, edge cases)
+2. **Partially covered functions** — Functions below 100% (error paths, edge cases, defensive branches)
 3. **Untested branches** — Conditional logic where only one branch is covered
 4. **Error handling paths** — `if err != nil` blocks that are never tested
 5. **Edge cases** — Boundary conditions, nil inputs, empty slices, zero values
@@ -115,23 +115,23 @@ Rank packages by coverage gap impact:
 
 | Priority | Criteria |
 |----------|----------|
-| P0 — Critical | Core business logic with 0% coverage |
+| P0 — Critical | Core business logic with 0% coverage, `main()` included |
 | P1 — High | Tool handlers, resource handlers below 80% |
-| P2 — Medium | Helper functions, config loading below 90% |
-| P3 — Low | Already above 90%, minor edge cases |
+| P2 — Medium | Helper functions, config loading below 100%: error paths and edge cases |
+| P3 — Last | The remaining defensive branches: real inputs where one exists, seams where none does |
 
 ### Step 2: Group into Phases
 
 Divide work into **2-5 phases**, each targeting a specific package or functional area:
 
 ```text
-Phase 1: [package] — Current: X% → Target: 90%+
+Phase 1: [package] — Current: X% → Target: 100%
   - TestFunctionA_HappyPath
   - TestFunctionA_ErrorCase
   - TestFunctionA_EdgeCase_EmptyInput
   ...
 
-Phase 2: [package] — Current: X% → Target: 90%+
+Phase 2: [package] — Current: X% → Target: 100%
   ...
 ```
 
@@ -308,11 +308,11 @@ After each phase, update progress:
 
 ```text
 Package             Before    After     Target    Status
-internal/tools      72%       91%       90%       ✅ Done
-internal/gitlab     65%       —         90%       🔄 In Progress
-internal/config     80%       —         90%       ⏳ Pending
-internal/resources  70%       —         90%       ⏳ Pending
-internal/prompts    68%       —         90%       ⏳ Pending
+internal/tools      72%       100%      100%      ✅ Done
+internal/gitlab     65%       —         100%      🔄 In Progress
+internal/config     80%       —         100%      ⏳ Pending
+internal/resources  70%       —         100%      ⏳ Pending
+internal/prompts    68%       —         100%      ⏳ Pending
 ```
 
 ### Step 5: Final Validation
@@ -321,8 +321,8 @@ After all phases complete:
 
 1. Run full test suite: `go test -race -coverprofile=coverage.out ./...`
 2. Generate final coverage report: `go tool cover -func=coverage.out`
-3. Verify every package meets 90%+ target
-4. Run quality checks: `make golangci-lint`
+3. Verify every touched package is at 100%, or name each function below it with its reason
+4. Run quality checks: `make golangci-lint`, `make check-test-subtests`, `make check-test-goroutines`, `make check-test-file-names`
 5. Refresh `docs/development/testing/testing.md`: `go run ./cmd/gen_testing_docs/`
 6. Verify the generated testing reference: `go run ./cmd/gen_testing_docs/ --check`
 7. Lint the generated testing reference: `npx markdownlint-cli2 docs/development/testing/testing.md`
@@ -368,15 +368,30 @@ After all phases complete:
 
 ## Coverage Targets
 
-| Package | Minimum Target | Stretch Goal |
-|---------|---------------|-------------|
-| `internal/tools` | 90% | 95% |
-| `internal/resources` | 90% | 95% |
-| `internal/prompts` | 90% | 95% |
-| `internal/gitlab` | 90% | 95% |
-| `internal/config` | 90% | 95% |
-| `cmd/server` | 80% | 90% |
-| **Overall** | **90%** | **95%** |
+The house rule: a package touched by a change is driven to **100% statement coverage**, preexisting code included. Every function that stays below 100% is named in the report with the reason, and "defensive branch" is not a reason until a seam has been tried.
+
+| Scope | Target |
+|-------|--------|
+| Every package the change touches | 100% |
+| The repository as a whole (the CI gate) | 90% minimum; a floor, never the goal |
+
+### Reaching the last branches
+
+- **Real inputs first.** A crafted fixture, a specific declaration shape, a file that does not parse, a broken symlink: prefer any of these over a seam.
+- **Seams for what a real input cannot reach.** A package-level function variable defaulting to the standard-library call, overridden in the test and restored with `t.Cleanup`:
+
+  ```go
+  var (
+      walkDir      = filepath.WalkDir
+      formatSource = format.Source
+      writeFile    = os.WriteFile
+  )
+  ```
+
+  Established in `cmd/godoc_tool/docgo.go` and `cmd/gen_stats/main.go`. Each seam carries a short doc comment naming the branch it exists for. Wrap a helper rather than aliasing `os.WriteFile` directly when gosec's taint analysis would otherwise re-home a finding onto a test file.
+- **Tests run as root.** Permission bits make nothing fail. A read that must fail even for root uses a broken symlink (`os.Symlink` to a missing target); a write that must fail goes through a seam.
+- **`main()` is covered, not exempt.** Extract `runMain(args []string, stdout, stderr io.Writer) int`, make `main()` the one line `osExit(runMain(os.Args, os.Stdout, os.Stderr))` with `var osExit = os.Exit`, and assert every exit code and message. Replace `os.Args` in the test so the flag set parses no test flags.
+- **Never lift the number by other means.** No weakened assertions, no `//nolint`, no coverage pragmas, no branches deleted to make the figure. A provably dead branch is removed as a code change with its own justification, or made reachable by extracting it into a function a test can call directly.
 
 ---
 

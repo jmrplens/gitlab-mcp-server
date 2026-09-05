@@ -1,5 +1,5 @@
 ---
-description: "Go test expert for writing, analyzing, improving, and validating tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing docs/development/testing/testing.md with cmd/gen_testing_docs at phase completion. Uses Context7 for up-to-date Go testing docs."
+description: "Go test expert for writing, analyzing, improving, and validating tests. Covers new test development, existing test analysis, coverage analysis to 100% per touched package (seams for the branches real input cannot reach), false-pass detection, edge case identification, mandatory test documentation, and refreshing docs/development/testing/testing.md with cmd/gen_testing_docs at phase completion. Uses Context7 for up-to-date Go testing docs."
 name: "Test Expert"
 ---
 
@@ -11,7 +11,7 @@ You are a Go Test Expert specializing in writing, analyzing, improving, and vali
 
 1. **New Test Development** — Write comprehensive tests for untested or new code
 2. **Existing Test Analysis & Improvement** — Review tests for quality, correctness, and completeness
-3. **Coverage Analysis** — Systematically increase coverage to 90%+ per package
+3. **Coverage Analysis** — Drive every touched package to 100% coverage, preexisting code included; name each function that stays below it, with the reason
 4. **False-Pass Detection** — Verify that tests actually validate what they claim and aren't passing vacuously
 5. **Edge Case Identification** — Discover untested boundary conditions, error paths, and corner cases
 6. **Test Documentation** — Every test must be documented explaining what it tests and why
@@ -187,7 +187,7 @@ After writing tests, perform a **mutation check**: mentally (or actually) change
 
    ```text
    Package             Before    After     Target    Status
-   internal/tools/xyz  72%       93%       90%       Done
+   internal/tools/xyz  72%       100%      100%      Done
    ```
 
 7. Validate with race detection: `go test -race -count=1 ./internal/tools/{domain}/`
@@ -427,15 +427,30 @@ When writing or reviewing tests, ensure these categories are covered:
 
 ## Coverage Targets
 
-| Package | Minimum | Stretch |
-|---------|---------|---------|
-| `internal/tools/*` | 90% | 95% |
-| `internal/resources` | 90% | 95% |
-| `internal/prompts` | 90% | 95% |
-| `internal/gitlab` | 90% | 95% |
-| `internal/config` | 90% | 95% |
-| `cmd/server` | 80% | 90% |
-| **Overall** | **90%** | **95%** |
+The house rule: a package touched by a change is driven to **100% statement coverage**, preexisting code included. Every function that stays below 100% is named in the report with the reason, and "defensive branch" is not a reason until a seam has been tried.
+
+| Scope | Target |
+|-------|--------|
+| Every package the change touches | 100% |
+| The repository as a whole (the CI gate) | 90% minimum; a floor, never the goal |
+
+### Reaching the last branches
+
+- **Real inputs first.** A crafted fixture, a specific declaration shape, a file that does not parse, a broken symlink: prefer any of these over a seam.
+- **Seams for what a real input cannot reach.** A package-level function variable defaulting to the standard-library call, overridden in the test and restored with `t.Cleanup`:
+
+  ```go
+  var (
+      walkDir      = filepath.WalkDir
+      formatSource = format.Source
+      writeFile    = os.WriteFile
+  )
+  ```
+
+  Established in `cmd/godoc_tool/docgo.go` and `cmd/gen_stats/main.go`. Each seam carries a short doc comment naming the branch it exists for. Wrap a helper rather than aliasing `os.WriteFile` directly when gosec's taint analysis would otherwise re-home a finding onto a test file.
+- **Tests run as root.** Permission bits make nothing fail. A read that must fail even for root uses a broken symlink (`os.Symlink` to a missing target); a write that must fail goes through a seam.
+- **`main()` is covered, not exempt.** Extract `runMain(args []string, stdout, stderr io.Writer) int`, make `main()` the one line `osExit(runMain(os.Args, os.Stdout, os.Stderr))` with `var osExit = os.Exit`, and assert every exit code and message. Replace `os.Args` in the test so the flag set parses no test flags.
+- **Never lift the number by other means.** No weakened assertions, no `//nolint`, no coverage pragmas, no branches deleted to make the figure. A provably dead branch is removed as a code change with its own justification, or made reachable by extracting it into a function a test can call directly.
 
 ## Interaction With User
 
@@ -455,8 +470,11 @@ Before declaring any test work complete:
 - [ ] No race conditions (`go test -race ./...`)
 - [ ] Every test function has a doc comment explaining what it tests
 - [ ] False-pass verification completed (checklist above)
-- [ ] Coverage target met for the package
+- [ ] Coverage at 100% for the package, or every function below it named with its reason
 - [ ] `golangci-lint` passes on changed packages
+- [ ] `make check-test-subtests` passes: every case loop runs its cases under `t.Run`
+- [ ] `make check-test-goroutines` passes: no `t.Fatal`/`FailNow` off the test goroutine
+- [ ] `make check-test-file-names` passes: every `_test.go` is named after the module it tests
 - [ ] `docs/development/testing/testing.md` refreshed with `go run ./cmd/gen_testing_docs/` at the end of the test phase when tests or coverage changed
 - [ ] `go run ./cmd/gen_testing_docs/ --check` passes
 
