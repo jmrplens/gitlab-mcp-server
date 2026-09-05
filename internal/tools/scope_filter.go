@@ -159,6 +159,28 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 // life of the process. Derived from MetaToolScopes rather than written out, so
 // a scope added to a requirement there widens the key with it and cannot be
 // forgotten here.
+//
+// What makes the narrowing safe is an equivalence: two tokens with the same
+// canonical components get the same filtered catalog, so serving both from
+// one cache entry serves neither a catalog it did not earn. That equivalence
+// holds because of exactly how the filter reads a scope list, and these are
+// the changes that would break it silently, each of which needs this
+// derivation changed with it:
+//
+//   - a prefix or wildcard match in [allScopesPresent], which would make a
+//     scope not spelled in MetaToolScopes decide a removal;
+//   - a scope-implication rule (api implies read_api, say), since the
+//     implying scope need not appear anywhere in the union this reads;
+//   - a rule keyed on a scope's absence, or on the length of the list, since
+//     both read the scopes this drops;
+//   - a second requirements map beside MetaToolScopes, which this derivation
+//     does not read at all;
+//   - admin detection from anything other than the scope list, such as an
+//     instance probe, which would make two equal lists filter differently.
+//
+// [TestCatalogRelevantScopes_EqualComponentsFilterIdentically] runs the
+// filter over the equivalence rather than asserting it, so a change of that
+// kind fails there rather than reaching a shared catalog.
 func catalogRelevantScopes(tokenScopes []string) []string {
 	required := make(map[string]struct{}, len(MetaToolScopes))
 	for _, scopes := range MetaToolScopes {
