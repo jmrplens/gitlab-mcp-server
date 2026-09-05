@@ -48,9 +48,10 @@ func Build(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalo
 // and the standalone specs are fixed. The branches reporting their failure
 // exist for the day that changes, and would otherwise never run.
 var (
-	sharedBaseCatalog    = gitlabtools.SharedBaseCatalog     //nolint:gochecknoglobals // test seam
-	filterActionCatalog  = gitlabtools.FilterActionCatalog   //nolint:gochecknoglobals // test seam
-	addStandaloneCatalog = dynamictools.AddStandaloneCatalog //nolint:gochecknoglobals // test seam
+	sharedBaseCatalog    = gitlabtools.SharedBaseCatalog                 //nolint:gochecknoglobals // test seam
+	filterActionCatalog  = gitlabtools.FilterActionCatalog               //nolint:gochecknoglobals // test seam
+	addStandaloneCatalog = dynamictools.AddStandaloneCatalog             //nolint:gochecknoglobals // test seam
+	safeModePreviews     = (*actioncatalog.Catalog).WithSafeModePreviews //nolint:gochecknoglobals // test seam
 )
 
 // build assembles the dynamic catalog for cfg from the shared base catalog,
@@ -87,7 +88,7 @@ func build(client *gitlabclient.Client, dotcom bool, cfg *config.ServerConfig) (
 		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("validate dynamic action catalog: %w", validateErr)
 	}
 	if cfg.SafeMode {
-		withStandalone = withStandalone.WithSafeModePreviews()
+		withStandalone = safeModePreviews(withStandalone)
 		if validateErr := withStandalone.Validate(); validateErr != nil {
 			return nil, gitlabtools.WithheldActions{}, fmt.Errorf("validate safe-mode dynamic action catalog: %w", validateErr)
 		}

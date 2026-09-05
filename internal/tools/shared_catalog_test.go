@@ -605,61 +605,19 @@ func TestSharedCatalogs_BuildFailuresAreReportedWithTheirStep(t *testing.T) {
 //     handed to every credential's server: one write reaches all of them, and
 //     no test of the writing package can see it.
 //
-// A whole-field assignment is not an offence and is not matched: a route is a
+// A whole-field assignment is not an offense and is not matched: a route is a
 // value, so replacing a field replaces it on a copy. Only an indexed write and
 // a delete reach through to the map itself.
 //
 // It is a text guard, so it reads the names a route is usually held under
 // rather than resolving types. That is enough for what it is for: keeping the
 // habit visible at review time on the roughly 770 files where the mistake
-// would be silent.
+// would be silent. What each pattern does and does not match is pinned by
+// [TestSharedRouteStateGuard_MatchesTheShapesItMustRefuse].
 func TestDomainPackages_LeaveSharedRouteStateAlone(t *testing.T) {
 	t.Parallel()
 
-	forbidden := []struct {
-		what     string
-		pattern  *regexp.Regexp
-		remedy   string
-		offences []string
-		allowed  []string
-	}{
-		{
-			what:     "Route.Handler is assigned directly",
-			pattern:  regexp.MustCompile(`\.Handler\s*=[^=]`),
-			remedy:   "use ActionRoute.WrapHandler or ActionRoute.WithBoundHandler so the binder changes with it",
-			offences: []string{"route.Handler = wrapped", "action.Route.Handler=wrapped"},
-			allowed:  []string{"if route.Handler == nil {", "Handler: wrapped,"},
-		},
-		{
-			what:     "a route's ParameterGuidance is written into",
-			pattern:  regexp.MustCompile(`(?i)\broute\.ParameterGuidance\s*\[[^\]]*\]\s*=[^=]|(?i)\bdelete\(\s*[\w.]*route\.ParameterGuidance\b`),
-			remedy:   "build the guidance the spec is given instead; the route's map is shared with every server in the process",
-			offences: []string{`route.ParameterGuidance["project_id"] = guidance`, `action.Route.ParameterGuidance["ref"]=g`, "delete(spec.Route.ParameterGuidance, key)"},
-			allowed:  []string{`options.ParameterGuidance["project_id"] = guidance`, `if g, ok := route.ParameterGuidance["project_id"]; ok {`, "route.ParameterGuidance = merged"},
-		},
-		{
-			what:     "a route's schema map is written into",
-			pattern:  regexp.MustCompile(`(?i)\broute\.(Input|Output)Schema\s*\[[^\]]*\]\s*=[^=]|(?i)\bdelete\(\s*[\w.]*route\.(Input|Output)Schema\b`),
-			remedy:   "copy it with toolutil.CloneSchemaMap first; the route's schemas are frozen and shared with every server in the process",
-			offences: []string{`route.InputSchema["required"] = names`, `entry.Route.OutputSchema["type"]="object"`, "delete(route.InputSchema, \"required\")"},
-			allowed:  []string{`schema["required"] = names`, `if props, ok := route.InputSchema["properties"]; ok {`, "route.OutputSchema = cloned"},
-		},
-	}
-	// A text guard is only worth what it matches, so each pattern is held to
-	// the shapes it must refuse and the shapes it must leave alone.
-	for _, rule := range forbidden {
-		for _, offence := range rule.offences {
-			if !rule.pattern.MatchString(offence) {
-				t.Errorf("the guard for %q does not match %q", rule.what, offence)
-			}
-		}
-		for _, allowed := range rule.allowed {
-			if rule.pattern.MatchString(allowed) {
-				t.Errorf("the guard for %q wrongly matches %q", rule.what, allowed)
-			}
-		}
-	}
-
+	rules := sharedRouteStateRules()
 	offenders := make(map[string][]string)
 	tree := os.DirFS(".")
 	err := fs.WalkDir(tree, ".", func(path string, entry fs.DirEntry, walkErr error) error {
@@ -673,7 +631,7 @@ func TestDomainPackages_LeaveSharedRouteStateAlone(t *testing.T) {
 		if readErr != nil {
 			return readErr
 		}
-		for _, rule := range forbidden {
+		for _, rule := range rules {
 			if rule.pattern.Match(source) {
 				offenders[rule.what] = append(offenders[rule.what], path)
 			}
@@ -683,10 +641,77 @@ func TestDomainPackages_LeaveSharedRouteStateAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("walking the package tree: %v", err)
 	}
-	for _, rule := range forbidden {
-		if files := offenders[rule.what]; len(files) > 0 {
-			t.Errorf("%s in %v; %s", rule.what, files, rule.remedy)
-		}
+	for _, rule := range rules {
+		t.Run(rule.what, func(t *testing.T) {
+			t.Parallel()
+			if files := offenders[rule.what]; len(files) > 0 {
+				t.Errorf("%s in %v; %s", rule.what, files, rule.remedy)
+			}
+		})
+	}
+}
+
+// TestSharedRouteStateGuard_MatchesTheShapesItMustRefuse holds every pattern
+// of the source guard to the writes it must catch and the reads it must leave
+// alone. A text guard is worth exactly what it matches, and a guard that
+// matched nothing would pass [TestDomainPackages_LeaveSharedRouteStateAlone]
+// on every tree.
+func TestSharedRouteStateGuard_MatchesTheShapesItMustRefuse(t *testing.T) {
+	t.Parallel()
+
+	for _, rule := range sharedRouteStateRules() {
+		t.Run(rule.what, func(t *testing.T) {
+			t.Parallel()
+			for _, offense := range rule.offenses {
+				if !rule.pattern.MatchString(offense) {
+					t.Errorf("the guard does not match %q", offense)
+				}
+			}
+			for _, allowed := range rule.allowed {
+				if rule.pattern.MatchString(allowed) {
+					t.Errorf("the guard wrongly matches %q", allowed)
+				}
+			}
+		})
+	}
+}
+
+// sharedRouteStateRule is one forbidden write: what it is, the pattern that
+// finds it, the remedy the failure names, and the samples that pin the
+// pattern's reach in both directions.
+type sharedRouteStateRule struct {
+	what     string
+	pattern  *regexp.Regexp
+	remedy   string
+	offenses []string
+	allowed  []string
+}
+
+// sharedRouteStateRules returns the writes no package under internal/tools may
+// make into the state a shared catalog gives every server in the process.
+func sharedRouteStateRules() []sharedRouteStateRule {
+	return []sharedRouteStateRule{
+		{
+			what:     "Route.Handler is assigned directly",
+			pattern:  regexp.MustCompile(`\.Handler\s*=[^=]`),
+			remedy:   "use ActionRoute.WrapHandler or ActionRoute.WithBoundHandler so the binder changes with it",
+			offenses: []string{"route.Handler = wrapped", "action.Route.Handler=wrapped"},
+			allowed:  []string{"if route.Handler == nil {", "Handler: wrapped,"},
+		},
+		{
+			what:     "a route's ParameterGuidance is written into",
+			pattern:  regexp.MustCompile(`(?i)\broute\.ParameterGuidance\s*\[[^\]]*\]\s*=[^=]|(?i)\bdelete\(\s*[\w.]*route\.ParameterGuidance\b`),
+			remedy:   "build the guidance the spec is given instead; the route's map is shared with every server in the process",
+			offenses: []string{`route.ParameterGuidance["project_id"] = guidance`, `action.Route.ParameterGuidance["ref"]=g`, "delete(spec.Route.ParameterGuidance, key)"},
+			allowed:  []string{`options.ParameterGuidance["project_id"] = guidance`, `if g, ok := route.ParameterGuidance["project_id"]; ok {`, "route.ParameterGuidance = merged"},
+		},
+		{
+			what:     "a route's schema map is written into",
+			pattern:  regexp.MustCompile(`(?i)\broute\.(Input|Output)Schema\s*\[[^\]]*\]\s*=[^=]|(?i)\bdelete\(\s*[\w.]*route\.(Input|Output)Schema\b`),
+			remedy:   "copy it with toolutil.CloneSchemaMap first; the route's schemas are frozen and shared with every server in the process",
+			offenses: []string{`route.InputSchema["required"] = names`, `entry.Route.OutputSchema["type"]="object"`, "delete(route.InputSchema, \"required\")"},
+			allowed:  []string{`schema["required"] = names`, `if props, ok := route.InputSchema["properties"]; ok {`, "route.OutputSchema = cloned"},
+		},
 	}
 }
 

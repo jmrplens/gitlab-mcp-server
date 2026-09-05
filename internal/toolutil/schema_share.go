@@ -145,8 +145,8 @@ func ParameterGuidanceIdentity(guidance map[string]ParameterGuidance) string {
 		entry := guidance[name]
 		// Every field quoted, so that no shifting of characters from one
 		// field into the next can spell the same canonical form twice.
-		canonical.WriteString(fmt.Sprintf("%q=%q|%q|%q|%q;",
-			name, entry.SemanticRole, entry.ValueSource, entry.ExampleBinding, entry.CommonConfusions))
+		fmt.Fprintf(&canonical, "%q=%q|%q|%q|%q;",
+			name, entry.SemanticRole, entry.ValueSource, entry.ExampleBinding, entry.CommonConfusions)
 	}
 	digest := sha256.Sum256([]byte(canonical.String()))
 	return hex.EncodeToString(digest[:])

@@ -84,6 +84,7 @@ func TestBuild_ACacheHitStillCarriesTheScopeCause(t *testing.T) {
 	}
 	for name, withheld := range map[string]gitlabtools.WithheldActions{"first build": firstWithheld, "cache hit": secondWithheld} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			if !slices.Contains(withheld.ByTokenScope, "issue.create") {
 				t.Errorf("withheld.ByTokenScope = %v, want it to name issue.create as removed by the credential", withheld.ByTokenScope)
 			}
@@ -224,6 +225,76 @@ func TestBuild_SharesOneCatalogAcrossClients(t *testing.T) {
 	}
 	if len(urls) != 2 {
 		t.Fatalf("server.status reached %v, want each client's own instance", urls)
+	}
+}
+
+// TestBuild_RefusesACatalogAnAssemblyStepLeftUnbindable verifies the two
+// validations the assembly runs on what it built, which are the reason the
+// step after buildActionCatalog cannot quietly add an action nothing can bind.
+//
+// Both are driven through the seams, because no real input reaches them: the
+// standalone specs are fixed and the safe-mode rewrite installs a binder of
+// its own. A route whose handler is installed directly is what each seam
+// returns, since that is the shape an action would have if a future step
+// forgot the binder, and it would refuse every call for every credential of
+// the configuration.
+func TestBuild_RefusesACatalogAnAssemblyStepLeftUnbindable(t *testing.T) {
+	unbindable := func(t *testing.T) *actioncatalog.Catalog {
+		t.Helper()
+		catalog := actioncatalog.NewCatalog()
+		group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
+		group.SetAction(actioncatalog.Action{Name: "get", Route: toolutil.ActionRoute{
+			Handler:     func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil },
+			InputSchema: map[string]any{"type": "object"},
+		}})
+		if err := catalog.AddGroup(group); err != nil {
+			t.Fatalf("AddGroup() error = %v", err)
+		}
+		return catalog
+	}
+	cases := []struct {
+		name     string
+		safeMode bool
+		arrange  func(t *testing.T)
+		want     string
+	}{
+		{
+			name: "after the standalone actions join",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := addStandaloneCatalog
+				t.Cleanup(func() { addStandaloneCatalog = original })
+				addStandaloneCatalog = func(*actioncatalog.Catalog, *gitlabclient.Client, dynamictools.StandaloneOptions) (*actioncatalog.Catalog, error) {
+					return unbindable(t), nil
+				}
+			},
+			want: "validate dynamic action catalog",
+		},
+		{
+			name:     "after the safe-mode rewrite",
+			safeMode: true,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := safeModePreviews
+				t.Cleanup(func() { safeModePreviews = original })
+				safeModePreviews = func(*actioncatalog.Catalog) *actioncatalog.Catalog { return unbindable(t) }
+			},
+			want: "validate safe-mode dynamic action catalog",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.arrange(t)
+			cfg := &config.ServerConfig{
+				Tier:         edition.Free,
+				SafeMode:     tc.safeMode,
+				ExcludeTools: []string{"unbindable-" + t.Name()},
+			}
+			_, _, err := Build(nil, cfg)
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "has no binder") {
+				t.Errorf("Build() error = %v, want %q naming the action with no binder", err, tc.want)
+			}
+		})
 	}
 }
 

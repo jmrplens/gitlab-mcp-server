@@ -970,31 +970,31 @@ func TestToolManifest_SharedSnapshotServesTheSameBytesAsAPrivateOne(t *testing.T
 			},
 		}
 	}
-	shareKey := "manifest|" + t.Name()
-	sessions := map[string]*mcp.ClientSession{
-		"first under the share key":  toolManifestSession(t, options(shareKey)),
-		"second under the share key": toolManifestSession(t, options(shareKey)),
-		"private, no share key":      toolManifestSession(t, options("")),
+	const detailURI = "gitlab://tools/issue.list"
+	// The server with no share key is the reference: it built its own
+	// snapshot, so what it answers is what a server answers with no cache
+	// behind it at all.
+	private := toolManifestSession(t, options(""))
+	indexWant := readResourceText(t, private, "gitlab://tools")
+	detailWant := readResourceText(t, private, detailURI)
+	if !strings.Contains(indexWant, `"issue.list"`) {
+		t.Fatalf("gitlab://tools does not list issue.list, so the comparison below proves nothing")
 	}
 
-	var indexWant, detailWant string
-	const detailURI = "gitlab://tools/issue.list"
-	for name, session := range sessions {
-		index := readResourceText(t, session, "gitlab://tools")
-		detail := readResourceText(t, session, detailURI)
-		if indexWant == "" {
-			indexWant, detailWant = index, detail
-			if !strings.Contains(index, `"issue.list"`) {
-				t.Fatalf("gitlab://tools from the %s server does not list issue.list, so the comparison proves nothing", name)
+	shareKey := "manifest|" + t.Name()
+	shared := map[string]*mcp.ClientSession{
+		"first under the share key":  toolManifestSession(t, options(shareKey)),
+		"second under the share key": toolManifestSession(t, options(shareKey)),
+	}
+	for name, session := range shared {
+		t.Run(name, func(t *testing.T) {
+			if got := readResourceText(t, session, "gitlab://tools"); got != indexWant {
+				t.Errorf("gitlab://tools from the %s server differs from what a server with no share key serves", name)
 			}
-			continue
-		}
-		if index != indexWant {
-			t.Errorf("gitlab://tools from the %s server differs from the first server's", name)
-		}
-		if detail != detailWant {
-			t.Errorf("%s from the %s server differs from the first server's", detailURI, name)
-		}
+			if got := readResourceText(t, session, detailURI); got != detailWant {
+				t.Errorf("%s from the %s server differs from what a server with no share key serves", detailURI, name)
+			}
+		})
 	}
 }
 
