@@ -54,23 +54,26 @@ func interactiveCreateSpec(name string, route toolutil.ActionRoute, individualTo
 }
 
 func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, cancelMessage string, fn func(context.Context, *mcp.CallToolRequest, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
-	route := toolutil.RouteActionWithRequest(client, fn)
-	route.Handler = func(ctx context.Context, params map[string]any) (any, error) {
-		input, err := toolutil.UnmarshalParams[T](params)
-		if err != nil {
-			var zero R
-			return zero, err
+	// The handler needs the client itself, not only the handler it replaces,
+	// so it is bound through WithBoundHandler: a shared catalog then rebuilds
+	// it for each credential's client instead of keeping this one.
+	return toolutil.RouteActionWithRequest(client, fn).WithBoundHandler(client, func(client *gitlabclient.Client) toolutil.ActionFunc {
+		return func(ctx context.Context, params map[string]any) (any, error) {
+			input, err := toolutil.UnmarshalParams[T](params)
+			if err != nil {
+				var zero R
+				return zero, err
+			}
+			out, err := fn(ctx, toolutil.RequestFromContext(ctx), client, input)
+			if errors.Is(err, elicitation.ErrElicitationNotSupported) {
+				return unsupportedOutput{ToolName: toolName}, nil
+			}
+			if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
+				return cancelledOutput{Message: cancelMessage}, nil
+			}
+			return out, err
 		}
-		out, err := fn(ctx, toolutil.RequestFromContext(ctx), client, input)
-		if errors.Is(err, elicitation.ErrElicitationNotSupported) {
-			return unsupportedOutput{ToolName: toolName}, nil
-		}
-		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
-			return cancelledOutput{Message: cancelMessage}, nil
-		}
-		return out, err
-	}
-	return route
+	})
 }
 
 // FormatResult renders elicitation outputs and expected control outcomes.

@@ -3,6 +3,7 @@ package toolutil
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -61,7 +62,9 @@ func NewMetaSchemaRegistry(routes map[string]ActionMap) *MetaSchemaRegistry {
 	return registry
 }
 
-// SetRoutes replaces the registry contents with a defensive route snapshot.
+// SetRoutes replaces the registry contents with a snapshot of routes, taken
+// with [CloneMetaSchemaRoutes]: the maps are the registry's own, the schemas
+// inside them are shared with the caller and frozen.
 func (r *MetaSchemaRegistry) SetRoutes(routes map[string]ActionMap) {
 	if r == nil {
 		return
@@ -71,7 +74,9 @@ func (r *MetaSchemaRegistry) SetRoutes(routes map[string]ActionMap) {
 	r.routes = CloneMetaSchemaRoutes(routes)
 }
 
-// Routes returns a defensive copy of the registry contents.
+// Routes returns a snapshot of the registry contents, taken with
+// [CloneMetaSchemaRoutes]: later SetRoutes calls do not reach it, and the
+// schemas in it are shared and must not be mutated.
 func (r *MetaSchemaRegistry) Routes() map[string]ActionMap {
 	if r == nil {
 		return nil
@@ -81,29 +86,38 @@ func (r *MetaSchemaRegistry) Routes() map[string]ActionMap {
 	return CloneMetaSchemaRoutes(r.routes)
 }
 
-// CloneMetaSchemaRoutes creates a defensive snapshot of route maps so consumers
-// do not observe later registration, filtering, or schema map changes.
+// CloneMetaSchemaRoutes returns a snapshot of the route maps: the two map
+// levels are new, so later insertions and deletions in routes do not reach
+// the snapshot, and every route in it is a [CloneActionRoute] copy.
+//
+// The schemas are not copied. A route's InputSchema, OutputSchema and
+// ParameterGuidance are frozen and shared by every consumer in the process,
+// which is what lets a catalog cached per configuration serve every server
+// without a copy per server; the copies this function used to make were half
+// of the heap at a hundred pooled credentials. A consumer that must change a
+// schema derives its own through [DeriveSchema].
 func CloneMetaSchemaRoutes(routes map[string]ActionMap) map[string]ActionMap {
 	out := make(map[string]ActionMap, len(routes))
 	for tool, actions := range routes {
 		actionCopy := make(ActionMap, len(actions))
 		for action, route := range actions {
-			routeCopy := route
-			if route.InputSchema != nil {
-				routeCopy.InputSchema = cloneSchemaMap(route.InputSchema)
-			}
-			if route.OutputSchema != nil {
-				routeCopy.OutputSchema = cloneSchemaMap(route.OutputSchema)
-			}
-			routeCopy.ParameterGuidance = cloneParameterGuidanceMap(route.ParameterGuidance)
-			routeCopy.Aliases = cloneRouteStrings(route.Aliases)
-			routeCopy.Tags = cloneRouteStrings(route.Tags)
-			routeCopy.RelatedActions = cloneRouteStrings(route.RelatedActions)
-			actionCopy[action] = routeCopy
+			actionCopy[action] = CloneActionRoute(route)
 		}
 		out[tool] = actionCopy
 	}
 	return out
+}
+
+// CloneActionRoute returns a copy of the route that owns its string slices
+// and shares everything else. The handler, the types and the frozen schema
+// and guidance maps describe the same action and are not copied; the
+// Aliases, Tags and RelatedActions slices are, so a caller may append to
+// them without reaching the original.
+func CloneActionRoute(route ActionRoute) ActionRoute {
+	route.Aliases = cloneRouteStrings(route.Aliases)
+	route.Tags = cloneRouteStrings(route.Tags)
+	route.RelatedActions = cloneRouteStrings(route.RelatedActions)
+	return route
 }
 
 // BuildMetaSchemaIndex builds the resource-compatible schema index payload.
@@ -165,17 +179,34 @@ func LookupMetaActionSchema(routes map[string]ActionMap, tool, action string) (m
 	if !ok {
 		return nil, false
 	}
+	return MetaActionSchema(route), true
+}
+
+// MetaActionSchema returns the params schema served for one meta-tool action:
+// the route's input schema with the destructive confirmation property and the
+// parameter guidance added, or a permissive placeholder when the route
+// captured no schema. For a route of a shared catalog the result is built
+// once per process and shared; the caller must not mutate it.
+func MetaActionSchema(route ActionRoute) map[string]any {
 	if route.InputSchema == nil {
 		schema := map[string]any{
 			"type":                 "object",
 			"description":          "This action has no captured parameter schema. Send an empty object {} or consult the meta-tool description for required fields.",
 			"additionalProperties": true,
 		}
-		return enrichParameterGuidanceSchema(enrichDestructiveSchema(schema, route.Destructive), route.ParameterGuidance), true
+		return enrichParameterGuidanceSchema(enrichDestructiveSchema(schema, route.Destructive), route.ParameterGuidance)
 	}
-	return enrichParameterGuidanceSchema(enrichDestructiveSchema(cloneSchemaMap(route.InputSchema), route.Destructive), route.ParameterGuidance), true
+	transform := "meta-action|destructive=" + strconv.FormatBool(route.Destructive) + "|guidance=" + ParameterGuidanceIdentity(route.ParameterGuidance)
+	derived := DeriveSchema(route.InputSchema, transform, func() any {
+		return enrichParameterGuidanceSchema(enrichDestructiveSchema(cloneSchemaMap(route.InputSchema), route.Destructive), route.ParameterGuidance)
+	})
+	schema, _ := derived.(map[string]any)
+	return schema
 }
 
+// enrichDestructiveSchema adds the confirm property and the x_destructive
+// marker to a destructive action's schema, in place: the caller owns schema,
+// having copied it from wherever it came.
 func enrichDestructiveSchema(schema map[string]any, destructive bool) map[string]any {
 	if !destructive {
 		return schema

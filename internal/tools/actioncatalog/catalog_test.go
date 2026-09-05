@@ -2,11 +2,13 @@ package actioncatalog
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -130,12 +132,16 @@ func TestGroup_SetActionAndActionsInOrder_DefensiveBranches(t *testing.T) {
 	}
 }
 
-// TestCatalog_CloneDefensivelyCopiesRoutes verifies the Catalog_CloneDefensivelyCopiesRoutes handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestCatalog_CloneDefensivelyCopiesRoutes(t *testing.T) {
+// TestCatalog_Clone_SharesSchemasAndOwnsStructure verifies the copy contract
+// of the accessors: a clone's groups, actions and slices are its own, so
+// adding to or editing them does not reach the original, while the route
+// schema maps are shared, since they are frozen and every server in the
+// process reads the same ones.
+func TestCatalog_Clone_SharesSchemasAndOwnsStructure(t *testing.T) {
+	route := testRoute(false)
+	route.Aliases = []string{"show"}
 	catalog := FromActionMaps(map[string]toolutil.ActionMap{
-		"gitlab_project": {"get": testRoute(false)},
+		"gitlab_project": {"get": route},
 	})
 
 	cloned := catalog.Clone()
@@ -143,15 +149,31 @@ func TestCatalog_CloneDefensivelyCopiesRoutes(t *testing.T) {
 	if !ok {
 		t.Fatal("cloned Group(gitlab_project) = false")
 	}
-	clonedRoute := clonedGroup.Actions["get"].Route
-	clonedRoute.InputSchema["changed"] = true
-
 	originalGroup, foundOriginal := catalog.Group("gitlab_project")
 	if !foundOriginal {
 		t.Fatal("original Group(gitlab_project) = false")
 	}
-	if _, hasChanged := originalGroup.Actions["get"].Route.InputSchema["changed"]; hasChanged {
-		t.Fatal("mutating cloned schema changed original catalog")
+	clonedRoute := clonedGroup.Actions["get"].Route
+	originalRoute := originalGroup.Actions["get"].Route
+	if reflect.ValueOf(clonedRoute.InputSchema).UnsafePointer() != reflect.ValueOf(originalRoute.InputSchema).UnsafePointer() {
+		t.Fatal("Clone() copied the input schema, want it shared")
+	}
+	if reflect.ValueOf(clonedRoute.OutputSchema).UnsafePointer() != reflect.ValueOf(originalRoute.OutputSchema).UnsafePointer() {
+		t.Fatal("Clone() copied the output schema, want it shared")
+	}
+
+	clonedRoute.Aliases[0] = "changed"
+	if originalRoute.Aliases[0] != "show" {
+		t.Fatalf("original aliases = %v, want unchanged by an edit to the clone's", originalRoute.Aliases)
+	}
+	if err := cloned.AddAction("gitlab_project", Action{Name: "list", Route: testRoute(false)}); err != nil {
+		t.Fatalf("AddAction() error = %v", err)
+	}
+	if catalog.CountActions() != 1 {
+		t.Fatalf("original CountActions() = %d after adding to the clone, want 1", catalog.CountActions())
+	}
+	if cloned.SharedOrigin() != nil {
+		t.Fatal("Clone() carried a shared origin, want none for a catalog that can be added to")
 	}
 }
 
@@ -709,5 +731,150 @@ func TestCatalog_WithSafeModePreviewsRewritesOnlyMutatingActions(t *testing.T) {
 	var nilCatalog *Catalog
 	if nilCatalog.WithSafeModePreviews() != nil {
 		t.Error("nil catalog WithSafeModePreviews() must return nil")
+	}
+}
+
+// recordingRoute builds a typed route whose handler records the client it
+// ran under, which is how a test observes what BindTo did.
+func recordingRoute(client *gitlabclient.Client, seen **gitlabclient.Client) toolutil.ActionRoute {
+	return toolutil.RouteAction(client, func(_ context.Context, client *gitlabclient.Client, _ struct{}) (string, error) {
+		*seen = client
+		return "ok", nil
+	})
+}
+
+// TestCatalog_MarkSharedAndSharedOrigin verifies the identity a catalog
+// offers to caches: nothing for an ordinary catalog, itself once marked
+// shared, and the shared catalog for every catalog bound from it, with the
+// route schemas registered as shared by the marking. A nil catalog answers
+// nil to both without panicking.
+func TestCatalog_MarkSharedAndSharedOrigin(t *testing.T) {
+	var nilCatalog *Catalog
+	nilCatalog.MarkShared()
+	if nilCatalog.SharedOrigin() != nil || nilCatalog.BindTo(nil) != nil {
+		t.Fatal("nil catalog SharedOrigin() or BindTo() returned something")
+	}
+
+	var seen *gitlabclient.Client
+	// The list route carries ad hoc schema maps: a typed route's schemas come
+	// from the process-wide type cache and are shared by construction, which
+	// would make the "not shared yet" half of this test vacuous.
+	catalog := FromActionMaps(map[string]toolutil.ActionMap{
+		"gitlab_project": {"get": recordingRoute(nil, &seen), "list": testRoute(false)},
+	})
+	if catalog.SharedOrigin() != nil {
+		t.Fatal("an unshared catalog reported a shared origin")
+	}
+	action, _ := catalog.Action("project.list")
+	if toolutil.SchemaShared(action.Route.InputSchema) {
+		t.Fatal("the route schema was registered as shared before MarkShared")
+	}
+
+	catalog.MarkShared()
+	if catalog.SharedOrigin() != catalog {
+		t.Fatal("a shared catalog does not report itself as its origin")
+	}
+	if !toolutil.SchemaShared(action.Route.InputSchema) || !toolutil.SchemaShared(action.Route.OutputSchema) {
+		t.Fatal("MarkShared() did not register the route schemas")
+	}
+
+	client := &gitlabclient.Client{}
+	bound := catalog.BindTo(client)
+	if bound == catalog || bound.SharedOrigin() != catalog {
+		t.Fatal("BindTo() did not return a distinct catalog with the shared one as its origin")
+	}
+	if rebound := bound.BindTo(client); rebound.SharedOrigin() != catalog {
+		t.Fatal("binding a bound catalog lost the shared origin")
+	}
+	if cloned := bound.Clone(); cloned.SharedOrigin() != nil {
+		t.Fatal("Clone() of a bound catalog carried its origin, want none")
+	}
+	if filtered := bound.FilterReadOnlyGroups(); filtered.SharedOrigin() != nil {
+		t.Fatal("a filtered catalog carried the origin, want none: it is a different action set")
+	}
+}
+
+// TestCatalog_BindTo_RebindsEveryHandlerAndSharesTheRest verifies a bound
+// catalog runs every action under the client it was bound to, while the
+// route metadata, the group metadata and the action index are the shared
+// catalog's own.
+func TestCatalog_BindTo_RebindsEveryHandlerAndSharesTheRest(t *testing.T) {
+	var seen *gitlabclient.Client
+	buildClient, clientA, clientB := &gitlabclient.Client{}, &gitlabclient.Client{}, &gitlabclient.Client{}
+	catalog := FromActionMaps(map[string]toolutil.ActionMap{
+		"gitlab_project": {"get": recordingRoute(buildClient, &seen), "list": recordingRoute(buildClient, &seen)},
+	})
+	catalog.MarkShared()
+
+	boundA, boundB := catalog.BindTo(clientA), catalog.BindTo(clientB)
+	for _, id := range []ActionID{"project.get", "project.list"} {
+		t.Run(string(id), func(t *testing.T) {
+			actionA, okA := boundA.Action(id)
+			actionB, okB := boundB.Action(id)
+			shared, okShared := catalog.Action(id)
+			if !okA || !okB || !okShared {
+				t.Fatalf("Action(%s) missing from a catalog: A %t, B %t, shared %t", id, okA, okB, okShared)
+			}
+			if _, err := actionA.Route.Handler(context.Background(), map[string]any{}); err != nil || seen != clientA {
+				t.Errorf("catalog A ran %s under %p (error %v), want client A %p", id, seen, err, clientA)
+			}
+			if _, err := actionB.Route.Handler(context.Background(), map[string]any{}); err != nil || seen != clientB {
+				t.Errorf("catalog B ran %s under %p (error %v), want client B %p", id, seen, err, clientB)
+			}
+			if _, err := shared.Route.Handler(context.Background(), map[string]any{}); err != nil || seen != buildClient {
+				t.Errorf("the shared catalog ran %s under %p, want the build client %p untouched by binding", id, seen, buildClient)
+			}
+			if reflect.ValueOf(actionA.Route.InputSchema).UnsafePointer() != reflect.ValueOf(actionB.Route.InputSchema).UnsafePointer() {
+				t.Errorf("bound catalogs carry different input schemas for %s, want one shared map", id)
+			}
+		})
+	}
+	groupA, _ := boundA.Group("gitlab_project")
+	if len(groupA.ActionOrder) != 2 || boundA.CountActions() != 2 || boundA.CountGroups() != 1 {
+		t.Errorf("bound catalog shape = %d groups, %d actions, order %v; want the shared catalog's", boundA.CountGroups(), boundA.CountActions(), groupA.ActionOrder)
+	}
+}
+
+// TestCatalog_WithSafeModePreviews_SurvivesBinding verifies the previews a
+// safe-mode catalog carries stay previews after the catalog is bound to a
+// client: both halves of the route were replaced, so binding does not
+// rebuild the real handler.
+func TestCatalog_WithSafeModePreviews_SurvivesBinding(t *testing.T) {
+	var seen *gitlabclient.Client
+	route := recordingRoute(&gitlabclient.Client{}, &seen)
+	catalog := FromActionMaps(map[string]toolutil.ActionMap{
+		"gitlab_project": {"delete": route},
+	})
+	previewed := catalog.WithSafeModePreviews()
+	if err := previewed.Validate(); err != nil {
+		t.Fatalf("Validate(previewed) error = %v", err)
+	}
+	bound := previewed.BindTo(&gitlabclient.Client{})
+	action, _ := bound.Action("project.delete")
+	result, err := action.Route.Handler(context.Background(), map[string]any{"project_id": "1"})
+	if err != nil {
+		t.Fatalf("preview handler error = %v", err)
+	}
+	if _, isPreview := result.(toolutil.SafeModePreview); !isPreview {
+		t.Fatalf("bound safe-mode handler returned %T, want a SafeModePreview", result)
+	}
+	if seen != nil {
+		t.Fatal("binding a previewed catalog rebuilt the real handler, which ran")
+	}
+}
+
+// TestCatalog_Validate_RefusesAReplacedHandler verifies catalog validation
+// carries the route binding guard: an action whose handler was assigned
+// directly after the constructor set a binder is refused, naming the action.
+func TestCatalog_Validate_RefusesAReplacedHandler(t *testing.T) {
+	var seen *gitlabclient.Client
+	broken := recordingRoute(nil, &seen)
+	broken.Handler = func(context.Context, map[string]any) (any, error) { return "replaced", nil }
+	catalog := FromActionMaps(map[string]toolutil.ActionMap{
+		"gitlab_project": {"get": broken},
+	})
+	err := catalog.Validate()
+	if err == nil || !strings.Contains(err.Error(), `action "project.get"`) || !strings.Contains(err.Error(), "without its binder") {
+		t.Fatalf("Validate() error = %v, want the replaced handler refused by action", err)
 	}
 }

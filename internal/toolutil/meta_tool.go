@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -54,8 +55,32 @@ type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 // action's typed output. InputSchema holds the JSON Schema for the action's
 // typed params (nil for routes constructed via the untyped Route and
 // DestructiveRoute constructors).
+//
+// A route is two things with different lifetimes. Its metadata (the schemas,
+// the guidance, the aliases) depends on nothing but the action, and a catalog
+// cached per configuration shares it between every server in the process; the
+// schema maps are frozen, and a consumer that needs to change one copies it
+// first (see [DeriveSchema]). Its Handler is bound to one GitLab client, and
+// so to one credential. Bind is what joins the two: the RouteAction family
+// sets it to rebuild the handler for any client, and [ActionRoute.BindTo]
+// pairs the shared metadata with a handler for the client at hand. A route
+// with no Bind has a handler that captured no client and is served as is.
+//
+// Replacing Handler directly breaks that pairing silently: the shared catalog
+// would rebind to the constructor's plain handler and drop whatever the
+// replacement added. [ActionRoute.WrapHandler] and
+// [ActionRoute.WithBoundHandler] change the handler and its binder together,
+// and [ValidateRouteBinding] refuses a route whose two halves disagree.
 type ActionRoute struct {
-	Handler           ActionFunc
+	Handler ActionFunc
+	// Bind builds the handler for a client. Nil means the handler depends on
+	// no client and is shared as it is.
+	Bind func(*gitlabclient.Client) ActionFunc
+	// boundHandler is the handler the binder installed, kept so
+	// [ValidateRouteBinding] can tell whether Handler is still that one. It
+	// is set only by the constructors and the two rebinding helpers, which
+	// is the point: a direct assignment to Handler cannot update it.
+	boundHandler      ActionFunc
 	Destructive       bool
 	InputType         reflect.Type
 	OutputType        reflect.Type
@@ -319,6 +344,78 @@ func cloneParameterGuidanceMap(guidance map[string]ParameterGuidance) map[string
 	return out
 }
 
+// BindTo returns the route with its handler rebuilt for client. A route whose
+// Bind is nil captured no client and is returned unchanged. The metadata is
+// shared with the receiver, not copied: it is the same action.
+func (route ActionRoute) BindTo(client *gitlabclient.Client) ActionRoute {
+	if route.Bind == nil {
+		return route
+	}
+	return route.withBoundHandler(route.Bind(client))
+}
+
+// WrapHandler returns the route with wrap applied to its handler, now and on
+// every later rebinding. Use it where a domain decorates the constructor's
+// handler, such as turning a 404 into a structured not-found result: wrap
+// receives the handler to decorate and returns the decorated one.
+func (route ActionRoute) WrapHandler(wrap func(next ActionFunc) ActionFunc) ActionRoute {
+	if bind := route.Bind; bind != nil {
+		route.Bind = func(client *gitlabclient.Client) ActionFunc {
+			return wrap(bind(client))
+		}
+	}
+	return route.withBoundHandler(wrap(route.Handler))
+}
+
+// WithBoundHandler returns the route with a handler that bind builds for
+// client, and with bind recorded so a shared catalog can build the same
+// handler for any other client. Use it where the replacement handler needs
+// the client itself rather than only the handler it replaces.
+func (route ActionRoute) WithBoundHandler(client *gitlabclient.Client, bind func(*gitlabclient.Client) ActionFunc) ActionRoute {
+	route.Bind = bind
+	return route.withBoundHandler(bind(client))
+}
+
+// withBoundHandler installs handler as the route's handler and records it
+// as the one the binder produced.
+func (route ActionRoute) withBoundHandler(handler ActionFunc) ActionRoute {
+	route.Handler = handler
+	route.boundHandler = handler
+	return route
+}
+
+// ValidateRouteBinding reports a route whose handler was replaced without
+// its binder being replaced with it. Such a route serves the replacement on
+// the server it was built for and the constructor's plain handler on every
+// server a shared catalog rebinds it to, which is a defect no test of the
+// domain package can see, since the package tests the route as it built it.
+// The check is exact: the handler in place must be the very closure the
+// binder installed, compared by identity rather than by the code it runs,
+// because the compiler gives an inlined copy of a function literal a closure
+// of its own.
+func ValidateRouteBinding(route ActionRoute) error {
+	if route.Bind == nil || route.Handler == nil {
+		return nil
+	}
+	if funcIdentity(route.Handler) != funcIdentity(route.boundHandler) {
+		return errors.New("route handler was replaced without its binder: use ActionRoute.WrapHandler or ActionRoute.WithBoundHandler so a shared catalog can rebind it")
+	}
+	return nil
+}
+
+// funcIdentity returns the address of the closure object behind a handler
+// value, which is unique to that closure instance. A func value is a pointer
+// to its closure, so reading the value's first word yields it; reflect's
+// Pointer method would dereference that once more and return the code
+// pointer instead, which is what makes two instances of one literal look
+// alike.
+func funcIdentity(fn ActionFunc) uintptr {
+	if fn == nil {
+		return 0
+	}
+	return *(*uintptr)(unsafe.Pointer(&fn))
+}
+
 // Route creates a non-destructive ActionRoute without an output schema.
 func Route(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: false}
@@ -409,6 +506,9 @@ func schemaForType(rt reflect.Type) map[string]any {
 		return nil
 	}
 	normalizeSchemaDescriptions(m)
+	// Cached for the process, so shared: every transform of it can be
+	// memoized by its address (see ShareSchema).
+	ShareSchema(m)
 	outputSchemaCache.Store(rt, m)
 	return m
 }
@@ -448,6 +548,7 @@ func inputSchemaForType(rt reflect.Type) map[string]any {
 	} else {
 		delete(schema, "required")
 	}
+	ShareSchema(schema)
 	inputSchemaCache.Store(rt, schema)
 	return schema
 }
@@ -2091,112 +2192,90 @@ func withVoidOutput(inner ActionFunc, successOutput any) ActionFunc {
 	}
 }
 
-// RouteAction wraps a typed function as a non-destructive ActionRoute
-// and attaches the JSON Schema for the input type T and output type R.
-func RouteAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+// typedRoute builds the route every typed constructor returns: the schemas
+// of T and R, which come from the process-wide type caches and are shared,
+// and a handler that bind builds for client, with bind kept so a shared
+// catalog can build the same handler for another client.
+func typedRoute[T, R any](client *gitlabclient.Client, bind func(*gitlabclient.Client) ActionFunc, destructive bool) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
-		Handler:      WrapAction(client, fn),
-		Destructive:  false,
+		Destructive:  destructive,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
 		OutputType:   reflect.TypeFor[R](),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
-	}
+	}.WithBoundHandler(client, bind)
+}
+
+// RouteAction wraps a typed function as a non-destructive ActionRoute
+// and attaches the JSON Schema for the input type T and output type R.
+func RouteAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+	return typedRoute[T, R](client, func(client *gitlabclient.Client) ActionFunc {
+		return WrapAction(client, fn)
+	}, false)
 }
 
 // RouteVoidAction wraps a typed void function as a non-destructive ActionRoute.
 // The handler returns a typed VoidOutput confirmation so meta-tool routes
 // expose structured output instead of nil content.
 func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
-	inputType := reflect.TypeFor[T]()
-	return ActionRoute{
-		Handler:      withVoidOutput(WrapVoidAction(client, fn), VoidOutput{Status: "success", Message: msgActionCompleted}),
-		Destructive:  false,
-		InputType:    inputType,
-		InputSchema:  inputSchemaForType(inputType),
-		OutputType:   reflect.TypeFor[VoidOutput](),
-		OutputSchema: schemaForType(reflect.TypeFor[VoidOutput]()),
-	}
+	return typedRoute[T, VoidOutput](client, func(client *gitlabclient.Client) ActionFunc {
+		return withVoidOutput(WrapVoidAction(client, fn), VoidOutput{Status: "success", Message: msgActionCompleted})
+	}, false)
 }
 
 // RouteActionWithRequest wraps a typed function that needs the MCP request
 // as a non-destructive ActionRoute and attaches input/output schemas.
 func RouteActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	inputType := reflect.TypeFor[T]()
-	return ActionRoute{
-		Handler:      WrapActionWithRequest(client, fn),
-		Destructive:  false,
-		InputType:    inputType,
-		InputSchema:  inputSchemaForType(inputType),
-		OutputType:   reflect.TypeFor[R](),
-		OutputSchema: schemaForType(reflect.TypeFor[R]()),
-	}
+	return typedRoute[T, R](client, func(client *gitlabclient.Client) ActionFunc {
+		return WrapActionWithRequest(client, fn)
+	}, false)
 }
 
 // DestructiveAction wraps a typed function as a destructive ActionRoute
 // and attaches input/output schemas.
 func DestructiveAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	inputType := reflect.TypeFor[T]()
-	return ActionRoute{
-		Handler:      WrapAction(client, fn),
-		Destructive:  true,
-		InputType:    inputType,
-		InputSchema:  inputSchemaForType(inputType),
-		OutputType:   reflect.TypeFor[R](),
-		OutputSchema: schemaForType(reflect.TypeFor[R]()),
-	}
+	return typedRoute[T, R](client, func(client *gitlabclient.Client) ActionFunc {
+		return WrapAction(client, fn)
+	}, true)
 }
 
 // DestructiveVoidAction wraps a typed void function as a destructive ActionRoute.
 // The handler returns a typed DeleteOutput confirmation so meta-tool routes
 // expose structured output instead of nil content.
 func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
-	inputType := reflect.TypeFor[T]()
-	return ActionRoute{
-		Handler:      withVoidOutput(WrapVoidAction(client, fn), DeleteOutput{Status: "success", Message: msgActionCompleted}),
-		Destructive:  true,
-		InputType:    inputType,
-		InputSchema:  inputSchemaForType(inputType),
-		OutputType:   reflect.TypeFor[DeleteOutput](),
-		OutputSchema: schemaForType(reflect.TypeFor[DeleteOutput]()),
-	}
+	return typedRoute[T, DeleteOutput](client, func(client *gitlabclient.Client) ActionFunc {
+		return withVoidOutput(WrapVoidAction(client, fn), DeleteOutput{Status: "success", Message: msgActionCompleted})
+	}, true)
 }
 
 // DestructiveActionWithRequest wraps a typed function that needs the MCP request
 // as a destructive ActionRoute and attaches input/output schemas.
 func DestructiveActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	inputType := reflect.TypeFor[T]()
-	return ActionRoute{
-		Handler:      WrapActionWithRequest(client, fn),
-		Destructive:  true,
-		InputType:    inputType,
-		InputSchema:  inputSchemaForType(inputType),
-		OutputType:   reflect.TypeFor[R](),
-		OutputSchema: schemaForType(reflect.TypeFor[R]()),
-	}
+	return typedRoute[T, R](client, func(client *gitlabclient.Client) ActionFunc {
+		return WrapActionWithRequest(client, fn)
+	}, true)
 }
 
 // DestructiveVoidActionWithRequest wraps a request-aware void function as a
 // destructive ActionRoute with typed DeleteOutput confirmation, reusing
 // WrapVoidActionWithRequest so the request-extraction logic is not duplicated.
 func DestructiveVoidActionWithRequest[T any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) error) ActionRoute {
-	inputType := reflect.TypeFor[T]()
-	return ActionRoute{
-		Handler:      withVoidOutput(WrapVoidActionWithRequest(client, fn), DeleteOutput{Status: "success", Message: msgActionCompleted}),
-		Destructive:  true,
-		InputType:    inputType,
-		InputSchema:  inputSchemaForType(inputType),
-		OutputType:   reflect.TypeFor[DeleteOutput](),
-		OutputSchema: schemaForType(reflect.TypeFor[DeleteOutput]()),
-	}
+	return typedRoute[T, DeleteOutput](client, func(client *gitlabclient.Client) ActionFunc {
+		return withVoidOutput(WrapVoidActionWithRequest(client, fn), DeleteOutput{Status: "success", Message: msgActionCompleted})
+	}, true)
 }
 
 // metaSchemaCompileKey returns a stable content key for compiling and
 // caching a meta dispatcher's schemas across registrations, or "" (caching
-// disabled) outside the default opaque mode: compact/full schemas embed
-// tier-pruned per-action payloads with no cheap stable identity, while the
-// opaque envelope depends only on the sorted action-name enum.
+// disabled) outside the default opaque mode.
+//
+// The opaque envelope depends only on the sorted action-name enum, so its key
+// is the names. The compact and full envelopes are never compiled, and not
+// for want of a key: compiling turns a map into a *jsonschema.Schema, and the
+// two do not serialize alike (a boolean sub-schema comes back as an object),
+// so the wire would change for those two modes. They are shared as maps
+// instead, by [metaEnvelopeFor].
 func metaSchemaCompileKey(name string, routes ActionMap) string {
 	if currentMetaParamSchemaMode() != MetaParamSchemaOpaque {
 		return ""
@@ -2207,6 +2286,61 @@ func metaSchemaCompileKey(name string, routes ActionMap) string {
 	}
 	sort.Strings(actions)
 	return "meta|opaque|" + name + "|" + strings.Join(actions, ",")
+}
+
+// metaEnvelopes holds one compact or full envelope per distinct routes map,
+// keyed by [metaEnvelopeKey].
+var metaEnvelopes sync.Map // string -> map[string]any
+
+// metaEnvelopeKey names a compact or full envelope by what it embeds: the
+// mode, and every action with the identity of its params schema. A schema
+// shared by a catalog cached per configuration has an address that is stable
+// for the process, which is identity enough; a routes map carrying any schema
+// nobody shared has no durable key, and reports false.
+func metaEnvelopeKey(routes ActionMap, mode string) (string, bool) {
+	actions := make([]string, 0, len(routes))
+	for actionName := range routes {
+		actions = append(actions, actionName)
+	}
+	sort.Strings(actions)
+	var key strings.Builder
+	key.WriteString("meta|" + mode)
+	for _, actionName := range actions {
+		schema := routes[actionName].InputSchema
+		if schema == nil {
+			key.WriteString("|" + actionName + "=nil")
+			continue
+		}
+		identity, shared := SharedSchemaIdentity(schema)
+		if !shared {
+			return "", false
+		}
+		key.WriteString("|" + actionName + "=" + identity)
+	}
+	return key.String(), true
+}
+
+// metaEnvelopeFor returns the compact or full envelope for routes, built once
+// per distinct routes map and registered as shared, so every server of one
+// configuration lists one envelope and the tools/list middlewares derive
+// their rewrites of it once. A routes map with no durable key gets a private
+// envelope, as before.
+func metaEnvelopeFor(routes ActionMap, mode string) map[string]any {
+	key, ok := metaEnvelopeKey(routes, mode)
+	if !ok {
+		return BuildMetaToolSchema(routes, mode)
+	}
+	if cached, hit := metaEnvelopes.Load(key); hit {
+		envelope, _ := cached.(map[string]any)
+		return envelope
+	}
+	built := BuildMetaToolSchema(routes, mode)
+	actual, loaded := metaEnvelopes.LoadOrStore(key, built)
+	if !loaded {
+		ShareSchema(built)
+	}
+	envelope, _ := actual.(map[string]any)
+	return envelope
 }
 
 // FormatResultFunc converts an action result into an MCP call tool result.
@@ -2504,8 +2638,17 @@ func ValidActionsString(routes ActionMap) string {
 // mode set via [SetMetaParamSchemaMode]. Default is opaque. Callers that
 // always want the opaque envelope regardless of global configuration should
 // invoke [BuildMetaToolSchema] directly.
+//
+// The opaque envelope is small and is compiled and cached by name downstream
+// (see [CompileToolSchemas]). The compact and full envelopes embed every
+// action's params schema and are served as maps, so they are shared as maps,
+// one per distinct routes map (see [metaEnvelopeFor]).
 func MetaToolSchema(routes ActionMap) map[string]any {
-	return BuildMetaToolSchema(routes, currentMetaParamSchemaMode())
+	mode := currentMetaParamSchemaMode()
+	if mode == MetaParamSchemaOpaque {
+		return BuildMetaToolSchema(routes, mode)
+	}
+	return metaEnvelopeFor(routes, mode)
 }
 
 // Meta-tool param schema mode constants. Mirrors the values accepted by the

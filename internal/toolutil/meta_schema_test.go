@@ -1,6 +1,9 @@
 package toolutil
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func testMetaSchemaRoutes() map[string]ActionMap {
 	return map[string]ActionMap{
@@ -45,57 +48,53 @@ func TestMetaSchemaRegistry_NilSetRoutesIsNoop(t *testing.T) {
 	registry.SetRoutes(testMetaSchemaRoutes())
 }
 
-// TestCloneMetaSchemaRoutes_DeepClonesSchemas verifies route snapshots do not
-// share nested input or output schema maps with the original route registry.
-func TestCloneMetaSchemaRoutes_DeepClonesSchemas(t *testing.T) {
+// TestCloneMetaSchemaRoutes_SharesSchemasAndOwnsSlices verifies the snapshot
+// contract: the two map levels are new and the string slices are copies, so
+// insertions and appends do not reach the original, while the schema and
+// guidance maps are the very same objects, since they are frozen and shared
+// by every server in the process.
+func TestCloneMetaSchemaRoutes_SharesSchemasAndOwnsSlices(t *testing.T) {
 	routes := map[string]ActionMap{
 		"gitlab_project": {
 			"create": {
-				Aliases:        []string{"project.create"},
-				Tags:           []string{"project"},
-				RelatedActions: []string{"project.get"},
-				InputSchema: map[string]any{
-					"required": []string{"name"},
-					"properties": map[string]any{
-						"name": map[string]any{"type": "string"},
-					},
-				},
-				OutputSchema: map[string]any{
-					"required": []string{"id"},
-				},
-				ParameterGuidance: map[string]ParameterGuidance{
-					"project_id": {CommonConfusions: []string{"do not use target_project_id"}},
-				},
+				Aliases:           []string{"project.create"},
+				Tags:              []string{"project"},
+				RelatedActions:    []string{"project.get"},
+				InputSchema:       map[string]any{"type": "object"},
+				OutputSchema:      map[string]any{"type": "object"},
+				ParameterGuidance: map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
 			},
 		},
 	}
 
 	clone := CloneMetaSchemaRoutes(routes)
 	cloneRoute := clone["gitlab_project"]["create"]
-	cloneRoute.InputSchema["required"].([]string)[0] = "changed"
-	cloneRoute.InputSchema["properties"].(map[string]any)["name"].(map[string]any)["type"] = "integer"
-	cloneRoute.OutputSchema["required"].([]string)[0] = "changed"
-	cloneRoute.ParameterGuidance["project_id"].CommonConfusions[0] = "changed"
+	original := routes["gitlab_project"]["create"]
+
+	if !sameMap(cloneRoute.InputSchema, original.InputSchema) || !sameMap(cloneRoute.OutputSchema, original.OutputSchema) {
+		t.Fatal("CloneMetaSchemaRoutes() copied the schema maps, want them shared")
+	}
+	if reflect.ValueOf(cloneRoute.ParameterGuidance).UnsafePointer() != reflect.ValueOf(original.ParameterGuidance).UnsafePointer() {
+		t.Fatal("CloneMetaSchemaRoutes() copied the guidance map, want it shared")
+	}
+
 	cloneRoute.Aliases[0] = "changed"
 	cloneRoute.Tags[0] = "changed"
 	cloneRoute.RelatedActions[0] = "changed"
-
-	original := routes["gitlab_project"]["create"]
-	if got := original.InputSchema["required"].([]string)[0]; got != "name" {
-		t.Fatalf("original input required = %q, want name", got)
-	}
-	if got := original.InputSchema["properties"].(map[string]any)["name"].(map[string]any)["type"]; got != "string" {
-		t.Fatalf("original property type = %#v, want string", got)
-	}
-	if got := original.OutputSchema["required"].([]string)[0]; got != "id" {
-		t.Fatalf("original output required = %q, want id", got)
-	}
-	if got := original.ParameterGuidance["project_id"].CommonConfusions[0]; got != "do not use target_project_id" {
-		t.Fatalf("original guidance confusion = %q, want unchanged", got)
-	}
 	if original.Aliases[0] != "project.create" || original.Tags[0] != "project" || original.RelatedActions[0] != "project.get" {
-		t.Fatalf("original route metadata = %+v, want unchanged", original)
+		t.Fatalf("original route slices = %+v, want unchanged by edits to the snapshot", original)
 	}
+
+	delete(clone["gitlab_project"], "create")
+	delete(clone, "gitlab_project")
+	if _, ok := routes["gitlab_project"]["create"]; !ok {
+		t.Fatal("deleting from the snapshot reached the original maps")
+	}
+}
+
+// sameMap reports whether two schema maps are one object.
+func sameMap(left, right map[string]any) bool {
+	return reflect.ValueOf(left).UnsafePointer() == reflect.ValueOf(right).UnsafePointer()
 }
 
 // TestBuildMetaSchemaIndex_SortsToolsAndActions verifies the resource index
@@ -344,5 +343,50 @@ func TestMetaSchemaURI_ToolAndAction_ReturnsMetaSchemaURI(t *testing.T) {
 	want := "gitlab://schema/meta/gitlab_project/milestone_delete"
 	if got != want {
 		t.Fatalf("MetaSchemaURI() = %q, want %q", got, want)
+	}
+}
+
+// TestMetaActionSchema_SharedRouteDerivesOnce verifies the params schema a
+// meta action serves: a route without a captured schema gets a fresh
+// permissive placeholder each time, a route over a private schema gets a
+// private enriched copy each time, and a route over a shared schema gets one
+// enriched map for every caller, with the destructive confirm property and
+// the guidance in it and the route's own schema untouched.
+func TestMetaActionSchema_SharedRouteDerivesOnce(t *testing.T) {
+	t.Parallel()
+
+	placeholder := MetaActionSchema(ActionRoute{Destructive: true})
+	if placeholder["type"] != "object" || placeholder["x_destructive"] != true {
+		t.Fatalf("MetaActionSchema(no schema) = %#v, want the destructive placeholder", placeholder)
+	}
+	if sameMap(placeholder, MetaActionSchema(ActionRoute{Destructive: true})) {
+		t.Fatal("the placeholder was shared between calls, want a fresh one")
+	}
+
+	private := ActionRoute{InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}}
+	if sameMap(MetaActionSchema(private), MetaActionSchema(private)) {
+		t.Fatal("MetaActionSchema(private route) shared a map nobody registered")
+	}
+
+	schema := map[string]any{"type": "object", "properties": map[string]any{"project_id": map[string]any{"type": "string"}}}
+	ShareSchema(schema)
+	shared := ActionRoute{
+		InputSchema:       schema,
+		Destructive:       true,
+		ParameterGuidance: map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
+	}
+	first := MetaActionSchema(shared)
+	if !sameMap(first, MetaActionSchema(shared)) {
+		t.Fatal("MetaActionSchema(shared route) built two maps, want one")
+	}
+	properties, _ := first["properties"].(map[string]any)
+	if _, ok := properties["confirm"]; !ok || first["x_destructive"] != true {
+		t.Errorf("derived schema = %#v, want the destructive confirm property", first)
+	}
+	if _, ok := first["x_parameter_guidance"]; !ok {
+		t.Errorf("derived schema = %#v, want the parameter guidance", first)
+	}
+	if _, leaked := schema["x_destructive"]; leaked || len(schema["properties"].(map[string]any)) != 1 {
+		t.Fatalf("the route's own schema was mutated: %#v", schema)
 	}
 }

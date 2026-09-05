@@ -27,18 +27,31 @@ import (
 // Concurrency. As with [LockdownInputSchemas], the mutation runs through
 // [onFirstToolsList], whose `sync.Once` guard prevents concurrent
 // `tools/list` calls from racing on the shared *Tool.InputSchema maps.
+//
+// Sharing. Like the lockdown, this derives the enriched schema instead of
+// changing the one in place (see [DeriveSchema]): the lockdown's output is
+// shared across servers, and so is this one.
 func EnrichPaginationConstraints(server *mcp.Server) {
 	onFirstToolsList(server, func(mcpTools []*mcp.Tool) {
 		for _, t := range mcpTools {
-			// schemaMap also converts compiled *jsonschema.Schema inputs to a
-			// fresh map, so the enrichment works regardless of whether the
-			// lockdown middleware already ran and never mutates a schema
-			// object shared across servers.
-			if schema := schemaMap(t.InputSchema); schema != nil {
-				enrichPaginationNode(schema)
-				t.InputSchema = schema
-			}
+			t.InputSchema = paginationEnrichedSchema(t.InputSchema)
 		}
+	})
+}
+
+// paginationEnrichedSchema returns schema with the pagination bounds added,
+// or schema itself when it is nil or cannot be rendered as a map.
+func paginationEnrichedSchema(schema any) any {
+	if schema == nil {
+		return nil
+	}
+	return DeriveSchema(schema, "pagination", func() any {
+		copied := schemaMapCopy(schema)
+		if copied == nil {
+			return schema
+		}
+		enrichPaginationNode(copied)
+		return copied
 	})
 }
 

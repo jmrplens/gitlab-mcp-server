@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -95,9 +96,37 @@ type Group struct {
 // Catalog stores deterministic groups and action lookup indexes. A Catalog is
 // intended to be mutated during single-threaded initialization and then shared
 // read-only; concurrent mutation is not supported.
+//
+// # What a catalog shares
+//
+// Every accessor returns copies of the Group and Action values, so a caller
+// may set fields and append to slices without reaching the catalog. What the
+// copies do not include is the route metadata: the InputSchema, OutputSchema
+// and ParameterGuidance maps of every route are frozen and shared, between
+// the copies, the catalog, and every other catalog derived from it by
+// filtering or binding. The accessors used to deep-copy them, and in the HTTP
+// pool, where a catalog is consulted several times for each of a thousand
+// credentials, those copies were half of the process's heap. A consumer that
+// must change a schema derives its own through [toolutil.DeriveSchema].
+//
+// # Shared and bound catalogs
+//
+// A catalog built once per configuration and cached for the process is marked
+// with [Catalog.MarkShared]; its handlers are bound to no credential. Each
+// server gets [Catalog.BindTo] of it: the same groups and actions, with the
+// handlers rebuilt for that server's client. A bound catalog remembers the
+// shared one it came from as its origin, and consumers that build something
+// client-independent from a catalog (the dynamic search index, the tool
+// manifest, the telemetry identifier) key it on [Catalog.SharedOrigin] so
+// every server of one configuration shares one.
 type Catalog struct {
 	groups  map[string]Group
 	actions map[ActionID]Action
+	// shared records that this catalog is the process-lived copy of its
+	// configuration, whose identity may key caches.
+	shared bool
+	// origin is the shared catalog a bound catalog was rebound from.
+	origin *Catalog
 }
 
 // NewCatalog creates an empty action catalog.
@@ -218,13 +247,15 @@ func (g *Group) ActionsInOrder() []Action {
 	return actions
 }
 
-// ActionMap returns a legacy route map for this group.
+// ActionMap returns a legacy route map for this group. The map is the
+// caller's; the routes in it share their schemas with the group, as every
+// accessor of this package does (see [Catalog]).
 func (g *Group) ActionMap() toolutil.ActionMap {
 	routes := make(toolutil.ActionMap, len(g.Actions))
 	for _, action := range g.ActionsInOrder() {
-		routes[action.Name] = action.Route
+		routes[action.Name] = toolutil.CloneActionRoute(action.Route)
 	}
-	return toolutil.CloneMetaSchemaRoutes(map[string]toolutil.ActionMap{g.ToolName: routes})[g.ToolName]
+	return routes
 }
 
 // AddGroup adds a complete group to the catalog.
@@ -318,7 +349,8 @@ func newAddActionGroup(toolName string, groupOptions []GroupOptions) (Group, err
 	return NewGroup(opts), nil
 }
 
-// Group returns a defensive copy of one group by tool name.
+// Group returns a copy of one group by tool name, sharing the route schemas
+// as described on [Catalog].
 func (c *Catalog) Group(toolName string) (Group, bool) {
 	if c == nil {
 		return Group{}, false
@@ -330,7 +362,8 @@ func (c *Catalog) Group(toolName string) (Group, bool) {
 	return cloneGroup(group), true
 }
 
-// Action returns a defensive copy of one action by canonical ID.
+// Action returns a copy of one action by canonical ID, sharing the route
+// schemas as described on [Catalog].
 func (c *Catalog) Action(id ActionID) (Action, bool) {
 	if c == nil {
 		return Action{}, false
@@ -342,7 +375,8 @@ func (c *Catalog) Action(id ActionID) (Action, bool) {
 	return cloneAction(action), true
 }
 
-// Groups returns all groups sorted by tool name.
+// Groups returns copies of all groups sorted by tool name, sharing the route
+// schemas as described on [Catalog].
 func (c *Catalog) Groups() []Group {
 	if c == nil {
 		return nil
@@ -359,7 +393,8 @@ func (c *Catalog) Groups() []Group {
 	return groups
 }
 
-// Actions returns all actions sorted by canonical ID.
+// Actions returns copies of all actions sorted by canonical ID, sharing the
+// route schemas as described on [Catalog].
 func (c *Catalog) Actions() []Action {
 	if c == nil {
 		return nil
@@ -376,7 +411,8 @@ func (c *Catalog) Actions() []Action {
 	return actions
 }
 
-// ActionMaps returns a defensive legacy route snapshot keyed by tool and action.
+// ActionMaps returns a legacy route snapshot keyed by tool and action. The
+// maps are the caller's; the routes share their schemas with the catalog.
 func (c *Catalog) ActionMaps() map[string]toolutil.ActionMap {
 	if c == nil {
 		return nil
@@ -385,7 +421,68 @@ func (c *Catalog) ActionMaps() map[string]toolutil.ActionMap {
 	for _, group := range c.Groups() {
 		routes[group.ToolName] = group.ActionMap()
 	}
-	return toolutil.CloneMetaSchemaRoutes(routes)
+	return routes
+}
+
+// MarkShared records that this catalog is the process-lived copy of its
+// configuration and registers every route schema in it with
+// [toolutil.ShareSchema], so the transforms every server derives from them
+// are built once. Call it only from a cache that keeps the catalog for the
+// rest of the process: a registered schema is never collected, and a
+// catalog's identity may key other caches from then on.
+func (c *Catalog) MarkShared() {
+	if c == nil {
+		return
+	}
+	c.shared = true
+	for _, action := range c.actions {
+		toolutil.ShareSchema(action.Route.InputSchema)
+		toolutil.ShareSchema(action.Route.OutputSchema)
+	}
+}
+
+// SharedOrigin returns the shared catalog this one is, or was bound from,
+// and nil for a catalog that is neither. It is the identity to key a
+// client-independent derivation on: every server of one configuration binds
+// the same shared catalog, and a catalog nobody shared has no identity worth
+// caching under.
+func (c *Catalog) SharedOrigin() *Catalog {
+	if c == nil {
+		return nil
+	}
+	if c.origin != nil {
+		return c.origin
+	}
+	if c.shared {
+		return c
+	}
+	return nil
+}
+
+// BindTo returns this catalog with every handler rebuilt for client, through
+// [toolutil.ActionRoute.BindTo]. The groups, the actions and the route
+// metadata are the same; only the handlers are new, which is the whole
+// per-credential cost of a surface built from a shared catalog. The result
+// remembers this catalog's [Catalog.SharedOrigin] as its own.
+func (c *Catalog) BindTo(client *gitlabclient.Client) *Catalog {
+	if c == nil {
+		return nil
+	}
+	bound := &Catalog{
+		groups:  make(map[string]Group, len(c.groups)),
+		actions: make(map[ActionID]Action, len(c.actions)),
+		origin:  c.SharedOrigin(),
+	}
+	for name, group := range c.groups {
+		cloned := cloneGroup(group)
+		for actionName, action := range cloned.Actions {
+			action.Route = action.Route.BindTo(client)
+			cloned.Actions[actionName] = action
+			bound.actions[action.ID] = action
+		}
+		bound.groups[name] = cloned
+	}
+	return bound
 }
 
 // CountGroups returns the number of groups in the catalog.
@@ -404,7 +501,10 @@ func (c *Catalog) CountActions() int {
 	return len(c.actions)
 }
 
-// Clone returns a defensive deep copy of the catalog.
+// Clone returns a copy of the catalog that may be added to and filtered
+// without reaching the original, sharing the route schemas as described on
+// [Catalog]. The copy is a new catalog with no shared origin: what is added
+// to it afterwards makes it a different action set.
 func (c *Catalog) Clone() *Catalog {
 	if c == nil {
 		return nil
@@ -459,6 +559,9 @@ func validateCatalogAction(group Group, action Action, seenAliases map[string]Ac
 	}
 	if action.Route.InputSchema == nil {
 		return fmt.Errorf("action %q has nil input schema", action.ID)
+	}
+	if err := toolutil.ValidateRouteBinding(action.Route); err != nil {
+		return fmt.Errorf("action %q: %w", action.ID, err)
 	}
 	if tool, actionName := toolutil.ParseMetaSchemaURI(action.SchemaURI); tool != action.ToolName || actionName != action.Name {
 		return fmt.Errorf("action %q has malformed schema URI %q", action.ID, action.SchemaURI)
@@ -575,7 +678,10 @@ func (c *Catalog) WithSafeModePreviews() *Catalog {
 		})
 		for _, action := range group.ActionsInOrder() {
 			if !action.ReadOnly {
-				action.Route.Handler = toolutil.SafeModeActionFunc(string(action.ID))
+				// Both halves of the route, so that binding the previewed
+				// catalog to a client keeps the preview: a binder left in
+				// place would rebuild the real handler.
+				action.Route = action.Route.WithBoundHandler(nil, safeModeBinder(string(action.ID)))
 				action.Route.Destructive = false
 				action.Destructive = false
 			}
@@ -584,6 +690,14 @@ func (c *Catalog) WithSafeModePreviews() *Catalog {
 		mustAddCatalogGroup(previewed, safeGroup, "apply safe mode previews")
 	}
 	return previewed
+}
+
+// safeModeBinder builds the preview handler for an action whatever client it
+// is bound to: a preview executes nothing and needs none.
+func safeModeBinder(actionID string) func(*gitlabclient.Client) toolutil.ActionFunc {
+	return func(*gitlabclient.Client) toolutil.ActionFunc {
+		return toolutil.SafeModeActionFunc(actionID)
+	}
 }
 
 // FilterAllowedToolNames returns a cloned catalog with only explicitly allowed tools.
@@ -729,13 +843,11 @@ func cloneGroup(group Group) Group {
 	return cloned
 }
 
+// cloneAction copies an action so the caller owns its slices and its
+// individual-tool and compatibility metadata, while the route keeps sharing
+// its frozen schema maps (see [Catalog]).
 func cloneAction(action Action) Action {
-	route := action.Route
-	if route.InputSchema != nil || route.OutputSchema != nil {
-		routes := toolutil.CloneMetaSchemaRoutes(map[string]toolutil.ActionMap{action.ToolName: {action.Name: route}})
-		route = routes[action.ToolName][action.Name]
-	}
-	action.Route = route
+	action.Route = toolutil.CloneActionRoute(action.Route)
 	action.IndividualTool = toolutil.CloneIndividualToolSpec(action.IndividualTool)
 	action.Compatibility = toolutil.CloneCompatibilityPolicy(action.Compatibility)
 	action.Aliases = cloneStrings(action.Aliases)

@@ -223,19 +223,19 @@ func badgeEditGuidance(actionName string, options toolutil.ActionSpecOptions) to
 // in the identifier sentence (e.g. "project"), the input-map key for the scope ID
 // (e.g. "project_id"), and the hint strings shown to the model.
 func wrapBadgeNotFound(route toolutil.ActionRoute, resource, scope, scopeKey string, hints []string) toolutil.ActionRoute {
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return badgeNotFoundOutput{
-				Resource:   resource,
-				Identifier: fmt.Sprintf("badge %v in %s %v", input["badge_id"], scope, input[scopeKey]),
-				Hints:      hints,
-			}, nil
+	return route.WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return badgeNotFoundOutput{
+					Resource:   resource,
+					Identifier: fmt.Sprintf("badge %v in %s %v", input["badge_id"], scope, input[scopeKey]),
+					Hints:      hints,
+				}, nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 func projectBadgeGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {

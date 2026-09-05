@@ -106,16 +106,15 @@ func ecosystemEnum() []any {
 // so a caller told only "not found" concludes the project is wrong and retries
 // with another one forever.
 func evaluateRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, EvaluatePackage)
-	base := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := base(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return notFoundOutput{ProjectID: projectIdentifier(input)}, nil
+	return toolutil.RouteAction(client, EvaluatePackage).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return notFoundOutput{ProjectID: projectIdentifier(input)}, nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 // projectIdentifier renders the project_id the caller passed, for the

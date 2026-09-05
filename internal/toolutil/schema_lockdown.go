@@ -37,24 +37,47 @@ import (
 // registered tools at startup, so the transformation runs inside a
 // `tools/list` middleware via [onFirstToolsList], which guards the mutation
 // with a `sync.Once`.
+//
+// Sharing. The schema a tool carries at that point is never changed in
+// place: a compiled schema is shared by every server in the process through
+// the compile cache, and a map may be shared through a catalog. The locked
+// down form is derived from it, once per process for a shared schema (see
+// [DeriveSchema]), so a thousand pooled servers list one set of maps.
 func LockdownInputSchemas(server *mcp.Server) {
 	onFirstToolsList(server, func(mcpTools []*mcp.Tool) {
 		for _, t := range mcpTools {
-			if schema := schemaMap(t.InputSchema); schema != nil {
-				normalizeSchemaDescriptions(schema)
-				lockdownSchemaNode(schema)
-				t.InputSchema = schema
-			}
+			t.InputSchema = lockedDownSchema(t.InputSchema)
 		}
 	})
 }
 
-func schemaMap(schema any) map[string]any {
+// lockedDownSchema returns the locked down form of schema, or schema itself
+// when it is nil or cannot be rendered as a map.
+func lockedDownSchema(schema any) any {
+	if schema == nil {
+		return nil
+	}
+	return DeriveSchema(schema, "lockdown", func() any {
+		copied := schemaMapCopy(schema)
+		if copied == nil {
+			return schema
+		}
+		normalizeSchemaDescriptions(copied)
+		lockdownSchemaNode(copied)
+		return copied
+	})
+}
+
+// schemaMapCopy returns a map the caller owns holding the content of schema:
+// a deep copy of a map, or a round trip through JSON for any other value,
+// such as a compiled *jsonschema.Schema. Nil when the value cannot be
+// rendered as a JSON object.
+func schemaMapCopy(schema any) map[string]any {
 	if schema == nil {
 		return nil
 	}
 	if typed, ok := schema.(map[string]any); ok {
-		return typed
+		return cloneSchemaMap(typed)
 	}
 	data, err := json.Marshal(schema)
 	if err != nil {

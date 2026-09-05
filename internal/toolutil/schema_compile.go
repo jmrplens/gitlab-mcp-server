@@ -54,6 +54,11 @@ func compiledSchema(key string, schema map[string]any) any {
 	if json.Unmarshal(data, compiled) != nil {
 		return schema
 	}
-	actual, _ := compiledSchemaCache.LoadOrStore(key, compiled)
+	actual, loaded := compiledSchemaCache.LoadOrStore(key, compiled)
+	if !loaded {
+		// Cached for the process, hence shared: the tools/list middlewares
+		// derive their rewrites of it once and serve them to every server.
+		ShareSchema(actual)
+	}
 	return actual
 }

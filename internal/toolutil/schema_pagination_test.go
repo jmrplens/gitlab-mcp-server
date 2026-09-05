@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -13,6 +14,36 @@ import (
 // call with a nil server.
 func TestEnrichPaginationConstraints_NilServer(t *testing.T) {
 	EnrichPaginationConstraints(nil)
+}
+
+// TestPaginationEnrichedSchema_SharesDerivationsAndKeepsWhatItCannotRender
+// verifies the derivation behind the middleware: nil stays nil, a value that
+// cannot be rendered as a JSON object is returned as it is, and a shared
+// compiled schema is enriched once and served to every server unchanged.
+func TestPaginationEnrichedSchema_SharesDerivationsAndKeepsWhatItCannotRender(t *testing.T) {
+	t.Parallel()
+
+	if got := paginationEnrichedSchema(nil); got != nil {
+		t.Errorf("paginationEnrichedSchema(nil) = %#v, want nil", got)
+	}
+	if got := paginationEnrichedSchema(func() {}); got == nil {
+		t.Error("paginationEnrichedSchema(func) = nil, want the input kept")
+	}
+
+	compiled := &jsonschema.Schema{Type: "object", Properties: map[string]*jsonschema.Schema{"page": {Type: "integer"}}}
+	ShareSchema(compiled)
+	first, _ := paginationEnrichedSchema(compiled).(map[string]any)
+	second, _ := paginationEnrichedSchema(compiled).(map[string]any)
+	if first == nil || !sameMap(first, second) {
+		t.Fatalf("paginationEnrichedSchema(shared compiled) = %#v then %#v, want one shared map", first, second)
+	}
+	page, _ := first["properties"].(map[string]any)["page"].(map[string]any)
+	if page["minimum"] != float64(1) {
+		t.Errorf("enriched page = %#v, want minimum 1", page)
+	}
+	if compiled.Properties["page"].Minimum != nil {
+		t.Error("the shared compiled schema was changed in place")
+	}
 }
 
 // TestEnrichPaginationConstraints_AddsBounds verifies that page and per_page

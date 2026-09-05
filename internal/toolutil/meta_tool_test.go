@@ -4424,8 +4424,8 @@ func TestMakeMetaHandler_HandlerError_Propagated(t *testing.T) {
 
 // TestMetaSchemaCompileKey_NonOpaqueMode_ReturnsEmpty verifies that schema
 // compile caching is disabled (empty key) outside the default opaque
-// META_PARAM_SCHEMA mode, where compact/full schemas have no cheap stable
-// identity.
+// META_PARAM_SCHEMA mode: compiling a compact or full envelope would change
+// what it serializes to, so those modes are shared as maps instead.
 func TestMetaSchemaCompileKey_NonOpaqueMode_ReturnsEmpty(t *testing.T) {
 	restore := SetMetaParamSchemaModeScoped(MetaParamSchemaCompact)
 	defer restore()
@@ -4435,6 +4435,91 @@ func TestMetaSchemaCompileKey_NonOpaqueMode_ReturnsEmpty(t *testing.T) {
 	}
 	if key := metaSchemaCompileKey("gitlab_test", routes); key != "" {
 		t.Errorf("metaSchemaCompileKey(compact mode) = %q, want empty", key)
+	}
+}
+
+// TestMetaEnvelopeKey_NamesSharedSchemasByIdentity verifies the key a compact
+// or full envelope is shared under: a routes map whose schemas are all shared
+// (or absent) is named by mode, action and schema identity, and one carrying
+// any schema nobody shared has no durable key.
+func TestMetaEnvelopeKey_NamesSharedSchemasByIdentity(t *testing.T) {
+	noop := func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{}, nil }
+	shared := map[string]any{"type": "object"}
+	ShareSchema(shared)
+	identity, _ := SharedSchemaIdentity(shared)
+	private := map[string]any{"type": "object"}
+
+	cases := []struct {
+		name   string
+		routes ActionMap
+		want   string
+		wantOK bool
+	}{
+		{
+			name:   "absent schemas are cacheable",
+			routes: ActionMap{"list": Route(noop)},
+			want:   "meta|full|list=nil",
+			wantOK: true,
+		},
+		{
+			name:   "shared schemas are named by identity",
+			routes: ActionMap{"list": Route(noop), "get": {Handler: noop, InputSchema: shared}},
+			want:   "meta|full|get=" + identity + "|list=nil",
+			wantOK: true,
+		},
+		{
+			name:   "a private schema has no durable key",
+			routes: ActionMap{"get": {Handler: noop, InputSchema: shared}, "create": {Handler: noop, InputSchema: private}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			key, ok := metaEnvelopeKey(tc.routes, MetaParamSchemaFull)
+			if key != tc.want || ok != tc.wantOK {
+				t.Errorf("metaEnvelopeKey() = %q, %t, want %q, %t", key, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestMetaToolSchema_NonOpaqueMode_SharesTheEnvelope verifies a compact or
+// full envelope over shared schemas is built once and served to every caller
+// as one shared map, while an envelope over a private schema is built per
+// call and shared with nobody, and the opaque envelope is always fresh since
+// it is compiled and cached by name downstream.
+func TestMetaToolSchema_NonOpaqueMode_SharesTheEnvelope(t *testing.T) {
+	noop := func(_ context.Context, _ map[string]any) (any, error) { return map[string]any{}, nil }
+	shared := map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}}}
+	ShareSchema(shared)
+	sharedRoutes := ActionMap{"get": {Handler: noop, InputSchema: shared}}
+	privateRoutes := ActionMap{"get": {Handler: noop, InputSchema: map[string]any{"type": "object"}}}
+
+	for _, mode := range []string{MetaParamSchemaCompact, MetaParamSchemaFull} {
+		t.Run(mode, func(t *testing.T) {
+			restore := SetMetaParamSchemaModeScoped(mode)
+			defer restore()
+
+			first := MetaToolSchema(sharedRoutes)
+			second := MetaToolSchema(sharedRoutes)
+			if !sameMap(first, second) {
+				t.Error("MetaToolSchema(shared routes) built two envelopes, want one shared")
+			}
+			if !SchemaShared(first) {
+				t.Error("the shared envelope was not registered as shared")
+			}
+			if want := BuildMetaToolSchema(sharedRoutes, mode); !reflect.DeepEqual(first, want) {
+				t.Errorf("shared envelope = %#v, want the envelope BuildMetaToolSchema builds", first)
+			}
+			if sameMap(MetaToolSchema(privateRoutes), MetaToolSchema(privateRoutes)) {
+				t.Error("MetaToolSchema(private routes) shared an envelope nobody registered")
+			}
+		})
+	}
+
+	restore := SetMetaParamSchemaModeScoped(MetaParamSchemaOpaque)
+	defer restore()
+	if sameMap(MetaToolSchema(sharedRoutes), MetaToolSchema(sharedRoutes)) {
+		t.Error("MetaToolSchema(opaque) shared an envelope, want a fresh one for the compile cache")
 	}
 }
 
@@ -5187,5 +5272,128 @@ func TestMakeMetaHandler_HandlerErrorDoesNotReflectUpstreamResponseBody(t *testi
 	}
 	if !errors.As(err, new(*gl.ErrorResponse)) {
 		t.Errorf("dispatcher error = %q, want the GitLab response still reachable through errors.As", got)
+	}
+}
+
+// TestActionRouteBindTo_RebuildsTheHandlerForAnotherClient verifies the seam
+// a shared catalog rebinds through: a typed route bound to one client runs
+// under another after BindTo, the original route is untouched, and a route
+// with no binder is returned as it is.
+func TestActionRouteBindTo_RebuildsTheHandlerForAnotherClient(t *testing.T) {
+	t.Parallel()
+
+	clientA, clientB := &gitlabclient.Client{}, &gitlabclient.Client{}
+	var seen *gitlabclient.Client
+	record := func(_ context.Context, client *gitlabclient.Client, _ testInput) (string, error) {
+		seen = client
+		return "ok", nil
+	}
+	route := RouteAction(clientA, record)
+	if _, err := route.Handler(context.Background(), map[string]any{}); err != nil || seen != clientA {
+		t.Fatalf("original handler ran under %p with error %v, want client A %p", seen, err, clientA)
+	}
+	bound := route.BindTo(clientB)
+	if _, err := bound.Handler(context.Background(), map[string]any{}); err != nil || seen != clientB {
+		t.Fatalf("rebound handler ran under %p with error %v, want client B %p", seen, err, clientB)
+	}
+	if _, err := route.Handler(context.Background(), map[string]any{}); err != nil || seen != clientA {
+		t.Fatalf("BindTo changed the original route: it ran under %p", seen)
+	}
+	if !sameMap(bound.InputSchema, route.InputSchema) || !sameMap(bound.OutputSchema, route.OutputSchema) {
+		t.Fatal("BindTo copied the route's schemas, want them shared")
+	}
+
+	plain := Route(func(context.Context, map[string]any) (any, error) { return "plain", nil })
+	if unchanged := plain.BindTo(clientB); unchanged.Bind != nil || funcIdentity(unchanged.Handler) != funcIdentity(plain.Handler) {
+		t.Fatal("BindTo on a route without a binder did not return it unchanged")
+	}
+}
+
+// TestActionRouteWrapHandler_KeepsTheDecorationAcrossRebinding verifies a
+// decoration applied through WrapHandler survives BindTo, which is what the
+// domains' not-found wrappers rely on, and that a route without a binder is
+// wrapped in place with its binder left nil.
+func TestActionRouteWrapHandler_KeepsTheDecorationAcrossRebinding(t *testing.T) {
+	t.Parallel()
+
+	clientA, clientB := &gitlabclient.Client{}, &gitlabclient.Client{}
+	var seen *gitlabclient.Client
+	record := func(_ context.Context, client *gitlabclient.Client, _ testInput) (string, error) {
+		seen = client
+		return "ok", nil
+	}
+	decorate := func(next ActionFunc) ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			return fmt.Sprintf("decorated %v", result), err
+		}
+	}
+	wrapped := RouteAction(clientA, record).WrapHandler(decorate)
+	if result, err := wrapped.Handler(context.Background(), map[string]any{}); err != nil || result != "decorated ok" || seen != clientA {
+		t.Fatalf("wrapped handler = %v, %v under %p, want the decoration under client A", result, err, seen)
+	}
+	rebound := wrapped.BindTo(clientB)
+	if result, err := rebound.Handler(context.Background(), map[string]any{}); err != nil || result != "decorated ok" || seen != clientB {
+		t.Fatalf("rebound wrapped handler = %v, %v under %p, want the decoration kept under client B", result, err, seen)
+	}
+	if err := ValidateRouteBinding(rebound); err != nil {
+		t.Fatalf("ValidateRouteBinding(rebound wrapped route) = %v, want nil", err)
+	}
+
+	plain := Route(func(context.Context, map[string]any) (any, error) { return "plain", nil }).WrapHandler(decorate)
+	if plain.Bind != nil {
+		t.Fatal("WrapHandler invented a binder for a route that had none")
+	}
+	if result, _ := plain.Handler(context.Background(), nil); result != "decorated plain" {
+		t.Fatalf("wrapped plain handler = %v, want the decoration", result)
+	}
+}
+
+// TestValidateRouteBinding_RefusesAReplacedHandler verifies the guard: a
+// route whose handler was assigned directly, after the constructor set it
+// with a binder, is refused, while intact routes, routes with no binder and
+// routes with no handler pass.
+func TestValidateRouteBinding_RefusesAReplacedHandler(t *testing.T) {
+	t.Parallel()
+
+	record := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (string, error) { return "ok", nil }
+	intact := RouteAction(nil, record)
+	replaced := intact
+	replaced.Handler = func(context.Context, map[string]any) (any, error) { return "replaced", nil }
+	cases := []struct {
+		name    string
+		route   ActionRoute
+		wantErr bool
+	}{
+		{name: "intact typed route", route: intact},
+		{name: "route with no binder", route: Route(func(context.Context, map[string]any) (any, error) { return "plain", nil })},
+		{name: "binder but no handler", route: ActionRoute{Bind: intact.Bind}},
+		{name: "handler replaced directly", route: replaced, wantErr: true},
+		{name: "handler rebound through the helper", route: intact.WithBoundHandler(nil, intact.Bind)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateRouteBinding(tc.route)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ValidateRouteBinding() = %v, want error %t", err, tc.wantErr)
+			}
+			if tc.wantErr && !strings.Contains(err.Error(), "WrapHandler") {
+				t.Errorf("error = %q, want it to name the helpers to use", err)
+			}
+		})
+	}
+	if funcIdentity(nil) != 0 {
+		t.Error("funcIdentity(nil) != 0")
+	}
+}
+
+// TestMetaParamSchemaMode_ReportsTheSelectedMode verifies the reader of the
+// package-level mode follows the scoped setter.
+func TestMetaParamSchemaMode_ReportsTheSelectedMode(t *testing.T) {
+	restore := SetMetaParamSchemaModeScoped(MetaParamSchemaFull)
+	defer restore()
+	if got := MetaParamSchemaMode(); got != MetaParamSchemaFull {
+		t.Errorf("MetaParamSchemaMode() = %q, want %q", got, MetaParamSchemaFull)
 	}
 }

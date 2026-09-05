@@ -2,7 +2,9 @@ package toolutil
 
 import (
 	"context"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -512,4 +514,56 @@ func optionalBoolString(value *bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+// TestTypeIdentity_NamesTypesByPackagePath verifies the transform-name
+// component for a type carries the package path, and that a nil type is
+// named by the empty string rather than a panic.
+func TestTypeIdentity_NamesTypesByPackagePath(t *testing.T) {
+	t.Parallel()
+
+	if got := TypeIdentity(nil); got != "" {
+		t.Errorf("TypeIdentity(nil) = %q, want empty", got)
+	}
+	got := TypeIdentity(reflect.TypeFor[testInput]())
+	if !strings.HasPrefix(got, "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil.") || !strings.HasSuffix(got, "toolutil.testInput") {
+		t.Errorf("TypeIdentity(testInput) = %q, want the package path and the type", got)
+	}
+}
+
+// TestIndividualInputSchema_SharedRouteDerivesOnce verifies the individual
+// projection derives one locked-down schema per shared route and serves it
+// to every server, and that a route over a private schema keeps a private
+// derivation; a route with no input type keeps the required list it has.
+func TestIndividualInputSchema_SharedRouteDerivesOnce(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{
+		"type":       "object",
+		"required":   []string{"name"},
+		"properties": map[string]any{"name": map[string]any{"type": "string"}},
+	}
+	ShareSchema(schema)
+	route := ActionRoute{InputSchema: schema, Destructive: true}
+	first := individualInputSchema(route)
+	if !sameMap(first, individualInputSchema(route)) {
+		t.Fatal("individualInputSchema(shared route) built two schemas, want one")
+	}
+	if first["additionalProperties"] != false {
+		t.Errorf("derived schema = %#v, want the lockdown applied", first)
+	}
+	if _, ok := first["properties"].(map[string]any)["confirm"]; !ok {
+		t.Errorf("derived schema = %#v, want the destructive confirm property", first)
+	}
+	if required, _ := first["required"].([]string); len(required) != 1 || required[0] != "name" {
+		t.Errorf("derived required = %v, want the route's own list kept when there is no input type", first["required"])
+	}
+	if _, mutated := schema["additionalProperties"]; mutated {
+		t.Fatal("the shared route schema was locked down in place")
+	}
+
+	private := ActionRoute{InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}}
+	if sameMap(individualInputSchema(private), individualInputSchema(private)) {
+		t.Fatal("individualInputSchema(private route) shared a schema nobody registered")
+	}
 }

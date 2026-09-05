@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -143,16 +144,19 @@ type ActionSpecOptions struct {
 }
 
 // NewActionSpec creates a defensive canonical action specification.
+//
+// The route's input schema is not changed in place: the overrides and the
+// canonical enums, formats and ranges are applied to a derived schema, built
+// once per process for a shared input (see [DeriveSchema]) and privately
+// otherwise. The transform is idempotent, so a spec cloned through this
+// constructor keeps the schema it already had.
 func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
-	route = cloneActionRoute(route)
+	route = CloneActionRoute(route)
 	if opts.Destructive {
 		route.Destructive = true
 	}
 	inputSchemaOverrides := cloneInputSchemaOverrides(opts.InputSchemaOverrides)
-	applyInputSchemaOverrides(route.InputSchema, inputSchemaOverrides)
-	applyCanonicalParamEnums(route.InputSchema)
-	applyCanonicalParamFormats(route.InputSchema)
-	applyCanonicalParamRanges(route.InputSchema)
+	route.InputSchema = specInputSchema(route.InputSchema, inputSchemaOverrides)
 	return ActionSpec{
 		Name:                   strings.TrimSpace(name),
 		Route:                  route,
@@ -179,6 +183,43 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 		SchemaValidationNotes:  normalizeActionSpecNotes(opts.SchemaValidationNotes),
 		RuntimeValidationNotes: normalizeActionSpecNotes(opts.RuntimeValidationNotes),
 	}
+}
+
+// specInputSchema returns schema with overrides and the canonical parameter
+// enums, formats and ranges applied. The overrides are part of the transform
+// name because they are part of the result: two specs over one type with
+// different overrides must not share a schema.
+func specInputSchema(schema map[string]any, overrides []InputSchemaOverride) map[string]any {
+	derived := DeriveSchema(schema, "spec|"+inputSchemaOverridesKey(overrides), func() any {
+		out := schema
+		if out != nil {
+			out = cloneSchemaMap(out)
+		}
+		applyInputSchemaOverrides(out, overrides)
+		applyCanonicalParamEnums(out)
+		applyCanonicalParamFormats(out)
+		applyCanonicalParamRanges(out)
+		return out
+	})
+	out, _ := derived.(map[string]any)
+	return out
+}
+
+// inputSchemaOverridesKey renders overrides deterministically for a transform
+// name. JSON is deterministic here because map keys are sorted by the
+// encoder, and the values are plain JSON Schema fragments.
+func inputSchemaOverridesKey(overrides []InputSchemaOverride) string {
+	if len(overrides) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(overrides)
+	if err != nil {
+		// Unreachable for JSON Schema fragments, which is what the values
+		// are; fall back to a name that never matches so the schema is
+		// derived privately rather than shared under a wrong key.
+		return fmt.Sprintf("unencodable:%p", overrides)
+	}
+	return string(data)
 }
 
 // NewReadActionSpec creates a read-only, idempotent action specification.
@@ -553,7 +594,7 @@ func ActionSpecsToMapWithError(specs []ActionSpec) (ActionMap, error) {
 			errs = append(errs, err)
 			continue
 		}
-		route := cloneActionRoute(spec.Route)
+		route := CloneActionRoute(spec.Route)
 		route.Aliases = mergeActionSpecStrings(route.Aliases, spec.Aliases)
 		route.Tags = mergeActionSpecStrings(route.Tags, spec.Tags)
 		route.Usage = firstNonEmptyString(spec.Usage, route.Usage)
@@ -572,11 +613,6 @@ func actionSpecCanonicalNames(specs []ActionSpec) map[string]struct{} {
 		}
 	}
 	return names
-}
-
-func cloneActionRoute(route ActionRoute) ActionRoute {
-	routes := CloneMetaSchemaRoutes(map[string]ActionMap{"_": {"_": route}})
-	return routes["_"]["_"]
 }
 
 func mergeActionSpecGuidance(routeGuidance, specGuidance map[string]ParameterGuidance) map[string]ParameterGuidance {
