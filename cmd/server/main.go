@@ -2129,12 +2129,12 @@ func shutdownHTTPServer(ctx context.Context, httpServer *http.Server) error {
 	slog.WarnContext(ctx,
 		"HTTP drain budget exhausted, closing the connections that did not finish",
 		"budget", budget)
-	// Shutdown has already closed the listeners, so Close finds them closed
-	// and says so. That is expected here and says nothing about the
-	// connections, which are what this call is for.
-	if closeErr := httpServer.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
-		return fmt.Errorf("http server close after drain budget: %w", closeErr)
-	}
+	// Close has no error left to report: its only error source is closing
+	// the tracked listeners, and Shutdown waited for every Serve loop to
+	// return before it came back, which is where each loop untracks its
+	// listener. What remains is the connections, and closing those reports
+	// nothing.
+	_ = httpServer.Close()
 	return nil
 }
 
@@ -3066,9 +3066,6 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// handed the bearer token — which is what made a free-form GITLAB-URL
 	// header unacceptable in oauth mode in the first place.
 	resolveInstance := func(r *http.Request) (string, error) {
-		if r == nil {
-			return cfg.GitLabURL, nil
-		}
 		// Ahead of the resolver for the message, not for the decision: the
 		// resolver refuses an absent header on a multi-instance deployment
 		// too, and this gate turns the same refusal into the wording each
@@ -3185,9 +3182,15 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 	mountMCPEndpoint(cfg, mux, gate.middleware(mcpHandler))
 }
 
+// periodicCleanupInterval is how often the expiring caches (token identities,
+// rejected tokens, failure budgets) are swept. A var only so a test can make
+// the tick arrive; nothing at runtime writes it.
+var periodicCleanupInterval = 5 * time.Minute //nolint:gochecknoglobals // test seam
+
+// startPeriodicCleanup runs cleanup on every tick until ctx ends.
 func startPeriodicCleanup(ctx context.Context, cleanup func()) {
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(periodicCleanupInterval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -4283,6 +4286,8 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 
+	// EffectiveToolSurface answers one of exactly these three, so there is no
+	// fourth case to refuse.
 	switch config.EffectiveToolSurface(true, toolSurface) {
 	case config.ToolSurfaceMeta:
 		if err := gitlabtools.RegisterAllMeta(server, nil, tier); err != nil {
@@ -4296,8 +4301,6 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 			return err
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-	default:
-		return fmt.Errorf("unsupported tool surface for search: %q", toolSurface)
 	}
 
 	st, ct := mcp.NewInMemoryTransports()

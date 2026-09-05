@@ -10,11 +10,19 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"io"
 	"log/slog"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +30,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,11 +44,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -699,6 +710,145 @@ func TestServeStdio_ContextCancelled(t *testing.T) {
 	// stdio mode with canceled context should return an error or nil
 	// (either is acceptable — we just verify it doesn't hang)
 	_ = err
+}
+
+// acceptFailingListener is a bound listener whose accept loop fails outright,
+// standing in for a socket the kernel stopped serving under the process.
+type acceptFailingListener struct {
+	net.Listener
+	err error
+}
+
+func (l *acceptFailingListener) Accept() (net.Conn, error) { return nil, l.err }
+
+// TestServeHTTPOn_TheServeLoopFails_IsReportedAsAServerError covers the other
+// way serving ends: not a shutdown but the accept loop returning an error of
+// its own, which is a failure the process must exit non-zero over rather than
+// a stop it should describe as clean.
+func TestServeHTTPOn_TheServeLoopFails_IsReportedAsAServerError(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	bound, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	listener := &acceptFailingListener{Listener: bound, err: errors.New("accept: socket is not connected")}
+
+	serveErr := serveHTTPOn(t.Context(), statelessTestConfig(gitlab.URL, false), bound.Addr().String(), listener, defaultHTTPIdleTimeout)
+
+	if serveErr == nil || !errors.Is(serveErr, listener.err) || !strings.Contains(serveErr.Error(), "mcp server error (http)") {
+		t.Errorf("serveHTTPOn() = %v, want the accept failure wrapped as a server error", serveErr)
+	}
+}
+
+// selfSignedTLSPair mints a certificate for the loopback address and writes
+// it and its key as the PEM pair --tls-cert and --tls-key expect, returning
+// both paths and the parsed certificate so a client can trust exactly it.
+func selfSignedTLSPair(t *testing.T) (certPath, keyPath string, cert *x509.Certificate) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "gitlab-mcp-server test"},
+		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1)},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err = x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	certPath = filepath.Join(dir, "cert.pem")
+	keyPath = filepath.Join(dir, "key.pem")
+	if writeErr := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if writeErr := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	return certPath, keyPath, cert
+}
+
+// TestServeHTTPOn_WithATLSPair_ServesHTTPS covers the listener terminating
+// TLS itself: the pair the operator configured is what the server presents,
+// under the floor the code states, and the plain-HTTP path is not taken.
+func TestServeHTTPOn_WithATLSPair_ServesHTTPS(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	certPath, keyPath, cert := selfSignedTLSPair(t)
+	cfg := statelessTestConfig(gitlab.URL, false)
+	cfg.TLSCertFile, cfg.TLSKeyFile = certPath, keyPath
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
+	}()
+
+	roots := x509.NewCertPool()
+	roots.AddCert(cert)
+	client := &http.Client{
+		Timeout:   testHTTPLivenessTimeout,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}},
+	}
+	t.Cleanup(client.CloseIdleConnections)
+
+	var resp *http.Response
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	for {
+		select {
+		case serveErr := <-errCh:
+			t.Fatalf("serveHTTPOn exited before answering: %v", serveErr)
+		default:
+		}
+		req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://"+addr+"/health", nil)
+		if reqErr != nil {
+			t.Fatalf("build request: %v", reqErr)
+		}
+		resp, err = client.Do(req)
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the TLS listener never answered: %v", err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("/health over TLS = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if resp.TLS == nil || resp.TLS.Version < tls.VersionTLS12 {
+		t.Errorf("response TLS state = %+v, want a handshake at TLS 1.2 or above", resp.TLS)
+	}
+
+	cancel()
+	select {
+	case serveErr := <-errCh:
+		if serveErr != nil {
+			t.Fatalf("serveHTTPOn() = %v, want a clean stop", serveErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("the TLS server did not shut down in time")
+	}
 }
 
 // TestServeHTTP_PortConflict verifies that [serveHTTP] returns an error
@@ -2231,6 +2381,291 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	})
 }
 
+// TestNewDepthLimitedBody_ADisabledLimit_PassesTheBodyThrough pins that a
+// zero or negative ceiling means no wrapper at all rather than a wrapper that
+// refuses everything, and that a body already refused keeps refusing on every
+// later read instead of handing the decoder the rest of a document it was
+// told not to have.
+func TestNewDepthLimitedBody_ADisabledLimit_PassesTheBodyThrough(t *testing.T) {
+	t.Parallel()
+
+	body := io.NopCloser(strings.NewReader(`{"a":[[[1]]]}`))
+	for _, limit := range []int{0, -1} {
+		t.Run(strconv.Itoa(limit), func(t *testing.T) {
+			t.Parallel()
+			if got := newDepthLimitedBody(body, limit); got != body {
+				t.Errorf("newDepthLimitedBody(limit=%d) wrapped the body, want it returned unchanged", limit)
+			}
+		})
+	}
+
+	limited := newDepthLimitedBody(io.NopCloser(strings.NewReader(`[[[[1]]]]`)), 2)
+	buf := make([]byte, 64)
+	if _, err := limited.Read(buf); err == nil {
+		t.Fatal("a body nested past the ceiling was read without a refusal")
+	}
+	if _, err := limited.Read(buf); err == nil || !strings.Contains(err.Error(), "deeper than 2 levels") {
+		t.Errorf("a second read after the refusal returned %v, want the same refusal", err)
+	}
+	if closeErr := limited.Close(); closeErr != nil {
+		t.Errorf("Close() = %v, want nil", closeErr)
+	}
+}
+
+// TestTransportFailureBudget_ExistsOnlyWithATrustedHeader pins the shape the
+// gates rely on: without a trusted proxy header the primary key is already the
+// transport source, so a second budget over the same string would only halve
+// it, and nil is what "no second budget" looks like.
+func TestTransportFailureBudget_ExistsOnlyWithATrustedHeader(t *testing.T) {
+	t.Parallel()
+	if budget := transportFailureBudget("  "); budget != nil {
+		t.Errorf("transportFailureBudget(blank) = %+v, want nil", budget)
+	}
+	budget := transportFailureBudget("X-Forwarded-For")
+	if budget == nil || budget.rateLimiter() == nil {
+		t.Fatal("transportFailureBudget(header) = nil, want a budget with a limiter behind it")
+	}
+}
+
+// TestWriteUnsupportedProtocolVersion_LogsAResponseTheClientNeverReceived
+// covers the write failing under the refusal, where the status is already on
+// the wire and the log line is the only trace of what was lost.
+func TestWriteUnsupportedProtocolVersion_LogsAResponseTheClientNeverReceived(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
+	rec := httptest.NewRecorder()
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader(`{"id":3}`))
+
+	writeUnsupportedProtocolVersion(brokenResponseWriter{rec}, r, []string{"2025-11-25"}, "1999-01-01")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d committed before the body failed", rec.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(logged.String(), "failed to write unsupported-protocol-version response") {
+		t.Errorf("log = %q, want the lost response reported", logged.String())
+	}
+}
+
+// TestStartPeriodicCleanup_RunsOnEveryTickUntilTheContextEnds covers the
+// sweep loop itself, which at its production interval of five minutes no test
+// would ever see tick: the cleanup runs on each tick and stops running once
+// the context ends.
+func TestStartPeriodicCleanup_RunsOnEveryTickUntilTheContextEnds(t *testing.T) {
+	restore := periodicCleanupInterval
+	periodicCleanupInterval = time.Millisecond
+	t.Cleanup(func() { periodicCleanupInterval = restore })
+
+	var ticks atomic.Int64
+	ctx, cancel := context.WithCancel(t.Context())
+	startPeriodicCleanup(ctx, func() { ticks.Add(1) })
+
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	for ticks.Load() < 3 {
+		if time.Now().After(deadline) {
+			t.Fatalf("cleanup ran %d time(s) at a 1ms interval, want at least 3", ticks.Load())
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+
+	// Once the loop has noticed the cancellation the count stops moving.
+	var settled int64
+	for range 50 {
+		settled = ticks.Load()
+		time.Sleep(5 * time.Millisecond)
+		if ticks.Load() == settled {
+			return
+		}
+	}
+	t.Error("cleanup kept running after its context ended")
+}
+
+// TestStartPooledRegistration_WithNothingPending_StartsNothing covers the two
+// ways the post-insert hook finds no work: a server nobody recorded a shell
+// for, which is what a second hook call for the same server sees, and a
+// recorded value that is not a shell at all. Neither may start a goroutine
+// or evict anything.
+func TestStartPooledRegistration_WithNothingPending_StartsNothing(t *testing.T) {
+	t.Parallel()
+
+	srv := mcp.NewServer(&mcp.Implementation{Name: "pooled", Version: "0"}, nil)
+	var pending sync.Map
+	var evicted atomic.Int64
+	evict := func() { evicted.Add(1) }
+
+	startPooledRegistration(t.Context(), &pending, srv, evict)
+
+	pending.Store(srv, "not a shell")
+	startPooledRegistration(t.Context(), &pending, srv, evict)
+	if _, still := pending.Load(srv); still {
+		t.Error("an entry that is not a shell was left in the map; the next hook would find it again")
+	}
+	if evicted.Load() != 0 {
+		t.Errorf("evict ran %d time(s) with nothing to register", evicted.Load())
+	}
+}
+
+// TestPrepareStdioCatalog_ResolvesWhatStartupNeedsBeforeOpeningTheGate covers
+// the stdio startup work against a reachable GitLab, which the main-level test
+// cannot see because its client closes the pipe before the first request
+// returns: the identity is published, the tier is detected rather than
+// pinned, and the gate opens only once the catalog is registered. The second
+// case is an instance that answers the version and refuses the user lookup,
+// which still verifies the connection and starts without an identity.
+func TestPrepareStdioCatalog_ResolvesWhatStartupNeedsBeforeOpeningTheGate(t *testing.T) {
+	cases := []struct {
+		name         string
+		userStatus   int
+		wantIdentity bool
+	}{
+		{name: "the user is resolved", userStatus: http.StatusOK, wantIdentity: true},
+		{name: "the user lookup fails", userStatus: http.StatusInternalServerError, wantIdentity: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gitlab := stdioStartupGitLab(t, tc.userStatus)
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				DisableRetries: true,
+			}
+			client, err := gitlabclient.NewClient(cfg)
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			serverCfg := cfg.ServerConfig()
+			shell, err := newServerShell(t.Context(), client, serverCfg, withTransport(mcpotel.TransportPipe))
+			if err != nil {
+				t.Fatalf("newServerShell: %v", err)
+			}
+			identity := &deferredIdentity{}
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, identity); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+
+			if !shell.gate.isReady() {
+				t.Error("the readiness gate is still shut after the catalog was registered")
+			}
+			if serverCfg.Tier != edition.Free {
+				t.Errorf("tier = %s, want free detected from an instance with no license endpoint", serverCfg.Tier)
+			}
+			assertStartupIdentity(t, identity.resolved.Load(), tc.wantIdentity)
+		})
+	}
+}
+
+// stdioStartupGitLab answers the two requests stdio startup makes, with the
+// user lookup answering the given status.
+func stdioStartupGitLab(t *testing.T, userStatus int) *httptest.Server {
+	t.Helper()
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.0.0","revision":"abc"}`)
+		case "/api/v4/user":
+			if userStatus != http.StatusOK {
+				http.Error(w, `{"message":"boom"}`, userStatus)
+				return
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	return gitlab
+}
+
+// assertStartupIdentity checks what stdio startup published about the caller.
+func assertStartupIdentity(t *testing.T, resolved *toolutil.UserIdentity, want bool) {
+	t.Helper()
+	if want && (resolved == nil || resolved.UserID != "42" || resolved.Username != "testuser") {
+		t.Errorf("identity = %+v, want user 42 testuser", resolved)
+	}
+	if !want && resolved != nil {
+		t.Errorf("identity = %+v, want none when the user lookup failed", resolved)
+	}
+}
+
+// TestNewServerShell_RateLimitAndProgressNotifications covers two pieces of
+// the shell the ordinary tests leave alone: the tools/call rate limit, which
+// is attached only when a positive rate is configured and says so, and the
+// handler for a client's own progress notifications, which this server only
+// logs, because nothing a client reports about its progress changes what the
+// server does.
+func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+	client := newMockGitLabClient(t)
+	shell, err := newServerShell(t.Context(), client, &config.ServerConfig{
+		ToolSurface:    config.ToolSurfaceDynamic,
+		RateLimitRPS:   5,
+		RateLimitBurst: 1,
+	})
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	if !strings.Contains(logged.String(), "tools/call rate limit enabled") {
+		t.Errorf("log = %q, want the rate limit announced", logged.String())
+	}
+
+	session := newInMemorySession(t, shell.server)
+	if notifyErr := session.NotifyProgress(t.Context(), &mcp.ProgressNotificationParams{ProgressToken: "upload-1", Progress: 0.5, Message: "halfway"}); notifyErr != nil {
+		t.Fatalf("NotifyProgress: %v", notifyErr)
+	}
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	for !strings.Contains(logged.String(), "received progress notification from client") {
+		if time.Now().After(deadline) {
+			t.Fatalf("log = %q, want the client's progress notification recorded", logged.String())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestRegisterConfiguredToolSurfaceWithCatalog_IndividualPrebuilt_ReportsExclusions
+// covers the individual surface handed a catalog it did not build, which is
+// how the tests reach it: the exclusions are resolved against that catalog,
+// since it is the only one available, and reported the same way the other
+// two surfaces report theirs.
+func TestRegisterConfiguredToolSurfaceWithCatalog_IndividualPrebuilt_ReportsExclusions(t *testing.T) {
+	client := newMockGitLabClient(t)
+	cfg := &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, ExcludeTools: []string{"issue.list"}}
+	prebuilt, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog: %v", err)
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "individual", Version: "0"}, nil)
+
+	registration, err := registerConfiguredToolSurfaceWithCatalog(server, client, cfg, config.ToolSurfaceIndividual, prebuilt)
+	if err != nil {
+		t.Fatalf("registerConfiguredToolSurfaceWithCatalog: %v", err)
+	}
+	if registration.surfaceCatalog != prebuilt {
+		t.Error("the registration did not keep the catalog it was handed")
+	}
+	if !slices.Contains(registration.excludedActions, "issue.list") {
+		t.Errorf("excludedActions = %v, want issue.list resolved against the supplied catalog", registration.excludedActions)
+	}
+}
+
+// TestDoToolSearch_NoMatches_SaysSo covers the search answering nothing: a
+// script grepping the output has to be able to tell "no tool matches" from an
+// empty listing, so the answer is a sentence naming the query rather than
+// silence.
+func TestDoToolSearch_NoMatches_SaysSo(t *testing.T) {
+	stdout := captureStdout(t)
+
+	if err := doToolSearch("zzzz-nothing-is-called-this", config.ToolSurfaceDynamic, edition.Free); err != nil {
+		t.Fatalf("doToolSearch: %v", err)
+	}
+
+	if out := stdout(); !strings.Contains(out, `No tools found matching "zzzz-nothing-is-called-this"`) {
+		t.Errorf("stdout = %q, want the no-match sentence naming the query", out)
+	}
+}
+
 // TestRunStdio_PingSucceeds verifies the success path for Ping in runStdio,
 // where the GitLab mock returns a valid version response.
 func TestRunStdio_PingSucceeds(t *testing.T) {
@@ -3246,6 +3681,146 @@ func TestServeHTTP_OAuthMode_MetadataEndpoint(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_OAuthMode_SeveralInstances_TheHeaderChooses covers the
+// resolver oauth mode verifies against when more than one instance is
+// published: a request naming none is refused before the bearer goes
+// anywhere, one naming an instance outside the list is refused as
+// misaddressed, and one naming a published instance is verified against it
+// and served.
+func TestServeHTTP_OAuthMode_SeveralInstances_TheHeaderChooses(t *testing.T) {
+	first := newMockGitLabServerWithUser(t)
+	second := newMockGitLabServerWithUser(t)
+	cfg := &config.Config{
+		GitLabURL:      first.URL,
+		GitLabURLs:     []string{first.URL, second.URL},
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		AuthMode:       config.AuthModeOAuth,
+		PublicURL:      "https://mcp.example.com",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+		Stateless:      true,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	addr, errCh := oauthAddr(t, ctx, cfg)
+
+	cases := []struct {
+		name       string
+		instance   string
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "no instance selected", instance: "", wantStatus: http.StatusBadRequest, wantBody: second.URL},
+		{name: "an unpublished instance", instance: "https://unpublished.example.com", wantStatus: http.StatusForbidden, wantBody: "does not serve"},
+		{name: "the second published instance", instance: second.URL, wantStatus: http.StatusOK, wantBody: "protocolVersion"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr+"/mcp", strings.NewReader(body))
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+			req.Header.Set(hdrContentType, mimeJSON)
+			req.Header.Set("Accept", mimeJSONSSE)
+			req.Header.Set("Authorization", "Bearer "+testToken)
+			if tc.instance != "" {
+				req.Header.Set(serverpool.RequestOptionGitLabURL, tc.instance)
+			}
+			resp, err := testHTTPClient.Do(req)
+			if err != nil {
+				t.Fatalf("request: %v", err)
+			}
+			got := readAndCloseBody(t, resp)
+			if resp.StatusCode != tc.wantStatus {
+				t.Errorf("status = %d, want %d: %s", resp.StatusCode, tc.wantStatus, got)
+			}
+			if !strings.Contains(got, tc.wantBody) {
+				t.Errorf("body = %q, want it to carry %q", got, tc.wantBody)
+			}
+		})
+	}
+
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Fatalf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("shutdown timeout")
+	}
+}
+
+// TestServeHTTP_PinnedApplicationsAndTrustedProxy_AreWiredInBothAuthModes
+// covers the two registrations that depend on configuration nothing else in
+// this file sets: a pinned OAuth application, which oauth mode announces at
+// startup because it turns every personal access token away, and a trusted
+// proxy header, which gives both auth modes a transport budget with its own
+// periodic sweep. What is asserted is the startup line and that the server
+// comes up and serves /health with the extra machinery in place.
+func TestServeHTTP_PinnedApplicationsAndTrustedProxy_AreWiredInBothAuthModes(t *testing.T) {
+	cases := []struct {
+		name     string
+		authMode string
+		wantLog  string
+	}{
+		{name: "oauth mode", authMode: config.AuthModeOAuth, wantLog: "admitting only tokens issued to the pinned OAuth applications"},
+		{name: "legacy mode", authMode: config.AuthModeLegacy, wantLog: "starting MCP server in HTTP mode"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := testutil.CaptureSlog(t)
+			gitlab := newMockGitLabServerWithUser(t)
+			cfg := &config.Config{
+				GitLabURL:          gitlab.URL,
+				MaxHTTPClients:     config.DefaultMaxHTTPClients,
+				SessionTimeout:     config.DefaultSessionTimeout,
+				ToolSurface:        config.ToolSurfaceDynamic,
+				AuthMode:           tc.authMode,
+				PublicURL:          "https://mcp.example.com",
+				OAuthCacheTTL:      config.DefaultOAuthCacheTTL,
+				OAuthClientUIDs:    []string{"0123456789abcdef"},
+				TrustedProxyHeader: "X-Forwarded-For",
+				TrustedProxies:     []string{"127.0.0.1"},
+				Stateless:          true,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			addr, errCh := oauthAddr(t, ctx, cfg)
+
+			if !strings.Contains(logged.String(), tc.wantLog) {
+				t.Errorf("startup log = %q, want it to carry %q", logged.String(), tc.wantLog)
+			}
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/health", nil)
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+			resp, err := testHTTPClient.Do(req)
+			if err != nil {
+				t.Fatalf("health request: %v", err)
+			}
+			readAndCloseBody(t, resp)
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("/health = %d, want %d", resp.StatusCode, http.StatusOK)
+			}
+
+			cancel()
+			select {
+			case srvErr := <-errCh:
+				if srvErr != nil {
+					t.Fatalf("serveHTTP error: %v", srvErr)
+				}
+			case <-time.After(testHTTPLivenessTimeout):
+				t.Fatal("shutdown timeout")
+			}
+		})
+	}
+}
+
 // TestServeHTTP_OAuthMode_RejectsUnauthenticated verifies that OAuth mode
 // rejects requests without a Bearer token with 401.
 func TestServeHTTP_OAuthMode_RejectsUnauthenticated(t *testing.T) {
@@ -4199,6 +4774,122 @@ func TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly(t *testing.T) {
 	// Release the gated builder only after the assertions: its goroutine
 	// outlives serveHTTPOn by design, and must not touch the restored seam.
 	close(releaseBuild)
+}
+
+// TestServeHTTP_ServerCardBuildFails_AnswersUnavailableAndStaysUp covers a
+// card that cannot be built: the endpoint answers 503 rather than a broken
+// document, the failure is cached the way a success would be so the build is
+// not retried on every fetch, and the rest of the server is unaffected.
+//
+// Deliberately not parallel: the builder seam is a package global.
+func TestServeHTTP_ServerCardBuildFails_AnswersUnavailableAndStaysUp(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	var builds atomic.Int64
+	origBuild := buildServerCardFn
+	buildServerCardFn = func(context.Context, *config.Config) ([]byte, error) {
+		builds.Add(1)
+		return nil, errors.New("the catalog would not marshal")
+	}
+	t.Cleanup(func() { buildServerCardFn = origBuild })
+
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(gitlab.URL, false))
+	defer shutdown()
+
+	for attempt := range 2 {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+serverCardPath, nil)
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("card request %d: %v", attempt, err)
+		}
+		body := readAndCloseBody(t, resp)
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("card request %d = %d, want %d: %s", attempt, resp.StatusCode, http.StatusServiceUnavailable, body)
+		}
+	}
+	if builds.Load() != 1 {
+		t.Errorf("the card was built %d time(s), want once: a failed build is cached like a successful one", builds.Load())
+	}
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/health", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("health request: %v", err)
+	}
+	readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("/health = %d after a failed card build, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+// TestServeHTTP_ServerCardRequestAbandonedMidBuild_DoesNotPoisonTheCard covers
+// a fetcher that gives up while the first build is still running: its handler
+// is released at once rather than left waiting for a build it will never read,
+// and the build itself carries on, so the next fetcher gets the finished card.
+//
+// Deliberately not parallel: the builder seam is a package global.
+func TestServeHTTP_ServerCardRequestAbandonedMidBuild_DoesNotPoisonTheCard(t *testing.T) {
+	gitlab := newMockGitLabServer(t)
+	buildStarted := make(chan struct{})
+	releaseBuild := make(chan struct{})
+	origBuild := buildServerCardFn
+	buildServerCardFn = func(context.Context, *config.Config) ([]byte, error) {
+		close(buildStarted)
+		<-releaseBuild
+		return []byte(`{"name":"card"}`), nil
+	}
+	t.Cleanup(func() { buildServerCardFn = origBuild })
+
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(gitlab.URL, false))
+	defer shutdown()
+
+	// The first fetcher, which abandons its request once the build is in
+	// flight. Its own outcome is a transport error and is not asserted on:
+	// what matters is what the next fetcher sees.
+	abandonCtx, abandon := context.WithCancel(t.Context())
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		req, reqErr := http.NewRequestWithContext(abandonCtx, http.MethodGet, "http://"+addr+serverCardPath, nil)
+		if reqErr != nil {
+			t.Errorf("build card request: %v", reqErr)
+			return
+		}
+		if resp, doErr := testHTTPClient.Do(req); doErr == nil {
+			resp.Body.Close()
+		}
+	}()
+	select {
+	case <-buildStarted:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("card build never started")
+	}
+	abandon()
+	<-firstDone
+	// The handler learns of the disconnect from the connection's background
+	// read, which is asynchronous to the client returning; the build is held a
+	// little longer so the release does not race that read, since a handler
+	// that sees both the finished build and the gone client picks either.
+	time.Sleep(100 * time.Millisecond)
+
+	close(releaseBuild)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+serverCardPath, nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("second card request: %v", err)
+	}
+	body := readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `"card"`) {
+		t.Errorf("second card request = %d %q, want the finished card", resp.StatusCode, body)
+	}
 }
 
 // TestBuildServerCard_MinimalCapabilitySurface verifies that server-card
@@ -7999,6 +8690,50 @@ func TestSSEAwareWriter_ABrokenStream_EndsItsHeartbeat(t *testing.T) {
 	writer.stopKeepAlive()
 }
 
+// TestSSEAwareWriter_AClientThatWentAway_EndsItsHeartbeat covers the third
+// way the heartbeat goroutine exits: the request context ending because the
+// client disconnected, as opposed to the handler returning or a write failing.
+//
+// A stream whose reader is gone has nobody to keep alive, and a goroutine
+// ticking every twenty-five seconds for the rest of the process would be the
+// leak this exit prevents. The interval is left at its default on purpose:
+// the exit must come from the disconnect signal alone, before any tick.
+func TestSSEAwareWriter_AClientThatWentAway_EndsItsHeartbeat(t *testing.T) {
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	rec.Header().Set(hdrContentType, "text/event-stream")
+	disconnected := make(chan struct{})
+	writer := &sseAwareWriter{ResponseWriter: rec, disconnected: disconnected}
+
+	writer.WriteHeader(http.StatusOK)
+	if writer.done == nil {
+		t.Fatal("no heartbeat was started for a response that committed to text/event-stream")
+	}
+
+	close(disconnected)
+	select {
+	case <-writer.done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the heartbeat is still running for a client that disconnected")
+	}
+	writer.stopKeepAlive()
+}
+
+// TestSSEAwareWriter_Unwrap_ExposesTheConnection pins the method
+// http.NewResponseController relies on: the SDK sets write deadlines through
+// the controller, and a wrapper that did not unwrap would stop it at a type
+// that has no deadline to set, silently leaving every stream on the default.
+func TestSSEAwareWriter_Unwrap_ExposesTheConnection(t *testing.T) {
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	writer := &sseAwareWriter{ResponseWriter: rec}
+	if got := writer.Unwrap(); got != http.ResponseWriter(rec) {
+		t.Errorf("Unwrap() = %T, want the wrapped recorder", got)
+	}
+}
+
 // TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly pins the exit status of
 // the two ways an stdio session is meant to end.
 //
@@ -8719,6 +9454,67 @@ func TestShutdownHTTPServer_NothingInFlight_ReturnsWithoutSpendingTheBudget(t *t
 	}
 }
 
+// closeFailingListener is a listener whose socket the kernel will not
+// release: Close closes the underlying socket, so the serve loop ends the way
+// it always does, and still reports an error.
+type closeFailingListener struct {
+	net.Listener
+	closeErr error
+}
+
+func (l *closeFailingListener) Close() error {
+	_ = l.Listener.Close()
+	return l.closeErr
+}
+
+// TestShutdownHTTPServer_AListenerThatWillNotClose_IsReported covers the one
+// error the drain still reports after an exhausted budget stopped being one.
+//
+// A listener whose close fails is a real failure rather than a late
+// connection: nothing was drained badly, the socket itself could not be
+// released, and the process is about to exit believing it was. Shutdown
+// carries that error out once the server is idle, and it must not be
+// mistaken for the budget running out, which is answered with a forced close
+// and no error at all.
+func TestShutdownHTTPServer_AListenerThatWillNotClose_IsReported(t *testing.T) {
+	bound, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	listener := &closeFailingListener{Listener: bound, closeErr: errors.New("socket held by the kernel")}
+	httpServer := newHTTPServer("", http.NotFoundHandler(), defaultHTTPIdleTimeout)
+	served := make(chan error, 1)
+	go func() { served <- httpServer.Serve(listener) }()
+	// One answered request proves Serve is tracking the listener, so the
+	// drain has a listener to close rather than racing the serve loop's start.
+	req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+bound.Addr().String()+"/", nil)
+	if reqErr != nil {
+		t.Fatalf("build request: %v", reqErr)
+	}
+	resp, doErr := testHTTPClient.Do(req)
+	if doErr != nil {
+		t.Fatalf("request: %v", doErr)
+	}
+	readAndCloseBody(t, resp)
+	testHTTPClient.CloseIdleConnections()
+
+	shutdownErr := shutdownHTTPServer(t.Context(), httpServer)
+	if shutdownErr == nil {
+		t.Fatal("shutdownHTTPServer() = nil, want the listener's close failure reported")
+	}
+	if !strings.Contains(shutdownErr.Error(), "http server shutdown") || !errors.Is(shutdownErr, listener.closeErr) {
+		t.Errorf("shutdownHTTPServer() = %q, want the drain's wrapping of the listener's error", shutdownErr)
+	}
+	select {
+	case serveErr := <-served:
+		if !errors.Is(serveErr, http.ErrServerClosed) {
+			t.Errorf("Serve() = %v, want ErrServerClosed: the socket itself was closed", serveErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("Serve did not return after the listener was closed")
+	}
+}
+
 // TestHTTPShutdownBudget_TakesTheSmallerOfTheDefaultAndTheCallersDeadline
 // verifies the arithmetic on its own, with no server to drain.
 //
@@ -8782,6 +9578,18 @@ func cancelledDeadlineContext(t *testing.T, in time.Duration) context.Context {
 func blockedHTTPServer(t *testing.T) *http.Server {
 	t.Helper()
 
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	return blockedHTTPServerOn(t, listener)
+}
+
+// blockedHTTPServerOn is [blockedHTTPServer] serving on a listener the caller
+// supplies, for the tests that need to see what the server does with it.
+func blockedHTTPServerOn(t *testing.T, listener net.Listener) *http.Server {
+	t.Helper()
+
 	var enteredOnce sync.Once
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -8790,10 +9598,6 @@ func blockedHTTPServer(t *testing.T) *http.Server {
 		<-release
 	}), defaultHTTPIdleTimeout)
 
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
 	go func() { _ = httpServer.Serve(listener) }()
 
 	callDone := make(chan struct{})
