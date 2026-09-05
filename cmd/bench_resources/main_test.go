@@ -808,7 +808,13 @@ func TestMemoryBudgetMiB_FlagWinsOverTheHost(t *testing.T) {
 // temporary directory that does not exist, which is the one failure before
 // the compiler runs.
 func TestBuildServer_NoTemporaryDirectory_IsReported(t *testing.T) {
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "absent"))
+	// os.TempDir reads TMPDIR on Unix and TMP, TEMP or USERPROFILE on
+	// Windows, so all three point at the absent directory and the build
+	// fails before the compiler runs on every platform.
+	absent := filepath.Join(t.TempDir(), "absent")
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, absent)
+	}
 	if _, err := buildServer(t.TempDir()); err == nil || !strings.Contains(err.Error(), "build directory") {
 		t.Errorf("buildServer = %v, want the build directory failure", err)
 	}

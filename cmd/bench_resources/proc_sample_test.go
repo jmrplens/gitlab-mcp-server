@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -298,6 +299,11 @@ func TestTicksFromGetconf_FallsBackToUserHZ(t *testing.T) {
 // has the same ps: this process is read, a process that does not exist is
 // reported.
 func TestReadProcStat_PSFallback_ReadsTheProcessOrFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// The ps on a Windows runner is MSYS's, which knows its own
+		// emulated processes and not this one.
+		t.Skip("this platform does not report process statistics through ps")
+	}
 	if _, err := exec.LookPath("ps"); err != nil {
 		t.Skipf("no ps to fall back to: %v", err)
 	}
@@ -433,6 +439,9 @@ func TestDumpGoroutines_EveryFailure(t *testing.T) {
 	})
 
 	t.Run("does not exit in time", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("SIGQUIT is not a signal Windows delivers; the traceback path is unix-only")
+		}
 		previous := dumpWait
 		dumpWait = 20 * time.Millisecond
 		t.Cleanup(func() { dumpWait = previous })
@@ -449,6 +458,9 @@ func TestDumpGoroutines_EveryFailure(t *testing.T) {
 	})
 
 	t.Run("no traceback", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("SIGQUIT is not a signal Windows delivers; the traceback path is unix-only")
+		}
 		cmd := exec.CommandContext(t.Context(), sleep, "30")
 		if startErr := cmd.Start(); startErr != nil {
 			t.Fatalf("start sleep: %v", startErr)
