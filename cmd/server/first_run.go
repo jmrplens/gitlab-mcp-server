@@ -73,13 +73,18 @@ Press Enter to close.
 	_, _ = bufio.NewReader(in).ReadString('\n')
 }
 
+// osExecutable resolves the running binary's path. A variable because the
+// lookup cannot be made to fail from outside the process, and the fallback
+// name below is otherwise never printed by any test.
+var osExecutable = os.Executable //nolint:gochecknoglobals // test seam
+
 // executableName is how to spell this program on the reader's command line.
 //
 // Taken from the running binary rather than hardcoded, so the line can be
 // copied as it appears: someone who renamed the download, or who reached this
 // through a launcher, is told the name that will actually work.
 func executableName() string {
-	path, err := os.Executable()
+	path, err := osExecutable()
 	if err != nil || path == "" {
 		return "gitlab-mcp-server"
 	}

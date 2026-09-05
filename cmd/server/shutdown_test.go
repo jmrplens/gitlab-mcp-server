@@ -11,12 +11,15 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -192,6 +195,100 @@ func TestRunShutdown_RunningPeers_AreStoppedBeforeItReturns(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestRunShutdown_ProcessListingFails_ReportsAndExitsNonZero covers the one
+// error --shutdown can meet before it has done anything: the process table
+// could not be read.
+//
+// An updater acts on the exit status, and this is the case where "found
+// nothing" would be a lie: nothing was looked at. The listing is replaced
+// through its seam because procfs cannot be made unreadable from a test.
+func TestRunShutdown_ProcessListingFails_ReportsAndExitsNonZero(t *testing.T) {
+	original := listProcesses
+	t.Cleanup(func() { listProcesses = original })
+	listProcesses = func() ([]*process.Process, error) {
+		return nil, errors.New("procfs is not mounted")
+	}
+
+	if got := runShutdown(); got != 1 {
+		t.Errorf("runShutdown() = %d when the process table is unreadable, want 1", got)
+	}
+
+	_, err := findPeers()
+	if err == nil || !strings.Contains(err.Error(), "procfs is not mounted") {
+		t.Errorf("findPeers() error = %v, want the listing's own error passed through", err)
+	}
+}
+
+// TestFindPeers_AProcessThatVanishedAfterTheListing_IsSkipped covers the gap
+// between enumerating the table and reading a name from it: a process that
+// exited in between has no name to read and must be passed over rather than
+// fail the whole lookup, which would abort a --shutdown over a process that is
+// already gone.
+//
+// The listing is injected because the gap is otherwise a race against the
+// machine's own process churn: on a busy host it was hit by luck and on a
+// quiet one never.
+func TestFindPeers_AProcessThatVanishedAfterTheListing_IsSkipped(t *testing.T) {
+	withArgv0(t, filepath.Join(t.TempDir(), peerName(t)))
+	gone := &process.Process{Pid: pid32(t, exitedPID(t))}
+	original := listProcesses
+	t.Cleanup(func() { listProcesses = original })
+	listProcesses = func() ([]*process.Process, error) {
+		return []*process.Process{gone}, nil
+	}
+
+	peers, err := findPeers()
+	if err != nil {
+		t.Fatalf("findPeers() error = %v, want nil: a vanished process is not a failure", err)
+	}
+	if len(peers) != 0 {
+		t.Errorf("findPeers() = %d peer(s), want none: the only listed process has no name to match", len(peers))
+	}
+}
+
+// TestForceKillPeers_ReportsWhatItDid covers the phase after the grace period,
+// in both of its outcomes.
+//
+// The second outcome is the one runShutdown cannot be made to reach on
+// purpose: a peer that stops between the last poll and the deadline is gone by
+// the time the kill runs, and then there is nothing to kill and nothing to
+// complain about. Reaching it through runShutdown would mean racing a
+// process exit against a five-second timer, so the phase is exercised
+// directly with a pid that has already exited and been reaped.
+func TestForceKillPeers_ReportsWhatItDid(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the peer cannot decline TerminateProcess, so there is no wedged peer to kill")
+	}
+
+	binary := buildPeer(t, filepath.Join(t.TempDir(), peerName(t)))
+	wedged := startPeer(t, binary, []string{peerIgnoreTermEnv + "=1"})
+	alive := &process.Process{Pid: pid32(t, wedged.cmd.Process.Pid)}
+	gone := &process.Process{Pid: pid32(t, exitedPID(t))}
+
+	tests := []struct {
+		name  string
+		peers []*process.Process
+		want  string
+	}{
+		{name: "nothing left to kill", peers: []*process.Process{gone}, want: "shutdown: all instances terminated\n"},
+		{name: "a wedged peer is killed", peers: []*process.Process{gone, alive}, want: "shutdown: force-killed 1 instance(s)\n"},
+	}
+
+	// Order matters: the second case kills the peer the first leaves alone.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var said bytes.Buffer
+			forceKillPeers(tt.peers, &said)
+			if said.String() != tt.want {
+				t.Errorf("forceKillPeers said %q, want %q", said.String(), tt.want)
+			}
+		})
+	}
+	if !wedged.exited(t) {
+		t.Error("the peer that ignores SIGTERM survived the kill")
 	}
 }
 
