@@ -50,11 +50,58 @@ func TestNewGitLabVerifier_ValidToken(t *testing.T) {
 	if got, ok := info.Extra["username"].(string); !ok || got != "testuser" {
 		t.Errorf("Extra[username] = %v, want %q", info.Extra["username"], "testuser")
 	}
-	if got, ok := info.Extra["token"].(string); !ok || got != "valid-token" {
-		t.Errorf("Extra[token] = %v, want %q", info.Extra["token"], "valid-token")
-	}
 	if info.Expiration.Before(time.Now()) {
 		t.Error("Expiration should be in the future")
+	}
+}
+
+// TestNewGitLabVerifier_AdmissionCarriesNoRawToken pins that the identity a
+// verifier returns, and therefore the value the [TokenCache] holds for the
+// TTL, contains the token nowhere.
+//
+// It did until this test existed: Extra["token"] carried the bearer in the
+// clear "for downstream GitLab client creation", which nothing downstream ever
+// read, while the package documentation promised the cache stored no raw token
+// material. A digest key is worth nothing if the value beside it is the
+// credential. The check walks every Extra value rather than one key, so the
+// token cannot come back under another name.
+func TestNewGitLabVerifier_AdmissionCarriesNoRawToken(t *testing.T) {
+	t.Parallel()
+
+	const token = "gloas-secret-material"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/user" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(gitlabUserResponse{ID: 42, Username: "testuser"})
+	}))
+	t.Cleanup(srv.Close)
+
+	cache := NewTokenCache()
+	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, cache)
+	info, err := verifier(t.Context(), token, nil)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+
+	cached, ok := cache.Get(srv.URL, token)
+	if !ok {
+		t.Fatal("the admission was not cached")
+	}
+	for name, subject := range map[string]*auth.TokenInfo{"returned": info, "cached": cached} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if _, present := subject.Extra["token"]; present {
+				t.Error("Extra carries a \"token\" entry; the identity must not hold the credential it was verified with")
+			}
+			for key, value := range subject.Extra {
+				if text, isString := value.(string); isString && strings.Contains(text, token) {
+					t.Errorf("Extra[%q] = %q carries the raw token", key, text)
+				}
+			}
+		})
 	}
 }
 
