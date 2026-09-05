@@ -1382,12 +1382,17 @@ func prepareStdioCatalog(
 		serverCfg.Tier = client.DetectTier(ctx)
 	}
 
-	// Detect PAT scopes for scope-based tool filtering.
+	// Detect PAT scopes for scope-based tool filtering, and narrow the surface
+	// the way the HTTP pool does per entry (ADR-0018): a token that cannot
+	// write is served the read-only catalog, which withholds every write
+	// action and says why, instead of listing actions GitLab would refuse one
+	// by one with its own 403.
 	if !cfg.IgnoreScopes {
 		serverCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
 		if serverCfg.TokenScopes == nil {
 			slog.DebugContext(ctx, "PAT scope detection unavailable. All tools will be registered")
 		}
+		gitlabclient.NarrowToTokenScope(serverCfg)
 	}
 
 	// serverCfg is only read again from here: the shell copied everything it

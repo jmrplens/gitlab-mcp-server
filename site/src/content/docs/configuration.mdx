@@ -9,7 +9,7 @@ chips:
 datePublished: "2026-04-21"
 faq:
   - q: "What is the minimum configuration?"
-    a: "In stdio mode, a single `GITLAB_TOKEN` with the `api` scope is enough to start — every other variable is optional and defaults to a safe value. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only when connecting to a self-managed instance. For a read-only setup, use a `read_api` token and add `GITLAB_READ_ONLY=true`. In HTTP mode, no token is configured on the server at all; each client sends its own token with every request."
+    a: "In stdio mode, a single `GITLAB_TOKEN` with the `api` scope is enough to start — every other variable is optional and defaults to a safe value. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only when connecting to a self-managed instance. For a read-only setup, use a `read_api` token: the server serves it a read-only surface on its own, and `GITLAB_READ_ONLY=true` does the same for an `api` token. In HTTP mode, no token is configured on the server at all; each client sends its own token with every request."
   - q: "stdio vs HTTP — which mode do I use?"
     a: "Use **stdio mode** (the default) for local, single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables, plus `~/.gitlab-mcp-server.env` or a file named in `GITLAB_MCP_ENV_FILE` for what the environment does not carry. Use **HTTP mode** (`--http`) for shared or remote deployments such as Docker or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request."
   - q: "How do I point at a self-managed GitLab instance?"

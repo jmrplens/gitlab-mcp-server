@@ -378,6 +378,11 @@ type fakeGitLab struct {
 	// instead of guessing at a duration.
 	entered chan struct{}
 	arrived sync.Once
+	// scopes is what the personal-access-token endpoint reports for the token
+	// in use; nil leaves the endpoint unanswered, which is the "detection
+	// unavailable" case every other test relies on. Set it before the server
+	// starts, since the server asks once at startup.
+	scopes []string
 }
 
 // awaitInFlightCall blocks until a call has reached the blocking endpoint.
@@ -405,6 +410,14 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, `{"id":7,"username":"someone","name":"Some One"}`)
+	})
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		if fake.scopes == nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		scopes, _ := json.Marshal(fake.scopes)
+		writeJSON(w, `{"id":1,"name":"stdio-e2e","active":true,"scopes":`+string(scopes)+`}`)
 	})
 	mux.HandleFunc("/api/v4/projects/42", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, `{"id":42,"name":"proj","path_with_namespace":"g/proj","web_url":"http://example.invalid/g/proj"}`)

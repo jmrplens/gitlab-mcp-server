@@ -6,6 +6,8 @@ import (
 	"slices"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // DetectScopes queries the GitLab PAT self endpoint to retrieve the scopes
@@ -44,6 +46,28 @@ func WriteCapable(scopes []string) bool {
 		return true
 	}
 	return slices.Contains(scopes, ScopeAPI)
+}
+
+// NarrowToTokenScope marks a server configuration read-only when the token
+// it was built for cannot write, and reports whether it did. Both transports
+// call it once the scopes are known: the HTTP pool per entry, since an entry
+// is per token, and stdio once at startup for its single token. The catalog
+// built from the configuration then withholds every write action and reports
+// it as withheld by the token scope, rather than listing actions GitLab would
+// refuse one by one with its own 403 (ADR-0018).
+//
+// A configuration already read-only is left alone, so the operator's setting
+// and the token's limit never contradict each other in the log, and unknown
+// scopes narrow nothing, for the reason WriteCapable gives.
+func NarrowToTokenScope(cfg *config.ServerConfig) bool {
+	if cfg == nil || cfg.ReadOnly || WriteCapable(cfg.TokenScopes) {
+		return false
+	}
+	cfg.ReadOnly = true
+	cfg.ReadOnlyFromTokenScope = true
+	slog.Info("token cannot write; serving a read-only tool surface for it",
+		"scopes", cfg.TokenScopes)
+	return true
 }
 
 // ScopeSatisfied checks whether requiredScopes are all present in the

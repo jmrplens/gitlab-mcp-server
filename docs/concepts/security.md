@@ -303,7 +303,7 @@ The server automatically detects the scopes of the Personal Access Token (PAT) a
 - **Graceful degradation**: If scope detection fails (e.g. older GitLab versions), all tools remain registered
 - **Opt-out**: Set `GITLAB_IGNORE_SCOPES=true` or `--ignore-scopes` to skip detection
 - **Scope map**: Defined in `internal/tools/scope_filter.go` (`MetaToolScopes`)
-- **HTTP mode narrows further, in both auth modes**: a pool entry whose token carries no write scope is served the read-only catalog, exactly as if `--read-only` had been set for that client. The narrowing is per pool entry, and an entry is per token, so one client's `read_api` token cannot narrow another client's `api` token. Unknown scopes (detection failed, or `--ignore-scopes`) count as write-capable — a wrong "no" would silently remove tools, while a wrong "yes" simply surfaces as GitLab's own 403 on the call that tried to write
+- **Both transports narrow further**: a token that carries no write scope is served the read-only catalog, exactly as if `--read-only` or `GITLAB_READ_ONLY` had been set for it, once at startup on stdio and per pool entry in HTTP mode (in both auth modes). The narrowing is per token, so in HTTP mode one client's `read_api` token cannot narrow another client's `api` token. Unknown scopes (detection failed, or `--ignore-scopes`) count as write-capable — a wrong "no" would silently remove tools, while a wrong "yes" simply surfaces as GitLab's own 403 on the call that tried to write
 
 Tools requiring `admin_mode` (e.g. `gitlab_admin`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope.
 

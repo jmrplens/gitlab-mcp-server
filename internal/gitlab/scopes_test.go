@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // TestDetectScopes_Success verifies that DetectScopes returns the scopes reported by the /personal_access_tokens/self endpoint.
@@ -78,6 +80,43 @@ func TestScopeSatisfied_Scenarios_CorrectResult(t *testing.T) {
 			got := ScopeSatisfied(tt.token, tt.required)
 			if got != tt.want {
 				t.Errorf("ScopeSatisfied(%v, %v) = %v, want %v", tt.token, tt.required, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNarrowToTokenScope_NarrowsOnlyATokenThatCannotWrite verifies the one
+// decision both transports share: a token without the api scope makes the
+// configuration read-only and marks the narrowing as the token's, unknown
+// scopes narrow nothing, and a configuration already read-only is left as the
+// operator set it.
+func TestNarrowToTokenScope_NarrowsOnlyATokenThatCannotWrite(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		cfg           *config.ServerConfig
+		wantNarrowed  bool
+		wantReadOnly  bool
+		wantFromScope bool
+	}{
+		{name: "read_api narrows", cfg: &config.ServerConfig{TokenScopes: []string{"read_api"}}, wantNarrowed: true, wantReadOnly: true, wantFromScope: true},
+		{name: "api stays writable", cfg: &config.ServerConfig{TokenScopes: []string{"api", "read_user"}}},
+		{name: "unknown scopes stay writable", cfg: &config.ServerConfig{}},
+		{name: "empty scopes narrow", cfg: &config.ServerConfig{TokenScopes: []string{}}, wantNarrowed: true, wantReadOnly: true, wantFromScope: true},
+		{name: "the operator's read-only is not the token's", cfg: &config.ServerConfig{ReadOnly: true, TokenScopes: []string{"read_api"}}, wantReadOnly: true},
+		{name: "nil configuration", cfg: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := NarrowToTokenScope(tt.cfg); got != tt.wantNarrowed {
+				t.Errorf("NarrowToTokenScope() = %v, want %v", got, tt.wantNarrowed)
+			}
+			if tt.cfg == nil {
+				return
+			}
+			if tt.cfg.ReadOnly != tt.wantReadOnly || tt.cfg.ReadOnlyFromTokenScope != tt.wantFromScope {
+				t.Errorf("ReadOnly = %v (from scope %v), want %v (from scope %v)", tt.cfg.ReadOnly, tt.cfg.ReadOnlyFromTokenScope, tt.wantReadOnly, tt.wantFromScope)
 			}
 		})
 	}
