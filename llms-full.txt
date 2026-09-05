@@ -1684,7 +1684,7 @@ Param conventions: * = required. All actions need project_id* (numeric or url-en
 - get / delete: project_id*, branch_name*
 - list: project_id*, search, page, per_page
 - delete_merged: project_id*. Deletes all merged branches except default/protected
-- protect: project_id*, branch_name*, push_access_level (0/30/40), merge_access_level (0/30/40), allow_force_push (bool)
+- protect: project_id*, branch_name*, push_access_level (0/30/40/60), merge_access_level (0/30/40/60), allow_force_push (bool)
 - unprotect: project_id*, branch_name*
 - list_protected: project_id*
 - get_protected: project_id*, branch_name*
@@ -2204,7 +2204,7 @@ Freeze periods (cron expressions):
 Deployments (immutable history records):
 - deployment_list: project_id*, order_by, sort, environment, status, page, per_page
 - deployment_get / deployment_delete: project_id*, deployment_id*
-- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status (created/running/success/failed/canceled)
+- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status (running/success/failed/canceled)
 - deployment_update: project_id*, deployment_id*, status*
 - deployment_approve_or_reject: project_id*, deployment_id*, status* (approved/rejected), comment
 - deployment_merge_requests: project_id*, deployment_id*, state, order_by, sort, page, per_page
@@ -14245,7 +14245,7 @@ Create a broadcast message. Returns: the created message with id, theme, target,
 - `font` (string): Font for the message
 - `message` (string) (required): Message text. Supports Markdown.
 - `starts_at` (string): Start time in ISO 8601 format
-- `target_access_levels` (array of integers): Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
+- `target_access_levels` (array of integers): Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)
 - `target_path` (string): Target path to show message on
 - `theme` (string): Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.
 
@@ -15629,7 +15629,7 @@ Update a deployment's status by deployment_id within a project. Returns: the upd
 
 - `deployment_id` (integer) (required): Deployment ID
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `status` (string) (required): New deployment status: created or running or success or failed or canceled
+- `status` (string) (required): New deployment status: running or success or failed or canceled
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -18319,7 +18319,7 @@ Add a user as a direct member of a group. Returns: the created membership with a
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID to assign. Ultimate only. The role's base access level must match access_level
@@ -18334,7 +18334,7 @@ Edit a direct group member's access level, expiry, or custom member role. Return
 
 **Parameters:**
 
-- `access_level` (integer): New access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)
+- `access_level` (integer): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)
 - `expires_at` (string): New membership expiration date (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID to assign. Ultimate only. The role's base access level must match access_level
@@ -18604,7 +18604,7 @@ Protect a group-level branch or wildcard, optionally with per-user/per-group all
 - `merge_access_level` (integer): Merge access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)
 - `name` (string) (required): Branch name or wildcard to protect
 - `push_access_level` (integer): Push access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)
-- `unprotect_access_level` (integer): Unprotect access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)
+- `unprotect_access_level` (integer): Unprotect access level (30=Developer, 40=Maintainer, 60=Admin on GitLab Self-Managed). 0 (No access) is not valid here
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -25341,7 +25341,7 @@ Add a user to a project team by user_id or username with an access level. Option
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `member_role_id` (integer): Custom member role ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -25368,7 +25368,7 @@ Edit a project member's access level, expiry, or custom member role. Returns: th
 
 **Parameters:**
 
-- `access_level` (integer) (required): New access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `member_role_id` (integer): Custom member role ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -28378,7 +28378,7 @@ Update a broadcast message. Returns: the updated message. See also: gitlab_get_b
 - `id` (integer) (required): Broadcast message ID
 - `message` (string): Message text. Supports Markdown.
 - `starts_at` (string): Start time in ISO 8601 format
-- `target_access_levels` (array of integers): Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
+- `target_access_levels` (array of integers): Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)
 - `target_path` (string): Target path to show message on
 - `theme` (string): Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.
 

@@ -105,7 +105,7 @@ All three tables are checked for staleness in the same run: a declaration for a 
 
 Unlike the candidate scopes this one **exits non-zero** on a finding, and is deliberately kept out of the merged backlog so `plan/1to1-backlog.json` keeps its shape for the tooling that reads it.
 
-Report keys: `schema_version`, `client_go_path`, a `summary` block (12 counters), `services[]`, `graphql_operations[]`, `enum_fields[]`, and `stale_declarations[]`. With `-gaps-only` the three arrays hold only findings.
+Report keys: `schema_version`, `client_go_path`, a `summary` block (12 counters), `services[]`, `graphql_operations[]`, `enum_fields[]`, and `stale_declarations[]`. With `-gaps-only` the first three arrays hold only findings; `stale_declarations[]` never holds anything else, so the flag does not change it.
 
 #### Enum values (R-ENUM)
 

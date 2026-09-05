@@ -10,6 +10,13 @@ const (
 	// a protected ref can be restricted to administrators, not because a
 	// membership can carry it.
 	membershipNoAdmin = "60 (Admin) is not a level a membership can carry: doc/api/project_members.md, group_members.md, invitations.md and access_requests.md list 0 (No access) through 50 (Owner) for adding, editing, inviting and approving; only the group member edit endpoint documents 60, and that field offers it"
+	// membershipNoAccessGrant: 0 (No access) is a level a membership reads
+	// back with, not one the add and edit endpoints grant; the handlers treat
+	// 0 as the field left unset and refuse the request before it leaves.
+	membershipNoAccessGrant = "0 (No access) is read back on a membership but never granted: doc/api/members.md lists it under valid access levels while the add and edit handlers (members.go, group_members.go) treat 0 as access_level left unset and refuse the call"
+	// broadcastTargetLevels: the roles a banner can target are the membership
+	// roles proper, without the two ends of AccessLevelValue.
+	broadcastTargetLevels = "doc/api/broadcast_messages.md lists target_access_levels as 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer) and 50 (Owner); 5 (Minimal access) and 60 (Admin) are AccessLevelValue constants outside that set"
 	// minAccessLevelFilter: the list filters document the membership roles a
 	// caller can hold, which excludes both ends of the type.
 	minAccessLevelFilter = "doc/api/groups.md and projects.md document min_access_level and shared_min_access_level as 5 (Minimal access) through 50 (Owner): 0 (No access) filters nothing and 60 (Admin) is not a membership level"
@@ -59,6 +66,10 @@ func buildAcceptedEnumGaps() map[string]string {
 		"invites.ProjectInvitesInput.access_level=60":        membershipNoAdmin,
 		"members.AddInput.access_level=60":                   membershipNoAdmin,
 		"members.EditInput.access_level=60":                  membershipNoAdmin,
+		"members.AddInput.access_level=0":                    membershipNoAccessGrant,
+		"members.EditInput.access_level=0":                   membershipNoAccessGrant,
+		"groupmembers.AddInput.access_level=0":               membershipNoAccessGrant,
+		"groupmembers.EditInput.access_level=0":              membershipNoAccessGrant,
 		"groupldap.AddInput.group_access=60":                 "doc/api/group_ldap_links.md#add-an-ldap-group-link lists 0 (No access) through 50 (Owner); " + membershipNoAdmin,
 		"groupsaml.AddInput.access_level=60":                 "doc/api/saml.md#add-a-saml-group-link lists 0 (No access) through 50 (Owner); " + membershipNoAdmin,
 
@@ -66,8 +77,12 @@ func buildAcceptedEnumGaps() map[string]string {
 		"memberroles.CreateInstanceInput.base_access_level=5":  "doc/api/member_roles.md#add-a-member-role-to-an-instance lists 10 (Guest) through 50 (Owner) as the valid base access levels",
 		"memberroles.CreateInstanceInput.base_access_level=60": "doc/api/member_roles.md#add-a-member-role-to-an-instance lists 10 (Guest) through 50 (Owner) as the valid base access levels",
 
-		"broadcastmessages.CreateInput.target_access_levels=0": "doc/api/broadcast_messages.md documents target_access_levels as an array of roles without listing values; 0 (No access) is not a role a message can target",
-		"broadcastmessages.UpdateInput.target_access_levels=0": "doc/api/broadcast_messages.md documents target_access_levels as an array of roles without listing values; 0 (No access) is not a role a message can target",
+		"broadcastmessages.CreateInput.target_access_levels=0":  broadcastTargetLevels,
+		"broadcastmessages.CreateInput.target_access_levels=5":  broadcastTargetLevels,
+		"broadcastmessages.CreateInput.target_access_levels=60": broadcastTargetLevels,
+		"broadcastmessages.UpdateInput.target_access_levels=0":  broadcastTargetLevels,
+		"broadcastmessages.UpdateInput.target_access_levels=5":  broadcastTargetLevels,
+		"broadcastmessages.UpdateInput.target_access_levels=60": broadcastTargetLevels,
 
 		"groups.InvitedListInput.min_access_level=0":                minAccessLevelFilter,
 		"groups.InvitedListInput.min_access_level=60":               minAccessLevelFilter,

@@ -340,8 +340,10 @@ parameter is typed with the wrong value type altogether.
 holds every schema enum to the constants of the SDK type behind the field and
 reported these as values offered that the SDK does not declare.
 
-**Effort**: small. One constant each, and a dedicated value type for the
-cancellation role; none of them changes a signature.
+**Effort**: small. Six constants across the four types (one on
+`EventTypeValue`, one on `EventTargetTypeValue`, three on `TodoAction`, one on
+`DeploymentStatusValue`), and a dedicated value type for the cancellation role;
+none of them changes a signature.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

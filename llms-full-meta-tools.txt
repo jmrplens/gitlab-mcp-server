@@ -1684,7 +1684,7 @@ Param conventions: * = required. All actions need project_id* (numeric or url-en
 - get / delete: project_id*, branch_name*
 - list: project_id*, search, page, per_page
 - delete_merged: project_id*. Deletes all merged branches except default/protected
-- protect: project_id*, branch_name*, push_access_level (0/30/40), merge_access_level (0/30/40), allow_force_push (bool)
+- protect: project_id*, branch_name*, push_access_level (0/30/40/60), merge_access_level (0/30/40/60), allow_force_push (bool)
 - unprotect: project_id*, branch_name*
 - list_protected: project_id*
 - get_protected: project_id*, branch_name*
@@ -2204,7 +2204,7 @@ Freeze periods (cron expressions):
 Deployments (immutable history records):
 - deployment_list: project_id*, order_by, sort, environment, status, page, per_page
 - deployment_get / deployment_delete: project_id*, deployment_id*
-- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status (created/running/success/failed/canceled)
+- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status (running/success/failed/canceled)
 - deployment_update: project_id*, deployment_id*, status*
 - deployment_approve_or_reject: project_id*, deployment_id*, status* (approved/rejected), comment
 - deployment_merge_requests: project_id*, deployment_id*, state, order_by, sort, page, per_page

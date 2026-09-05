@@ -11366,7 +11366,7 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)",
+          "description": "Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "items": {
             "type": "integer"
           },
@@ -22118,7 +22118,7 @@
           "type": "string"
         },
         "status": {
-          "description": "New deployment status: created or running or success or failed or canceled",
+          "description": "New deployment status: running or success or failed or canceled",
           "enum": [
             "running",
             "success",
@@ -52978,7 +52978,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "expires_at": {
@@ -53228,7 +53228,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)",
+          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)",
           "type": "integer"
         },
         "expires_at": {
@@ -56281,7 +56281,7 @@
           ]
         },
         "unprotect_access_level": {
-          "description": "Unprotect access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)",
+          "description": "Unprotect access level (30=Developer, 40=Maintainer, 60=Admin on GitLab Self-Managed). 0 (No access) is not valid here",
           "type": [
             "null",
             "integer"
@@ -164972,7 +164972,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "expires_at": {
@@ -165254,7 +165254,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "expires_at": {
@@ -203348,7 +203348,7 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)",
+          "description": "Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
           "items": {
             "type": "integer"
           },
