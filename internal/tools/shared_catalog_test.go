@@ -668,6 +668,7 @@ func TestDomainPackages_LeaveSharedRouteStateAlone(t *testing.T) {
 
 	rules := sharedRouteStateRules()
 	offenders := make(map[string][]string)
+	// sequential: both trees accumulate into one set of offenders, asserted per rule below.
 	for _, root := range []string{".", "../toolutil"} {
 		tree := os.DirFS(root)
 		err := fs.WalkDir(tree, ".", func(path string, entry fs.DirEntry, walkErr error) error {
@@ -724,19 +725,25 @@ func TestSharedRouteStateGuard_MatchesTheShapesItMustRefuse(t *testing.T) {
 					t.Errorf("the guard wrongly matches %q", allowed)
 				}
 			}
-			// An exemption that no longer covers anything is an exemption
-			// that would cover the next write made in that file silently.
-			for _, path := range rule.exempt {
-				source, err := os.ReadFile(path)
-				if err != nil {
-					t.Errorf("exempt file %s cannot be read: %v", path, err)
-					continue
-				}
-				if !rule.pattern.Match(source) {
-					t.Errorf("%s is exempt from %q but no longer makes that write; drop the exemption", path, rule.what)
-				}
-			}
+			assertExemptionsStillApply(t, rule)
 		})
+	}
+}
+
+// assertExemptionsStillApply fails when a file exempt from a rule no longer
+// makes the write it was exempted for. An exemption that covers nothing is an
+// exemption that would silently cover the next write made in that file.
+func assertExemptionsStillApply(t *testing.T, rule sharedRouteStateRule) {
+	t.Helper()
+	for _, path := range rule.exempt {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("exempt file %s cannot be read: %v", path, err)
+			continue
+		}
+		if !rule.pattern.Match(source) {
+			t.Errorf("%s is exempt from %q but no longer makes that write; drop the exemption", path, rule.what)
+		}
 	}
 }
 
