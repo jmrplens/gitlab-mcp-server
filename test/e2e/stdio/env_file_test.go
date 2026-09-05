@@ -27,6 +27,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -251,20 +253,12 @@ func TestWorkingDirEnvFile_IgnoredFileIsAnnouncedByAbsolutePath(t *testing.T) {
 	}
 
 	logs := s.waitForStderr(t, "ignoring the .env file in the working directory", 5*time.Second)
-	// The path this test computes and the path the server prints are resolved
-	// separately, and on macOS one of them goes through /private. Comparing the
-	// resolved form keeps the assertion about the path and not about symlinks.
-	wantPath, err := filepath.EvalSymlinks(envPath)
-	if err != nil {
-		t.Fatalf("resolving the .env path: %v", err)
-	}
 
 	for _, want := range []struct {
 		name string
 		text string
 	}{
 		{name: "says it ignored the file", text: "ignoring the .env file in the working directory"},
-		{name: "names the file by absolute path", text: wantPath},
 		{name: "names a key the developer will miss", text: "GITLAB_SKIP_TLS_VERIFY"},
 		{name: "says where those settings belong instead", text: envFileHomeName},
 	} {
@@ -274,4 +268,48 @@ func TestWorkingDirEnvFile_IgnoredFileIsAnnouncedByAbsolutePath(t *testing.T) {
 			}
 		})
 	}
+
+	// The path this test computes and the path the server prints are two
+	// spellings of one file: on macOS one of them goes through /private, and on
+	// a Windows runner whose temp directory sits under an 8.3 short name the
+	// server prints C:\Users\RUNNER~1\... while the test holds the long form.
+	// Both sides are resolved before comparing, so the assertion is about the
+	// file the operator can open and not about which spelling reached the log.
+	t.Run("names the file by absolute path", func(t *testing.T) {
+		wantPath, err := filepath.EvalSymlinks(envPath)
+		if err != nil {
+			t.Fatalf("resolving the .env path: %v", err)
+		}
+		logged := loggedIgnoredEnvPath(t, logs)
+		gotPath, err := filepath.EvalSymlinks(logged)
+		if err != nil {
+			t.Fatalf("the logged path %q does not resolve to a file: %v", logged, err)
+		}
+		if gotPath != wantPath {
+			t.Errorf("stderr names %q (resolves to %q), want %q:\n%s", logged, gotPath, wantPath, logs)
+		}
+	})
+}
+
+// ignoredEnvPathLine finds the path attribute of the "ignoring the .env file"
+// warning: unquoted when slog's text handler saw nothing to escape, quoted
+// otherwise.
+var ignoredEnvPathLine = regexp.MustCompile(`ignoring the \.env file in the working directory\s+path=("(?:[^"\\]|\\.)*"|\S+)`)
+
+// loggedIgnoredEnvPath returns the path the server said it ignored, unquoted.
+func loggedIgnoredEnvPath(t *testing.T, logs string) string {
+	t.Helper()
+	m := ignoredEnvPathLine.FindStringSubmatch(logs)
+	if m == nil {
+		t.Fatalf("stderr carries no path= on the ignored .env warning:\n%s", logs)
+	}
+	value := m[1]
+	if strings.HasPrefix(value, `"`) {
+		unquoted, err := strconv.Unquote(value)
+		if err != nil {
+			t.Fatalf("unquoting the logged path %s: %v", value, err)
+		}
+		return unquoted
+	}
+	return value
 }

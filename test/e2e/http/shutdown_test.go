@@ -20,7 +20,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -113,12 +112,12 @@ func TestShutdown_OpenListenStreams_ProcessExitsCleanlyOnEverySurface(t *testing
 				}
 			}
 			if code != 0 {
-				t.Errorf("exit status %d after SIGTERM, want 0:\n%s", code, srv.logs())
+				t.Errorf("exit status %d after %s, want 0:\n%s", code, terminationSignalName, srv.logs())
 			}
 			if strings.Contains(srv.logs(), "context deadline exceeded") {
 				t.Errorf("shutdown ran out of its drain budget:\n%s", srv.logs())
 			}
-			t.Logf("exited %s after SIGTERM", elapsed)
+			t.Logf("exited %s after %s", elapsed, terminationSignalName)
 		})
 	}
 }
@@ -151,6 +150,7 @@ func shutdownStartServer(t *testing.T, flags ...string) *shutdownServer {
 	// Not exec.CommandContext: its cancellation is a kill, and this file needs
 	// the process to survive until it is signaled deliberately.
 	cmd := exec.Command(bin, args...) //nolint:noctx // see above
+	prepareForTermination(cmd)
 	cmd.Env = append(os.Environ(),
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
@@ -201,8 +201,8 @@ func (s *shutdownServer) terminateAndWait(t *testing.T, grace time.Duration) (ti
 	t.Helper()
 
 	started := time.Now()
-	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		t.Fatalf("sending SIGTERM: %v", err)
+	if err := signalTermination(s.cmd.Process); err != nil {
+		t.Fatalf("sending %s: %v", terminationSignalName, err)
 	}
 
 	// The wait runs on its own goroutine so the deadline can be enforced here,
@@ -216,7 +216,7 @@ func (s *shutdownServer) terminateAndWait(t *testing.T, grace time.Duration) (ti
 	select {
 	case <-reaped:
 	case <-time.After(grace):
-		t.Fatalf("the server was still running %s after SIGTERM; it had to be killed:\n%s", grace, s.logs())
+		t.Fatalf("the server was still running %s after %s; it had to be killed:\n%s", grace, terminationSignalName, s.logs())
 	}
 	return time.Since(started), s.cmd.ProcessState.ExitCode()
 }

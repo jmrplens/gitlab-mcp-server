@@ -33,11 +33,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -80,6 +80,11 @@ func serverBinary(t *testing.T) string {
 		}
 		builtDir = dir
 		out := filepath.Join(dir, "gitlab-mcp-server")
+		if runtime.GOOS == "windows" {
+			// exec refuses a file with no executable extension there, and
+			// go build -o writes exactly the name it is given.
+			out += ".exe"
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/server")
@@ -131,6 +136,9 @@ type session struct {
 
 	mu     sync.Mutex
 	stderr strings.Builder
+	// notifications holds every notification call read past while waiting
+	// for a response, in arrival order, for the tests that want them.
+	notifications []map[string]any
 }
 
 // startSession launches the binary with the given environment and returns a
@@ -180,12 +188,19 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 	bin := serverBinary(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
+	prepareForTermination(cmd)
 	cmd.Dir = dir
 
 	environ := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
 	for k, v := range env {
 		environ = append(environ, k+"="+v)
 	}
+	// os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows, and the
+	// server resolves its home through it: the env file it loads and the home
+	// directory it drops as an implicit allow-list root both hang off that
+	// answer. Mirror the effective HOME into the platform's own variable, or a
+	// test that sets HOME configures a home the server never looks at.
+	environ = withPlatformHome(environ)
 	cmd.Env = environ
 
 	stdin, err := cmd.StdinPipe()
@@ -304,11 +319,62 @@ func (s *session) readMessage(t *testing.T, within time.Duration) map[string]any
 	}
 }
 
-// call sends a request and returns its response.
+// call sends a request and returns the response carrying its id.
+//
+// Matching on the id is what makes this a call rather than "the next line".
+// The server speaks unprompted: after initialize it announces the catalog it
+// registered once the transport was connected, as tools, prompts and resources
+// list_changed notifications, and a reader that took the next line for the
+// answer was one message behind from then on. Every later assertion then ran
+// against a notification, which has no error and so never failed, and the real
+// responses piled up unread in the pipe. On Windows, whose pipe is smaller than
+// Linux's, four of those were enough to block the server's write and hold its
+// shutdown forever, which is how this surfaced. Notifications read past are
+// kept in notifications; a response to some other request is a failure, since
+// nothing here sends two requests without reading the first one back.
 func (s *session) call(t *testing.T, msg string) map[string]any {
 	t.Helper()
+
+	want := requestIDOf(t, msg)
 	s.send(t, msg)
-	return s.readMessage(t, 30*time.Second)
+	for {
+		got := s.readMessage(t, 30*time.Second)
+		if _, isCall := got["method"]; isCall && got["id"] == nil {
+			s.mu.Lock()
+			s.notifications = append(s.notifications, got)
+			s.mu.Unlock()
+			continue
+		}
+		if !sameID(got["id"], want) {
+			s.mu.Lock()
+			passed := len(s.notifications)
+			s.mu.Unlock()
+			t.Fatalf("waiting for the response to id %v, read a message for id %v after passing %d notification(s): %v\nstderr: %s",
+				want, got["id"], passed, got, s.stderrText())
+		}
+		return got
+	}
+}
+
+// requestIDOf reads the id out of an outgoing request, failing on a message
+// that has none: a notification is sent with send, not call.
+func requestIDOf(t *testing.T, msg string) any {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(msg), &decoded); err != nil {
+		t.Fatalf("call was given a message that is not JSON: %q: %v", msg, err)
+	}
+	id, ok := decoded["id"]
+	if !ok || id == nil {
+		t.Fatalf("call was given a message without an id; use send for a notification: %q", msg)
+	}
+	return id
+}
+
+// sameID compares two JSON-RPC ids as the decoder produced them, a number or a
+// string, without caring which of the two spellings each side used.
+func sameID(a, b any) bool {
+	return fmt.Sprint(a) == fmt.Sprint(b)
 }
 
 // alive reports whether the server process is still running.
@@ -505,8 +571,8 @@ func (s *session) terminate(t *testing.T, within time.Duration) bool {
 func (s *session) terminateAndWait(t *testing.T, within time.Duration) (code int, exited bool) {
 	t.Helper()
 
-	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		t.Fatalf("sending SIGTERM: %v", err)
+	if err := signalTermination(s.cmd.Process); err != nil {
+		t.Fatalf("sending %s: %v", terminationSignalName, err)
 	}
 	return s.waitExit(t, within)
 }

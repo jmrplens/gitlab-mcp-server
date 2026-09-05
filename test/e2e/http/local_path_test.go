@@ -21,6 +21,7 @@ package httpe2e
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -118,6 +119,18 @@ func localPathSecret(t *testing.T) string {
 	return path
 }
 
+// jsonString renders s as a JSON string literal, quotes included. A path is
+// spliced into a request body below, and on Windows it carries backslashes
+// that a raw splice would hand the decoder as escape sequences.
+func jsonString(t *testing.T, s string) string {
+	t.Helper()
+	quoted, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("quoting %q: %v", s, err)
+	}
+	return string(quoted)
+}
+
 // TestLocalPath_HTTPRefusesEveryCallerSuppliedPath drives one tools/call per
 // local-path input over the real HTTP transport and asserts each is refused
 // before anything reaches GitLab.
@@ -150,19 +163,19 @@ func TestLocalPath_HTTPRefusesEveryCallerSuppliedPath(t *testing.T) {
 		{
 			name:      "file_path reads a file from the server's own disk",
 			action:    "project.upload_avatar",
-			params:    `{"project_id":"42","filename":"avatar.png","file_path":"` + secret + `"}`,
+			params:    `{"project_id":"42","filename":"avatar.png","file_path":` + jsonString(t, secret) + `}`,
 			wantInput: "file_path",
 		},
 		{
 			name:      "output_path writes one to it",
 			action:    "package.download",
-			params:    `{"project_id":"42","package_name":"pkg","package_version":"1.0.0","file_name":"asset.bin","output_path":"` + filepath.Join(directory, "written.bin") + `"}`,
+			params:    `{"project_id":"42","package_name":"pkg","package_version":"1.0.0","file_name":"asset.bin","output_path":` + jsonString(t, filepath.Join(directory, "written.bin")) + `}`,
 			wantInput: "output_path",
 		},
 		{
 			name:      "directory_path reads a whole tree",
 			action:    "package.publish_directory",
-			params:    `{"project_id":"42","package_name":"pkg","package_version":"1.0.0","directory_path":"` + directory + `"}`,
+			params:    `{"project_id":"42","package_name":"pkg","package_version":"1.0.0","directory_path":` + jsonString(t, directory) + `}`,
 			wantInput: "directory_path",
 		},
 	}

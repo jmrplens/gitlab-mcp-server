@@ -68,16 +68,24 @@ func TestTelemetry_EnabledWithAnUnreachableCollectorKeepsStdoutClean(t *testing.
 		t.Fatalf("the server exited while telemetry was failing to export\nstderr: %s", session.stderrText())
 	}
 
-	// Shutdown flushes, which is the other moment an exporter writes.
-	if _, exited := session.terminateAndWait(t, 20*time.Second); !exited {
+	// The failures must be visible, on stderr. A telemetry stack that fails
+	// silently is worse than one that fails loudly: an operator would see an
+	// empty dashboard and no reason for it. Asserted before the shutdown so it
+	// holds on every platform, including the one that cannot reach the shutdown
+	// below.
+	session.waitForStderr(t, "telemetry", 5*time.Second)
+
+	// Shutdown flushes, which is the other moment an exporter writes. Closing
+	// stdin is the stdio shutdown a client actually performs, and the portable
+	// one. This once hung on Windows and was blamed on the flush; the cause
+	// was the harness reading notifications as responses and leaving the real
+	// ones unread in a pipe too small to hold them, so the server's last write
+	// never returned. call now matches on the id, and the exit is asserted on
+	// every platform.
+	if _, exited := session.closeStdinAndWait(t, 20*time.Second); !exited {
 		t.Errorf("the server did not exit; a telemetry flush against a dead collector held it open\nstderr: %s",
 			session.stderrText())
 	}
-
-	// The failures must be visible, on stderr. A telemetry stack that fails
-	// silently is worse than one that fails loudly: an operator would see an
-	// empty dashboard and no reason for it.
-	session.waitForStderr(t, "telemetry", 5*time.Second)
 }
 
 // TestTelemetry_DisabledByDefault asserts that a server nobody asked to
