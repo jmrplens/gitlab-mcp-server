@@ -8798,6 +8798,106 @@ func TestMain_VersionAndToolSearch_ExitBeforeAnythingIsStarted(t *testing.T) {
 	}
 }
 
+// TestMain_ProcessLevelModes_ExitThroughTheSeam covers the argument forms
+// that end the process with a status code, every one of which now leaves
+// through exitProcess so the code can be read back here: a transport nobody
+// recognizes, --shutdown with nothing to stop, --probe of a listener that
+// answers, and an HTTP deployment that names no instance. The first case is
+// --version again, carrying the two flags main handles before it prints:
+// --env-file, which has to reach the environment before anything reads it,
+// and --meta-tools, which is recorded as explicitly set.
+//
+// --shutdown runs under a private process name, because with the real one it
+// would find, and stop, any server the machine running this test is serving.
+func TestMain_ProcessLevelModes_ExitThroughTheSeam(t *testing.T) {
+	envFile := filepath.Join(t.TempDir(), "server.env")
+	health := httptest.NewServer(healthMux(http.StatusOK))
+	t.Cleanup(health.Close)
+
+	cases := []struct {
+		name       string
+		args       []string
+		wantExit   []int
+		wantStdout string
+		// verify runs after main returned, for what the mode leaves behind.
+		verify func(t *testing.T)
+	}{
+		{
+			name:       "--version carrying --env-file and --meta-tools",
+			args:       []string{"gitlab-mcp-server", "-version", "-env-file", envFile, "-meta-tools"},
+			wantStdout: version,
+			verify: func(t *testing.T) {
+				t.Helper()
+				if got := os.Getenv(config.EnvFileVar); got != envFile {
+					t.Errorf("%s = %q after --env-file, want %q", config.EnvFileVar, got, envFile)
+				}
+			},
+		},
+		{
+			name:     "a transport nobody recognizes exits 2",
+			args:     []string{"gitlab-mcp-server", "-transport", "carrier-pigeon"},
+			wantExit: []int{2},
+		},
+		{
+			name:     "--shutdown with no instance running exits 0",
+			args:     []string{filepath.Join(t.TempDir(), peerName(t)), "-shutdown"},
+			wantExit: []int{0},
+		},
+		{
+			name:     "--probe of a listener that answers exits 0",
+			args:     []string{"gitlab-mcp-server", "-probe", health.URL + "/health"},
+			wantExit: []int{0},
+		},
+		{
+			name:     "--http naming no instance exits 1",
+			args:     []string{"gitlab-mcp-server", "-http"},
+			wantExit: []int{1},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			withFreshFlagSet(t)
+			// Claimed through t.Setenv so what main writes reverts with the
+			// test, and cleared so no instance from the environment turns the
+			// HTTP case into a working server.
+			t.Setenv(config.EnvFileVar, "")
+			t.Setenv("GITLAB_URL", "")
+			t.Setenv("GITLAB_TOKEN", "")
+			t.Setenv("GITLAB_MCP_TELEMETRY", "")
+
+			var exits []int
+			originalExit := exitProcess
+			exitProcess = func(code int) { exits = append(exits, code) }
+			originalArgs, originalLogger, originalBase := os.Args, slog.Default(), baseLogHandler
+			os.Args = tt.args
+			t.Cleanup(func() {
+				exitProcess = originalExit
+				os.Args = originalArgs
+				slog.SetDefault(originalLogger)
+				baseLogHandler = originalBase
+				// The HTTP case switches the filesystem policy for the
+				// process; every other test here runs as stdio.
+				toolutil.SetLocalFilesystemAccess(true)
+			})
+			stdout := captureStdout(t)
+
+			main()
+
+			printed := stdout()
+			if tt.wantStdout != "" && !strings.Contains(printed, tt.wantStdout) {
+				t.Errorf("stdout = %q, want it to carry %q", printed, tt.wantStdout)
+			}
+			if !slices.Equal(exits, tt.wantExit) {
+				t.Errorf("exit codes = %v, want %v", exits, tt.wantExit)
+			}
+			if tt.verify != nil {
+				tt.verify(t)
+			}
+		})
+	}
+}
+
 // TestMain_StdioMode_StartsAndStopsWithTheClient covers the ordinary path all
 // the way through main: no flags, credentials from the environment, and a
 // client that closes its pipe.

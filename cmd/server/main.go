@@ -332,7 +332,8 @@ func main() {
 	transportChoice, transportErr := resolveTransport(transport, useHTTP, flagWasSet("http"))
 	if transportErr != nil {
 		fmt.Fprintln(os.Stderr, transportErr)
-		os.Exit(2)
+		exitProcess(2)
+		return
 	}
 	useHTTP = transportChoice.HTTP
 
@@ -359,12 +360,14 @@ func main() {
 	}
 
 	if shutdownPeers {
-		os.Exit(runShutdown())
+		exitProcess(runShutdown())
+		return
 	}
 
 	if probeHealth {
 		deps := probeDeps{peers: livePeers, stdinIsNull: peerStdinIsNull}
-		os.Exit(runProbe(context.Background(), flag.Args(), hcfg.tlsCert, deps, os.Stderr))
+		exitProcess(runProbe(context.Background(), flag.Args(), hcfg.tlsCert, deps, os.Stderr))
+		return
 	}
 
 	if toolSearch != "" {
@@ -431,7 +434,8 @@ func main() {
 
 	if err := run(hcfgPtr); err != nil {
 		slog.Error("server exited with error", "error", err)
-		os.Exit(1)
+		exitProcess(1)
+		return
 	}
 }
 
@@ -4302,8 +4306,12 @@ func runToolSearch(query, toolSurface string, tier edition.Tier) {
 	}
 }
 
-// Tool search hooks are replaceable in tests so runToolSearch can be verified
-// without terminating the test process through os.Exit.
+// exitProcess is every exit main takes, so a test can drive main through
+// each of its process-level modes and read the status code back instead of
+// having the test binary end. main returns after calling it for the same
+// reason: os.Exit never returns, and a test's replacement does.
+// toolSearchRunner lets the same tests run --tool-search without building
+// a catalog.
 var (
 	toolSearchRunner = doToolSearch
 	exitProcess      = os.Exit
