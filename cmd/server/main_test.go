@@ -2487,6 +2487,26 @@ func TestRunStdio_ACatalogThatCannotBeBuilt_StopsTheServer(t *testing.T) {
 	}
 }
 
+// captureLogMessages installs a default logger that records every message at
+// DEBUG and above, and returns a function reporting whether any recorded
+// message contains the given text. The record is guarded by a mutex, so it
+// is safe to consult while goroutines the test started are still logging,
+// which a plain buffer is not.
+func captureLogMessages(t *testing.T) func(substring string) bool {
+	t.Helper()
+	var mu sync.Mutex
+	var messages []string
+	capture := levelCapturingHandler{threshold: slog.LevelDebug, mu: &mu, messages: &messages}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(capture))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return func(substring string) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.ContainsFunc(messages, func(message string) bool { return strings.Contains(message, substring) })
+	}
+}
+
 // TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain covers the bound
 // on the wait for startup work: a client that leaves while the catalog is
 // still being built is not held for the whole build, only for the drain,
@@ -2502,18 +2522,7 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 	restoreDrain := stdioStartupDrainTimeout
 	stdioStartupDrainTimeout = time.Millisecond
 	t.Cleanup(func() { stdioStartupDrainTimeout = restoreDrain })
-
-	var mu sync.Mutex
-	var messages []string
-	capture := levelCapturingHandler{threshold: slog.LevelDebug, mu: &mu, messages: &messages}
-	previous := slog.Default()
-	slog.SetDefault(slog.New(capture))
-	t.Cleanup(func() { slog.SetDefault(previous) })
-	logged := func(message string) bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return slices.Contains(messages, message)
-	}
+	logged := captureLogMessages(t)
 
 	// A closed pipe: EOF at once, so serving ends while the build is running.
 	reader, writer, err := os.Pipe()
@@ -3128,8 +3137,7 @@ func assertStartupIdentity(t *testing.T, resolved *toolutil.UserIdentity, want b
 // logs, because nothing a client reports about its progress changes what the
 // server does.
 func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
-	logged := testutil.CaptureSlog(t)
-	slog.SetDefault(slog.New(slog.NewJSONHandler(logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	logged := captureLogMessages(t)
 
 	client := newMockGitLabClient(t)
 	shell, err := newServerShell(t.Context(), client, &config.ServerConfig{
@@ -3140,8 +3148,8 @@ func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newServerShell: %v", err)
 	}
-	if !strings.Contains(logged.String(), "tools/call rate limit enabled") {
-		t.Errorf("log = %q, want the rate limit announced", logged.String())
+	if !logged("tools/call rate limit enabled") {
+		t.Error("the rate limit was attached without being announced")
 	}
 
 	session := newInMemorySession(t, shell.server)
@@ -3149,9 +3157,9 @@ func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
 		t.Fatalf("NotifyProgress: %v", notifyErr)
 	}
 	deadline := time.Now().Add(testHTTPLivenessTimeout)
-	for !strings.Contains(logged.String(), "received progress notification from client") {
+	for !logged("received progress notification from client") {
 		if time.Now().After(deadline) {
-			t.Fatalf("log = %q, want the client's progress notification recorded", logged.String())
+			t.Fatal("the client's progress notification was never recorded")
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -4305,7 +4313,7 @@ func TestServeHTTP_PinnedApplicationsAndTrustedProxy_AreWiredInBothAuthModes(t *
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			logged := testutil.CaptureSlog(t)
+			logged := captureLogMessages(t)
 			gitlab := newMockGitLabServerWithUser(t)
 			cfg := &config.Config{
 				GitLabURL:          gitlab.URL,
@@ -4325,8 +4333,8 @@ func TestServeHTTP_PinnedApplicationsAndTrustedProxy_AreWiredInBothAuthModes(t *
 			defer cancel()
 			addr, errCh := oauthAddr(t, ctx, cfg)
 
-			if !strings.Contains(logged.String(), tc.wantLog) {
-				t.Errorf("startup log = %q, want it to carry %q", logged.String(), tc.wantLog)
+			if !logged(tc.wantLog) {
+				t.Errorf("startup log lacks %q", tc.wantLog)
 			}
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/health", nil)
 			if err != nil {
@@ -9440,13 +9448,35 @@ func TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly(t *testing.T) {
 // failure and exits non-zero, which is what a supervisor's restart policy
 // acts on. A context deadline is the reachable stand-in here, since it ends
 // the run without the client closing its pipe and without a cancellation.
+//
+// The SDK's Run cannot return while its read loop is parked on stdin, and
+// nothing in the stdio binding interrupts that read, so once the deadline
+// has passed the pipe's read end is closed from here: that ends the loop
+// with an error that is not EOF, which is not a client hanging up, and Run
+// then reports the deadline it had already chosen.
 func TestServeStdio_AnyOtherEnd_IsReportedAsAFailure(t *testing.T) {
-	heldOpenStdin(t)
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	original := os.Stdin
+	os.Stdin = reader
+	t.Cleanup(func() {
+		os.Stdin = original
+		_ = writer.Close()
+		_ = reader.Close()
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	done := make(chan error, 1)
 	go func() { done <- serveStdio(ctx, newTestMCPServer(t)) }()
+
+	<-ctx.Done()
+	// Long enough for Run to have taken the deadline's branch, where it waits
+	// on the session, before the session is made to end.
+	time.Sleep(500 * time.Millisecond)
+	_ = reader.Close()
 
 	select {
 	case serveErr := <-done:
@@ -9454,7 +9484,7 @@ func TestServeStdio_AnyOtherEnd_IsReportedAsAFailure(t *testing.T) {
 			t.Errorf("serveStdio() = %v, want the deadline reported as a server error", serveErr)
 		}
 	case <-time.After(testHTTPLivenessTimeout):
-		t.Fatal("serveStdio did not return after its context expired")
+		t.Fatal("serveStdio did not return after its context expired and its input ended")
 	}
 }
 
