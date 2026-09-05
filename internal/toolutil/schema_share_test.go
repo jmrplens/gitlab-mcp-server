@@ -143,6 +143,13 @@ func TestDeriveSchema_TransformReturningItsInput(t *testing.T) {
 // TestDeriveSchema_ConcurrentCallersShareOneResult verifies callers racing
 // for one transform of one shared schema all receive the same map: the memo
 // is the point of contention when a pool builds many servers at once.
+//
+// The derivation waits on an [arrivalGate], so every caller is inside it
+// before any of them stores. Nothing here is exclusive — a memo miss lets all
+// of them derive — so the gate makes the store the only thing that decides
+// which map they share: replacing its LoadOrStore with a plain store, which
+// hands each caller the map it built itself, was caught 23 runs in 100
+// without it.
 func TestDeriveSchema_ConcurrentCallersShareOneResult(t *testing.T) {
 	t.Parallel()
 
@@ -151,10 +158,13 @@ func TestDeriveSchema_ConcurrentCallersShareOneResult(t *testing.T) {
 	transform := "race|" + t.Name()
 	const callers = 16
 	results := make([]map[string]any, callers)
+	allArrived, arrive := arrivalGate(callers)
 	var wg sync.WaitGroup
 	for i := range callers {
 		wg.Go(func() {
+			arrive()
 			results[i], _ = DeriveSchema(shared, transform, func() any {
+				<-allArrived
 				return map[string]any{"type": "object", "properties": map[string]any{}}
 			}).(map[string]any)
 		})
