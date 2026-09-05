@@ -67,6 +67,83 @@ func TestOnceMap_Peek_ReportsOnlyFinishedBuilds(t *testing.T) {
 	}
 }
 
+// TestOnceMap_PanickingBuildLeavesTheKeyUnbuilt verifies a build that panics
+// memoizes nothing: the panic reaches its own caller, the key is reported
+// unbuilt, and the next caller builds it and is memoized in turn.
+//
+// [sync.Once] marks itself done however its function ends, so without the
+// entry being dropped the key would be poisoned for the life of the process:
+// the zero value served to everyone, with no rebuild and nothing recorded as
+// built. Every build here runs where a panic kills the process, but the first
+// caller to run one under a recover would inherit the poisoning, which is not
+// what the caches this replaced did.
+func TestOnceMap_PanickingBuildLeavesTheKeyUnbuilt(t *testing.T) {
+	t.Parallel()
+
+	var cache OnceMap[string, string]
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != "the build failed" {
+				t.Errorf("recover() = %v, want the build's own panic", recovered)
+			}
+		}()
+		cache.Load("key", func() string { panic("the build failed") })
+		t.Error("Load() returned instead of letting the panic through")
+	}()
+
+	if value, ok := cache.Peek("key"); ok || value != "" {
+		t.Errorf("Peek() after a panicking build = %q, %t; want the key unbuilt", value, ok)
+	}
+	if got := cache.Load("key", func() string { return "rebuilt" }); got != "rebuilt" {
+		t.Errorf("Load() after a panicking build = %q, want the next build's value", got)
+	}
+	if got := cache.Load("key", func() string { return "later" }); got != "rebuilt" {
+		t.Errorf("Load() = %q, want the rebuild memoized like any other value", got)
+	}
+}
+
+// TestOnceMap_PanickingBuildReleasesWaitersToRebuild verifies the half of the
+// same contract that only a second caller can see: a caller waiting on a
+// build that panics is not handed the zero value the build never produced,
+// but goes on to build the key itself.
+//
+// The waiter's own build is what makes the assertion hold whatever the
+// scheduler does: reaching Load before the panic or after it, the value it
+// returns is a built one. Before the entry was dropped, both orders returned
+// the zero value instead, since the entry stayed in the map with its once
+// already done.
+func TestOnceMap_PanickingBuildReleasesWaitersToRebuild(t *testing.T) {
+	t.Parallel()
+
+	var cache OnceMap[string, string]
+	allArrived, arrive := arrivalGate(2)
+	var waiter string
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		arrive()
+		waiter = cache.Load("key", func() string { return "built by the waiter" })
+	})
+
+	func() {
+		defer func() { _ = recover() }()
+		arrive()
+		cache.Load("key", func() string {
+			// Held open until the waiter has arrived, so it is waiting on
+			// this build rather than finding the key already gone.
+			<-allArrived
+			panic("the build failed")
+		})
+	}()
+	wg.Wait()
+
+	if waiter != "built by the waiter" {
+		t.Errorf("the waiter received %q, want the value of its own build", waiter)
+	}
+	if value, ok := cache.Peek("key"); !ok || value != "built by the waiter" {
+		t.Errorf("Peek() = %q, %t; want the waiter's build memoized", value, ok)
+	}
+}
+
 // arrivalGate returns a channel closed once callers goroutines have each
 // reported arriving at the call under test, together with the report they
 // make. A build closure that waits on the channel therefore holds the memo
