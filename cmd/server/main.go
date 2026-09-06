@@ -1035,6 +1035,9 @@ func validateHTTPRuntimeConfig(cfg *config.Config) error {
 	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
 		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", rateErr)
 	}
+	if err := validateHTTPPoolAndRateBounds(cfg); err != nil {
+		return err
+	}
 	// A malformed trusted origin must fail startup, not be silently dropped:
 	// a deployment believing an origin is trusted when it is not is worse
 	// than one that rejects it loudly. AddTrustedOrigin is the same check the
@@ -1052,6 +1055,35 @@ func validateHTTPRuntimeConfig(cfg *config.Config) error {
 		return fmt.Errorf("--max-request-body-bytes must be >= 0, got %d", cfg.MaxRequestBodyBytes)
 	}
 	return validateTrustedProxyConfig(cfg)
+}
+
+// validateHTTPPoolAndRateBounds applies the documented ceilings on the flags
+// that size a deployment.
+//
+// Stdio reaches them through (*config.Config).validate, which HTTP mode does
+// not run: it builds its configuration from flags and validates what it knows
+// about. The bounds were therefore published and unenforced on the transport
+// they were written for, and the two ways that showed were both silent.
+// `--max-http-clients=0` did not fail, it fell back to the pool's own default
+// of 100, so an operator who meant "no limit" got a limit and no message
+// saying so. And a value above the ceiling was taken literally, which is the
+// one direction where the number decides how much memory the process may
+// hold. The environment spelling of the same setting already refused a
+// non-positive value, so this is also what makes the two spellings agree.
+func validateHTTPPoolAndRateBounds(cfg *config.Config) error {
+	if cfg.MaxHTTPClients <= 0 {
+		return fmt.Errorf("--max-http-clients must be positive, got %d", cfg.MaxHTTPClients)
+	}
+	if cfg.MaxHTTPClients > config.MaxHTTPClients {
+		return fmt.Errorf("--max-http-clients %d exceeds maximum of %d", cfg.MaxHTTPClients, config.MaxHTTPClients)
+	}
+	if cfg.RateLimitRPS > config.MaxRateLimitRPS {
+		return fmt.Errorf("--rate-limit-rps %g exceeds maximum of %g", cfg.RateLimitRPS, float64(config.MaxRateLimitRPS))
+	}
+	if cfg.RateLimitBurst > config.MaxRateLimitBurst {
+		return fmt.Errorf("--rate-limit-burst %d exceeds maximum of %d", cfg.RateLimitBurst, config.MaxRateLimitBurst)
+	}
+	return nil
 }
 
 // validateTrustedProxyConfig holds the two proxy flags to each other.

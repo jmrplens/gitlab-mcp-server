@@ -8246,6 +8246,62 @@ func TestValidateHTTPSurfaceConfig_DefaultsThenRefusesWhatItCannotServe(t *testi
 	}
 }
 
+// TestValidateHTTPPoolAndRateBounds_AppliesTheDocumentedCeilings covers the
+// bounds HTTP mode published and did not enforce.
+//
+// Stdio reaches them through (*config.Config).validate, which HTTP mode never
+// runs, so --max-http-clients and the two rate-limit flags were checked for
+// shape and not for range on the transport they exist for. Both failures were
+// silent: a non-positive pool size fell back to the pool's own default of 100,
+// so an operator who wrote 0 meaning "no limit" got a limit and no message,
+// and a size above the ceiling was taken literally, which is the direction
+// that decides how much the process may hold.
+func TestValidateHTTPPoolAndRateBounds_AppliesTheDocumentedCeilings(t *testing.T) {
+	t.Parallel()
+
+	valid := func() *config.Config {
+		return &config.Config{
+			MaxHTTPClients: config.DefaultMaxHTTPClients,
+			RateLimitRPS:   config.DefaultHTTPRateLimitRPS,
+			RateLimitBurst: config.DefaultRateLimitBurst,
+		}
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*config.Config)
+		wantErr string
+	}{
+		{name: "the defaults pass", mutate: func(*config.Config) {}},
+		{name: "the ceiling itself passes", mutate: func(c *config.Config) { c.MaxHTTPClients = config.MaxHTTPClients }},
+		{name: "a pool of zero", mutate: func(c *config.Config) { c.MaxHTTPClients = 0 }, wantErr: "max-http-clients"},
+		{name: "a negative pool", mutate: func(c *config.Config) { c.MaxHTTPClients = -1 }, wantErr: "max-http-clients"},
+		{name: "a pool past the ceiling", mutate: func(c *config.Config) { c.MaxHTTPClients = config.MaxHTTPClients + 1 }, wantErr: "exceeds maximum"},
+		{name: "a rate past the ceiling", mutate: func(c *config.Config) { c.RateLimitRPS = config.MaxRateLimitRPS + 1 }, wantErr: "rate-limit-rps"},
+		{name: "a burst past the ceiling", mutate: func(c *config.Config) { c.RateLimitBurst = config.MaxRateLimitBurst + 1 }, wantErr: "rate-limit-burst"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := valid()
+			tt.mutate(cfg)
+
+			err := validateHTTPPoolAndRateBounds(cfg)
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("validateHTTPPoolAndRateBounds = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %v, want it to name %s", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestValidateHTTPDurationConfig_RefusesWhatWouldNeverExpire covers the upper
 // bounds on the two intervals that keep a pooled entry honest.
 //
@@ -8410,6 +8466,10 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			CapabilitySurface: config.DefaultCapabilitySurface,
 			RateLimitRPS:      1,
 			RateLimitBurst:    1,
+			// A pool size is part of a usable configuration: the size bound is
+			// checked here too, and a zero would make every case in this table
+			// fail on the pool rather than on the setting it is about.
+			MaxHTTPClients: config.DefaultMaxHTTPClients,
 		}
 	}
 
