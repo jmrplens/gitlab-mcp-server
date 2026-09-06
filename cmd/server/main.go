@@ -280,7 +280,7 @@ func main() {
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP); believed only from the peers named in --trusted-proxies, which it requires")
 	flag.StringVar(&hcfg.trustedProxies, "trusted-proxies", "", "Comma-separated addresses or CIDR ranges of the reverse proxies whose --trusted-proxy-header is believed (e.g. 127.0.0.1,10.0.0.0/8); required with --trusted-proxy-header")
 	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
-	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-server rate limit, in requests/second, on every call that reaches GitLab (0 disables it)")
+	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-credential rate limit, in requests/second, on every call that reaches GitLab; each pooled token and URL pair draws on its own bucket (0 disables it)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so nothing above the transport closes idle connections; set a positive duration to recycle idle connections sooner")
@@ -537,7 +537,7 @@ FLAGS
   -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -drain-delay dur          After SIGTERM, answer /health with 503 draining for this long before closing the
                             listener, so a balancer takes the instance out first (default 0: close at once)
-  -rate-limit-rps float     Per-server rate limit on every call that reaches GitLab (default 10; 0 disables it)
+  -rate-limit-rps float     Per-credential rate limit on every call that reaches GitLab (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP); requires -trusted-proxies
@@ -579,7 +579,7 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names to exclude (default empty)
   GITLAB_MCP_IGNORE_SCOPES          Skip PAT scope detection: true/false (default false)
   GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Maximum upload/file size for upload tools (default 2GB)
-  GITLAB_MCP_RATE_LIMIT_RPS         Per-server rate limit on every call that reaches GitLab (default 0, disabled)
+  GITLAB_MCP_RATE_LIMIT_RPS         Per-credential rate limit on every call that reaches GitLab (default 0, disabled)
   GITLAB_MCP_RATE_LIMIT_BURST       Token-bucket burst size when the rate limit is on (default 40)
   GITLAB_MCP_STDIO_MAX_LINE_BYTES   Longest stdio message accepted, in bytes (default 4 MiB). Raise it
                                     only for a client that inlines large base64 payloads; a longer line

@@ -260,7 +260,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_MCP_SESSION_TIMEOUT` | Idle MCP session timeout, HTTP mode with `--stateless=false` only (also `--session-timeout` flag) | `30m` (default)  |
 | `GITLAB_MCP_ACTION_TIMEOUT`         | Cancel an action still running after this long, both transports (also `--action-timeout` in HTTP mode; `0` disables, max 24h). Above the longest wait any action offers | `65m`            |
 | `GITLAB_MCP_DRAIN_DELAY`            | HTTP mode: after `SIGTERM`, answer `/health` with `503 draining` for this long before closing the listener, so a polling balancer removes the instance first (also `--drain-delay`; max 5m) | `0`              |
-| `GITLAB_MCP_RATE_LIMIT_RPS`         | Per-server rate limit, in req/s, on every call that reaches GitLab (`tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get`); `0` disables it. Both transports: `0` in stdio, `10` in HTTP mode, where `--rate-limit-rps` overrides it | `0` / `10` (HTTP) |
+| `GITLAB_MCP_RATE_LIMIT_RPS`         | Per-credential rate limit, in req/s, on every call that reaches GitLab (`tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get`); `0` disables it. Both transports: `0` in stdio, `10` in HTTP mode, where `--rate-limit-rps` overrides it | `0` / `10` (HTTP) |
 | `GITLAB_MCP_RATE_LIMIT_BURST`       | Token-bucket burst size when RPS > 0 (also `--rate-limit-burst` flag) | `40` (default)   |
 | `GITLAB_MCP_AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
 | `GITLAB_MCP_OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
