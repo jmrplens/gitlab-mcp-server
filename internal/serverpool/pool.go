@@ -898,6 +898,20 @@ var ErrCredentialProbeBusy = errors.New("credential verification is saturated, r
 // The wait is bounded by [credentialProbeQueueTimeout] and by the pool's
 // lifetime, so a shutdown does not leave builds parked on a queue that will
 // never move.
+// probeWait is how long a build waits for a probe slot before giving up.
+//
+// A pool assembled outside [New] carries no timeout, and a zero one would
+// make the wait expire the instant it started: the queue is not full most of
+// the time, so the caller would win the race about half the time and be told
+// the queue is saturated the rest, which is the least useful of the three
+// possible behaviors.
+func (p *ServerPool) probeWait() time.Duration {
+	if p.probeQueueTimeout <= 0 {
+		return credentialProbeQueueTimeout
+	}
+	return p.probeQueueTimeout
+}
+
 func (p *ServerPool) acquireProbeSlot() (func(), error) {
 	if p.probes == nil {
 		return func() {
@@ -906,10 +920,7 @@ func (p *ServerPool) acquireProbeSlot() (func(), error) {
 			// every caller's deferred release unconditional.
 		}, nil
 	}
-	wait := p.probeQueueTimeout
-	if wait <= 0 {
-		wait = credentialProbeQueueTimeout
-	}
+	wait := p.probeWait()
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
 	select {
@@ -1177,6 +1188,19 @@ func recoverSweep(ctx context.Context, sweep string) {
 	}
 }
 
+// idleSweepCadence is how often the idle sweep runs.
+//
+// A quarter of the idle timeout, so an entry is noticed within a quarter of
+// the deadline of passing it, floored at [idleSweepMinInterval] so a short
+// timeout cannot turn the sweep into a busy loop, and overridden by
+// idleSweepInterval where a test has to reach a tick.
+func (p *ServerPool) idleSweepCadence() time.Duration {
+	if p.idleSweepInterval > 0 {
+		return p.idleSweepInterval
+	}
+	return max(p.idleTimeout/idleSweepDivisor, idleSweepMinInterval)
+}
+
 func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background() //nolint:contextcheck // defensive: nil-ctx guard for callers that pass uninitialized context
@@ -1186,10 +1210,7 @@ func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 		return
 	}
 
-	interval := p.idleSweepInterval
-	if interval <= 0 {
-		interval = max(p.idleTimeout/idleSweepDivisor, idleSweepMinInterval)
-	}
+	interval := p.idleSweepCadence()
 	slog.InfoContext(ctx, "server pool: starting idle eviction",
 		"idle_timeout", p.idleTimeout, "sweep_interval", interval)
 

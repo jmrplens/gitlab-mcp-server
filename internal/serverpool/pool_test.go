@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -3310,6 +3311,141 @@ func TestEvictStaleCredential_KeepsWhatIsNotStale(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSweepCadences_ResolveTheirDefaults verifies the two durations the
+// background goroutines are started with.
+//
+// Both are read once, at start, and then live inside a goroutine that runs
+// for the life of the process, which is why they are worth asserting on their
+// own: a cadence resolved to zero is a ticker that panics into the sweep's
+// own recover, and the pool then quietly has no idle eviction at all. The
+// probe wait resolved to zero is subtler still — the queue is usually not
+// full, so the caller wins the race about half the time and is told the queue
+// is saturated the rest.
+func TestSweepCadences_ResolveTheirDefaults(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the probe wait", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name       string
+			configured time.Duration
+			want       time.Duration
+		}{
+			{name: "unset falls back to the default", want: credentialProbeQueueTimeout},
+			{name: "negative falls back to the default", configured: -time.Second, want: credentialProbeQueueTimeout},
+			{name: "configured is used", configured: 50 * time.Millisecond, want: 50 * time.Millisecond},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				pool := &ServerPool{probeQueueTimeout: tc.configured}
+				if got := pool.probeWait(); got != tc.want {
+					t.Errorf("probeWait() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("the idle sweep cadence", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name     string
+			timeout  time.Duration
+			override time.Duration
+			want     time.Duration
+		}{
+			{name: "a long timeout is swept four times over", timeout: 8 * time.Minute, want: 2 * time.Minute},
+			{name: "a short timeout is floored", timeout: time.Second, want: idleSweepMinInterval},
+			{name: "an override wins", timeout: time.Hour, override: time.Millisecond, want: time.Millisecond},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				pool := &ServerPool{idleTimeout: tc.timeout, idleSweepInterval: tc.override}
+				if got := pool.idleSweepCadence(); got != tc.want {
+					t.Errorf("idleSweepCadence() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+}
+
+// TestBackgroundSweeps_StopWhenTheirContextIsDone verifies that both sweeps
+// are bound to the context they were started with.
+//
+// The pool outlives a request but not the server, and these goroutines are
+// how it holds credentials open. A sweep that ignored its context would keep
+// polling GitLab for every pooled credential after shutdown, and in a test
+// binary would keep doing so between packages. The context each was given is
+// the only thing that ends them, so a guard that replaced it with a
+// background one would leave nothing able to.
+func TestBackgroundSweeps_StopWhenTheirContextIsDone(t *testing.T) {
+	tests := []struct {
+		name  string
+		start func(pool *ServerPool, ctx context.Context)
+		want  string
+	}{
+		{
+			name:  "idle eviction",
+			start: (*ServerPool).StartIdleEviction,
+			want:  "idle eviction stopped",
+		},
+		{
+			name:  "revalidation",
+			start: (*ServerPool).StartRevalidation,
+			want:  "revalidation stopped",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logged := &syncLogBuffer{}
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(logged, nil)))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			pool := New(testConfig(stubGitLabBase), testFactory(),
+				WithIdleTimeout(time.Hour),
+				WithRevalidateInterval(time.Hour))
+			// Already done, so the goroutine's very first select must take
+			// the shutdown arm rather than wait an hour for a tick.
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			tt.start(pool, ctx)
+
+			deadline := time.After(5 * time.Second)
+			for !strings.Contains(logged.String(), tt.want) {
+				select {
+				case <-deadline:
+					t.Fatalf("the sweep did not stop with its context; log = %q", logged.String())
+				default:
+					runtime.Gosched()
+				}
+			}
+		})
+	}
+}
+
+// syncLogBuffer collects log output from a goroutine the test does not own.
+type syncLogBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+// Write appends to the buffer under the lock.
+func (b *syncLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+// String returns everything written so far.
+func (b *syncLogBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 // TestRevalidateAll_EntryEvictedDuringTheCheck_IsNotResurrected verifies the
