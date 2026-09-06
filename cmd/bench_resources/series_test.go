@@ -346,10 +346,27 @@ type seriesFixture struct {
 	conns    []*clientConn
 }
 
+// quickSettle shortens the quiet a step leaves the process before its settled
+// reading, for the duration of one test.
+//
+// What is dropped is the wait, not the reading: the collection is still forced
+// through the real profiling handlers and the heap that comes back is this
+// process's own. The wait exists so a real server's last responses are off the
+// wire before the reading; a fixture whose load is an in-memory call has
+// nothing in flight to wait for, and would otherwise pay half a second per
+// step for it.
+func quickSettle(t *testing.T) {
+	t.Helper()
+	previous := settleDelay
+	settleDelay = time.Millisecond
+	t.Cleanup(func() { settleDelay = previous })
+}
+
 // newSeriesFixture builds the fixture for a plan over the given counts, with
 // a steady phase short enough for a test.
 func newSeriesFixture(t *testing.T, steps []int, budget float64) *seriesFixture {
 	t.Helper()
+	quickSettle(t)
 	plan := scenarioPlan{
 		ID: "http-dynamic-series", Transport: transportHTTP, Surface: surfaceDynamic,
 		Parallel: 1, Steps: steps, StepDuration: 80 * time.Millisecond,
@@ -419,6 +436,9 @@ func assertSeriesStep(t *testing.T, plan scenarioPlan, step SeriesStep, wantClie
 	}
 	if step.RSSMeanMiB <= 0 || step.RSSPeakMiB < step.RSSMeanMiB {
 		t.Errorf("resident set mean %v peak %v, want both measured with the peak at least the mean", step.RSSMeanMiB, step.RSSPeakMiB)
+	}
+	if step.SettledHeapMiB <= 0 || step.SettledRSSMiB <= 0 {
+		t.Errorf("settled heap %v resident %v, want both read once the load stopped", step.SettledHeapMiB, step.SettledRSSMiB)
 	}
 	if step.Calls == 0 || step.CallP50Ms < 0 || step.ListP50Ms < 0 {
 		t.Errorf("latency %+v over %d calls, want a distribution per method", step, step.Calls)
@@ -535,6 +555,118 @@ func TestWalkSteps_LatencyCeiling_MakesTheStepTheLast(t *testing.T) {
 	}
 }
 
+// settledShare is the share of a step's peak resident set under load that its
+// settled live heap has to stay under for the reading to be the tenancy figure
+// it claims to be.
+//
+// Half is deliberately loose. The process measured here is the test binary
+// itself, whose resident set carries its own mapped text and the runtime's
+// arenas beside a heap of a few mebibytes, so the real ratio is a small
+// fraction of this. The number worth pinning is that the two are not the same
+// measurement: on the reference host at a thousand credentials the peak
+// resident set was seventeen times the live heap, and publishing the first as
+// the second is the defect this reading exists to correct.
+const settledShare = 0.5
+
+// TestRunStep_SettledReading_IsAFractionOfThePeakUnderLoad verifies a step
+// records what the process holds with nothing in flight, and that the figure
+// is a different one from the peak it reached while serving.
+//
+// The whole step runs the way the driver runs it: a real steady phase, the
+// resident set sampled from the kernel throughout, and the settled heap read
+// through the real profiling handlers with a collection forced. Nothing here
+// is a stand-in for the reading.
+func TestRunStep_SettledReading_IsAFractionOfThePeakUnderLoad(t *testing.T) {
+	r := &runner{progress: progressFunc(false)}
+	f := newSeriesFixture(t, []int{1}, 0)
+
+	step := r.runStep(t.Context(), stepInput{
+		plan: f.plan, call: f.call, conns: []*clientConn{{rpc: &countingConn{}}},
+		sampler: f.sampler, profiler: f.profiler, capacity: 1,
+	})
+
+	t.Logf("settled heap %.2f MiB, settled resident %.2f MiB, peak resident under load %.2f MiB",
+		step.SettledHeapMiB, step.SettledRSSMiB, step.RSSPeakMiB)
+	if step.SettledHeapMiB <= 0 {
+		t.Fatalf("settled heap %v, want the live heap this process holds", step.SettledHeapMiB)
+	}
+	if step.SettledHeapMiB > step.RSSPeakMiB*settledShare {
+		t.Errorf("settled heap %.2f MiB against a peak resident set of %.2f MiB under load: "+
+			"the settled reading is not distinguishable from the load figure",
+			step.SettledHeapMiB, step.RSSPeakMiB)
+	}
+	// The resident set is read at the same moment as the heap and holds
+	// everything the heap does, so it cannot be the smaller of the two.
+	if step.SettledRSSMiB < step.SettledHeapMiB {
+		t.Errorf("settled resident %v under settled heap %v, which cannot be", step.SettledRSSMiB, step.SettledHeapMiB)
+	}
+	for _, note := range step.Notes {
+		if strings.Contains(note, "settled") {
+			t.Errorf("note %q on a step whose settled reading was taken", note)
+		}
+	}
+}
+
+// TestSettle_NotesWhatItCouldNotRead covers the three ways a settled reading
+// is not taken: a cancelled run, a listener that does not answer, and a
+// platform or process the resident set cannot be read from. None of them is
+// worth losing a step over, so each is a note beside figures that stand on
+// their own.
+func TestSettle_NotesWhatItCouldNotRead(t *testing.T) {
+	quickSettle(t)
+	self := os.Getpid()
+
+	t.Run("cancelled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		var step SeriesStep
+		settle(ctx, newSampler(ctx, time.Second, func() []int { return []int{self} }), newPprofTestClient(t), &step)
+		if step.SettledHeapMiB != 0 || step.SettledRSSMiB != 0 {
+			t.Errorf("step %+v claims a reading taken on a cancelled run", step)
+		}
+		if len(step.Notes) != 1 || !strings.Contains(step.Notes[0], "the run was cancelled") {
+			t.Errorf("notes = %v, want one saying the run was cancelled", step.Notes)
+		}
+	})
+
+	t.Run("listener gone", func(t *testing.T) {
+		var step SeriesStep
+		settle(t.Context(), newSampler(t.Context(), time.Second, func() []int { return []int{self} }),
+			newPprofClient("http://127.0.0.1:1"), &step)
+		if step.SettledHeapMiB != 0 {
+			t.Errorf("settled heap %v, want nothing from a listener that does not answer", step.SettledHeapMiB)
+		}
+		// The resident set is read through ps, which a platform without one
+		// notes as unavailable in its own words. That note belongs to the
+		// platform, not to the listener this case takes away, so it may stand
+		// beside the one the case is about and nothing else may.
+		var heapNotes int
+		for _, note := range step.Notes {
+			switch {
+			case strings.Contains(note, "settled heap unavailable"):
+				heapNotes++
+			case strings.Contains(note, "settled resident set unavailable"):
+			default:
+				t.Errorf("note %q, want only the heap's and, without ps, the resident set's", note)
+			}
+		}
+		if heapNotes != 1 {
+			t.Errorf("notes = %v, want exactly one about the heap", step.Notes)
+		}
+	})
+
+	t.Run("no process to sample", func(t *testing.T) {
+		var step SeriesStep
+		settle(t.Context(), newSampler(t.Context(), time.Second, func() []int { return nil }), newPprofTestClient(t), &step)
+		if step.SettledHeapMiB <= 0 {
+			t.Errorf("settled heap %v, want the reading that did answer", step.SettledHeapMiB)
+		}
+		if len(step.Notes) != 1 || !strings.Contains(step.Notes[0], "settled resident set unavailable") {
+			t.Errorf("notes = %v, want one about the resident set", step.Notes)
+		}
+	})
+}
+
 // TestRunStep_ListenerGone_NotesWhatItCouldNotRead verifies a step whose
 // profile listener does not answer still publishes its load figures, with a
 // note per thing it could not read, since the memory and latency of a step
@@ -556,7 +688,7 @@ func TestRunStep_ListenerGone_NotesWhatItCouldNotRead(t *testing.T) {
 		t.Errorf("step %+v claims what the listener never answered", step)
 	}
 	joined := strings.Join(step.Notes, "\n")
-	for _, want := range []string{"goroutine count unavailable", "cpu profile unavailable", "heap profile unavailable"} {
+	for _, want := range []string{"goroutine count unavailable", "cpu profile unavailable", "heap profile unavailable", "settled heap unavailable"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(joined, want) {
 				t.Errorf("notes %v do not say %q", step.Notes, want)
@@ -566,19 +698,31 @@ func TestRunStep_ListenerGone_NotesWhatItCouldNotRead(t *testing.T) {
 }
 
 // TestSeriesSummaries_NameWhatHappened verifies the lines a run prints for
-// a step and for a series carry the figures and the stop.
+// a step and for a series carry the figures and the stop, with each memory
+// figure said to be what it is: the resident set under load, the heap once
+// the load stopped.
 func TestSeriesSummaries_NameWhatHappened(t *testing.T) {
 	step := SeriesStep{
-		Clients: 50, RSSMeanMiB: 3000, RSSPeakMiB: 3200, CPUMsPerCall: 1.25, Calls: 4000,
+		Clients: 50, RSSMeanMiB: 3000, RSSPeakMiB: 3200, SettledHeapMiB: 6.4, SettledRSSMiB: 2100,
+		CPUMsPerCall: 1.25, Calls: 4000,
 		CallP50Ms: 12, CallP99Ms: 40, ListP50Ms: 5, ListP99Ms: 9, Goroutines: 120,
 	}
-	for _, want := range []string{"50 credentials", "3000 MiB mean", "3200 MiB peak", "1.250 ms/call", "4000 calls", "p50 12 ms p99 40 ms", "120 goroutines"} {
+	for _, want := range []string{
+		"50 credentials", "3000 MiB mean", "3200 MiB peak under load", "settled heap 6.40 MiB",
+		"settled rss 2100 MiB", "1.250 ms/call", "4000 calls", "p50 12 ms p99 40 ms", "120 goroutines",
+	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(step.summary(), want) {
 				t.Errorf("step summary %q lacks %q", step.summary(), want)
 			}
 		})
 	}
+	// A step whose settled reading could not be taken says so rather than
+	// printing a zero, which would read as a process holding nothing.
+	if got := (SeriesStep{Clients: 1, RSSPeakMiB: 100}).summary(); !strings.Contains(got, "settled heap n/a") {
+		t.Errorf("step summary %q, want the settled reading marked as not taken", got)
+	}
+
 	complete := SeriesScenario{Steps: []SeriesStep{{}, {}}, StoppedAt: 2}
 	if got := complete.summary(3 * time.Second); !strings.Contains(got, "2 steps to 2 credentials") {
 		t.Errorf("series summary = %q", got)
@@ -586,6 +730,52 @@ func TestSeriesSummaries_NameWhatHappened(t *testing.T) {
 	stopped := SeriesScenario{Steps: []SeriesStep{{}}, StoppedAt: 1, StopReason: "stopped at 1 credentials: because"}
 	if got := stopped.summary(3 * time.Second); !strings.Contains(got, "1 steps, stopped at 1 credentials: because") {
 		t.Errorf("series summary = %q", got)
+	}
+}
+
+// TestSlopeLine_NamesWhichGrowthEachFigureIs verifies the line a finished
+// series prints carries both slopes when both were measured and only the
+// resident one otherwise, each named.
+//
+// A lone figure of so many mebibytes per credential is read as what a
+// credential costs, and the resident one is not that. That reading is the
+// defect this pass corrects, so the naming is asserted rather than assumed.
+func TestSlopeLine_NamesWhichGrowthEachFigureIs(t *testing.T) {
+	// Two steps fix a line exactly: the resident set grows 10 MiB per
+	// credential, the settled heap 0.5 MiB, which is 512 KiB.
+	both := &SeriesScenario{Steps: []SeriesStep{
+		{Clients: 1, RSSPeakMiB: 200, SettledHeapMiB: 40.5},
+		{Clients: 3, RSSPeakMiB: 220, SettledHeapMiB: 41.5},
+	}}
+	cases := []struct {
+		name string
+		s    *SeriesScenario
+		want string
+	}{
+		{
+			name: "both measured", s: both,
+			want: "load slope 10.00 MiB per credential, tenancy slope 512.0 KiB per credential",
+		},
+		{
+			name: "no settled reading",
+			s:    &SeriesScenario{Steps: []SeriesStep{{Clients: 1, RSSPeakMiB: 200}, {Clients: 3, RSSPeakMiB: 220}}},
+			want: "load slope 10.00 MiB per credential",
+		},
+		{
+			name: "one step fixes no line",
+			s:    &SeriesScenario{Steps: []SeriesStep{{Clients: 1, RSSPeakMiB: 200, SettledHeapMiB: 40.5}}},
+			want: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.s.slopeLine(); got != tc.want {
+				t.Errorf("slopeLine = %q, want %q", got, tc.want)
+			}
+		})
+	}
+	if got := both.summary(time.Second); !strings.Contains(got, "tenancy slope") {
+		t.Errorf("series summary %q does not carry the slopes", got)
 	}
 }
 
@@ -614,15 +804,7 @@ func TestRunSeries_Standin_StepsThroughTheCountsAndProfiles(t *testing.T) {
 	}
 	for _, step := range series.Steps {
 		t.Run(strconv.Itoa(step.Clients), func(t *testing.T) {
-			if step.Calls == 0 || step.RSSPeakMiB <= 0 || step.Goroutines < 1 {
-				t.Errorf("step %+v is missing a figure", step)
-			}
-			if step.Pool.Capacity != 3 {
-				t.Errorf("pool capacity %d, want the largest step", step.Pool.Capacity)
-			}
-			if _, statErr := os.Stat(filepath.Join(profiles, plan.ID, strconv.Itoa(step.Clients)+".cpu.pb.gz")); statErr != nil {
-				t.Errorf("no CPU profile for %d credentials: %v", step.Clients, statErr)
-			}
+			assertStandinStep(t, step, plan.ID, profiles)
 		})
 	}
 	if r.serverInfo.Version != "standin" {
@@ -633,6 +815,29 @@ func TestRunSeries_Standin_StepsThroughTheCountsAndProfiles(t *testing.T) {
 	}
 	if series.BudgetMiB != 0 || len(series.Notes) != 1 || !strings.Contains(series.Notes[0], "no memory budget") {
 		t.Errorf("a series with no budget must say so: budget %v notes %v", series.BudgetMiB, series.Notes)
+	}
+}
+
+// assertStandinStep checks one step measured against the stand-in binary: the
+// load figures, the settled reading, the pool the driver sized, and the CPU
+// profile on disk.
+//
+// The settled figures are the point of running this against a real process:
+// the collection is forced on the far side of a real listener, in the process
+// under measurement, rather than in the test's own runtime.
+func assertStandinStep(t *testing.T, step SeriesStep, scenarioID, profiles string) {
+	t.Helper()
+	if step.Calls == 0 || step.RSSPeakMiB <= 0 || step.Goroutines < 1 {
+		t.Errorf("step %+v is missing a figure", step)
+	}
+	if step.SettledHeapMiB <= 0 || step.SettledRSSMiB <= 0 {
+		t.Errorf("step %+v took no settled reading from the stand-in", step)
+	}
+	if step.Pool.Capacity != 3 {
+		t.Errorf("pool capacity %d, want the largest step", step.Pool.Capacity)
+	}
+	if _, err := os.Stat(filepath.Join(profiles, scenarioID, strconv.Itoa(step.Clients)+".cpu.pb.gz")); err != nil {
+		t.Errorf("no CPU profile for %d credentials: %v", step.Clients, err)
 	}
 }
 

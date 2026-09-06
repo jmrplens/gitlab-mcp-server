@@ -9,6 +9,15 @@
 // a CPU and a heap profile taken while the phase runs, so the analysis can say
 // what a pooled entry is made of and where a call's time goes.
 //
+// Each step is measured twice, because "what N credentials cost" is two
+// questions. The steady phase answers what they cost while all of them are
+// calling, which is what a host has to survive; the settled reading taken once
+// that phase stops answers what they cost to hold, which is what a reader
+// means by the cost of a pooled credential. Reporting only the first, as this
+// driver did until this pass, publishes the load as the tenancy: at a thousand
+// credentials on the dynamic surface the peak resident set was seventeen times
+// the live heap, and the difference was the JSON of the calls in flight.
+//
 // Two guards keep it from taking the host down. Before each step the resident
 // set it would reach is estimated from the steps so far, and the rest of the
 // list is skipped when the estimate exceeds the memory budget; and a step
@@ -159,25 +168,19 @@ func (r *runner) budgetStop(steps []SeriesStep, next int) *SeriesStop {
 // toward stopping early rather than late, the right side to err on for a
 // guard whose failure mode is a host with no memory left.
 func estimateRSS(steps []SeriesStep, next int) (estimate float64, ok bool) {
-	switch len(steps) {
-	case 0:
-		return 0, false
-	case 1:
+	if len(steps) == 1 {
 		return steps[0].RSSPeakMiB / float64(steps[0].Clients) * float64(next), true
 	}
-	var sumX, sumY, sumXY, sumXX float64
+	xs := make([]float64, 0, len(steps))
+	ys := make([]float64, 0, len(steps))
 	for _, step := range steps {
-		x, y := float64(step.Clients), step.RSSPeakMiB
-		sumX += x
-		sumY += y
-		sumXY += x * y
-		sumXX += x * x
+		xs = append(xs, float64(step.Clients))
+		ys = append(ys, step.RSSPeakMiB)
 	}
-	n := float64(len(steps))
-	// The counts ascend, so at least two differ and the denominator is not
-	// zero.
-	slope := (n*sumXY - sumX*sumY) / (n*sumXX - sumX*sumX)
-	intercept := (sumY - slope*sumX) / n
+	slope, intercept, fitted := fitLine(xs, ys)
+	if !fitted {
+		return 0, false
+	}
 	return slope*float64(next) + intercept, true
 }
 
@@ -291,7 +294,60 @@ func (r *runner) runStep(ctx context.Context, in stepInput) SeriesStep {
 			<-cpuProfile, in.profiler.heapProfile(ctx))
 		step.Notes = append(step.Notes, profileNotes...)
 	}
+	settle(ctx, in.sampler, in.profiler, &step)
 	return step
+}
+
+// settleDelay is how long a step's process is left alone before the settled
+// reading is taken.
+//
+// The load has stopped by then, but the last responses are still being
+// written and the buffers behind them are still referenced, and counting
+// those as tenancy is the error this whole reading exists to correct. A
+// variable so the tests do not pay half a second per step; the reading itself
+// is the real one either way.
+var settleDelay = 500 * time.Millisecond
+
+// settle records what the process is holding with the step's credentials
+// admitted and nothing in flight.
+//
+// This is the tenancy figure, and it is measured rather than inferred: the
+// load stops, the process is left alone for a moment, a collection is forced
+// and the live heap is read through the profile listener, exactly as
+// TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials does in
+// test/e2e/http.
+//
+// The resident set is read at the same moment and recorded beside it, because
+// a container limit is measured against the resident set and not against the
+// heap. It lags, and by design: freeing the heap does not return the pages to
+// the operating system, which Go's scavenger does on its own schedule. Read
+// the heap for what a credential costs and the resident set for what the host
+// is still holding.
+//
+// Nothing is disconnected first. The credentials stay admitted, which is the
+// point, and they stay connected, which is what a live credential does: the
+// per-connection buffers of the sockets it holds open are part of its cost and
+// belong in the figure.
+//
+// Neither reading failing is worth losing a step over: the load figures above
+// stand on their own, so a failure is a note rather than an error.
+func settle(ctx context.Context, s *sampler, profiler *pprofClient, step *SeriesStep) {
+	select {
+	case <-ctx.Done():
+		step.Notes = append(step.Notes, "settled reading not taken: the run was cancelled")
+		return
+	case <-time.After(settleDelay):
+	}
+	if heap, err := profiler.settledHeap(ctx); err == nil {
+		step.SettledHeapMiB = mibOf(heap)
+	} else {
+		step.Notes = append(step.Notes, "settled heap unavailable: "+err.Error())
+	}
+	if stat, err := s.current(); err == nil {
+		step.SettledRSSMiB = mibOf(stat.rssBytes)
+	} else {
+		step.Notes = append(step.Notes, "settled resident set unavailable: "+err.Error())
+	}
 }
 
 // loadOutcome is what a steady phase observed: the durations of every call
@@ -433,16 +489,40 @@ func (stop *SeriesStop) sentence(stoppedAt int, budgetMiB float64) string {
 }
 
 // summary is the one line a step prints as it completes.
+//
+// Both readings are on it, each said to be what it is: the resident set is
+// under load, the heap is what is left once the load has stopped.
 func (step SeriesStep) summary() string {
-	return fmt.Sprintf("%d credentials: rss %.0f MiB mean, %.0f MiB peak; cpu %.3f ms/call over %d calls; tools/call p50 %s ms p99 %s ms; tools/list p50 %s ms p99 %s ms; %d goroutines",
-		step.Clients, step.RSSMeanMiB, step.RSSPeakMiB, step.CPUMsPerCall, step.Calls,
+	return fmt.Sprintf("%d credentials: rss %.0f MiB mean, %.0f MiB peak under load; settled heap %s MiB, settled rss %s MiB; cpu %.3f ms/call over %d calls; tools/call p50 %s ms p99 %s ms; tools/list p50 %s ms p99 %s ms; %d goroutines",
+		step.Clients, step.RSSMeanMiB, step.RSSPeakMiB, mibFine(step.SettledHeapMiB), mibFine(step.SettledRSSMiB),
+		step.CPUMsPerCall, step.Calls,
 		msLabel(step.CallP50Ms), msLabel(step.CallP99Ms), msLabel(step.ListP50Ms), msLabel(step.ListP99Ms), step.Goroutines)
 }
 
 // summary is the line a series prints when it ends.
 func (s *SeriesScenario) summary(elapsed time.Duration) string {
 	if s.StopReason != "" {
-		return fmt.Sprintf("%d steps, %s, %s", len(s.Steps), s.StopReason, elapsed.Round(time.Second))
+		return joinNonEmpty(", ", fmt.Sprintf("%d steps", len(s.Steps)), s.StopReason, s.slopeLine(), elapsed.Round(time.Second).String())
 	}
-	return fmt.Sprintf("%d steps to %d credentials, %s", len(s.Steps), s.StoppedAt, elapsed.Round(time.Second))
+	return joinNonEmpty(", ", fmt.Sprintf("%d steps to %d credentials", len(s.Steps), s.StoppedAt),
+		s.slopeLine(), elapsed.Round(time.Second).String())
+}
+
+// slopeLine is the pair of slopes a finished series prints, each named for
+// what it measures.
+//
+// Named because a lone figure of so many mebibytes per credential is read as
+// what a credential costs, and the resident-set one is not that: it is the
+// credential and everything it keeps in flight together. A series with no
+// settled reading prints only the load slope, still named.
+func (s *SeriesScenario) slopeLine() string {
+	load, loadOK := s.loadSlopeMiB()
+	if !loadOK {
+		return ""
+	}
+	line := fmt.Sprintf("load slope %.2f MiB per credential", load)
+	if tenancy, ok := s.tenancySlopeKiB(); ok {
+		line += fmt.Sprintf(", tenancy slope %.1f KiB per credential", tenancy)
+	}
+	return line
 }

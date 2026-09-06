@@ -26,10 +26,18 @@ import (
 // scenarios. Nothing a schema-1 record carries changed shape, so the reader
 // still accepts one: the published figures were measured under schema 1 and
 // stay published until the series is measured on a host that can hold it.
-const resultSchema = 2
+//
+// Schema 3 added the settled reading to every series step: what the process
+// holds with a step's credentials admitted and nothing in flight. A schema-2
+// record carries none, which is a different statement from carrying a zero,
+// so the renderers leave the settled columns out of a series that has no such
+// reading rather than printing a column of nothing. That is why a reader older
+// than this one would be wrong about a schema-3 record and the number moved:
+// it would draw the settled figures as measured zeros.
+const resultSchema = 3
 
 // readableSchemas are the versions this build can draw.
-var readableSchemas = []int{1, resultSchema}
+var readableSchemas = []int{1, 2, resultSchema}
 
 // Run is one benchmark session: what was measured, on what, and with which
 // knobs.
@@ -108,13 +116,44 @@ type SeriesStop struct {
 	Error string `json:"error,omitempty"`
 }
 
-// SeriesStep is one credential count, measured over its steady phase.
+// SeriesStep is one credential count, measured twice: over its steady phase,
+// and again once that phase has stopped.
+//
+// The two are different questions and were reported as one figure until this
+// pass. RSSMeanMiB and RSSPeakMiB are what N credentials cost **while all of
+// them are calling**, which on the dynamic surface at a thousand credentials
+// was a peak resident set seventeen times the live heap, most of it the JSON
+// being decoded and encoded for the calls in flight. SettledHeapMiB is what N
+// credentials cost **to hold**, which is the figure a reader means by "what a
+// pooled credential costs".
 type SeriesStep struct {
 	Clients int `json:"clients"`
 	// RSSMeanMiB and RSSPeakMiB are the resident set over the steady phase,
-	// sampled the way every other scenario samples it.
+	// sampled the way every other scenario samples it. They are load figures:
+	// the process is serving Parallel requests per credential throughout.
 	RSSMeanMiB float64 `json:"rss_mean_mib"`
 	RSSPeakMiB float64 `json:"rss_peak_mib"`
+	// SettledHeapMiB is the live heap with the load stopped and a collection
+	// forced: the tenancy figure, and the honest one, since nothing a request
+	// allocated while it was being served is still in it.
+	//
+	// The credentials are still connected when it is taken, which is
+	// deliberate: a live credential in a real deployment holds its sockets
+	// open, and their per-connection buffers are part of what it costs. It is
+	// also why this figure sits above what the end-to-end test reports for the
+	// same credential count, which drives one self-contained POST apiece.
+	SettledHeapMiB float64 `json:"settled_heap_mib,omitempty"`
+	// SettledRSSMiB is the resident set read at that same moment.
+	//
+	// It is recorded because a container limit is measured against the
+	// resident set rather than against the heap, and it must be read knowing
+	// that **it lags**: the forced collection frees the heap, and Go returns
+	// the pages behind it to the operating system on the scavenger's own
+	// schedule, minutes later and only under memory pressure. A settled
+	// resident set well above the settled heap is therefore the expected
+	// reading, not a contradiction of it, and the heap is what moves with the
+	// credential count.
+	SettledRSSMiB float64 `json:"settled_rss_mib,omitempty"`
 	// CPUMsPerCall is the processor time the server consumed during the
 	// phase divided by the calls that completed, in milliseconds.
 	CPUMsPerCall float64 `json:"cpu_ms_per_call"`
@@ -146,6 +185,89 @@ type PoolCounters struct {
 type StepProfiles struct {
 	CPU  string `json:"cpu"`
 	Heap string `json:"heap"`
+}
+
+// hasSettled reports whether any step of the series carries a settled
+// reading.
+//
+// A schema-2 record carries none, and a settled column of "n/a" against every
+// step of it would read as a measurement rather than as an absence, so the
+// renderers leave those columns out entirely instead.
+func (s *SeriesScenario) hasSettled() bool {
+	for _, step := range s.Steps {
+		if step.SettledHeapMiB > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// loadSlopeMiB is how much the peak resident set grows per credential while
+// every credential is calling, in mebibytes.
+//
+// This is the figure the documentation published as "resident set per
+// credential" until this pass, and it is not what a credential costs to hold.
+// It answers a question of its own, and a real one: what a deployment needs
+// while N credentials are all working at once. It is only wrong when it is
+// read as tenancy.
+func (s *SeriesScenario) loadSlopeMiB() (float64, bool) {
+	return s.slopePerCredential(func(step SeriesStep) float64 { return step.RSSPeakMiB })
+}
+
+// tenancySlopeKiB is how much the settled live heap grows per credential, in
+// kibibytes: what holding one more credential costs with nothing in flight.
+//
+// Kibibytes because that is the size of the thing: the end-to-end measurement
+// this follows puts a credential at 7.7 KiB on the dynamic surface, which in
+// mebibytes is a row of zeros.
+func (s *SeriesScenario) tenancySlopeKiB() (float64, bool) {
+	slope, ok := s.slopePerCredential(func(step SeriesStep) float64 { return step.SettledHeapMiB })
+	return round(slope * 1024), ok
+}
+
+// slopePerCredential fits a least-squares line through the steps, taking each
+// step's y from pick, and reports its slope: the growth per credential.
+//
+// A step whose figure is zero is left out of the fit rather than dragged
+// through it, because zero is how this record spells "that reading could not
+// be taken", and a fit that believed it would publish a slope nobody
+// measured. Fewer than two points fix no line, and then nothing is published.
+func (s *SeriesScenario) slopePerCredential(pick func(SeriesStep) float64) (float64, bool) {
+	xs := make([]float64, 0, len(s.Steps))
+	ys := make([]float64, 0, len(s.Steps))
+	for _, step := range s.Steps {
+		if value := pick(step); value > 0 {
+			xs = append(xs, float64(step.Clients))
+			ys = append(ys, value)
+		}
+	}
+	slope, _, ok := fitLine(xs, ys)
+	return slope, ok
+}
+
+// fitLine fits a least-squares line through the points.
+//
+// ok is false for fewer than two points, and for points that all share one x:
+// they fix no slope, the fit's denominator is zero there, and dividing by it
+// would publish an infinity as a measurement.
+func fitLine(xs, ys []float64) (slope, intercept float64, ok bool) {
+	if len(xs) < 2 {
+		return 0, 0, false
+	}
+	var sumX, sumY, sumXY, sumXX float64
+	for i, x := range xs {
+		sumX += x
+		sumY += ys[i]
+		sumXY += x * ys[i]
+		sumXX += x * x
+	}
+	n := float64(len(xs))
+	denominator := n*sumXX - sumX*sumX
+	if denominator == 0 {
+		return 0, 0, false
+	}
+	slope = (n*sumXY - sumX*sumY) / denominator
+	return slope, (sumY - slope*sumX) / n, true
 }
 
 // ServerInfo identifies the build that was measured, as the binary itself

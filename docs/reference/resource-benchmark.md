@@ -47,11 +47,32 @@ from inside the program:
 - **Latency percentiles**, per MCP method, from the client's side of the wire.
 
 The concurrency series records, at each credential count: the resident set
-over the steady phase, as a mean and a peak; processor time per completed
-call; the p50 and p99 of `tools/call` and of `tools/list`; the goroutine
-count; the pool counters the driver knows (entries admitted and the capacity
-it sized the pool to); and a CPU profile and a heap profile of the server,
-kept beside the record for the analysis rather than committed.
+over the steady phase, as a mean and a peak; the settled live heap and the
+settled resident set, read once that phase has stopped; processor time per
+completed call; the p50 and p99 of `tools/call` and of `tools/list`; the
+goroutine count; the pool counters the driver knows (entries admitted and the
+capacity it sized the pool to); and a CPU profile and a heap profile of the
+server, kept beside the record for the analysis rather than committed.
+
+**The two memory readings answer different questions, and only one of them is
+what a credential costs.** The resident set over the steady phase is measured
+with every credential holding several requests in flight, so it is the
+credential and everything it keeps in flight, together: what the host has to
+survive while N credentials are all working at once. The settled reading is
+taken with the load stopped and a collection forced, so it is what the process
+holds with N credentials admitted and nothing being served: the tenancy. On
+the reference host the two are not close. At a thousand credentials on the
+dynamic surface the peak resident set was 4379 MiB against a live heap of 253
+MiB, a factor of seventeen, and a breakdown of the growth attributed 38% to
+JSON being decoded in flight, 26% to encoding, 14% to per-connection buffers
+and 7% to cloned request bodies, with nothing at all attributable to the
+catalog, the handler maps or the SDK's tool table.
+
+The settled resident set is recorded beside the settled heap because a
+container limit is measured against the resident set, and it **lags**: freeing
+the heap does not hand the pages back, which Go's scavenger does on its own
+schedule. Read the heap for what a credential costs and the resident set for
+what the host is still holding.
 
 ## How it is measured
 
@@ -132,9 +153,18 @@ each count:
    of the phase, from the listener's `/debug/pprof/profile`, and as the phase
    ends a heap profile and the goroutine total from
    `/debug/pprof/goroutine?debug=1`, which unlike the traceback signal leaves
-   the process alive for the next step. Profiles land under
+   the process alive for the next step. The heap profile is taken with `gc=1`,
+   so it is a profile of what is live rather than of whatever the collector
+   had not reached yet. Profiles land under
    `bench/profiles/<scenario>/<clients>.cpu.pb.gz` and `<clients>.heap.pb.gz`
    (`-profiles`), ignored by git.
+4. **Takes a settled reading**: the load having stopped, the process is left
+   alone for half a second, a collection is forced, and the live heap is read
+   from `/debug/pprof/heap?gc=1&debug=1` with the resident set beside it. Two
+   collections rather than one, because the first still counts what the phase
+   left behind for a cycle. This is the same measurement the end-to-end test
+   `TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials` makes on
+   every push, taken here at every step of the ladder.
 
 Two guards keep the series from taking the host down, and both are recorded
 so the page says where a series stopped and why rather than presenting a
@@ -269,7 +299,7 @@ Measured on Intel(R) Core(TM) i5-14400, 16 logical CPUs, 62 GiB RAM, linux/amd64
 |          50 |           6414 |           6808 |        8.085 | 15771 |             85 |            969 |             55 |            837 |        271 |
 |         100 |          12382 |          13192 |        8.112 | 16358 |            239 |            815 |            217 |            775 |        515 |
 
-Stopped at 100 credentials: the next step (200) was estimated at 26345 MiB against a budget of 16172 MiB.
+Fitted across these steps, the peak resident set under load grows 130.94 MiB per credential. That is a credential together with the requests it keeps in flight, not what a credential costs to hold: this record carries no settled reading. Stopped at 100 credentials: the next step (200) was estimated at 26345 MiB against a budget of 16172 MiB.
 
 #### http, meta surface: 4 in flight per credential, 10 s per step, memory budget 16172 MiB
 
@@ -284,7 +314,7 @@ Stopped at 100 credentials: the next step (200) was estimated at 26345 MiB again
 |         100 |           6540 |           6645 |        7.995 | 14582 |            256 |            977 |            201 |            933 |        515 |
 |         200 |          12642 |          12907 |        7.893 | 14740 |            465 |           1599 |            532 |           1543 |       1014 |
 
-Stopped at 200 credentials: the next step (500) was estimated at 32007 MiB against a budget of 16172 MiB.
+Fitted across these steps, the peak resident set under load grows 63.52 MiB per credential. That is a credential together with the requests it keeps in flight, not what a credential costs to hold: this record carries no settled reading. Stopped at 200 credentials: the next step (500) was estimated at 32007 MiB against a budget of 16172 MiB.
 
 #### http, individual surface: 2 in flight per credential, 10 s per step, memory budget 16172 MiB
 
@@ -298,7 +328,7 @@ Stopped at 200 credentials: the next step (500) was estimated at 32007 MiB again
 |          50 |           4518 |           4682 |      147.885 |  1007 |            108 |           1064 |           1806 |           4074 |        165 |
 |         100 |           8513 |           9432 |      152.311 |  1060 |            299 |           2069 |           3716 |           7631 |        314 |
 
-Stopped at 100 credentials: the next step (200) was estimated at 18461 MiB against a budget of 16172 MiB.
+Fitted across these steps, the peak resident set under load grows 90.84 MiB per credential. That is a credential together with the requests it keeps in flight, not what a credential costs to hold: this record carries no settled reading. Stopped at 100 credentials: the next step (200) was estimated at 18461 MiB against a budget of 16172 MiB.
 
 <!-- END BENCHMARK -->
 
@@ -306,19 +336,37 @@ Stopped at 100 credentials: the next step (200) was estimated at 18461 MiB again
 
 Five things the measurements say, in the order an operator meets them.
 
-**An HTTP process is cheap until a credential arrives, and then it is not.**
+**An HTTP process is cheap until a credential arrives and starts calling.**
 Idle it holds about 35 MiB and no tool catalog at all. The first request from
 each distinct token builds one, and the resident set grows with every live
-credential. The eight-credential scenarios put the increment at 33 MiB on
-`meta`, 49 MiB on `individual` and 77 MiB on `dynamic`, and landed between
-436 and 775 MiB, peaking between 591 MiB and 1.15 GiB while all eight were
-calling at once. The concurrency series is the sizing tool, because it
-measures the slope where a shared deployment lives: with every credential
-calling, the peak resident set grew by about 63 MiB per credential on `meta`,
-90 MiB on `individual` and 130 MiB on `dynamic`, which is 6.2 GiB, 8.8 GiB and
-12.7 GiB at a hundred credentials. Read `--max-http-clients` as a memory
-setting rather than a concurrency one: its default of 100 entries describes a
-pool of six to thirteen gibibytes, which no small instance can hold.
+credential that is working. The eight-credential scenarios put the increment
+at 33 MiB on `meta`, 49 MiB on `individual` and 77 MiB on `dynamic`, and
+landed between 436 and 775 MiB, peaking between 591 MiB and 1.15 GiB while all
+eight were calling at once. The concurrency series is the sizing tool, because
+it measures the slope where a shared deployment lives: with every credential
+holding requests in flight, the peak resident set grew by about 63 MiB per
+credential on `meta`, 90 MiB on `individual` and 130 MiB on `dynamic`, which
+is 6.2 GiB, 8.8 GiB and 12.7 GiB at a hundred credentials.
+
+**Those slopes are the load, not the tenancy.** They were published on this
+page as what a credential costs, and they are not: each is the credential
+together with the two to four requests it keeps in flight throughout the step.
+On the current build a heap profile of that growth attributes it to JSON
+decoding and encoding, per-connection buffers and cloned request bodies, and
+nothing at all to the catalog, the handler maps or the SDK's tool table; in
+the older record above, part of it was also the tool catalog each pool entry
+built for itself, which this build no longer does. Measured at rest instead,
+by the end-to-end test
+`TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials`, which runs on
+every push, the live heap grows 148 KiB on `dynamic` and 159 KiB on
+`individual` between the first credential and the twentieth: about **8 KiB per
+credential**, against a load slope in megabytes. The series above carries no
+settled reading, because it was
+measured before that reading existed; the run that follows this change
+publishes both figures per step, side by side. Until then, size an instance
+from how many credentials will be **calling at once**, and read
+`--max-http-clients` as a bound on pooled credentials rather than as the
+memory setting a load slope makes it look like.
 
 **stdio has no idle state, and one process per client.** The process starts
 building its catalog on a background goroutine as soon as it is executed, so
@@ -338,11 +386,16 @@ reclaims an entry.
 
 **The tool surface changes responses far more than memory.** A `tools/list` is
 12 KB on `dynamic`, 584 KB on `meta` and 3.1 MB on `individual`, and the warm
-response times follow. Memory per credential does not follow the tool counts:
-`dynamic` costs the most, because every entry builds a search index the other
-two do not, `individual` sits in between, and `meta` costs the least despite
-carrying the same catalog, because its few tools hold their action schemas
-behind an opaque parameter object.
+response times follow. Memory under load does not follow the tool counts
+either: `dynamic` costs the most per calling credential, `individual` sits in
+between and `meta` costs the least despite carrying the same catalog. That
+ranking mixes two things, and neither is what a credential costs to hold: what
+a surface allocates while it answers a call, and, in the record above, the
+catalog each pool entry built for itself. This build builds one server per
+configuration shape and shares it
+([ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)),
+so what a credential holds is its client, its rate-limit bucket, its listen
+counter and its watchers, which the settled reading measures in kilobytes.
 
 **Throughput is bounded by processor time per call, and latency past that
 point is queueing.** In the series, calls completed per ten-second step stop

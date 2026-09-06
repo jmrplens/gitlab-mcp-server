@@ -10,7 +10,9 @@ import (
 	"net/http/pprof"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -18,12 +20,48 @@ import (
 // and returns a client for them.
 func newPprofTestClient(t *testing.T) *pprofClient {
 	t.Helper()
+	return newRecordedPprofClient(t).client
+}
+
+// recordedPprofClient serves the same handlers and remembers what was asked
+// of them, so a test can check the request the driver made rather than
+// inferring it from the answer.
+//
+// The handlers are the runtime's own, not a stand-in for them: gc=1 there
+// really does run a collection before the profile is written, which is what
+// makes the assertion on this process's collection count evidence rather
+// than a restatement of the driver's code.
+type recordedPprofClient struct {
+	client *pprofClient
+
+	mu       sync.Mutex
+	requests []string
+}
+
+// newRecordedPprofClient serves the profiling handlers from this test process
+// behind a recorder.
+func newRecordedPprofClient(t *testing.T) *recordedPprofClient {
+	t.Helper()
+	rec := &recordedPprofClient{}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/", func(w http.ResponseWriter, r *http.Request) {
+		rec.mu.Lock()
+		rec.requests = append(rec.requests, r.URL.RequestURI())
+		rec.mu.Unlock()
+		pprof.Index(w, r)
+	})
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return newPprofClient(srv.URL)
+	rec.client = newPprofClient(srv.URL)
+	return rec
+}
+
+// asked lists the request URIs the listener answered, oldest first.
+func (r *recordedPprofClient) asked() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string{}, r.requests...)
 }
 
 // isGzip reports whether data starts with the gzip magic number, which is
@@ -65,6 +103,127 @@ func TestPprofClient_ReadsProfilesAndTheGoroutineTotal(t *testing.T) {
 			t.Errorf("goroutineCount = %d, want at least this test's goroutine", count)
 		}
 	})
+}
+
+// TestPprofClient_HeapReads_ForceACollection verifies both heap reads ask for
+// one, and that the collection actually happened.
+//
+// Without gc=1 the handler serves whatever survived the last cycle, which is
+// not the live heap: it is the live heap plus however much garbage the
+// collector had not reached, and on a process serving thousands of calls a
+// second that is most of what the profile shows. The profile is the evidence
+// the hot-spot analysis reads and the settled figure is what the series
+// publishes as tenancy, so both have to mean what their readers think.
+//
+// The proof is this process's own collection count, taken across the read.
+// runtime.GC blocks until its cycle is complete, so a read that forced one
+// leaves NumGC higher; a read that did not, cannot. The recorded request is
+// asserted beside it because a growing count alone could be some other
+// goroutine's collection.
+func TestPprofClient_HeapReads_ForceACollection(t *testing.T) {
+	cases := []struct {
+		name       string
+		read       func(*testing.T, *pprofClient)
+		wantReads  int
+		wantSuffix string
+	}{
+		{
+			name: "the profile written beside the record",
+			read: func(t *testing.T, client *pprofClient) {
+				t.Helper()
+				if got := client.heapProfile(t.Context()); got.err != nil || !isGzip(got.data) {
+					t.Errorf("heapProfile = %d bytes, %v; want a compressed profile", len(got.data), got.err)
+				}
+			},
+			wantReads: 1, wantSuffix: "/debug/pprof/heap?gc=1",
+		},
+		{
+			name: "the settled reading",
+			read: func(t *testing.T, client *pprofClient) {
+				t.Helper()
+				heap, err := client.settledHeap(t.Context())
+				if err != nil {
+					t.Errorf("settledHeap: %v", err)
+					return
+				}
+				if heap == 0 {
+					t.Error("settledHeap = 0 bytes, want this process's live heap")
+				}
+			},
+			// Two: the first collection still counts what the moment before
+			// it left behind, so the figure is taken from the second.
+			wantReads: 2, wantSuffix: "/debug/pprof/heap?gc=1&debug=1",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := newRecordedPprofClient(t)
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+
+			tc.read(t, rec.client)
+
+			runtime.ReadMemStats(&after)
+			asked := rec.asked()
+			if len(asked) != tc.wantReads {
+				t.Fatalf("the listener answered %v, want %d read(s)", asked, tc.wantReads)
+			}
+			for _, uri := range asked {
+				if uri != tc.wantSuffix {
+					t.Errorf("the driver asked for %q, want %q", uri, tc.wantSuffix)
+				}
+			}
+			//#nosec G115 -- both are collection counts of this test process, orders below the conversion's range
+			if collections := int(after.NumGC) - int(before.NumGC); collections < tc.wantReads {
+				t.Errorf("%d collections ran across %d read(s), want one per read: the handler was not asked to collect",
+					collections, tc.wantReads)
+			}
+		})
+	}
+}
+
+// TestParseHeapAlloc_ReadsTheMemStatsLine verifies the live heap is taken
+// from the MemStats dump that ends a debug=1 heap profile, and that a body
+// carrying no such line is refused rather than read as zero, which would be
+// published as a credential costing nothing.
+func TestParseHeapAlloc_ReadsTheMemStatsLine(t *testing.T) {
+	const dump = "heap profile: 1: 16 [2: 32] @ heap/8192\n\n# runtime.MemStats\n# Alloc = 4194304\n# HeapAlloc = 4194304\n# HeapSys = 8388608\n"
+	cases := []struct {
+		name    string
+		body    string
+		want    uint64
+		wantErr string
+	}{
+		{name: "a dump", body: dump, want: 4194304},
+		{name: "the line alone", body: "# HeapAlloc = 12\n", want: 12},
+		{name: "no such line", body: "heap profile: 0: 0 [0: 0] @ heap/8192\n", wantErr: "carried no HeapAlloc line"},
+		{name: "empty", body: "", wantErr: "carried no HeapAlloc line"},
+		{name: "not a number", body: "# HeapAlloc = plenty\n", wantErr: "parse HeapAlloc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseHeapAlloc([]byte(tc.body))
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Errorf("parseHeapAlloc = %d, %v; want an error saying %q", got, err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Errorf("parseHeapAlloc = %d, %v; want %d", got, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestSettledHeap_ListenerGone_ReportsTheFirstRead verifies a listener that
+// does not answer fails the settled reading at the first collection rather
+// than at the second, so the note on the step names what was unreachable.
+func TestSettledHeap_ListenerGone_ReportsTheFirstRead(t *testing.T) {
+	_, err := newPprofClient("http://127.0.0.1:1").settledHeap(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "GET /debug/pprof/heap") {
+		t.Errorf("settledHeap = %v, want the unreachable listener named", err)
+	}
 }
 
 // TestPprofClient_Failures covers every way a read fails, each reported with

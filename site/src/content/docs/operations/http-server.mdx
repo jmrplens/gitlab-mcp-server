@@ -586,15 +586,15 @@ Use a token scoped to what you actually need. A hosted endpoint sees every reque
 
 ## How much memory does it need?
 
-Size the host from the HTTP server's resident set, not from the binary, and size it **for the work in flight**. These figures come from the [resource benchmark](/gitlab-mcp-server/operations/resource-benchmark/), which measures the real binary on both transports and states the machine it ran on. The per-credential row predates the shared server and is an upper bound; what a credential now costs at rest is three lines further down:
+Size the host from the HTTP server's resident set, not from the binary, and size it **per credential calling at once**, which is not the same as per token on the books. These figures come from the [resource benchmark](/gitlab-mcp-server/operations/resource-benchmark/), which measures the real binary on both transports and states the machine it ran on. The per-credential row predates the shared server and is an upper bound; what a credential now costs at rest is three lines further down:
 
-| Mode                                 | Resident set | Notes                                                           |
-| ------------------------------------ | -----------: | --------------------------------------------------------------- |
-| HTTP, idle, no credentials           |      ~40 MiB | The process holds no tool catalog until a request asks for one  |
-| HTTP, per additional live credential |    35–71 MiB | Measured when every credential built a catalog of its own       |
-| HTTP, eight live credentials         |  445–719 MiB | Peaks of 599 MiB to 1.14 GiB while all eight were calling       |
-| stdio, one process per client        |  190–330 MiB | It starts building its catalog at once, so it has no idle state |
-| Binary on disk                       |       ~55 MB | Single static binary, no runtime dependencies                   |
+| Mode                                    | Resident set | Notes                                                           |
+| --------------------------------------- | -----------: | --------------------------------------------------------------- |
+| HTTP, idle, no credentials              |      ~40 MiB | The process holds no tool catalog until a token asks for one    |
+| HTTP, per additional calling credential |    35–71 MiB | Read with the credential admitted and calling, not at rest      |
+| HTTP, eight live credentials            |  445–719 MiB | Peaks of 599 MiB to 1.14 GiB while all eight were calling       |
+| stdio, one process per client           |  190–330 MiB | It starts building its catalog at once, so it has no idle state |
+| Binary on disk                          |       ~55 MB | Single static binary, no runtime dependencies                   |
 
 Three things follow from this.
 

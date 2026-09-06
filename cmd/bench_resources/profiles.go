@@ -6,7 +6,7 @@
 // it is the only way the series can look inside the process it measures, and
 // it is also how the goroutine count is taken without the traceback signal
 // the point scenarios use, which ends the process and so cannot be sent
-// between steps.
+// between steps, and how the live heap is read once a step's load has stopped.
 
 package main
 
@@ -77,10 +77,65 @@ func (p *pprofClient) cpuProfile(ctx context.Context, seconds int) captured {
 	return captured{data: data, err: err}
 }
 
-// heapProfile collects the heap as it is now.
+// heapProfile collects the heap as it is now, after forcing a collection.
+//
+// The collection is the difference between a profile of what is live and a
+// profile of whatever had not been collected yet. Without gc=1 the handler
+// serves the last completed cycle's snapshot, so a reader attributing "the
+// in-use heap" to functions is attributing garbage the collector had not got
+// to along with it. That is not a rounding error on a process serving
+// thousands of calls a second: the profile is the evidence the hot-spot
+// analysis reads, and it has to mean what its readers think it means.
 func (p *pprofClient) heapProfile(ctx context.Context) captured {
-	data, err := p.fetch(ctx, "/debug/pprof/heap", profileGrace)
+	data, err := p.fetch(ctx, "/debug/pprof/heap?gc=1", profileGrace)
 	return captured{data: data, err: err}
+}
+
+// settledHeap forces a collection and reads the live heap the process is left
+// holding, in bytes.
+//
+// Two collections rather than one. The first still counts what the phase that
+// just ended left behind for one more cycle: the last responses being written,
+// the profile's own buffers, whatever a finalizer still holds. Reading twice
+// makes the figure a settled heap rather than the tail of the load. It is the
+// technique TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials
+// uses in test/e2e/http, taken here at every step of a series.
+func (p *pprofClient) settledHeap(ctx context.Context) (uint64, error) {
+	if _, err := p.heapAlloc(ctx); err != nil {
+		return 0, err
+	}
+	return p.heapAlloc(ctx)
+}
+
+// heapAlloc performs one collection and returns the live heap the profile
+// reports.
+//
+// debug=1 is what carries it: the text form of a heap profile ends with a
+// runtime.MemStats dump, one "# Field = value" per line, and HeapAlloc there
+// is the live set. The binary form carries sample counts, not MemStats.
+func (p *pprofClient) heapAlloc(ctx context.Context) (uint64, error) {
+	body, err := p.fetch(ctx, "/debug/pprof/heap?gc=1&debug=1", profileGrace)
+	if err != nil {
+		return 0, err
+	}
+	return parseHeapAlloc(body)
+}
+
+// parseHeapAlloc reads "# HeapAlloc = N" off the MemStats dump that ends a
+// debug=1 heap profile.
+func parseHeapAlloc(body []byte) (uint64, error) {
+	for line := range strings.SplitSeq(string(body), "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "# HeapAlloc = ")
+		if !ok {
+			continue
+		}
+		value, err := strconv.ParseUint(strings.TrimSpace(rest), 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("parse HeapAlloc %q: %w", rest, err)
+		}
+		return value, nil
+	}
+	return 0, fmt.Errorf("the heap profile carried no HeapAlloc line: %s", firstLine(body))
 }
 
 // goroutineCount reads the total off the goroutine listing's first line.

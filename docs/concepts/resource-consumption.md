@@ -60,12 +60,21 @@ In HTTP mode, a single process serves all clients. Idle, before any credential h
 > [Resource hot spots](../development/resource-hot-spots.md#what-the-shared-server-measured).
 > The tables below stay as they were until the reference host they were taken on
 > is re-run.
+>
+> **They are also resident-set figures, which is a different measurement from
+> what a credential costs to hold.** A resident set is read with the credential
+> admitted and, in the concurrency series, with it calling, so it carries the
+> requests in flight and the pages Go has not yet returned to the operating
+> system. The benchmark now records both per step: the resident set under load,
+> and a settled live heap taken with the load stopped and a collection forced.
+> On this build the second is measured in kilobytes per credential where the
+> first is measured in megabytes.
 
-| Tool surface | Process with one credential | Each further credential |
-| ------------ | --------------------------: | ----------------------: |
-| `dynamic`    |                    ~219 MiB |                 ~71 MiB |
-| `meta`       |                    ~197 MiB |                 ~35 MiB |
-| `individual` |                    ~334 MiB |                 ~36 MiB |
+| Tool surface | Process with one credential | Each further credential, resident set |
+| ------------ | --------------------------: | ------------------------------------: |
+| `dynamic`    |                    ~219 MiB |                               ~71 MiB |
+| `meta`       |                    ~197 MiB |                               ~35 MiB |
+| `individual` |                    ~334 MiB |                               ~36 MiB |
 
 Memory per credential used to go the other way from what the tool counts suggest: `individual` cost the least per additional credential despite registering about a thousand tools, because pooled entries already shared their tool schemas, while `dynamic` cost the most because every entry carried its own search index. Both of those causes are gone.
 
