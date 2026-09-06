@@ -368,14 +368,14 @@ If both headers are present in legacy mode, `PRIVATE-TOKEN` wins. In OAuth mode 
 
 #### Missing Token
 
-A request with no token is rejected with `401 Unauthorized`, an RFC 9110 challenge, and a JSON-RPC error body naming both accepted headers:
+A request with no token is rejected with `401 Unauthorized`, an RFC 9110 challenge, and a JSON-RPC error body naming both accepted headers. The body echoes the id of the request it refuses, and carries no `id` at all when the request had none:
 
 ```http
 HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer realm="gitlab-mcp-server"
 Content-Type: application/json
 
-{"jsonrpc":"2.0","id":null,"error":{"code":-40100,"message":"Authentication required: send a GitLab personal access token as 'Authorization: Bearer <glpat-...>' or 'PRIVATE-TOKEN: <glpat-...>'. ..."}}
+{"jsonrpc":"2.0","id":1,"error":{"code":-40100,"message":"Authentication required: send a GitLab personal access token as 'Authorization: Bearer <glpat-...>' or 'PRIVATE-TOKEN: <glpat-...>'. ..."}}
 ```
 
 The challenge deliberately omits the `resource_metadata` parameter. Clients discover an OAuth authorization server through that parameter, and legacy mode has none — advertising it would start a discovery flow that cannot complete. Use `--auth-mode=oauth` for a challenge that does point at [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata.
