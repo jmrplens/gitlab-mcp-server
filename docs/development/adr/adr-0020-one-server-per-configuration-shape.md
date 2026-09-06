@@ -380,6 +380,19 @@ writing.
   work, while a watcher belongs to one credential and stopping one to admit
   another would be the cross-tenant trade this whole section rules out.
 
+  What that ceiling costs to fill is the same shape of exposure and is recorded
+  beside it. 512 slots is about 52 credentials at the per-credential cap of ten,
+  and under `--stateless=false` holding them is nearly free: a watcher needs no
+  held connection, so an incumbent pays one keep-alive per session before
+  `--session-timeout` and one re-subscribe per `MaxLifetime`, while every other
+  tenant's new watch is refused. That is the same free incumbency the rejected
+  pool refusal has, and it is accepted here because the alternative is unbounded
+  polling from one process: the only cheaper defence would key on a mintable
+  identity, which is the share rejected below. A refusal at the ceiling is
+  reported at WARN and nowhere else, unlike the pool's evictions, because there
+  is no flag it would tell an operator to raise; if a deployment ever needs to
+  alert on saturation rather than grep for it, that line is the event to count.
+
   Two remedies were considered and rejected, and they are recorded here rather
   than only in the tracker so the next reader finds the reasoning where the
   decision is. **Refusing the arriving credential** when every entry is busy
@@ -404,11 +417,19 @@ writing.
   `subscriptions/listen`, from a closed vocabulary published on the server card
   and documented in
   [Resource subscriptions](../../reference/capabilities/subscriptions.md#why-a-subscription-ended).
-  What the reason deliberately does not carry is anything about the deployment:
-  how full the pool is, how many credentials it holds and who else is connected
-  are exactly the reconnaissance a caller probing for the busy fallback would
-  want, and they are withheld here for the same reason `/health` publishes no
-  pool state.
+  What the reason carries about the deployment is one bit, to one recipient, and
+  it is written down here rather than claimed away. No count, no other
+  credential's URIs and no configuration travel in it, and `/health` still
+  publishes no pool state to an unauthenticated caller. But `credential_evicted`
+  reaches a client only over an open `subscriptions/listen`, and holding one is
+  what makes that credential's entry busy, so a client receiving it learns that
+  at that instant the pool had nothing quiet to take. Merging the busy and
+  unbusy evictions into one cause does not close that, since the recipient's own
+  busyness supplies the missing bit, and the oracle is not new either: before
+  the vocabulary existed, a bare completion on a list-changed-only listen
+  already meant "evicted or shut down". It is accepted for what it buys, a
+  client that can tell an eviction from a revocation and act differently, and
+  the alternative would be to stop telling an evicted client anything.
 
   One client is not reached by any of this, and it is worth stating plainly
   rather than implying otherwise: a session-era `resources/subscribe` under

@@ -283,7 +283,7 @@ func TestSessionDuration_ASessionThatEndsBadly_CarriesAnErrorType(t *testing.T) 
 	if _, writeErr := clientConn.Write([]byte("this is not a JSON-RPC frame\n")); writeErr != nil {
 		t.Fatalf("writing the malformed frame: %v", writeErr)
 	}
-	if waitErr := serverSession.Wait(); waitErr == nil {
+	if serverSession.Wait() == nil {
 		t.Fatal("the session ended cleanly after a malformed frame, so this test drives the wrong branch")
 	}
 	_ = clientConn.Close()

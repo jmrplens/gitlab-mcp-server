@@ -38,6 +38,9 @@ func TestLooksLikeDocument_TellsGraphQLFromEverythingElse(t *testing.T) {
 		{name: "an identifier that merely starts with a keyword", value: "queryBuilder{}", want: false},
 		{name: "a keyword with nothing after it", value: "query", want: false},
 		{name: "a Go format verb", value: "%s{%d}", want: false},
+		{name: "an OpenTelemetry unit annotation", value: "{entry}", want: false},
+		{name: "another one", value: "{eviction}", want: false},
+		{name: "one with an underscore", value: "{listen_stream}", want: false},
 
 		// A "#" comment is legal at the top of a document and gqlparser accepts
 		// one, so a maintainer who writes an ordinary explanatory line above an

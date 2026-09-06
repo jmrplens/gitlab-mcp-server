@@ -1826,6 +1826,57 @@ func TestWatcherGate_AtTheSharedLimit_ANewWatcherIsRefused(t *testing.T) {
 	assertGateMatchesWatchers(t, gate, first, second)
 }
 
+// TestWatcherGate_ARefusalAtTheCeiling_CostsTheCredentialNothing covers the one
+// point where the two ceilings meet.
+//
+// A credential at its own MaxWatchers makes room by stopping its longest-demoted
+// watch. If the shared gate were consulted after that eviction, a subscribe the
+// gate went on to refuse would have spent a watch on a request that was not
+// admitted: the caller would end the exchange holding one subscription fewer
+// than it started with, told only that the condition is transient, and a client
+// that retried would lose one more watch per attempt. The slot is taken first
+// for that reason, and this is what says so.
+func TestWatcherGate_ARefusalAtTheCeiling_CostsTheCredentialNothing(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		gate := NewWatcherGate(2)
+		opts := leaseOptions(time.Minute, time.Hour)
+		opts.MaxWatchers = 1
+		atCap, reader := newSharedManager(t, gate, opts)
+		other, _ := newSharedManager(t, gate, Options{})
+
+		subscribeAll(t, atCap, subA, gatedURIs[0])
+		// Past the lease, which is what makes this watch evictable by the
+		// credential's own cap and so puts the two ceilings in each other's way.
+		time.Sleep(3 * time.Minute)
+		synctest.Wait()
+		if got := atCap.DemotedCount(); got != 1 {
+			t.Fatalf("DemotedCount() = %d, want the only watch demoted", got)
+		}
+
+		// The other credential fills the gate, so the eviction this credential's
+		// cap would perform cannot be followed by an admission.
+		subscribeAll(t, other, subA, gatedURIs[1])
+
+		err := atCap.Subscribe(context.Background(), subA, gatedURIs[2])
+		if !errors.Is(err, ErrTooManySubscriptions) {
+			t.Fatalf("Subscribe at both ceilings = %v, want ErrTooManySubscriptions", err)
+		}
+		if !strings.Contains(err.Error(), "server-wide") {
+			t.Errorf("refusal = %q, want the shared ceiling named: it is the one that refused", err)
+		}
+		if got := atCap.Len(); got != 1 {
+			t.Errorf("the refused credential holds %d watchers, want the 1 it held before asking", got)
+		}
+		if got := atCap.DemotedCount(); got != 1 {
+			t.Errorf("demoted watches after the refusal = %d, want 1: a refusal must not spend one", got)
+		}
+		if got := reader.readCount(gatedURIs[2]); got != 0 {
+			t.Errorf("reads of the refused URI = %d, want 0: a refusal must not cost an API call", got)
+		}
+		assertGateMatchesWatchers(t, gate, atCap, other)
+	})
+}
+
 // TestWatcherGate_ReservesNothingPerCredential verifies the ceiling is
 // first-come, with no share held back for anyone.
 //
@@ -2064,8 +2115,10 @@ func TestWatcherGate_AWithdrawalMidRead_ReturnsTheSlotExactlyOnce(t *testing.T) 
 }
 
 // TestWatcherGate_WithoutACeiling_AdmitsEveryone covers the two ways a manager
-// runs unbounded: stdio and every direct-built test server pass no gate, and a
-// gate built with no limit is the same answer written down.
+// runs unbounded: a manager built directly passes no gate at all, which is this
+// package's own tests and any embedder, and a gate built with no limit is the
+// same answer written down. Neither is a transport this repository ships, since
+// cmd/server installs the process gate on stdio as well as on HTTP.
 //
 // The counting has to stay off in both, or a release that pairs with an
 // admission nobody counted would drive the count below zero.

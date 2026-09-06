@@ -679,8 +679,12 @@ func TestSharedServer_AnEvictedCredentialsListenIsEnded(t *testing.T) {
 	// indistinguishable in the log from an ordinary one, so a deployment
 	// evicting its own subscribers looked exactly like a deployment recycling
 	// idle callers, and the number to raise was on neither line.
-	logs := awaitLog(t, srv, "server pool: evicted an entry that was serving a subscription")
-	if logs == "" {
+	// The line itself, not the whole output: the harness starts every server
+	// with two deprecated environment variables and so with two WARN lines
+	// already printed, and a level asserted against everything the server said
+	// would match one of those however this line were logged.
+	line := awaitLogLine(t, srv, "server pool: evicted an entry that was serving a subscription")
+	if line == "" {
 		t.Fatalf("the busy eviction produced no WARN line.\nserver output:\n%s", srv.logs())
 	}
 	fields := []struct {
@@ -693,8 +697,8 @@ func TestSharedServer_AnEvictedCredentialsListenIsEnded(t *testing.T) {
 	}
 	for _, field := range fields {
 		t.Run(field.name, func(t *testing.T) {
-			if !strings.Contains(logs, field.want) {
-				t.Errorf("the busy eviction line is missing %s.\nserver output:\n%s", field.want, logs)
+			if !strings.Contains(line, field.want) {
+				t.Errorf("the busy eviction line is missing %s:\n%s", field.want, line)
 			}
 		})
 	}
