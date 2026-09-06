@@ -9,6 +9,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accessrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/achievements"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/adminspecs"
@@ -216,6 +217,13 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 	specs = append(specs, accessrequests.ActionSpecs(client)...)
 	specs = append(specs, invites.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_access", specs)
+}
+
+// buildAchievementActionSpecs contributes the gitlab_achievement catalog
+// group. Achievements are Free on every offering, so the group carries no
+// edition tag and reaches Community Edition catalogs unchanged.
+func buildAchievementActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_achievement", achievements.ActionSpecs(client))
 }
 
 // buildOrbitActionSpecs contributes the gitlab_orbit catalog group only

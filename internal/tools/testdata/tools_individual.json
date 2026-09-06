@@ -714,6 +714,1383 @@
     }
   },
   {
+    "name": "gitlab_achievement_award",
+    "description": "Award an achievement to a user. Returns: the new award with its own id, achievement_id, user_id, awarded_by_user_id, award_message, priority, show_on_profile, and timestamps. See also: gitlab_achievement_revoke, gitlab_achievement_recipients, gitlab_achievement_user_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievement_id": {
+          "description": "Numeric ID of the achievement to hand out",
+          "type": "integer"
+        },
+        "award_message": {
+          "description": "Note shown alongside the award, up to 200 characters",
+          "type": "string"
+        },
+        "user_id": {
+          "description": "Numeric ID of the user receiving the achievement",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "achievement_id",
+        "user_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "user_achievement": {
+          "additionalProperties": false,
+          "properties": {
+            "achievement_id": {
+              "type": "integer"
+            },
+            "award_message": {
+              "type": "string"
+            },
+            "awarded_by_user_id": {
+              "type": "integer"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "priority": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "revoked_at": {
+              "type": "string"
+            },
+            "revoked_by_user_id": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "show_on_profile": {
+              "type": "boolean"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "achievement_id",
+            "user_id",
+            "awarded_by_user_id",
+            "show_on_profile"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "user_achievement"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_achievement_create",
+    "description": "Define a new achievement in a group or project namespace. Creating one awards it to nobody. Returns: the created achievement with id, namespace_id, name, description, avatar_url, and timestamps. See also: gitlab_achievement_award, gitlab_achievement_list, gitlab_achievement_update.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "avatar_content_base64": {
+          "description": "Base64-encoded avatar image bytes. Alternative to avatar_file_path. Only one of the two should be provided",
+          "type": "string"
+        },
+        "avatar_content_type": {
+          "description": "MIME type of the avatar image such as image/png. Defaults to application/octet-stream when omitted",
+          "type": "string"
+        },
+        "avatar_file_path": {
+          "description": "Absolute path to a local image file the MCP server reads. Alternative to avatar_content_base64 for files too large to base64-encode. Only one of the two should be provided, and neither is available when the server is reached over HTTP",
+          "type": "string"
+        },
+        "avatar_filename": {
+          "description": "File name for the avatar image such as badge.png. Required whenever an avatar is sent, because GitLab identifies the upload part by its file name",
+          "type": "string"
+        },
+        "description": {
+          "description": "Free-text explanation of what the achievement is awarded for",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name of the achievement such as First Contribution",
+          "type": "string"
+        },
+        "namespace_id": {
+          "description": "Numeric ID of the group or project namespace that will own the achievement",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "namespace_id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievement": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "namespace_id": {
+              "type": "integer"
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "namespace_id",
+            "name"
+          ],
+          "type": "object"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "achievement"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_achievement_delete",
+    "description": "Delete an achievement definition and every award made from it. Returns: deletion confirmation plus the achievement as it looked when removed. See also: gitlab_achievement_revoke, gitlab_achievement_list, gitlab_achievement_create.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievement_id": {
+          "description": "Numeric ID of the achievement to delete. Every award made from it is removed with it",
+          "type": "integer"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "achievement_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievement": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "namespace_id": {
+              "type": "integer"
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "namespace_id",
+            "name"
+          ],
+          "type": "object"
+        },
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "achievement"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_achievement_list",
+    "description": "List the achievements a group or project namespace defines, with cursor pagination. Returns: each achievement with id, namespace_id, name, description, avatar_url, and timestamps, plus pagination cursors. See also: gitlab_achievement_recipients, gitlab_achievement_create, gitlab_achievement_award.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "description": "Cursor for forward pagination, taken from a previous response pagination.end_cursor",
+          "type": "string"
+        },
+        "before": {
+          "description": "Cursor for backward pagination, taken from a previous response pagination.start_cursor",
+          "type": "string"
+        },
+        "first": {
+          "description": "Number of items to return from the start of the page (default 20, max 100)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "full_path": {
+          "description": "Full path of the group or project namespace such as my-group or my-group/my-project",
+          "type": "string"
+        },
+        "ids": {
+          "description": "Numeric achievement IDs to restrict the result to. Omit to list every achievement in the namespace",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "last": {
+          "description": "Number of items to return from the end of the page, for backward pagination",
+          "type": [
+            "null",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "full_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievements": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "namespace_id": {
+                "type": "integer"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "namespace_id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            },
+            "has_previous_page": {
+              "type": "boolean"
+            },
+            "start_cursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "achievements",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_achievement_recipients",
+    "description": "List every award of one achievement, revoked awards and repeat awards included, with cursor pagination. Returns: each award with its own id, achievement_id, user_id, award_message, priority, show_on_profile, and revocation stamps, plus pagination cursors. See also: gitlab_achievement_unique_users, gitlab_achievement_user_list, gitlab_achievement_revoke.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievement_id": {
+          "description": "Numeric ID of the achievement whose awards to list",
+          "type": "integer"
+        },
+        "after": {
+          "description": "Cursor for forward pagination, taken from a previous response pagination.end_cursor",
+          "type": "string"
+        },
+        "before": {
+          "description": "Cursor for backward pagination, taken from a previous response pagination.start_cursor",
+          "type": "string"
+        },
+        "first": {
+          "description": "Number of items to return from the start of the page (default 20, max 100)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "full_path": {
+          "description": "Full path of the group or project namespace that owns the achievement",
+          "type": "string"
+        },
+        "last": {
+          "description": "Number of items to return from the end of the page, for backward pagination",
+          "type": [
+            "null",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "full_path",
+        "achievement_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            },
+            "has_previous_page": {
+              "type": "boolean"
+            },
+            "start_cursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "type": "object"
+        },
+        "user_achievements": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "achievement_id": {
+                "type": "integer"
+              },
+              "award_message": {
+                "type": "string"
+              },
+              "awarded_by_user_id": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "priority": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "revoked_at": {
+                "type": "string"
+              },
+              "revoked_by_user_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "show_on_profile": {
+                "type": "boolean"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "achievement_id",
+              "user_id",
+              "awarded_by_user_id",
+              "show_on_profile"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "user_achievements",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_achievement_revoke",
+    "description": "Revoke one award while keeping its record, which is then stamped with revoked_at and revoked_by_user_id. Returns: confirmation plus the revoked award. See also: gitlab_achievement_user_achievement_delete, gitlab_achievement_award, gitlab_achievement_recipients.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "user_achievement_id": {
+          "description": "Numeric ID of the award to revoke. The award record is kept and marked revoked",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "user_achievement_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "user_achievement": {
+          "additionalProperties": false,
+          "properties": {
+            "achievement_id": {
+              "type": "integer"
+            },
+            "award_message": {
+              "type": "string"
+            },
+            "awarded_by_user_id": {
+              "type": "integer"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "priority": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "revoked_at": {
+              "type": "string"
+            },
+            "revoked_by_user_id": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "show_on_profile": {
+              "type": "boolean"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "achievement_id",
+            "user_id",
+            "awarded_by_user_id",
+            "show_on_profile"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "user_achievement"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_achievement_unique_users",
+    "description": "List the distinct users who hold one achievement, deduplicated across repeat awards, with cursor pagination. Returns: each user with id, username, name, state, avatar_url, and web_url, plus pagination cursors. See also: gitlab_achievement_recipients, gitlab_achievement_user_list, gitlab_achievement_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievement_id": {
+          "description": "Numeric ID of the achievement whose recipients to count",
+          "type": "integer"
+        },
+        "after": {
+          "description": "Cursor for forward pagination, taken from a previous response pagination.end_cursor",
+          "type": "string"
+        },
+        "before": {
+          "description": "Cursor for backward pagination, taken from a previous response pagination.start_cursor",
+          "type": "string"
+        },
+        "first": {
+          "description": "Number of items to return from the start of the page (default 20, max 100)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "full_path": {
+          "description": "Full path of the group or project namespace that owns the achievement",
+          "type": "string"
+        },
+        "last": {
+          "description": "Number of items to return from the end of the page, for backward pagination",
+          "type": [
+            "null",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "full_path",
+        "achievement_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            },
+            "has_previous_page": {
+              "type": "boolean"
+            },
+            "start_cursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "type": "object"
+        },
+        "users": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "state",
+              "avatar_url",
+              "web_url"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "users",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_achievement_update",
+    "description": "Change an existing achievement's name, description, or avatar. Omitted fields keep their current value. Returns: the updated achievement with id, namespace_id, name, description, avatar_url, and timestamps. See also: gitlab_achievement_list, gitlab_achievement_create, gitlab_achievement_delete.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievement_id": {
+          "description": "Numeric ID of the achievement to change",
+          "type": "integer"
+        },
+        "avatar_content_base64": {
+          "description": "Base64-encoded avatar image bytes. Alternative to avatar_file_path. Only one of the two should be provided",
+          "type": "string"
+        },
+        "avatar_content_type": {
+          "description": "MIME type of the avatar image such as image/png. Defaults to application/octet-stream when omitted",
+          "type": "string"
+        },
+        "avatar_file_path": {
+          "description": "Absolute path to a local image file the MCP server reads. Alternative to avatar_content_base64 for files too large to base64-encode. Only one of the two should be provided, and neither is available when the server is reached over HTTP",
+          "type": "string"
+        },
+        "avatar_filename": {
+          "description": "File name for the avatar image such as badge.png. Required whenever an avatar is sent, because GitLab identifies the upload part by its file name",
+          "type": "string"
+        },
+        "description": {
+          "description": "New description. Omit to leave the current description unchanged",
+          "type": "string"
+        },
+        "name": {
+          "description": "New display name. Omit to leave the current name unchanged",
+          "type": "string"
+        }
+      },
+      "required": [
+        "achievement_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "achievement": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "namespace_id": {
+              "type": "integer"
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "namespace_id",
+            "name"
+          ],
+          "type": "object"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "achievement"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_achievement_user_achievement_delete",
+    "description": "Erase one award record outright, keeping no revocation history. Returns: confirmation plus the deleted award. See also: gitlab_achievement_revoke, gitlab_achievement_user_list, gitlab_achievement_delete.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "user_achievement_id": {
+          "description": "Numeric ID of the award to delete. The record is removed outright rather than marked revoked",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "user_achievement_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "user_achievement": {
+          "additionalProperties": false,
+          "properties": {
+            "achievement_id": {
+              "type": "integer"
+            },
+            "award_message": {
+              "type": "string"
+            },
+            "awarded_by_user_id": {
+              "type": "integer"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "priority": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "revoked_at": {
+              "type": "string"
+            },
+            "revoked_by_user_id": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "show_on_profile": {
+              "type": "boolean"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "achievement_id",
+            "user_id",
+            "awarded_by_user_id",
+            "show_on_profile"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "user_achievement"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_achievement_user_achievement_reorder",
+    "description": "Set the display order of one user's awards, highest priority first. Returns: confirmation plus every award in its new order with the assigned priority. See also: gitlab_achievement_user_list, gitlab_achievement_user_achievement_update, gitlab_achievement_award.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "user_achievement_ids": {
+          "description": "Numeric award IDs in the order they should appear, highest priority first. All of one user's awards should be listed",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "user_achievement_ids"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "user_achievements": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "achievement_id": {
+                "type": "integer"
+              },
+              "award_message": {
+                "type": "string"
+              },
+              "awarded_by_user_id": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "priority": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "revoked_at": {
+                "type": "string"
+              },
+              "revoked_by_user_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "show_on_profile": {
+                "type": "boolean"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "achievement_id",
+              "user_id",
+              "awarded_by_user_id",
+              "show_on_profile"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "user_achievements"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_achievement_user_achievement_update",
+    "description": "Change one award, which today means its show_on_profile visibility. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, and timestamps. See also: gitlab_achievement_user_list, gitlab_achievement_user_achievement_reorder, gitlab_achievement_update.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "show_on_profile": {
+          "description": "Whether the recipient's profile displays this award. Omit to leave the current visibility unchanged",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "user_achievement_id": {
+          "description": "Numeric ID of the award to change",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "user_achievement_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "user_achievement": {
+          "additionalProperties": false,
+          "properties": {
+            "achievement_id": {
+              "type": "integer"
+            },
+            "award_message": {
+              "type": "string"
+            },
+            "awarded_by_user_id": {
+              "type": "integer"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "priority": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "revoked_at": {
+              "type": "string"
+            },
+            "revoked_by_user_id": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "show_on_profile": {
+              "type": "boolean"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "achievement_id",
+            "user_id",
+            "awarded_by_user_id",
+            "show_on_profile"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "user_achievement"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_achievement_user_list",
+    "description": "List the awards one user holds, by username, with cursor pagination. Returns: each award with id, achievement_id, user_id, priority, show_on_profile, award_message, and revocation stamps, plus pagination cursors. See also: gitlab_achievement_recipients, gitlab_achievement_user_achievement_reorder, gitlab_achievement_award.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "description": "Cursor for forward pagination, taken from a previous response pagination.end_cursor",
+          "type": "string"
+        },
+        "before": {
+          "description": "Cursor for backward pagination, taken from a previous response pagination.start_cursor",
+          "type": "string"
+        },
+        "first": {
+          "description": "Number of items to return from the start of the page (default 20, max 100)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "include_hidden": {
+          "description": "Include awards the user hid from their profile. Only the user themself and namespace or instance maintainers and owners see these",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "last": {
+          "description": "Number of items to return from the end of the page, for backward pagination",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "username": {
+          "description": "Account name of the user whose awards to list, without a leading at sign",
+          "type": "string"
+        }
+      },
+      "required": [
+        "username"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            },
+            "has_previous_page": {
+              "type": "boolean"
+            },
+            "start_cursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "type": "object"
+        },
+        "user_achievements": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "achievement_id": {
+                "type": "integer"
+              },
+              "award_message": {
+                "type": "string"
+              },
+              "awarded_by_user_id": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "priority": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "revoked_at": {
+                "type": "string"
+              },
+              "revoked_by_user_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "show_on_profile": {
+                "type": "boolean"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "achievement_id",
+              "user_id",
+              "awarded_by_user_id",
+              "show_on_profile"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "user_achievements",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_activate_user",
     "description": "Activate a deactivated user. Returns: confirmation with the user ID and action. See also: gitlab_deactivate_user, gitlab_unblock_user, gitlab_get_user.",
     "inputSchema": {
