@@ -42,6 +42,18 @@ func TestWithClient_BindsTheClientARequestRunsUnder(t *testing.T) {
 			},
 			want: bound,
 		},
+		{
+			// WithClient refuses to store a nil, so only a caller reaching
+			// past it can produce this. The fallback still has to win:
+			// returning the typed nil would hand a handler a client whose
+			// every method call is a nil dereference, which is strictly
+			// worse than the refusal ErrUnboundClient gives.
+			name: "a typed-nil binding falls back to the captured client",
+			ctx: func() context.Context {
+				return context.WithValue(context.Background(), clientContextKey{}, (*Client)(nil))
+			},
+			want: captured,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,6 +120,15 @@ func TestClientFrom_SaysWhetherAnythingWasBound(t *testing.T) {
 		{
 			name:    "a nil context",
 			ctx:     func() context.Context { return nil },
+			wantNil: true,
+		},
+		{
+			// "Bound to a nil client" is not "bound": a middleware told
+			// otherwise would install nothing and report that it had.
+			name: "a context carrying a typed-nil client",
+			ctx: func() context.Context {
+				return context.WithValue(context.Background(), clientContextKey{}, (*Client)(nil))
+			},
 			wantNil: true,
 		},
 	}

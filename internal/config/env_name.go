@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -88,7 +89,16 @@ func LegacyEnvName(name string) string {
 // old spelling was the value's source. The warning is emitted once at startup
 // rather than at each read, because several of these are consulted more than
 // once and a per-read warning would say the same thing four times.
-var deprecatedEnvUses sync.Map
+//
+// It is a typed map behind a mutex rather than a [sync.Map] because every key
+// this package stores is a setting name and every value one of two kinds: the
+// any-typed alternative bought nothing here but two assertions whose false
+// branch no input could reach, and the map is written a handful of times at
+// startup, where lock contention is not a consideration.
+var (
+	deprecatedEnvMu   sync.Mutex
+	deprecatedEnvUses = map[string]envUseKind{}
+)
 
 // Getenv reads a setting under its prefixed name, falling back to the
 // unprefixed one and recording that it did.
@@ -109,24 +119,34 @@ func Getenv(name string) string {
 
 	switch {
 	case prefixedSet && legacySet:
-		deprecatedEnvUses.Store(name, bothSet)
+		recordDeprecatedEnvUse(name, bothSet)
 		return prefixed
 	case prefixedSet:
 		return prefixed
 	case legacySet:
-		deprecatedEnvUses.Store(name, legacyOnly)
+		recordDeprecatedEnvUse(name, legacyOnly)
 		return legacy
 	default:
 		return ""
 	}
 }
 
-// How an unprefixed name came to be noticed, which decides what the warning
-// tells the operator to do about it.
+// envUseKind is how an unprefixed name came to be noticed, which decides what
+// the warning tells the operator to do about it.
+type envUseKind int
+
 const (
-	legacyOnly = iota
+	legacyOnly envUseKind = iota
 	bothSet
 )
+
+// recordDeprecatedEnvUse notes that name was read under its unprefixed
+// spelling, in the way kind describes.
+func recordDeprecatedEnvUse(name string, kind envUseKind) {
+	deprecatedEnvMu.Lock()
+	defer deprecatedEnvMu.Unlock()
+	deprecatedEnvUses[name] = kind
+}
 
 // DeprecatedEnvWarnings returns one line per unprefixed variable that was
 // actually read, in a stable order, ready to be logged at startup.
@@ -134,18 +154,15 @@ const (
 // It reports what was read rather than what is set, so an operator is never
 // warned about a variable this deployment ignores anyway.
 func DeprecatedEnvWarnings() []string {
-	var names []string
-	deprecatedEnvUses.Range(func(key, _ any) bool {
-		if name, ok := key.(string); ok {
-			names = append(names, name)
-		}
-		return true
-	})
-	slices.Sort(names)
+	deprecatedEnvMu.Lock()
+	recorded := maps.Clone(deprecatedEnvUses)
+	deprecatedEnvMu.Unlock()
+
+	names := slices.Sorted(maps.Keys(recorded))
 
 	warnings := make([]string, 0, len(names))
 	for _, name := range names {
-		kind, _ := deprecatedEnvUses.Load(name)
+		kind := recorded[name]
 		legacy := LegacyEnvName(name)
 		if kind == bothSet {
 			warnings = append(warnings, "both "+EnvPrefix+name+" and "+legacy+
@@ -167,10 +184,9 @@ func PrefixedEnvNames() []string {
 // the record is process-wide by design: the warning belongs to the process, not
 // to a call.
 func resetDeprecatedEnvUses() {
-	deprecatedEnvUses.Range(func(key, _ any) bool {
-		deprecatedEnvUses.Delete(key)
-		return true
-	})
+	deprecatedEnvMu.Lock()
+	defer deprecatedEnvMu.Unlock()
+	clear(deprecatedEnvUses)
 }
 
 // TrimmedGetenv is [Getenv] with surrounding whitespace removed, which is what

@@ -1207,6 +1207,154 @@ func TestCredentialRejected_NilContext(t *testing.T) {
 	}
 }
 
+// TestCredentialRejected_OnlyAnExplicitRefusalCountsAsOne verifies the verdict
+// the probe actually returns, for every answer GitLab can give it.
+//
+// The positive half is the point: a 401 or a 403 on /api/v4/user is the
+// instance saying this credential is no longer good, and it is what makes the
+// pool drop the entry. Nothing asserted that half before, so a probe that had
+// been reduced to `return false` would have passed the whole suite while
+// quietly keeping revoked credentials alive for as long as the process ran.
+//
+// The negative half is the fail-open rule: a 404 from a stubbed instance, a
+// 5xx, and an instance that does not answer at all are all "no verdict", and
+// answering true for any of them turns one unreachable GitLab into a mass
+// revocation across every pooled entry.
+func TestCredentialRejected_OnlyAnExplicitRefusalCountsAsOne(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		unreliable bool
+		want       bool
+	}{
+		{name: "401 is the instance refusing the credential", status: http.StatusUnauthorized, want: true},
+		{name: "403 is the instance refusing the credential", status: http.StatusForbidden, want: true},
+		{name: "200 is the credential working", status: http.StatusOK},
+		{name: "404 is a stubbed endpoint, not a verdict", status: http.StatusNotFound},
+		{name: "500 is the instance struggling, not a verdict", status: http.StatusInternalServerError},
+		{name: "an instance that does not answer is not a verdict", unreliable: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v4/version" {
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(map[string]any{"version": "17.0.0"})
+					return
+				}
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+
+			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			if tt.unreliable {
+				// Closing the server first is how a transport error is
+				// produced without waiting on a timeout: the probe's Do
+				// fails to connect at all.
+				srv.Close()
+			}
+
+			if got := client.CredentialRejected(context.Background()); got != tt.want {
+				t.Errorf("CredentialRejected() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPing_NullVersionDocument verifies that a version endpoint answering the
+// JSON literal null is reported as a failed ping rather than dereferenced.
+//
+// client-go decodes into a pointer it leaves nil when the body is null, so
+// this is the one 200 response that reaches [Client.Ping] with no error and
+// no value. Without the nil half of the guard the next line reads
+// v.Version off nothing.
+func TestPing_NullVersionDocument(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("null"))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	version, err := client.Ping(context.Background())
+	if err == nil {
+		t.Fatalf("Ping() = %q, want an error for a null version document", version)
+	}
+}
+
+// TestDetectTier_NullLicenseDocument verifies that a license endpoint
+// answering the JSON literal null falls back to Free rather than being
+// dereferenced, the same shape [TestPing_NullVersionDocument] pins for the
+// version endpoint.
+func TestDetectTier_NullLicenseDocument(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v4/version" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "17.0.0"})
+			return
+		}
+		_, _ = w.Write([]byte("null"))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	if got := client.DetectTier(context.Background()); got != edition.Free {
+		t.Errorf("DetectTier() on a null license document = %v, want free", got)
+	}
+}
+
+// TestNewBaseTransport_ForeignDefault_StillBuildsATransport covers the
+// fallback taken when http.DefaultTransport is not an *http.Transport.
+//
+// A process whose default is an instrumented or mocked RoundTripper has
+// nothing to clone, and this package must build a plain transport rather
+// than dereference what it found. The clone exists to inherit proxy and
+// dial settings, not to make requests work, so the fallback is only about
+// staying alive; what it must not lose is this package's own response
+// header timeout, which is asserted here.
+//
+// The shared transport is realized before the swap so no other test can
+// observe the foreign default through the sync.OnceValue.
+func TestNewBaseTransport_ForeignDefault_StillBuildsATransport(t *testing.T) {
+	_ = buildBaseTransport(false)
+
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	http.DefaultTransport = testRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		return original.RoundTrip(r)
+	})
+
+	transport := newBaseTransport(nil)
+	if transport == nil {
+		t.Fatal("newBaseTransport() = nil with a foreign DefaultTransport")
+	}
+	if transport.ResponseHeaderTimeout != responseHeaderTimeout {
+		t.Errorf("ResponseHeaderTimeout = %v, want %v", transport.ResponseHeaderTimeout, responseHeaderTimeout)
+	}
+	if transport.TLSClientConfig != nil {
+		t.Errorf("TLSClientConfig = %+v, want none when no TLS configuration was supplied", transport.TLSClientConfig)
+	}
+}
+
+// testRoundTripperFunc is a RoundTripper that is deliberately not an
+// *http.Transport, which is the condition the fallback above exists for.
+type testRoundTripperFunc func(*http.Request) (*http.Response, error)
+
+// RoundTrip delegates to the wrapped function.
+func (f testRoundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 // TestPoolClientConstructors_UseTheirAuthScheme verifies each pool client
 // constructor authenticates every request path — the raw credential probe,
 // the raw version probe, and SDK API calls — with its own scheme: the
