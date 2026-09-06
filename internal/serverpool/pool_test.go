@@ -3571,9 +3571,32 @@ func TestEntryFromBuild_RefusesWhatIsNotAnEntry(t *testing.T) {
 // both stop silently, and the pool would grow to its cap holding credentials
 // nobody has checked since startup. The recover is what keeps the failure to
 // one sweep.
+// awaitSweepTicks waits for two signals from a sweep whose callback panics
+// every time, and says which of the two failures happened.
+//
+// Two, because one proves only that the panic was caught. A recovery in the
+// goroutine's own defer catches the first just as well and then returns,
+// taking the ticker with it, so the second signal is the whole question.
+func awaitSweepTicks(t *testing.T, ticks <-chan struct{}, never, stopped string) {
+	t.Helper()
+	for tick := 1; tick <= 2; tick++ {
+		select {
+		case <-ticks:
+		case <-time.After(5 * time.Second):
+			if tick == 1 {
+				t.Fatal(never)
+			}
+			t.Fatal(stopped)
+		}
+	}
+}
+
 func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 	t.Run("the idle sweep", func(t *testing.T) {
-		panicked := make(chan struct{}, 1)
+		// Two, not one: surviving the panic is the point, and a sweep that
+		// recovered in the goroutine's own defer would also deliver the first.
+		// Only the second says the ticker is still there.
+		panicked := make(chan struct{}, 2)
 		pool := New(testConfig(stubGitLabBase), testFactory(),
 			WithIdleTimeout(time.Nanosecond),
 			WithInUse(func(*Entry) bool {
@@ -3593,13 +3616,11 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 
 		pool.StartIdleEviction(t.Context())
 
-		select {
-		case <-panicked:
-		case <-time.After(5 * time.Second):
-			t.Fatal("the idle sweep never ran")
-		}
-		// Reaching here at all is the assertion: an unrecovered panic in a
-		// goroutine ends the test binary.
+		awaitSweepTicks(t, panicked,
+			"the idle sweep never ran",
+			"the idle sweep ran once and stopped: the panic took the ticker with it, so nothing is ever swept again")
+		// Reaching here at all is half the assertion: an unrecovered panic in
+		// a goroutine ends the test binary.
 	})
 
 	// The recovery both goroutines defer, called directly, so the ordinary
@@ -3633,7 +3654,10 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 	})
 
 	t.Run("revalidation", func(t *testing.T) {
-		panicked := make(chan struct{}, 1)
+		// Room for two, and two entries below, for the same reason the idle
+		// sweep wants two ticks: one eviction proves the panic was caught, and
+		// only a second proves the sweep that caught it is still running.
+		panicked := make(chan struct{}, 2)
 		refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
@@ -3650,27 +3674,27 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 				}
 				panic("evict callback blew up")
 			}))
-		entry, err := pool.GetOrCreateEntry("glpat-revalidate-panic", stubGitLabBase, nil)
-		if err != nil {
-			t.Fatalf("GetOrCreateEntry(): %v", err)
+		for _, token := range []string{"glpat-revalidate-panic-1", "glpat-revalidate-panic-2"} {
+			entry, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil)
+			if err != nil {
+				t.Fatalf("GetOrCreateEntry(%q): %v", token, err)
+			}
+			// Point each entry's own client at an instance that refuses it, so
+			// revalidation reaches a verdict and evicts.
+			rejecting, err := gitlabclient.NewClientWithTokenRetries(refusing.URL, token, false, true)
+			if err != nil {
+				t.Fatalf("NewClientWithToken(): %v", err)
+			}
+			pool.mu.Lock()
+			entry.client = rejecting
+			pool.mu.Unlock()
 		}
-		// Point the entry's own client at an instance that refuses it, so
-		// revalidation reaches a verdict and evicts.
-		rejecting, err := gitlabclient.NewClientWithTokenRetries(refusing.URL, "glpat-revalidate-panic", false, true)
-		if err != nil {
-			t.Fatalf("NewClientWithToken(): %v", err)
-		}
-		pool.mu.Lock()
-		entry.client = rejecting
-		pool.mu.Unlock()
 
 		pool.StartRevalidation(t.Context())
 
-		select {
-		case <-panicked:
-		case <-time.After(5 * time.Second):
-			t.Fatal("revalidation never evicted the refused entry")
-		}
+		awaitSweepTicks(t, panicked,
+			"revalidation never evicted a refused entry",
+			"revalidation evicted once and stopped: the panic took the ticker with it, so no credential is ever re-checked again")
 	})
 }
 

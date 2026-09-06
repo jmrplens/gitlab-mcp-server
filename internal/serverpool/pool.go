@@ -1188,6 +1188,20 @@ func recoverSweep(ctx context.Context, sweep string) {
 	}
 }
 
+// sweepTick runs one sweep with the recovery around that tick alone, so a
+// panic costs the tick and not the sweep.
+//
+// Recovering in the goroutine's own defer, which is where this started, only
+// looks like it does the same thing: the panic unwinds the whole goroutine
+// before the recover sees it, so the ticker is gone and no sweep ever runs
+// again. That is precisely the outcome the comment above says is worse than
+// the bug. The goroutine keeps its own defer as the last resort, for a panic
+// raised outside the tick.
+func sweepTick(ctx context.Context, sweep string, run func()) {
+	defer recoverSweep(ctx, sweep)
+	run()
+}
+
 // idleSweepCadence is how often the idle sweep runs.
 //
 // A quarter of the idle timeout, so an entry is noticed within a quarter of
@@ -1226,7 +1240,7 @@ func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 				slog.InfoContext(ctx, "server pool: idle eviction stopped")
 				return
 			case <-ticker.C:
-				p.evictIdle()
+				sweepTick(ctx, "idle eviction", p.evictIdle)
 			}
 		}
 	}()
@@ -1317,7 +1331,7 @@ func (p *ServerPool) StartRevalidation(ctx context.Context) {
 				slog.InfoContext(ctx, "server pool: revalidation stopped")
 				return
 			case <-ticker.C:
-				p.revalidateAll(ctx)
+				sweepTick(ctx, "revalidation", func() { p.revalidateAll(ctx) })
 			}
 		}
 	}()
