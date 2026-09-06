@@ -223,7 +223,7 @@ func openStandaloneStream(t *testing.T, srv *server, token, sessionID, protocol 
 // The only ending the protocol offers a subscriber with no open request is
 // terminating its session, which is what this asserts: the standalone stream
 // ends, and the client's next request re-initializes. It is also what the gate
-// would enforce on that next request anyway — the point is that a client whose
+// would enforce on that next request anyway; the point is that a client whose
 // only activity is a subscription never makes one.
 //
 // Reachable on --stateless=false alone. The default transport gives each POST a

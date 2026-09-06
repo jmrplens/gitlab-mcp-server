@@ -1067,7 +1067,7 @@ func (p *ServerPool) dropEntry(key string) *Entry {
 //
 // The fallback is what keeps the pool bounded. An entry is only skipped in
 // favor of another one, never in favor of growing past --max-http-clients, so
-// a pool in which everything is busy still evicts its oldest — the case
+// a pool in which everything is busy still evicts its oldest, which is the case
 // TestSharedServer_AnEvictedCredentialsListenIsEnded drives with a maximum of
 // one. What a credential is told when that happens is [WithOnEvict]'s job.
 //
@@ -1214,8 +1214,8 @@ func (p *ServerPool) evictIdle() {
 			//
 			// Moved in the LRU as well, because the pool keeps two clocks and
 			// this decision has to reach both. Restarting lastUsed alone left
-			// the entry where it was — at the tail, since a subscription
-			// refreshes nothing here — so the sweep protected it and size
+			// the entry where it was, at the tail, since a subscription
+			// refreshes nothing here, so the sweep protected it and size
 			// pressure took it first. [ServerPool.evictLRU] is what enforces
 			// the decision; this is what keeps the ordering honest, and what
 			// keeps that scan short.

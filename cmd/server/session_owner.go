@@ -214,10 +214,10 @@ func (o *sessionOwners) forgetOwner(owner string) []*mcp.ServerSession {
 // path.
 //
 // Terminating the session is the only ending the protocol offers a subscriber
-// with no open request: the standalone stream ends, and the client's next
+// with no open request: the standalone stream ends and the client's next
 // request re-initializes. It is also what the gate would enforce a moment later
 // anyway, since [sessionOwners.forgetOwner] has just taken the session's claim
-// away — the difference is that a client whose only activity is a subscription
+// away. The difference is that a client whose only activity is a subscription
 // makes no next request, so without this it learns nothing, ever.
 //
 // Two exclusions, both load-bearing:

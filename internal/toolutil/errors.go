@@ -110,8 +110,8 @@ func WrapErr(operation string, err error) error {
 // The cause is deliberately not appended, which makes this the one wrapping in
 // this file that does not end with the error it wraps. Everywhere else that
 // tail is GitLab's own words and the useful half of the message; here it is
-// net/http's, and it reads "Get \"https://gitlab.invalid/api/v4/...\"" — a
-// synthetic host the shared catalog is registered against, for a request that
+// net/http's, and it reads "Get \"https://gitlab.invalid/api/v4/...\"", naming
+// a synthetic host the shared catalog is registered against, for a request that
 // never left this process. So the model was handed the attribution sentence
 // followed by a DNS wild-goose chase, which is the exact hunt the sentence was
 // written to prevent. [ClassifyError] alone could not fix that: it decides the

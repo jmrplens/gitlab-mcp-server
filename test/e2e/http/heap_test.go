@@ -68,6 +68,16 @@ const heapGrowthBudget = 2 << 20
 // The heap is read through --pprof-addr, which the binary serves on loopback
 // only, with ?gc=1 so each reading is of the live set rather than of whatever
 // had not been collected yet.
+//
+// What it measures is a credential with **no connection open**: each of its
+// clients completes a tools/list and goes, so what the reading is left holding
+// is the pool entry and nothing the transport keeps for it. That is the narrow
+// question on purpose, because it is the one that isolates the tenancy from
+// everything else and so can say whether a catalog is being built per
+// credential again. The benchmark driver (cmd/bench_resources) answers the
+// wider one, a settled slope with four sockets per credential still open, and
+// reports a larger per-credential figure for exactly that reason. A sizing
+// decision wants the driver's number; this budget is not it.
 func TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials(t *testing.T) {
 	// All three, because all three per-credential figures are published and a
 	// published figure with no test behind it is a claim. meta was left out

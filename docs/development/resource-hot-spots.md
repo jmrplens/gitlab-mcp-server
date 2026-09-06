@@ -584,7 +584,16 @@ reads `HeapAlloc` from `/debug/pprof/heap?gc=1&debug=1` after a collection, at
 one credential and at twenty, and the per-credential figure is the difference
 divided by nineteen. The **after** column is the median of fifteen runs at
 `7827d55b`, the **before** column one run of the same test on the parent commit,
-both on the Ryzen host named at the top of this section:
+both on the Ryzen host named at the top of this section.
+
+**These are credentials with no connection open**, which is the narrower of the
+two at-rest questions and the one that isolates the tenancy: the probe's clients
+complete their `tools/list` and go, so what is left is the pool entry and
+nothing the transport holds for it. The benchmark driver answers the wider one,
+a settled slope with its sockets still open, and its figure is larger by the
+per-connection buffers a connected credential really costs. Neither corrects the
+other; a sizing decision wants the driver's, and the question "did sharing the
+server remove the catalog from the per-credential cost" wants this one.
 
 | Surface      | Live heap per credential, before |   after | Spread over 15 runs | Ratio |
 | ------------ | -------------------------------: | ------: | ------------------: | ----: |

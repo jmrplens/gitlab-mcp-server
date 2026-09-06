@@ -49,10 +49,14 @@ In HTTP mode, a single process serves all clients. Idle, before any credential h
 > listen counter, a watcher set, and the sessions that credential holds open.
 >
 > Measured locally on the development machine, the live heap an idle process
-> holds per additional credential fell from 434 KiB to 7.7 on `dynamic`, 815 to
-> 8.3 on `meta` and 1,487 to 8.5 on `individual`: the three surfaces now cost
-> the same, because what a credential costs no longer depends on which tools are
-> registered. The before and after runs are written up in
+> holds per additional credential **with no connection open** fell from 434 KiB
+> to 7.7 on `dynamic`, 815 to 8.3 on `meta` and 1,487 to 8.5 on `individual`:
+> the three surfaces now cost the same, because what a credential costs no
+> longer depends on which tools are registered. That figure isolates the tenancy
+> and is deliberately narrower than the benchmark's settled slope, which keeps
+> each credential's sockets open across steps and so also carries the
+> per-connection buffers; size against the benchmark's, read this one for what
+> sharing the server removed. The before and after runs are written up in
 > [Resource hot spots](../development/resource-hot-spots.md#what-the-shared-server-measured).
 > The tables below stay as they were until the reference host they were taken on
 > is re-run.

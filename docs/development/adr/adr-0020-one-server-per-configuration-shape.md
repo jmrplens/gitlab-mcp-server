@@ -314,8 +314,11 @@ writing.
   open — and none of that depends on which tools are registered. What remains of
   the resident-set slope under load is the requests in flight, not the tenancy.
   The figures are medians of fifteen runs of the shipped probe
-  (`TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials`); the run
-  and its spread are recorded in
+  (`TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials`) and measure
+  a credential **with no connection open**, which is what isolates the tenancy
+  from everything the transport holds; the benchmark driver measures a settled
+  slope with its sockets still open and reports a larger figure for that reason.
+  The run and its spread are recorded in
   [Resource hot spots](../resource-hot-spots.md#what-the-shared-server-measured).
 - POS-002: A credential's first request no longer pays for a catalog build
   whenever another credential of the same shape has already paid for it. That
