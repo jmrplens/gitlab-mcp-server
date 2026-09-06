@@ -1644,3 +1644,64 @@ func TestClearRateLimit_AfterPauseExpires_Resets(t *testing.T) {
 		}
 	})
 }
+
+// TestLease_ReportsTheIntervalTheManagerIsRunningWith covers the accessor a
+// caller renewing by some other means has to read.
+//
+// It is not a getter for its own sake. cmd/server holds a watch open while a
+// subscriptions/listen stream is open, and it renews at a third of this value;
+// guessing the interval instead would either waste work on every stream or miss
+// the deadline the first time the option changed.
+func TestLease_ReportsTheIntervalTheManagerIsRunningWith(t *testing.T) {
+	tests := []struct {
+		name string
+		set  time.Duration
+		want time.Duration
+	}{
+		{name: "a configured lease", set: 4 * time.Minute, want: 4 * time.Minute},
+		{name: "the default", want: DefaultLease},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _, _ := newTestManager(t, Options{Lease: tt.set})
+
+			if got := m.Lease(); got != tt.want {
+				t.Errorf("Lease() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDemotedCount_CountsTheWatchesThatSlowedDown covers the number that says
+// whether the lease is doing its job.
+//
+// Zero while subscribers are present and non-zero once they go quiet is the
+// whole signal: a count stuck at the total means whatever renews watches on
+// this transport is not reaching them, which is a failure that otherwise shows
+// up only as subscriptions that answer late.
+func TestDemotedCount_CountsTheWatchesThatSlowedDown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		m, _, _ := newTestManager(t, leaseOptions(time.Minute, time.Hour))
+
+		if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
+			t.Fatalf("Subscribe: %v", err)
+		}
+		if got := m.DemotedCount(); got != 0 {
+			t.Errorf("DemotedCount() = %d on a fresh watch, want 0", got)
+		}
+
+		time.Sleep(3 * time.Minute)
+		synctest.Wait()
+		if got := m.DemotedCount(); got != 1 {
+			t.Errorf("DemotedCount() = %d after the lease expired, want 1", got)
+		}
+
+		if revived := m.RenewAll(subA); revived != 1 {
+			t.Errorf("RenewAll revived %d watches, want 1", revived)
+		}
+		if got := m.DemotedCount(); got != 0 {
+			t.Errorf("DemotedCount() = %d after a renewal, want 0", got)
+		}
+	})
+}

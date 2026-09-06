@@ -109,6 +109,17 @@ func TestShutdown_OpenListenStreams_ProcessExitsCleanlyOnEverySurface(t *testing
 				if !stream.completed() {
 					t.Errorf("stream %d never received its completion result, so the process ended without closing it:\n%s",
 						stream.id, stream.text())
+					continue
+				}
+				// The second reason reachable end to end without a GitLab
+				// fixture, and the one that proves the stamp is not
+				// eviction-specific: a client whose stream ends at SIGTERM
+				// should reconnect, where one whose credential was revoked
+				// should re-authenticate first, and the bare result these used
+				// to carry said neither.
+				if !stream.endedWith(`"reason":"shutdown"`) {
+					t.Errorf("stream %d completed without saying the server was shutting down:\n%s",
+						stream.id, stream.text())
 				}
 			}
 			if code != 0 {
@@ -324,6 +335,23 @@ func (s *shutdownStream) completed() bool {
 	want := fmt.Sprintf(`"id":%d`, s.id)
 	for _, frame := range s.frames {
 		if strings.Contains(frame, want) && strings.Contains(frame, `"result"`) {
+			return true
+		}
+	}
+	return false
+}
+
+// endedWith reports whether the stream's completion result carries want.
+//
+// It looks at the completion frame alone rather than at everything that
+// arrived, so a reason appearing in some other message could not pass for one
+// the client was given with its ending.
+func (s *shutdownStream) endedWith(want string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id := fmt.Sprintf(`"id":%d`, s.id)
+	for _, frame := range s.frames {
+		if strings.Contains(frame, id) && strings.Contains(frame, `"result"`) && strings.Contains(frame, want) {
 			return true
 		}
 	}

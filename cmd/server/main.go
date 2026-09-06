@@ -3895,6 +3895,16 @@ func serverCardSubscriptions(cfg *config.Config) map[string]any {
 		},
 		"subscribable_uri_templates": subscriptions.Templates(),
 		"notification":               "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
+		// The vocabulary a client may meet in the result of a
+		// subscriptions/listen this server ended, so it can be branched on
+		// without connecting first and without a client having to discover it
+		// one ending at a time. Built from [watchEndReasons] rather than
+		// written out again, so the card and the constants cannot drift; cloned
+		// rather than aliased, so the card the caller now owns cannot be edited
+		// into the vocabulary the server answers with, which is how
+		// [subscriptions.Templates] hands over the list beside it.
+		"end_reasons":         slices.Clone(watchEndReasons),
+		"end_reason_meta_key": watchEndMetaKey,
 	}
 }
 

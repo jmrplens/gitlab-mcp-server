@@ -1690,6 +1690,129 @@ func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
 	}
 }
 
+// TestOnEvict_EachRemovalPathNamesItsOwnCause pins the vocabulary the callback
+// is handed, one case per call site of [ServerPool.dropEntry].
+//
+// The cause is not decoration: cmd/server turns it into the sentence an evicted
+// subscriber is given, and the seven paths do not deserve the same sentence. A
+// credential taken for size pressure is still valid and should reconnect at
+// once; one GitLab has refused must be replaced first. Before the cause
+// existed, the caller could only guess, and it guessed "evicted" for all of
+// them, so a client whose token had just been revoked was told to retry with
+// the same token.
+//
+// Every path is here rather than the interesting ones, because a path that
+// arrives with the zero value reaches the client as an ending nobody can name,
+// and nothing else in the build would notice.
+func TestOnEvict_EachRemovalPathNamesItsOwnCause(t *testing.T) {
+	tests := []struct {
+		name string
+		// evict drives one removal path against a pool holding one entry.
+		evict func(t *testing.T, pool *ServerPool, entry *Entry, key string)
+		want  EvictionCause
+	}{
+		{
+			name: "a full pool taking a new credential",
+			evict: func(t *testing.T, pool *ServerPool, _ *Entry, _ string) {
+				t.Helper()
+				if _, err := pool.GetOrCreateEntry("glpat-arriving", stubGitLabBase, nil); err != nil {
+					t.Fatalf("the arriving credential: %v", err)
+				}
+			},
+			want: CauseSizePressure,
+		},
+		{
+			name: "the idle sweep",
+			evict: func(_ *testing.T, pool *ServerPool, _ *Entry, key string) {
+				pool.mu.Lock()
+				pool.entries[key].lastUsed = time.Now().Add(-time.Hour)
+				pool.mu.Unlock()
+				pool.evictIdle()
+			},
+			want: CauseIdle,
+		},
+		{
+			name: "a credential too long unchecked",
+			evict: func(_ *testing.T, pool *ServerPool, _ *Entry, key string) {
+				pool.mu.Lock()
+				pool.maxCredentialAge = time.Minute
+				pool.entries[key].lastValidated = time.Now().Add(-time.Hour)
+				pool.mu.Unlock()
+				pool.evictStaleCredential(key)
+			},
+			want: CauseStaleCredential,
+		},
+		{
+			name: "GitLab refusing the credential on a call",
+			evict: func(_ *testing.T, pool *ServerPool, entry *Entry, key string) {
+				pool.evictRejectedCredential(key, entry)
+			},
+			want: CauseRejectedCredential,
+		},
+		{
+			name: "the periodic revalidation finding the credential refused",
+			evict: func(_ *testing.T, pool *ServerPool, _ *Entry, key string) {
+				pool.evictByKey(key)
+			},
+			want: CauseInvalidCredential,
+		},
+		{
+			name: "a configuration shape whose registration failed",
+			evict: func(t *testing.T, pool *ServerPool, entry *Entry, _ string) {
+				t.Helper()
+				if !pool.EvictServer(entry.Server()) {
+					t.Error("EvictServer() found nothing, but the entry was just created")
+				}
+			},
+			want: CauseRebuild,
+		},
+		{
+			name: "the pool shutting down",
+			evict: func(_ *testing.T, pool *ServerPool, _ *Entry, _ string) {
+				pool.Close()
+			},
+			want: CausePoolClosed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const token = "glpat-the-one-entry"
+
+			var mu sync.Mutex
+			var causes []EvictionCause
+			pool := New(testConfig(stubGitLabBase), testFactory(),
+				// One, so size pressure has somewhere to bite and every other
+				// path still has an entry of its own to take.
+				WithMaxSize(1),
+				WithIdleTimeout(time.Minute),
+				WithOnEvict(func(_ *Entry, cause EvictionCause) {
+					mu.Lock()
+					defer mu.Unlock()
+					causes = append(causes, cause)
+				}))
+			entry, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil)
+			if err != nil {
+				t.Fatalf("GetOrCreateEntry() error: %v", err)
+			}
+
+			tt.evict(t, pool, entry, sessionKey(token, stubGitLabBase))
+
+			mu.Lock()
+			defer mu.Unlock()
+			if len(causes) != 1 {
+				t.Fatalf("onEvict fired %d times, want 1: causes %v", len(causes), causes)
+			}
+			if causes[0] != tt.want {
+				t.Errorf("cause = %q, want %q", causes[0], tt.want)
+			}
+			if causes[0] == "" {
+				t.Error("the path left the zero value, which reaches a client as an ending nobody can name")
+			}
+		})
+	}
+}
+
 // TestEvictIdle_AKeptEntryMovesToTheFrontOfTheLRU pins the second half of the
 // same decision.
 //
@@ -2554,7 +2677,7 @@ func TestStartIdleEviction_NilContextAndDisabled_DoesNotPanic(t *testing.T) {
 // the single place an entry leaves the map.
 func TestPool_OnEvictFiresOnEveryRemovalPath(t *testing.T) {
 	newRecordingPool := func(evicted *[]*mcp.Server, mu *sync.Mutex, opts ...Option) *ServerPool {
-		record := WithOnEvict(func(entry *Entry) {
+		record := WithOnEvict(func(entry *Entry, _ EvictionCause) {
 			mu.Lock()
 			defer mu.Unlock()
 			*evicted = append(*evicted, entry.Server())
@@ -2645,7 +2768,7 @@ func TestStartRevalidation_PanickingEvictionCallback_DoesNotKillTheProcess(t *te
 
 	pool := New(testConfig(srv.URL), testFactory(),
 		WithRevalidateInterval(10*time.Millisecond),
-		WithOnEvict(func(*Entry) { panic("a callback outside the pool") }),
+		WithOnEvict(func(*Entry, EvictionCause) { panic("a callback outside the pool") }),
 	)
 	if _, err := pool.GetOrCreate("glpat-revalidate", srv.URL); err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
@@ -3394,7 +3517,7 @@ func TestEvictServer_DropsEveryEntryServedByThatServer(t *testing.T) {
 	var evicted []string
 	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
 		return shared, nil
-	}, WithOnEvict(func(entry *Entry) {
+	}, WithOnEvict(func(entry *Entry, _ EvictionCause) {
 		mu.Lock()
 		defer mu.Unlock()
 		evicted = append(evicted, entry.Owner())
@@ -4020,7 +4143,7 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 		cfg := testConfig(stubGitLabBase)
 		pool := New(cfg, testFactory(),
 			WithRevalidateInterval(10*time.Millisecond),
-			WithOnEvict(func(*Entry) {
+			WithOnEvict(func(*Entry, EvictionCause) {
 				select {
 				case panicked <- struct{}{}:
 				default:

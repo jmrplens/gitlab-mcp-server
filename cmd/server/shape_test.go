@@ -739,7 +739,7 @@ func TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned(t *test
 	}
 	streamCtx, cancelStream := context.WithCancel(t.Context())
 	t.Cleanup(cancelStream)
-	_, release := state.streams.arm([]string{uri}, entry.Owner(), nil, cancelStream)
+	stream, release := state.streams.arm([]string{uri}, entry.Owner(), nil, cancelStream)
 	t.Cleanup(release)
 
 	// The entry is in use while it holds those, which is what keeps the idle
@@ -765,5 +765,81 @@ func TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned(t *test
 	}
 	if binding.credentials.inUse(entry) {
 		t.Error("an entry the pool no longer holds is still reported in use")
+	}
+
+	// The reason traveled with the ending, which is what tells this client
+	// apart from one whose credential GitLab refused. EvictServer is the
+	// failed-rebuild path, so what its subscribers should do is reconnect and
+	// subscribe again with the same credential.
+	end := stream.end.Load()
+	if end == nil {
+		t.Fatal("the stream was ended with no reason, so its client cannot tell a rebuild from a revoked token")
+	}
+	if end.reason != endCredentialReset {
+		t.Errorf("reason = %q, want %q", end.reason, endCredentialReset)
+	}
+}
+
+// TestNewShapedServerPool_SizePressure_TellsTheSubscriberItsEntryWasEvicted is
+// the ending [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561)
+// is about, driven through the wiring that produces it.
+//
+// A pool of one is always all busy once its single entry holds a subscription,
+// so the arriving credential takes it: that is the bounded fallback, and it
+// stays. What changes here is that the client is told which ending it was.
+// Before the cause was threaded, this credential and one GitLab had just
+// revoked received the same bare result, and a client acting on it retried a
+// token that will be refused every time.
+//
+// It also pins the half that must never change: the arriving credential is
+// admitted. A refusal in its place would convert churn into a first-come
+// lockout whose incumbency is free to hold, which is why the issue forbids it.
+func TestNewShapedServerPool_SizePressure_TellsTheSubscriberItsEntryWasEvicted(t *testing.T) {
+	gitlab := shapedPoolGitLab(t)
+	binding, pool := newShapedServerPool(t.Context(), &config.Config{
+		GitLabURL:         gitlab,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+		IgnoreScopes:      true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		MaxHTTPClients:    1,
+	})
+	t.Cleanup(pool.Close)
+
+	subscribed, err := pool.GetOrCreateEntry("glpat-subscribed", gitlab, nil)
+	if err != nil {
+		t.Fatalf("the subscribed credential: %v", err)
+	}
+	state := binding.credentials.get(subscribed.Owner())
+	if state == nil {
+		t.Fatal("the pool's insert callback filed no state for the entry it built")
+	}
+	streamCtx, cancelStream := context.WithCancel(t.Context())
+	t.Cleanup(cancelStream)
+	stream, release := state.streams.arm([]string{"gitlab://project/42"}, subscribed.Owner(), nil, cancelStream)
+	t.Cleanup(release)
+
+	arriving, err := pool.GetOrCreateEntry("glpat-arriving", gitlab, nil)
+	if err != nil {
+		t.Fatalf("the arriving credential was refused: %v; a refusal is the remedy the issue rules out", err)
+	}
+	if arriving.Owner() == subscribed.Owner() {
+		t.Fatal("the arriving credential reused the incumbent's entry, so nothing was evicted")
+	}
+
+	waitFor(t, func() bool { return stream.end.Load() != nil && streamCtx.Err() != nil })
+	if streamCtx.Err() == nil {
+		t.Error("the evicted subscriber's listen stream was left open, so it is served nothing and told nothing")
+	}
+	end := stream.end.Load()
+	if end == nil {
+		t.Fatal("the evicted subscriber was given no reason, so it cannot tell capacity from a revoked token")
+	}
+	if end.reason != endCredentialEvicted {
+		t.Errorf("reason = %q, want %q", end.reason, endCredentialEvicted)
+	}
+	if end.detail == "" {
+		t.Error("the ending carries no advice for a client that does not know the reason word")
 	}
 }
