@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -261,23 +262,43 @@ func seriesBlocks(run *Run, l labels, heading string) string {
 			budget = fmt.Sprintf(l.SeriesBudgetClause, s.BudgetMiB)
 		}
 		fmt.Fprintf(&b, "%s# %s\n\n", heading, fmt.Sprintf(l.SeriesCaption, s.Transport, s.Surface, s.Parallel, s.StepSeconds, budget))
-		fmt.Fprintf(&b, "%s\n\n%s\n\n", strings.TrimRight(seriesTable(s, l), "\n"), seriesSentence(s, l))
+		fmt.Fprintf(&b, "%s\n\n", strings.TrimRight(seriesTable(s, l), "\n"))
+		fmt.Fprintf(&b, "%s\n\n", joinNonEmpty(" ", seriesSlopeSentence(s, l), seriesSentence(s, l)))
 	}
 	return b.String()
 }
 
 // seriesTable is one series' steps, one row per credential count.
+//
+// The settled pair is only a column when the series carries one. A record
+// measured before the settled reading existed would otherwise get two columns
+// of "n/a" against every step, which reads as a process that holds nothing
+// rather than as a run that did not look.
 func seriesTable(s SeriesScenario, l labels) string {
-	alignments := []docgen.Alignment{
-		docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
-		docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
+	// The settled pair goes after the credential count and the two resident
+	// columns, so the four memory figures of a step read together.
+	const afterResident = 3
+
+	head, settled := l.SeriesHead, s.hasSettled()
+	if settled {
+		head = slices.Concat(l.SeriesHead[:afterResident],
+			[]string{l.SeriesSettledHeap, l.SeriesSettledRSS}, l.SeriesHead[afterResident:])
+	}
+	alignments := make([]docgen.Alignment, len(head))
+	for i := range alignments {
+		alignments[i] = docgen.AlignRight
 	}
 	rows := make([][]string, 0, len(s.Steps))
 	for _, step := range s.Steps {
-		rows = append(rows, []string{
+		row := []string{
 			strconv.Itoa(step.Clients),
 			mib(step.RSSMeanMiB),
 			mib(step.RSSPeakMiB),
+		}
+		if settled {
+			row = append(row, mibFine(step.SettledHeapMiB), mibFine(step.SettledRSSMiB))
+		}
+		rows = append(rows, append(row,
 			cpuPerCallLabel(step.CPUMsPerCall),
 			strconv.Itoa(step.Calls),
 			ms(step.CallP50Ms),
@@ -285,9 +306,28 @@ func seriesTable(s SeriesScenario, l labels) string {
 			ms(step.ListP50Ms),
 			ms(step.ListP99Ms),
 			strconv.Itoa(step.Goroutines),
-		})
+		))
 	}
-	return docgen.RenderMarkdownTable(l.SeriesHead, alignments, rows)
+	return docgen.RenderMarkdownTable(head, alignments, rows)
+}
+
+// seriesSlopeSentence names the growth per credential, and says which growth
+// it is.
+//
+// Both slopes are least-squares lines through the steps. The resident one is
+// the cost of a credential and of everything it keeps in flight, together; the
+// settled one is what holding a credential costs on its own. A series carrying
+// no settled reading says so rather than letting the resident figure stand as
+// the answer to a question it does not answer.
+func seriesSlopeSentence(s SeriesScenario, l labels) string {
+	load, ok := s.loadSlopeMiB()
+	if !ok {
+		return ""
+	}
+	if tenancy, settled := s.tenancySlopeKiB(); settled {
+		return fmt.Sprintf(l.SeriesSlopes, load, tenancy)
+	}
+	return fmt.Sprintf(l.SeriesLoadSlopeOnly, load)
 }
 
 // seriesSentence says where a series ended, in the page's language: every
@@ -387,6 +427,23 @@ func mib(value float64) string {
 		return "n/a"
 	}
 	return fmt.Sprintf("%.0f", value)
+}
+
+// mibFine renders a mebibyte figure at a precision that suits its size,
+// because the settled columns hold both kinds at once: a live heap of a few
+// mebibytes, where whole numbers would round a credential's whole cost away,
+// and a resident set of thousands, where two decimals are noise.
+func mibFine(value float64) string {
+	switch {
+	case value == 0:
+		return "n/a"
+	case value < 10:
+		return fmt.Sprintf("%.2f", value)
+	case value < 100:
+		return fmt.Sprintf("%.1f", value)
+	default:
+		return fmt.Sprintf("%.0f", value)
+	}
 }
 
 // ms renders a millisecond figure for a table.

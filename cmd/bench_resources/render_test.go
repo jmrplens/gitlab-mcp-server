@@ -494,6 +494,10 @@ func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 		"#### http, dynamic surface: 4 in flight per credential, 10 s per step, memory budget 4000 MiB",
 		"#### http, meta surface",
 		"| Credentials |",
+		"| Settled heap | Settled resident |",
+		"the peak resident set under load grows 36.61 MiB per credential",
+		"the settled live heap, read with the load stopped and a collection forced, grows 512.0 KiB per credential",
+		"That is a credential together with the requests it keeps in flight, not what a credential costs to hold",
 		"Every planned step ran, up to 20 credentials.",
 		"Stopped at 5 credentials: the next step (20) was estimated at 4300 MiB against a budget of 4000 MiB.",
 		"Stopped at 5 credentials: the tools/call p99 reached 31000 ms, above the 30000 ms ceiling.",
@@ -509,15 +513,39 @@ func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 		t.Error("the generated block has a run of blank lines, which markdownlint refuses")
 	}
 	// The cells are padded to the column, so the row for twenty credentials
-	// is matched by shape rather than by a literal.
-	if !regexp.MustCompile(`(?m)^\|\s+20 \|\s+880 \|\s+900 \|\s+1\.400 \|\s+8000 \|`).MatchString(english) {
+	// is matched by shape rather than by a literal. The settled pair sits
+	// between the resident columns and the processor time, which is the order
+	// this asserts.
+	if !regexp.MustCompile(`(?m)^\|\s+20 \|\s+880 \|\s+900 \|\s+50\.0 \|\s+800 \|\s+1\.400 \|\s+8000 \|`).MatchString(english) {
 		t.Error("the meta series table has no row for its twenty-credential step")
+	}
+	// The dynamic series measured no settled reading, so its own section
+	// carries neither settled column: two columns of "n/a" would read as a
+	// process holding nothing rather than as a run that did not look.
+	var dynamic string
+	for section := range strings.SplitSeq(english, "\n#### ") {
+		if strings.HasPrefix(section, "http, dynamic surface") {
+			dynamic = section
+		}
+	}
+	if dynamic == "" {
+		t.Fatal("the generated block has no section for the dynamic series")
+	}
+	if strings.Contains(dynamic, "Settled heap") {
+		t.Error("a series with no settled reading was given settled columns")
+	}
+	if !strings.Contains(dynamic, "this record carries no settled reading") {
+		t.Error("a series with no settled reading does not say so under its table")
 	}
 
 	spanish := siteBlock(sampleSeriesRun(), spanishLabels())
 	for _, want := range []string{
 		"### Serie de concurrencia",
 		"presupuesto de memoria de 4000 MiB",
+		"| Heap en reposo | Residente en reposo |",
+		"el pico de conjunto residente bajo carga crece 36.61 MiB por credencial",
+		"el heap vivo en reposo, leído con la carga detenida y una recolección forzada, crece 512.0 KiB por credencial",
+		"no lo que cuesta mantener una credencial",
 		"Detenida en 5 credenciales: el siguiente paso (20) se estimó en 4300 MiB frente a un presupuesto de 4000 MiB.",
 		"Detenida en 5 credenciales: el p99 de tools/call alcanzó 31000 ms, por encima del techo de 30000 ms.",
 		"Se ejecutaron todos los pasos previstos, hasta 20 credenciales.",
@@ -529,10 +557,83 @@ func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 			}
 		})
 	}
-	for _, english := range []string{"Stopped at", "Every planned step", "memory budget", "Credentials |"} {
+	for _, english := range []string{
+		"Stopped at", "Every planned step", "memory budget", "Credentials |",
+		"Settled heap", "Settled resident", "per credential",
+	} {
 		t.Run(english, func(t *testing.T) {
 			if strings.Contains(spanish, english) {
 				t.Errorf("the Spanish block carries the English %q", english)
+			}
+		})
+	}
+}
+
+// TestSeriesSlopeSentence_SaysWhichGrowthItIs verifies the sentence under a
+// series table reports both slopes when the record carries a settled reading,
+// only the resident one otherwise, and nothing at all from steps that fix no
+// line.
+//
+// Which of the two a figure is, is the whole point of the sentence. Published
+// alone, the resident slope was read as what a pooled credential costs, and it
+// is the credential and everything it keeps in flight together.
+func TestSeriesSlopeSentence_SaysWhichGrowthItIs(t *testing.T) {
+	l := englishLabels()
+	step := func(clients int, peak, settled float64) SeriesStep {
+		return SeriesStep{Clients: clients, RSSPeakMiB: peak, SettledHeapMiB: settled}
+	}
+	cases := []struct {
+		name  string
+		steps []SeriesStep
+		want  string
+	}{
+		{
+			name:  "both",
+			steps: []SeriesStep{step(1, 200, 40.5), step(3, 220, 41.5)},
+			want: "Fitted across these steps: the peak resident set under load grows 10.00 MiB per credential, " +
+				"and the settled live heap, read with the load stopped and a collection forced, grows 512.0 KiB per credential. " +
+				"The first is what a credential costs while it and every other one is calling; the second is what it costs to hold. " +
+				"The settled resident set lags both, because Go returns freed pages to the operating system on its own schedule.",
+		},
+		{
+			name:  "no settled reading",
+			steps: []SeriesStep{step(1, 200, 0), step(3, 220, 0)},
+			want: "Fitted across these steps, the peak resident set under load grows 10.00 MiB per credential. " +
+				"That is a credential together with the requests it keeps in flight, not what a credential costs to hold: " +
+				"this record carries no settled reading.",
+		},
+		{name: "one step", steps: []SeriesStep{step(1, 200, 40.5)}, want: ""},
+		{name: "no steps", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := seriesSlopeSentence(SeriesScenario{Steps: tc.steps}, l); got != tc.want {
+				t.Errorf("seriesSlopeSentence = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMibFine_KeepsWhatWholeNumbersWouldRoundAway verifies the settled
+// columns' renderer prints a small live heap at a precision that shows a
+// credential's cost and a large resident set without decimals that are noise,
+// and marks a figure that was not taken rather than printing it as zero.
+func TestMibFine_KeepsWhatWholeNumbersWouldRoundAway(t *testing.T) {
+	cases := []struct {
+		name  string
+		value float64
+		want  string
+	}{
+		{name: "not taken", value: 0, want: "n/a"},
+		{name: "a small heap", value: 0.384, want: "0.38"},
+		{name: "under ten", value: 9.5, want: "9.50"},
+		{name: "under a hundred", value: 40.53, want: "40.5"},
+		{name: "a resident set", value: 2104.6, want: "2105"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := mibFine(tc.value); got != tc.want {
+				t.Errorf("mibFine(%v) = %q, want %q", tc.value, got, tc.want)
 			}
 		})
 	}

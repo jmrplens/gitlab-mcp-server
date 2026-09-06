@@ -66,13 +66,25 @@ type labels struct {
 	SeriesP50             string
 	SeriesP99             string
 	SeriesHead            []string
-	SeriesCaption         string
-	SeriesBudgetClause    string
-	SeriesNoBudget        string
-	SeriesComplete        string
-	SeriesStopBudget      string
-	SeriesStopLatency     string
-	SeriesStopFailure     string
+	// SeriesSettledHeap and SeriesSettledRSS head the two columns a step
+	// carries only when its series took a settled reading, spliced in after
+	// the resident columns rather than kept in SeriesHead, which describes the
+	// figures every series has.
+	SeriesSettledHeap string
+	SeriesSettledRSS  string
+	// SeriesSlopes and SeriesLoadSlopeOnly are the sentence under a series
+	// table. Both name what their figures measure: one number per credential
+	// is read as what a credential costs, and the resident one is the
+	// credential and its requests in flight together.
+	SeriesSlopes        string
+	SeriesLoadSlopeOnly string
+	SeriesCaption       string
+	SeriesBudgetClause  string
+	SeriesNoBudget      string
+	SeriesComplete      string
+	SeriesStopBudget    string
+	SeriesStopLatency   string
+	SeriesStopFailure   string
 
 	MeasuredOn string
 	// HostCPUs, HostRAM and HostKernel are the words the machine's own
@@ -147,6 +159,15 @@ func englishLabels() labels {
 			"Credentials", "Resident, mean", "Resident, peak", "CPU per call", "Calls",
 			"tools/call p50", "tools/call p99", "tools/list p50", "tools/list p99", "Goroutines",
 		},
+		SeriesSettledHeap: "Settled heap",
+		SeriesSettledRSS:  "Settled resident",
+		SeriesSlopes: "Fitted across these steps: the peak resident set under load grows %.2f MiB per credential, " +
+			"and the settled live heap, read with the load stopped and a collection forced, grows %.1f KiB per credential. " +
+			"The first is what a credential costs while it and every other one is calling; the second is what it costs to hold. " +
+			"The settled resident set lags both, because Go returns freed pages to the operating system on its own schedule.",
+		SeriesLoadSlopeOnly: "Fitted across these steps, the peak resident set under load grows %.2f MiB per credential. " +
+			"That is a credential together with the requests it keeps in flight, not what a credential costs to hold: " +
+			"this record carries no settled reading.",
 		SeriesCaption:      "%s, %s surface: %d in flight per credential, %.0f s per step, %s",
 		SeriesBudgetClause: "memory budget %.0f MiB",
 		SeriesNoBudget:     "no memory budget",
@@ -233,6 +254,15 @@ func spanishLabels() labels {
 			"Credenciales", "Residente, media", "Residente, pico", "CPU por llamada", "Llamadas",
 			"tools/call p50", "tools/call p99", "tools/list p50", "tools/list p99", "Goroutines",
 		},
+		SeriesSettledHeap: "Heap en reposo",
+		SeriesSettledRSS:  "Residente en reposo",
+		SeriesSlopes: "Ajustado sobre estos pasos: el pico de conjunto residente bajo carga crece %.2f MiB por credencial, " +
+			"y el heap vivo en reposo, leído con la carga detenida y una recolección forzada, crece %.1f KiB por credencial. " +
+			"Lo primero es lo que cuesta una credencial mientras ella y todas las demás están llamando; lo segundo es lo que cuesta mantenerla. " +
+			"El conjunto residente en reposo va por detrás de ambos, porque Go devuelve al sistema operativo las páginas liberadas según su propio calendario.",
+		SeriesLoadSlopeOnly: "Ajustado sobre estos pasos, el pico de conjunto residente bajo carga crece %.2f MiB por credencial. " +
+			"Eso es una credencial junto con las peticiones que mantiene en vuelo, no lo que cuesta mantener una credencial: " +
+			"este registro no contiene ninguna lectura en reposo.",
 		SeriesCaption:      "%s, superficie %s: %d en vuelo por credencial, %.0f s por paso, %s",
 		SeriesBudgetClause: "presupuesto de memoria de %.0f MiB",
 		SeriesNoBudget:     "sin presupuesto de memoria",

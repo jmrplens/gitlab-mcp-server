@@ -129,9 +129,10 @@ func TestWriteRun_ThenReadRun_RoundTrips(t *testing.T) {
 }
 
 // TestReadRun_AcceptsEverySchemaThisBuildDraws verifies the reader takes
-// both the schema-1 record the published figures were measured under, which
-// carries no series, and a schema-2 record that carries only a series, so a
-// filtered series run has a record of its own to render.
+// every schema this build draws: the schema-1 record the published figures
+// were measured under, which carries no series; a schema-2 record that
+// carries only a series, so a filtered series run has a record of its own to
+// render; and a schema-3 record, whose steps carry the settled reading.
 func TestReadRun_AcceptsEverySchemaThisBuildDraws(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -139,6 +140,10 @@ func TestReadRun_AcceptsEverySchemaThisBuildDraws(t *testing.T) {
 	}{
 		{name: "schema 1 without series", content: `{"schema":1,"scenarios":[{"id":"x"}]}`},
 		{name: "schema 2 with a series only", content: `{"schema":2,"scenarios":[],"series":[{"id":"http-dynamic-series","steps":[{"clients":1}]}]}`},
+		{
+			name:    "schema 3 with a settled reading",
+			content: `{"schema":3,"scenarios":[],"series":[{"id":"http-dynamic-series","steps":[{"clients":1,"settled_heap_mib":40.5}]}]}`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -149,6 +154,97 @@ func TestReadRun_AcceptsEverySchemaThisBuildDraws(t *testing.T) {
 			}
 			if _, err := readRun(path); err != nil {
 				t.Errorf("readRun refused a record this build draws: %v", err)
+			}
+		})
+	}
+}
+
+// TestSeriesSlopes_SeparateTheLoadFromTheTenancy verifies the two figures a
+// series publishes per credential are fitted from different columns, in
+// different units, and that a step with no settled reading is left out of the
+// tenancy fit rather than dragged through it as a zero.
+//
+// The steps here are exactly linear, so the fit has one answer and the
+// arithmetic is pinned rather than approximated: the resident set grows 10 MiB
+// per credential, the settled heap 0.5 MiB, which is the 512 KiB the tenancy
+// figure is published in.
+func TestSeriesSlopes_SeparateTheLoadFromTheTenancy(t *testing.T) {
+	step := func(clients int, peak, settled float64) SeriesStep {
+		return SeriesStep{Clients: clients, RSSPeakMiB: peak, SettledHeapMiB: settled}
+	}
+	cases := []struct {
+		name        string
+		steps       []SeriesStep
+		wantSettled bool
+		wantLoad    float64
+		wantLoadOK  bool
+		wantTenancy float64
+		wantTenOK   bool
+	}{
+		{
+			name:        "both measured at every step",
+			steps:       []SeriesStep{step(1, 200, 40.5), step(3, 220, 41.5), step(5, 240, 42.5)},
+			wantSettled: true, wantLoad: 10, wantLoadOK: true, wantTenancy: 512, wantTenOK: true,
+		},
+		{
+			name:        "a step whose settled reading failed",
+			steps:       []SeriesStep{step(1, 200, 40.5), step(3, 220, 0), step(5, 240, 42.5)},
+			wantSettled: true, wantLoad: 10, wantLoadOK: true, wantTenancy: 512, wantTenOK: true,
+		},
+		{
+			name:     "no settled reading at all",
+			steps:    []SeriesStep{step(1, 200, 0), step(3, 220, 0)},
+			wantLoad: 10, wantLoadOK: true,
+		},
+		{
+			name:        "one settled step fixes no line",
+			steps:       []SeriesStep{step(1, 200, 40.5), step(3, 220, 0)},
+			wantSettled: true, wantLoad: 10, wantLoadOK: true,
+		},
+		{name: "one step", steps: []SeriesStep{step(1, 200, 40.5)}, wantSettled: true},
+		{name: "no steps"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := SeriesScenario{Steps: tc.steps}
+			if got := s.hasSettled(); got != tc.wantSettled {
+				t.Errorf("hasSettled = %v, want %v", got, tc.wantSettled)
+			}
+			load, loadOK := s.loadSlopeMiB()
+			if loadOK != tc.wantLoadOK || round(load) != tc.wantLoad {
+				t.Errorf("loadSlopeMiB = %v, %v; want %v, %v", round(load), loadOK, tc.wantLoad, tc.wantLoadOK)
+			}
+			tenancy, tenancyOK := s.tenancySlopeKiB()
+			if tenancyOK != tc.wantTenOK || tenancy != tc.wantTenancy {
+				t.Errorf("tenancySlopeKiB = %v, %v; want %v, %v", tenancy, tenancyOK, tc.wantTenancy, tc.wantTenOK)
+			}
+		})
+	}
+}
+
+// TestFitLine_RefusesWhatFixesNoLine verifies the shared fit reports a slope
+// and an intercept for points that determine one, and refuses the two shapes
+// that do not: fewer than two points, and points that all share one x, whose
+// denominator is zero and whose slope would be published as an infinity.
+func TestFitLine_RefusesWhatFixesNoLine(t *testing.T) {
+	cases := []struct {
+		name             string
+		xs, ys           []float64
+		wantSlope, wantI float64
+		wantOK           bool
+	}{
+		{name: "two points", xs: []float64{1, 3}, ys: []float64{10, 20}, wantSlope: 5, wantI: 5, wantOK: true},
+		{name: "least squares over four", xs: []float64{1, 2, 3, 4}, ys: []float64{2, 4, 6, 8}, wantSlope: 2, wantOK: true},
+		{name: "one point", xs: []float64{1}, ys: []float64{10}},
+		{name: "no points"},
+		{name: "every x the same", xs: []float64{2, 2, 2}, ys: []float64{1, 2, 3}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			slope, intercept, ok := fitLine(tc.xs, tc.ys)
+			if ok != tc.wantOK || round(slope) != tc.wantSlope || round(intercept) != tc.wantI {
+				t.Errorf("fitLine = %v, %v, %v; want %v, %v, %v",
+					round(slope), round(intercept), ok, tc.wantSlope, tc.wantI, tc.wantOK)
 			}
 		})
 	}
@@ -290,12 +386,26 @@ func sampleSeriesRun() *Run {
 			Profiles: StepProfiles{CPU: "x/1.cpu.pb.gz", Heap: "x/1.heap.pb.gz"},
 		}
 	}
+	// The meta series carries a settled reading and the other two do not, so
+	// the renderers are exercised on both: a series measured since the reading
+	// existed, and one measured before it, whose table must not grow two
+	// columns of nothing. Its settled heap is exactly linear at half a
+	// mebibyte per credential, which is the 512 KiB the tenancy sentence
+	// reports.
+	settled := func(s SeriesStep, heap, rss float64) SeriesStep {
+		s.SettledHeapMiB, s.SettledRSSMiB = heap, rss
+		return s
+	}
 	run := sampleRun()
 	run.Series = []SeriesScenario{
 		{
 			ID: "http-meta-series", Transport: transportHTTP, Surface: surfaceMeta, Parallel: 4, StepSeconds: 10,
 			Clients: []int{1, 5, 20}, BudgetMiB: 4000, StoppedAt: 20,
-			Steps: []SeriesStep{step(1, 200, 1, 10, 20), step(5, 360, 1.1, 11, 25), step(20, 900, 1.4, 15, 40)},
+			Steps: []SeriesStep{
+				settled(step(1, 200, 1, 10, 20), 40.5, 150),
+				settled(step(5, 360, 1.1, 11, 25), 42.5, 300),
+				settled(step(20, 900, 1.4, 15, 40), 50, 800),
+			},
 		},
 		{
 			ID: "http-individual-series", Transport: transportHTTP, Surface: surfaceIndividual, Parallel: 2, StepSeconds: 10,

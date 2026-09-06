@@ -10,6 +10,19 @@ left. The numbers come from the concurrency series of the
 process through credential counts and writes a CPU and a heap profile at each
 step; this page reads those profiles.
 
+> **Every resident-set slope on this page is measured under load, and is not
+> what a credential costs to hold.** The series runs each step with two to four
+> requests in flight per credential and samples the resident set only while
+> that load runs, so a slope fitted through those samples is the credential and
+> its requests together. The driver now also takes a **settled** reading at
+> every step, with the load stopped and a collection forced, and the two are
+> not close: on the reference host at a thousand credentials on the dynamic
+> surface the peak resident set was 4379 MiB against a live heap of 253 MiB.
+> Where a table below says "per credential" of a resident set, read "per
+> credential that is calling"; the tenancy figures are in
+> [What this branch measured](#what-this-branch-measured-1), and the settled
+> reading is described in the benchmark reference.
+
 Two hosts, and which one matters, because a slope from one cannot be compared
 with a slope from the other. Everything down to and including
 [What this branch measured](#what-this-branch-measured) is from an Intel i5-14400
@@ -49,14 +62,18 @@ of one of those builds. One HTTP process per surface, four requests in flight
 per credential on `dynamic` and `meta` and two on `individual`, least-squares
 slope through the peak resident set of every step:
 
-| Surface      | Resident set per credential | Where the series stopped                                   |
-| ------------ | --------------------------: | ---------------------------------------------------------- |
-| `dynamic`    |                   130.9 MiB | 12.9 GiB at 100 credentials, the next step over the budget |
-| `meta`       |                    63.5 MiB | 12.6 GiB at 200 credentials, the next step over the budget |
-| `individual` |                    90.8 MiB | 9.2 GiB at 100 credentials, the next step over the budget  |
+| Surface      | Peak resident set per calling credential | Where the series stopped                                   |
+| ------------ | ---------------------------------------: | ---------------------------------------------------------- |
+| `dynamic`    |                                130.9 MiB | 12.9 GiB at 100 credentials, the next step over the budget |
+| `meta`       |                                 63.5 MiB | 12.6 GiB at 200 credentials, the next step over the budget |
+| `individual` |                                 90.8 MiB | 9.2 GiB at 100 credentials, the next step over the budget  |
 
 The budget was 15.8 GiB, and each series stopped when the next step's estimate
-exceeded it rather than on a failure.
+exceeded it rather than on a failure. Part of each slope was the catalog every
+pool entry built for itself, which is what the rest of this page is about, and
+part of it was the requests in flight while it was measured, which no amount
+of sharing removes. Nothing in this run separated the two; that separation is
+what the settled reading added.
 
 Processor time per call was flat on `dynamic` and `meta`, 7.5 to 8.1 ms and
 8.3 to 7.9 ms from the first step to the last. On `individual` it was not: it
@@ -66,7 +83,33 @@ a fifth of the CPU at a hundred credentials was the garbage collector scanning
 the heap (`scanObjectsSmall`, `tryDeferToSpanScan`, `scanSpan`), which is
 memory showing up as time.
 
-The heap profile at the top step named one function on every surface:
+The heap profile at the top step named one function on every surface. Every
+heap profile quoted on this page was taken **without forcing a collection**,
+which the driver now does (`/debug/pprof/heap?gc=1`), so each "in-use" total
+below is the heap as of the last completed cycle rather than the live set:
+
+- The **absolute** figures for what is live do not move. Measured on this
+  build, one profile taken with a forced collection and one without, seconds
+  apart on a process serving twenty credentials on the individual surface,
+  agreed to the megabyte on every live entry: `toolutil.cloneSchemaMap` 10 MB
+  in both, `reflect.mapassign_faststr0` 7.50 MB in both,
+  `jsonschema.(*Schema).checkStructure.func1` 6.50 MB in both.
+- The **totals** fall, and with them every percentage computed against a
+  total. That pair went from 268.0 MB to 234.0 MB, 13% lower, and an earlier
+  pair from 97.2 MB to 83.6 MB, 14% lower. So a share such as
+  "`cloneSchemaMap` 48%" below is a share of a denominator that was too large:
+  the megabytes stand, the percentage would read higher.
+- What shrinks is what the transient entries hold: in that same pair
+  `slices.Grow` fell 39.2 MB to 20.1 MB and `bytes.growSlice` 31.4 MB to
+  13.3 MB, and in the earlier one
+  `jsontext.(*encoderState).reformatObject`'s 13.2 MB left the profile
+  entirely. Those are the encode and decode buffers of the calls in flight,
+  which is exactly the part a reader of this page should not be attributing to
+  a pooled credential.
+
+The tables below are left as they were measured rather than adjusted, since an
+adjusted number is not a measured one; the run that follows this change
+supersedes them with profiles taken after a collection.
 
 | Surface                 | In-use heap | `toolutil.cloneSchemaMap` | Its callers, cumulative                                                                                                                                                                                            |
 | ----------------------- | ----------: | ------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -224,13 +267,15 @@ surface, credential counts 1, 2, 5, 10, 20, 50, 100, 200, 500 and 1000, ten
 seconds per step, four requests in flight per credential on `dynamic` and
 `meta` and two on `individual`. The slope is a least-squares line through the
 peak resident set of every step, the same way the before figures above were
-computed:
+computed, and the same load figure: both columns are the credential together
+with its requests in flight, which is why the after column is megabytes rather
+than the kilobytes the tenancy reading reports.
 
-| Surface      | Resident set per credential, before |     after | Ratio | Where the before series stopped | The after series at 1000 credentials | Fitted intercept, after |
-| ------------ | ----------------------------------: | --------: | ----: | ------------------------------- | ------------------------------------ | ----------------------: |
-| `dynamic`    |                           130.9 MiB |  4.10 MiB |   32x | 100 credentials, 12.9 GiB       | 4.0 GiB                              |                 263 MiB |
-| `meta`       |                            63.5 MiB |  5.44 MiB |   12x | 200 credentials, 12.6 GiB       | 5.7 GiB                              |                 139 MiB |
-| `individual` |                            90.8 MiB | 11.28 MiB |  8.1x | 100 credentials, 9.2 GiB        | 11.2 GiB                             |                 756 MiB |
+| Surface      | Peak resident set per calling credential, before |     after | Ratio | Where the before series stopped | The after series at 1000 credentials | Fitted intercept, after |
+| ------------ | -----------------------------------------------: | --------: | ----: | ------------------------------- | ------------------------------------ | ----------------------: |
+| `dynamic`    |                                        130.9 MiB |  4.10 MiB |   32x | 100 credentials, 12.9 GiB       | 4.0 GiB                              |                 263 MiB |
+| `meta`       |                                         63.5 MiB |  5.44 MiB |   12x | 200 credentials, 12.6 GiB       | 5.7 GiB                              |                 139 MiB |
+| `individual` |                                         90.8 MiB | 11.28 MiB |  8.1x | 100 credentials, 9.2 GiB        | 11.2 GiB                             |                 756 MiB |
 
 All three after series reached a thousand credentials, which no surface
 reached before. The after run had a larger budget than the before run (32.3
@@ -251,7 +296,11 @@ response marshalled per call, while `tools/call` p50 on the same step is
 122 ms.
 
 The heap profile of the after run at a thousand credentials on the dynamic
-surface holds 936 MB in use, and its top by flat allocation is this:
+surface holds 936 MB in use, and its top by flat allocation is this. It is one
+of the profiles taken without a forced collection, so rows 2, 4, 5, 6, 7, 8
+and 10, the buffers of the calls in flight, hold both what was in flight and
+what the collector had not reached; rows 1, 3 and 9 are live per-credential
+structures, which a collection does not touch, and stand as measured:
 
 | Rank | Function                                                   |     Flat | What it is                                                                          |
 | ---: | ---------------------------------------------------------- | -------: | ----------------------------------------------------------------------------------- |
@@ -549,11 +598,11 @@ The first thing the run says is that the resident set under load is the wrong
 instrument for this change, and it is worth stating rather than hiding, because
 the headline numbers barely move:
 
-| Surface      | Peak resident set per credential, before |    after | Peak at 20 credentials, before |   after |
-| ------------ | ---------------------------------------: | -------: | -----------------------------: | ------: |
-| `dynamic`    |                                  8.6 MiB |  7.3 MiB |                        360 MiB | 331 MiB |
-| `meta`       |                                  7.4 MiB |  2.7 MiB |                        317 MiB | 262 MiB |
-| `individual` |                                 30.5 MiB | 26.3 MiB |                        921 MiB | 835 MiB |
+| Surface      | Peak resident set per calling credential, before |    after | Peak at 20 credentials, before |   after |
+| ------------ | -----------------------------------------------: | -------: | -----------------------------: | ------: |
+| `dynamic`    |                                          8.6 MiB |  7.3 MiB |                        360 MiB | 331 MiB |
+| `meta`       |                                          7.4 MiB |  2.7 MiB |                        317 MiB | 262 MiB |
+| `individual` |                                         30.5 MiB | 26.3 MiB |                        921 MiB | 835 MiB |
 
 Those slopes are least-squares lines through the five steps, and most of what
 they measure is not the credential. The driver keeps four requests in flight per
@@ -622,6 +671,34 @@ surface, and a revert to a server per credential grows 8.1 MiB on `dynamic` and
 27.6 on `individual`, both measured by running the same test on the parent
 commit. It carried a 32 MiB budget until this pass, which that same revert
 passed on every surface, so what the test pinned was nothing.
+
+**The driver now takes that reading itself, at every step of every series.**
+Publishing only the resident set under load was the defect this section
+described and worked around by hand; the concurrency series records a settled
+live heap and a settled resident set per step, and every place that prints a
+slope says which of the two it is. Both slopes, from a five-step ladder (1, 2,
+5, 10, 20 credentials, ten seconds each) on the reference host while five other
+jobs shared it:
+
+| Surface      | Load slope, peak resident set | Tenancy slope, settled live heap | Ratio | Settled heap, 1 to 20 credentials | Settled resident set, 1 to 20 |
+| ------------ | ----------------------------: | -------------------------------: | ----: | --------------------------------- | ----------------------------- |
+| `dynamic`    |             6.33 MiB per cred |                54.1 KiB per cred |  120x | 38.7 to 39.7 MiB                  | 117 to 126 MiB                |
+| `meta`       |             4.09 MiB per cred |                53.7 KiB per cred |   78x | 32.2 to 33.2 MiB                  | 103 to 109 MiB                |
+| `individual` |            28.16 MiB per cred |                35.6 KiB per cred |  810x | 87.8 to 88.5 MiB                  | 189 to 200 MiB                |
+
+Three things to read off that table. The load slopes are noisy, because they
+are a peak sampled on a shared host, and the tenancy slopes are not: a live
+heap of a quiesced process barely moves between runs, which is most of why it
+is the better number. The settled resident set is three times the settled heap
+and moves with it only loosely, exactly as the record's own documentation
+warns: freeing a heap does not hand the pages back, and Go's scavenger returns
+them on its own schedule. And the tenancy slope here is several times the
+8 KiB the end-to-end test reports below, because the driver leaves its
+connections open across steps: four sockets per credential on `dynamic` and
+`meta` and two on `individual`, whose per-connection buffers are live heap for
+as long as the client is connected. That is part of what a live credential
+costs and belongs in the figure; it is also why the two measurements differ,
+and why neither is wrong.
 
 Per-call processor cost is unchanged, which is expected: 20.0 ms before and
 20.2 ms after on `dynamic`, 19.2 and 19.1 on `meta`, 357 and 342 on
