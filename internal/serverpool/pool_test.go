@@ -3674,6 +3674,10 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 				}
 				panic("evict callback blew up")
 			}))
+		// Two entries built for one assertion, not two cases: the second
+		// exists so that a second eviction has something to evict, which is
+		// the whole question below.
+		// sequential: dependent setup for the assertion after the loop
 		for _, token := range []string{"glpat-revalidate-panic-1", "glpat-revalidate-panic-2"} {
 			entry, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil)
 			if err != nil {
