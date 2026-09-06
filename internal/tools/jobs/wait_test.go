@@ -36,8 +36,10 @@ func useFastJobPollDuration(t *testing.T) {
 // the machine running it.
 //
 // The interval is passed in rather than read back because pollDuration is
-// handed the value after [toolutil.ClampPollInterval] has applied the 5..60
-// bounds, so a caller asking for 1 would see 10 here.
+// handed the value after [toolutil.ClampPollInterval] has been applied, and
+// that is not a clamp to the nearer bound: a value under the minimum of 5
+// becomes the default of 10, not 5, while one over 60 becomes 60. A caller
+// asking for 1 would therefore see 10 here.
 func useFastJobPollInterval(t *testing.T, intervalSeconds int) {
 	t.Helper()
 	original := pollDuration
