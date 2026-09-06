@@ -277,7 +277,7 @@ type ServerPool struct {
 	// It runs while the pool's write lock is held, so it must be cheap and
 	// must not call back into the pool.
 	onInsert func(*Entry)
-	onEvict  func(*Entry)
+	onEvict  func(*Entry, EvictionCause)
 	// inUse answers whether an entry is doing work the pool cannot see, for
 	// idle eviction alone. See [WithInUse].
 	inUse              func(*Entry) bool
@@ -328,15 +328,67 @@ type ServerPool struct {
 // Option configures pool behavior.
 type Option func(*ServerPool)
 
-// WithOnEvict registers a callback invoked with each entry the pool removes.
+// EvictionCause says which removal path dropped an entry.
+//
+// It exists because "the entry is gone" is not enough for the caller to tell
+// its client anything useful: a credential taken for size pressure is still
+// valid and should reconnect at once, one GitLab has refused must
+// re-authenticate first, and one dropped at shutdown should look for another
+// instance. Without a cause, cmd/server could only say the same thing to all
+// three, and it said the first.
+//
+// The values are the strings the eviction metric already labels its series
+// with, so the log line, the counter and the callback name one path one way.
+// [CausePoolClosed] is the exception, having no metric: an eviction at
+// shutdown is counted by nobody, since nothing observes a metric after the
+// process ends.
+type EvictionCause string
+
+// The causes, one per call site of [ServerPool.dropEntry]. A new removal path
+// picks one of these or adds its own; what it must not do is leave the zero
+// value, which names no path and would reach the caller as an ending it cannot
+// explain.
+//
+//nolint:gosec // G101 fires on the identifiers containing "Credential"; these name why an entry was dropped and no credential is anywhere near them.
+const (
+	// CauseSizePressure is a full pool taking a new credential. The entry it
+	// took may or may not have been busy, and that difference is deliberately
+	// not a second cause: it is the pool's own state, not this credential's,
+	// and it changes nothing about what the client should do next.
+	CauseSizePressure EvictionCause = "size_pressure"
+	// CauseIdle is the idle sweep reclaiming an entry nobody has used.
+	CauseIdle EvictionCause = "idle"
+	// CauseStaleCredential is an entry whose credential has not been checked
+	// against GitLab inside the ceiling, so it is rebuilt rather than trusted.
+	CauseStaleCredential EvictionCause = "stale_credential"
+	// CauseRejectedCredential is GitLab answering 401 to a call made with the
+	// entry's credential.
+	CauseRejectedCredential EvictionCause = "rejected_credential"
+	// CauseInvalidCredential is the periodic revalidation finding that GitLab
+	// now refuses the credential.
+	CauseInvalidCredential EvictionCause = "invalid_credential"
+	// CauseRebuild is a configuration shape whose catalog registration failed,
+	// taking every credential pointing at it.
+	CauseRebuild EvictionCause = "rebuild"
+	// CausePoolClosed is the pool shutting down.
+	CausePoolClosed EvictionCause = "pool_closed"
+)
+
+// WithOnEvict registers a callback invoked with each entry the pool removes,
+// and the cause that removed it.
 //
 // It takes the entry rather than its server because a server is shared by every
 // entry of one configuration shape: told only "this server is gone" a caller
 // would drop state belonging to credentials that are still pooled.
 //
+// The cause is what the caller turns into a reason for the client, so a removal
+// path added later has to pick one of the [EvictionCause] values rather than
+// leave the zero value: an unnamed cause reaches a subscriber as an ending
+// nobody can explain, and the wrong named one tells it to do the wrong thing.
+//
 // The callback runs under the pool's write lock: it must not block and must not
 // re-enter the pool.
-func WithOnEvict(fn func(*Entry)) Option {
+func WithOnEvict(fn func(*Entry, EvictionCause)) Option {
 	return func(p *ServerPool) { p.onEvict = fn }
 }
 
@@ -726,7 +778,7 @@ func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (gitlabURL stri
 		p.lru.Remove(entry.element)
 	}
 	p.metrics.RejectedCredentialEvictions.Add(1)
-	p.dropEntry(key)
+	p.dropEntry(key, CauseRejectedCredential)
 	return gitlabURL, len(p.entries), true
 }
 
@@ -1095,24 +1147,26 @@ func (p *ServerPool) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for key := range p.entries {
-		p.dropEntry(key)
+		p.dropEntry(key, CausePoolClosed)
 	}
 	p.lru.Init()
 	slog.Info("server pool: closed all entries")
 }
 
-// dropEntry removes one entry and notifies the eviction callback. It is the
-// only place an entry leaves p.entries, so a new removal path cannot silently
-// skip the notification. Must be called with the write lock held; the caller
-// remains responsible for the LRU list, which differs per path.
-func (p *ServerPool) dropEntry(key string) *Entry {
+// dropEntry removes one entry and notifies the eviction callback with the cause
+// that removed it. It is the only place an entry leaves p.entries, so a new
+// removal path cannot silently skip the notification, and taking the cause as
+// an argument is what stops one being added without saying what it is. Must be
+// called with the write lock held; the caller remains responsible for the LRU
+// list, which differs per path.
+func (p *ServerPool) dropEntry(key string, cause EvictionCause) *Entry {
 	entry, ok := p.entries[key]
 	if !ok {
 		return nil
 	}
 	delete(p.entries, key)
 	if p.onEvict != nil {
-		p.onEvict(entry)
+		p.onEvict(entry, cause)
 	}
 	return entry
 }
@@ -1146,7 +1200,7 @@ func (p *ServerPool) evictLRU() {
 		return
 	}
 	key, _ := victim.Value.(string)
-	if entry := p.dropEntry(key); entry != nil {
+	if entry := p.dropEntry(key, CauseSizePressure); entry != nil {
 		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.metrics.Evictions.Add(1)
 		// Two messages rather than one message at two levels, so an operator
@@ -1356,7 +1410,7 @@ func (p *ServerPool) evictIdle() {
 		}
 		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
-		p.dropEntry(key)
+		p.dropEntry(key, CauseIdle)
 		p.metrics.IdleEvictions.Add(1)
 		slog.Info(
 			"server pool: evicted idle entry",
@@ -1472,7 +1526,7 @@ func (p *ServerPool) evictStaleCredential(key string) {
 	gitlabURL, _ := entryConfigLogValues(entry)
 	age := time.Since(entry.lastValidated).Round(time.Second)
 	p.lru.Remove(entry.element)
-	p.dropEntry(key)
+	p.dropEntry(key, CauseStaleCredential)
 	p.metrics.StaleCredentialEvictions.Add(1)
 	p.mu.Unlock()
 
@@ -1491,7 +1545,7 @@ func (p *ServerPool) evictByKey(key string) {
 	if entry, ok := p.entries[key]; ok {
 		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
-		p.dropEntry(key)
+		p.dropEntry(key, CauseInvalidCredential)
 		p.metrics.Evictions.Add(1)
 		p.metrics.InvalidEvictions.Add(1)
 		slog.Info(
@@ -1541,7 +1595,7 @@ func (p *ServerPool) EvictServer(srv *mcp.Server) bool {
 		}
 		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
-		p.dropEntry(key)
+		p.dropEntry(key, CauseRebuild)
 		p.metrics.Evictions.Add(1)
 		p.metrics.RebuildEvictions.Add(1)
 		evicted = true

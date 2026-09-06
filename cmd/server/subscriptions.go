@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -18,7 +19,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // resourceReader reads a subscribed URI through the very handler the MCP
@@ -495,6 +498,197 @@ func (b *sessionBridge) awaitEnd(session *mcp.ServerSession) {
 // keeps its own constant unexported.
 const methodSubscriptionsListen = "subscriptions/listen"
 
+// watchEndMetaKey carries why the server ended a subscriptions/listen, in the
+// result the SDK writes when the stream is torn down.
+//
+// A vendor key under a domain this project controls, like [watchMetaKey] and
+// [ownerMetaKey]: MCP reserves the io.modelcontextprotocol/ prefix for
+// registered keys and registers nothing for the lifetime of a subscription. It
+// is added beside the SDK's own io.modelcontextprotocol/subscriptionId and
+// never over it.
+const watchEndMetaKey = "io.github.jmrplens/watch-end"
+
+// The closed vocabulary of [watchEnd.reason], one value per way this server
+// ends a subscription the client did not ask it to end.
+//
+// It is closed on purpose. A client branching on these has to be able to write
+// a default case that means "an ending I do not know about" rather than one
+// that means "any ending", so the set is published on the server card
+// ([watchEndReasons]) and documented in the capability reference, and a new
+// value is a documented addition rather than a free-text string.
+//
+// What none of them says is anything about anybody else. A reason describes
+// what happened to this subscription; how full the pool is, how many
+// credentials the deployment holds and who else is connected are the
+// operator's business and, to a caller probing for the busy fallback, exactly
+// the reconnaissance worth withholding.
+//
+//nolint:gosec // G101 fires on the identifiers containing "Credential"; these are the words a client reads to learn why its subscription ended, and no credential is anywhere near them.
+const (
+	endCredentialEvicted = "credential_evicted"
+	endCredentialReset   = "credential_reset"
+	endCredentialRevoked = "credential_revoked"
+	endResourceGone      = "resource_gone"
+	endLifetimeReached   = "lifetime_reached"
+	endWatcherEvicted    = "watcher_evicted"
+	endShutdown          = "shutdown"
+)
+
+// watchEndReasons is the vocabulary in the order the documentation lists it,
+// so the server card and the constants above cannot drift apart: the card is
+// built from this slice rather than from strings written a second time.
+var watchEndReasons = []string{
+	endCredentialEvicted,
+	endCredentialReset,
+	endCredentialRevoked,
+	endResourceGone,
+	endLifetimeReached,
+	endWatcherEvicted,
+	endShutdown,
+}
+
+// watchEnd is why one subscriptions/listen ended, ready to be stamped into the
+// result the SDK writes for it.
+//
+// detail is a sentence of advice rather than a restatement of the reason: a
+// client that does not recognize the reason word can still act on the prose,
+// and a person reading a frame in a log gets the same answer as the code does.
+// status is the HTTP status GitLab answered a watcher's read with, and is only
+// ever set for [endResourceGone], where it is the one fact the coarse mapping
+// throws away.
+type watchEnd struct {
+	reason string
+	detail string
+	status int
+}
+
+// meta renders the ending as the JSON object [watchEndMetaKey] carries.
+//
+// A map rather than a struct with tags, matching [watchMeta], because the SDK
+// marshals `_meta` values as arbitrary JSON and a map is what the rest of this
+// file already builds. status is omitted when zero rather than sent as 0,
+// since a client reading a status must be able to tell "GitLab said 404" from
+// "no status came with this ending".
+func (e *watchEnd) meta() map[string]any {
+	end := map[string]any{
+		"reason": e.reason,
+		"detail": e.detail,
+	}
+	if e.status != 0 {
+		end["status"] = e.status
+	}
+	return end
+}
+
+// The endings that carry no varying detail, built once and shared. A watchEnd
+// is never mutated after construction, so one pointer can be stamped into
+// every stream that ends the same way.
+var (
+	endOfCredentialEviction = &watchEnd{
+		reason: endCredentialEvicted,
+		detail: "the server released this credential's pooled entry under capacity pressure; " +
+			"reconnect and subscribe again, the credential itself is still valid",
+	}
+	endOfCredentialReset = &watchEnd{
+		reason: endCredentialReset,
+		detail: "the server released this credential's pooled entry and will rebuild it on the next request; " +
+			"reconnect and subscribe again, nothing is wrong with the credential",
+	}
+	endOfCredentialRevocation = &watchEnd{
+		reason: endCredentialRevoked,
+		detail: "GitLab refused this credential; re-authenticate before subscribing again, " +
+			"because the same token will be refused again",
+	}
+	endOfLifetime = &watchEnd{
+		reason: endLifetimeReached,
+		detail: "the subscription reached the maximum lifetime a single watch is given; " +
+			"subscribe again to carry on, which is expected on a long-lived client",
+	}
+	endOfWatcherEviction = &watchEnd{
+		reason: endWatcherEvicted,
+		detail: "this watch was stopped to make room for one whose subscriber is active; " +
+			"subscribe again, and keep the session busy so the watch is not demoted",
+	}
+	endOfShutdown = &watchEnd{
+		reason: endShutdown,
+		detail: "the server is shutting down; reconnect, and behind a balancer another instance will take you",
+	}
+)
+
+// resourceGoneEnd is the ending a retired watcher produces, carrying the status
+// GitLab answered the read with when there was one.
+//
+// The status is relayed rather than interpreted, and the detail says why: 401,
+// 403 and 404 are collapsed into one outcome on purpose, because GitLab answers
+// 404 for a resource the caller may not see precisely so that it cannot be told
+// apart from one that does not exist. A client must not read 404 as "deleted".
+func resourceGoneEnd(reason error) *watchEnd {
+	end := watchEnd{
+		reason: endResourceGone,
+		detail: "the watched resource can no longer be read with this credential, either because it is gone " +
+			"or because access to it was withdrawn, which GitLab does not distinguish; " +
+			"check access before subscribing again",
+	}
+	switch {
+	case toolutil.IsHTTPStatus(reason, http.StatusUnauthorized):
+		end.status = http.StatusUnauthorized
+	case toolutil.IsHTTPStatus(reason, http.StatusForbidden):
+		end.status = http.StatusForbidden
+	case toolutil.IsHTTPStatus(reason, http.StatusNotFound):
+		end.status = http.StatusNotFound
+	}
+	return &end
+}
+
+// watchEndForStop turns a watcher's stop reason into the ending its client is
+// told, or nil for a reason that is not one of the three the manager announces.
+//
+// nil is the honest answer rather than a fallback: a stream ended for a reason
+// this server cannot name gets the bare result it has always got, where an
+// invented reason would have the client acting on something nobody established.
+func watchEndForStop(reason error) *watchEnd {
+	switch {
+	case errors.Is(reason, subscriptions.ErrInaccessible):
+		return resourceGoneEnd(reason)
+	case errors.Is(reason, subscriptions.ErrLifetimeExceeded):
+		return endOfLifetime
+	case errors.Is(reason, subscriptions.ErrEvicted):
+		return endOfWatcherEviction
+	default:
+		return nil
+	}
+}
+
+// watchEndForCause turns the pool's reason for dropping an entry into the
+// ending that credential's subscribers are told.
+//
+// The grouping is by what the client should do next, which is the only thing a
+// reason is for. Size pressure leaves a perfectly good credential, so its
+// client should reconnect at once. Idleness, a credential too long unchecked
+// and a shape that has to be rebuilt all end in the same place, an entry the
+// next request rebuilds, so they share a reason rather than each getting one
+// that would tell the client the same thing in different words. A credential
+// GitLab has refused, whether at revalidation or on a call, must be replaced
+// before anything is retried.
+//
+// A cause this does not know produces no reason at all. That is deliberate:
+// a removal path added later without a decision here should leave the client
+// with the bare ending it has always had, not with the nearest reason to hand.
+func watchEndForCause(cause serverpool.EvictionCause) *watchEnd {
+	switch cause {
+	case serverpool.CauseSizePressure:
+		return endOfCredentialEviction
+	case serverpool.CauseIdle, serverpool.CauseStaleCredential, serverpool.CauseRebuild:
+		return endOfCredentialReset
+	case serverpool.CauseRejectedCredential, serverpool.CauseInvalidCredential:
+		return endOfCredentialRevocation
+	case serverpool.CausePoolClosed:
+		return endOfShutdown
+	default:
+		return nil
+	}
+}
+
 // listenStream is one open subscriptions/listen request and the URIs it is
 // still waiting on.
 type listenStream struct {
@@ -510,6 +704,65 @@ type listenStream struct {
 	// the SDK writes when this stream's context ends is the graceful ending, and
 	// closing the connection would race it. Nil for the process-wide sentinel.
 	session *mcp.ServerSession
+	// end is why the server ended this stream, written by whichever cause got
+	// here first and read back by [listenStreams.middleware] once the SDK's
+	// handler has returned. Nil while the stream is open, and nil forever on a
+	// stream the client itself ended, which is the case that deliberately
+	// carries no reason.
+	end atomic.Pointer[watchEnd]
+}
+
+// endWith records why this stream is ending and then ends it.
+//
+// The order is the whole mechanism. Storing before canceling is what makes the
+// value visible to the middleware: the cancel is what unblocks the SDK's
+// handler, the handler returning is what hands the result back to the
+// middleware, and a store that happened before the cancel has happened before
+// all of it.
+//
+// First writer wins, because two causes can reach one stream at the same
+// moment: shutdown closes the pool and cancels the streams from two different
+// goroutines, and an eviction racing a SIGTERM is ordinary rather than
+// exceptional. Whichever arrives first is the true one, and the second must not
+// overwrite an ending the client may already have been given.
+//
+// A nil end cancels and records nothing, which is what a stop reason this
+// server does not name produces: the bare completion result, exactly as before.
+func (s *listenStream) endWith(end *watchEnd) {
+	if end != nil {
+		s.end.CompareAndSwap(nil, end)
+	}
+	s.cancel()
+}
+
+// stampWatchEnd adds this stream's ending to the result the SDK wrote for it.
+//
+// Added, never assigned over: the SDK stamps its own
+// io.modelcontextprotocol/subscriptionId into this same map, and a client
+// matching the result to its request reads that key. The map is this one
+// request's own, built by the SDK's handler as it returned, so mutating it is
+// safe here in a way that mutating a notification's `_meta` is not (see
+// [sessionOwners.sendingMiddleware], which is handed one params value per
+// subscriber and so may not touch it at all).
+//
+// Nothing is stamped on a stream with no recorded ending, which is a client
+// that cancelled its own listen or disconnected: it caused the ending, and the
+// result may never reach it anyway. Nothing is stamped either when the handler
+// answered with an error instead of a result, including the typed nil pointer
+// the SDK's own early returns produce.
+func stampWatchEnd(result mcp.Result, stream *listenStream) {
+	end := stream.end.Load()
+	if end == nil {
+		return
+	}
+	listen, ok := result.(*mcp.SubscriptionsListenResult)
+	if !ok || listen == nil {
+		return
+	}
+	if listen.Meta == nil {
+		listen.Meta = mcp.Meta{}
+	}
+	listen.Meta[watchEndMetaKey] = end.meta()
 }
 
 // listenStreams ends a subscription stream when the server stops watching
@@ -565,9 +818,12 @@ func (s *listenStreams) arm(uris []string, owner string, session *mcp.ServerSess
 	s.mu.Unlock()
 
 	if closed {
-		// Outside the lock, like every other cancel here: the SDK's handler
-		// unwinds through the unsubscribe path.
-		stream.cancel()
+		// Outside the lock, like every other ending here: the SDK's handler
+		// unwinds through the unsubscribe path. The reason is shutdown because
+		// that is the only thing that sets the flag, and a listen that arrives
+		// during the drain is owed the same answer as one that was already
+		// open when it began.
+		stream.endWith(endOfShutdown)
 	}
 
 	return stream, func() {
@@ -586,7 +842,12 @@ func (s *listenStreams) arm(uris []string, owner string, session *mcp.ServerSess
 // tenant's open listen over the same URI, and the specification's graceful
 // completion result would be sent to clients whose subscription is perfectly
 // alive.
-func (s *listenStreams) stoppedFor(owner, uri string, _ error) {
+//
+// The reason travels with it. A stream carrying several URIs is ended by
+// whichever one empties the set, so that URI's reason is the one its client is
+// given, which is the ending that actually closed the stream rather than the
+// first thing that went wrong on it.
+func (s *listenStreams) stoppedFor(owner, uri string, reason error) {
 	s.mu.Lock()
 	var finished []*listenStream
 	for stream := range s.streams {
@@ -607,8 +868,9 @@ func (s *listenStreams) stoppedFor(owner, uri string, _ error) {
 	// Canceling unblocks the SDK's handler, which then writes its normal
 	// result: the graceful end the specification asks for. Done outside the
 	// lock, since the handler unwinds through the unsubscribe path.
+	end := watchEndForStop(reason)
 	for _, stream := range finished {
-		stream.cancel()
+		stream.endWith(end)
 	}
 }
 
@@ -633,7 +895,13 @@ func (s *listenStreams) stoppedFor(owner, uri string, _ error) {
 // specification asks for. A session-era resources/subscribe holds no stream and
 // appears in no answer here, which is what
 // [sessionOwners.endSessionsWithoutStreams] is for.
-func (s *listenStreams) closeOwner(owner string) map[*mcp.ServerSession]struct{} {
+//
+// end is why the pool dropped the credential, which this cannot work out for
+// itself: only the eviction callback is told the cause, so it is threaded down
+// here rather than guessed at. A session-era subscriber still learns nothing,
+// for the reason [sessionOwners.endSessionsWithoutStreams] records: it holds no
+// open request for an answer to be written on.
+func (s *listenStreams) closeOwner(owner string, end *watchEnd) map[*mcp.ServerSession]struct{} {
 	if s == nil || owner == "" {
 		return nil
 	}
@@ -653,11 +921,11 @@ func (s *listenStreams) closeOwner(owner string) map[*mcp.ServerSession]struct{}
 	}
 	s.mu.Unlock()
 
-	// Outside the lock, like every other cancel here: the SDK's handler
+	// Outside the lock, like every other ending here: the SDK's handler
 	// unwinds through the unsubscribe path, and writes the completion result
 	// the specification asks for as it goes.
 	for _, stream := range owned {
-		stream.cancel()
+		stream.endWith(end)
 	}
 	return told
 }
@@ -684,7 +952,7 @@ func (s *listenStreams) closeAll() {
 	s.mu.Unlock()
 
 	for _, stream := range open {
-		stream.cancel()
+		stream.endWith(endOfShutdown)
 	}
 }
 
@@ -718,7 +986,14 @@ func (s *listenStreams) middleware() mcp.Middleware {
 			// which stream is holding a watch. The SDK's deferred unsubscribe
 			// runs with this same context, so the second answer is still there
 			// when the stream is torn down.
-			return next(withListenStream(streamCtx, stream), method, req)
+			result, err := next(withListenStream(streamCtx, stream), method, req)
+			// Here rather than anywhere else because this is the only place the
+			// result exists in a form application code can touch:
+			// SubscriptionsListenResult embeds an unexported type, so it cannot
+			// be constructed, and it is written to the wire the moment this
+			// middleware returns.
+			stampWatchEnd(result, stream)
+			return result, err
 		}
 	}
 }

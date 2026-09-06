@@ -72,6 +72,40 @@ A watch that goes unrenewed does not silently die — it slows down. After 30 mi
 }
 ```
 
+## Why a subscription ended
+
+On protocol 2026-07-28 a subscription is a `subscriptions/listen` request the client leaves open, and the server ends it by answering it. Every ending the **server** initiates says which one it was, in the result's `_meta`, beside the subscription id the SDK stamps there:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "_meta": {
+      "io.modelcontextprotocol/subscriptionId": 1,
+      "io.github.jmrplens/watch-end": {
+        "reason": "credential_evicted",
+        "detail": "the server released this credential's pooled entry under capacity pressure; reconnect and subscribe again, the credential itself is still valid"
+      }
+    }
+  }
+}
+```
+
+| `reason`             | What happened                                                 | What to do                                                          |
+| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `credential_evicted` | Size pressure took this credential's pooled entry             | Reconnect and subscribe again now; the credential is still valid    |
+| `credential_reset`   | The entry was reclaimed for idleness, staleness, or a rebuild | Reconnect and subscribe again; nothing is wrong with the credential |
+| `credential_revoked` | GitLab refused the credential                                 | Re-authenticate first; the same token will be refused again         |
+| `resource_gone`      | The watched resource answered 401, 403 or 404                 | Check access; subscribe again only if the resource comes back       |
+| `lifetime_reached`   | The absolute 24-hour watch lifetime ran out                   | Subscribe again; expected on a long-lived client                    |
+| `watcher_evicted`    | A demoted watch of yours was stopped at the watcher cap       | Subscribe again, and keep the session busy                          |
+| `shutdown`           | The server is stopping                                        | Reconnect; behind a balancer another instance will take you         |
+
+`detail` is a sentence of advice, so a client that does not recognize the reason word can still act on it. A `status` field appears only on `resource_gone`, and it is relayed rather than interpreted: GitLab answers 404 for a resource you may not see, so a 404 here does not mean deleted. The vocabulary is closed and published in the server card's `subscriptions.end_reasons`, so treat an unrecognized value as "an ending this client does not know", never as "any ending".
+
+An ending **you** caused carries no reason, because you caused it. Neither does a session-era `resources/subscribe` under `--stateless=false`: it holds no open request, so there is nothing to answer, and terminating the session is the only ending the protocol offers it. Use `subscriptions/listen` if you want the reason.
+
 ## Transport notes
 
 - **stdio**: works as-is on both protocol generations.

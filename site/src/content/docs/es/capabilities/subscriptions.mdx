@@ -72,6 +72,40 @@ Un vigilante sin renovar no muere en silencio — se ralentiza. Tras 30 minutos 
 }
 ```
 
+## Por qué terminó una suscripción
+
+En el protocolo 2026-07-28 una suscripción es una petición `subscriptions/listen` que el cliente deja abierta, y el servidor la termina respondiéndola. Todo final que inicia el **servidor** dice cuál fue, en el `_meta` del resultado, junto al identificador de suscripción que el SDK estampa ahí:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "_meta": {
+      "io.modelcontextprotocol/subscriptionId": 1,
+      "io.github.jmrplens/watch-end": {
+        "reason": "credential_evicted",
+        "detail": "the server released this credential's pooled entry under capacity pressure; reconnect and subscribe again, the credential itself is still valid"
+      }
+    }
+  }
+}
+```
+
+| `reason`             | Qué ocurrió                                                            | Qué hacer                                                              |
+| -------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `credential_evicted` | La presión de tamaño se llevó la entrada del pool de esta credencial   | Reconecta y vuelve a suscribirte ya; la credencial sigue siendo válida |
+| `credential_reset`   | La entrada se reclamó por inactividad, antigüedad o una reconstrucción | Reconecta y vuelve a suscribirte; la credencial no tiene nada malo     |
+| `credential_revoked` | GitLab rechazó la credencial                                           | Reautentícate primero; el mismo token se rechazará de nuevo            |
+| `resource_gone`      | El recurso vigilado respondió 401, 403 o 404                           | Revisa el acceso; vuelve a suscribirte solo si el recurso reaparece    |
+| `lifetime_reached`   | Se agotó el tope absoluto de vida de 24 horas                          | Vuelve a suscribirte; es lo esperado en un cliente de larga duración   |
+| `watcher_evicted`    | Un vigilante tuyo, degradado, se detuvo en el tope de vigilantes       | Vuelve a suscribirte y mantén la sesión activa                         |
+| `shutdown`           | El servidor se está deteniendo                                         | Reconecta; tras un balanceador te atenderá otra instancia              |
+
+`detail` es una frase de consejo, para que un cliente que no reconozca la palabra del motivo pueda actuar igualmente. El campo `status` aparece solo en `resource_gone`, y se retransmite sin interpretarlo: GitLab responde 404 a un recurso que quizá no puedas ver, así que un 404 aquí no significa «borrado». El vocabulario es cerrado y se publica en `subscriptions.end_reasons` de la tarjeta del servidor, así que trata un valor desconocido como «un final que este cliente no conoce», nunca como «cualquier final».
+
+Un final que causas **tú** no lleva motivo, precisamente porque lo causaste tú. Tampoco lo lleva un `resources/subscribe` de la era de sesiones con `--stateless=false`: no mantiene ninguna petición abierta, así que no hay nada que responder, y terminar la sesión es el único final que el protocolo le ofrece. Usa `subscriptions/listen` si quieres el motivo.
+
 ## Notas de transporte
 
 - **stdio**: funciona tal cual en ambas generaciones del protocolo.

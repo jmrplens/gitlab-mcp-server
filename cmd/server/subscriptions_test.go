@@ -25,11 +25,13 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
@@ -1531,7 +1533,7 @@ func TestListenStreams_CloseOwner_EndsOnlyThatCredentialsStreams(t *testing.T) {
 		t.Cleanup(release)
 	}
 
-	streams.closeOwner("owner-evicted")
+	streams.closeOwner("owner-evicted", endOfCredentialEviction)
 
 	for i, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1563,7 +1565,7 @@ func TestListenStreams_CloseOwner_ReportsTheSessionsItGaveAnEndingTo(t *testing.
 	_, releaseWithout := streams.arm([]string{"uri"}, "owner-evicted", nil, func() {})
 	t.Cleanup(releaseWithout)
 
-	told := streams.closeOwner("owner-evicted")
+	told := streams.closeOwner("owner-evicted", endOfCredentialEviction)
 
 	if len(told) != 1 {
 		t.Fatalf("closeOwner reported %d sessions, want 1: a session it never ended a stream on "+
@@ -1586,9 +1588,9 @@ func TestListenStreams_CloseOwner_WithoutAnOwner_EndsNothing(t *testing.T) {
 	_, release := streams.arm([]string{"uri"}, "", nil, func() { ended = true })
 	t.Cleanup(release)
 
-	streams.closeOwner("")
+	streams.closeOwner("", endOfCredentialEviction)
 	var absent *listenStreams
-	absent.closeOwner("owner")
+	absent.closeOwner("owner", endOfCredentialEviction)
 
 	if ended {
 		t.Error("closeOwner(\"\") ended a stream; on stdio that is every stream there is")
@@ -2690,5 +2692,414 @@ func TestSessionBridge_SubscribeUnlessStateless_TellsTheListenPathFromTheLegacyO
 	}
 	if runtime.manager.Len() != 1 {
 		t.Errorf("watchers = %d after the listen-path subscribe, want 1", runtime.manager.Len())
+	}
+}
+
+// gitLabStatusError is a GitLab failure carrying an HTTP status, wrapped the
+// way [subscriptions.TranslateReadError] wraps one, which is what a watcher's
+// stop reason really looks like by the time it reaches the transport layer.
+func gitLabStatusError(status int) error {
+	upstream := &gl.ErrorResponse{
+		Response: &http.Response{StatusCode: status},
+		Message:  http.StatusText(status),
+	}
+	return fmt.Errorf("%w: %w", subscriptions.ErrInaccessible, upstream)
+}
+
+// TestWatchEndForStop_TurnsAWatchersEndingIntoWhatTheClientIsTold covers the
+// half of the vocabulary the watchers supply.
+//
+// The status is the part worth pinning. 401, 403 and 404 are deliberately
+// collapsed into one outcome by [subscriptions.TranslateReadError], because
+// GitLab answers 404 for a resource the caller may not see precisely so that it
+// cannot be told apart from one that does not exist. Relaying the status lets a
+// client log what happened without letting it conclude "deleted", which is what
+// the detail says in words.
+func TestWatchEndForStop_TurnsAWatchersEndingIntoWhatTheClientIsTold(t *testing.T) {
+	tests := []struct {
+		name       string
+		reason     error
+		wantReason string
+		wantStatus int
+	}{
+		{
+			name:       "an unauthorized read",
+			reason:     gitLabStatusError(http.StatusUnauthorized),
+			wantReason: endResourceGone,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "a forbidden read",
+			reason:     gitLabStatusError(http.StatusForbidden),
+			wantReason: endResourceGone,
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "a resource that is gone or invisible",
+			reason:     gitLabStatusError(http.StatusNotFound),
+			wantReason: endResourceGone,
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			// The MCP not-found error carries no HTTP status, so there is
+			// none to relay and none is invented.
+			name:       "an inaccessible resource with no status behind it",
+			reason:     subscriptions.ErrInaccessible,
+			wantReason: endResourceGone,
+		},
+		{
+			name:       "the absolute watch lifetime",
+			reason:     subscriptions.ErrLifetimeExceeded,
+			wantReason: endLifetimeReached,
+		},
+		{
+			name:       "a demoted watch making room",
+			reason:     subscriptions.ErrEvicted,
+			wantReason: endWatcherEvicted,
+		},
+		{
+			// Nothing else reaches OnStop today, and an ending this server
+			// cannot name must leave the bare result rather than borrow the
+			// nearest reason to hand.
+			name:   "an ending this server has no reason for",
+			reason: errors.New("something else entirely"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			end := watchEndForStop(tt.reason)
+
+			if tt.wantReason == "" {
+				if end != nil {
+					t.Fatalf("watchEndForStop = %+v, want nil so the result stays bare", end)
+				}
+				return
+			}
+			if end == nil {
+				t.Fatalf("watchEndForStop(%v) = nil, want reason %q", tt.reason, tt.wantReason)
+			}
+			if end.reason != tt.wantReason {
+				t.Errorf("reason = %q, want %q", end.reason, tt.wantReason)
+			}
+			if end.status != tt.wantStatus {
+				t.Errorf("status = %d, want %d", end.status, tt.wantStatus)
+			}
+			if end.detail == "" {
+				t.Error("the ending carries no advice, which is the half a client that does not know the reason reads")
+			}
+		})
+	}
+}
+
+// TestWatchEndForCause_TurnsAPoolEvictionIntoWhatTheClientIsTold covers the
+// other half, and the one issue 561 is about.
+//
+// Every pool eviction used to reach the client as the same bare completion
+// result, so a credential GitLab had just revoked was told exactly what a
+// credential taken for capacity was told: reconnect and carry on. One of those
+// clients then retried with a token that will be refused every time. The
+// grouping here is by what the client should do next, which is the only thing
+// a reason is for.
+func TestWatchEndForCause_TurnsAPoolEvictionIntoWhatTheClientIsTold(t *testing.T) {
+	tests := []struct {
+		name  string
+		cause serverpool.EvictionCause
+		want  string
+	}{
+		{name: "size pressure", cause: serverpool.CauseSizePressure, want: endCredentialEvicted},
+		{name: "the idle sweep", cause: serverpool.CauseIdle, want: endCredentialReset},
+		{name: "a credential too long unchecked", cause: serverpool.CauseStaleCredential, want: endCredentialReset},
+		{name: "a shape that has to be rebuilt", cause: serverpool.CauseRebuild, want: endCredentialReset},
+		{name: "GitLab refusing a call", cause: serverpool.CauseRejectedCredential, want: endCredentialRevoked},
+		{name: "revalidation finding it refused", cause: serverpool.CauseInvalidCredential, want: endCredentialRevoked},
+		{name: "the pool closing", cause: serverpool.CausePoolClosed, want: endShutdown},
+		{
+			// A removal path added later without a decision here leaves the
+			// client with the bare ending it always had, which is honest,
+			// rather than with the nearest reason to hand, which is not.
+			name:  "a cause this server does not know",
+			cause: serverpool.EvictionCause("something added later"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			end := watchEndForCause(tt.cause)
+
+			if tt.want == "" {
+				if end != nil {
+					t.Fatalf("watchEndForCause(%q) = %+v, want nil", tt.cause, end)
+				}
+				return
+			}
+			if end == nil {
+				t.Fatalf("watchEndForCause(%q) = nil, want reason %q", tt.cause, tt.want)
+			}
+			if end.reason != tt.want {
+				t.Errorf("reason = %q, want %q", end.reason, tt.want)
+			}
+			if end.status != 0 {
+				t.Errorf("status = %d on a pool eviction, want none: no read failed", end.status)
+			}
+			if !slices.Contains(watchEndReasons, end.reason) {
+				t.Errorf("reason %q is outside the published vocabulary %v", end.reason, watchEndReasons)
+			}
+		})
+	}
+}
+
+// TestWatchEnd_Meta_OmitsAStatusThereIsNone covers the rendering.
+//
+// A client reading the status has to be able to tell "GitLab answered 404" from
+// "no status came with this ending", and a zero sent as a number says neither.
+func TestWatchEnd_Meta_OmitsAStatusThereIsNone(t *testing.T) {
+	tests := []struct {
+		name       string
+		end        *watchEnd
+		wantStatus any
+	}{
+		{name: "with a status", end: &watchEnd{reason: endResourceGone, detail: "gone", status: 404}, wantStatus: 404},
+		{name: "without one", end: endOfShutdown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			meta := tt.end.meta()
+
+			if meta["reason"] != tt.end.reason {
+				t.Errorf("reason = %v, want %q", meta["reason"], tt.end.reason)
+			}
+			if meta["detail"] != tt.end.detail {
+				t.Errorf("detail = %v, want %q", meta["detail"], tt.end.detail)
+			}
+			status, present := meta["status"]
+			if tt.wantStatus == nil {
+				if present {
+					t.Errorf("status = %v, want it absent", status)
+				}
+				return
+			}
+			if status != tt.wantStatus {
+				t.Errorf("status = %v, want %v", status, tt.wantStatus)
+			}
+		})
+	}
+}
+
+// TestStampWatchEnd_AddsTheReasonBesideTheSDKsSubscriptionID is the invariant
+// the whole mechanism rests on.
+//
+// The SDK builds this result itself and stamps
+// io.modelcontextprotocol/subscriptionId into its `_meta`, which is how a client
+// matches the completion to the listen it sent. A reason written over that map
+// rather than added to it would take the correlation away, and the client would
+// be told why a subscription it can no longer identify ended.
+func TestStampWatchEnd_AddsTheReasonBesideTheSDKsSubscriptionID(t *testing.T) {
+	for _, reason := range watchEndReasons {
+		t.Run(reason, func(t *testing.T) {
+			end := &watchEnd{reason: reason, detail: "advice for " + reason}
+			stream := &listenStream{cancel: func() {}}
+			stream.endWith(end)
+
+			result := &mcp.SubscriptionsListenResult{Meta: mcp.Meta{mcp.MetaKeySubscriptionID: 7}}
+			stampWatchEnd(result, stream)
+
+			if result.Meta[mcp.MetaKeySubscriptionID] != 7 {
+				t.Errorf("the SDK's subscription id is %v after the stamp, want 7",
+					result.Meta[mcp.MetaKeySubscriptionID])
+			}
+			stamped, ok := result.Meta[watchEndMetaKey].(map[string]any)
+			if !ok {
+				t.Fatalf("%s = %v, want the ending as an object", watchEndMetaKey, result.Meta[watchEndMetaKey])
+			}
+			if stamped["reason"] != reason {
+				t.Errorf("reason = %v, want %q", stamped["reason"], reason)
+			}
+		})
+	}
+}
+
+// TestStampWatchEnd_LeavesAResultItHasNoReasonFor covers everything the stamp
+// deliberately does not touch.
+//
+// A client that cancelled its own listen gets what it always got: the bare
+// result, with no reason, because it caused the ending and the result may never
+// reach it anyway. The typed nil is the shape the SDK's own early returns
+// produce, and it is reachable here: a listen armed after shutdown records its
+// ending before the handler has run, and that handler can still fail on a
+// malformed request.
+func TestStampWatchEnd_LeavesAResultItHasNoReasonFor(t *testing.T) {
+	ended := &listenStream{cancel: func() {}}
+	ended.endWith(endOfShutdown)
+
+	tests := []struct {
+		name   string
+		result mcp.Result
+		stream *listenStream
+	}{
+		{
+			name:   "a stream the client itself ended",
+			result: &mcp.SubscriptionsListenResult{Meta: mcp.Meta{mcp.MetaKeySubscriptionID: 1}},
+			stream: &listenStream{cancel: func() {}},
+		},
+		{
+			name:   "a handler that answered with an error",
+			result: nil,
+			stream: ended,
+		},
+		{
+			name:   "the typed nil an early return produces",
+			result: (*mcp.SubscriptionsListenResult)(nil),
+			stream: ended,
+		},
+		{
+			name:   "a result of some other method",
+			result: &mcp.CallToolResult{},
+			stream: ended,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stampWatchEnd(tt.result, tt.stream)
+
+			listen, isListen := tt.result.(*mcp.SubscriptionsListenResult)
+			if !isListen || listen == nil {
+				return
+			}
+			if _, stamped := listen.Meta[watchEndMetaKey]; stamped {
+				t.Errorf("a stream with no recorded ending was stamped anyway: %v", listen.Meta)
+			}
+		})
+	}
+}
+
+// TestStampWatchEnd_AResultWithNoMetaGetsOne covers the allocation.
+//
+// Today the SDK always builds this map, because it puts its own subscription id
+// in it. Relying on that would make this server's ending disappear the day the
+// SDK stops, which is a silent loss rather than a failure.
+func TestStampWatchEnd_AResultWithNoMetaGetsOne(t *testing.T) {
+	stream := &listenStream{cancel: func() {}}
+	stream.endWith(endOfShutdown)
+
+	result := &mcp.SubscriptionsListenResult{}
+	stampWatchEnd(result, stream)
+
+	stamped, ok := result.Meta[watchEndMetaKey].(map[string]any)
+	if !ok {
+		t.Fatalf("_meta = %v, want the ending in a map built for it", result.Meta)
+	}
+	if stamped["reason"] != endShutdown {
+		t.Errorf("reason = %v, want %q", stamped["reason"], endShutdown)
+	}
+}
+
+// TestListenStream_EndWith_FirstWriterWins covers the race two causes really
+// have.
+//
+// Shutdown closes the pool and cancels every stream from two different
+// goroutines, so an eviction arriving at the same moment as a SIGTERM is
+// ordinary rather than exceptional. Whichever cause got here first is the one
+// the client is given, because by the time the second arrives the completion
+// result may already be on the wire.
+func TestListenStream_EndWith_FirstWriterWins(t *testing.T) {
+	stream := &listenStream{cancel: func() {}}
+	stream.endWith(endOfCredentialEviction)
+
+	var wg sync.WaitGroup
+	for _, end := range []*watchEnd{endOfShutdown, endOfCredentialRevocation, endOfCredentialReset} {
+		wg.Go(func() { stream.endWith(end) })
+	}
+	wg.Wait()
+
+	if got := stream.end.Load(); got != endOfCredentialEviction {
+		t.Errorf("the ending is %+v, want the first one recorded; a later cause overwrote an ending "+
+			"the client may already have been given", got)
+	}
+}
+
+// TestListenStream_EndWith_NoReason_StillEndsTheStream covers the nil end.
+//
+// A stop reason this server does not name has to end the stream all the same:
+// the alternative is a client left holding an open request against a watch that
+// no longer exists, which is the very failure the registry was built to close.
+func TestListenStream_EndWith_NoReason_StillEndsTheStream(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream := &listenStream{cancel: cancel}
+
+	stream.endWith(nil)
+
+	if ctx.Err() == nil {
+		t.Error("a stream ended for an unnamed reason was left open")
+	}
+	if got := stream.end.Load(); got != nil {
+		t.Errorf("the stream recorded %+v for an unnamed ending, want nothing", got)
+	}
+}
+
+// TestListenStreams_AWatchThatRetires_TellsTheStreamWhy drives the reason
+// through the registry rather than through the mapping function alone.
+//
+// A stream carrying several URIs is ended by whichever one empties the set, so
+// that URI's reason is the one its client is given: the ending that actually
+// closed the stream, not the first thing that went wrong on it.
+func TestListenStreams_AWatchThatRetires_TellsTheStreamWhy(t *testing.T) {
+	streams := newListenStreams()
+	stream, release := streams.arm([]string{"uri-a", "uri-b"}, "owner", nil, func() {})
+	t.Cleanup(release)
+
+	streams.stoppedFor("owner", "uri-a", subscriptions.ErrEvicted)
+	if got := stream.end.Load(); got != nil {
+		t.Fatalf("the stream recorded %+v while it was still watching uri-b", got)
+	}
+
+	streams.stoppedFor("owner", "uri-b", gitLabStatusError(http.StatusNotFound))
+
+	end := stream.end.Load()
+	if end == nil {
+		t.Fatal("the stream was ended with no reason recorded")
+	}
+	if end.reason != endResourceGone {
+		t.Errorf("reason = %q, want %q: the ending that closed the stream is the one to report", end.reason, endResourceGone)
+	}
+	if end.status != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", end.status)
+	}
+}
+
+// TestListenStreams_CloseAll_TellsEveryStreamItIsShutdown covers the ending a
+// client gets when the process is stopping, which is the one reason reachable
+// without a pool at all.
+func TestListenStreams_CloseAll_TellsEveryStreamItIsShutdown(t *testing.T) {
+	streams := newListenStreams()
+	open, release := streams.arm([]string{"uri"}, "owner", nil, func() {})
+	t.Cleanup(release)
+
+	streams.closeAll()
+
+	// A listen that arrives during the drain is owed the same answer as one
+	// that was already open when it began.
+	late, releaseLate := streams.arm([]string{"uri"}, "owner", nil, func() {})
+	t.Cleanup(releaseLate)
+
+	for _, tc := range []struct {
+		name   string
+		stream *listenStream
+	}{
+		{name: "a stream that was already open", stream: open},
+		{name: "a stream armed during the drain", stream: late},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			end := tc.stream.end.Load()
+			if end == nil {
+				t.Fatal("the stream was ended with no reason recorded")
+			}
+			if end.reason != endShutdown {
+				t.Errorf("reason = %q, want %q", end.reason, endShutdown)
+			}
+		})
 	}
 }
