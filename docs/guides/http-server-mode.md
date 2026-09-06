@@ -914,12 +914,15 @@ The **GitLab token** always varies per client. The **GitLab URL** can vary per c
 
 ### Server Logs
 
-The server logs key events to stderr in JSON format:
+The server logs key events to stderr in JSON format. Durations are `slog`'s
+rendering of a Go `time.Duration`, which is an integer count of nanoseconds
+rather than a string, and the startup line carries `version`, `commit`, `build`
+and `config_digest` as well, elided here for width:
 
 ```json
-{"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","max_clients":100,"session_timeout":"30m0s"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","enterprise":false,"enterprise_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","enterprise":true,"enterprise_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
+{"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","auth_mode":"legacy","max_clients":100,"session_timeout":1800000000000,"stateless":true,"json_response":false,"trusted_proxy_header":"","trusted_proxies":null,"drain_delay":0}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
 {"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
 {"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"gitlab_url":"https://gitlab.com","enterprise":false}
 {"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
