@@ -581,7 +581,10 @@ func replaceUnboundRendering(text string, err error) string {
 		return text
 	}
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {
-		if raw := fmt.Sprintf("%v", urlErr); strings.Contains(text, raw) {
+		// Through fmt for the reason [sanitize] gives: url.Error.Error()
+		// delegates to whatever it wraps, and fmt recovers a panic in there
+		// where a direct call would crash the process.
+		if raw := fmt.Sprintf("%v", urlErr); strings.Contains(text, raw) { //nolint:perfsprint // Error() is exactly what must not be called here
 			return strings.ReplaceAll(text, raw, UnattributedRequestMessage)
 		}
 	}

@@ -1756,7 +1756,7 @@ func TestWrapErr_UnboundClient_ComposesTheWholeMessageWithoutTheSyntheticHost(t 
 			// The chain has to survive, or every IsHTTPStatus and sentinel
 			// check downstream changes meaning.
 			if !errors.Is(got, gitlabclient.ErrUnboundClient) {
-				t.Error("the wrapping lost the cause, so nothing downstream can recognise it any more")
+				t.Error("the wrapping lost the cause, so nothing downstream can recognize it any more")
 			}
 		})
 	}

@@ -1269,7 +1269,7 @@ func TestEvictLRU_EmptyList(t *testing.T) {
 }
 
 // TestEvictLRU_SkipsBusyEntriesUntilOnlyBusyOnesAreLeft covers the half of
-// [WithInUse] that size pressure honours.
+// [WithInUse] that size pressure honors.
 //
 // The pool keeps two clocks and they used to disagree. lastUsed is refreshed by
 // pool hits, and a credential whose only activity is an open
@@ -1279,8 +1279,8 @@ func TestEvictLRU_EmptyList(t *testing.T) {
 // could evict every quiet subscriber in the pool by presenting
 // --max-http-clients credentials of its own, over and over.
 //
-// Skipping them is bounded by the fallback: an entry is passed over in favour
-// of another one, never in favour of the pool growing, so a pool in which
+// Skipping them is bounded by the fallback: an entry is passed over in favor
+// of another one, never in favor of the pool growing, so a pool in which
 // everything is busy still evicts its oldest.
 func TestEvictLRU_SkipsBusyEntriesUntilOnlyBusyOnesAreLeft(t *testing.T) {
 	const (

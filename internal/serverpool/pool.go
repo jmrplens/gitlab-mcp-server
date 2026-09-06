@@ -1066,7 +1066,7 @@ func (p *ServerPool) dropEntry(key string) *Entry {
 // protection when a stranger could evict them in a second.
 //
 // The fallback is what keeps the pool bounded. An entry is only skipped in
-// favour of another one, never in favour of growing past --max-http-clients, so
+// favor of another one, never in favor of growing past --max-http-clients, so
 // a pool in which everything is busy still evicts its oldest — the case
 // TestSharedServer_AnEvictedCredentialsListenIsEnded drives with a maximum of
 // one. What a credential is told when that happens is [WithOnEvict]'s job.
