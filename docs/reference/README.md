@@ -28,6 +28,10 @@ inventories are hand-maintained and checked against `internal/prompts` and
 | [Capabilities](capabilities/README.md)      | The MCP capabilities (progress, completions, elicitation, resource subscriptions) and icons |
 | [Resource Benchmark](resource-benchmark.md) | What the server costs to run: memory, processor time, goroutines and latency, measured      |
 
+The measurements in the benchmark are what
+[Enterprise Deployments](../guides/enterprise-deployment.md) sizes an instance
+from, if you are looking for the arithmetic rather than the numbers.
+
 **Looking for something else?**
 [Guides](../guides/README.md) for step-by-step tasks ·
 [Concepts](../concepts/README.md) for the "why" behind these surfaces.

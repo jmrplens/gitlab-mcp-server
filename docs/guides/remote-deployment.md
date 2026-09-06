@@ -713,19 +713,27 @@ five things:
 
 ## Several instances behind one proxy
 
-### Affinity is structural, not a preference
+> Serving hundreds of people from one deployment has its own page:
+> [Enterprise Deployments](enterprise-deployment.md) covers sizing from the
+> measurements, consistent hashing across a changing instance set, health-driven
+> ejection, MCP gateways, certificate rotation and operations at scale. This
+> section is the first pass those build on.
+
+### Affinity is a preference, with two exceptions
 
 Each instance keeps two caches. Both are per process, both are keyed on the
 caller, and neither can be shared:
 
 - The **server pool**, keyed on `SHA-256(token + "\x00" + gitlabURL)`. On a miss
   the entry is built: the token's scopes are probed, the instance's licensing
-  tier is detected, and a whole tool catalog is registered and pruned to that
-  tier. The catalog build is the entire cost, measured at **1.8 seconds on the
-  dynamic surface and 3.0 seconds on individual**, and it is paid on the first
-  request of every credential rather than once per process the way stdio pays
-  it. The handshake itself is answered immediately from a shell, so the cost
-  lands on the first tool call rather than on `initialize`.
+  tier is detected, and the credential is bound to the MCP server for its
+  configuration shape. The catalog itself is **not** rebuilt per credential: it
+  is registered once per shape and shared by every credential of that shape, so
+  the 1.8 seconds it takes on the dynamic surface and 3.0 on individual are paid
+  once per instance rather than once per caller. The handshake is answered
+  immediately from a shell, so what remains lands on the first tool call rather
+  than on `initialize`. See
+  [ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md).
 - The **OAuth identity cache**, keyed on instance and token, with
   `--oauth-cache-ttl` at 15 minutes by default. A miss is a round trip to GitLab
   to verify the credential.
@@ -735,7 +743,9 @@ this where a second instance reads the first one's cache. The question for a
 balancer is therefore not whether requests will work anywhere. Under the default
 `--stateless=true` every POST is self-contained and every instance answers
 correctly. The question is how many times you are willing to pay for a cache
-designed to be paid once.
+designed to be paid once, and since the expensive half of that cache is now
+shared per configuration rather than held per credential, the answer is smaller
+than it used to be: a credential probe, a licensing lookup and a client.
 
 Two things do not merely cost extra when a caller moves, they break. A stateful
 session (`--stateless=false`) lives in the process that minted its
@@ -748,7 +758,7 @@ optimization.
 
 | Distribution | Key                               | What it costs                                                                                                                                                                                                                                                                                                                              |
 | ------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Round robin  | none                              | Every instance eventually holds an entry for every caller, so pool memory multiplies by the instance count and each caller pays a 1.8 to 3.0 second catalog build on each instance it first touches. Token verification against GitLab goes from once per cache TTL to roughly once per TTL per instance. Correct, and pays N times over   |
+| Round robin  | none                              | Every instance eventually holds an entry for every caller, so each caller's scope probe, licensing lookup and token verification are paid once per instance rather than once. The catalog behind those entries is per configuration shape, so it is not multiplied. Correct, and pays N times for the cheap half                           |
 | IP hash      | the client address                | Free, one directive, no secret to keep. The key is the wrong grain in both directions: an office, a VPN concentrator or a CI runner fleet is one address, so all of it collapses onto one instance, while one caller roaming between networks changes key and lands cold each time. Behind a CDN it needs the real address recovered first |
 | Token hash   | a salted digest of the credential | Matches the grain of what is cached, because the pool key is derived from the token. Costs one secret to manage, a fallback for credential-less requests, and one cold entry whenever a caller rotates its token. This is what the hosted endpoint runs                                                                                    |
 
@@ -932,6 +942,7 @@ thing affinity keeps to one.
 
 ## Further reading
 
+- [Enterprise Deployments](enterprise-deployment.md) for sizing from measurements, balancing at scale, MCP gateways, certificate rotation and operations
 - [HTTP Server Mode](http-server-mode.md) for every flag, the server pool, and the OAuth derivation rules
 - [OAuth App Setup](oauth-app-setup.md) for creating the GitLab application clients authorize against
 - [Security](../concepts/security.md) for the threat model, CORS, and the hardening checklist

@@ -19,8 +19,8 @@ matches your goal:
 ### 📘 [Guides](guides/README.md) — how-to
 
 Task-oriented instructions for running the server: installation through any
-channel, IDE configuration, HTTP server mode, OAuth app setup, CI/CD usage,
-troubleshooting, and worked examples.
+channel, IDE configuration, HTTP server mode, remote and enterprise deployment,
+OAuth app setup, CI/CD usage, troubleshooting, and worked examples.
 
 ### 📖 [Reference](reference/README.md) — look-up
 

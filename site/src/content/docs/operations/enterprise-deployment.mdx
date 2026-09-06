@@ -1,0 +1,649 @@
+---
+title: Enterprise Deployments
+description: "Serve hundreds of people from one GitLab MCP Server deployment: sizing from real measurements, consistent-hash balancing with nginx and HAProxy, MCP gateways, TLS with in-place certificate rotation, and operations at scale."
+datePublished: "2026-09-06"
+faq:
+  - q: "How much memory does one pooled credential cost now?"
+    a: "At rest with no connection open, 7.7 KiB on the dynamic surface, 8.3 KiB on meta and 8.5 KiB on individual. The catalog, its schemas, the discovery index and the MCP server itself are shared per configuration shape, so what a credential holds is its GitLab client, its rate-limit bucket, its listen counter, its watchers and its sessions, which is why the figure barely moves with the surface. It is the live heap of an idle process; a credential holding a connection also costs the buffers behind it, and one with requests in flight costs what those requests allocate, which is the term that actually sizes an instance."
+  - q: "How many calls a second can one instance serve?"
+    a: "Threads divided by processor time per call. On the benchmark's reference host, an Intel i5-14400 with 16 threads, a call costs about 8 ms on the dynamic and meta surfaces and about 130 ms on individual, and the measured series plateaus at roughly 1,650 calls a second on dynamic, reached by five concurrently busy credentials and using thirteen of the sixteen threads. The individual surface plateaus near 106 calls a second, because one `tools/list` there costs sixteen times what a whole dynamic call does."
+  - q: "Do I still need token affinity across instances?"
+    a: "For ordinary calls it is now an optimisation rather than a requirement: an instance a caller moves to already has the catalog built, so the move costs a credential probe, a licensing lookup and a client. Affinity still keeps one rate-limit bucket and one identity probe per caller instead of one per instance. It stays mandatory for two things: legacy stateful sessions, which live in the process that minted the session id, and resource subscriptions, whose watchers are held by one process."
+  - q: "Can I rotate the TLS certificate without restarting?"
+    a: "Yes. Write the new pair over the same paths and the next handshake presents it; connections already open keep the old certificate until they are replaced. The certificate is served through a callback that stats both files on each handshake and re-reads them when either changed. A half-written pair, or files briefly unreadable, keeps the previous certificate in service and logs the reason once. No signal is needed, and `SIGHUP` is not a reload: it is unhandled and terminates the process."
+  - q: "Why does HAProxy mark every instance DOWN?"
+    a: "`option httpchk` sends no `Host` header unless one is configured, and a server bound to a specific host used to refuse such a request with 403. Version 2.8.0 serves it, because a request naming no host is not the DNS-rebinding attack that check exists for. On an older server, add `hdr Host your.host.name` to the `http-check send` line, which is good practice either way."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
+
+<Aside type="tip" title="At a glance">
+
+- **Sizing is two questions, not one.** Holding a credential is nearly free
+  (7.7 KiB at rest on the dynamic surface); serving calls is where an instance
+  runs out.
+- **Pinning `--tier` is a sizing decision.** It removes the tier from the
+  configuration shape key and collapses up to three registered catalogs into one.
+- **Certificate rotation needs no restart.** Write the new pair over the same
+  paths; the next handshake presents it.
+- **Behind any proxy, set `--trusted-proxy-header` and `--trusted-proxies`.**
+  Without them every caller's authentication failures are charged to the
+  balancer's address, and ten a minute answers `429` to the whole deployment.
+
+</Aside>
+
+[Remote Deployment](/gitlab-mcp-server/operations/remote-deployment/) stands the
+server up for other people: a service unit, a container, a reverse proxy, a
+certificate, and a first pass at several instances. This page is what changes
+when "other people" is hundreds of them.
+
+Everything here is HTTP mode. Read
+[HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) first if the
+pool, the instance allow-list and the authentication modes are not already
+familiar.
+
+## Two quantities, not one
+
+Sizing this server used to be one question, because holding a credential and
+serving a call cost the same kind of thing. It is now two.
+
+**Holding a credential is nearly free.** Up to version 2.8.0 an HTTP deployment
+built one MCP server per credential, so the resident set was a straight line in
+the number of pooled credentials and the slope was one registered tool catalog.
+The catalog, its schemas, the discovery index and the tool manifest are now
+shared per configuration, and the MCP server itself is shared per configuration
+**shape**, so what a credential costs is its GitLab client, its rate-limit
+bucket, its listen counter, its watchers and its sessions.
+
+**Serving a call costs exactly what it did.** The sharing work did not touch the
+per-call path, and per-call processor time is where an instance actually runs
+out.
+
+## Sizing an instance
+
+### What a credential costs at rest
+
+Measured at rest with no connection open, a pooled credential costs **7.7 KiB on
+the dynamic surface, 8.3 KiB on meta and 8.5 KiB on individual**. It is the same
+figure three times over, because what a credential holds is its GitLab client
+and its bookkeeping rather than its tools. Those figures come from the
+[resource record](/gitlab-mcp-server/operations/resource-benchmark/).
+
+The shipped regression probe takes the same reading with the test harness's
+connections kept alive: run on an AMD Ryzen 5 3550H (8 threads, 60.8 GiB, Go
+1.27.1), the live heap grows 0.14 MiB between one credential and twenty on the
+dynamic surface and 0.16 MiB on individual.
+
+Three things bound that measurement:
+
+- It is the **live heap** after a collection, not the resident set. The resident
+  set is larger and does not shrink promptly, because Go returns memory to the
+  operating system lazily.
+- It is **with no connection open**. A credential holding one also costs the
+  buffers behind it, which the resource benchmark measures separately.
+- It is **at rest**. A credential with requests in flight costs what those
+  requests allocate. Any per-credential figure measured under load mixes tenancy
+  with load and cannot be multiplied by a credential count.
+
+### What a configuration shape costs, once
+
+A **shape** is everything that decides what a server registers: tool surface,
+capability surface, meta parameter-schema mode, tier and whether it was pinned,
+GitLab.com or self-managed, read-only including the narrowing a `read_api` token
+causes, safe mode, excluded tools, token scopes, and whether the transport is
+stateless. Every credential hashing to one shape is served by one MCP server.
+
+A process holding one registered shape and one credential has a live heap of
+about **38 MiB on the dynamic surface and 88 MiB on individual**, from the same
+run on the same host, at rest. An HTTP process with no credential at all, and
+therefore no shape registered, holds about 35 MiB resident on the benchmark's
+reference host, an Intel i5-14400 with 16 threads.
+
+| Input               | Values in one deployment                                                               |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| Tier                | 1 with `--tier` pinned; up to 3 (free, premium, ultimate) when detected per credential |
+| Token scopes        | 2, because only `admin_mode` changes the catalog                                       |
+| Scope detection     | 2, or 1 with `--ignore-scopes`                                                         |
+| Read-only narrowing | 2 when the operator did not set `--read-only`, 1 when they did                         |
+| GitLab.com or not   | 1, or 2 for a deployment publishing both                                               |
+| Everything else     | 1 each; they are process settings                                                      |
+
+A deployment with `--tier` pinned and `--ignore-scopes` produces exactly one
+shape. A typical one produces two to eight. Each costs one catalog build
+(measured at 1.8 seconds on the dynamic surface and 3.0 on individual) paid once
+for the process rather than once per credential.
+
+### What a call costs
+
+On the reference host, under the concurrency series' load of four requests in
+flight per credential on the dynamic and meta surfaces and two on individual:
+
+| Surface      | Processor time per call | What dominates it                                  |
+| ------------ | ----------------------- | -------------------------------------------------- |
+| `dynamic`    | about 8 ms              | The SDK's result marshalling and schema validation |
+| `meta`       | about 8 ms              | The same                                           |
+| `individual` | about 130 ms            | Marshalling a 3 MB `tools/list` response           |
+
+```text
+calls per second ceiling  =  usable threads  /  processor seconds per call
+```
+
+`16 / 0.008` is 2,000 calls a second in theory. The measured series plateaus at
+about **1,650 calls a second** on the dynamic surface, reached by five
+credentials each keeping four requests in flight, and never exceeded no matter
+how many more credentials are added; that plateau is thirteen of the host's
+sixteen threads. The individual surface plateaus at about **106 calls a second**
+on the same host.
+
+Use it to size, not as a promise: your GitLab is across a network this
+measurement did not cross.
+
+### The worked example
+
+Five hundred developers, an editor each, on the default dynamic surface, against
+one Ultimate self-managed instance, with `--tier=ultimate` pinned.
+
+**Memory.** One shape, so one catalog: about 38 MiB of live heap. Five hundred
+credentials at 7.7 KiB is under 4 MiB. Tenancy is not the term that sizes this
+deployment; the peak resident set is decided by how many calls are in flight.
+A 512 MiB floor is the right starting point, and the first thing to measure is
+the peak resident set under your own traffic rather than the credential count.
+
+**Processor.** Five hundred editors do not make five hundred concurrent calls.
+Fifty calls a second is `50 × 0.008 = 0.4` of a thread on the reference host. A
+thousand is eight threads, about two thirds of one reference host's ceiling; add
+a second instance for headroom rather than for memory.
+
+**Reach for a second instance for availability first.** The ceiling that usually
+binds a busy deployment is GitLab's own rate limit against one token, which no
+number of instances raises.
+
+### The knobs, and what to set them to
+
+| Setting                                   | Default     | At scale                                                                                                                                                                                              |
+| ----------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--max-http-clients`                      | `100`       | Set it above your expected simultaneous population; upper bound 10000. Eviction is no longer cheap: it ends that credential's subscriptions and closes its listen streams                             |
+| `--pool-idle-timeout`                     | `1h`        | Leave it. The sweep runs every quarter of the timeout with a one-minute floor. An entry with live watchers or open listen streams is never idle-evicted                                               |
+| `--revalidate-interval`                   | `15m`       | The sweep is serial with a ten second timeout per entry, so a large pool against a slow instance costs up to `entries × 10s` per round. An entry older than an hour is rebuilt on next use regardless |
+| `--rate-limit-rps` / `--rate-limit-burst` | `10` / `40` | Per credential **per process**. Several instances multiply it unless affinity pins each caller to one                                                                                                 |
+| `--action-timeout`                        | `65m`       | Above the longest wait any action offers. Lower it only if you would rather fail a pipeline wait than hold a goroutine                                                                                |
+| `GITLAB_MCP_MAX_LISTEN_STREAMS`           | `64`        | Per credential. A second ceiling of 512 per process is deliberately not configurable                                                                                                                  |
+| `--session-timeout`                       | `30m`       | Only under `--stateless=false`. Under the default transport a session ends with its POST                                                                                                              |
+| `--http-idle-timeout`                     | `0`         | Leave it disabled. A positive value cuts long-lived streams                                                                                                                                           |
+| `--drain-delay`                           | `0`         | Set it to at least one balancer detection interval                                                                                                                                                    |
+
+Two further limits are not configurable: ten resource watchers per credential,
+and ten failed authentications a minute per client address before that address
+is answered `429` for a minute.
+
+## Load balancing beyond one worked example
+
+### What affinity is still worth
+
+Affinity used to be close to mandatory, because a caller that moved paid a whole
+catalog build on the instance it moved to. It no longer does. What it still
+buys: one rate-limit bucket per caller instead of one per instance, one
+licensing and identity probe per caller instead of one per instance, and a pool
+entry that stays warm.
+
+Two things are not preferences. A stateful session (`--stateless=false`) lives
+in the process that minted its `Mcp-Session-Id`, and another instance answers
+that id with `404`. Resource subscriptions are watchers held by one process.
+
+### Consistent hashing across a changing instance set
+
+Use consistent hashing, not a plain modulo: removing one of three instances then
+relocates roughly a third of the callers instead of reshuffling all of them.
+
+Hash a **salted digest of the credential**, never the credential. An affinity key
+ends up in the balancer's memory, in its access log if the log format names the
+variable, and in whatever upstream selection it drives. The salt is what does
+the security work: without it the key is a token fingerprint anyone holding a
+candidate token could confirm.
+
+Three details decide whether the affinity holds:
+
+- **Normalize before hashing.** Strip the `Bearer` prefix and surrounding
+  whitespace.
+- **Fall back to the address, not to nothing.** An empty key makes every
+  credential-less request hash identically onto one instance.
+- **Prove it rather than assume it.** A hash key the balancer cannot resolve
+  makes it fall back to round robin silently.
+
+### nginx
+
+```nginx
+# Keep the salt out of the repository: include it from a 0600 file.
+map $host $mcp_salt {
+    default "a-long-random-per-deployment-salt";
+}
+map $http_authorization $mcp_bearer {
+    default                     "";
+    "~*^Bearer[ ]+(?<tok>\S+)$" $tok;
+}
+map $mcp_bearer $mcp_credential {
+    default $mcp_bearer;
+    ""      $http_private_token;
+}
+map $mcp_credential $mcp_affinity {
+    default $mcp_credential;
+    ""      $remote_addr;
+}
+
+upstream gitlab_mcp {
+    hash "$mcp_salt$mcp_affinity" consistent;
+    server 10.0.0.11:8080 max_fails=2 fail_timeout=10s;
+    server 10.0.0.12:8080 max_fails=2 fail_timeout=10s;
+    server 10.0.0.13:8080 max_fails=2 fail_timeout=10s;
+    keepalive 32;
+}
+
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+
+    location / {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+
+        # Retry only what was never delivered.
+        proxy_next_upstream error timeout;
+        proxy_next_upstream_tries 2;
+    }
+
+    location /.well-known/oauth-protected-resource {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+    }
+}
+```
+
+Do not log `$mcp_affinity` or `$mcp_credential`.
+
+<Aside type="caution" title="nginx open source has no active health check">
+
+`max_fails` and `fail_timeout` are passive: an instance is taken out only after
+real requests to it fail, so the requests that discover the failure are the ones
+that failed. A drain window buys nginx nothing, because nothing polls `/health`.
+Use a balancer that polls, or remove the instance from the upstream and reload
+before you signal it.
+
+</Aside>
+
+### HAProxy
+
+HAProxy computes the digest in its own configuration and polls `/health`, which
+is what makes the drain window mean anything.
+
+```haproxy
+global
+  daemon
+defaults
+  mode http
+  timeout connect 2s
+  timeout client 1h
+  timeout server 1h
+  retries 1
+  option http-server-close
+
+frontend mcp
+  bind *:443 ssl crt /etc/ssl/private/mcp.example.com.pem
+  http-request set-var(txn.cred) req.hdr(PRIVATE-TOKEN)
+  http-request set-var(txn.cred) req.hdr(Authorization),regsub(^[Bb]earer\ +,) if !{ req.hdr(PRIVATE-TOKEN) -m found }
+  http-request set-var(txn.cred) src,ipmask(32,128) if !{ var(txn.cred) -m found }
+  default_backend mcp_servers
+
+backend mcp_servers
+  # Route on a salted digest, never on the credential itself.
+  balance hash var(txn.cred),concat(a-long-random-per-deployment-salt),sha1,hex
+  hash-type consistent
+  option httpchk
+  http-check send meth GET uri /health
+  http-check expect status 200
+  server one 10.0.0.11:8080 check inter 2s fall 2 rise 2
+  server two 10.0.0.12:8080 check inter 2s fall 2 rise 2
+  server three 10.0.0.13:8080 check inter 2s fall 2 rise 2
+```
+
+`retries 1` with no `option redispatch` is the deliberate half: HAProxy retries
+a connection failure and never a request it already delivered, so a `tools/call`
+that created an issue and then lost its response is not replayed elsewhere.
+
+### Health-driven ejection and the drain window
+
+On `SIGTERM` the process marks itself draining before anything else. From that
+moment `/health` answers `503` with `"status": "draining"` and
+`Cache-Control: no-store`, **while the listener stays open and keeps serving
+real requests**. By default it stays open for no time at all, so a balancer
+usually discovers the shutdown from a failed request rather than from the flip.
+
+`--drain-delay` is the window. For the HAProxy configuration above,
+`inter 2s fall 2` detects in four seconds, so `--drain-delay=10s` is
+comfortable. The sequence is: signal, `/health` flips to `503`, the balancer
+stops sending new work while the instance still answers what it has, the window
+elapses, the listener closes, and in-flight requests get fifteen seconds to
+finish. Upper bound five minutes.
+
+### Retries that never replay a delivered request
+
+An MCP `tools/call` can create an issue, merge a request or delete a branch. A
+balancer that retries a delivered POST turns one mutating call into two.
+
+- **nginx**: `proxy_next_upstream error timeout` and nothing else. Never add
+  `non_idempotent` or `http_500`.
+- **HAProxy**: leave `option redispatch` off and `retry-on` at its default.
+- **Anything else**: a retry is safe only when the request provably never
+  reached an instance.
+
+### When a gateway hides the client
+
+- **Affinity has to key on something the gateway preserves.** If the gateway
+  issues its own credential downstream, hash that one; if it forwards the
+  original, hash the original; if it does neither, round robin is the honest
+  choice.
+- **The rate limiter must be told the real address.** Set
+  `--trusted-proxy-header` to the header your gateway sets and
+  `--trusted-proxies` to its addresses. Each flag is refused without the other.
+  For `X-Forwarded-For` the value is read from the right, skipping hops that are
+  themselves listed.
+
+### The limiter multiplies
+
+`--rate-limit-rps` is per pooled credential inside one process. Three instances
+mean up to three buckets for one caller unless affinity pins it to one. The same
+applies to `--revalidate-interval`.
+
+## MCP gateways
+
+### The catalog is validated before it is admitted
+
+A refusal is usually all-or-nothing: one bad description and none of the tools
+are admitted. Everything this server lists is pure ASCII prose with no
+semicolons, descriptions, titles and schema-embedded descriptions included.
+
+For the next rule, which is yours and not ours,
+`GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` rewrites listed text on the way out:
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
+  --description-substitutions=';=.'
+```
+
+It never touches names, URIs, `pattern`, `const`, enum values or tool-call
+payloads. A malformed value refuses startup rather than serving the gateway the
+unrewritten catalog it already rejected. See
+[Compatibility](/gitlab-mcp-server/compatibility/) for the full rule set.
+
+### The credential has to reach the server
+
+This server holds no credential of its own: every request carries the caller's.
+A gateway must forward it or hold one of its own.
+
+Forwarding the caller's is the only arrangement that preserves per-user
+identity, tiering and rate limiting. A gateway holding one shared credential
+collapses the population onto a single pool entry, a single rate-limit bucket
+and a single GitLab identity: every action is attributed to that one user in
+GitLab's audit log, and `--rate-limit-rps` becomes a limit for the entire
+deployment.
+
+If the deployment publishes several instances with repeated `--gitlab-url`, the
+gateway must also forward `GITLAB-URL`.
+
+### Sessions and subscriptions may not survive
+
+Run gateways against the default `--stateless=true`. Each POST is then
+self-contained and no `Mcp-Session-Id` has to survive the gateway.
+
+Do not assume subscriptions pass through. A gateway advertises its own
+capabilities, and it may advertise fewer than the servers behind it.
+
+### What a gateway may cache
+
+Almost every result is marked `private`, because catalogs and resource content
+are filtered by the caller's token scopes and licensing tier. The prompt catalog
+is the one exception and is marked `public`. A gateway that ignores `cacheScope`
+and caches a `tools/list` across callers will serve one caller's tier-filtered
+catalog to another.
+
+### A worked gateway configuration
+
+Verified against
+[mcp-context-forge](https://github.com/IBM/mcp-context-forge) 0.9.0:
+
+```bash
+curl -sS -X POST https://gateway.example.com/gateways \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "gitlab_mcp",
+        "url": "https://mcp.example.com/mcp",
+        "transport": "STREAMABLEHTTP",
+        "auth_type": "authheaders",
+        "auth_headers": [{"key": "PRIVATE-TOKEN", "value": "glpat-..."}]
+      }'
+```
+
+What that produced, exactly:
+
+- `reachable: true`, with `prompts`, `resources` (`subscribe: true`), `tools`
+  and `completions` negotiated, and the catalog fetched. On the default dynamic
+  surface that is two tools.
+- **The tool names change.** `gitlab_find_action` is re-exposed as
+  `gitlab-mcp-gitlab-find-action`. Any prompt or documentation naming a tool has
+  to be written against the gateway's names.
+- **Descriptions pass through unchanged.**
+- **The gateway advertises `resources.subscribe: false` to its own clients**,
+  having negotiated `true` with this server.
+- Its `/rpc` convenience endpoint re-validated a successful tool result and
+  reported it as an error while carrying the real answer in `structuredContent`;
+  its MCP endpoint at `/mcp/` did not. Prefer the MCP endpoint.
+
+### Routing by action
+
+On the dynamic surface, the `action` property of `gitlab_execute_action` carries
+the SEP-2243 `x-mcp-header` annotation, which the SDK turns into the wire header
+`Mcp-Param-Action`. A gateway can route, rate-limit and observe by canonical
+action ID without parsing the body:
+
+```nginx
+map $http_mcp_param_action $mcp_action_zone {
+    default            "read";
+    "~^issue\.create$" "write";
+    "~^project\."      "write";
+}
+```
+
+The header is advisory: it reflects what the client declared. Use it for routing
+and observability, never as an authorization decision.
+
+## TLS
+
+| Where the proxy is      | What to do                                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| On the same machine     | `--http-addr=/run/gitlab-mcp/server.sock`. No network hop to encrypt, no certificate to rotate |
+| On another machine      | `--tls-cert` and `--tls-key` on the listener, with the proxy verifying it                      |
+| Terminating for clients | The proxy's own certificate, plus one of the two rows above for the hop behind it              |
+
+### The listener's own TLS
+
+```bash
+gitlab-mcp-server --http --http-addr=:8443 \
+  --gitlab-url=https://gitlab.example.com \
+  --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
+```
+
+Both flags or neither. TLS 1.2 is the floor and no maximum is set, so a current
+client negotiates TLS 1.3 and 1.2 is reached only by a client that cannot go
+higher.
+
+### Certificate rotation without downtime
+
+**Write the new pair over the old paths. There is nothing else to do.** The
+certificate is served through a callback that checks both files on each
+handshake and re-reads them when either has changed. Connections already open
+keep the old certificate until they are replaced.
+
+Three properties, each covered by a test:
+
+- **A half-written rotation keeps serving.** Between the two writes the pair on
+  disk does not match; the previously loaded certificate stays in service, and
+  the failure is logged once rather than once per handshake.
+- **Unreadable files keep serving.** A renewal that unlinks before it writes
+  does not take the listener down.
+- **Nothing is re-read while nothing changed.** The staleness check is two
+  `stat` calls.
+
+No reload signal is needed. `SIGHUP` is not handled and, under its default
+disposition, terminates the process; do not send it. The first load is still
+strict: at startup a missing path or a mismatched key is a named startup error.
+
+### Client certificates
+
+**The listener does not do mTLS.** It requests no client certificate and
+verifies none; authentication on it is the bearer credential. Mutual TLS belongs
+on the proxy, which is where the client CA and the revocation list live:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+
+    ssl_client_certificate /etc/ssl/clients-ca.pem;
+    ssl_verify_client on;
+    ssl_verify_depth 2;
+
+    location / {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        # Pass the verified identity on for logging, never for authorization.
+        proxy_set_header X-Client-DN $ssl_client_s_dn;
+    }
+}
+```
+
+### The unix socket, and what it costs at scale
+
+A unix socket has no peer address, and the authentication failure budget is
+keyed on the caller's address. On a socket **every caller shares one budget**:
+ten failed authentications a minute from anywhere behind the proxy answer `429`
+to everybody for a minute. `--trusted-proxy-header` cannot repair it, since the
+header is believed only from a peer that parses as an address.
+
+The alternative is one line:
+
+```bash
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+  --gitlab-url=https://gitlab.example.com \
+  --trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1,::1
+```
+
+Keep the socket where the caller population is small or entirely trusted.
+
+## Operations at scale
+
+### Rolling updates
+
+1. Start every instance with `--drain-delay` at or above one balancer detection
+   interval.
+2. Roll one instance at a time. Under consistent hashing the callers pinned to
+   it move to a neighbour and come back when it returns.
+3. Compare `config_digest` across the fleet after the roll.
+
+A build from a different version with the same settings reports the same
+`config_digest`. The digest answers "do these instances serve the same catalog",
+not "are these instances the same build"; `build` answers the second.
+
+### `/health` and `config_digest` across a fleet
+
+```bash
+for host in 10.0.0.11 10.0.0.12 10.0.0.13; do
+  printf '%s ' "$host"
+  curl -fsS "http://$host:8080/health" |
+    python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["build"], d["config_digest"], d["status"])'
+done
+```
+
+Every instance behind one balancer must report the same `config_digest`, or one
+of them serves a different catalog to whichever clients reach it and nothing
+else notices: the calls all succeed, and only the set of available actions
+differs. The digest covers tool surface, capability surface, meta parameter
+schema, tier and whether it was pinned, scope detection, read-only, safe mode
+and excluded tools. It does **not** cover TLS, addresses, rate limits or pool
+sizes.
+
+`/health` deliberately does not test GitLab reachability, so a balancer must not
+read a `200` as "GitLab is up".
+
+### Telemetry with many users
+
+- **`--telemetry-identity`** decides what is recorded about who made a call:
+  `none` (the default), `pseudonymous`, or `full`. Identity never reaches a
+  metric under any policy.
+- **`GITLAB_MCP_TELEMETRY_IDENTITY_KEY`** is what makes `pseudonymous` agree
+  across replicas. Left empty, each process generates its own key, so a
+  distinct-user count is meaningless across a fleet. Keep it away from wherever
+  the telemetry lands.
+- **`--telemetry-tool-name`** defaults to `auto`, which keeps
+  `gen_ai.tool.name` as a metric dimension on the dynamic and meta surfaces and
+  drops it on individual, where a thousand tool names would exhaust the SDK's
+  cardinality limit.
+
+See [Telemetry](/gitlab-mcp-server/operations/telemetry/).
+
+### Fixed egress for GitLab allow-lists
+
+GitLab applies its own rate limits and any IP allow-lists per source address.
+Instances behind a NAT gateway with a stable address are one caller to GitLab;
+instances with ephemeral public addresses are several unpredictable ones.
+
+### Secrets
+
+There is no server credential to protect. What the deployment does hold: the
+affinity salt (mode 0600, not in the repository), the TLS private key if the
+listener terminates TLS, and `GITLAB_MCP_TELEMETRY_IDENTITY_KEY` if pseudonymous
+telemetry is on. The last has no flag on purpose, since process arguments are
+readable through `/proc` by any local principal; `GITLAB_TOKEN` has none for the
+same reason.
+
+Pooled tokens live in memory for as long as their entry does, keyed by digest so
+a scan of the lookup structures yields no credential. Nothing is written to
+disk, and logs carry the last four characters of a token and nothing more.
+
+### What to monitor
+
+| Signal                                    | Where         | Why it matters                                                        |
+| ----------------------------------------- | ------------- | --------------------------------------------------------------------- |
+| `config_digest` equality across instances | `/health`     | The only detector of an instance serving a different catalog          |
+| `status` and the HTTP code                | `/health`     | `503 draining` is the balancer's cue, not a failure                   |
+| `build` per instance                      | `/health`     | Which version each instance is actually running                       |
+| Peak resident set                         | Host metrics  | The term that sizes the process is calls in flight, not credentials   |
+| Processor time per call                   | Telemetry     | The ceiling is threads divided by this                                |
+| Pool evictions                            | Logs          | Frequent eviction means `--max-http-clients` is below the population  |
+| `429` rate                                | Balancer logs | Distinguish the per-credential limiter from the authentication budget |
+| Authentication failures per address       | Logs          | Ten a minute blocks an address                                        |
+
+<Aside type="danger" title="The trap that bites hardest at scale">
+
+Without `--trusted-proxy-header` and `--trusted-proxies`, every caller's
+authentication failures are charged to the balancer's address, so ten bad tokens
+a minute from anywhere in the population answers `429` to the entire deployment
+for a minute. Configure both flags on any instance behind a proxy.
+
+</Aside>
+
+<FAQ />
+
+For the complete technical reference, see
+[`docs/guides/enterprise-deployment.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/enterprise-deployment.md)
+in the repository.
