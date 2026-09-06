@@ -188,6 +188,74 @@ func TestHostValidationMiddleware_PublicURLHostIsServed(t *testing.T) {
 	}
 }
 
+// TestHostValidationMiddleware_HostComparisonIgnoresCase pins that the guard
+// asks the question DNS asks.
+//
+// Neither url.Hostname nor http.Request.Host folds case, so a comparison on
+// the raw strings makes the spelling of a configured host part of the policy.
+// A browser lowercases the authority before sending it, so an operator who
+// wrote --public-url=https://MCP.Example.com would have published an origin
+// their own deployment answers 403 to, and the message would tell them to pass
+// the flag they had already passed. The listen address has the same problem
+// from the other direction.
+func TestHostValidationMiddleware_HostComparisonIgnoresCase(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		addr      string
+		publicURL string
+		host      string
+		want      int
+	}{
+		{
+			name:      "a mixed-case public URL against the host a browser sends",
+			addr:      "127.0.0.1:8080",
+			publicURL: "https://MCP.Example.COM",
+			host:      "mcp.example.com",
+			want:      http.StatusOK,
+		},
+		{
+			name:      "a mixed-case Host against a lower-case public URL",
+			addr:      "127.0.0.1:8080",
+			publicURL: "https://mcp.example.com",
+			host:      "MCP.Example.com",
+			want:      http.StatusOK,
+		},
+		{
+			name:      "a mixed-case public URL carrying a port, with the port the client used",
+			addr:      "127.0.0.1:8080",
+			publicURL: "https://MCP.Example.com:8443",
+			host:      "mcp.example.com:8443",
+			want:      http.StatusOK,
+		},
+		{
+			name:      "a mixed-case listen address against the host a client sends",
+			addr:      "MCP.Example.com:8080",
+			publicURL: "",
+			host:      "mcp.example.com:8080",
+			want:      http.StatusOK,
+		},
+		{
+			name:      "a different host in any case is still refused",
+			addr:      "127.0.0.1:8080",
+			publicURL: "https://MCP.Example.com",
+			host:      "REBOUND.example.com",
+			want:      http.StatusForbidden,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			status, _ := servedBy(t, newHostGuard(tt.addr, tt.publicURL, trustedProxies{}),
+				loopbackRequest(t, tt.host))
+			if status != tt.want {
+				t.Errorf("status = %d, want %d", status, tt.want)
+			}
+		})
+	}
+}
+
 // TestHostValidationMiddleware_TrustedProxyForwardsItsHost pins the second
 // exception: a hop the operator listed in --trusted-proxies may forward
 // whatever host it heard.

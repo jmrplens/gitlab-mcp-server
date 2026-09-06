@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strings"
 )
 
 // hostGuard is a deployment's policy on the Host header a request may carry.
@@ -58,7 +59,7 @@ func newHostGuard(addr, publicURL string, proxies trustedProxies) hostGuard {
 	// name, in the RFC 9728 metadata and in every configuration snippet that
 	// sets it, so the name is declared in the strongest sense the flags offer.
 	if host := publicURLHost(publicURL); host != "" {
-		guard.declared[host] = true
+		guard.declared[normalizedHost(host)] = true
 	}
 	return guard
 }
@@ -79,7 +80,7 @@ func (g hostGuard) permits(r *http.Request) bool {
 	if r.Host == "" {
 		return true
 	}
-	if g.declared[hostOnly(r.Host)] {
+	if g.declared[normalizedHost(r.Host)] {
 		return true
 	}
 	// A proxy the operator listed is a hop they vouched for, and forwarding
@@ -97,7 +98,7 @@ func (g hostGuard) permits(r *http.Request) bool {
 	// is a local server, and a local server is what a rebinding attack aims
 	// at. Reached on any other address it is not, and a wildcard bind then
 	// keeps answering whatever host a proxy in front of it forwards.
-	return !arrivedOnLoopback(r) || isLoopbackHost(hostOnly(r.Host))
+	return !arrivedOnLoopback(r) || isLoopbackHost(normalizedHost(r.Host))
 }
 
 // trustsPeer reports whether the request arrived from an address in
@@ -120,6 +121,20 @@ func hostOnly(value string) string {
 		return host
 	}
 	return value
+}
+
+// normalizedHost is a Host header value or a configured host reduced to what
+// the declared set is keyed on: no port, lower case.
+//
+// DNS is case-insensitive and Go is not. Neither url.Hostname nor
+// http.Request.Host folds case, so --public-url=https://MCP.Example.com would
+// declare one spelling while every browser, which lowercases the authority
+// before sending it, asks for another, and the guard would answer 403 to the
+// origin the operator published. Both sides go through here so the comparison
+// asks what DNS asks. An IPv6 literal is unharmed: its hex digits mean the
+// same in either case, and lower is the canonical spelling.
+func normalizedHost(value string) string {
+	return strings.ToLower(hostOnly(value))
 }
 
 // publicURLHost is the host --public-url advertises, without its port. An
@@ -156,7 +171,7 @@ func arrivedOnLoopback(r *http.Request) bool {
 	if !ok || local == nil {
 		return false
 	}
-	return isLoopbackHost(hostOnly(local.String()))
+	return isLoopbackHost(normalizedHost(local.String()))
 }
 
 // allowedHosts computes the set of valid Host header values based on the
@@ -179,10 +194,10 @@ func allowedHosts(addr string) map[string]bool {
 		return nil
 	}
 	return map[string]bool{
-		host:        true,
-		"localhost": true,
-		"127.0.0.1": true,
-		"::1":       true,
+		strings.ToLower(host): true,
+		"localhost":           true,
+		"127.0.0.1":           true,
+		"::1":                 true,
 	}
 }
 
