@@ -1,14 +1,14 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 854 (Free/CE) to 1073 (self-managed Ultimate) individual tools, or 1079 on GitLab.com Ultimate, **32 base meta-tools** (38 on Premium, 49 on self-managed Ultimate, 50 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 866 (Free/CE) to 1085 (self-managed Ultimate) individual tools, or 1091 on GitLab.com Ultimate, **33 base meta-tools** (39 on Premium, 50 on self-managed Ultimate, 51 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **32 base GitLab/interactive tools**: 28 catalog-backed meta-tools plus 4 interactive elicitation tools. Premium registers 6 additional inline meta-tools for **38 tools**, Ultimate 11 more for **49 tools** on self-managed GitLab, and GitLab.com adds the experimental `gitlab_orbit` meta-tool on Premium and Ultimate, for **50 tools** on GitLab.com Ultimate. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
+In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **33 base GitLab/interactive tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. Premium registers 6 additional inline meta-tools for **39 tools**, Ultimate 11 more for **50 tools** on self-managed GitLab, and GitLab.com adds the experimental `gitlab_orbit` meta-tool on Premium and Ultimate, for **51 tools** on GitLab.com Ultimate. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
 
-The `gitlab_server` meta-tool (actions `status` and `health_check`) is registered separately for server diagnostics and is not included in the 32/49/50 GitLab action catalog counts.
+The `gitlab_server` meta-tool (actions `status` and `health_check`) is registered separately for server diagnostics and is not included in the 33/50/51 GitLab action catalog counts.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license (fallback `free`).
 
@@ -66,8 +66,8 @@ Meta-tools remain available because they are the most broadly compatible consoli
 | Mode              |                                                                       Tool Count | Best For                                                                         |
 | ----------------- | -------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
 | Dynamic (default) |                                2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
-| Meta-tools        |                   32 Free/CE / 38 Premium / 49 Ultimate / 50 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
-| Individual tools  | 854 Free/CE / 1007 Premium / 1073 Ultimate / 1079 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
+| Meta-tools        |                   33 Free/CE / 39 Premium / 50 Ultimate / 51 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
+| Individual tools  | 866 Free/CE / 1019 Premium / 1085 Ultimate / 1091 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
 
 ---
 
@@ -106,7 +106,7 @@ Action counts are the Free/CE catalog as served by the binary (read them from th
 | 20  | `gitlab_snippet`       | 34      | Snippets, snippet discussions, snippet emoji                        |
 | 21  | `gitlab_feature_flags` | 10      | Feature flags, feature flag user lists                              |
 
-### Always-Registered Meta-Tools (4)
+### Always-Registered Meta-Tools (5)
 
 | #   | Tool Name               | Actions | Source                                                      |
 | --- | ----------------------- | ------- | ----------------------------------------------------------- |
@@ -114,28 +114,29 @@ Action counts are the Free/CE catalog as served by the binary (read them from th
 | 23  | `gitlab_ci_catalog`     | 2       | CI/CD Catalog resource discovery (GraphQL)                  |
 | 24  | `gitlab_custom_emoji`   | 3       | Group-level custom emoji management (GraphQL)               |
 | 25  | `gitlab_storage_move`   | 12      | Project and snippet repository storage moves (`admin_mode`) |
+| 26  | `gitlab_achievement`    | 12      | Achievement definitions and their awards (GraphQL)          |
 
 ### Delegated Meta-Tools (2)
 
 | #   | Tool Name       | Actions | Source                                         |
 | --- | --------------- | ------- | ---------------------------------------------- |
-| 26  | `gitlab_search` | 10      | Global, project, group search                  |
-| 27  | `gitlab_runner` | 19      | Runners, runner management, runner controllers |
+| 27  | `gitlab_search` | 10      | Global, project, group search                  |
+| 28  | `gitlab_runner` | 19      | Runners, runner management, runner controllers |
 
 ### Standalone Tools (1)
 
 | #   | Tool Name                 | Actions | Source                                      |
 | --- | ------------------------- | ------- | ------------------------------------------- |
-| 28  | `gitlab_discover_project` | 1       | Git remote URL to GitLab project resolution |
+| 29  | `gitlab_discover_project` | 1       | Git remote URL to GitLab project resolution |
 
 ### Interactive Elicitation Tools (4)
 
 | #   | Tool Name                           | Actions                                                               | Domain/Source |
 | --- | ----------------------------------- | --------------------------------------------------------------------- | ------------- |
-| 29  | `gitlab_interactive_issue_create`   | Guided prompts for issue fields with final confirmation               | GitLab        |
-| 30  | `gitlab_interactive_mr_create`      | Guided prompts for branch, title, metadata, and confirmation          | GitLab        |
-| 31  | `gitlab_interactive_project_create` | Guided prompts for name, visibility, initialization, and confirmation | GitLab        |
-| 32  | `gitlab_interactive_release_create` | Guided prompts for tag, name, notes, and confirmation                 | GitLab        |
+| 30  | `gitlab_interactive_issue_create`   | Guided prompts for issue fields with final confirmation               | GitLab        |
+| 31  | `gitlab_interactive_mr_create`      | Guided prompts for branch, title, metadata, and confirmation          | GitLab        |
+| 32  | `gitlab_interactive_project_create` | Guided prompts for name, visibility, initialization, and confirmation | GitLab        |
+| 33  | `gitlab_interactive_release_create` | Guided prompts for tag, name, notes, and confirmation                 | GitLab        |
 
 ### Premium and Ultimate Meta-Tools (17)
 
@@ -326,14 +327,14 @@ Meta-tools advertise a deliberately compact input schema by default (`GITLAB_MCP
 
    For example, `gitlab://tools/gitlab_merge_request.create` returns the call shape and JSON Schema for the `create` action's `params`. The `gitlab://tools` manifest enumerates every visible meta-tool action in the active server configuration.
 
-   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`). `visible_tool_count` is one more than the 32 tools listed above because `gitlab_server`, which sits outside the catalog counts, has actions of its own and so appears in the manifest:
+   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`). `visible_tool_count` is one more than the 33 tools listed above because `gitlab_server`, which sits outside the catalog counts, has actions of its own and so appears in the manifest:
 
    ```json
    {
      "surface": "meta",
      "uri_template": "gitlab://tools/{id}",
-     "visible_tool_count": 33,
-     "entry_count": 858,
+     "visible_tool_count": 34,
+     "entry_count": 870,
      "visible_tools": [
        { "name": "gitlab_merge_request", "title": "Merge Request", "detail_uri": "gitlab://tools/gitlab_merge_request", "read_only": false, "destructive": true }
      ],

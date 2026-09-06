@@ -545,10 +545,16 @@ func (a AvatarInput) upload(operation string) (*gl.GraphQLUpload, func(), error)
 	return upload, cleanup, nil
 }
 
-// resolve returns the cursor options in the SDK's own shape. Only one of first
-// and last is ever set, because a GraphQL connection rejects both at once, and
-// a page size is requested even when the caller named none so a list action
-// never asks the instance for every award it holds.
+// resolve returns the cursor options in the SDK's own shape.
+//
+// Only one of first and last is ever set. Not because the connection refuses
+// both, which it does not: graphql-ruby applies first and then last, so a
+// request carrying the pair is answered by an intersection nobody asked for.
+// One at a time is what makes the direction the caller chose the direction
+// they get.
+//
+// A page size is requested even when the caller named none, so that a list
+// action never asks the instance for every award it holds.
 func (c CursorInput) resolve() (after, before *string, first, last *int64) {
 	if c.After != "" {
 		after = &c.After

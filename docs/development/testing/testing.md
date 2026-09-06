@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,290 |
-| Unit test functions                                   | 13,689 |
+| Total test functions                                  | 14,292 |
+| Unit test functions                                   | 13,691 |
 | E2E test functions                                    |    601 |
 | cmd test functions                                    |  2,506 |
 | Test files (internal/)                                |    511 |
@@ -37,7 +37,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 11,715 | 82.0% |
 | `TestFunc` (no underscore)             |    976 |  6.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,599 | 11.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,601 | 11.2% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,330 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,521 |        358 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,523 |        358 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            601 |        237 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,506 |        151 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,290** |    **899** |                                                                                                 |
+| **Total**               |     **14,292** |    **899** |                                                                                                 |
 
 ### Core Packages
 
@@ -118,7 +118,7 @@
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        97 |          2 |   100.0% |        18 |
-| achievements            |        54 |          3 |   100.0% |        12 |
+| achievements            |        56 |          3 |   100.0% |        12 |
 | actioncatalog           |        44 |          5 |    99.1% |         0 |
 | actioncompat            |        44 |          2 |   100.0% |         1 |
 | adminspecs              |         6 |          1 |   100.0% |        92 |
@@ -293,7 +293,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |        95 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        50 |          4 |   100.0% |         7 |
-| **Total**               | **8,521** |    **358** |          | **1,187** |
+| **Total**               | **8,523** |    **358** |          | **1,187** |
 
 </details>
 

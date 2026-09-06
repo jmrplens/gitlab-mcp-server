@@ -278,3 +278,86 @@ func markdownText(t *testing.T, result *mcp.CallToolResult) string {
 	}
 	return text.Text
 }
+
+// hostileText is what a person can type into an achievement's name, its
+// description or an award message: a pipe, which ends a Markdown cell, and a
+// newline, which ends a row.
+const hostileText = "Ship | It\nsecond line"
+
+var hostileAchievement = Achievement{ID: 1, NamespaceID: 10, Name: hostileText, Description: hostileText}
+
+var hostileUserAchievement = UserAchievement{ID: 88, AchievementID: 1, UserID: 2, AwardedByUserID: 3, AwardMessage: hostileText}
+
+// assertTableRowsWellFormed fails when a row of a Markdown table carries a
+// different number of cells than the header above it, which is exactly what an
+// unescaped pipe or newline in a cell produces.
+//
+// It counts structure rather than comparing against a golden string, so it
+// keeps failing for the right reason after a column is added or a label is
+// reworded.
+func assertTableRowsWellFormed(t *testing.T, rendered string) {
+	t.Helper()
+	want := -1
+	for line := range strings.SplitSeq(rendered, "\n") {
+		if !strings.HasPrefix(line, "|") {
+			want = -1
+			continue
+		}
+		got := strings.Count(line, "|")
+		switch {
+		case want < 0:
+			want = got
+		case got != want:
+			t.Errorf("table row %q has %d pipes, want %d\n---\n%s", line, got, want, rendered)
+		}
+	}
+}
+
+// TestMarkdownFormatters_PipeAndNewlineInText_StayInOneCell pins every
+// achievement table against free text a person typed.
+//
+// A name, a description and an award message are unvalidated strings that the
+// create handler trims and nothing more, so a pipe or a newline reaches the
+// formatter through this server's own achievement.create and has to leave it
+// as one cell. Every formatter in the package is driven, because the defect
+// this guards was in all of them at once: a new domain shipped without calling
+// the escaping helper 105 sibling packages call, and no gate could see it.
+func TestMarkdownFormatters_PipeAndNewlineInText_StayInOneCell(t *testing.T) {
+	cases := []struct {
+		name     string
+		rendered string
+	}{
+		{name: "Output", rendered: FormatOutputMarkdown(Output{Achievement: hostileAchievement})},
+		{name: "DeleteOutput", rendered: FormatDeleteOutputMarkdown(DeleteOutput{Achievement: hostileAchievement, Message: "deleted"})},
+		{name: "UserAchievementOutput", rendered: FormatUserAchievementOutputMarkdown(UserAchievementOutput{UserAchievement: hostileUserAchievement})},
+		{name: "UserAchievementMutationOutput", rendered: FormatUserAchievementMutationOutputMarkdown(UserAchievementMutationOutput{UserAchievement: hostileUserAchievement, Message: "revoked"})},
+		{name: "ListOutput", rendered: FormatListMarkdown(ListOutput{Achievements: []Achievement{hostileAchievement}})},
+		{name: "UserAchievementListOutput", rendered: FormatUserAchievementListMarkdown(UserAchievementListOutput{UserAchievements: []UserAchievement{hostileUserAchievement}})},
+		{name: "ReorderOutput", rendered: FormatReorderOutputMarkdown(ReorderOutput{UserAchievements: []UserAchievement{hostileUserAchievement}, Message: "reordered"})},
+		{name: "UniqueUsersOutput", rendered: FormatUniqueUsersMarkdown(UniqueUsersOutput{Users: []*toolutil.BasicUserOutput{{ID: 3, Username: "jdoe", Name: hostileText, State: "active"}}})},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertTableRowsWellFormed(t, tc.rendered)
+			if !strings.Contains(tc.rendered, "&#124;") {
+				t.Errorf("rendered Markdown does not escape the pipe\n---\n%s", tc.rendered)
+			}
+			if strings.Contains(tc.rendered, "It\nsecond line") {
+				t.Errorf("rendered Markdown keeps the newline inside a cell\n---\n%s", tc.rendered)
+			}
+		})
+	}
+}
+
+// TestFormatOutputMarkdown_HostileName_DoesNotEscapeTheHeading pins the other
+// place a GitLab-authored name is interpolated.
+//
+// A pipe in a heading is harmless, so the table check above cannot see this
+// one: what matters here is that a name cannot promote itself to a new heading
+// or open raw HTML a rendering client would obey.
+func TestFormatOutputMarkdown_HostileName_DoesNotEscapeTheHeading(t *testing.T) {
+	rendered := FormatOutputMarkdown(Output{Achievement: Achievement{Name: "# <b>Boom\nsecond"}})
+	if !strings.HasPrefix(rendered, "## Achievement: &lt;b>Boom second") {
+		t.Errorf("heading = %q, want the name neutralized and kept on one line", strings.SplitN(rendered, "\n", 2)[0])
+	}
+}

@@ -24,13 +24,13 @@ func writeAchievementRows(sb *strings.Builder, a Achievement) {
 	fmt.Fprintf(sb, "| Field | Value |\n")
 	fmt.Fprintf(sb, "|-------|-------|\n")
 	fmt.Fprintf(sb, "| ID | %d |\n", a.ID)
-	fmt.Fprintf(sb, "| Name | %s |\n", a.Name)
+	fmt.Fprintf(sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(a.Name))
 	fmt.Fprintf(sb, "| Namespace ID | %d |\n", a.NamespaceID)
 	if a.Description != "" {
-		fmt.Fprintf(sb, "| Description | %s |\n", a.Description)
+		fmt.Fprintf(sb, "| Description | %s |\n", toolutil.EscapeMdTableCell(a.Description))
 	}
 	if a.AvatarURL != "" {
-		fmt.Fprintf(sb, "| Avatar | [image](%s) |\n", a.AvatarURL)
+		fmt.Fprintf(sb, "| Avatar | %s |\n", toolutil.MdTitleLink("image", a.AvatarURL))
 	}
 	if a.CreatedAt != "" {
 		fmt.Fprintf(sb, "| Created | %s |\n", toolutil.FormatTime(a.CreatedAt))
@@ -50,7 +50,7 @@ func writeUserAchievementRows(sb *strings.Builder, u UserAchievement) {
 	fmt.Fprintf(sb, "| Awarded By | %d |\n", u.AwardedByUserID)
 	fmt.Fprintf(sb, "| Shown On Profile | %s |\n", yesNo(u.ShowOnProfile))
 	if u.AwardMessage != "" {
-		fmt.Fprintf(sb, "| Message | %s |\n", u.AwardMessage)
+		fmt.Fprintf(sb, "| Message | %s |\n", toolutil.EscapeMdTableCell(u.AwardMessage))
 	}
 	if u.Priority != nil {
 		fmt.Fprintf(sb, "| Priority | %d |\n", *u.Priority)
@@ -84,7 +84,7 @@ func writeUserAchievementTable(sb *strings.Builder, awards []UserAchievement) {
 		if award.RevokedAt != "" {
 			revoked = toolutil.FormatTime(award.RevokedAt)
 		}
-		message := award.AwardMessage
+		message := toolutil.EscapeMdTableCell(award.AwardMessage)
 		if message == "" {
 			message = "-"
 		}
@@ -103,7 +103,7 @@ func yesNo(b bool) string {
 // FormatOutputMarkdown formats one achievement definition as Markdown.
 func FormatOutputMarkdown(out Output) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Achievement: %s\n\n", out.Achievement.Name)
+	fmt.Fprintf(&sb, "## Achievement: %s\n\n", toolutil.EscapeMdHeading(out.Achievement.Name))
 	writeAchievementRows(&sb, out.Achievement)
 	toolutil.WriteHints(&sb, hintAwardNext, hintRecipientsNex, hintListNext)
 	return sb.String()
@@ -153,16 +153,16 @@ func FormatListMarkdown(out ListOutput) string {
 	fmt.Fprintf(&sb, "| ID | Name | Namespace ID | Description | Avatar |\n")
 	fmt.Fprintf(&sb, "|---:|------|-------------:|-------------|--------|\n")
 	for _, achievement := range out.Achievements {
-		description := achievement.Description
+		description := toolutil.EscapeMdTableCell(achievement.Description)
 		if description == "" {
 			description = "-"
 		}
 		avatar := "-"
 		if achievement.AvatarURL != "" {
-			avatar = fmt.Sprintf("[image](%s)", achievement.AvatarURL)
+			avatar = toolutil.MdTitleLink("image", achievement.AvatarURL)
 		}
 		fmt.Fprintf(&sb, "| %d | %s | %d | %s | %s |\n",
-			achievement.ID, achievement.Name, achievement.NamespaceID, description, avatar)
+			achievement.ID, toolutil.EscapeMdTableCell(achievement.Name), achievement.NamespaceID, description, avatar)
 	}
 	fmt.Fprintf(&sb, "\n%s\n", toolutil.FormatGraphQLPagination(out.Pagination, len(out.Achievements)))
 	return sb.String()
@@ -213,11 +213,11 @@ func FormatUniqueUsersMarkdown(out UniqueUsersOutput) string {
 		if user == nil {
 			continue
 		}
-		username := user.Username
-		if user.WebURL != "" {
-			username = fmt.Sprintf("[%s](%s)", user.Username, user.WebURL)
-		}
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", user.ID, username, user.Name, user.State)
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n",
+			user.ID,
+			toolutil.MdTitleLink(user.Username, user.WebURL),
+			toolutil.EscapeMdTableCell(user.Name),
+			toolutil.EscapeMdTableCell(user.State))
 	}
 	fmt.Fprintf(&sb, "\n%s\n", toolutil.FormatGraphQLPagination(out.Pagination, len(out.Users)))
 	return sb.String()

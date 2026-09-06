@@ -260,8 +260,8 @@ The server can present GitLab in three shapes, controlled by `GITLAB_MCP_TOOL_SU
 | Surface                       | Visible tools                                     | Best for                                                         |
 | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | **Dynamic** (default)         | 2 (`gitlab_find_action`, `gitlab_execute_action`) | Lowest token cost; reaches the full catalog via find/execute.    |
-| **Meta-tools** (`meta`)       | 32 base / 49 Ultimate / 50 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
-| **Individual** (`individual`) | ~854 Free/CE · ~1007 Premium · 1073–1079 Ultimate | One MCP tool per GitLab operation; needs a large context window. |
+| **Meta-tools** (`meta`)       | 33 base / 50 Ultimate / 51 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
+| **Individual** (`individual`) | ~866 Free/CE · ~1019 Premium · 1085–1091 Ultimate | One MCP tool per GitLab operation; needs a large context window. |
 
 Tool counts scale with your GitLab edition (`GITLAB_MCP_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `GITLAB_MCP_CAPABILITY_SURFACE=minimal`.
 
@@ -467,10 +467,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,157 |     237,556 |
-| Unit tests (`_test.go`)  |       662 |     393,660 |
+| Source (`.go`, non-test) |     1,157 |     237,562 |
+| Unit tests (`_test.go`)  |       662 |     393,743 |
 | End-to-end tests         |       243 |      64,277 |
-| **Total**                | **2,062** | **695,493** |
+| **Total**                | **2,062** | **695,582** |
 
 ### Functions
 
@@ -479,8 +479,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  8,877 |
 | . Exported (public)             |  2,885 |
 | . Unexported (private)          |  5,992 |
-| Unit test functions (`TestXxx`) | 13,689 |
-| Subtests (`t.Run(...)`)         |  5,351 |
+| Unit test functions (`TestXxx`) | 13,691 |
+| Subtests (`t.Run(...)`)         |  5,352 |
 | End-to-end test functions       |    601 |
 
 ### Ratios worth noting
@@ -490,7 +490,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.66× more tests than code |
 | Average source file length         |                 ~205 lines |
 | Average test file length           |                 ~595 lines |
-| Comment lines in source            |  38,618 (~16.3% of source) |
+| Comment lines in source            |  38,624 (~16.3% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
