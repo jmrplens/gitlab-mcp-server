@@ -656,13 +656,22 @@ gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
   --public-url=https://mcp.example.com
 ```
 
-Three more things count as declared, and none of them replaces the flag:
+Three more things count as declared, and the second of them can stand in for
+the flag:
 
 | Shape                                                        | Why it is served                                                           |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | `Host` naming the loopback family (`localhost`, `127.0.0.1`) | The local names a listener answers to anyway                               |
 | A request from an address in `--trusted-proxies`             | The operator has vouched for that hop, so the host it forwards is believed |
 | A request carrying no `Host` at all                          | What a balancer health check sends, and not a shape a browser can produce  |
+
+The trusted-proxy row admits a host on its own: a hop listed in
+`--trusted-proxies` may forward whatever host it heard, with no `--public-url`
+at all, which is how one deployment fronts several names without naming each.
+The list is the bound, since the same request from an address nobody listed is
+still refused. `--public-url` stays required for two other things: OAuth mode
+demands it as the RFC 9728 resource identifier, and it is what declares a host
+for a request that does not come from a listed peer.
 
 A listener bound to `0.0.0.0` or `::` and reached on a routable address is not a local server, so the rebinding rule does not apply to it; reached over loopback, the same listener applies it. Configurations for nginx, Caddy, Traefik, Apache and Cloudflare Tunnel are in [Remote Deployment](remote-deployment.md#behind-a-reverse-proxy).
 

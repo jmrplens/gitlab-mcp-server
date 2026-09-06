@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,197 |
-| Unit test functions                                   | 13,596 |
+| Total test functions                                  | 14,199 |
+| Unit test functions                                   | 13,598 |
 | E2E test functions                                    |    601 |
-| cmd test functions                                    |  2,506 |
+| cmd test functions                                    |  2,507 |
 | Test files (internal/)                                |    508 |
 | Test files (cmd/)                                     |    151 |
 | Test files (test/e2e/)                                |    233 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,642 | 82.0% |
+| `TestFunc_Scenario` (2-part)           | 11,644 | 82.0% |
 | `TestFunc` (no underscore)             |    967 |  6.8% |
 | `TestFunc_Scenario_Expected` (3+ part) |  1,588 | 11.2% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,292 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (176) |          8,466 |        355 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (176) |          8,467 |        355 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            601 |        233 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,506 |        151 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,197** |    **892** |                                                                                                 |
+| cmd packages            |          2,507 |        151 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,199** |    **892** |                                                                                                 |
 
 ### Core Packages
 
@@ -88,7 +88,7 @@
 | mergerequests     |   242 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
 | users             |   210 |   100.0% |    38 |
-| dynamic           |   175 |    99.9% |     2 |
+| dynamic           |   176 |    99.9% |     2 |
 | jobs              |   151 |   100.0% |    17 |
 | packages          |   131 |    99.0% |     9 |
 | search            |   118 |   100.0% |    10 |
@@ -156,7 +156,7 @@
 | deploytokens            |        68 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |        15 |          1 |   100.0% |         2 |
 | dorametrics             |        11 |          2 |   100.0% |         2 |
-| dynamic                 |       175 |          8 |    99.9% |         2 |
+| dynamic                 |       176 |          8 |    99.9% |         2 |
 | dynamiccatalog          |         7 |          1 |   100.0% |         0 |
 | elicitationtools        |        65 |          2 |    98.7% |         4 |
 | enterpriseusers         |        35 |          3 |   100.0% |         4 |
@@ -292,7 +292,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |        95 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        50 |          4 |   100.0% |         7 |
-| **Total**               | **8,466** |    **355** |          | **1,175** |
+| **Total**               | **8,467** |    **355** |          | **1,175** |
 
 </details>
 

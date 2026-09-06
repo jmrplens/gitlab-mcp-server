@@ -437,13 +437,17 @@ about, so a deployment reached as `mcp.example.com` starts with
 `--public-url=https://mcp.example.com` and the same request is served. Anything
 else is still refused with `403`, on `/health` as well as on `/mcp`.
 
-Two further ways a host becomes acceptable, neither of which replaces the first:
-a request from an address listed in `--trusted-proxies` may carry whatever host
-that hop forwards, since the operator has already vouched for it; and a listener
-bound to `0.0.0.0` or `::` and reached on a routable address is not a local
-server, so the rebinding rule does not apply to it. A request that carries no
-`Host` at all is served in every shape, which is what a balancer health check
-sends.
+Two further ways a host becomes acceptable. A request from an address listed in
+`--trusted-proxies` may carry whatever host that hop forwards, since the
+operator has already vouched for it, and this one does stand in for
+`--public-url`: a deployment fronting several names can list the proxy instead
+of naming each host, and a request from an address nobody listed is still
+refused. `--public-url` remains required in OAuth mode, where it is the RFC 9728
+resource identifier, and remains what declares a host for a request that reaches
+the listener from anywhere else. The other way is a listener bound to `0.0.0.0`
+or `::` and reached on a routable address: it is not a local server, so the
+rebinding rule does not apply to it. A request that carries no `Host` at all is
+served in every shape, which is what a balancer health check sends.
 
 **The metadata path is at the host root.** `--public-url` is the RFC 9728
 resource identifier, and the metadata URL is derived by inserting the well-known
