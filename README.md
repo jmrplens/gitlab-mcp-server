@@ -44,7 +44,7 @@ You talk to your AI assistant; it does the GitLab work. No project IDs, API endp
 
 <!-- START TOKEN CLAIM -->
 
-**10,336 tokens of startup context by default, the same on every GitLab tier (1,671 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
+**10,355 tokens of startup context by default, the same on every GitLab tier (1,690 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
 
 <!-- END TOKEN CLAIM -->
 
@@ -275,12 +275,12 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               858 | n/a                            |              1,501 |         8,835 |       10,336 |
-| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               858 | n/a                            |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,011 | n/a                            |              1,501 |         8,835 |       10,336 |
-| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,011 | n/a                            |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,077 | n/a                            |              1,501 |         8,835 |       10,336 |
-| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,077 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               858 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               858 | n/a                            |              1,520 |           170 |        1,690 |
+| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,011 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,011 | n/a                            |              1,520 |           170 |        1,690 |
+| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,077 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,077 | n/a                            |              1,520 |           170 |        1,690 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_MCP_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
