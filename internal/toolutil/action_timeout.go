@@ -1,7 +1,8 @@
 // action_timeout.go bounds how long one action may run.
 //
-// Every action passes through WrapAction, which makes it the one place a
-// deadline reaches all of them. The transports already end a call whose
+// Every action passes through one of the four WrapAction functions, which
+// makes them the one place a deadline reaches all of them. The transports
+// already end a call whose
 // client went away: an HTTP POST's lifetime cancels the calls it carries, and
 // a stdio client's own cancellation notification reaches the handler. What
 // neither bounds is a handler whose client is still waiting: a poll that

@@ -69,6 +69,54 @@ func TestWrapActionWithRequest_DeadlineApplies(t *testing.T) {
 	}
 }
 
+// TestWrapVoidAction_DeadlineEndsAHandlerThatNeverReturns covers the wrapper
+// the deadline used to skip.
+//
+// A void action is a delete, a cancel or a retry, so it is the shape an
+// operator most wants bounded, and it was the one shape running unbounded
+// while this setting's documentation said every action passed through the
+// deadline. A handler that never returns held a goroutine, a connection and
+// the caller's pooled entry for as long as the client cared to wait.
+func TestWrapVoidAction_DeadlineEndsAHandlerThatNeverReturns(t *testing.T) {
+	withActionTimeout(t, 30*time.Millisecond)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := WrapVoidAction(nil, func(ctx context.Context, _ *gitlabclient.Client, _ struct{}) error {
+			<-ctx.Done()
+			return ctx.Err()
+		})(context.Background(), nil)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("error = %v, want context.DeadlineExceeded", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the void action outlived a 30ms deadline by five seconds")
+	}
+}
+
+// TestWrapVoidActionWithRequest_DeadlineApplies covers the fourth wrapper, so
+// that all four routes an action can be registered through carry the bound.
+func TestWrapVoidActionWithRequest_DeadlineApplies(t *testing.T) {
+	withActionTimeout(t, 30*time.Millisecond)
+
+	deadlineSeen := make(chan bool, 1)
+	fn := WrapVoidActionWithRequest(nil, func(ctx context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ struct{}) error {
+		_, ok := ctx.Deadline()
+		deadlineSeen <- ok
+		return nil
+	})
+	if _, err := fn(context.Background(), nil); err != nil {
+		t.Fatalf("WrapVoidActionWithRequest: %v", err)
+	}
+	if !<-deadlineSeen {
+		t.Error("the handler ran without a deadline while one was configured")
+	}
+}
+
 // TestWrapAction_ZeroDisablesTheDeadline verifies 0 means no bound at all,
 // rather than a zero-length one.
 func TestWrapAction_ZeroDisablesTheDeadline(t *testing.T) {
