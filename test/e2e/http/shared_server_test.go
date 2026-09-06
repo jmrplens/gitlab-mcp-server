@@ -77,7 +77,7 @@ func openListen(t *testing.T, srv *server, token, uri string, id int) *listenStr
 	// The body outlives this function on purpose: a listen stays open, so the
 	// reader goroutine below owns it and closes it when the stream ends. Every
 	// path that does not reach that goroutine closes it here.
-	resp, err := srv.httpClient().Do(req) //nolint:bodyclose // closed by the reader goroutine, and on every early return
+	resp, err := srv.httpClient().Do(req)
 	if err != nil {
 		cancel()
 		t.Fatalf("sending the listen for %s: %v", token, err)
@@ -195,7 +195,7 @@ func openStandaloneStream(t *testing.T, srv *server, token, sessionID, protocol 
 
 	// As in openListen, the body outlives this function: the reader goroutine
 	// owns it, and every path that does not reach that goroutine closes it.
-	resp, err := srv.httpClient().Do(req) //nolint:bodyclose // closed by the reader goroutine, and on every early return
+	resp, err := srv.httpClient().Do(req)
 	if err != nil {
 		cancel()
 		t.Fatalf("opening the standalone stream for %s: %v", token, err)
