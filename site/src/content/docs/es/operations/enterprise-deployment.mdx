@@ -124,11 +124,11 @@ En el host de referencia, bajo la carga de la serie de concurrencia: cuatro
 peticiones en vuelo por credencial en las superficies dinámica y meta, y dos en
 la individual.
 
-| Superficie   | Tiempo de CPU por llamada | Qué lo domina                                                   |
-| ------------ | ------------------------- | --------------------------------------------------------------- |
-| `dynamic`    | unos 8 ms                 | El serializado del resultado y la validación de esquema del SDK |
-| `meta`       | unos 8 ms                 | Lo mismo                                                        |
-| `individual` | unos 130 ms               | Serializar una respuesta `tools/list` de 3 MB                   |
+| Superficie   | Tiempo de CPU por llamada | Qué lo domina                          |
+| ------------ | ------------------------- | -------------------------------------- |
+| `dynamic`    | unos 8 ms                 | El serializado y la validación del SDK |
+| `meta`       | unos 8 ms                 | Lo mismo                               |
+| `individual` | unos 130 ms               | Serializar un `tools/list` de 3 MB     |
 
 ```text
 techo de llamadas por segundo  =  hilos utilizables  /  segundos de CPU por llamada
