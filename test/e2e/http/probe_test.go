@@ -102,7 +102,13 @@ func TestProbe_ExplicitTarget(t *testing.T) {
 // instance, so the address is this one's.
 func TestProbe_Discovery(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+	// On a port this test names, unlike everything else in this module.
+	// Discovery reads --http-addr off the other process's command line, which
+	// is where the port has to be: an instance that asked the kernel for one
+	// carries a 0 there, and the probe would dial port 0. That is a real
+	// limitation of the bare --probe and it is recorded where the flag is
+	// documented; here it just means this test cannot use an ephemeral port.
+	srv := startServerOnPort(t, freePort(t), nil, "--gitlab-url="+gitlab.url)
 
 	code, said := runProbe(t)
 	if code != 0 {

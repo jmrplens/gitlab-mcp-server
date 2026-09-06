@@ -53,7 +53,16 @@ func isUnixSocketAddr(addr string) bool {
 // address is a path, a TCP port otherwise.
 func listenHTTP(ctx context.Context, addr string, socketMode os.FileMode) (net.Listener, error) {
 	if !isUnixSocketAddr(addr) {
-		return (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
+		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		// The address that was bound, not the one that was asked for. They
+		// differ whenever the port is 0, which is how a deployment asks the
+		// kernel to choose one, and there is no other way to learn which port
+		// it chose. The unix branch has logged what it bound since it existed.
+		slog.InfoContext(ctx, "listening on tcp", "addr", listener.Addr().String())
+		return listener, nil
 	}
 	return listenUnix(ctx, addr, socketMode)
 }

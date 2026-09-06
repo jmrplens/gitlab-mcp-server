@@ -185,31 +185,29 @@ func withInstancePolicy(flags []string) []string {
 // GITLAB_URL points at whatever the caller passes; the tests here never reach
 // GitLab, because every behavior under test is decided before the request
 // would leave the process.
+// The port is not chosen here. freePort hands back a number rather than a
+// listener, so between the moment it releases the port and the moment the
+// server binds it the port belongs to nobody, and every test in this module
+// runs in parallel: two tests could be handed the same number, and the one
+// that lost would either fail to bind or, worse, find the port answering and
+// drive somebody else's server. Asking for port 0 hands the choice to the
+// kernel, which cannot hand the same port to two live listeners, and the
+// server says which one it got.
 func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 	t.Helper()
-	for attempt := 1; ; attempt++ {
-		srv, err := tryStartServerOnPort(t, freePort(t), env, flags...)
-		switch {
-		case err == nil:
-			return srv
-		case !errors.Is(err, errPortTaken):
-			t.Fatalf("starting the server: %v", err)
-		case attempt == portAttempts:
-			t.Fatalf("the server lost the port to another test %d times running: %v", portAttempts, err)
-		}
+
+	srv, err := tryStartServerOnPort(t, ephemeralPort, env, flags...)
+	if err != nil {
+		t.Fatalf("starting the server: %v", err)
 	}
+	return srv
 }
 
-// portAttempts is how many ports startServer will try before giving up.
-//
-// freePort hands back a number rather than a listener, so between the moment
-// it releases the port and the moment the server binds it the port belongs to
-// nobody, and every test in this module runs in parallel. Losing that race
-// three times over is not a race any more.
-const portAttempts = 3
+// ephemeralPort asks the kernel for a port instead of naming one.
+const ephemeralPort = 0
 
-// errPortTaken says the server exited because something else holds its port,
-// which is the one startup failure worth retrying on another one.
+// errPortTaken says the server exited because something else holds its port.
+// Only a caller that named the port can meet it.
 var errPortTaken = errors.New("the port was taken")
 
 // startServerOnPort is startServer with the port chosen by the caller, for
@@ -256,29 +254,86 @@ func tryStartServerOnPort(t *testing.T, port int, env map[string]string, flags .
 		return nil, fmt.Errorf("launching the binary: %w", err)
 	}
 
-	srv := &server{
-		baseURL: "http://" + addr,
-		logs: func() string {
-			mu.Lock()
-			defer mu.Unlock()
-			return out.String()
-		},
+	logs := func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return out.String()
 	}
 
-	// The process is waited on once, here, and its outcome published, so that
-	// awaitHealthy can stop the moment the server gives up instead of polling
-	// a port nothing is listening on for the whole deadline.
-	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
+	// The process is waited on once, here, and the result published by closing
+	// rather than by sending: everything that asks whether the server is still
+	// there has to be able to ask, and a value can only be taken once. It was
+	// sent once, and the cleanup then blocked forever on a channel the health
+	// wait had already drained.
+	exited := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(exited)
+	}()
 	t.Cleanup(func() {
 		cancel()
 		<-exited
 	})
 
-	if err := awaitHealthy(t, srv, exited); err != nil {
+	// The address is read back from the server rather than assumed, because
+	// with port 0 only the server knows it. This is also what ties the health
+	// check to this process: the address came out of its own log, so nothing
+	// else can be the thing that answers.
+	bound, err := awaitListenAddr(logs, exited)
+	if err != nil {
+		return nil, err
+	}
+
+	srv := &server{baseURL: "http://" + bound, logs: logs}
+	if err = awaitHealthy(t, srv, exited); err != nil {
 		return nil, err
 	}
 	return srv, nil
+}
+
+// awaitListenAddr reads the address the server bound out of its own log.
+//
+// The server logs the listener's address, not the one it was asked for, so
+// this is the only way to learn the port when the harness asked for 0, and the
+// most direct way to know the process under test is the one on that port.
+func awaitListenAddr(logs func() string, exited <-chan struct{}) (string, error) {
+	deadline := time.Now().Add(45 * time.Second)
+	for {
+		if addr := listenAddrIn(logs()); addr != "" {
+			return addr, nil
+		}
+		select {
+		case <-exited:
+			// One last read: the line and the exit can land together, and a
+			// server that bound and then died has still said where.
+			if addr := listenAddrIn(logs()); addr != "" {
+				return addr, nil
+			}
+			return "", startupFailure(logs())
+		default:
+		}
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf("the server never said what it bound. Output:\n%s", logs())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// listenAddrIn finds the bound address in the server's JSON log output.
+func listenAddrIn(logs string) string {
+	for line := range strings.SplitSeq(logs, "\n") {
+		var record struct {
+			Msg  string `json:"msg"`
+			Addr string `json:"addr"`
+		}
+		if json.Unmarshal([]byte(line), &record) != nil {
+			continue
+		}
+		if record.Msg == "listening on tcp" && record.Addr != "" {
+			return record.Addr
+		}
+	}
+	return ""
 }
 
 // lockedWriter serializes writes from the process's two pipes into one buffer
@@ -306,7 +361,7 @@ func waitHealthy(t *testing.T, s *server) {
 // awaitHealthy polls /health until the server answers or the deadline passes.
 // A failure dumps the process output, because a server that refuses to start
 // has already said why and the test should not make anyone go looking.
-func awaitHealthy(t *testing.T, s *server, exited <-chan error) error {
+func awaitHealthy(t *testing.T, s *server, exited <-chan struct{}) error {
 	t.Helper()
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {

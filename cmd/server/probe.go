@@ -11,6 +11,11 @@
 // --transport and --http from their arguments, derives where /health is served,
 // and asks. A target may also be given outright, for a probe run from outside
 // the container or for a deployment whose process list cannot be read.
+//
+// One listener it cannot discover is one bound to port 0: the command line then
+// says 0 and the port that was actually bound is known only to the kernel and
+// to the server's own log. A deployment that asks the kernel for a port has to
+// give --probe the target, which it knows from that log.
 
 package main
 
