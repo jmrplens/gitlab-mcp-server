@@ -676,6 +676,87 @@ func TestLoadEnvFiles_NoHomeDirectory_LoadsWhatIsLeft(t *testing.T) {
 	}
 }
 
+// TestLoadEnvFiles_HomeWithoutTheFile_NamesNothing verifies that a home
+// directory holding no dotenv leaves HomePath empty.
+//
+// The report is what the startup announcement reads, and naming a file that
+// was never loaded sends an operator to edit a path that does not exist while
+// the setting they are chasing comes from somewhere else. Nothing asserted the
+// empty case, so a load whose success test had been inverted would have
+// announced the home file on every start that did not have one.
+func TestLoadEnvFiles_HomeWithoutTheFile_NamesNothing(t *testing.T) {
+	clearEnvFileKeys(t)
+	resetEnvFileAnnouncement(t)
+	useHomeDir(t, t.TempDir())
+	t.Chdir(t.TempDir())
+
+	report := LoadEnvFiles()
+
+	if report.HomePath != "" {
+		t.Errorf("HomePath = %q, want none: the home directory holds no dotenv", report.HomePath)
+	}
+}
+
+// TestAnnouncedKeys_BoundsWithoutTruncatingWhatFits verifies the two limits
+// on the untrusted key names the ignored-file warning prints.
+//
+// Both are bounds on a log line assembled from a file this server refused to
+// load, so the names in it are attacker-controlled. What the boundary decides
+// is whether a file that sits exactly on a limit is reported intact: a bound
+// off by one truncates a perfectly ordinary ten-key .env and appends an
+// ellipsis to a key that was never too long, which reads as corruption rather
+// than as a limit.
+func TestAnnouncedKeys_BoundsWithoutTruncatingWhatFits(t *testing.T) {
+	t.Parallel()
+
+	keyOf := func(n int) string { return strings.Repeat("K", n) }
+
+	t.Run("exactly the key limit is kept whole", func(t *testing.T) {
+		t.Parallel()
+		keys := make([]string, maxAnnouncedKeys)
+		for i := range keys {
+			keys[i] = "K" + strconv.Itoa(i)
+		}
+		if got := announcedKeys(keys); len(got) != maxAnnouncedKeys {
+			t.Errorf("announcedKeys kept %d of exactly %d keys", len(got), maxAnnouncedKeys)
+		}
+	})
+
+	t.Run("one key over the limit is dropped", func(t *testing.T) {
+		t.Parallel()
+		keys := make([]string, maxAnnouncedKeys+1)
+		for i := range keys {
+			keys[i] = "K" + strconv.Itoa(i)
+		}
+		if got := announcedKeys(keys); len(got) != maxAnnouncedKeys {
+			t.Errorf("announcedKeys kept %d keys, want the list capped at %d", len(got), maxAnnouncedKeys)
+		}
+	})
+
+	t.Run("a key of exactly the rune limit is not shortened", func(t *testing.T) {
+		t.Parallel()
+		key := keyOf(maxAnnouncedKeyRunes)
+		got := announcedKeys([]string{key})
+		if len(got) != 1 || got[0] != key {
+			t.Errorf("announcedKeys(%d runes) = %v, want the name unchanged", maxAnnouncedKeyRunes, got)
+		}
+	})
+
+	t.Run("one rune over the limit is shortened", func(t *testing.T) {
+		t.Parallel()
+		got := announcedKeys([]string{keyOf(maxAnnouncedKeyRunes + 1)})
+		if len(got) != 1 {
+			t.Fatalf("announcedKeys returned %d names, want 1", len(got))
+		}
+		if !strings.HasSuffix(got[0], "...") {
+			t.Errorf("announcedKeys(%d runes) = %q, want it shortened", maxAnnouncedKeyRunes+1, got[0])
+		}
+		if runes := []rune(got[0]); len(runes) != maxAnnouncedKeyRunes+3 {
+			t.Errorf("shortened name is %d runes, want %d plus the ellipsis", len(runes), maxAnnouncedKeyRunes)
+		}
+	})
+}
+
 // TestDotenvKeys_UnreadableFile_ReturnsNoKeys verifies the other half of the
 // same courtesy: a file that vanished between the check and the read, or that
 // this process may not open, costs the warning its key names and nothing else.

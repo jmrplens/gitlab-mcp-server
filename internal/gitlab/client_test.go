@@ -666,6 +666,18 @@ func TestEnsureInitialized_Recovery(t *testing.T) {
 	if !client.IsInitialized() {
 		t.Error("client should be initialized after successful recovery")
 	}
+	// Recovery must also switch lazy re-initialization off. The check runs
+	// from the transport on every SDK request, so a client that stays in
+	// lazy mode after recovering takes the lock, and once per cooldown a
+	// whole version round-trip, for the rest of the process's life.
+	if client.needsLazyInit.Load() {
+		t.Error("lazy re-initialization is still armed after a successful recovery")
+	}
+	before := client.lastInitAttempt
+	client.EnsureInitialized(context.Background())
+	if client.lastInitAttempt != before {
+		t.Error("a recovered client attempted initialization again")
+	}
 }
 
 // TestEnsureInitialized_Cooldown verifies that [Client.EnsureInitialized]

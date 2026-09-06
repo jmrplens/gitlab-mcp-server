@@ -585,6 +585,72 @@ func TestParseSize_CaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestParseSize_RefusesASizeOfNothing verifies that a size of zero, and a
+// negative one, are refused rather than accepted as a ceiling.
+//
+// A ceiling of zero would refuse every upload and every local file read with
+// "too large", which reads as a broken server rather than as a setting the
+// operator wrote. Only non-numeric input was refused before, so the boundary
+// between "no ceiling was asked for" and "a ceiling of nothing" was never
+// tested at all.
+func TestParseSize_RefusesASizeOfNothing(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		want    int64
+	}{
+		{name: "zero", input: "0", wantErr: true},
+		{name: "zero with a unit", input: "0MB", wantErr: true},
+		{name: "negative", input: "-1", wantErr: true},
+		{name: "one byte is a ceiling, however small", input: "1", want: 1},
+		{name: "empty falls back to the default", input: "", want: 4096},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSize(tt.input, 4096)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseSize(%q) = %d, want a refusal", tt.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseSize(%q) unexpected error: %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Errorf("parseSize(%q) = %d, want %d", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestValidate_RateLimitBurstOfOne_IsAccepted verifies the smallest burst a
+// rate-limited deployment may configure.
+//
+// A burst is a token bucket's depth, so one is the smallest that admits any
+// request at all, and it is the value an operator writes to say "no burst,
+// just the rate". Only zero and the ceiling were asserted, which leaves the
+// bound free to drift onto the one value between them.
+func TestValidate_RateLimitBurstOfOne_IsAccepted(t *testing.T) {
+	cfg := &Config{
+		GitLabURL:      testGitLabURL,
+		GitLabToken:    testGitLabToken,
+		RateLimitRPS:   10,
+		RateLimitBurst: 1,
+		MaxHTTPClients: DefaultMaxHTTPClients,
+	}
+	if err := cfg.validate(); err != nil {
+		t.Errorf("validate() refused a burst of 1 beside a positive RPS: %v", err)
+	}
+
+	cfg.RateLimitBurst = 0
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() accepted a burst of 0 beside a positive RPS, which admits nothing")
+	}
+}
+
 // TestParseInt verifies parseInt handles valid values, defaults, and errors.
 func TestParseInt(t *testing.T) {
 	tests := []struct {
@@ -1525,6 +1591,20 @@ func TestLoad_RevalidateInterval(t *testing.T) {
 		_, err := Load()
 		if err == nil {
 			t.Fatal("expected error for SESSION_REVALIDATE_INTERVAL exceeding maximum")
+		}
+	})
+
+	// The maximum itself is a value the operator may set. Only "over" and
+	// "well under" were asserted, so a bound that had drifted from > to >=
+	// would refuse the documented ceiling and no test would say so.
+	t.Run("the maximum itself is accepted", func(t *testing.T) {
+		t.Setenv("SESSION_REVALIDATE_INTERVAL", MaxRevalidateInterval.String())
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() refused the documented maximum: %v", err)
+		}
+		if cfg.RevalidateInterval != MaxRevalidateInterval {
+			t.Errorf("RevalidateInterval = %v, want %v", cfg.RevalidateInterval, MaxRevalidateInterval)
 		}
 	})
 }

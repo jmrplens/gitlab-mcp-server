@@ -1781,8 +1781,11 @@ func TestExpiryFromSeconds_RejectsWhatIsNotADeadline(t *testing.T) {
 		name     string
 		raw      any
 		wantZero bool
+		// wantIn is how far ahead the deadline must land, when it is one.
+		wantIn time.Duration
 	}{
-		{name: "a positive count is a deadline", raw: float64(3600)},
+		{name: "a positive count is a deadline", raw: float64(3600), wantIn: time.Hour},
+		{name: "a single second", raw: float64(1), wantIn: time.Second},
 		{name: "zero says nothing", raw: float64(0), wantZero: true},
 		{name: "a negative count says nothing", raw: float64(-1), wantZero: true},
 		{name: "a missing field", raw: nil, wantZero: true},
@@ -1792,9 +1795,21 @@ func TestExpiryFromSeconds_RejectsWhatIsNotADeadline(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			before := time.Now()
 			got := expiryFromSeconds(tt.raw)
 			if got.IsZero() != tt.wantZero {
-				t.Errorf("expiryFromSeconds(%v) = %v, want zero: %v", tt.raw, got, tt.wantZero)
+				t.Fatalf("expiryFromSeconds(%v) = %v, want zero: %v", tt.raw, got, tt.wantZero)
+			}
+			if tt.wantZero {
+				return
+			}
+			// The count is seconds, and the unit it is multiplied by is what
+			// decides whether an hour-long token is cached for an hour or for
+			// a microsecond. A minute of slack absorbs a slow machine without
+			// admitting a wrong unit.
+			ahead := got.Sub(before)
+			if ahead < tt.wantIn || ahead > tt.wantIn+time.Minute {
+				t.Errorf("expiryFromSeconds(%v) lands %v ahead, want about %v", tt.raw, ahead, tt.wantIn)
 			}
 		})
 	}
