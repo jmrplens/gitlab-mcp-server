@@ -106,6 +106,52 @@ func TestClampedBackoff_RespectsTheCallersMinimum(t *testing.T) {
 	}
 }
 
+// TestClampedBackoff_JitterStaysInsideTheCallersWindow verifies the spread
+// added on top of the computed wait is the window client-go asked for, and
+// not some other span.
+//
+// The jitter exists so that a fleet of pooled clients released by one
+// rate-limit reset does not re-send in lockstep, and its width is the
+// caller's own [minWait, maxWait) range. Every other assertion in this file
+// is one-sided — no longer than the ceiling, no shorter than the step — so a
+// jitter computed from the wrong span passed them all: a wider one still sits
+// under the ceiling, and a narrower one still clears the step, while the
+// desynchronisation the jitter was added for quietly changes size.
+//
+// Sampled rather than computed because the value is random by design. With a
+// window of 300ms, a span mutated to 500ms puts four samples in ten above the
+// bound, so a couple of hundred draws settle it beyond any doubt a test needs.
+func TestClampedBackoff_JitterStaysInsideTheCallersWindow(t *testing.T) {
+	t.Parallel()
+
+	const (
+		minWait = 100 * time.Millisecond
+		maxWait = 400 * time.Millisecond
+		samples = 200
+	)
+	// attempt 0 with no response: the wait before jitter is one step, which
+	// is above minWait and well under the ceiling, so neither clamp fires and
+	// what remains is exactly the jitter.
+	base := retryBackoffStep
+
+	var sawSpread bool
+	for range samples {
+		got := clampedBackoff(minWait, maxWait, 0, nil)
+		if got < base {
+			t.Fatalf("clampedBackoff() = %v, want at least the unjittered wait %v", got, base)
+		}
+		if got >= base+(maxWait-minWait) {
+			t.Fatalf("clampedBackoff() = %v, want less than %v: the jitter is wider than the window it was given", got, base+(maxWait-minWait))
+		}
+		if got != base {
+			sawSpread = true
+		}
+	}
+	if !sawSpread {
+		t.Errorf("every one of %d waits was exactly %v; no jitter was added at all", samples, base)
+	}
+}
+
 // TestRateLimitResetWait_ReadsTheHeader verifies how the RateLimit-Reset
 // header is turned into a wait, including every shape that must yield none.
 func TestRateLimitResetWait_ReadsTheHeader(t *testing.T) {
@@ -208,6 +254,8 @@ func countingFailureServer(t *testing.T, failStatus, failures int, rateLimited b
 // magnitude away from both the fixed and the unfixed behavior, so they
 // discriminate without turning CI load into a failure.
 func TestClient_RetryBudget_IsBounded(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		status      int
@@ -224,6 +272,13 @@ func TestClient_RetryBudget_IsBounded(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// The three cases spend their time waiting out a real backoff,
+			// which is the point of the assertion and cannot be shortened
+			// without measuring something else. They share nothing — each
+			// builds its own server and its own client — so waiting through
+			// them at the same time costs the longest rather than the sum.
+			t.Parallel()
+
 			srvURL, hits := countingFailureServer(t, tt.status, tt.failures, tt.rateLimited)
 
 			client, err := NewClientWithTokenRetries(srvURL, testValidToken, false, false)

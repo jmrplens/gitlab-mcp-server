@@ -70,6 +70,57 @@ func TestTokenCache_GetExpired(t *testing.T) {
 	}
 }
 
+// TestStillStale_KeepsWhatAnotherGoroutineSaved verifies the rule the lazy
+// eviction re-checks under the write lock.
+//
+// Get releases the read lock before taking the write lock, so both false
+// answers here are races a test cannot schedule: another request may have
+// evicted the entry in the gap, or reverified the same token and stored a
+// live one. Deleting in either case discards a verification that has already
+// happened and sends the next request back to GitLab for an identity this
+// process already holds, which is the whole cost the cache exists to avoid.
+func TestStillStale_KeepsWhatAnotherGoroutineSaved(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		entry   cacheEntry
+		present bool
+		want    bool
+	}{
+		{
+			name:    "the expired entry is still there",
+			entry:   cacheEntry{expiresAt: time.Now().Add(-time.Minute)},
+			present: true,
+			want:    true,
+		},
+		{
+			name:    "another goroutine evicted it first",
+			present: false,
+		},
+		{
+			name:    "another goroutine reverified the token",
+			entry:   cacheEntry{expiresAt: time.Now().Add(time.Minute)},
+			present: true,
+		},
+		{
+			name:    "an entry expiring exactly now is stale",
+			entry:   cacheEntry{expiresAt: time.Now()},
+			present: true,
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := stillStale(tt.entry, tt.present); got != tt.want {
+				t.Errorf("stillStale() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestTokenCache_Evict verifies that Evict removes a specific token entry
 // and subsequent Get calls for that token return a miss.
 func TestTokenCache_Evict(t *testing.T) {

@@ -175,3 +175,104 @@ func TestAuthRateLimiter_CapAdmitsNewKeysOnceRecordsLapse(t *testing.T) {
 		t.Errorf("tracked keys = %d, want only the one live record", got)
 	}
 }
+
+// TestAuthRateLimiter_LapsedRecordIsReplacedInPlace verifies that a client
+// coming back after its window lapsed starts a fresh count, and does so
+// without needing room under the cap.
+//
+// This is the branch the "replaced in place, which is not growth" comment
+// describes and nothing reached: every recorded failure in the suite either
+// found no record at all or found a live one. It matters at the cap, where
+// treating a lapsed record as a new key would refuse to reset it and leave a
+// returning client pinned to whatever count it had when the flood started.
+func TestAuthRateLimiter_LapsedRecordIsReplacedInPlace(t *testing.T) {
+	// An hour, so that nothing lapses by itself while the table is filled.
+	// With a window of milliseconds this test read as if it were fast, and on
+	// a slower machine the filler loop outlasted the window: the record this
+	// test is about was pruned as lapsed before the test could lapse it, and
+	// the next line dereferenced a map entry that was no longer there. The one
+	// record that must lapse is lapsed below, by moving its own timestamp.
+	limiter := NewAuthRateLimiter(2, time.Hour)
+
+	limiter.RecordFailure("10.0.0.1")
+	limiter.RecordFailure("10.0.0.1")
+	if !limiter.IsBlocked("10.0.0.1") {
+		t.Fatal("two failures inside the window should block the client")
+	}
+
+	// Fill the table so the cap would refuse a new key, then lapse only the
+	// blocked client's record. Its next failure must still be recorded.
+	for i := range maxTrackedAuthSources {
+		limiter.RecordFailure("filler-" + strconv.Itoa(i))
+	}
+	limiter.mu.Lock()
+	blocked, tracked := limiter.failures["10.0.0.1"]
+	if tracked {
+		blocked.firstAt = time.Now().Add(-2 * limiter.window)
+	}
+	limiter.mu.Unlock()
+	if !tracked {
+		t.Fatal("the blocked client's record was dropped while the table was filled, so there is nothing to lapse")
+	}
+
+	limiter.RecordFailure("10.0.0.1")
+
+	if limiter.IsBlocked("10.0.0.1") {
+		t.Error("a lapsed record was not replaced: the client is still blocked on a count from the previous window")
+	}
+	limiter.mu.Lock()
+	count := limiter.failures["10.0.0.1"].count
+	limiter.mu.Unlock()
+	if count != 1 {
+		t.Errorf("count = %d after the window lapsed, want the record restarted at 1", count)
+	}
+}
+
+// TestAuthRateLimiter_Cleanup_KeepsTheCapWarningWhileTheTableIsFull verifies
+// that the at-capacity warning is re-armed only once there is room again.
+//
+// Cleanup sweeps first and then decides, so a sweep that frees nothing must
+// leave the flag set: re-arming it while the table is still full would put one
+// warning per sweep in the log for as long as the flood lasts, which is the
+// noise the flag exists to prevent.
+func TestAuthRateLimiter_Cleanup_KeepsTheCapWarningWhileTheTableIsFull(t *testing.T) {
+	limiter := NewAuthRateLimiter(2, time.Hour)
+
+	for i := range maxTrackedAuthSources + 1 {
+		limiter.RecordFailure("spoofed-" + strconv.Itoa(i))
+	}
+	limiter.mu.Lock()
+	limiter.warnedAtCap = true
+	limiter.mu.Unlock()
+
+	limiter.Cleanup()
+
+	limiter.mu.Lock()
+	stillWarned := limiter.warnedAtCap
+	size := len(limiter.failures)
+	limiter.mu.Unlock()
+
+	if size != maxTrackedAuthSources {
+		t.Fatalf("tracked keys = %d after a sweep that frees nothing, want the table still full at %d", size, maxTrackedAuthSources)
+	}
+	if !stillWarned {
+		t.Error("the at-capacity warning was re-armed while the table is still full")
+	}
+
+	// One lapsed record is enough to make room, and the flag is re-armed.
+	limiter.mu.Lock()
+	for _, rec := range limiter.failures {
+		rec.firstAt = time.Now().Add(-2 * limiter.window)
+		break
+	}
+	limiter.mu.Unlock()
+
+	limiter.Cleanup()
+
+	limiter.mu.Lock()
+	rearmed := !limiter.warnedAtCap
+	limiter.mu.Unlock()
+	if !rearmed {
+		t.Error("the at-capacity warning stayed suppressed after the table dropped below the cap")
+	}
+}

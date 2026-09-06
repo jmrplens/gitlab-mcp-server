@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -3101,5 +3103,674 @@ func TestEvictServer_DropsEveryEntryServedByThatServer(t *testing.T) {
 	defer mu.Unlock()
 	if len(evicted) != 3 {
 		t.Errorf("the evict hook fired %d times, want 3", len(evicted))
+	}
+}
+
+// TestLifetime_FallsBackToBackground verifies the context that bounds entry
+// construction is never nil.
+//
+// Every test in this file supplies a base context, so the two fallbacks had
+// never been taken. They are what keeps a pool built without the option, or
+// with one whose function has nothing to give yet, from canceling every
+// build the instant it starts: a nil context passed to context.WithTimeout
+// panics, and the panic would be inside the credential probe of the first
+// request the deployment ever served.
+func TestLifetime_FallsBackToBackground(t *testing.T) {
+	bounded := t.Context()
+
+	tests := []struct {
+		name        string
+		opts        []Option
+		wantBounded bool
+	}{
+		{name: "no base context configured", opts: nil},
+		{name: "a base context function that yields nothing", opts: []Option{WithBaseContext(func() context.Context { return nil })}},
+		{name: "a base context function that yields one", opts: []Option{WithBaseContext(func() context.Context { return bounded })}, wantBounded: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := New(testConfig(stubGitLabBase), testFactory(), tt.opts...)
+			got := pool.lifetime()
+			if got == nil {
+				t.Fatal("lifetime() = nil; every build would panic on WithTimeout")
+			}
+			if tt.wantBounded != (got == bounded) {
+				t.Errorf("lifetime() returned the configured context = %v, want %v", got == bounded, tt.wantBounded)
+			}
+		})
+	}
+}
+
+// TestAcquireProbeSlot_DefaultsWhenNothingIsConfigured verifies the two
+// fallbacks the probe limiter takes on a pool whose fields were not filled in.
+//
+// New always configures both, so neither branch is reachable through it; a
+// pool assembled field by field, which is how several tests here drive the
+// queue, is what reaches them. The release function matters as much as the
+// slot: callers defer it unconditionally, so returning nil instead of a no-op
+// would turn "no limiter configured" into a nil call at the end of every
+// build.
+func TestAcquireProbeSlot_DefaultsWhenNothingIsConfigured(t *testing.T) {
+	t.Run("no limiter is configured", func(t *testing.T) {
+		pool := &ServerPool{}
+		release, err := pool.acquireProbeSlot()
+		if err != nil {
+			t.Fatalf("acquireProbeSlot() error = %v, want a slot from an unlimited pool", err)
+		}
+		if release == nil {
+			t.Fatal("acquireProbeSlot() returned no release function; every caller defers it")
+		}
+		release()
+	})
+
+	t.Run("a limiter with no queue timeout uses the default", func(t *testing.T) {
+		pool := &ServerPool{probes: make(chan struct{}, 1)}
+		release, err := pool.acquireProbeSlot()
+		if err != nil {
+			t.Fatalf("acquireProbeSlot() error = %v, want the free slot", err)
+		}
+		release()
+		if len(pool.probes) != 0 {
+			t.Error("the slot was not given back")
+		}
+	})
+}
+
+// TestDropRejectedEntry_LeavesAReplacementAlone verifies the identity check
+// the rejected-credential eviction makes under the lock.
+//
+// The 401 is noticed on a call, and the eviction that follows takes the lock
+// afterwards. In between, a request that found the entry already marked
+// rejected rebuilds the key. Deleting by key alone at that point would drop
+// the freshly verified replacement and refuse the sessions it owns, so the
+// eviction must recognize that the entry under the key is no longer its own.
+func TestDropRejectedEntry_LeavesAReplacementAlone(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), testFactory())
+	entry, err := pool.GetOrCreateEntry("glpat-original", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(): %v", err)
+	}
+	key := sessionKey("glpat-original", stubGitLabBase)
+
+	t.Run("a key holding a different entry is left alone", func(t *testing.T) {
+		replacement := &Entry{server: entry.server, client: entry.client, serverConfig: entry.serverConfig}
+		pool.mu.Lock()
+		pool.entries[key] = replacement
+		pool.mu.Unlock()
+
+		if _, _, dropped := pool.dropRejectedEntry(key, entry); dropped {
+			t.Error("dropRejectedEntry() removed a replacement built after the refusal")
+		}
+		pool.mu.Lock()
+		still := pool.entries[key] == replacement
+		pool.mu.Unlock()
+		if !still {
+			t.Error("the replacement is gone from the pool")
+		}
+	})
+
+	t.Run("a key holding no entry at all", func(t *testing.T) {
+		pool.mu.Lock()
+		delete(pool.entries, key)
+		pool.mu.Unlock()
+
+		if _, _, dropped := pool.dropRejectedEntry(key, entry); dropped {
+			t.Error("dropRejectedEntry() reported dropping an entry that was already gone")
+		}
+	})
+
+	t.Run("an entry that never reached the LRU", func(t *testing.T) {
+		// A build that failed after the entry was made but before
+		// insertEntry gave it a list element. Removing a nil element from a
+		// list panics, so the guard is what keeps the eviction from taking
+		// the process down.
+		partial := &Entry{server: entry.server, client: entry.client, serverConfig: entry.serverConfig}
+		pool.mu.Lock()
+		pool.entries[key] = partial
+		pool.mu.Unlock()
+
+		if _, _, dropped := pool.dropRejectedEntry(key, partial); !dropped {
+			t.Error("dropRejectedEntry() left behind an entry that had no LRU element")
+		}
+	})
+}
+
+// TestEvictStaleCredential_KeepsWhatIsNotStale verifies the re-check the
+// staleness eviction makes under the write lock.
+//
+// The sweep spots a candidate under the read lock and takes the write lock
+// afterwards, so all three of these are what it may find in between: the key
+// gone, the age limit no longer in force, and an entry a concurrent request
+// has just revalidated. Evicting in any of them throws away a check made a
+// moment ago and sends the next caller round the whole build again.
+func TestEvictStaleCredential_KeepsWhatIsNotStale(t *testing.T) {
+	const token = "glpat-stale-check"
+	key := sessionKey(token, stubGitLabBase)
+
+	tests := []struct {
+		name    string
+		age     time.Duration
+		prepare func(t *testing.T, pool *ServerPool)
+		wantOut bool
+	}{
+		{
+			name: "the key is gone",
+			age:  time.Nanosecond,
+			prepare: func(t *testing.T, pool *ServerPool) {
+				t.Helper()
+				pool.mu.Lock()
+				delete(pool.entries, key)
+				pool.mu.Unlock()
+			},
+		},
+		{
+			// Zeroed directly: WithMaxCredentialAge maps a non-positive
+			// value to the default, so a pool built outside New is the only
+			// shape that carries no ceiling, and it is the shape both of
+			// these guards exist for.
+			name: "the age limit is not in force",
+			age:  time.Nanosecond,
+			prepare: func(t *testing.T, pool *ServerPool) {
+				t.Helper()
+				pool.mu.Lock()
+				pool.maxCredentialAge = 0
+				pool.mu.Unlock()
+			},
+		},
+		{
+			name: "the entry was revalidated in the meantime",
+			age:  time.Hour,
+		},
+		{
+			// Backdated rather than waited out. A one-nanosecond ceiling and
+			// one elapsed nanosecond are not the same thing: Windows reads its
+			// monotonic clock in ticks, so two calls inside one tick are the
+			// same instant, time.Since answers zero, and nothing is ever older
+			// than any ceiling. This case failed there and nowhere else.
+			name: "a genuinely stale entry is evicted",
+			age:  time.Minute,
+			prepare: func(t *testing.T, pool *ServerPool) {
+				t.Helper()
+				pool.mu.Lock()
+				defer pool.mu.Unlock()
+				entry, ok := pool.entries[key]
+				if !ok {
+					t.Fatal("the entry to age is not in the pool")
+				}
+				entry.lastValidated = time.Now().Add(-time.Hour)
+			},
+			wantOut: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := New(testConfig(stubGitLabBase), testFactory(), WithMaxCredentialAge(tt.age))
+			if _, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil); err != nil {
+				t.Fatalf("GetOrCreateEntry(): %v", err)
+			}
+			if tt.prepare != nil {
+				tt.prepare(t, pool)
+			}
+
+			before := pool.metrics.StaleCredentialEvictions.Load()
+			pool.evictStaleCredential(key)
+			evicted := pool.metrics.StaleCredentialEvictions.Load() - before
+
+			// The counter rather than the map: for the first case the key is
+			// absent either way, and only the counter says whether this call
+			// is what removed it.
+			if (evicted > 0) != tt.wantOut {
+				t.Errorf("stale evictions = %d, want an eviction: %v", evicted, tt.wantOut)
+			}
+		})
+	}
+}
+
+// TestSweepCadences_ResolveTheirDefaults verifies the two durations the
+// background goroutines are started with.
+//
+// Both are read once, at start, and then live inside a goroutine that runs
+// for the life of the process, which is why they are worth asserting on their
+// own: a cadence resolved to zero is a ticker that panics into the sweep's
+// own recover, and the pool then quietly has no idle eviction at all. The
+// probe wait resolved to zero is subtler still — the queue is usually not
+// full, so the caller wins the race about half the time and is told the queue
+// is saturated the rest.
+func TestSweepCadences_ResolveTheirDefaults(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the probe wait", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name       string
+			configured time.Duration
+			want       time.Duration
+		}{
+			{name: "unset falls back to the default", want: credentialProbeQueueTimeout},
+			{name: "negative falls back to the default", configured: -time.Second, want: credentialProbeQueueTimeout},
+			{name: "configured is used", configured: 50 * time.Millisecond, want: 50 * time.Millisecond},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				pool := &ServerPool{probeQueueTimeout: tc.configured}
+				if got := pool.probeWait(); got != tc.want {
+					t.Errorf("probeWait() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("the idle sweep cadence", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name     string
+			timeout  time.Duration
+			override time.Duration
+			want     time.Duration
+		}{
+			{name: "a long timeout is swept four times over", timeout: 8 * time.Minute, want: 2 * time.Minute},
+			{name: "a short timeout is floored", timeout: time.Second, want: idleSweepMinInterval},
+			{name: "an override wins", timeout: time.Hour, override: time.Millisecond, want: time.Millisecond},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				pool := &ServerPool{idleTimeout: tc.timeout, idleSweepInterval: tc.override}
+				if got := pool.idleSweepCadence(); got != tc.want {
+					t.Errorf("idleSweepCadence() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+}
+
+// TestBackgroundSweeps_StopWhenTheirContextIsDone verifies that both sweeps
+// are bound to the context they were started with.
+//
+// The pool outlives a request but not the server, and these goroutines are
+// how it holds credentials open. A sweep that ignored its context would keep
+// polling GitLab for every pooled credential after shutdown, and in a test
+// binary would keep doing so between packages. The context each was given is
+// the only thing that ends them, so a guard that replaced it with a
+// background one would leave nothing able to.
+func TestBackgroundSweeps_StopWhenTheirContextIsDone(t *testing.T) {
+	tests := []struct {
+		name  string
+		start func(pool *ServerPool, ctx context.Context)
+		want  string
+	}{
+		{
+			name:  "idle eviction",
+			start: (*ServerPool).StartIdleEviction,
+			want:  "idle eviction stopped",
+		},
+		{
+			name:  "revalidation",
+			start: (*ServerPool).StartRevalidation,
+			want:  "revalidation stopped",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logged := &syncLogBuffer{}
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(logged, nil)))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			pool := New(testConfig(stubGitLabBase), testFactory(),
+				WithIdleTimeout(time.Hour),
+				WithRevalidateInterval(time.Hour))
+			// Already done, so the goroutine's very first select must take
+			// the shutdown arm rather than wait an hour for a tick.
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			tt.start(pool, ctx)
+
+			deadline := time.After(5 * time.Second)
+			for !strings.Contains(logged.String(), tt.want) {
+				select {
+				case <-deadline:
+					t.Fatalf("the sweep did not stop with its context; log = %q", logged.String())
+				default:
+					runtime.Gosched()
+				}
+			}
+		})
+	}
+}
+
+// syncLogBuffer collects log output from a goroutine the test does not own.
+type syncLogBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+// Write appends to the buffer under the lock.
+func (b *syncLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+// String returns everything written so far.
+func (b *syncLogBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// TestRevalidateAll_EntryEvictedDuringTheCheck_IsNotResurrected verifies the
+// re-read the success path makes before stamping an entry as revalidated.
+//
+// revalidateAll works from a snapshot and calls GitLab without the lock, so an
+// entry can be evicted while its own check is in flight: by a 401 on a
+// concurrent call, by size pressure, or by the idle sweep. Writing the
+// timestamp by key alone at that point would put the evicted entry back in the
+// map, and the pool would then serve a credential it had already decided to
+// drop.
+//
+// The eviction is triggered from inside the GitLab handler, which is the one
+// place guaranteed to run between the snapshot and the update.
+func TestRevalidateAll_EntryEvictedDuringTheCheck_IsNotResurrected(t *testing.T) {
+	const token = "glpat-evicted-mid-check"
+	key := sessionKey(token, stubGitLabBase)
+
+	var pool *ServerPool
+	var evictOnce sync.Once
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		evictOnce.Do(func() {
+			if pool != nil {
+				pool.evictByKey(key)
+			}
+		})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	}))
+	defer srv.Close()
+
+	pool = New(testConfig(stubGitLabBase), testFactory())
+	entry, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(): %v", err)
+	}
+	answering, err := gitlabclient.NewClientWithTokenRetries(srv.URL, token, false, true)
+	if err != nil {
+		t.Fatalf("NewClientWithTokenRetries(): %v", err)
+	}
+	pool.mu.Lock()
+	entry.client = answering
+	pool.mu.Unlock()
+
+	pool.revalidateAll(context.Background())
+
+	pool.mu.Lock()
+	_, present := pool.entries[key]
+	pool.mu.Unlock()
+	if present {
+		t.Error("an entry evicted during its own check was written back into the pool")
+	}
+	if got := pool.metrics.RevalidationsSucceeded.Load(); got != 1 {
+		t.Errorf("RevalidationsSucceeded = %d, want 1: the check itself passed", got)
+	}
+}
+
+// TestEntryFromBuild_RefusesWhatIsNotAnEntry verifies the boundary where a
+// shared build result stops being typed.
+//
+// singleflight hands back an any, and every path above this returns an entry
+// or an error, so nothing in the pool can produce these two answers today.
+// They are asserted here because the alternative to refusing is a nil
+// dereference one frame up, in a request handler: a 500 with a stack trace
+// instead of a refusal that names the cause.
+func TestEntryFromBuild_RefusesWhatIsNotAnEntry(t *testing.T) {
+	tests := []struct {
+		name    string
+		built   any
+		wantErr bool
+	}{
+		{name: "a built entry", built: &Entry{}},
+		{name: "nothing at all", built: nil, wantErr: true},
+		{name: "a typed nil entry", built: (*Entry)(nil), wantErr: true},
+		{name: "something that is not an entry", built: "server", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry, err := entryFromBuild(tt.built)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("entryFromBuild(%v) = %v, want an error", tt.built, entry)
+				}
+				if entry != nil {
+					t.Errorf("entryFromBuild() returned %v beside its error", entry)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("entryFromBuild() error = %v", err)
+			}
+			if entry == nil {
+				t.Error("entryFromBuild() returned no entry and no error")
+			}
+		})
+	}
+}
+
+// TestBackgroundSweeps_SurviveAPanickingCallback verifies that a panic raised
+// inside a caller-supplied hook does not take the pool's background
+// goroutines down with it.
+//
+// Both sweeps call back into cmd/server: the idle sweep asks whether an entry
+// is still in use, and eviction tells the caller to stop that credential's
+// watchers. A panic in either is a bug in this process, but losing the
+// goroutine to it is worse than the bug: idle eviction and revalidation would
+// both stop silently, and the pool would grow to its cap holding credentials
+// nobody has checked since startup. The recover is what keeps the failure to
+// one sweep.
+// awaitSweepTicks waits for two signals from a sweep whose callback panics
+// every time, and says which of the two failures happened.
+//
+// Two, because one proves only that the panic was caught. A recovery in the
+// goroutine's own defer catches the first just as well and then returns,
+// taking the ticker with it, so the second signal is the whole question.
+func awaitSweepTicks(t *testing.T, ticks <-chan struct{}, never, stopped string) {
+	t.Helper()
+	for tick := 1; tick <= 2; tick++ {
+		select {
+		case <-ticks:
+		case <-time.After(5 * time.Second):
+			if tick == 1 {
+				t.Fatal(never)
+			}
+			t.Fatal(stopped)
+		}
+	}
+}
+
+func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
+	t.Run("the idle sweep", func(t *testing.T) {
+		// Two, not one: surviving the panic is the point, and a sweep that
+		// recovered in the goroutine's own defer would also deliver the first.
+		// Only the second says the ticker is still there.
+		panicked := make(chan struct{}, 2)
+		pool := New(testConfig(stubGitLabBase), testFactory(),
+			WithIdleTimeout(time.Nanosecond),
+			WithInUse(func(*Entry) bool {
+				select {
+				case panicked <- struct{}{}:
+				default:
+				}
+				panic("in-use callback blew up")
+			}))
+		// The derived cadence is floored at a minute so an operator's short
+		// timeout cannot turn the sweep into a busy loop, which puts the
+		// first tick further away than any test may wait.
+		pool.idleSweepInterval = time.Millisecond
+		if _, err := pool.GetOrCreateEntry("glpat-idle-panic", stubGitLabBase, nil); err != nil {
+			t.Fatalf("GetOrCreateEntry(): %v", err)
+		}
+
+		pool.StartIdleEviction(t.Context())
+
+		awaitSweepTicks(t, panicked,
+			"the idle sweep never ran",
+			"the idle sweep ran once and stopped: the panic took the ticker with it, so nothing is ever swept again")
+		// Reaching here at all is half the assertion: an unrecovered panic in
+		// a goroutine ends the test binary.
+	})
+
+	// The recovery both goroutines defer, called directly, so the ordinary
+	// return through it is asserted as well as the panic.
+	t.Run("the shared recovery", func(t *testing.T) {
+		var logged strings.Builder
+		previous := slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+		t.Cleanup(func() { slog.SetDefault(previous) })
+
+		func() {
+			defer recoverSweep(context.Background(), "idle eviction")
+			panic("in-use callback blew up")
+		}()
+
+		// Reaching here at all is half the assertion: an unrecovered panic
+		// ends the test binary.
+		for _, want := range []string{"idle eviction", "in-use callback blew up"} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(logged.String(), want) {
+					t.Errorf("log = %q, want it to mention %q", logged.String(), want)
+				}
+			})
+		}
+
+		logged.Reset()
+		func() { defer recoverSweep(context.Background(), "idle eviction") }()
+		if logged.Len() != 0 {
+			t.Errorf("a sweep that returned normally logged %q", logged.String())
+		}
+	})
+
+	t.Run("revalidation", func(t *testing.T) {
+		// Room for two, and two entries below, for the same reason the idle
+		// sweep wants two ticks: one eviction proves the panic was caught, and
+		// only a second proves the sweep that caught it is still running.
+		panicked := make(chan struct{}, 2)
+		refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
+		}))
+		defer refusing.Close()
+
+		cfg := testConfig(stubGitLabBase)
+		pool := New(cfg, testFactory(),
+			WithRevalidateInterval(10*time.Millisecond),
+			WithOnEvict(func(*Entry) {
+				select {
+				case panicked <- struct{}{}:
+				default:
+				}
+				panic("evict callback blew up")
+			}))
+		// Two entries built for one assertion, not two cases: the second
+		// exists so that a second eviction has something to evict, which is
+		// the whole question below.
+		// sequential: dependent setup for the assertion after the loop
+		for _, token := range []string{"glpat-revalidate-panic-1", "glpat-revalidate-panic-2"} {
+			entry, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil)
+			if err != nil {
+				t.Fatalf("GetOrCreateEntry(%q): %v", token, err)
+			}
+			// Point each entry's own client at an instance that refuses it, so
+			// revalidation reaches a verdict and evicts.
+			rejecting, err := gitlabclient.NewClientWithTokenRetries(refusing.URL, token, false, true)
+			if err != nil {
+				t.Fatalf("NewClientWithToken(): %v", err)
+			}
+			pool.mu.Lock()
+			entry.client = rejecting
+			pool.mu.Unlock()
+		}
+
+		pool.StartRevalidation(t.Context())
+
+		awaitSweepTicks(t, panicked,
+			"revalidation never evicted a refused entry",
+			"revalidation evicted once and stopped: the panic took the ticker with it, so no credential is ever re-checked again")
+	})
+}
+
+// TestGetOrCreateEntry_NoCredentialAgeCeiling_NeverCallsAnEntryStale verifies
+// the fast path on a pool that carries no re-check ceiling.
+//
+// WithMaxCredentialAge maps a non-positive value to the default, so this is
+// the shape only a pool assembled outside New has. The staleness test is the
+// first thing a cache hit evaluates, and reading it without the ceiling check
+// would compare an entry's age against a zero duration: every hit older than
+// an instant would look stale, and the pool would rebuild a credential on
+// every single request.
+func TestGetOrCreateEntry_NoCredentialAgeCeiling_NeverCallsAnEntryStale(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), testFactory())
+	pool.mu.Lock()
+	pool.maxCredentialAge = 0
+	pool.mu.Unlock()
+
+	first, err := pool.GetOrCreateEntry("glpat-no-ceiling", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(): %v", err)
+	}
+	// Backdated well past any ceiling the pool would have had, so the hit
+	// below can only be served by the ceiling check itself.
+	pool.mu.Lock()
+	first.lastValidated = time.Now().Add(-30 * 24 * time.Hour)
+	pool.mu.Unlock()
+
+	second, err := pool.GetOrCreateEntry("glpat-no-ceiling", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry() on the second call: %v", err)
+	}
+	if second != first {
+		t.Error("the entry was rebuilt: an unset ceiling was read as one of zero, so every hit is stale")
+	}
+	if got := pool.metrics.Hits.Load(); got != 1 {
+		t.Errorf("Hits = %d, want 1", got)
+	}
+}
+
+// TestEntryConfigLogValues_TolerateAPartiallyBuiltEntry verifies the accessor
+// eviction logging goes through.
+//
+// It is called from paths that run while an entry is still being assembled,
+// so both halves of its guard are real: an entry that is not there at all,
+// and one whose configuration has not been resolved yet. A log line is not
+// worth a panic in an eviction path.
+func TestEntryConfigLogValues_TolerateAPartiallyBuiltEntry(t *testing.T) {
+	tests := []struct {
+		name           string
+		entry          *Entry
+		wantURL        string
+		wantEnterprise bool
+	}{
+		{name: "no entry at all", entry: nil},
+		{name: "an entry with no configuration yet", entry: &Entry{}},
+		{
+			name:    "a fully built entry",
+			entry:   &Entry{serverConfig: &config.ServerConfig{GitLabURL: "https://gitlab.example.com"}},
+			wantURL: "https://gitlab.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotURL, gotEnterprise := entryConfigLogValues(tt.entry)
+			if gotURL != tt.wantURL {
+				t.Errorf("gitlabURL = %q, want %q", gotURL, tt.wantURL)
+			}
+			if gotEnterprise != tt.wantEnterprise {
+				t.Errorf("enterprise = %v, want %v", gotEnterprise, tt.wantEnterprise)
+			}
+		})
 	}
 }

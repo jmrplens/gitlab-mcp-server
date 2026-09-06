@@ -231,6 +231,51 @@ func TestRejectedTokens_IsScopedToTheInstance(t *testing.T) {
 // as though it knew something, and an entry past its TTL must be dropped on the
 // way out so a token refused an hour ago is verified upstream again rather than
 // refused from memory forever.
+// TestRejectedTokens_Lookup_AnswersWhatItKnows verifies the two answers the
+// negative cache gives on an enabled cache that has not expired: the recorded
+// reason for a token it holds, and "nothing known" for one it does not.
+//
+// Contains answers the same question as a boolean and is what most of this
+// file exercises, so Lookup's own live path and its own miss had never been
+// taken. The kind is the load-bearing half: a refusal recorded because this
+// deployment does not accept the token's application must not come back as
+// GitLab's own verdict, or the caller is told to re-authorize against an
+// instance that was perfectly happy with the credential.
+func TestRejectedTokens_Lookup_AnswersWhatItKnows(t *testing.T) {
+	t.Parallel()
+
+	const instance = "https://gitlab.example.com"
+	cache := NewRejectedTokens(8, time.Hour)
+	cache.RecordKind(instance, "unaccepted-token", RejectionUnaccepted)
+	cache.Record(instance, "invalid-token")
+
+	tests := []struct {
+		name       string
+		token      string
+		wantKind   RejectionKind
+		wantKnown  bool
+		wantLenOne bool
+	}{
+		{name: "a token refused by this deployment", token: "unaccepted-token", wantKind: RejectionUnaccepted, wantKnown: true},
+		{name: "a token GitLab itself refused", token: "invalid-token", wantKind: RejectionInvalid, wantKnown: true},
+		{name: "a token nothing is known about", token: "unseen-token", wantKind: RejectionInvalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			kind, known := cache.Lookup(instance, tt.token)
+			if known != tt.wantKnown {
+				t.Errorf("Lookup() known = %v, want %v", known, tt.wantKnown)
+			}
+			if kind != tt.wantKind {
+				t.Errorf("Lookup() kind = %v, want %v", kind, tt.wantKind)
+			}
+		})
+	}
+}
+
 func TestRejectedTokens_Lookup_HonorsDisabledAndExpiry(t *testing.T) {
 	t.Parallel()
 

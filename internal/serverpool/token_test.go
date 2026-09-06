@@ -259,6 +259,46 @@ func TestResolveRequestOptions_IgnoredOptions(t *testing.T) {
 	}
 }
 
+// TestRequestOptions_ReportNothingWhenNothingWasIgnored verifies the negative
+// answer of both predicates.
+//
+// They gate a per-request log line, and only their true half was ever
+// evaluated. A predicate stuck at true would put one "ignored options" warning
+// on every ordinary request, which is the noise these were written to avoid,
+// and no test would have failed.
+func TestRequestOptions_ReportNothingWhenNothingWasIgnored(t *testing.T) {
+	t.Run("a request carrying no options at all", func(t *testing.T) {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+
+		options, err := ResolveRequestOptions(req, "https://gitlab.example.com/")
+		if err != nil {
+			t.Fatalf("ResolveRequestOptions() error: %v", err)
+		}
+		if options.HasIgnoredOptions() {
+			t.Errorf("HasIgnoredOptions() = true for a bare request, ignoring %v", options.IgnoredOptionsCopy())
+		}
+		if options.HasDeprecatedOptions() {
+			t.Errorf("HasDeprecatedOptions() = true for a bare request, ignoring %v", options.DeprecatedOptionsCopy())
+		}
+	})
+
+	t.Run("options ignored but none of them deprecated", func(t *testing.T) {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+		req.Header.Set("RATE-LIMIT-RPS", "999")
+
+		options, err := ResolveRequestOptions(req, "https://gitlab.example.com/")
+		if err != nil {
+			t.Fatalf("ResolveRequestOptions() error: %v", err)
+		}
+		if !options.HasIgnoredOptions() {
+			t.Error("HasIgnoredOptions() = false although RATE_LIMIT_RPS was ignored")
+		}
+		if options.HasDeprecatedOptions() {
+			t.Errorf("HasDeprecatedOptions() = true, want false: %v is ignored but not deprecated", options.DeprecatedOptionsCopy())
+		}
+	})
+}
+
 // TestResolveRequestOptions_ServerManagedHeadersIgnoredWithoutDefault verifies
 // that config-like request headers never override MCP server configuration,
 // even in multi-instance mode where GITLAB-URL is accepted.

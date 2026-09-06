@@ -1521,6 +1521,15 @@ func TestVerificationRedirect_Policy(t *testing.T) {
 		// is nowhere, so it is not the instance, and the policy must say so
 		// rather than let net/http try to dial an empty address.
 		{name: "destination without a host", origin: "https://gitlab.example.com/api/v4/user", dest: "https:///api/v4/user", wantErr: true},
+		// The mirror of the row above: an origin with no host is nowhere
+		// too, and nothing can be a subdomain of it. Without this the
+		// comparison would accept any destination whose name happens to end
+		// in the empty string, which is all of them.
+		{name: "origin without a host", origin: "https:///api/v4/user", dest: "https://gitlab.example.com/api/v4/user", wantErr: true},
+		// The dot boundary lands correctly and the suffix still differs, so
+		// only the suffix test refuses this one. A dot-boundary check on its
+		// own would follow the hop.
+		{name: "a dot boundary over a different parent", origin: "https://gitlab.example.com/api/v4/user", dest: "https://a.xitlab.example.com/api/v4/user", wantErr: true},
 		{name: "ten hops already made", origin: "https://gitlab.example.com/api/v4/user", dest: "https://gitlab.example.com/api/v4/user", hops: 10, wantErr: true},
 	}
 
@@ -1683,5 +1692,155 @@ func TestIntrospectToken_UnreachableInstance_StillAssumesAPI(t *testing.T) {
 	}
 	if got.answered {
 		t.Error("introspectToken() recorded an answer from an instance that never replied")
+	}
+}
+
+// TestSatisfiesMinimum_ApiCoversReadAPI verifies the rule the door depends on
+// when it decides whether a credential meets the deployment's minimum.
+//
+// Only one row of it had ever been evaluated. The rule that api supersedes
+// read_api is the reason this function exists rather than a plain set
+// containment, and it was the untested half: every api-only token would get a
+// 403 for lacking a scope it strictly includes, and nothing here would have
+// said so. The empty minimum is the other unvisited branch, and it is the
+// answer for a caller that demands nothing.
+func TestSatisfiesMinimum_ApiCoversReadAPI(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		granted []string
+		minimum string
+		want    bool
+	}{
+		{name: "no minimum admits anything", granted: nil, minimum: "", want: true},
+		{name: "no minimum admits an unknown scope", granted: []string{"read_user"}, minimum: "", want: true},
+		{name: "the minimum is granted outright", granted: []string{ScopeReadAPI}, minimum: ScopeReadAPI, want: true},
+		{name: "api covers a read_api minimum", granted: []string{ScopeAPI}, minimum: ScopeReadAPI, want: true},
+		{name: "read_api does not cover an api minimum", granted: []string{ScopeReadAPI}, minimum: ScopeAPI},
+		{name: "an unrelated scope covers nothing", granted: []string{"read_user"}, minimum: ScopeReadAPI},
+		{name: "no scopes at all", granted: nil, minimum: ScopeReadAPI},
+		// api only supersedes read_api. A minimum this deployment does not
+		// name must not be satisfied by holding something broader in a
+		// different dimension.
+		{name: "api does not cover an unrelated minimum", granted: []string{ScopeAPI}, minimum: "read_registry"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := SatisfiesMinimum(tt.granted, tt.minimum); got != tt.want {
+				t.Errorf("SatisfiesMinimum(%v, %q) = %v, want %v", tt.granted, tt.minimum, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestExpandImpliedScopes_LeavesAnAlreadyCompleteSetAlone verifies the
+// normalization that writes GitLab's implicit grant into the scope list.
+//
+// The row that was missing is a token GitLab already reports both scopes for:
+// appending read_api again would tell the SDK's containment check about a
+// duplicate, and would allocate a copy of the slice on every verification for
+// nothing.
+func TestExpandImpliedScopes_LeavesAnAlreadyCompleteSetAlone(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		scopes []string
+		want   []string
+	}{
+		{name: "api alone gains read_api", scopes: []string{ScopeAPI}, want: []string{ScopeAPI, ScopeReadAPI}},
+		{name: "api and read_api are left alone", scopes: []string{ScopeAPI, ScopeReadAPI}, want: []string{ScopeAPI, ScopeReadAPI}},
+		{name: "read_api alone is left alone", scopes: []string{ScopeReadAPI}, want: []string{ScopeReadAPI}},
+		{name: "no scopes at all", scopes: nil, want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := expandImpliedScopes(tt.scopes); !slices.Equal(got, tt.want) {
+				t.Errorf("expandImpliedScopes(%v) = %v, want %v", tt.scopes, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestExpiryFromSeconds_RejectsWhatIsNotADeadline verifies how an OAuth
+// expires_in is read.
+//
+// A zero or negative count is not a deadline in the past to be honored: it is
+// a field that says nothing, and turning it into a moment already gone would
+// cap every cached identity at the shortest lifetime the cache allows, for
+// every token an instance reports that way.
+func TestExpiryFromSeconds_RejectsWhatIsNotADeadline(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		raw      any
+		wantZero bool
+		// wantIn is how far ahead the deadline must land, when it is one.
+		wantIn time.Duration
+	}{
+		{name: "a positive count is a deadline", raw: float64(3600), wantIn: time.Hour},
+		{name: "a single second", raw: float64(1), wantIn: time.Second},
+		{name: "zero says nothing", raw: float64(0), wantZero: true},
+		{name: "a negative count says nothing", raw: float64(-1), wantZero: true},
+		{name: "a missing field", raw: nil, wantZero: true},
+		{name: "a field of the wrong type", raw: "3600", wantZero: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			before := time.Now()
+			got := expiryFromSeconds(tt.raw)
+			if got.IsZero() != tt.wantZero {
+				t.Fatalf("expiryFromSeconds(%v) = %v, want zero: %v", tt.raw, got, tt.wantZero)
+			}
+			if tt.wantZero {
+				return
+			}
+			// The count is seconds, and the unit it is multiplied by is what
+			// decides whether an hour-long token is cached for an hour or for
+			// a microsecond. A minute of slack absorbs a slow machine without
+			// admitting a wrong unit.
+			ahead := got.Sub(before)
+			if ahead < tt.wantIn || ahead > tt.wantIn+time.Minute {
+				t.Errorf("expiryFromSeconds(%v) lands %v ahead, want about %v", tt.raw, ahead, tt.wantIn)
+			}
+		})
+	}
+}
+
+// TestUpstreamError_NamesTheStatusWhenGitLabAnswered verifies the two
+// descriptions the error carries.
+//
+// An operator reading the log has to tell "the instance said no to the
+// request" from "nothing came back at all", because the first is a
+// configuration or rate-limit problem at a known endpoint and the second is a
+// network or DNS one. Only the unreachable wording had a test.
+func TestUpstreamError_NamesTheStatusWhenGitLabAnswered(t *testing.T) {
+	t.Parallel()
+
+	answered := &UpstreamError{Status: http.StatusTooManyRequests, Err: errors.New("slow down")}
+	message := answered.Error()
+	for _, want := range []string{"429", "slow down"} {
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+			if !strings.Contains(message, want) {
+				t.Errorf("Error() = %q, want it to mention %q", message, want)
+			}
+		})
+	}
+	if strings.Contains(message, "unreachable") {
+		t.Errorf("Error() = %q, want it not to call an answered request unreachable", message)
+	}
+
+	unreachable := &UpstreamError{Err: errors.New("dial refused")}
+	if !strings.Contains(unreachable.Error(), "unreachable") {
+		t.Errorf("Error() = %q, want it to say the instance was unreachable", unreachable.Error())
 	}
 }

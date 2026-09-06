@@ -415,6 +415,11 @@ type stubRoundTripper struct {
 	body string
 	// status is the answer's status code; zero means 200.
 	status int
+	// nilResponse answers (nil, nil), and nilBody answers a response whose
+	// Body is nil. Both violate the [http.RoundTripper] contract; they exist
+	// because this transport is the innermost layer and guards against them.
+	nilResponse bool
+	nilBody     bool
 }
 
 // RoundTrip returns the stubbed response or error.
@@ -422,13 +427,99 @@ func (s *stubRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 	if s.fail {
 		return nil, errors.New("stub transport failure")
 	}
+	if s.nilResponse {
+		return nil, nil //nolint:nilnil // a contract-violating transport is what this stub imitates
+	}
 	status := s.status
 	if status == 0 {
 		status = http.StatusOK
 	}
-	return &http.Response{
+	resp := &http.Response{
 		StatusCode: status,
 		Body:       io.NopCloser(strings.NewReader(s.body)),
 		Header:     make(http.Header),
-	}, nil
+	}
+	if s.nilBody {
+		resp.Body = nil
+	}
+	return resp, nil
+}
+
+// TestResponseLimitTransport_ContractViolatingBase_IsPassedThrough verifies
+// that the innermost transport survives a base that breaks the
+// [http.RoundTripper] contract, rather than dereferencing what it was handed.
+//
+// Two shapes are pinned. A base that answers (nil, nil) must not reach the
+// unauthorized hook, since there is no status to judge, and must not be
+// wrapped, since there is no body to bound. A base that answers a response
+// with a nil Body must be returned untouched for the same reason: wrapping
+// nil would turn a malformed answer into a nil dereference in whichever
+// layer above reads it.
+//
+// These are the branches an in-process transport stack can produce and a real
+// GitLab cannot, so nothing else in this package reaches them: net/http's own
+// transport always returns one of the two valid shapes.
+func TestResponseLimitTransport_ContractViolatingBase_IsPassedThrough(t *testing.T) {
+	// roundTrip reports the shape of what came back rather than the response
+	// itself: every case here is about a response with no body to hand on,
+	// and returning one would only be a body nothing can close.
+	roundTrip := func(t *testing.T, base http.RoundTripper) (respWasNil, bodyWasNil bool, fired int) {
+		t.Helper()
+		client := &Client{}
+		client.SetMaxResponseBytes(1 << 20)
+		client.SetOnUnauthorized(func() { fired++ })
+
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://gitlab.example.com/x", http.NoBody)
+		if err != nil {
+			t.Fatalf("NewRequest unexpected error: %v", err)
+		}
+		resp, err := (&responseLimitTransport{base: base, client: client}).RoundTrip(req)
+		if err != nil {
+			t.Fatalf("RoundTrip() unexpected error: %v", err)
+		}
+		if resp == nil {
+			return true, true, fired
+		}
+		if resp.Body == nil {
+			return false, true, fired
+		}
+		defer resp.Body.Close()
+		return false, false, fired
+	}
+
+	t.Run("a base that answers nothing at all", func(t *testing.T) {
+		respWasNil, _, fired := roundTrip(t, &stubRoundTripper{nilResponse: true})
+		if !respWasNil {
+			t.Error("RoundTrip() invented a response, want the base's nil passed through")
+		}
+		if fired != 0 {
+			t.Errorf("the unauthorized hook fired %d times for a response that never existed", fired)
+		}
+	})
+
+	t.Run("a base that answers a response with no body", func(t *testing.T) {
+		respWasNil, bodyWasNil, fired := roundTrip(t, &stubRoundTripper{nilBody: true})
+		if respWasNil {
+			t.Fatal("RoundTrip() = nil, want the base's response passed through")
+		}
+		if !bodyWasNil {
+			t.Error("the nil body was replaced, want it passed through unwrapped")
+		}
+		if fired != 0 {
+			t.Errorf("the unauthorized hook fired %d times on a 200", fired)
+		}
+	})
+
+	t.Run("a 401 with no body still fires the hook", func(t *testing.T) {
+		respWasNil, bodyWasNil, fired := roundTrip(t, &stubRoundTripper{nilBody: true, status: http.StatusUnauthorized})
+		if respWasNil {
+			t.Fatal("RoundTrip() = nil, want the base's response passed through")
+		}
+		if !bodyWasNil {
+			t.Error("the nil body was replaced, want it passed through unwrapped")
+		}
+		if fired != 1 {
+			t.Errorf("the unauthorized hook fired %d times on a 401, want once", fired)
+		}
+	})
 }

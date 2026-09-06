@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -541,6 +542,217 @@ func TestLoadEnvFiles_UnparsableWorkingDirectoryFile_StillReportsIt(t *testing.T
 	t.Run("no keys are claimed", func(t *testing.T) {
 		if len(report.IgnoredKeys) != 0 {
 			t.Errorf("IgnoredKeys = %v, want none from an unparsable file", report.IgnoredKeys)
+		}
+	})
+}
+
+// TestIgnoredWorkingDirEnvFile_OnlyReportsAFileWorthNaming verifies which
+// working-directory entries are reported as an ignored .env at all.
+//
+// The warning exists to explain a file whose settings did not take effect, so
+// it must not fire for something that has no settings to lose: a directory
+// that happens to be named .env, an empty one, or the very file the operator
+// pointed GITLAB_MCP_ENV_FILE at, which was loaded on purpose. Only the last
+// of those had a test; the first two are the shape a `mkdir .env` or a
+// `touch .env` produces, and warning about either sends the operator looking
+// for a precedence bug that is not there.
+func TestIgnoredWorkingDirEnvFile_OnlyReportsAFileWorthNaming(t *testing.T) {
+	tests := []struct {
+		name string
+		// setup prepares the working directory and returns the value of the
+		// explicit path the caller had resolved, if any.
+		setup    func(t *testing.T, work string) string
+		wantPath bool
+		wantKeys []string
+	}{
+		{
+			name: "no working-directory file at all",
+			setup: func(*testing.T, string) string {
+				return ""
+			},
+		},
+		{
+			name: "a directory that happens to be named .env",
+			setup: func(t *testing.T, work string) string {
+				t.Helper()
+				if err := os.Mkdir(filepath.Join(work, ".env"), 0o750); err != nil {
+					t.Fatalf("mkdir .env: %v", err)
+				}
+				return ""
+			},
+		},
+		{
+			name: "an empty .env sets nothing and is not worth a warning",
+			setup: func(t *testing.T, work string) string {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(work, ".env"), nil, 0o600); err != nil {
+					t.Fatalf("write empty .env: %v", err)
+				}
+				return ""
+			},
+		},
+		{
+			name: "the file the operator named is not an ignored file",
+			setup: func(t *testing.T, work string) string {
+				t.Helper()
+				return writeEnvFile(t, work, ".env", "GITLAB_URL=https://named.example.com")
+			},
+		},
+		{
+			name: "a .env beside a differently named explicit file is still ignored",
+			setup: func(t *testing.T, work string) string {
+				t.Helper()
+				writeEnvFile(t, work, ".env", "GITLAB_URL=https://ignored.example.com")
+				return writeEnvFile(t, work, "custom.env", "GITLAB_URL=https://named.example.com")
+			},
+			wantPath: true,
+			wantKeys: []string{"GITLAB_URL"},
+		},
+		{
+			name: "a .env with content and no explicit file is ignored",
+			setup: func(t *testing.T, work string) string {
+				t.Helper()
+				writeEnvFile(t, work, ".env", "GITLAB_TOKEN=glpat-ignored")
+				return ""
+			},
+			wantPath: true,
+			wantKeys: []string{"GITLAB_TOKEN"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			work := t.TempDir()
+			t.Chdir(work)
+			explicit := tt.setup(t, work)
+
+			path, keys := ignoredWorkingDirEnvFile(explicit)
+
+			if tt.wantPath && path == "" {
+				t.Fatal("ignoredWorkingDirEnvFile() named no file, want the working-directory .env")
+			}
+			if !tt.wantPath && path != "" {
+				t.Fatalf("ignoredWorkingDirEnvFile() = %q, want nothing reported", path)
+			}
+			if !slices.Equal(keys, tt.wantKeys) {
+				t.Errorf("keys = %v, want %v", keys, tt.wantKeys)
+			}
+		})
+	}
+}
+
+// TestLoadEnvFiles_NoHomeDirectory_LoadsWhatIsLeft verifies that a process
+// with no resolvable home directory still loads the file it was pointed at.
+//
+// A daemon started by an init system, a container running as a user with no
+// passwd entry, and a cron job all reach os.UserHomeDir with nothing to
+// return. The home file is a convenience; losing it must not take the
+// explicit file with it, and must not be an error the operator sees.
+func TestLoadEnvFiles_NoHomeDirectory_LoadsWhatIsLeft(t *testing.T) {
+	clearEnvFileKeys(t)
+	resetEnvFileAnnouncement(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	named := writeEnvFile(t, work, "custom.env", "GITLAB_URL=https://named.example.com")
+
+	// An empty HOME is what os.UserHomeDir refuses on every platform this
+	// server runs on, and it is the only way to reach that branch without
+	// a real account whose home has been removed.
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv(EnvFileVar, named)
+	resetExplicitEnvFile(t)
+
+	report := LoadEnvFiles()
+
+	if report.HomePath != "" {
+		t.Errorf("HomePath = %q, want none when the home directory cannot be resolved", report.HomePath)
+	}
+	if report.ExplicitErr != nil {
+		t.Errorf("ExplicitErr = %v, want the named file loaded regardless", report.ExplicitErr)
+	}
+	if got := os.Getenv("GITLAB_URL"); got != "https://named.example.com" {
+		t.Errorf("GITLAB_URL = %q, want the named file's value", got)
+	}
+}
+
+// TestLoadEnvFiles_HomeWithoutTheFile_NamesNothing verifies that a home
+// directory holding no dotenv leaves HomePath empty.
+//
+// The report is what the startup announcement reads, and naming a file that
+// was never loaded sends an operator to edit a path that does not exist while
+// the setting they are chasing comes from somewhere else. Nothing asserted the
+// empty case, so a load whose success test had been inverted would have
+// announced the home file on every start that did not have one.
+func TestLoadEnvFiles_HomeWithoutTheFile_NamesNothing(t *testing.T) {
+	clearEnvFileKeys(t)
+	resetEnvFileAnnouncement(t)
+	useHomeDir(t, t.TempDir())
+	t.Chdir(t.TempDir())
+
+	report := LoadEnvFiles()
+
+	if report.HomePath != "" {
+		t.Errorf("HomePath = %q, want none: the home directory holds no dotenv", report.HomePath)
+	}
+}
+
+// TestAnnouncedKeys_BoundsWithoutTruncatingWhatFits verifies the two limits
+// on the untrusted key names the ignored-file warning prints.
+//
+// Both are bounds on a log line assembled from a file this server refused to
+// load, so the names in it are attacker-controlled. What the boundary decides
+// is whether a file that sits exactly on a limit is reported intact: a bound
+// off by one truncates a perfectly ordinary ten-key .env and appends an
+// ellipsis to a key that was never too long, which reads as corruption rather
+// than as a limit.
+func TestAnnouncedKeys_BoundsWithoutTruncatingWhatFits(t *testing.T) {
+	t.Parallel()
+
+	keyOf := func(n int) string { return strings.Repeat("K", n) }
+
+	t.Run("exactly the key limit is kept whole", func(t *testing.T) {
+		t.Parallel()
+		keys := make([]string, maxAnnouncedKeys)
+		for i := range keys {
+			keys[i] = "K" + strconv.Itoa(i)
+		}
+		if got := announcedKeys(keys); len(got) != maxAnnouncedKeys {
+			t.Errorf("announcedKeys kept %d of exactly %d keys", len(got), maxAnnouncedKeys)
+		}
+	})
+
+	t.Run("one key over the limit is dropped", func(t *testing.T) {
+		t.Parallel()
+		keys := make([]string, maxAnnouncedKeys+1)
+		for i := range keys {
+			keys[i] = "K" + strconv.Itoa(i)
+		}
+		if got := announcedKeys(keys); len(got) != maxAnnouncedKeys {
+			t.Errorf("announcedKeys kept %d keys, want the list capped at %d", len(got), maxAnnouncedKeys)
+		}
+	})
+
+	t.Run("a key of exactly the rune limit is not shortened", func(t *testing.T) {
+		t.Parallel()
+		key := keyOf(maxAnnouncedKeyRunes)
+		got := announcedKeys([]string{key})
+		if len(got) != 1 || got[0] != key {
+			t.Errorf("announcedKeys(%d runes) = %v, want the name unchanged", maxAnnouncedKeyRunes, got)
+		}
+	})
+
+	t.Run("one rune over the limit is shortened", func(t *testing.T) {
+		t.Parallel()
+		got := announcedKeys([]string{keyOf(maxAnnouncedKeyRunes + 1)})
+		if len(got) != 1 {
+			t.Fatalf("announcedKeys returned %d names, want 1", len(got))
+		}
+		if !strings.HasSuffix(got[0], "...") {
+			t.Errorf("announcedKeys(%d runes) = %q, want it shortened", maxAnnouncedKeyRunes+1, got[0])
+		}
+		if runes := []rune(got[0]); len(runes) != maxAnnouncedKeyRunes+3 {
+			t.Errorf("shortened name is %d runes, want %d plus the ellipsis", len(runes), maxAnnouncedKeyRunes)
 		}
 	})
 }

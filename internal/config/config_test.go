@@ -370,15 +370,75 @@ func TestLoad_CapabilitySurfaceInvalid(t *testing.T) {
 	}
 }
 
-// TestEffectiveCapabilitySurface verifies that empty capability settings resolve
-// to the full surface while explicit minimal settings are preserved.
+// TestEffectiveCapabilitySurface verifies that an unset or unrecognized
+// capability setting resolves to the default surface while each canonical
+// value is preserved.
+//
+// The full arm is asserted explicitly rather than left to the default: both
+// return the same string, so a switch that had lost the arm would still
+// answer correctly for "full" and wrongly for anything else the arm ever
+// grows to cover.
 func TestEffectiveCapabilitySurface(t *testing.T) {
-	if got := EffectiveCapabilitySurface(""); got != CapabilitySurfaceFull {
-		t.Fatalf("EffectiveCapabilitySurface(empty) = %q, want %q", got, CapabilitySurfaceFull)
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "empty falls back to the default", input: "", want: DefaultCapabilitySurface},
+		{name: "unrecognized falls back to the default", input: "compact", want: DefaultCapabilitySurface},
+		{name: "the canonical full is preserved", input: CapabilitySurfaceFull, want: CapabilitySurfaceFull},
+		{name: "the canonical minimal is preserved", input: CapabilitySurfaceMinimal, want: CapabilitySurfaceMinimal},
 	}
-	if got := EffectiveCapabilitySurface(CapabilitySurfaceMinimal); got != CapabilitySurfaceMinimal {
-		t.Fatalf("EffectiveCapabilitySurface(minimal) = %q, want %q", got, CapabilitySurfaceMinimal)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EffectiveCapabilitySurface(tt.input); got != tt.want {
+				t.Errorf("EffectiveCapabilitySurface(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
+}
+
+// TestValidateSurfaces_AcceptEveryCanonicalValue verifies the two validators
+// a configuration passes through accept each surface they document and refuse
+// anything else by name.
+//
+// Only one arm of each switch was ever taken, so a validator that had lost
+// the individual or the full arm would have refused a documented
+// configuration at startup with the list of values it had just rejected.
+func TestValidateSurfaces_AcceptEveryCanonicalValue(t *testing.T) {
+	t.Run("tool surface", func(t *testing.T) {
+		for _, surface := range []string{"", ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic} {
+			t.Run(surface, func(t *testing.T) {
+				if err := validateToolSurface(surface); err != nil {
+					t.Errorf("validateToolSurface(%q) = %v, want it accepted", surface, err)
+				}
+			})
+		}
+		err := validateToolSurface("individual-tools")
+		if err == nil {
+			t.Fatal("validateToolSurface(alias) = nil, want a refusal: validation runs on the resolved surface, not the operator's spelling")
+		}
+		if !strings.Contains(err.Error(), "individual-tools") {
+			t.Errorf("error %q does not name the value it refused", err)
+		}
+	})
+
+	t.Run("capability surface", func(t *testing.T) {
+		for _, surface := range []string{"", CapabilitySurfaceFull, CapabilitySurfaceMinimal} {
+			t.Run(surface, func(t *testing.T) {
+				if err := validateCapabilitySurface(surface); err != nil {
+					t.Errorf("validateCapabilitySurface(%q) = %v, want it accepted", surface, err)
+				}
+			})
+		}
+		err := validateCapabilitySurface("minimum")
+		if err == nil {
+			t.Fatal("validateCapabilitySurface(alias) = nil, want a refusal")
+		}
+		if !strings.Contains(err.Error(), "minimum") {
+			t.Errorf("error %q does not name the value it refused", err)
+		}
+	})
 }
 
 // TestLoad_MetaParamSchemaDefault verifies that [Load] defaults
@@ -522,6 +582,72 @@ func TestParseSize_CaseInsensitive(t *testing.T) {
 				t.Errorf("parseSize(%q) = %d, want %d", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestParseSize_RefusesASizeOfNothing verifies that a size of zero, and a
+// negative one, are refused rather than accepted as a ceiling.
+//
+// A ceiling of zero would refuse every upload and every local file read with
+// "too large", which reads as a broken server rather than as a setting the
+// operator wrote. Only non-numeric input was refused before, so the boundary
+// between "no ceiling was asked for" and "a ceiling of nothing" was never
+// tested at all.
+func TestParseSize_RefusesASizeOfNothing(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		want    int64
+	}{
+		{name: "zero", input: "0", wantErr: true},
+		{name: "zero with a unit", input: "0MB", wantErr: true},
+		{name: "negative", input: "-1", wantErr: true},
+		{name: "one byte is a ceiling, however small", input: "1", want: 1},
+		{name: "empty falls back to the default", input: "", want: 4096},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSize(tt.input, 4096)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseSize(%q) = %d, want a refusal", tt.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseSize(%q) unexpected error: %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Errorf("parseSize(%q) = %d, want %d", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestValidate_RateLimitBurstOfOne_IsAccepted verifies the smallest burst a
+// rate-limited deployment may configure.
+//
+// A burst is a token bucket's depth, so one is the smallest that admits any
+// request at all, and it is the value an operator writes to say "no burst,
+// just the rate". Only zero and the ceiling were asserted, which leaves the
+// bound free to drift onto the one value between them.
+func TestValidate_RateLimitBurstOfOne_IsAccepted(t *testing.T) {
+	cfg := &Config{
+		GitLabURL:      testGitLabURL,
+		GitLabToken:    testGitLabToken,
+		RateLimitRPS:   10,
+		RateLimitBurst: 1,
+		MaxHTTPClients: DefaultMaxHTTPClients,
+	}
+	if err := cfg.validate(); err != nil {
+		t.Errorf("validate() refused a burst of 1 beside a positive RPS: %v", err)
+	}
+
+	cfg.RateLimitBurst = 0
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() accepted a burst of 0 beside a positive RPS, which admits nothing")
 	}
 }
 
@@ -946,6 +1072,14 @@ func TestLoad_DeprecatedEnterpriseEnv(t *testing.T) {
 	if LegacyEnterpriseEnvInUse("premium", "true") {
 		t.Error("LegacyEnterpriseEnvInUse should be false when GITLAB_MCP_TIER is set")
 	}
+	// Neither set is the ordinary case, and it must not warn: a deprecation
+	// notice about a variable the operator never wrote is noise they cannot act on.
+	if LegacyEnterpriseEnvInUse("", "") {
+		t.Error("LegacyEnterpriseEnvInUse should be false when neither variable is set")
+	}
+	if LegacyEnterpriseEnvInUse("", "   ") {
+		t.Error("LegacyEnterpriseEnvInUse should treat a whitespace-only GITLAB_ENTERPRISE as unset")
+	}
 }
 
 // TestLoad_InvalidReadOnly verifies that Load returns an error when
@@ -1229,6 +1363,12 @@ func TestEffectiveToolSurface(t *testing.T) {
 		{name: "legacy meta", metaTools: true, want: ToolSurfaceMeta},
 		{name: "legacy individual", metaTools: false, want: ToolSurfaceIndividual},
 		{name: "unknown falls back to meta", metaTools: true, toolSurface: "unknown", want: ToolSurfaceMeta},
+		// An explicit surface wins over the legacy boolean in both
+		// directions; only the dynamic arm was exercised, so a switch that
+		// had lost these two would have gone on passing while silently
+		// deriving the surface from META_TOOLS instead.
+		{name: "explicit meta beats a contradicting legacy boolean", metaTools: false, toolSurface: ToolSurfaceMeta, want: ToolSurfaceMeta},
+		{name: "explicit individual beats a contradicting legacy boolean", metaTools: true, toolSurface: ToolSurfaceIndividual, want: ToolSurfaceIndividual},
 	}
 
 	for _, tt := range tests {
@@ -1237,6 +1377,96 @@ func TestEffectiveToolSurface(t *testing.T) {
 				t.Errorf("EffectiveToolSurface() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestParseToolSurfaceValue_EverySpellingAnOperatorMayWrite verifies each
+// accepted spelling of the tool-surface selector resolves to the surface it
+// names, and that an unrecognized one is refused by name.
+//
+// The selector accepts nineteen spellings across three surfaces, and only six
+// of them were ever evaluated: the two booleans and the three canonical names,
+// plus one alias. An arm quietly deleted from any of the three cases would
+// have turned a documented value into a startup error, and nothing here would
+// have noticed. They are cheap to pin because the function is pure, and they
+// are the values operators copy out of the README.
+func TestParseToolSurfaceValue_EverySpellingAnOperatorMayWrite(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "the canonical meta", value: ToolSurfaceMeta, want: ToolSurfaceMeta},
+		{name: "legacy true", value: "true", want: ToolSurfaceMeta},
+		{name: "legacy t", value: "t", want: ToolSurfaceMeta},
+		{name: "legacy 1", value: "1", want: ToolSurfaceMeta},
+		{name: "legacy yes", value: "yes", want: ToolSurfaceMeta},
+		{name: "legacy y", value: "y", want: ToolSurfaceMeta},
+		{name: "meta-tools", value: "meta-tools", want: ToolSurfaceMeta},
+		{name: "metatools", value: "metatools", want: ToolSurfaceMeta},
+
+		{name: "the canonical individual", value: ToolSurfaceIndividual, want: ToolSurfaceIndividual},
+		{name: "legacy false", value: "false", want: ToolSurfaceIndividual},
+		{name: "legacy f", value: "f", want: ToolSurfaceIndividual},
+		{name: "legacy 0", value: "0", want: ToolSurfaceIndividual},
+		{name: "legacy no", value: "no", want: ToolSurfaceIndividual},
+		{name: "legacy n", value: "n", want: ToolSurfaceIndividual},
+		{name: "individual-tools", value: "individual-tools", want: ToolSurfaceIndividual},
+		{name: "tools", value: "tools", want: ToolSurfaceIndividual},
+
+		{name: "the canonical dynamic", value: ToolSurfaceDynamic, want: ToolSurfaceDynamic},
+		{name: "dynamic-tools", value: "dynamic-tools", want: ToolSurfaceDynamic},
+		{name: "low-token", value: "low-token", want: ToolSurfaceDynamic},
+
+		{name: "case and surrounding space are ignored", value: "  META  ", want: ToolSurfaceMeta},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseToolSurfaceValue(tt.value, "TOOL_SURFACE")
+			if err != nil {
+				t.Fatalf("parseToolSurfaceValue(%q) unexpected error: %v", tt.value, err)
+			}
+			if got != tt.want {
+				t.Errorf("parseToolSurfaceValue(%q) = %q, want %q", tt.value, got, tt.want)
+			}
+
+			// The same spelling must survive the exported entry point, in
+			// both the TOOL_SURFACE and the legacy META_TOOLS position.
+			mode, metaTools, err := ParseToolSurface(tt.value, "")
+			if err != nil {
+				t.Fatalf("ParseToolSurface(%q, \"\") unexpected error: %v", tt.value, err)
+			}
+			if mode != tt.want {
+				t.Errorf("ParseToolSurface(%q, \"\") = %q, want %q", tt.value, mode, tt.want)
+			}
+			if wantMeta := tt.want != ToolSurfaceIndividual; metaTools != wantMeta {
+				t.Errorf("ParseToolSurface(%q, \"\") metaTools = %v, want %v", tt.value, metaTools, wantMeta)
+			}
+			if replacement := LegacyMetaToolsReplacement(tt.value); replacement != tt.want {
+				t.Errorf("LegacyMetaToolsReplacement(%q) = %q, want %q", tt.value, replacement, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseToolSurfaceValue_UnknownIsRefusedByName verifies the error names
+// the setting and the value, since an operator reading it has only the log to
+// work out which of the two selectors they mistyped.
+func TestParseToolSurfaceValue_UnknownIsRefusedByName(t *testing.T) {
+	_, err := parseToolSurfaceValue("indivdual", "TOOL_SURFACE")
+	if err == nil {
+		t.Fatal("parseToolSurfaceValue(typo) = nil error, want a refusal")
+	}
+	for _, want := range []string{"TOOL_SURFACE", "indivdual"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not mention %q", err, want)
+			}
+		})
+	}
+	if got := LegacyMetaToolsReplacement("indivdual"); got != "" {
+		t.Errorf("LegacyMetaToolsReplacement(typo) = %q, want no replacement", got)
 	}
 }
 
@@ -1252,6 +1482,13 @@ func TestParseCapabilitySurface_Aliases(t *testing.T) {
 		{name: "default alias", input: "default", want: CapabilitySurfaceFull},
 		{name: "low token alias", input: "low-token", want: CapabilitySurfaceMinimal},
 		{name: "invalid", input: "compact", wantErr: true},
+		// The canonical spellings and the remaining alias: only the aliases
+		// were exercised, so the two arms an operator is most likely to
+		// write were the untested ones.
+		{name: "the canonical full", input: CapabilitySurfaceFull, want: CapabilitySurfaceFull},
+		{name: "the canonical minimal", input: CapabilitySurfaceMinimal, want: CapabilitySurfaceMinimal},
+		{name: "minimum alias", input: "minimum", want: CapabilitySurfaceMinimal},
+		{name: "case and surrounding space are ignored", input: "  FULL  ", want: CapabilitySurfaceFull},
 	}
 
 	for _, tt := range tests {
@@ -1356,6 +1593,20 @@ func TestLoad_RevalidateInterval(t *testing.T) {
 		_, err := Load()
 		if err == nil {
 			t.Fatal("expected error for SESSION_REVALIDATE_INTERVAL exceeding maximum")
+		}
+	})
+
+	// The maximum itself is a value the operator may set. Only "over" and
+	// "well under" were asserted, so a bound that had drifted from > to >=
+	// would refuse the documented ceiling and no test would say so.
+	t.Run("the maximum itself is accepted", func(t *testing.T) {
+		t.Setenv("SESSION_REVALIDATE_INTERVAL", MaxRevalidateInterval.String())
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() refused the documented maximum: %v", err)
+		}
+		if cfg.RevalidateInterval != MaxRevalidateInterval {
+			t.Errorf("RevalidateInterval = %v, want %v", cfg.RevalidateInterval, MaxRevalidateInterval)
 		}
 	})
 }
@@ -1795,6 +2046,7 @@ func TestValidateMetadataURL_RejectsWhatTheFlagsPromise(t *testing.T) {
 		{name: "a path with no host", value: "/privacy", wantErr: true},
 		{name: "a scheme that is not http(s)", value: "ftp://example.com/privacy", wantErr: true},
 		{name: "a mailto link", value: "mailto:someone@example.com", wantErr: true},
+		{name: "unparseable", value: "https://[::1/privacy", wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -2017,6 +2269,12 @@ func TestValidateOAuthGitLabURL_RequiresHTTPSOffTheMachine(t *testing.T) {
 		{name: "http on loopback", raw: "http://127.0.0.1:8929"},
 		{name: "http elsewhere", raw: "http://gitlab.example.com", wantErr: "cleartext"},
 		{name: "not a url", raw: "gitlab.example.com", wantErr: "not an absolute URL"},
+		{name: "unparseable", raw: "https://[::1", wantErr: "not an absolute URL"},
+		// Neither https nor http: the loopback exemption must not be
+		// reached at all, or a scheme this server cannot speak would be
+		// accepted for any host that happens to be local.
+		{name: "a scheme that is neither http nor https", raw: "ftp://gitlab.example.com", wantErr: "cleartext"},
+		{name: "a foreign scheme on loopback", raw: "ftp://127.0.0.1:8929", wantErr: "cleartext"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2047,6 +2305,11 @@ func TestValidatePublicURL_ExportedPathAndTheNonURL(t *testing.T) {
 		{name: "no host", raw: "mcp.example.com", wantErr: "not an absolute URL"},
 		{name: "unparseable", raw: "https://[::1", wantErr: "not an absolute URL"},
 		{name: "empty", raw: "", wantErr: "requires --public-url"},
+		// A scheme that is neither https nor http short-circuits before the
+		// loopback exemption, so an identifier no client can dereference is
+		// refused wherever it points.
+		{name: "a scheme that is neither http nor https", raw: "ftp://mcp.example.com", wantErr: "must use https"},
+		{name: "a foreign scheme on loopback", raw: "ftp://127.0.0.1:8080", wantErr: "must use https"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
