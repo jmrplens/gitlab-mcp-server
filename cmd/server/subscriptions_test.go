@@ -1359,7 +1359,7 @@ func TestListenStreams_EveryURIStops_ClosesTheStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, release := streams.arm([]string{"uri-a", "uri-b"}, "owner", cancel)
+	_, release := streams.arm([]string{"uri-a", "uri-b"}, "owner", nil, cancel)
 	defer release()
 
 	streams.stoppedFor("owner", "uri-a", subscriptions.ErrInaccessible)
@@ -1387,7 +1387,7 @@ func TestListenStreams_AnotherCredentialsWatchStops_LeavesTheStream(t *testing.T
 	defer cancel()
 
 	const uri = "gitlab://project/42/pipeline/99"
-	_, release := streams.arm([]string{uri}, "mine", cancel)
+	_, release := streams.arm([]string{uri}, "mine", nil, cancel)
 	defer release()
 
 	streams.stoppedFor("somebody-elses", uri, subscriptions.ErrInaccessible)
@@ -1407,7 +1407,7 @@ func TestListenStreams_UnrelatedURIStops_LeavesTheStream(t *testing.T) {
 	streams := newListenStreams()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, release := streams.arm([]string{"mine"}, "owner", cancel)
+	_, release := streams.arm([]string{"mine"}, "owner", nil, cancel)
 	defer release()
 
 	streams.stoppedFor("owner", "somebody-elses", subscriptions.ErrEvicted)
@@ -1421,7 +1421,7 @@ func TestListenStreams_UnrelatedURIStops_LeavesTheStream(t *testing.T) {
 func TestListenStreams_ReleasedStream_IsNotCancelled(t *testing.T) {
 	streams := newListenStreams()
 	cancelled := false
-	_, release := streams.arm([]string{"uri"}, "owner", func() { cancelled = true })
+	_, release := streams.arm([]string{"uri"}, "owner", nil, func() { cancelled = true })
 	release()
 
 	streams.stoppedFor("owner", "uri", subscriptions.ErrInaccessible)
@@ -1455,7 +1455,7 @@ func TestListenStreams_CloseAll_EndsEveryStreamItHolds(t *testing.T) {
 	// closeAll makes it on this goroutine.
 	ended := make([]bool, len(cases))
 	for i, tc := range cases {
-		_, release := streams.arm(tc.uris, "owner", func() { ended[i] = true })
+		_, release := streams.arm(tc.uris, "owner", nil, func() { ended[i] = true })
 		t.Cleanup(release)
 	}
 
@@ -1509,7 +1509,7 @@ func TestListenStreams_CloseOwner_EndsOnlyThatCredentialsStreams(t *testing.T) {
 
 	ended := make([]bool, len(cases))
 	for i, tc := range cases {
-		_, release := streams.arm(tc.uris, tc.owner, func() { ended[i] = true })
+		_, release := streams.arm(tc.uris, tc.owner, nil, func() { ended[i] = true })
 		t.Cleanup(release)
 	}
 
@@ -1524,6 +1524,38 @@ func TestListenStreams_CloseOwner_EndsOnlyThatCredentialsStreams(t *testing.T) {
 	}
 }
 
+// TestListenStreams_CloseOwner_ReportsTheSessionsItGaveAnEndingTo covers the
+// answer eviction reads to decide which sessions still need telling.
+//
+// A session whose stream this cancelled is already being told: the SDK writes
+// the stream's completion result as the handler unwinds, which is the graceful
+// ending the specification asks for. Terminating such a session as well would
+// race that write. A session-era resources/subscribe holds no stream, appears
+// in no answer here, and is exactly what [sessionOwners.endSessionsWithoutStreams]
+// then has to end.
+func TestListenStreams_CloseOwner_ReportsTheSessionsItGaveAnEndingTo(t *testing.T) {
+	streams := newListenStreams()
+	session, _ := connectedSessions(t)
+
+	// One stream with a session, one without: the process-wide sentinel and
+	// every stdio stream carry none, and a nil must not be reported as a
+	// session that was told.
+	_, releaseWith := streams.arm([]string{"uri"}, "owner-evicted", session, func() {})
+	t.Cleanup(releaseWith)
+	_, releaseWithout := streams.arm([]string{"uri"}, "owner-evicted", nil, func() {})
+	t.Cleanup(releaseWithout)
+
+	told := streams.closeOwner("owner-evicted")
+
+	if len(told) != 1 {
+		t.Fatalf("closeOwner reported %d sessions, want 1: a session it never ended a stream on "+
+			"would be left out of the only ending it can still be given", len(told))
+	}
+	if _, ok := told[session]; !ok {
+		t.Error("closeOwner reported a session other than the one whose stream it ended")
+	}
+}
+
 // TestListenStreams_CloseOwner_WithoutAnOwner_EndsNothing covers the guard in
 // front of it.
 //
@@ -1533,7 +1565,7 @@ func TestListenStreams_CloseOwner_EndsOnlyThatCredentialsStreams(t *testing.T) {
 func TestListenStreams_CloseOwner_WithoutAnOwner_EndsNothing(t *testing.T) {
 	streams := newListenStreams()
 	ended := false
-	_, release := streams.arm([]string{"uri"}, "", func() { ended = true })
+	_, release := streams.arm([]string{"uri"}, "", nil, func() { ended = true })
 	t.Cleanup(release)
 
 	streams.closeOwner("")
@@ -1559,7 +1591,7 @@ func TestListenStreams_ArmedAfterCloseAll_EndsImmediately(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, release := streams.arm(nil, "owner", cancel)
+	_, release := streams.arm(nil, "owner", nil, cancel)
 	defer release()
 
 	if ctx.Err() == nil {
@@ -1648,7 +1680,7 @@ func TestSubscriptionRuntime_WatchStops_EndsTheStream(t *testing.T) {
 	defer cancel()
 	// Armed under the same owner the runtime watches as, which is what scopes
 	// the stop to this credential's streams.
-	_, release := shape.streams.arm([]string{uri}, "", cancel)
+	_, release := shape.streams.arm([]string{uri}, "", nil, cancel)
 	defer release()
 
 	// The pipeline becomes unreadable: deleted, or this token lost access.

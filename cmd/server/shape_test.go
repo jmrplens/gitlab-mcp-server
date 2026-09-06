@@ -739,7 +739,7 @@ func TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned(t *test
 	}
 	streamCtx, cancelStream := context.WithCancel(t.Context())
 	t.Cleanup(cancelStream)
-	_, release := state.streams.arm([]string{uri}, entry.Owner(), cancelStream)
+	_, release := state.streams.arm([]string{uri}, entry.Owner(), nil, cancelStream)
 	t.Cleanup(release)
 
 	// The entry is in use while it holds those, which is what keeps the idle

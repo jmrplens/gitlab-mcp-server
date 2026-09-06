@@ -320,12 +320,19 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 		// replaced it.
 		//
 		// remove is also what tells this credential's clients that it is over:
-		// it stops the watchers and ends the listen streams they are holding
-		// open, so an eviction is an ending they are told about rather than a
-		// stream that goes quiet. See [credentialState.close].
+		// it stops the watchers, ends the listen streams they are holding open
+		// and terminates the sessions that were holding nothing but a
+		// session-era resources/subscribe, so an eviction is an ending they are
+		// told about rather than a stream that goes quiet. See
+		// [credentialState.close].
+		//
+		// The sessions are forgotten first, and what that forgetting took away
+		// is handed to remove. Forgetting is the half that has to happen here,
+		// under the pool's write lock, so the gate stops accepting the ID at
+		// once; telling the client is the half that must not, so it goes on
+		// remove's goroutine with the list it can no longer look up.
 		serverpool.WithOnEvict(func(entry *serverpool.Entry) {
-			credentials.remove(entry.Owner())
-			sessions.forgetOwner(entry.Owner())
+			credentials.remove(entry.Owner(), sessions.forgetOwner(entry.Owner()))
 		}),
 		// An entry whose only activity is an open subscription is not idle.
 		// Its watcher polls GitLab directly and its listen stream is one

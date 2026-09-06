@@ -504,6 +504,12 @@ type listenStream struct {
 	// one credential cannot close another's stream over the same URI. Empty on
 	// stdio and for the process-wide sentinel, where there is only one owner.
 	owner string
+	// session is the MCP session the listen arrived on, so an eviction can tell
+	// which of a credential's sessions have already been given an ending here.
+	// A session that has one must not also be terminated: the completion result
+	// the SDK writes when this stream's context ends is the graceful ending, and
+	// closing the connection would race it. Nil for the process-wide sentinel.
+	session *mcp.ServerSession
 }
 
 // listenStreams ends a subscription stream when the server stops watching
@@ -540,8 +546,13 @@ func newListenStreams() *listenStreams {
 }
 
 // arm registers a stream and returns the function that unregisters it.
-func (s *listenStreams) arm(uris []string, owner string, cancel context.CancelFunc) (stream *listenStream, release func()) {
-	stream = &listenStream{cancel: cancel, live: make(map[string]struct{}, len(uris)), owner: owner}
+func (s *listenStreams) arm(uris []string, owner string, session *mcp.ServerSession, cancel context.CancelFunc) (stream *listenStream, release func()) {
+	stream = &listenStream{
+		cancel:  cancel,
+		live:    make(map[string]struct{}, len(uris)),
+		owner:   owner,
+		session: session,
+	}
 	for _, uri := range uris {
 		stream.live[uri] = struct{}{}
 	}
@@ -615,18 +626,29 @@ func (s *listenStreams) stoppedFor(owner, uri string, _ error) {
 //
 // An empty owner ends nothing. That is stdio and the single-credential server,
 // where every stream carries it and nothing evicts anything.
-func (s *listenStreams) closeOwner(owner string) {
+//
+// It reports which sessions it ended a stream on, because those are the
+// sessions the client is already being told about: the SDK writes each stream's
+// completion result when its context ends, and that is the graceful ending the
+// specification asks for. A session-era resources/subscribe holds no stream and
+// appears in no answer here, which is what
+// [sessionOwners.endSessionsWithoutStreams] is for.
+func (s *listenStreams) closeOwner(owner string) map[*mcp.ServerSession]struct{} {
 	if s == nil || owner == "" {
-		return
+		return nil
 	}
 
 	s.mu.Lock()
 	var owned []*listenStream
+	told := make(map[*mcp.ServerSession]struct{})
 	for stream := range s.streams {
 		if stream.owner != owner {
 			continue
 		}
 		owned = append(owned, stream)
+		if stream.session != nil {
+			told[stream.session] = struct{}{}
+		}
 		delete(s.streams, stream)
 	}
 	s.mu.Unlock()
@@ -637,6 +659,7 @@ func (s *listenStreams) closeOwner(owner string) {
 	for _, stream := range owned {
 		stream.cancel()
 	}
+	return told
 }
 
 // closeAll ends every open listen stream.
@@ -685,7 +708,8 @@ func (s *listenStreams) middleware() mcp.Middleware {
 			}
 			streamCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
-			stream, release := s.arm(uris, ownerOfRequest(ctx), cancel)
+			session, _ := req.GetSession().(*mcp.ServerSession)
+			stream, release := s.arm(uris, ownerOfRequest(ctx), session, cancel)
 			defer release()
 
 			// The stream travels in the context for every listen, including

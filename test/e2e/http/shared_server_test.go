@@ -88,6 +88,16 @@ func openListen(t *testing.T, srv *server, token, uri string, id int) *listenStr
 		t.Fatalf("listen for %s answered %d, want 200", token, resp.StatusCode)
 	}
 
+	return readStream(ctx, resp, cancel)
+}
+
+// readStream turns an open SSE response into a stream of frames a test can wait
+// on, taking ownership of the body.
+//
+// It takes no *testing.T because it runs the reader on a goroutine of its own,
+// where an abort is forbidden; a transport failure travels back on the failure
+// channel and is raised by whichever assertion reads it next.
+func readStream(ctx context.Context, resp *http.Response, cancel context.CancelFunc) *listenStream {
 	stream := &listenStream{
 		frames:  make(chan string, 64),
 		failure: make(chan error, 1),
@@ -158,6 +168,161 @@ func (s *listenStream) drain() []string {
 			return seen
 		}
 	}
+}
+
+// openStandaloneStream opens the standalone SSE stream of a stateful session.
+//
+// It is the GET half of the legacy transport: the stream a session-era client
+// leaves open to receive server-initiated messages, which is where a
+// resources/subscribe would deliver its notifications. Nothing in the shared
+// server file drove --stateless=false before, and this is the only path on
+// which a subscription holds no request of its own.
+func openStandaloneStream(t *testing.T, srv *server, token, sessionID, protocol string) *listenStream {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.baseURL+"/mcp", http.NoBody)
+	if err != nil {
+		cancel()
+		t.Fatalf("building the standalone stream request for %s: %v", token, err)
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("MCP-Protocol-Version", protocol)
+	req.Header.Set("Mcp-Session-Id", sessionID)
+	req.Header.Set("PRIVATE-TOKEN", token)
+
+	// As in openListen, the body outlives this function: the reader goroutine
+	// owns it, and every path that does not reach that goroutine closes it.
+	resp, err := srv.httpClient().Do(req) //nolint:bodyclose // closed by the reader goroutine, and on every early return
+	if err != nil {
+		cancel()
+		t.Fatalf("opening the standalone stream for %s: %v", token, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		cancel()
+		t.Fatalf("the standalone stream for %s answered %d, want 200", token, resp.StatusCode)
+	}
+	return readStream(ctx, resp, cancel)
+}
+
+// TestSharedServer_AnEvictedCredentialsLegacySubscriptionIsEnded pins the other
+// half of what eviction owes a subscriber, on the transport that has it.
+//
+// Ending a credential's listen streams reaches everything a 2026-07-28
+// subscriber holds, because there the subscription IS an open request. A
+// session-era resources/subscribe holds nothing: it is answered and over, and
+// the notifications would arrive later on the session's standalone SSE stream.
+// So eviction stopped its watchers, which Manager.Close does without firing
+// OnStop, forgot which credential the session belonged to, and left that stream
+// open and mute for the rest of its life. The client was not told, could not
+// tell, and ADR-0020 claimed the opposite.
+//
+// The only ending the protocol offers a subscriber with no open request is
+// terminating its session, which is what this asserts: the standalone stream
+// ends, and the client's next request re-initializes. It is also what the gate
+// would enforce on that next request anyway — the point is that a client whose
+// only activity is a subscription never makes one.
+//
+// Reachable on --stateless=false alone. The default transport gives each POST a
+// session of its own and refuses the legacy subscribe outright, so there is
+// nothing there to leave hanging.
+func TestSharedServer_AnEvictedCredentialsLegacySubscriptionIsEnded(t *testing.T) {
+	const (
+		subscribedToken = "glpat-legacy-subscriber"
+		arrivingToken   = "glpat-arrives-and-takes-the-slot"
+		uri             = "gitlab://project/123"
+		statefulVersion = "2025-06-18"
+	)
+
+	gitlab := startTwoTenantGitLab(t, subscribedToken, arrivingToken)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.URL,
+		"--capability-surface=full",
+		"--stateless=false",
+		"--max-http-clients=1",
+	)
+
+	headers := openStatefulSessionAs(t, srv, subscribedToken)
+	stream := openStandaloneStream(t, srv, subscribedToken, headers["Mcp-Session-Id"], statefulVersion)
+
+	subscribed := srv.do(t, request{
+		body:    fmt.Sprintf(`{"jsonrpc":"2.0","id":3,"method":"resources/subscribe","params":{"uri":%q}}`, uri),
+		headers: headers,
+	})
+	if subscribed.status != http.StatusOK || strings.Contains(subscribed.body, `"error"`) {
+		t.Fatalf("the session-era subscribe was refused (%d), so there is no hanging client to test: %s",
+			subscribed.status, subscribed.body)
+	}
+
+	// One more credential than the pool may hold. Every entry is busy, so the
+	// bound is what evicts: see TestSharedServer_AnEvictedCredentialsListenIsEnded.
+	//
+	// Sent as a session-era client, because --stateless=false refuses
+	// 2026-07-28 outright and the harness sends that revision by default.
+	arriving := srv.do(t, request{
+		body: legacyToolsListBody,
+		headers: map[string]string{
+			"PRIVATE-TOKEN":        arrivingToken,
+			"MCP-Protocol-Version": "",
+			"Mcp-Method":           "",
+		},
+	})
+	if arriving.status != http.StatusOK {
+		t.Fatalf("the arriving credential was answered %d: %s", arriving.status, arriving.body)
+	}
+
+	if seen, ended := stream.awaitEnd(t, 30*time.Second); !ended {
+		t.Errorf("the evicted credential's standalone stream was left open: its watchers are gone, so it is "+
+			"served nothing and told nothing.\nframes: %v\nserver output:\n%s", seen, srv.logs())
+	}
+}
+
+// openStatefulSessionAs completes the session-era handshake as one credential
+// and returns the headers its later requests carry.
+//
+// The protocol version is the session-era one on purpose: 2026-07-28 removed
+// resources/subscribe, and the SDK answers it itself before any middleware runs.
+func openStatefulSessionAs(t *testing.T, srv *server, token string) map[string]string {
+	t.Helper()
+
+	base := map[string]string{
+		"PRIVATE-TOKEN":        token,
+		"MCP-Protocol-Version": "",
+		"Mcp-Method":           "",
+	}
+
+	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18",` +
+		`"capabilities":{},"clientInfo":{"name":"httpe2e","version":"0"}}}`
+	opened := srv.do(t, request{body: initialize, headers: base})
+	if opened.status != http.StatusOK {
+		t.Fatalf("opening a stateful session for %s: initialize = %d: %s", token, opened.status, opened.body)
+	}
+	sessionID := opened.header.Get("Mcp-Session-Id")
+	if sessionID == "" {
+		t.Fatalf("the stateful server answered initialize without a session id: %v", opened.header)
+	}
+
+	headers := map[string]string{
+		"PRIVATE-TOKEN":        token,
+		"MCP-Protocol-Version": "",
+		"Mcp-Method":           "",
+		"Mcp-Session-Id":       sessionID,
+	}
+	ready := srv.do(t, request{body: `{"jsonrpc":"2.0","method":"notifications/initialized"}`, headers: headers})
+	if ready.status != http.StatusOK && ready.status != http.StatusAccepted {
+		t.Fatalf("completing the handshake for %s: notifications/initialized = %d: %s", token, ready.status, ready.body)
+	}
+
+	// The catalog is built here rather than under the subscribe, so the
+	// readiness gate is not what the rest of the test is waiting on.
+	warm := srv.do(t, request{body: legacyToolsListBody, headers: headers})
+	if warm.status != http.StatusOK {
+		t.Fatalf("warming the pool entry for %s: tools/list = %d: %s", token, warm.status, warm.body)
+	}
+	return headers
 }
 
 // twoTenantGitLab is a GitLab whose one project changes for the first token

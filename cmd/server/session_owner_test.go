@@ -766,6 +766,145 @@ func TestSessionOwners_ForgetOwner_DropsEverySessionOfAnEvictedCredential(t *tes
 	}
 }
 
+// TestSessionOwners_ForgetOwner_ReturnsTheSessionsItOrphaned covers the answer
+// eviction needs and cannot look up afterwards.
+//
+// Forgetting has to happen under the pool's write lock, so the gate stops
+// accepting the ID at once; telling the client must not happen there, because
+// the callback contract forbids blocking. The list is how the second half finds
+// the sessions the first half has already taken out of the table.
+func TestSessionOwners_ForgetOwner_ReturnsTheSessionsItOrphaned(t *testing.T) {
+	owners := newSessionOwners(false)
+	minted := newIdentifiedSessions(t)
+
+	first, second := minted.connect(t), minted.connect(t)
+	owners.record(first, "owner-evicted")
+	owners.record(second, "owner-evicted")
+	owners.record(minted.connect(t), "owner-kept")
+
+	orphaned := owners.forgetOwner("owner-evicted")
+
+	if len(orphaned) != 2 {
+		t.Fatalf("forgetOwner returned %d sessions, want 2; the ones it left out are never told", len(orphaned))
+	}
+	returned := map[*mcp.ServerSession]bool{}
+	for _, session := range orphaned {
+		returned[session] = true
+	}
+	if !returned[first] || !returned[second] {
+		t.Error("forgetOwner returned sessions other than the evicted credential's own")
+	}
+	if got := owners.forgetOwner("owner-never-pooled"); len(got) != 0 {
+		t.Errorf("forgetOwner(unknown) returned %d sessions, want none", len(got))
+	}
+}
+
+// TestSessionOwners_EndSessionsWithoutStreams_TellsOnlyTheClientsNoStreamTold
+// covers the ending a session-era resources/subscribe gets.
+//
+// A legacy subscribe is not a request the client leaves open, so there is no
+// stream for listenStreams.closeOwner to complete. Eviction stopped its
+// watchers, Manager.Close fires no OnStop, and on --stateless=false the client
+// was left holding a live session and a standalone SSE stream that would never
+// carry anything again: not told, unable to tell, and promised the opposite by
+// ADR-0020. Terminating the session is the only ending the protocol offers a
+// subscriber with no open request.
+//
+// The two exclusions are what the cases below are for. A session a stream
+// already ended must be left alone, because the SDK writes that stream's
+// completion result as the handler unwinds and closing the connection would
+// race it; and on the sessionless transport nothing is terminated at all, since
+// each POST's session closes with its own response and a legacy subscribe is
+// refused there anyway.
+func TestSessionOwners_EndSessionsWithoutStreams_TellsOnlyTheClientsNoStreamTold(t *testing.T) {
+	tests := []struct {
+		name      string
+		stateless bool
+		// toldByStream marks the session as one listenStreams.closeOwner
+		// already ended.
+		toldByStream bool
+		wantEnded    bool
+	}{
+		{
+			name:      "a session holding only a legacy subscribe is terminated",
+			wantEnded: true,
+		},
+		{
+			name:         "a session a listen stream already ended is left alone",
+			toldByStream: true,
+		},
+		{
+			name:      "the sessionless transport terminates nothing",
+			stateless: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			owners := newSessionOwners(tt.stateless)
+			session, _ := connectedSessions(t)
+
+			told := map[*mcp.ServerSession]struct{}{}
+			if tt.toldByStream {
+				told[session] = struct{}{}
+			}
+
+			// The nil entry rides along in every case: closeOwner reports no
+			// session for the process-wide sentinel stream, and a nil in the
+			// orphan list must not take the loop down.
+			owners.endSessionsWithoutStreams([]*mcp.ServerSession{nil, session}, told)
+
+			if got := sessionEnded(t, session, time.Second); got != tt.wantEnded {
+				if tt.wantEnded {
+					t.Error("the session was left open, so a client whose only activity was a " +
+						"session-era subscribe is never told its credential is gone")
+					return
+				}
+				t.Error("the session was terminated, which races the ending it was already being given")
+			}
+		})
+	}
+
+	t.Run("a table that does not exist ends nothing", func(t *testing.T) {
+		var absent *sessionOwners
+		absent.endSessionsWithoutStreams([]*mcp.ServerSession{nil}, nil)
+	})
+
+	t.Run("a session that is already gone is an ordinary outcome", func(t *testing.T) {
+		// The client can disconnect between the eviction and this call, which
+		// is why closing is done for its effect and not for its answer.
+		owners := newSessionOwners(false)
+		session, _ := connectedSessions(t)
+		if err := session.Close(); err != nil {
+			t.Fatalf("closing the session for the second-close case: %v", err)
+		}
+		owners.endSessionsWithoutStreams([]*mcp.ServerSession{session}, nil)
+	})
+}
+
+// sessionEnded reports whether a server session has been closed, by waiting for
+// its connection to unwind.
+//
+// The wait runs on a goroutine of its own because Wait blocks until the
+// connection ends, and the verdict is taken on the test's goroutine. A session
+// that is never closed leaves that goroutine parked until connectedSessions'
+// cleanup closes the client end, which is what unblocks it.
+func sessionEnded(t *testing.T, session *mcp.ServerSession, within time.Duration) bool {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		_ = session.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(within):
+		return false
+	}
+}
+
 // TestSessionOwners_ADisconnectedSession_IsForgotten covers the waiter record
 // starts.
 //

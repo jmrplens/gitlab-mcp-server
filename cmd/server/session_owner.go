@@ -171,26 +171,83 @@ func (o *sessionOwners) forget(session *mcp.ServerSession) {
 	o.dropIDLocked(owner, id)
 }
 
-// forgetOwner drops every session of an evicted entry.
+// forgetOwner drops every session of an evicted entry, and returns them.
 //
 // Without it a session outlives the credential it belonged to: the gate would
 // go on accepting its ID, and a notification tagged with a rebuilt entry's
 // owner would be filtered away from a session the client still holds. Both are
 // answered by making the credential's disappearance end its sessions' claim.
-func (o *sessionOwners) forgetOwner(owner string) {
+//
+// The sessions are returned because forgetting them is not the same as telling
+// their client, and the eviction has to do both. This runs under the pool's
+// write lock, where nothing may block, so the telling is done afterwards from
+// [credentialState.close] and needs the list this took away.
+func (o *sessionOwners) forgetOwner(owner string) []*mcp.ServerSession {
 	if o == nil || owner == "" {
-		return
+		return nil
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	orphaned := make([]*mcp.ServerSession, 0, len(o.sessionsByOwner[owner]))
 	for session := range o.sessionsByOwner[owner] {
 		delete(o.bySession, session)
+		orphaned = append(orphaned, session)
 	}
 	delete(o.sessionsByOwner, owner)
 	for id := range o.idsByOwner[owner] {
 		delete(o.byID, id)
 	}
 	delete(o.idsByOwner, owner)
+	return orphaned
+}
+
+// endSessionsWithoutStreams terminates the evicted credential's sessions that
+// no open subscriptions/listen already ended.
+//
+// It closes the hole [listenStreams.closeOwner] cannot reach. A session-era
+// resources/subscribe is not a request the client leaves open, so there is no
+// stream to complete and no answer to write: the eviction stopped the watchers,
+// which Manager.Close does without firing OnStop, and on --stateless=false the
+// client kept a live session with a standalone SSE stream that would never
+// carry anything again. It was not told, it could not tell, and ADR-0020's
+// promise that an evicted client is told to re-subscribe was false for that one
+// path.
+//
+// Terminating the session is the only ending the protocol offers a subscriber
+// with no open request: the standalone stream ends, and the client's next
+// request re-initializes. It is also what the gate would enforce a moment later
+// anyway, since [sessionOwners.forgetOwner] has just taken the session's claim
+// away — the difference is that a client whose only activity is a subscription
+// makes no next request, so without this it learns nothing, ever.
+//
+// Two exclusions, both load-bearing:
+//
+//   - A session that held a listen is left alone. [listenStreams.closeOwner]
+//     has already cancelled that stream, and the SDK writes its completion
+//     result as the handler unwinds; closing the connection would race that
+//     write and turn the graceful ending into a torn-down one.
+//   - On the sessionless transport nothing is terminated at all. Each POST gets
+//     a session of its own that closes with its response, so there is nothing
+//     to save and closing it would race the response the SDK is writing. A
+//     legacy subscribe is refused outright there
+//     ([sessionBridge.subscribeUnlessStateless]), which is why nothing is lost.
+func (o *sessionOwners) endSessionsWithoutStreams(orphaned []*mcp.ServerSession, told map[*mcp.ServerSession]struct{}) {
+	if o == nil || o.stateless {
+		return
+	}
+	for _, session := range orphaned {
+		if session == nil {
+			continue
+		}
+		if _, ended := told[session]; ended {
+			continue
+		}
+		// The error is dropped rather than logged because there is only one:
+		// the session was already gone, which is the state this is trying to
+		// reach. A client disconnecting between the eviction and this call is
+		// ordinary, not a fault.
+		_ = session.Close()
+	}
 }
 
 // dropSessionLocked and dropIDLocked remove one entry from the per-owner

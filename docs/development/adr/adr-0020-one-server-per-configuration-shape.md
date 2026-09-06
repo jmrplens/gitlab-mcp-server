@@ -209,7 +209,7 @@ server it cannot, because the same eviction forgets which credential that
 session belongs to and every later notification for it would be filtered away in
 silence.
 
-Ending it has two halves, and the first implementation had only one. Stopping
+Ending it has three halves, and the first implementation had one. Stopping
 the watchers is silent by contract: `Manager.Close` is the one stop path that
 fires no `OnStop`, since the endings it announces are the ones a subscriber did
 not ask for and a closed manager used to mean the whole server going away. So
@@ -219,6 +219,24 @@ outcome this decision calls the worse one. The eviction therefore closes that
 credential's own streams as well, by owner, which is what makes the SDK write
 the completion result the specification asks for; the next request
 re-initializes.
+
+That reaches everything a 2026-07-28 subscriber holds, because there the
+subscription **is** an open request. A session-era `resources/subscribe` holds
+nothing: it is answered and over, and the notifications would arrive later on
+the session's standalone SSE stream. On `--stateless=false` such a client was
+therefore left with a live session and a stream that would never carry anything
+again, told nothing, while this decision claimed it was told to re-subscribe.
+The only ending the protocol offers a subscriber with no open request is
+terminating its session, so the eviction does that too, for the sessions of that
+credential that no stream already ended: `sessionOwners.endSessionsWithoutStreams`,
+called after `closeOwner` and given what `closeOwner` reports. A session a
+stream ended is skipped because the completion result the SDK is writing is the
+better ending and closing the connection would race it, and on the sessionless
+transport nothing is terminated at all, since each POST's session closes with
+its own response and a legacy subscribe is refused there before it can subscribe
+anything. Refusing the legacy method on any deployment that can evict was the
+alternative, and it takes a working capability away from every session-era
+client to describe a gap that terminating the session closes.
 
 The other half is not evicting in the first place. `lastUsed` is refreshed by
 pool hits, and a credential whose only activity is a subscription produces none:
@@ -333,7 +351,9 @@ writing.
   watchers is not by itself ending the subscription: `Manager.Close` is the one
   stop path that fires no `OnStop`, so nothing reaches `listenStreams.stoppedFor`
   and the client's stream would stay open and silent. The eviction closes that
-  credential's streams itself, which is what produces the completion result.
+  credential's streams itself, which is what produces the completion result, and
+  terminates the sessions no stream ended, which is the only ending a session-era
+  `resources/subscribe` can be given.
 - NEG-004: The shape registry is a second cache beside the pool, with its own
   lifetime. A shape is dropped when its registration fails and otherwise lives
   for the process, which is bounded by the number of distinct configurations a

@@ -46,6 +46,11 @@ type credentialState struct {
 	// because a listen belongs to a session on this server, not to a watcher;
 	// each stream records its owner.
 	streams *listenStreams
+	// sessions is the shared server's record of which credential each session
+	// belongs to. Eviction reads it to end the sessions a session-era
+	// resources/subscribe left holding nothing, which no stream can reach. Nil
+	// on stdio and on a server built without one.
+	sessions *sessionOwners
 }
 
 // close releases what the entry owns, for a credential the pool has evicted.
@@ -72,14 +77,23 @@ type credentialState struct {
 // the callback contract forbids blocking. The streams are ended on that same
 // goroutine, after the watchers, so a poll that is still in flight cannot
 // notify a stream that has already been told it is over.
-func (s *credentialState) close() {
+//
+// A stream is not the only thing a subscriber can hold. On --stateless=false a
+// session-era resources/subscribe leaves no open request at all, so
+// [listenStreams.closeOwner] reaches nothing and that client was left with a
+// live session and a standalone SSE stream that would never carry anything
+// again. The sessions the eviction has just orphaned are therefore terminated
+// too, minus the ones a stream has already ended gracefully. See
+// [sessionOwners.endSessionsWithoutStreams].
+func (s *credentialState) close(orphaned []*mcp.ServerSession) {
 	if s == nil {
 		return
 	}
-	subs, streams, owner := s.subs, s.streams, s.owner
+	subs, streams, sessions, owner := s.subs, s.streams, s.sessions, s.owner
 	go func() {
 		subs.close()
-		streams.closeOwner(owner)
+		told := streams.closeOwner(owner)
+		sessions.endSessionsWithoutStreams(orphaned, told)
 	}()
 }
 
@@ -183,7 +197,12 @@ func (c *credentialStates) inUse(entry *serverpool.Entry) bool {
 }
 
 // remove drops an evicted entry's state and releases what it held.
-func (c *credentialStates) remove(owner string) {
+//
+// orphaned is the credential's sessions, which the caller has already taken out
+// of the ownership record: the record has to stop answering for them under the
+// pool's write lock, while telling their clients must not happen there, so the
+// two halves are split and the list travels between them.
+func (c *credentialStates) remove(owner string, orphaned []*mcp.ServerSession) {
 	if owner == "" {
 		return
 	}
@@ -192,7 +211,7 @@ func (c *credentialStates) remove(owner string) {
 		return
 	}
 	typed, _ := state.(*credentialState)
-	typed.close()
+	typed.close(orphaned)
 }
 
 // bindCredential runs each MCP request under the credential the POST carrying
@@ -279,12 +298,13 @@ func (sh *serverShell) newCredentialState(entry *serverpool.Entry) *credentialSt
 		cfg = sh.cfg
 	}
 	state := &credentialState{
-		owner:   entry.Owner(),
-		client:  entry.Client(),
-		limiter: toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
-		listen:  &listenCounter{},
-		subs:    sh.subs.newRuntime(entry.Owner(), entry.Client()),
-		streams: sh.streams,
+		owner:    entry.Owner(),
+		client:   entry.Client(),
+		limiter:  toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
+		listen:   &listenCounter{},
+		subs:     sh.subs.newRuntime(entry.Owner(), entry.Client()),
+		streams:  sh.streams,
+		sessions: sh.sessions,
 	}
 	if state.subs != nil {
 		state.subs.notifier.attach(sh.server)
