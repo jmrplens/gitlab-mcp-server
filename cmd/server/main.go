@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -2697,13 +2696,11 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	rootHandler = securityHeadersMiddleware(inboundLimitsFor(cfg), rootHandler)
 
 	httpServer := newHTTPServer(httpAddr, rootHandler, httpIdleTimeout)
-	if cfg.TLSCertFile != "" {
-		// Stated rather than inherited: the standard library's default
-		// floor has moved before and may move again, and a deployment that
-		// turned TLS on to satisfy an auditor should be able to read the
-		// floor off this line.
-		httpServer.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	tlsConfig, tlsErr := tlsConfigFor(cfg.TLSCertFile, cfg.TLSKeyFile)
+	if tlsErr != nil {
+		return tlsErr
 	}
+	httpServer.TLSConfig = tlsConfig
 
 	serverErr, startErr := startServing(ctx, cfg, httpServer, httpAddr, listener)
 	if startErr != nil {
@@ -2747,13 +2744,15 @@ func startServing(
 
 	serverErr := make(chan error, 1)
 	go func() {
-		// ServeTLS with empty filenames would demand a certificate from
-		// TLSConfig, so the plain path stays plain: TLS is only reached when
-		// the operator supplied a pair, which validateTLSFiles has already
-		// loaded once to prove it parses.
+		// ServeTLS is given no filenames on purpose. The pair is already in
+		// TLSConfig behind a GetCertificate that re-reads it when it changes,
+		// and net/http replaces TLSConfig.Certificates with one load of the
+		// named files whenever either name is non-empty: passing them here
+		// would pin the certificate to what was on disk at startup, which is
+		// the rotation this indirection exists to allow.
 		var err error
 		if cfg.TLSCertFile != "" {
-			err = httpServer.ServeTLS(listener, cfg.TLSCertFile, cfg.TLSKeyFile)
+			err = httpServer.ServeTLS(listener, "", "")
 		} else {
 			err = httpServer.Serve(listener)
 		}
