@@ -27,6 +27,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                           | `make audit-test-names`, `make check-test-file-names` |
 | `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                      | `make check-test-goroutines`                          |
 | `audit_test_subtests`          | Source quality audits         | Case loops that assert without a `t.Run` subtest; `-fix` rewrites the unambiguous ones                                                                                                              | `make check-test-subtests`                            |
+| `audit_md_escaping`            | Source quality audits         | Values a Markdown formatter interpolates into a table cell, heading, list item or link without an escaping helper                                                                                   | `make check-md-escaping`                              |
 | `audit_string_dupes`           | Source quality audits         | Finds duplicated string literals missing `const`/`var` declarations                                                                                                                                 | —                                                     |
 | `audit_supply_chain`           | Release & supply-chain audits | Five release-configuration invariants: pinned actions, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current security policy, signature-verifying installers | `make check-supply-chain`                             |
 | `audit_install_buttons`        | Release & supply-chain audits | Decodes every one-click install button and holds the buttons to one configuration per command                                                                                                       | `make check-install-buttons`                          |
@@ -720,7 +721,55 @@ Per-file tallies (`sites`, `fixable`), a summary line, and optionally the JSON w
 #### Make targets
 
 - `make audit-test-subtests` — writes `plan/test-subtests-backlog.json`.
-- `make check-test-subtests` — CI gate; also step [7/8] of `make analyze`.
+- `make check-test-subtests` — CI gate; also step [7/9] of `make analyze`.
+
+### audit_md_escaping
+
+Type-checks the packages under `internal/`, finds every call that writes Markdown with a runtime value in it, and fails when a value this server did not write can reach a construct it can change the shape of. `toolutil.EscapeMdTableCell` belongs on every GitLab-authored string between two pipes of a table row and on every single-line list value, `toolutil.EscapeMdHeading` on the one value a formatter puts in a heading, and `toolutil.MdTitleLink` on both halves of a link. The containment is not only table geometry: `EscapeMdTableCell` entity-encodes `<` so GitLab-authored text cannot open raw HTML in a client that renders Markdown, and a title of `` Fix login](http://attacker.invalid/x) `` closes the label of a hand-built link and opens a destination of its own.
+
+A sink is an `fmt` formatting call whose format argument is a constant (a literal or a named constant, both resolved by the type checker) or a call of `toolutil.MarkdownTableRow` or `MarkdownTableHeader`, which have no template because every argument they take is a cell. The template is parsed with `fmt`'s own grammar, explicit argument indices included, so `[%[1]s](%[1]s)` pairs correctly; only `%s`, `%v` and `%q` are judged. The construct comes from the line the hole sits on: a leading pipe is a table cell, one to six `#` and a space a heading, a bullet or ordered marker a list item, an unclosed `[` a link label, and the text after `](` a link destination. Prose is skipped.
+
+Each value is then followed back to where it came from: a constant, a non-textual type, an escaper, a nested `Sprintf` of safe halves, a `strings` transform of safe values, a helper whose every return is safe, a local whose every assignment is safe, or a parameter every caller passes a safe value to. A call binds its arguments to the callee's parameters, so a helper is judged at the call site that reaches it, which matters for `toolutil.FormatTime`: it returns its argument verbatim when neither layout parses, and it is called from about a hundred and fifty places. A value that bottoms out at a field of a struct filled from a GitLab response is a finding; anything the walk cannot follow is reported in an unresolved bucket of its own and never counted as safe.
+
+```bash
+go run ./cmd/audit_md_escaping/
+go run ./cmd/audit_md_escaping/ -v -json plan/md-escaping-backlog.json
+go run ./cmd/audit_md_escaping/ -check
+go run ./cmd/audit_md_escaping/ -contexts table-cell,heading -check
+go run ./cmd/audit_md_escaping/ -check ./internal/tools/issues
+```
+
+#### Flags
+
+| Flag               | Type   | Default | Description                                                                                                                     |
+| ------------------ | ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `-dir`             | string | `.`     | Repository root to audit                                                                                                        |
+| `-json`            | string | _(off)_ | Write the JSON work list to this path                                                                                           |
+| `-contexts`        | string | `all`   | Constructs to judge: `all`, or a comma-separated list of `heading`, `link-destination`, `link-label`, `list-item`, `table-cell` |
+| `-check`           | bool   | `false` | Exit non-zero when a value still reaches a Markdown construct unescaped                                                         |
+| `-v`               | bool   | `false` | List the excused and unresolved values as well as the failing ones                                                              |
+| `-fail-unresolved` | bool   | `false` | Count a value the audit cannot follow as a failure                                                                              |
+
+Package patterns after the flags narrow the sweep, which makes checking one domain while working on it cheap. The default is `./internal/...`.
+
+#### Declaring that a value is already safe
+
+Escaping a value that needs none is noise that teaches the next reader the wrong rule, so an exemption is declared in the source, in the package that owns the formatter:
+
+```go
+//gitlab:allow-unescaped result.ID: a canonical catalog ID, compiled in from an ActionSpec rather than read from GitLab.
+```
+
+The expression is the one the report prints, and the directive excuses that expression wherever the package interpolates it. A directive that excuses nothing fails the gate, so an exemption cannot outlive the reason it was written for.
+
+#### Output
+
+Findings grouped by package, each naming the file, line, formatter, construct, verb, expression, the helper it wants and how the walk got there; then a summary with the counts and a breakdown by construct. `-v` adds the excused and unresolved buckets. The JSON work list carries `findings`, `unresolved`, `excused`, `stale_directives` and a `summary` with per-construct and per-package counts.
+
+#### Make targets
+
+- `make audit-md-escaping` — report plus `plan/md-escaping-backlog.json`.
+- `make check-md-escaping` — CI gate; also step [9/9] of `make analyze`.
 
 ### audit_string_dupes
 
@@ -1250,6 +1299,7 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-test-goroutines`                  | `audit_test_goroutines`            | No `testing.T` abort is made off the test goroutine                                                                        | Non-zero if any abort site exists                         |
 | `check-test-subtests`                    | `audit_test_subtests`              | No case loop asserts without a `t.Run` subtest                                                                             | Non-zero if any site remains                              |
 | `check-test-file-names`                  | `audit_test_names -check-files`    | Every `_test.go` is named after a module it tests                                                                          | Non-zero on a violation                                   |
+| `check-md-escaping`                      | `audit_md_escaping -check`         | No value reaches a Markdown table cell, heading, list item or link unescaped                                               | Non-zero on a finding or a directive that excuses nothing |
 | `check-site-stats`                       | `audit_metrics -site-stats -check` | `site/src/data/stats.json` is current                                                                                      | Non-zero if the file is stale                             |
 | `check-bench-resources`                  | `bench_resources -check`           | The committed benchmark charts and tables match the committed record                                                       | Non-zero if they are stale                                |
 | `brand-check`                            | `gen_brand --check`                | The committed brand assets match the geometry                                                                              | Non-zero on drift                                         |

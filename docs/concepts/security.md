@@ -369,14 +369,23 @@ MCP tool output contains user-generated content (UGC) from GitLab — issue desc
 
 ### Escaping Strategy
 
-All Markdown formatters apply context-appropriate escaping to UGC fields:
+Markdown formatters apply context-appropriate escaping to UGC fields:
 
-| Context                  | Escape Function       | Purpose                                                   |
-| ------------------------ | --------------------- | --------------------------------------------------------- |
-| Table cells              | `EscapeMdTableCell()` | Prevents pipe characters from breaking table structure    |
-| Headings                 | `EscapeMdHeading()`   | Prevents `#` injection that would break heading hierarchy |
-| Multi-line body content  | `WrapGFMBody()`       | Wraps in blockquote (`>`) to contain structural Markdown  |
-| List items (single-line) | `EscapeMdTableCell()` | Strips newlines and pipes from inline values              |
+| Context                  | Escape Function       | Purpose                                                     |
+| ------------------------ | --------------------- | ----------------------------------------------------------- |
+| Table cells              | `EscapeMdTableCell()` | Prevents pipe characters from breaking table structure      |
+| Headings                 | `EscapeMdHeading()`   | Prevents `#` injection that would break heading hierarchy   |
+| Multi-line body content  | `WrapGFMBody()`       | Wraps in blockquote (`>`) to contain structural Markdown    |
+| List items (single-line) | `EscapeMdTableCell()` | Strips newlines and pipes from inline values                |
+| Links                    | `MdTitleLink()`       | Escapes both halves, so neither can end the link it sits in |
+
+Habit and review are not what holds this: `make check-md-escaping` type-checks
+every formatter under `internal/` and fails when a value that came from GitLab
+reaches one of those constructs with no helper between it and the page. A value
+that needs no escaping is declared where it is written, with
+`//gitlab:allow-unescaped <expression>: <reason>`, and a declaration that
+excuses nothing fails the gate too. See
+[cmd utilities](../development/cmd-utilities.md#audit_md_escaping).
 
 ### UGC Boundary Markers
 
@@ -388,7 +397,7 @@ Explicit boundary markers (e.g., `<user_content>...</user_content>`) were evalua
 
 ### Coverage
 
-Escaping is applied to UGC fields across the 177 packages under `internal/tools`. Key field types:
+Escaping is applied to UGC fields across the packages under `internal/tools`, and what is not yet routed through a helper is what `make audit-md-escaping` lists. Key field types:
 
 - **Titles/names**: `EscapeMdTableCell()` in table contexts, `EscapeMdHeading()` in heading contexts
 - **Descriptions/bodies**: `WrapGFMBody()` for multi-line GFM content
