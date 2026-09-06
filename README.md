@@ -275,12 +275,12 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               858 | n/a                            |              1,520 |         8,835 |       10,355 |
-| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               858 | n/a                            |              1,520 |           170 |        1,690 |
-| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,011 | n/a                            |              1,520 |         8,835 |       10,355 |
-| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,011 | n/a                            |              1,520 |           170 |        1,690 |
-| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,077 | n/a                            |              1,520 |         8,835 |       10,355 |
-| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,077 | n/a                            |              1,520 |           170 |        1,690 |
+| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               870 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               870 | n/a                            |              1,520 |           170 |        1,690 |
+| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,023 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,023 | n/a                            |              1,520 |           170 |        1,690 |
+| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,089 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,089 | n/a                            |              1,520 |           170 |        1,690 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_MCP_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 

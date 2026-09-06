@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Meta-Tools Reference
 
-> Version 2.7.5 | up to 1079 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.5 | up to 1091 tools | 33 base meta-tools; 50 self-managed enterprise meta-tools; 51 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -610,6 +610,163 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ```json
 {"additionalProperties":false,"properties":{"access_level":{"type":"integer"},"active":{"type":"boolean"},"created_at":{"type":"string"},"description":{"type":"string"},"expires_at":{"type":"string"},"id":{"type":"integer"},"last_used_at":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"revoked":{"type":"boolean"},"scopes":{"items":{"type":"string"},"type":["null","array"]},"token":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","name","revoked","active"],"type":"object"}
+```
+
+</details>
+
+### gitlab_achievement
+
+**Achievement**
+
+Use {"action":"list","params":{...}}. The only top-level keys are action and params.
+Action params schema: gitlab://tools/gitlab_achievement.<action>.
+Action guidance:
+- award: Award an achievement to one user, creating an award record with its own id. That new id, not the achievement_id passed in, is what achievement.revoke and the user_achievement actions take. An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers.
+- create: Define a new achievement in a group or project namespace, addressed by its numeric namespace_id rather than its path. Creating an achievement does not give it to anyone. Hand it out afterwards with achievement.award. Send an avatar as exactly one of avatar_file_path (a local image the MCP server reads, unavailable when the server is reached over HTTP) or avatar_content_base64 (inline bytes), together with avatar_filename.
+- delete: Delete an achievement definition from its namespace. Every award ever made from it goes with it, so prefer achievement.revoke when the intent is to take the badge back from one person rather than to retire the badge itself.
+- list: List the achievements a namespace defines, found by its full_path and paginated by cursor. This is the action that turns a namespace path into the numeric achievement_id every other action needs. It returns badge definitions, not who holds them, which is what achievement.recipients answers.
+- recipients: List every award of one achievement, including repeat awards to the same person and awards already revoked. Use achievement.unique_users instead to count distinct holders, and achievement.user_list to look at one person rather than one badge. Each entry carries the user_achievement_id that revoke and delete take.
+- revoke: Revoke one award, taking the badge back from its holder while keeping the record and stamping who revoked it and when. Use achievement.user_achievement_delete instead to erase the record outright, and achievement.delete to retire the badge for everyone. An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers.
+- unique_users: List the distinct users who hold one achievement, counting a person once however many times they were awarded it. Use achievement.recipients instead when the award records themselves are wanted, because this action returns user profiles and carries no user_achievement_id to revoke or delete with.
+- update: Change an existing achievement's name, description, or avatar, addressed by its numeric achievement_id. Every field is optional and an omitted one keeps its current value, so this cannot be used to clear a description. Send an avatar as exactly one of avatar_file_path (a local image the MCP server reads, unavailable when the server is reached over HTTP) or avatar_content_base64 (inline bytes), together with avatar_filename.
+- user_achievement_delete: Erase one award record outright, leaving no trace that the badge was ever held. Use achievement.revoke instead when the history should be kept, and achievement.delete to retire the badge itself. An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers.
+- user_achievement_reorder: Set the order one user's awards appear in on their profile, highest priority first. Pass every award ID of that one user in the wanted order, since the mutation reads the whole sequence rather than moving a single entry. Read the current order from achievement.user_list.
+- user_achievement_update: Change one award, which today means whether the recipient's profile displays it. This edits an award, not the badge behind it, so use achievement.update to rename or re-illustrate the achievement everyone holds. An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers.
+- user_list: List the awards one user holds, found by username and paginated by cursor. This is the person-centered view: achievement.recipients answers the opposite question, who holds one badge. Set include_hidden to also return awards the user hid from their profile, which only they and namespace maintainers or owners can see.
+Parameter guidance:
+- award.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.
+- award.award_message. Source: Short note shown with the award, written by the caller, up to 200 characters. Avoid: GitLab rejects an award_message longer than 200 characters.
+- award.user_id: scope_user. Source: Numeric ID of the recipient, from user.list or user.get. Avoid: user_id is numeric. The username string belongs to achievement.user_list instead.
+- create.avatar_content_base64: inline_file_content. Source: Base64-encoded image bytes, for when no local path is available or the server is remote. Avoid: Send exactly one of avatar_file_path or avatar_content_base64, never both.
+- create.avatar_file_path: local_file_path. Source: Absolute path to an image on the machine the MCP server runs on. Avoid: Send exactly one of avatar_file_path or avatar_content_base64, never both., A server reached over HTTP refuses this parameter, because the path would name its own disk rather than the caller's. Send avatar_content_base64 there.
+- create.avatar_filename. Source: File name to record for the upload, such as badge.png. Avoid: Required whenever an avatar is sent by either route, because GitLab identifies the upload part by its file name.
+- create.name. Source: Display name for the badge, chosen by the caller.
+- create.namespace_id: scope_namespace. Source: Numeric ID of the owning group or project namespace, from group.get or project.get. Avoid: namespace_id is numeric here. The list and recipients actions take a path instead, in full_path.
+- delete.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.
+- list.after: pagination_cursor. Source: The pagination.end_cursor value of the previous response. Avoid: These endpoints paginate by opaque cursor, so page and per_page are not accepted., Page backwards with before and last, taking the cursor from pagination.start_cursor.
+- list.first: pagination_limit. Source: How many items to return, chosen by the caller, between 1 and 100 and defaulting to 20. Avoid: Set first for forward paging or last for backward paging, never both., A value above 100 is clamped to 100 rather than refused.
+- list.full_path: scope_namespace. Source: Full path of the owning group or project, from group.list or project.list. Avoid: full_path is a path string. The numeric namespace_id belongs to achievement.create instead.
+- list.ids. Source: Numeric achievement ids to narrow the listing to. Avoid: Omitting ids lists every achievement in the namespace rather than none.
+- recipients.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.
+- recipients.after: pagination_cursor. Source: The pagination.end_cursor value of the previous response. Avoid: These endpoints paginate by opaque cursor, so page and per_page are not accepted., Page backwards with before and last, taking the cursor from pagination.start_cursor.
+- recipients.first: pagination_limit. Source: How many items to return, chosen by the caller, between 1 and 100 and defaulting to 20. Avoid: Set first for forward paging or last for backward paging, never both., A value above 100 is clamped to 100 rather than refused.
+- recipients.full_path: scope_namespace. Source: Full path of the owning group or project, from group.list or project.list. Avoid: full_path is a path string. The numeric namespace_id belongs to achievement.create instead.
+- revoke.user_achievement_id: user_achievement_id. Source: Numeric award id from achievement.recipients or achievement.user_list. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::UserAchievement/88 global ID.
+- unique_users.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.
+- unique_users.after: pagination_cursor. Source: The pagination.end_cursor value of the previous response. Avoid: These endpoints paginate by opaque cursor, so page and per_page are not accepted., Page backwards with before and last, taking the cursor from pagination.start_cursor.
+- unique_users.first: pagination_limit. Source: How many items to return, chosen by the caller, between 1 and 100 and defaulting to 20. Avoid: Set first for forward paging or last for backward paging, never both., A value above 100 is clamped to 100 rather than refused.
+- unique_users.full_path: scope_namespace. Source: Full path of the owning group or project, from group.list or project.list. Avoid: full_path is a path string. The numeric namespace_id belongs to achievement.create instead.
+- update.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.
+- update.avatar_content_base64: inline_file_content. Source: Base64-encoded image bytes, for when no local path is available or the server is remote. Avoid: Send exactly one of avatar_file_path or avatar_content_base64, never both.
+- update.avatar_file_path: local_file_path. Source: Absolute path to an image on the machine the MCP server runs on. Avoid: Send exactly one of avatar_file_path or avatar_content_base64, never both., A server reached over HTTP refuses this parameter, because the path would name its own disk rather than the caller's. Send avatar_content_base64 there.
+- update.avatar_filename. Source: File name to record for the upload, such as badge.png. Avoid: Required whenever an avatar is sent by either route, because GitLab identifies the upload part by its file name.
+- user_achievement_delete.user_achievement_id: user_achievement_id. Source: Numeric award id from achievement.recipients or achievement.user_list. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::UserAchievement/88 global ID.
+- user_achievement_reorder.user_achievement_ids: user_achievement_id_list. Source: Award IDs from a prior achievement.user_list response, listed in the wanted order. Avoid: These are award IDs, not achievement IDs, and they must all belong to one user., At least one ID is required, and the whole sequence is replaced rather than merged.
+- user_achievement_update.show_on_profile. Source: Whether the recipient's profile displays the award. Avoid: Omitting the field leaves the current visibility alone rather than hiding the award.
+- user_achievement_update.user_achievement_id: user_achievement_id. Source: Numeric award id from achievement.recipients or achievement.user_list. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::UserAchievement/88 global ID.
+- user_list.after: pagination_cursor. Source: The pagination.end_cursor value of the previous response. Avoid: These endpoints paginate by opaque cursor, so page and per_page are not accepted., Page backwards with before and last, taking the cursor from pagination.start_cursor.
+- user_list.first: pagination_limit. Source: How many items to return, chosen by the caller, between 1 and 100 and defaulting to 20. Avoid: Set first for forward paging or last for backward paging, never both., A value above 100 is clamped to 100 rather than refused.
+- user_list.include_hidden. Source: Whether to include awards the recipient hid from their profile. Avoid: Hidden awards come back only for the user themself and for namespace or instance maintainers and owners, so another caller sees no difference.
+- user_list.username: scope_user. Source: Account name from user.list, without a leading at sign. Avoid: This action takes the username string. The numeric user_id belongs to achievement.award instead.
+
+GitLab achievement actions.
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
+**Action Output Schemas:**
+
+<details><summary>award</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_achievement":{"additionalProperties":false,"properties":{"achievement_id":{"type":"integer"},"award_message":{"type":"string"},"awarded_by_user_id":{"type":"integer"},"created_at":{"type":"string"},"id":{"type":"integer"},"priority":{"type":["null","integer"]},"revoked_at":{"type":"string"},"revoked_by_user_id":{"type":["null","integer"]},"show_on_profile":{"type":"boolean"},"updated_at":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","achievement_id","user_id","awarded_by_user_id","show_on_profile"],"type":"object"}},"required":["user_achievement"],"type":"object"}
+```
+
+</details>
+
+<details><summary>create</summary>
+
+```json
+{"additionalProperties":false,"properties":{"achievement":{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"namespace_id":{"type":"integer"},"updated_at":{"type":"string"}},"required":["id","namespace_id","name"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["achievement"],"type":"object"}
+```
+
+</details>
+
+<details><summary>delete</summary>
+
+```json
+{"additionalProperties":false,"properties":{"achievement":{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"namespace_id":{"type":"integer"},"updated_at":{"type":"string"}},"required":["id","namespace_id","name"],"type":"object"},"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message","achievement"],"type":"object"}
+```
+
+</details>
+
+<details><summary>list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"achievements":{"items":{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"namespace_id":{"type":"integer"},"updated_at":{"type":"string"}},"required":["id","namespace_id","name"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"}},"required":["achievements","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>recipients</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"},"user_achievements":{"items":{"additionalProperties":false,"properties":{"achievement_id":{"type":"integer"},"award_message":{"type":"string"},"awarded_by_user_id":{"type":"integer"},"created_at":{"type":"string"},"id":{"type":"integer"},"priority":{"type":["null","integer"]},"revoked_at":{"type":"string"},"revoked_by_user_id":{"type":["null","integer"]},"show_on_profile":{"type":"boolean"},"updated_at":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","achievement_id","user_id","awarded_by_user_id","show_on_profile"],"type":"object"},"type":["null","array"]}},"required":["user_achievements","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>revoke</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"},"user_achievement":{"additionalProperties":false,"properties":{"achievement_id":{"type":"integer"},"award_message":{"type":"string"},"awarded_by_user_id":{"type":"integer"},"created_at":{"type":"string"},"id":{"type":"integer"},"priority":{"type":["null","integer"]},"revoked_at":{"type":"string"},"revoked_by_user_id":{"type":["null","integer"]},"show_on_profile":{"type":"boolean"},"updated_at":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","achievement_id","user_id","awarded_by_user_id","show_on_profile"],"type":"object"}},"required":["status","message","user_achievement"],"type":"object"}
+```
+
+</details>
+
+<details><summary>unique_users</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"},"users":{"items":{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"created_at":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"state":{"type":"string"},"username":{"type":"string"},"web_url":{"type":"string"}},"required":["id","username","name","state","avatar_url","web_url"],"type":["null","object"]},"type":["null","array"]}},"required":["users","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>update</summary>
+
+```json
+{"additionalProperties":false,"properties":{"achievement":{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"namespace_id":{"type":"integer"},"updated_at":{"type":"string"}},"required":["id","namespace_id","name"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["achievement"],"type":"object"}
+```
+
+</details>
+
+<details><summary>user_achievement_delete</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"},"user_achievement":{"additionalProperties":false,"properties":{"achievement_id":{"type":"integer"},"award_message":{"type":"string"},"awarded_by_user_id":{"type":"integer"},"created_at":{"type":"string"},"id":{"type":"integer"},"priority":{"type":["null","integer"]},"revoked_at":{"type":"string"},"revoked_by_user_id":{"type":["null","integer"]},"show_on_profile":{"type":"boolean"},"updated_at":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","achievement_id","user_id","awarded_by_user_id","show_on_profile"],"type":"object"}},"required":["status","message","user_achievement"],"type":"object"}
+```
+
+</details>
+
+<details><summary>user_achievement_reorder</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"},"user_achievements":{"items":{"additionalProperties":false,"properties":{"achievement_id":{"type":"integer"},"award_message":{"type":"string"},"awarded_by_user_id":{"type":"integer"},"created_at":{"type":"string"},"id":{"type":"integer"},"priority":{"type":["null","integer"]},"revoked_at":{"type":"string"},"revoked_by_user_id":{"type":["null","integer"]},"show_on_profile":{"type":"boolean"},"updated_at":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","achievement_id","user_id","awarded_by_user_id","show_on_profile"],"type":"object"},"type":["null","array"]}},"required":["status","message","user_achievements"],"type":"object"}
+```
+
+</details>
+
+<details><summary>user_achievement_update</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"user_achievement":{"additionalProperties":false,"properties":{"achievement_id":{"type":"integer"},"award_message":{"type":"string"},"awarded_by_user_id":{"type":"integer"},"created_at":{"type":"string"},"id":{"type":"integer"},"priority":{"type":["null","integer"]},"revoked_at":{"type":"string"},"revoked_by_user_id":{"type":["null","integer"]},"show_on_profile":{"type":"boolean"},"updated_at":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","achievement_id","user_id","awarded_by_user_id","show_on_profile"],"type":"object"}},"required":["user_achievement"],"type":"object"}
+```
+
+</details>
+
+<details><summary>user_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"},"user_achievements":{"items":{"additionalProperties":false,"properties":{"achievement_id":{"type":"integer"},"award_message":{"type":"string"},"awarded_by_user_id":{"type":"integer"},"created_at":{"type":"string"},"id":{"type":"integer"},"priority":{"type":["null","integer"]},"revoked_at":{"type":"string"},"revoked_by_user_id":{"type":["null","integer"]},"show_on_profile":{"type":"boolean"},"updated_at":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","achievement_id","user_id","awarded_by_user_id","show_on_profile"],"type":"object"},"type":["null","array"]}},"required":["user_achievements","pagination"],"type":"object"}
 ```
 
 </details>

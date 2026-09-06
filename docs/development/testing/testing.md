@@ -27,8 +27,8 @@
 | Test files (test/e2e/)                                |    237 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     21 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.2% |
-| Overall coverage (`go test ./internal/...`)           |  98.4% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
+| Overall coverage (`go test ./internal/...`)           |  98.5% |
 | Average package coverage                              |  98.7% |
 
 ### Naming Convention Stats
@@ -71,7 +71,7 @@
 | oauth         |        78 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
 | prompts       |       280 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
-| resources     |       191 |    99.5% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
+| resources     |       191 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
 | serverpool    |       116 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                             |
 | subscriptions |        90 |    98.5% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
@@ -118,7 +118,7 @@
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        97 |          2 |   100.0% |        18 |
-| achievements            |        54 |          3 |      n/a |        12 |
+| achievements            |        54 |          3 |   100.0% |        12 |
 | actioncatalog           |        44 |          5 |    99.1% |         0 |
 | actioncompat            |        44 |          2 |   100.0% |         1 |
 | adminspecs              |         6 |          1 |   100.0% |        92 |
@@ -369,7 +369,7 @@
 | oauth         |   100.0% |
 | progress      |    83.8% |
 | prompts       |   100.0% |
-| resources     |    99.5% |
+| resources     |   100.0% |
 | serverpool    |   100.0% |
 | subscriptions |    98.5% |
 | telemetry     |    93.1% |
@@ -383,7 +383,7 @@
 | tools (orch.)           |    98.9% |
 | accessrequests          |   100.0% |
 | accesstokens            |   100.0% |
-| achievements            |      n/a |
+| achievements            |   100.0% |
 | actioncatalog           |    99.1% |
 | actioncompat            |   100.0% |
 | adminspecs              |   100.0% |
