@@ -6,7 +6,7 @@ faq:
   - q: "How much memory does one pooled credential cost?"
     a: "At rest with no connection open, 7.7 KiB on the dynamic surface, 8.3 KiB on meta and 8.5 KiB on individual. The catalog, its schemas, the discovery index and the MCP server itself are shared per configuration shape, so what a credential holds is its GitLab client, its rate-limit bucket, its listen counter, its watchers and its sessions, which is why the figure barely moves with the surface. It is the live heap of an idle process; a credential holding a connection also costs the buffers behind it, and one with requests in flight costs what those requests allocate, which is the term that actually sizes an instance."
   - q: "How many calls a second can one instance serve?"
-    a: "Threads divided by processor time per call. On the benchmark's reference host, an Intel i5-14400 with 16 threads, a call costs about 8 ms on the dynamic and meta surfaces and about 130 ms on individual, and the measured series plateaus at roughly 1,650 calls a second on dynamic, reached by five concurrently busy credentials and using thirteen of the sixteen threads. The individual surface plateaus near 106 calls a second, because one `tools/list` there costs sixteen times what a whole dynamic call does."
+    a: "Threads divided by processor time per call. On the benchmark's reference host, an Intel i5-14400 with 16 threads, a call costs about 8 ms on the dynamic and meta surfaces and about 120 ms on individual, and the measured series plateaus at roughly 1,800 calls a second on dynamic, reached by five concurrently busy credentials and using fourteen of the sixteen threads. The individual surface plateaus near 130 calls a second, because one `tools/list` there costs fifteen times what a whole dynamic call does."
   - q: "Is `--max-http-clients` how I size the memory?"
     a: "No. It bounds how many credentials the pool keeps, and a pooled credential is tens of kilobytes, so its default of 100 bounds about five mebibytes. Sizing an instance against it is wrong in both directions: it neither reserves that memory nor limits what the callers behind those credentials allocate while their requests are served. Size from how many callers will have requests in flight at the same moment."
 ---
@@ -110,17 +110,17 @@ flight per credential on the dynamic and meta surfaces and two on individual:
 | ------------ | ----------------------- | -------------------------------------------------- |
 | `dynamic`    | about 8 ms              | The SDK's result marshalling and schema validation |
 | `meta`       | about 8 ms              | The same                                           |
-| `individual` | about 130 ms            | Marshalling a 3 MB `tools/list` response           |
+| `individual` | about 120 ms            | Marshalling a 3 MB `tools/list` response           |
 
 ```text
 calls per second ceiling  =  usable threads  /  processor seconds per call
 ```
 
 `16 / 0.008` is 2,000 calls a second in theory. The measured series plateaus at
-about **1,650 calls a second** on the dynamic surface, reached by five
+about **1,800 calls a second** on the dynamic surface, reached by five
 credentials each keeping four requests in flight, and never exceeded no matter
-how many more credentials are added; that plateau is thirteen of the host's
-sixteen threads. The individual surface plateaus at about **106 calls a second**
+how many more credentials are added; that plateau is fourteen of the host's
+sixteen threads. The individual surface plateaus at about **130 calls a second**
 on the same host.
 
 Use it to size, not as a promise: your GitLab is across a network this
@@ -139,7 +139,7 @@ the peak resident set under your own traffic rather than the credential count.
 
 **Processor.** Five hundred editors do not make five hundred concurrent calls.
 Fifty calls a second is `50 × 0.008 = 0.4` of a thread on the reference host. A
-thousand is eight threads, about two thirds of one reference host's ceiling; add
+thousand is eight threads, a little over half of one reference host's ceiling; add
 a second instance for headroom rather than for memory.
 
 **Reach for a second instance for availability first.** The ceiling that usually

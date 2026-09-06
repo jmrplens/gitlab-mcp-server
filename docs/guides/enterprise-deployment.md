@@ -112,7 +112,7 @@ dynamic and meta surfaces and two on individual:
 | ------------ | ----------------------- | -------------------------------------------------- |
 | `dynamic`    | about 8 ms              | The SDK's result marshalling and schema validation |
 | `meta`       | about 8 ms              | The same                                           |
-| `individual` | about 130 ms            | Marshalling a 3 MB `tools/list` response           |
+| `individual` | about 120 ms            | Marshalling a 3 MB `tools/list` response           |
 
 The arithmetic that follows is the only one that matters for capacity:
 
@@ -121,12 +121,12 @@ calls per second ceiling  =  usable threads  /  processor seconds per call
 ```
 
 On the reference host, `16 / 0.008` is 2,000 calls a second in theory. The
-measured series plateaus at about **1,650 calls a second** on the dynamic
+measured series plateaus at about **1,800 calls a second** on the dynamic
 surface, reached by five credentials each keeping four requests in flight, and
 never exceeded no matter how many more credentials are added; that plateau is
-thirteen of the host's sixteen threads.
-The individual surface plateaus at about **106 calls a second** on the same
-host, because one `tools/list` there costs sixteen times what a whole dynamic
+fourteen of the host's sixteen threads.
+The individual surface plateaus at about **130 calls a second** on the same
+host, because one `tools/list` there costs fifteen times what a whole dynamic
 call does.
 
 Use it to size, not as a promise. Your instance's GitLab is on the other side of
@@ -149,7 +149,7 @@ under your own traffic rather than the credential count.
 Take the number actually in flight: if the busy hour sees fifty calls a second,
 that is `50 × 0.008 = 0.4` of a thread on the reference host, and the deployment
 is bound by nothing. If it sees a thousand, that is eight threads and one
-instance of the reference host's size is at about two thirds of its ceiling; add
+instance of the reference host's size is a little over half its ceiling; add
 the second instance for headroom rather than for memory.
 
 **Reach for a second instance for availability first.** A single instance holds

@@ -4,11 +4,11 @@ description: "What the server costs to run, measured rather than estimated: resi
 datePublished: "2026-09-04"
 faq:
   - q: "How much memory should I give the container?"
-    a: "In HTTP mode, size for **credentials that are calling, not for tokens and not for requests**. The process idles at 36 to 40 MiB holding no tool catalog at all. Holding credentials is nearly free: the concurrency series measured a settled live heap growing by 50.9 KiB per credential on the dynamic surface, 52.1 KiB on meta and 29.1 KiB on individual, so a thousand admitted credentials are under 120 MiB of live heap on any surface. What costs memory is serving them: with every credential holding requests in flight, the peak resident set grew by 4.05, 0.84 and 4.00 MiB per credential and reached 3.9, 1.0 and 4.4 GiB at a thousand. So a pool of a hundred idle tokens is about five mebibytes; a hundred callers at once is 0.5 to 2.0 GiB. 512 MiB serves twenty concurrent credentials on dynamic or meta; individual needs a gigabyte for the same. In stdio mode each client gets its own process of roughly 108 to 254 MiB."
+    a: "In HTTP mode, size for **credentials that are calling, not for tokens and not for requests**. The process idles at 35 to 38 MiB holding no tool catalog at all. Holding credentials is nearly free: the concurrency series measured a settled live heap growing by 50.6 KiB per credential on the dynamic surface, 52.6 KiB on meta and 29.8 KiB on individual, so a thousand admitted credentials are under 120 MiB of live heap on any surface. What costs memory is serving them: with every credential holding requests in flight, the peak resident set grew by 1.92, 0.81 and 4.27 MiB per credential and stood at 1.5, 1.0 and 4.7 GiB at the thousand-credential step. So a pool of a hundred idle tokens is about five mebibytes; a hundred callers at once is 0.4 to 1.7 GiB. 512 MiB serves twenty concurrent credentials on dynamic or meta; individual needs a gigabyte and a half for the same. In stdio mode each client gets its own process of roughly 106 to 277 MiB."
   - q: "Why is the first tool call after a new token so slow?"
-    a: "It is paying for registration. The process answers `/health` in about 52 ms while holding no catalog; the first credential of a configuration builds one, which took 0.39 seconds on dynamic, 0.41 on meta and 1.27 on individual on the host measured. Every later call is served from the built catalog, and so is every later credential of the same configuration, since the server is built once per configuration shape and shared. The wait returns whenever the pool reclaims the entry, which `--pool-idle-timeout` and `--max-http-clients` decide."
+    a: "It is paying for registration. The process answers `/health` in 51 to 59 ms while holding no catalog; the first credential of a configuration builds one, which took 0.32 seconds on dynamic, 0.32 on meta and 1.28 on individual on the host measured. Every later call is served from the built catalog, and so is every later credential of the same configuration, since the server is built once per configuration shape and shared. The wait returns whenever the pool reclaims the entry, which `--pool-idle-timeout` and `--max-http-clients` decide."
   - q: "Does the tool surface change how much memory the server needs?"
-    a: "For tenancy it does not change it at all: 51 KiB per credential on dynamic, 52 on meta and 29 on individual, across surfaces whose registered tool counts differ by a factor of five hundred, because the server and its catalog are built once per configuration shape and shared. Under load the surfaces do separate, and not by tool count: meta is the cheapest per calling credential at 0.84 MiB against 4.05 for dynamic and 4.00 for individual, which is what a surface allocates while it answers a call. What the surface really changes is the size of a `tools/list`: 12 KB on dynamic, 599 KB on meta and 3.2 MB on individual, which is a warm response of a few milliseconds against a third of a second, and 105 ms of processor time for the average call on individual, where every second call is one of those listings."
+    a: "For tenancy it does not change it at all: 51 KiB per credential on dynamic, 53 on meta and 30 on individual, across surfaces whose registered tool counts differ by a factor of five hundred, because the server and its catalog are built once per configuration shape and shared. Under load the surfaces do separate, and not by tool count: meta is the cheapest per calling credential at 0.81 MiB against 1.92 for dynamic and 4.27 for individual, which is what a surface allocates while it answers a call. What the surface really changes is the size of a `tools/list`: 12 KB on dynamic, 599 KB on meta and 3.2 MB on individual, which is a warm response of milliseconds against seconds, and 120 ms of processor time for the average call on individual, where every second call is one of those listings."
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -24,14 +24,15 @@ measured on both transports across the settings that move them.
   tool catalog; the first credential of a configuration builds one, and it is
   then shared by every other credential of that configuration.
 - **Holding a credential and serving one differ by three orders of
-  magnitude.** The concurrency series reports both at every step: 29 to 52 KiB
-  of settled live heap per credential held, 0.84 to 4.05 MiB of peak resident
+  magnitude.** The concurrency series reports both at every step: 30 to 53 KiB
+  of settled live heap per credential held, 0.81 to 4.27 MiB of peak resident
   set per credential calling.
 - **`--max-http-clients` is therefore not a memory setting.** Its default of
   100 bounds about five mebibytes of tenancy. Size from concurrent callers.
-- **The first call of a configuration pays for registration**, and it is
-  hundreds of milliseconds to a second and a half. No later call pays it again,
-  though on `individual` a warm `tools/list` still costs a third of a second.
+- **The first call of a configuration pays for registration**, and it is a
+  third of a second to a second and a third. No later call pays it again,
+  though on `individual` a warm `tools/list` still costs 0.38 seconds on a
+  quiet stdio process and 2.4 seconds with 64 credentials calling at once.
 - **The tool surface does not change what a credential costs to hold**, and
   decides everything about the responses: a `tools/list` is 12 KB on `dynamic`
   and 3.2 MB on `individual`.
@@ -106,7 +107,7 @@ is the honest thing to size a limit against and not the same as the live heap.
 
 {/*START BENCHMARK*/}
 
-Measured on Intel(R) Core(TM) i5-14400, 16 logical CPUs, 62 GiB RAM, linux/amd64, kernel 6.12.105-production+truenas, go1.27.1, build 2.7.6-0.20260906004147-2a92f7ec4445 (2a92f7ec), 2026-09-06T00:43:14Z. 3 rounds per method, resident set sampled every 100 ms.
+Measured on Intel(R) Core(TM) i5-14400, 16 logical CPUs, 62 GiB RAM, linux/amd64, kernel 6.12.105-production+truenas, go1.27.1, build 2.7.6-0.20260906081503-18bed59da189 (18bed59d), 2026-09-06T08:24:43Z. 3 rounds per method, resident set sampled every 100 ms.
 
 <ChartPair name="memory" lang="en" alt="Grouped bars comparing resident memory across the dynamic, meta and individual surfaces on both transports." />
 
@@ -126,136 +127,137 @@ Measured on Intel(R) Core(TM) i5-14400, 16 logical CPUs, 62 GiB RAM, linux/amd64
 
 | Scenario                  | Clients | Idle | One client | All clients | Per extra client | Peak | Goroutines | CPU, % of one core |
 | ------------------------- | ------: | ---: | ---------: | ----------: | ---------------: | ---: | ---------: | -----------------: |
-| stdio, dynamic            |       4 |  n/a |        108 |         438 |              110 |  534 |         34 |              1150% |
-| stdio, meta               |       4 |  n/a |        109 |         438 |              109 |  503 |         36 |              1044% |
-| stdio, individual         |       4 |  n/a |        254 |        1063 |              270 | 1132 |         36 |               905% |
-| stdio, dynamic, telemetry |       4 |  n/a |        112 |         460 |              116 |  561 |         43 |              1188% |
-| http, dynamic             |       8 |   40 |        114 |         114 |                0 |  220 |         67 |              1103% |
-| http, meta                |       8 |   36 |        107 |         113 |                1 |  208 |         69 |               927% |
-| http, individual          |       8 |   40 |        286 |         267 |               -3 |  647 |         53 |              1326% |
-| http, dynamic, telemetry  |       8 |   40 |        116 |         116 |                0 |  226 |         76 |              1200% |
+| stdio, dynamic            |       8 |  n/a |        106 |         849 |              106 |  995 |         34 |              1039% |
+| stdio, meta               |       8 |  n/a |        107 |         857 |              107 | 1018 |         36 |               794% |
+| stdio, individual         |       8 |  n/a |        277 |        2134 |              265 | 2291 |         36 |              1120% |
+| stdio, dynamic, telemetry |       8 |  n/a |        111 |         893 |              112 | 1048 |         43 |              1080% |
+| http, dynamic             |      64 |   35 |        108 |         118 |                0 |  375 |        291 |               974% |
+| http, meta                |      64 |   37 |        112 |         118 |                0 |  324 |        293 |               928% |
+| http, individual          |      64 |   36 |        282 |         248 |               -1 | 1422 |        165 |              1147% |
+| http, dynamic, telemetry  |      64 |   38 |        113 |         122 |                0 |  383 |        300 |              1018% |
 
 ### What a client waits for, per scenario
 
 | Scenario                  | Process ready | First tools/list | Warm tools/list (p50) | tools/list payload |
 | ------------------------- | ------------: | ---------------: | --------------------: | -----------------: |
-| stdio, dynamic            |          0.13 |              362 |                   1.1 |              12 KB |
-| stdio, meta               |          0.20 |              368 |                    23 |             598 KB |
-| stdio, individual         |          0.20 |             1180 |                   190 |             3.2 MB |
-| stdio, dynamic, telemetry |          0.19 |              363 |                   1.1 |              12 KB |
-| http, dynamic             |            53 |              390 |                   3.0 |              12 KB |
-| http, meta                |            52 |              408 |                    47 |             599 KB |
-| http, individual          |            52 |             1269 |                   328 |             3.2 MB |
-| http, dynamic, telemetry  |            52 |              316 |                   2.5 |              12 KB |
+| stdio, dynamic            |          0.26 |              351 |                   1.9 |              12 KB |
+| stdio, meta               |          0.17 |              341 |                    42 |             598 KB |
+| stdio, individual         |          0.18 |             1279 |                   379 |             3.2 MB |
+| stdio, dynamic, telemetry |          0.24 |              333 |                   1.7 |              12 KB |
+| http, dynamic             |            59 |              319 |                    21 |              12 KB |
+| http, meta                |            51 |              324 |                   270 |             599 KB |
+| http, individual          |            51 |             1277 |                  2394 |             3.2 MB |
+| http, dynamic, telemetry  |            51 |              319 |                    20 |              12 KB |
 
 ### Latency percentiles per method
 
 | Scenario                  | Method           | Call                   |  p50 |  p90 |  p99 |  Max |
 | ------------------------- | ---------------- | ---------------------- | ---: | ---: | ---: | ---: |
-| stdio, dynamic            | `resources/list` | smallest listing       | 0.56 | 0.82 | 0.92 | 0.92 |
-| stdio, dynamic            | `tools/call`     | gitlab_find_action     |   20 |   39 |   42 |   42 |
-| stdio, dynamic            | `tools/list`     | whole surface          |  1.1 |  2.0 |  2.1 |  2.1 |
-| stdio, meta               | `resources/list` | smallest listing       | 0.42 | 0.62 | 0.66 | 0.66 |
-| stdio, meta               | `tools/call`     | gitlab_server (status) |  1.1 |  1.4 |  1.6 |  1.6 |
-| stdio, meta               | `tools/list`     | whole surface          |   23 |   28 |   30 |   30 |
-| stdio, individual         | `resources/list` | smallest listing       | 0.35 | 0.56 | 0.57 | 0.57 |
-| stdio, individual         | `tools/call`     | gitlab_server_status   | 0.57 | 0.82 | 0.83 | 0.83 |
-| stdio, individual         | `tools/list`     | whole surface          |  190 |  216 |  225 |  225 |
-| stdio, dynamic, telemetry | `resources/list` | smallest listing       | 0.63 | 0.75 | 0.82 | 0.82 |
-| stdio, dynamic, telemetry | `tools/call`     | gitlab_find_action     |   18 |   51 |   55 |   55 |
-| stdio, dynamic, telemetry | `tools/list`     | whole surface          |  1.1 |  1.9 |  3.4 |  3.4 |
-| http, dynamic             | `resources/list` | smallest listing       |  2.7 |  4.4 |  6.8 |  6.8 |
-| http, dynamic             | `tools/call`     | gitlab_find_action     |   34 |   40 |   44 |   44 |
-| http, dynamic             | `tools/list`     | whole surface          |  3.0 |  5.4 |  6.0 |  6.0 |
-| http, meta                | `resources/list` | smallest listing       |  7.3 |   15 |   15 |   15 |
-| http, meta                | `tools/call`     | gitlab_server (status) |   23 |   47 |   48 |   48 |
-| http, meta                | `tools/list`     | whole surface          |   47 |   92 |   94 |   94 |
-| http, individual          | `resources/list` | smallest listing       | 0.92 |  1.3 |  1.5 |  1.5 |
-| http, individual          | `tools/call`     | gitlab_server_status   |  1.5 |  6.2 |  6.8 |  6.8 |
-| http, individual          | `tools/list`     | whole surface          |  328 |  339 |  343 |  343 |
-| http, dynamic, telemetry  | `resources/list` | smallest listing       |  4.5 |   12 |   12 |   12 |
-| http, dynamic, telemetry  | `tools/call`     | gitlab_find_action     |   34 |   51 |   58 |   58 |
-| http, dynamic, telemetry  | `tools/list`     | whole surface          |  2.5 |  5.6 |  5.7 |  5.7 |
+| stdio, dynamic            | `resources/list` | smallest listing       | 0.65 |  7.6 |  7.7 |  7.7 |
+| stdio, dynamic            | `tools/call`     | gitlab_find_action     |   30 |   41 |   49 |   49 |
+| stdio, dynamic            | `tools/list`     | whole surface          |  1.9 |  6.0 |  6.2 |  6.2 |
+| stdio, meta               | `resources/list` | smallest listing       | 0.64 | 0.99 |  1.2 |  1.2 |
+| stdio, meta               | `tools/call`     | gitlab_server (status) |  1.7 |   40 |   41 |   41 |
+| stdio, meta               | `tools/list`     | whole surface          |   42 |   51 |   55 |   55 |
+| stdio, individual         | `resources/list` | smallest listing       | 0.57 | 0.78 | 0.93 | 0.93 |
+| stdio, individual         | `tools/call`     | gitlab_server_status   | 0.87 |  1.4 |  1.8 |  1.8 |
+| stdio, individual         | `tools/list`     | whole surface          |  379 |  405 |  424 |  424 |
+| stdio, dynamic, telemetry | `resources/list` | smallest listing       | 0.79 | 0.87 | 0.95 | 0.95 |
+| stdio, dynamic, telemetry | `tools/call`     | gitlab_find_action     |   30 |   47 |   50 |   50 |
+| stdio, dynamic, telemetry | `tools/list`     | whole surface          |  1.7 |  2.3 |  2.6 |  2.6 |
+| http, dynamic             | `resources/list` | smallest listing       |   33 |   48 |   80 |   85 |
+| http, dynamic             | `tools/call`     | gitlab_find_action     |  213 |  307 |  314 |  314 |
+| http, dynamic             | `tools/list`     | whole surface          |   21 |   35 |   38 |   38 |
+| http, meta                | `resources/list` | smallest listing       |   10 |   55 |   62 |   66 |
+| http, meta                | `tools/call`     | gitlab_server (status) |   23 |   31 |   33 |   34 |
+| http, meta                | `tools/list`     | whole surface          |  270 |  388 |  403 |  404 |
+| http, individual          | `resources/list` | smallest listing       |  9.8 |   13 |   30 |   30 |
+| http, individual          | `tools/call`     | gitlab_server_status   |  8.4 |   16 |   18 |   18 |
+| http, individual          | `tools/list`     | whole surface          | 2394 | 2855 | 2929 | 2949 |
+| http, dynamic, telemetry  | `resources/list` | smallest listing       |   14 |   53 |   59 |   61 |
+| http, dynamic, telemetry  | `tools/call`     | gitlab_find_action     |  213 |  301 |  314 |  315 |
+| http, dynamic, telemetry  | `tools/list`     | whole surface          |   20 |   35 |   36 |   37 |
 
 ### Concurrency series
 
-#### http, dynamic surface: 4 in flight per credential, 10 s per step, memory budget 26717 MiB
+#### http, dynamic surface: 4 in flight per credential, 10 s per step, memory budget 35000 MiB
 
 | Credentials | Resident, mean | Resident, peak | Settled heap | Settled resident | CPU per call | Calls | tools/call p50 | tools/call p99 | tools/list p50 | tools/list p99 | Goroutines |
 | ----------: | -------------: | -------------: | -----------: | ---------------: | -----------: | ----: | -------------: | -------------: | -------------: | -------------: | ---------: |
-|           1 |            141 |            147 |         39.0 |              106 |        7.522 |  7251 |             10 |             14 |           0.85 |            3.1 |         18 |
-|           2 |            168 |            183 |         39.1 |              106 |        7.418 | 11964 |             12 |             17 |            1.0 |            4.0 |         22 |
-|           5 |            215 |            248 |         39.3 |              107 |        7.830 | 15772 |             21 |             34 |            3.0 |             13 |         36 |
-|          10 |            244 |            267 |         39.5 |              113 |        7.872 | 16108 |             36 |             98 |            6.6 |             44 |         56 |
-|          20 |            288 |            316 |         40.0 |              113 |        7.764 | 16309 |             65 |            248 |            9.0 |            126 |         96 |
-|          50 |            402 |            474 |         41.5 |              124 |        7.613 | 17330 |            144 |            737 |             11 |            442 |        218 |
-|         100 |            565 |            659 |         44.0 |              136 |        7.607 | 17605 |            175 |           1729 |             14 |           1006 |        416 |
-|         200 |            946 |           1167 |         48.9 |              160 |        7.654 | 17432 |            302 |           3928 |             20 |           1662 |        816 |
-|         500 |           2048 |           3024 |         64.0 |              529 |        7.917 | 18379 |            827 |           9557 |             36 |           3728 |       2015 |
-|        1000 |           2510 |           3964 |         88.7 |              312 |        8.358 | 18970 |           2166 |          11212 |            239 |           7405 |       4015 |
+|           1 |            143 |            154 |         39.0 |              106 |        7.394 |  6895 |             11 |             14 |           0.96 |            3.4 |         18 |
+|           2 |            172 |            192 |         39.1 |              107 |        7.633 | 11070 |             13 |             18 |            1.1 |            4.7 |         22 |
+|           5 |            217 |            232 |         39.2 |              109 |        7.910 | 13684 |             23 |             43 |            3.9 |             16 |         36 |
+|          10 |            241 |            277 |         39.5 |              110 |        7.971 | 13660 |             43 |            118 |            7.5 |             53 |         56 |
+|          20 |            289 |            364 |         40.0 |              115 |        7.843 | 14254 |             75 |            274 |             11 |            147 |         96 |
+|          50 |            414 |            481 |         41.5 |              122 |        7.629 | 16777 |            151 |            766 |             11 |            471 |        216 |
+|         100 |            547 |            608 |         44.0 |              133 |        7.639 | 17482 |            269 |           1578 |             15 |            956 |        416 |
+|         200 |            869 |           1070 |         48.9 |              157 |        7.674 | 17851 |            406 |           3572 |             20 |           1757 |        816 |
+|         500 |           1958 |           3089 |         64.0 |              232 |        7.851 | 17187 |            911 |           9313 |             52 |           4188 |       2015 |
+|        1000 |            897 |           1454 |         88.3 |              288 |        9.176 | 16119 |           3106 |           8857 |           2216 |           6357 |       4015 |
 
-Fitted across these steps: the peak resident set under load grows 4.05 MiB per credential, and the settled live heap, read with the load stopped and a collection forced, grows 50.9 KiB per credential. The first is what a credential costs while it and every other one is calling; the second is what it costs to hold. The settled resident set lags both, because Go returns freed pages to the operating system on its own schedule. Every planned step ran, up to 1000 credentials.
+Fitted across these steps: the peak resident set under load grows 1.92 MiB per credential, and the settled live heap, read with the load stopped and a collection forced, grows 50.6 KiB per credential. The first is what a credential costs while it and every other one is calling; the second is what it costs to hold. The settled resident set lags both, because Go returns freed pages to the operating system on its own schedule. Every planned step ran, up to 1000 credentials.
 
-#### http, meta surface: 4 in flight per credential, 10 s per step, memory budget 26717 MiB
-
-| Credentials | Resident, mean | Resident, peak | Settled heap | Settled resident | CPU per call | Calls | tools/call p50 | tools/call p99 | tools/list p50 | tools/list p99 | Goroutines |
-| ----------: | -------------: | -------------: | -----------: | ---------------: | -----------: | ----: | -------------: | -------------: | -------------: | -------------: | ---------: |
-|           1 |            136 |            149 |         32.6 |             95.3 |        8.262 |  6393 |           0.93 |            3.7 |             11 |             16 |         20 |
-|           2 |            163 |            190 |         32.7 |             95.2 |        7.748 | 10246 |            1.3 |            4.5 |             14 |             19 |         24 |
-|           5 |            192 |            216 |         32.8 |             99.1 |        8.471 | 12430 |            5.2 |             16 |             26 |             42 |         36 |
-|          10 |            204 |            231 |         33.1 |              101 |        8.576 | 12509 |             13 |             50 |             46 |            103 |         56 |
-|          20 |            236 |            271 |         33.6 |              100 |        8.150 | 13513 |             27 |            120 |             78 |            208 |         96 |
-|          50 |            311 |            391 |         35.2 |              109 |        7.835 | 14103 |             98 |            386 |            151 |            522 |        216 |
-|         100 |            335 |            481 |         38.0 |              120 |        8.181 | 13819 |            298 |            778 |            266 |            735 |        416 |
-|         200 |            382 |            625 |         43.4 |              138 |        8.457 | 13928 |            647 |           1364 |            593 |           1134 |        816 |
-|         500 |            514 |            753 |         59.3 |              181 |        8.632 | 14893 |           1372 |           3023 |           1594 |           2815 |       2015 |
-|        1000 |            726 |           1037 |         83.1 |              241 |        8.382 | 17407 |           1867 |           6442 |           2976 |           5695 |       4015 |
-
-Fitted across these steps: the peak resident set under load grows 0.84 MiB per credential, and the settled live heap, read with the load stopped and a collection forced, grows 52.1 KiB per credential. The first is what a credential costs while it and every other one is calling; the second is what it costs to hold. The settled resident set lags both, because Go returns freed pages to the operating system on its own schedule. Every planned step ran, up to 1000 credentials.
-
-#### http, individual surface: 2 in flight per credential, 10 s per step, memory budget 26717 MiB
+#### http, meta surface: 4 in flight per credential, 10 s per step, memory budget 35000 MiB
 
 | Credentials | Resident, mean | Resident, peak | Settled heap | Settled resident | CPU per call | Calls | tools/call p50 | tools/call p99 | tools/list p50 | tools/list p99 | Goroutines |
 | ----------: | -------------: | -------------: | -----------: | ---------------: | -----------: | ----: | -------------: | -------------: | -------------: | -------------: | ---------: |
-|           1 |            274 |            301 |         88.1 |              185 |      105.372 |   296 |           0.93 |            2.3 |            135 |            147 |         18 |
-|           2 |            299 |            353 |         88.3 |              183 |      114.093 |   496 |            1.0 |            6.6 |            161 |            184 |         20 |
-|           5 |            413 |            500 |         88.4 |              195 |      128.894 |   832 |            1.3 |             12 |            236 |            402 |         26 |
-|          10 |            524 |            731 |         88.5 |              196 |      137.807 |   985 |             14 |             66 |            390 |            513 |         36 |
-|          20 |            666 |            843 |         88.9 |              196 |      134.237 |  1022 |             35 |            191 |            742 |           1206 |         56 |
-|          50 |           1031 |           1526 |         89.7 |              209 |      128.778 |  1146 |             74 |            821 |           1647 |           3620 |        116 |
-|         100 |           1510 |           2083 |         91.2 |              225 |      125.004 |  1269 |            100 |           1681 |           3151 |           8060 |        216 |
-|         200 |           1956 |           2804 |         94.0 |              245 |      122.597 |  1525 |            764 |           3668 |           5229 |          12003 |        415 |
-|         500 |           2426 |           3172 |          103 |              277 |      107.447 |  2346 |           2279 |           9605 |          11592 |          17315 |       1015 |
-|        1000 |           2890 |           4498 |          117 |              316 |       95.645 |  3683 |           4937 |          18984 |          18198 |          25091 |       2015 |
+|           1 |            134 |            146 |         32.6 |             93.0 |        8.014 |  6323 |           0.97 |            4.0 |             11 |             16 |         20 |
+|           2 |            162 |            179 |         32.7 |             94.7 |        8.001 |  9544 |            1.4 |            5.3 |             15 |             20 |         24 |
+|           5 |            185 |            203 |         32.8 |             94.7 |        8.512 | 10810 |            6.9 |             20 |             29 |             49 |         36 |
+|          10 |            199 |            226 |         33.1 |             96.0 |        8.489 | 11025 |             16 |             53 |             51 |            117 |         56 |
+|          20 |            232 |            257 |         33.6 |              100 |        8.234 | 11486 |             34 |            146 |             91 |            247 |         96 |
+|          50 |            298 |            388 |         35.2 |              107 |        7.953 | 12021 |            138 |            451 |            165 |            530 |        216 |
+|         100 |            295 |            406 |         37.9 |              116 |        8.517 | 11842 |            349 |            775 |            348 |            700 |        416 |
+|         200 |            376 |            531 |         43.2 |              135 |        8.458 | 12427 |            747 |           1481 |            648 |           1250 |        816 |
+|         500 |            514 |            689 |         59.5 |              184 |        8.599 | 14008 |           1414 |           3252 |           1763 |           3077 |       2015 |
+|        1000 |            749 |           1009 |         83.5 |              243 |        8.330 | 16130 |           1791 |           6808 |           3180 |           6028 |       4015 |
 
-Fitted across these steps: the peak resident set under load grows 4.00 MiB per credential, and the settled live heap, read with the load stopped and a collection forced, grows 29.1 KiB per credential. The first is what a credential costs while it and every other one is calling; the second is what it costs to hold. The settled resident set lags both, because Go returns freed pages to the operating system on its own schedule. Every planned step ran, up to 1000 credentials.
+Fitted across these steps: the peak resident set under load grows 0.81 MiB per credential, and the settled live heap, read with the load stopped and a collection forced, grows 52.6 KiB per credential. The first is what a credential costs while it and every other one is calling; the second is what it costs to hold. The settled resident set lags both, because Go returns freed pages to the operating system on its own schedule. Every planned step ran, up to 1000 credentials.
+
+#### http, individual surface: 2 in flight per credential, 10 s per step, memory budget 35000 MiB
+
+| Credentials | Resident, mean | Resident, peak | Settled heap | Settled resident | CPU per call | Calls | tools/call p50 | tools/call p99 | tools/list p50 | tools/list p99 | Goroutines |
+| ----------: | -------------: | -------------: | -----------: | ---------------: | -----------: | ----: | -------------: | -------------: | -------------: | -------------: | ---------: |
+|           1 |            273 |            296 |         88.1 |              186 |      111.908 |   262 |            1.1 |            4.9 |            151 |            268 |         18 |
+|           2 |            296 |            338 |         88.3 |              183 |      116.938 |   480 |            1.1 |            6.9 |            164 |            201 |         20 |
+|           5 |            429 |            530 |         88.4 |              191 |      133.564 |   766 |            1.3 |             11 |            262 |            291 |         26 |
+|          10 |            538 |            673 |         88.5 |              194 |      137.591 |   855 |             17 |             61 |            454 |            593 |         36 |
+|          20 |            731 |           1073 |         88.8 |              200 |      134.659 |   953 |             38 |            257 |            784 |           1319 |         56 |
+|          50 |           1081 |           1303 |         89.7 |              211 |      127.568 |  1110 |             68 |            804 |           1685 |           3502 |        116 |
+|         100 |           1266 |           1724 |         91.1 |              215 |      126.672 |  1292 |            213 |           2572 |           2828 |           7144 |        216 |
+|         200 |           2244 |           3274 |         94.0 |              248 |      122.502 |  1499 |            239 |           3428 |           5430 |          12328 |        415 |
+|         500 |           2522 |           3427 |          103 |              277 |      110.330 |  2361 |            285 |          11643 |          11082 |          18163 |       1015 |
+|        1000 |           3330 |           4677 |          117 |              326 |       98.265 |  3637 |           4974 |          16559 |          16796 |          25229 |       2015 |
+
+Fitted across these steps: the peak resident set under load grows 4.27 MiB per credential, and the settled live heap, read with the load stopped and a collection forced, grows 29.8 KiB per credential. The first is what a credential costs while it and every other one is calling; the second is what it costs to hold. The settled resident set lags both, because Go returns freed pages to the operating system on its own schedule. Every planned step ran, up to 1000 credentials.
 
 {/*END BENCHMARK*/}
 
 ## Sizing a deployment
 
 **stdio.** One process per client, and the process builds its catalog as soon
-as it starts, so there is no idle state to save memory in. Between 108 and 254
+as it starts, so there is no idle state to save memory in. Between 106 and 277
 MiB per process depending on the surface, with peaks under load a little
 higher. Nothing is shared between processes, so the cost is a straight line in
 the client count: a developer machine running one client will not notice, and
 the "all clients" column is what eight of them weigh together.
 
-**HTTP.** Start from 36 to 40 MiB for a process serving nobody, then add one
+**HTTP.** Start from 35 to 38 MiB for a process serving nobody, then add one
 catalog per distinct configuration, built by the first credential that asks
 for it and shared by every other credential of that configuration. That is
-what the "per extra client" column reports: 0, 1 and -3 MiB on `dynamic`,
-`meta` and `individual`, which is nothing above the noise of a resident-set
-reading, across a ladder that admits 64 credentials one at a time. What is
-left to size for is the concurrent work, which is the peak column beside it.
+what the "per extra client" column reports: 0.15, 0.09 and -0.53 MiB on
+`dynamic`, `meta` and `individual`, which is nothing above the noise of a
+resident-set reading, across a ladder that admits 64 credentials one at a
+time. What is left to size for is the concurrent work, which is the peak
+column beside it: 324 to 1422 MiB with all 64 calling.
 
 **There are two axes, and only one of them is the pool.** Holding a credential
-costs 50.9 KiB of settled live heap on `dynamic`, 52.1 KiB on `meta` and 29.1
-KiB on `individual`, so a thousand admitted credentials are 89, 83 and 117 MiB
+costs 50.6 KiB of settled live heap on `dynamic`, 52.6 KiB on `meta` and 29.8
+KiB on `individual`, so a thousand admitted credentials are 88, 83 and 117 MiB
 of live heap and under a third of a gibibyte of resident set. Serving them is
 where an instance runs out: with every credential holding two to four requests
-in flight, the peak resident set grows 4.05, 0.84 and 4.00 MiB per credential,
-and at a thousand it reached 3.9, 1.0 and 4.4 GiB.
+in flight, the peak resident set grows 1.92, 0.81 and 4.27 MiB per credential,
+and at the thousand-credential step it stood at 1.5, 1.0 and 4.7 GiB.
 
 A practical rule for HTTP: **budget for concurrent callers, at 1 to 4 MiB
 each depending on the surface, on top of 40 MiB for the process and one
@@ -266,44 +268,45 @@ the memory back in kilobytes rather than gigabytes.
 
 <Aside type="note" title="Two at-rest figures, both correct">
 The end-to-end test that runs on every push reports about **8 KiB** per
-credential, and the series above reports **29 to 52 KiB**. They answer
+credential, and the series above reports **30 to 53 KiB**. They answer
 different questions. The test's clients complete their `tools/list` and
 disconnect, so it measures the pool entry with no connection open. The
 benchmark driver keeps its sockets open, four per credential on `dynamic` and
 `meta` and two on `individual`, so its figure also carries the buffers behind
-those connections, at roughly 11 KiB each. Size against the series figure: a
+those connections, at roughly 10 KiB each. Size against the series figure: a
 credential you are sizing for is a connected one.
 </Aside>
 
 **Throughput.** In the series, the calls completed per step stop growing at
 about five credentials on `dynamic` and `meta`: a call costs 8 ms of processor
-time, so a sixteen-thread host completes 12,000 to 19,000 per ten-second step
+time, so a sixteen-thread host completes 11,000 to 17,900 per ten-second step
 whatever the number of credentials, and latency past that point is queueing,
-with the p50 of `tools/call` on `dynamic` climbing from 10 ms at one credential
-to 175 ms at a hundred and 2.2 seconds at a thousand. `individual` is a
+with the p50 of `tools/call` on `dynamic` climbing from 11 ms at one credential
+to 269 ms at a hundred and 3.1 seconds at a thousand. `individual` is a
 different shape: a `tools/call` costs about a millisecond, but a call there
-averages 105 ms of processor time, because every second call is a `tools/list`
+averages 120 ms of processor time, because every second call is a `tools/list`
 serialising three megabytes of schemas, so a single credential with two
 requests in flight already keeps three cores busy.
 
 ## What a client waits for
 
 The process is ready in milliseconds and the surface behind it is not. On HTTP
-`/health` answers in about 52 ms while the pool holds nothing; the first
+`/health` answers in 51 to 59 ms while the pool holds nothing; the first
 credential of a configuration builds its catalog, and that is where the wait
-is: 0.39 seconds on `dynamic`, 0.41 on `meta` and 1.27 on `individual` on the
+is: 0.32 seconds on `dynamic`, 0.32 on `meta` and 1.28 on `individual` on the
 host measured. On stdio the process is executed in well under a millisecond and
 starts building immediately, so its first request waits on the same work, at
-0.36, 0.37 and 1.18 seconds.
+0.35, 0.34 and 1.28 seconds.
 
 That wait is per configuration rather than per credential, since the built
 server is shared, and it returns: when every entry of a configuration has been
 reclaimed by `--pool-idle-timeout` or evicted at the pool's size bound, the
 next request that needs it rebuilds from scratch.
 
-Once warm, the picture inverts. A `tools/list` costs 1 to 3 ms on `dynamic`,
-23 to 47 ms on `meta` and 0.19 to 0.33 seconds on `individual`, which is the
-cost of serializing 12 KB, 599 KB and 3.2 MB respectively. A client speaking
+Once warm, the picture inverts. A `tools/list` costs 1.9 to 21 ms on `dynamic`,
+42 to 270 ms on `meta` and 0.38 to 2.4 seconds on `individual`, which is the
+cost of serializing 12 KB, 599 KB and 3.2 MB respectively, the higher end of
+each pair being HTTP with all 64 credentials calling. A client speaking
 protocol 2026-07-28 may serve repeat listings from its own cache and pay this
 less often, but it pays it at least once per session.
 

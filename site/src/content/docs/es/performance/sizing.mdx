@@ -6,7 +6,7 @@ faq:
   - q: "¿Cuánta memoria cuesta una credencial en el pool?"
     a: "En reposo y sin ninguna conexión abierta, 7,7 KiB en la superficie dinámica, 8,3 KiB en la meta y 8,5 KiB en la individual. El catálogo, sus esquemas, el índice de descubrimiento y el propio servidor MCP se comparten por forma de configuración, así que lo que guarda una credencial es su cliente de GitLab, su cubo de límite de peticiones, su contador de listen, sus watchers y sus sesiones, y por eso la cifra apenas cambia con la superficie. Es el heap vivo de un proceso ocioso; una credencial que mantiene una conexión cuesta además los búferes que hay detrás, y una con peticiones en vuelo cuesta lo que esas peticiones reserven, que es el término que realmente dimensiona una instancia."
   - q: "¿Cuántas llamadas por segundo aguanta una instancia?"
-    a: "Hilos divididos entre el tiempo de CPU por llamada. En el host de referencia del benchmark, un Intel i5-14400 con 16 hilos, una llamada cuesta unos 8 ms en las superficies dinámica y meta y unos 130 ms en la individual, y la serie medida se estanca en torno a 1.650 llamadas por segundo en la dinámica, alcanzadas con cinco credenciales ocupadas a la vez y usando trece de los dieciséis hilos. La superficie individual se estanca cerca de 106 llamadas por segundo, porque un `tools/list` allí cuesta dieciséis veces lo que una llamada dinámica entera."
+    a: "Hilos divididos entre el tiempo de CPU por llamada. En el host de referencia del benchmark, un Intel i5-14400 con 16 hilos, una llamada cuesta unos 8 ms en las superficies dinámica y meta y unos 120 ms en la individual, y la serie medida se estanca en torno a 1.800 llamadas por segundo en la dinámica, alcanzadas con cinco credenciales ocupadas a la vez y usando catorce de los dieciséis hilos. La superficie individual se estanca cerca de 130 llamadas por segundo, porque un `tools/list` allí cuesta quince veces lo que una llamada dinámica entera."
   - q: "¿Dimensiono la memoria con `--max-http-clients`?"
     a: "No. Acota cuántas credenciales mantiene el pool, y una credencial del pool son decenas de kilobytes, así que su valor por defecto de 100 acota unos cinco mebibytes. Dimensionar una instancia con él es erróneo en ambos sentidos: ni reserva esa memoria ni limita lo que reservan los llamantes que hay detrás de esas credenciales mientras se atienden sus peticiones. Dimensiona por cuántos llamantes tendrán peticiones en vuelo a la vez."
 ---
@@ -113,18 +113,18 @@ la individual.
 | ------------ | ------------------------- | -------------------------------------- |
 | `dynamic`    | unos 8 ms                 | El serializado y la validación del SDK |
 | `meta`       | unos 8 ms                 | Lo mismo                               |
-| `individual` | unos 130 ms               | Serializar un `tools/list` de 3 MB     |
+| `individual` | unos 120 ms               | Serializar un `tools/list` de 3 MB     |
 
 ```text
 techo de llamadas por segundo  =  hilos utilizables  /  segundos de CPU por llamada
 ```
 
 `16 / 0,008` son 2.000 llamadas por segundo en teoría. La serie medida se
-estanca en unas **1.650 llamadas por segundo** en la superficie dinámica,
+estanca en unas **1.800 llamadas por segundo** en la superficie dinámica,
 alcanzadas con cinco credenciales que mantienen cuatro peticiones en vuelo cada
 una, y sin superarse por muchas credenciales más que se añadan; esa meseta son
-trece de los dieciséis hilos del host. La superficie individual se estanca en
-unas **106 llamadas por segundo** en el mismo host.
+catorce de los dieciséis hilos del host. La superficie individual se estanca en
+unas **130 llamadas por segundo** en el mismo host.
 
 Úsalo para dimensionar, no como promesa: tu GitLab está al otro lado de una red
 que esta medida no cruzó.
@@ -144,7 +144,7 @@ credenciales.
 
 **CPU.** Quinientos editores no hacen quinientas llamadas concurrentes.
 Cincuenta llamadas por segundo son `50 × 0,008 = 0,4` de un hilo en el host de
-referencia. Mil son ocho hilos, unos dos tercios del techo de un host de
+referencia. Mil son ocho hilos, algo más de la mitad del techo de un host de
 referencia; añade una segunda instancia por margen, no por memoria.
 
 **Busca una segunda instancia por disponibilidad, antes que por capacidad.** El
