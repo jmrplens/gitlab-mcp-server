@@ -1315,9 +1315,11 @@ func TestEvictLRU_SkipsBusyEntriesUntilOnlyBusyOnesAreLeft(t *testing.T) {
 		t.Error("size pressure evicted a subscriber and kept the entry that was doing nothing")
 	}
 	for _, token := range []string{"subscriber-one", "subscriber-two"} {
-		if _, ok := pool.entries[sessionKey(token, stubGitLabBase)]; !ok {
-			t.Errorf("%s was evicted by size pressure while its subscription was open", token)
-		}
+		t.Run(token, func(t *testing.T) {
+			if _, ok := pool.entries[sessionKey(token, stubGitLabBase)]; !ok {
+				t.Errorf("%s was evicted by size pressure while its subscription was open", token)
+			}
+		})
 	}
 	if pool.lru.Len() != pool.Size() {
 		t.Errorf("lru.Len() = %d, pool.Size() = %d: the list and the map must shrink together",
