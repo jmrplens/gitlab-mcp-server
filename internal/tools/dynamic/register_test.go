@@ -2785,9 +2785,47 @@ func TestFind_RunsUnderTheActionDeadline(t *testing.T) {
 	toolutil.SetActionTimeout(time.Nanosecond)
 
 	registry := NewRegistry(testRoutes(t))
-	_, _, err := registry.Find(context.Background(), nil, FindInput{Query: "project delete", Limit: 5})
+
+	// A deadline in the past is not the same as a context that reports one:
+	// both `Done` and `Err` on a timer context wait for the timer to fire, and
+	// on a platform whose timer resolution is coarser than a scan of this
+	// registry the search finishes first. Passing a context that has already
+	// expired asks the question the name asks, whether the search observes the
+	// deadline it is given, and answers it the same way on every platform.
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	_, _, err := registry.Find(expired, nil, FindInput{Query: "project delete", Limit: 5})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Find() error = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+// TestWithActionDeadline_BoundsTheSearchWhenOneIsConfigured covers the other
+// half, which the test above deliberately does not: that the search is given a
+// deadline at all when one is configured, and is left alone when none is.
+func TestWithActionDeadline_BoundsTheSearchWhenOneIsConfigured(t *testing.T) {
+	previous := toolutil.ActionTimeout()
+	t.Cleanup(func() { toolutil.SetActionTimeout(previous) })
+
+	cases := []struct {
+		name         string
+		timeout      time.Duration
+		wantDeadline bool
+	}{
+		{name: "configured", timeout: time.Hour, wantDeadline: true},
+		{name: "disabled", timeout: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			toolutil.SetActionTimeout(tc.timeout)
+			bounded, cancel := toolutil.WithActionDeadline(context.Background())
+			defer cancel()
+
+			if _, ok := bounded.Deadline(); ok != tc.wantDeadline {
+				t.Errorf("the search context carries a deadline: %v, want %v", ok, tc.wantDeadline)
+			}
+		})
 	}
 }
 
