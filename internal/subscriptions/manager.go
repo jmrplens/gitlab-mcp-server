@@ -249,8 +249,10 @@ func (o Options) withDefaults() Options {
 // The gate is injected rather than declared here because this package owns no
 // process-wide state and knows nothing about the server that runs it. A nil
 // gate, which is the zero value of [Options.SharedWatchers], is no ceiling at
-// all: that is stdio, where the process serves one credential, and every test
-// that does not opt in.
+// all: that is a manager built directly, by this package's own tests or by an
+// embedder. It is not any transport this repository ships, since cmd/server
+// installs the process gate on stdio as well as on HTTP, where it simply never
+// binds because a stdio process runs one manager held to [Options.MaxWatchers].
 //
 // It is an atomic count rather than a sum over the managers alive, because a
 // gate that asked each manager how many watchers it holds would take its own
@@ -268,15 +270,27 @@ func NewWatcherGate(limit int) *WatcherGate {
 }
 
 // acquire takes a slot and reports whether it got one.
+//
+// A compare-and-swap rather than an add followed by a retraction on refusal,
+// so the count never reads above the limit even for an instant. Under the
+// add-first shape, k callers racing at a full gate drive the count to limit+k
+// until each retracts, and an admission that had a free slot waiting for it
+// could be refused by other callers' failed attempts. That would also make
+// [WatcherGate.count] a number the refusal message and the log line could
+// report above the ceiling they name.
 func (g *WatcherGate) acquire() bool {
 	if g == nil || g.limit <= 0 {
 		return true
 	}
-	if g.held.Add(1) > int64(g.limit) {
-		g.held.Add(-1)
-		return false
+	for {
+		held := g.held.Load()
+		if held >= int64(g.limit) {
+			return false
+		}
+		if g.held.CompareAndSwap(held, held+1) {
+			return true
+		}
 	}
-	return true
 }
 
 // release gives a slot back.
@@ -407,13 +421,21 @@ func (m *Manager[S]) Subscribe(ctx context.Context, subscriber S, uri string) er
 			"uri", uri, "kind", kind.String(), "subscribers", count)
 		return m.awaitStart(ctx, w, subscriber)
 	}
-	if len(m.watchers) >= m.opts.MaxWatchers && !m.evictDemotedLocked() {
-		m.mu.Unlock()
-		return fmt.Errorf("%w: %d watching, limit %d", ErrTooManySubscriptions, len(m.watchers), m.opts.MaxWatchers)
-	}
-	// The shared slot is taken after this manager's own cap, so a subscribe
-	// refused by the per-credential limit never touches the shared count, and
-	// the demoted watch that limit just evicted has already returned its slot.
+	// The shared slot is taken before this manager's own cap is enforced,
+	// because enforcing that cap spends something: it stops the longest-demoted
+	// watch to make room. Evicting first and then finding the shared gate full
+	// would leave the caller with one watch fewer than it started with and
+	// nothing in its place, since the slot the eviction returns is a
+	// process-wide atomic that another credential can take in that instant.
+	// Taking the slot first makes both refusals free: neither touches this
+	// credential's watches, and the per-credential one gives the slot straight
+	// back, so the shared count ends where it started.
+	//
+	// The trade is that a credential at its own cap cannot replace a demoted
+	// watch while the shared gate is saturated, although the replacement would
+	// be net-neutral for the gate. It is refused instead, which is the right
+	// answer from a process already at its ceiling and costs the caller
+	// nothing.
 	if !m.opts.SharedWatchers.acquire() {
 		held, limit := m.opts.SharedWatchers.count(), m.opts.SharedWatchers.limit
 		m.mu.Unlock()
@@ -421,12 +443,25 @@ func (m *Manager[S]) Subscribe(ctx context.Context, subscriber S, uri string) er
 		// act on the number, but a deployment saturating it is running at a
 		// bound nothing else reports, and only the refused client would
 		// otherwise know.
+		//
+		// The kind rather than the URI: nothing has accepted this URI yet, its
+		// length is bounded only by the request body, and this line is on at
+		// the default level, so echoing it would let one refused request write
+		// as many bytes into the operator's log as the request carried. The
+		// client's own error names what it asked for.
 		m.opts.Logger.Warn("subscription refused: this process is at its watcher ceiling",
-			"uri", uri, "watching", held, "limit", limit)
+			"kind", kind.String(), "watching", held, "limit", limit)
 		return fmt.Errorf("%w: server-wide, %d watching, limit %d", ErrTooManySubscriptions, held, limit)
 	}
+	if len(m.watchers) >= m.opts.MaxWatchers && !m.evictDemotedLocked() {
+		m.opts.SharedWatchers.release()
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %d watching, limit %d", ErrTooManySubscriptions, len(m.watchers), m.opts.MaxWatchers)
+	}
 	// Reserve the slot before releasing the lock so two concurrent
-	// subscribes cannot both pass the cap check.
+	// subscribes cannot both pass the cap check. An eviction just above
+	// returned a slot of its own, so the two net to the one this watcher
+	// holds.
 	w := &watcher[S]{
 		uri:         uri,
 		kind:        kind,
