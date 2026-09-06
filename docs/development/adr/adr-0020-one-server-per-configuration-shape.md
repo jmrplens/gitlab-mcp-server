@@ -363,6 +363,32 @@ writing.
   credential's streams itself, which is what produces the completion result, and
   terminates the sessions no stream ended, which is the only ending a session-era
   `resources/subscribe` can be given.
+
+  What the fallback costs to reach is worth writing down, because it is the
+  whole of the exposure. Every entry in the pool has to be busy at the same
+  moment and stay that way, including the one the arriving credential just
+  created. On the default stateless transport that is one held connection per
+  entry, since a session-era `resources/subscribe` is refused there unless it
+  arrived through a listen and so a watcher cannot exist without a stream; open
+  streams are capped at 512 per process, which makes the fallback unreachable at
+  rest on any pool of 513 or more. Under `--stateless=false` it is about two
+  requests and a keep-alive every half hour per entry, because a watcher there
+  needs no held connection and nothing bounds watchers per process yet.
+
+  Two remedies were considered and rejected, and they are recorded here rather
+  than only in the tracker so the next reader finds the reasoning where the
+  decision is. **Refusing the arriving credential** when every entry is busy
+  converts churn into a first-come lockout whose incumbency is free to hold: a
+  listen asking only for list-changed notifications makes an entry busy with no
+  watcher and no polling, and listen streams carry no lifetime bound where
+  watchers do. In the accidental case, a stateful deployment whose population of
+  subscribing clients exceeds `--max-http-clients`, it also punishes the
+  newcomer instead of letting the oldest subscriber re-listen. **A per-credential
+  or per-busy-entry share** of the pool fails for the reason that split
+  [issue 540](https://github.com/jmrplens/gitlab-mcp-server/issues/540): the
+  share key is mintable one API call at a time, so the share is the appearance
+  of fairness rather than the fact of it. Both are set out in
+  [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561).
 - NEG-004: The shape registry is a second cache beside the pool, with its own
   lifetime. A shape is dropped when its registration fails and otherwise lives
   for the process, which is bounded by the number of distinct configurations a
