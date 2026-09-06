@@ -2708,9 +2708,14 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
 	rootHandler = corsMiddleware(cfg, rootHandler)
-	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
-		rootHandler = hostValidationMiddleware(hosts, rootHandler)
-	}
+	// Always installed, because the policy it applies is not always a set of
+	// declared hosts: a wildcard bind declares none and still has to refuse a
+	// name nobody declared on a connection that arrived over loopback, which
+	// is the rule the SDK used to apply for the MCP endpoint alone.
+	rootHandler = hostValidationMiddleware(
+		newHostGuard(httpAddr, cfg.PublicURL, trustedProxiesOf(cfg.TrustedProxies)),
+		rootHandler,
+	)
 	// Second outermost, so the span covers host validation, CORS and the
 	// credential check as well as the handler. That placement is the whole
 	// point: the MCP span starts after authentication, so it never exists for
@@ -3124,6 +3129,16 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 		Stateless:           cfg.Stateless,
 		JSONResponse:        cfg.JSONResponse,
 		MaxRequestBodyBytes: cfg.MaxRequestBodyBytes,
+		// The SDK refuses a non-loopback Host on a connection accepted over
+		// loopback, which is every reverse proxy in the deployment guide:
+		// they preserve the client's Host and connect to 127.0.0.1. The check
+		// is worth keeping and is kept, in [hostGuard], which is the only
+		// layer that can see --public-url and --trusted-proxies and so can
+		// tell a declared host from a rebinding attempt. Leaving both on
+		// would refuse here what the guard admitted, and the SDK's refusal is
+		// plain text besides, which is the one body shape a Streamable HTTP
+		// client must not be handed.
+		DisableLocalhostProtection: true,
 		// Always propagate client aborts into handler contexts so in-flight
 		// GitLab API calls are cancelled when the POST is abandoned. The SDK
 		// applies this to new-protocol (2026-07-28) requests only, and only
@@ -3467,33 +3482,6 @@ func parseLogLevel(s string) slog.Level {
 		return slog.LevelError
 	default:
 		return slog.LevelInfo
-	}
-}
-
-// allowedHosts computes the set of valid Host header values based on the
-// listen address. Returns nil when binding to all interfaces (0.0.0.0/::),
-// which skips host validation — suitable for reverse-proxy deployments.
-//
-// A unix socket gets nil as well, and explicitly. The check exists against
-// DNS rebinding, which needs a browser to reach the listener by name, and no
-// name resolves to a file on disk; the Host a socket client sends is whatever
-// its HTTP library needs to build a request, "unix" as often as not. Deriving
-// a set from the path used to work on Linux only by accident, because
-// SplitHostPort found no colon there; on Windows it found the drive letter's,
-// and a server on C:\...\mcp.sock served nothing but a client naming host "C".
-func allowedHosts(addr string) map[string]bool {
-	if isUnixSocketAddr(addr) {
-		return nil
-	}
-	host, _, _ := net.SplitHostPort(addr)
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		return nil
-	}
-	return map[string]bool{
-		host:        true,
-		"localhost": true,
-		"127.0.0.1": true,
-		"::1":       true,
 	}
 }
 
@@ -3858,45 +3846,6 @@ func loggedHeaderPrefix(value string) string {
 		return value
 	}
 	return value[:loggedHeaderPrefixBytes] + "..."
-}
-
-// hostValidationMiddleware rejects requests whose Host header does not match
-// the allowed set, mitigating DNS rebinding attacks on local servers.
-func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			host = h
-		}
-		// A request naming no host at all is not the attack this guards
-		// against. DNS rebinding works by making a browser resolve a name the
-		// attacker controls to the loopback address, and the browser then puts
-		// that name in the Host header; no browser omits it. What does omit it
-		// is a health check: HAProxy's `option httpchk` sends no Host unless
-		// one is configured, so a listener bound to 127.0.0.1 answered every
-		// check with 403 and was marked permanently DOWN by a balancer that
-		// was working correctly. Refusing it bought nothing, since anything
-		// able to send a header-less request can reach the listener directly
-		// and does not need a browser to do it for it.
-		if r.Host == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if !allowed[host] {
-			slog.WarnContext(r.Context(), "request blocked: invalid Host header", //#nosec G706 -- slog structured args are not interpolated
-				"host", loggedHeaderPrefix(r.Host), "host_len", len(r.Host))
-			// JSON-RPC rather than http.Error's plain text, for the same
-			// reason the cross-origin refusal is: an unparseable 4xx body
-			// reads to a Streamable HTTP client as a pre-negotiation server.
-			(&gateFailure{
-				status:  http.StatusForbidden,
-				code:    errCodeForbidden,
-				message: "Request refused: the Host header names a host this deployment does not serve.",
-			}).write(w, r)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // serverCardSubscriptions describes the subscription surface, or nil when this

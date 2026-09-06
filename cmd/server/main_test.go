@@ -4719,60 +4719,6 @@ func TestRunHTTP_InvalidGitLabURL(t *testing.T) {
 	}
 }
 
-// TestHostValidationMiddleware_BlockedHost verifies that the middleware
-// returns 403 when the Host header does not match any allowed value.
-func TestHostValidationMiddleware_BlockedHost(t *testing.T) {
-	allowed := map[string]bool{"localhost": true, "127.0.0.1": true}
-	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := hostValidationMiddleware(allowed, inner)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://evil.example.com/", nil)
-	req.Host = "evil.example.com"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 for blocked host, got %d", rr.Code)
-	}
-}
-
-// TestHostValidationMiddleware_ARequestNamingNoHostIsServed covers the health
-// check every polling balancer sends.
-//
-// The middleware exists against DNS rebinding, which needs a browser to
-// resolve a name the attacker controls to the loopback address; the browser
-// then puts that name in the Host header, and no browser omits it. A request
-// carrying none is therefore outside what this guards, and refusing it had a
-// cost: HAProxy's `option httpchk` sends no Host unless one is configured, so
-// a listener bound to a specific address answered every check with 403 and was
-// marked permanently DOWN by a balancer doing exactly what it was told.
-func TestHostValidationMiddleware_ARequestNamingNoHostIsServed(t *testing.T) {
-	t.Parallel()
-
-	served := false
-	handler := hostValidationMiddleware(
-		map[string]bool{"localhost": true, "127.0.0.1": true},
-		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			served = true
-			w.WriteHeader(http.StatusOK)
-		}),
-	)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1/health", nil)
-	req.Host = ""
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if !served {
-		t.Error("a request with no Host header was refused; a polling balancer's health check carries none")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-}
-
 // TestCorsAllowHeaders_FollowTheAuthMode pins what the preflight actually
 // permits, per mode.
 //
@@ -4859,7 +4805,7 @@ func TestSecurityHeaders_CoverRejectionsToo(t *testing.T) {
 	})
 	handler := securityHeadersMiddleware(
 		inboundLimits{maxDepth: maxInboundJSONDepth},
-		hostValidationMiddleware(map[string]bool{"localhost": true}, inner),
+		hostValidationMiddleware(newHostGuard("localhost:8080", "", trustedProxies{}), inner),
 	)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://evil.example.com/", http.NoBody)
@@ -4883,44 +4829,6 @@ func TestSecurityHeaders_CoverRejectionsToo(t *testing.T) {
 				t.Errorf("%s = %q, want %q", name, got, value)
 			}
 		})
-	}
-}
-
-// TestHostValidationMiddleware_AllowedHost verifies that the middleware
-// passes through when the Host header matches.
-func TestHostValidationMiddleware_AllowedHost(t *testing.T) {
-	allowed := map[string]bool{"localhost": true}
-	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := hostValidationMiddleware(allowed, inner)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost/", nil)
-	req.Host = "localhost"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 for allowed host, got %d", rr.Code)
-	}
-}
-
-// TestHostValidationMiddleware_HostWithPort verifies that the middleware
-// strips the port from the Host header before checking the allow list.
-func TestHostValidationMiddleware_HostWithPort(t *testing.T) {
-	allowed := map[string]bool{"localhost": true}
-	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := hostValidationMiddleware(allowed, inner)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:8080/", nil)
-	req.Host = "localhost:8080"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 for allowed host with port, got %d", rr.Code)
 	}
 }
 
@@ -5012,68 +4920,6 @@ func TestRemoveNonReadOnlyTools(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("after removal: %d tools, want 1", count)
-	}
-}
-
-// TestAllowedHosts_Localhost verifies that allowedHosts returns the expected
-// set for a localhost binding.
-func TestAllowedHosts_Localhost(t *testing.T) {
-	hosts := allowedHosts("127.0.0.1:8080")
-	if hosts == nil {
-		t.Fatal("expected non-nil hosts for localhost binding")
-	}
-	if !hosts["127.0.0.1"] {
-		t.Error("missing 127.0.0.1")
-	}
-	if !hosts["localhost"] {
-		t.Error("missing localhost")
-	}
-}
-
-// TestAllowedHosts_AllInterfaces verifies that allowedHosts returns nil
-// for 0.0.0.0 (bind to all interfaces), which skips host validation.
-func TestAllowedHosts_AllInterfaces(t *testing.T) {
-	hosts := allowedHosts("0.0.0.0:8080")
-	if hosts != nil {
-		t.Error("expected nil hosts for 0.0.0.0 (all interfaces)")
-	}
-}
-
-// TestAllowedHosts_EmptyHost verifies that allowedHosts returns nil
-// for an empty host, which means all interfaces.
-func TestAllowedHosts_EmptyHost(t *testing.T) {
-	hosts := allowedHosts(":8080")
-	if hosts != nil {
-		t.Error("expected nil hosts for empty host")
-	}
-}
-
-// TestAllowedHosts_UnixSocket_SkipsValidation pins that a listener on a
-// unix socket gets no Host allow-list, whatever form its path takes.
-//
-// The native form matters: on Windows it carries a drive letter, and
-// SplitHostPort read that letter as the host, so a socket server there
-// refused every request whose Host was not "C". The POSIX and relative
-// forms passed before by accident, having no colon to split on, and are
-// pinned so the decision no longer depends on that.
-func TestAllowedHosts_UnixSocket_SkipsValidation(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		addr string
-	}{
-		{name: "an absolute POSIX path", addr: "/run/gitlab-mcp/mcp.sock"},
-		{name: "a relative path", addr: "./mcp.sock"},
-		{name: "the platform's native form", addr: filepath.Join(t.TempDir(), "mcp.sock")},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if hosts := allowedHosts(tt.addr); hosts != nil {
-				t.Errorf("allowedHosts(%q) = %v, want nil: a socket client's Host header is arbitrary", tt.addr, hosts)
-			}
-		})
 	}
 }
 
@@ -5743,33 +5589,6 @@ func TestNewHTTPServer_HeaderCeiling_IsFarBelowTheStandardLibraryDefault(t *test
 	if srv.MaxHeaderBytes >= http.DefaultMaxHeaderBytes {
 		t.Errorf("MaxHeaderBytes = %d, which is not below the standard library's %d default",
 			srv.MaxHeaderBytes, http.DefaultMaxHeaderBytes)
-	}
-}
-
-// TestHostValidationMiddleware_LogsABoundedHost verifies that the refusal an
-// unauthenticated caller triggers cannot write an arbitrary amount to the log.
-//
-// The Host header is caller-supplied and was logged verbatim, so the refusal
-// meant to protect against DNS rebinding was also the cheapest way to fill an
-// operator's disk. The bounded prefix keeps the line diagnostic, since a
-// rebinding attempt is recognizable from its first bytes, and host_len keeps
-// the fact that it was truncated visible.
-func TestHostValidationMiddleware_LogsABoundedHost(t *testing.T) {
-	var logged bytes.Buffer
-	previous := slog.Default()
-	t.Cleanup(func() { slog.SetDefault(previous) })
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
-
-	handler := hostValidationMiddleware(map[string]bool{"localhost": true}, http.NotFoundHandler())
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost/mcp", http.NoBody)
-	req.Host = strings.Repeat("a", 32_000)
-	handler.ServeHTTP(httptest.NewRecorder(), req)
-
-	if logged.Len() > 4096 {
-		t.Errorf("a single refused request wrote %d bytes of log for a %d byte Host", logged.Len(), len(req.Host))
-	}
-	if !strings.Contains(logged.String(), `"host_len":32000`) {
-		t.Errorf("the log does not report the real Host length: %s", logged.String())
 	}
 }
 
@@ -7184,7 +7003,7 @@ func TestTransportRejections_AreJSONRPCErrorsNotPlainText(t *testing.T) {
 	}{
 		{
 			name:    "host validation",
-			handler: hostValidationMiddleware(map[string]bool{"localhost": true}, http.HandlerFunc(reached)),
+			handler: hostValidationMiddleware(newHostGuard("localhost:8080", "", trustedProxies{}), http.HandlerFunc(reached)),
 			request: func(ctx context.Context) *http.Request {
 				req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/mcp", strings.NewReader("{}"))
 				req.Host = "rebound.example"

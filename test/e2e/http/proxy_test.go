@@ -9,8 +9,12 @@
 // outright while curl reports 200. Both were found by hand, in that order,
 // after the plain HTTP matrix was already green.
 //
-// Docker is required and the tests skip without it, because the point is to run
-// a real nginx rather than to model one.
+// Docker is required by the nginx cases and they skip without it, because the
+// point is to run a real nginx rather than to model one. The forwarded-Host
+// cases at the end need no proxy at all: what a proxy does to the Host header
+// is one line the harness can send itself, and the class they pin was missed
+// for exactly as long as the nginx cases were the only ones here, since nginx
+// running on 127.0.0.1 forwards a loopback Host and never exercised the guard.
 package httpe2e
 
 import (
@@ -236,6 +240,129 @@ func TestProxy_RealClientAddressReachesTheLimiter(t *testing.T) {
 	}
 	if !blocked {
 		t.Error("the failure budget never engaged through the proxy")
+	}
+}
+
+// TestProxy_ForwardedPublicHostIsServed pins the deployment every proxy
+// section of the guide describes: the proxy preserves the client's Host and
+// connects over loopback, and the host it forwards is the one --public-url
+// advertises.
+//
+// Both guards used to refuse that. This server's host validation allowed only
+// the hosts the bind address named, and the SDK's own localhost protection
+// refused any non-loopback Host on a connection accepted over loopback, so
+// nginx, Caddy, Traefik, Apache and Cloudflare Tunnel as documented all got
+// 403 on /mcp and on /health, with no flag that helped.
+//
+// No proxy is started: forwarding a Host is one header, and the nginx cases
+// above cannot express this one, since they reach the proxy at 127.0.0.1 and
+// so forward a loopback Host that was never in question.
+func TestProxy_ForwardedPublicHostIsServed(t *testing.T) {
+	// An accepted token, so /mcp answers the call instead of stopping at the
+	// auth gate: a 401 would pass this test with the Host never having been
+	// judged.
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--public-url=https://mcp.example.com",
+	)
+
+	const forwarded = "mcp.example.com"
+
+	t.Run("the MCP endpoint", func(t *testing.T) {
+		got := srv.do(t, mcpPOST(map[string]string{
+			"Host":          forwarded,
+			"PRIVATE-TOKEN": "glpat-whatever",
+		}))
+		if got.status != http.StatusOK {
+			t.Errorf("POST /mcp with Host %q = %d, want 200: %s", forwarded, got.status, got.body)
+		}
+	})
+
+	t.Run("the health endpoint a balancer polls", func(t *testing.T) {
+		got := srv.do(t, request{
+			method: http.MethodGet, path: "/health",
+			headers: map[string]string{"Host": forwarded},
+		})
+		if got.status != http.StatusOK {
+			t.Errorf("GET /health with Host %q = %d, want 200: %s", forwarded, got.status, got.body)
+		}
+	})
+}
+
+// TestProxy_ForwardedUndeclaredHostIsRefused pins the other half of the same
+// decision: a host nobody declared is exactly what a DNS rebinding attack
+// presents, and it is still refused on every endpoint.
+//
+// The deployment here advertises one host and is asked for another, which is
+// the difference between a proxy the operator configured and a browser somebody
+// else's page told to reach this listener.
+func TestProxy_ForwardedUndeclaredHostIsRefused(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--public-url=https://mcp.example.com",
+	)
+
+	const rebound = "rebound.example.com"
+
+	t.Run("the MCP endpoint", func(t *testing.T) {
+		got := srv.do(t, mcpPOST(map[string]string{
+			"Host":          rebound,
+			"PRIVATE-TOKEN": "glpat-whatever",
+		}))
+		if got.status != http.StatusForbidden {
+			t.Errorf("POST /mcp with Host %q = %d, want 403: %s", rebound, got.status, got.body)
+		}
+		// A 4xx whose body is not a recognized JSON-RPC error tells a
+		// Streamable HTTP client the server predates version negotiation.
+		if !strings.Contains(got.body, `"jsonrpc"`) {
+			t.Errorf("the refusal is not a JSON-RPC error: %s", got.body)
+		}
+	})
+
+	t.Run("the health endpoint", func(t *testing.T) {
+		got := srv.do(t, request{
+			method: http.MethodGet, path: "/health",
+			headers: map[string]string{"Host": rebound},
+		})
+		if got.status != http.StatusForbidden {
+			t.Errorf("GET /health with Host %q = %d, want 403: %s", rebound, got.status, got.body)
+		}
+	})
+
+	t.Run("the refusal names the flag that admits a host", func(t *testing.T) {
+		got := srv.do(t, request{
+			method: http.MethodGet, path: "/health",
+			headers: map[string]string{"Host": rebound},
+		})
+		if !strings.Contains(got.body, "--public-url") {
+			t.Errorf("an operator reading this refusal is not told what to configure: %s", got.body)
+		}
+	})
+}
+
+// TestProxy_TrustedProxyForwardsAnyHost pins the second exception: an operator
+// who has listed the proxy's address in --trusted-proxies has vouched for that
+// hop, so the host it forwards is served whether or not --public-url names it.
+//
+// This is what makes a deployment fronting several names work without listing
+// each one, and it is bounded by the flag: from any address that is not on the
+// list, the same request is refused.
+func TestProxy_TrustedProxyForwardsAnyHost(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--trusted-proxy-header=X-Real-IP",
+		"--trusted-proxies=127.0.0.1,::1",
+	)
+
+	got := srv.do(t, request{
+		method: http.MethodGet, path: "/health",
+		headers: map[string]string{"Host": "whatever.example.com"},
+	})
+	if got.status != http.StatusOK {
+		t.Errorf("GET /health from a trusted proxy = %d, want 200: %s", got.status, got.body)
 	}
 }
 
