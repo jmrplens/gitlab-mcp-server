@@ -192,6 +192,12 @@ type DescribeOutput struct {
 const MaxSearchQueryLength = 256
 
 // overLength reports whether a query exceeds [MaxSearchQueryLength].
+//
+// Both callers give it the query as it arrived, before trimming. The bound is
+// published as the schema's maxLength, which a validating client or gateway
+// applies to the raw string, so measuring the trimmed one would let a
+// 257-character query through here that such a gateway had already refused,
+// and the answer to a call would depend on what sat in front of the server.
 func overLength(query string) bool {
 	return utf8.RuneCountInString(query) > MaxSearchQueryLength
 }
@@ -643,8 +649,8 @@ func (r *Registry) Search(ctx context.Context, _ *mcp.CallToolRequest, input Sea
 	if query == "" {
 		return toolutil.ErrorResult("catalog search: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), SearchOutput{}, nil
 	}
-	if overLength(query) {
-		return toolutil.ErrorResult(queryTooLongMessage("catalog search", query)), SearchOutput{}, nil
+	if overLength(input.Query) {
+		return toolutil.ErrorResult(queryTooLongMessage("catalog search", input.Query)), SearchOutput{}, nil
 	}
 
 	matches, err := r.searchMatches(ctx, query, input.Limit, input.Explain)
@@ -714,9 +720,9 @@ func (r *Registry) Find(ctx context.Context, req *mcp.CallToolRequest, input Fin
 		toolutil.LogToolRefusal(ctx, req, FindActionToolName, toolutil.RefusalInvalidParams)
 		return toolutil.ErrorResult("gitlab_find_action: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), FindOutput{}, nil
 	}
-	if overLength(query) {
+	if overLength(input.Query) {
 		toolutil.LogToolRefusal(ctx, req, FindActionToolName, toolutil.RefusalInvalidParams)
-		return toolutil.ErrorResult(queryTooLongMessage("gitlab_find_action", query)), FindOutput{}, nil
+		return toolutil.ErrorResult(queryTooLongMessage("gitlab_find_action", input.Query)), FindOutput{}, nil
 	}
 
 	// The deadline every catalog action runs under, which this tool passed

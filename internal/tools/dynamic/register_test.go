@@ -2670,6 +2670,52 @@ func TestFind_AnOverLongQueryIsRefusedNotTruncated(t *testing.T) {
 	}
 }
 
+// TestFind_TheBoundIsMeasuredOnTheQueryAsItArrived pins which string the bound
+// is applied to, on both entry points.
+//
+// The handler trims the query before searching, and the bound used to be
+// measured after that. The schema publishes the same number as maxLength,
+// which a validating client or gateway applies to the raw string, so a
+// 257-character query whose surrounding whitespace left 256 was refused before
+// it arrived by one deployment and answered by another. Whatever the two do,
+// they have to do the same thing.
+func TestFind_TheBoundIsMeasuredOnTheQueryAsItArrived(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	// One character over the bound, of which the last is a space: trimming
+	// would bring it back to the limit exactly.
+	padded := longQuery(t, MaxSearchQueryLength) + " "
+
+	t.Run("find", func(t *testing.T) {
+		result, output, err := registry.Find(t.Context(), nil, FindInput{Query: padded, Limit: 5})
+		if err != nil {
+			t.Fatalf("Find() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Find() result = %+v, want a refusal", result)
+		}
+		if text := textContent(result); !strings.Contains(text, "too long") {
+			t.Errorf("refusal = %q, want it to say the query is too long", text)
+		}
+		if output.Count != 0 {
+			t.Errorf("Find() output.Count = %d, want nothing searched", output.Count)
+		}
+	})
+
+	t.Run("search", func(t *testing.T) {
+		result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: padded})
+		if err != nil {
+			t.Fatalf("Search() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Search() result = %+v, want a refusal", result)
+		}
+		if output.Count != 0 {
+			t.Errorf("Search() output.Count = %d, want nothing searched", output.Count)
+		}
+	})
+}
+
 // TestSearch_AnOverLongQueryIsRefused pins the same bound on the other entry
 // point into the same scorer, so the cost cannot be reached around the find
 // tool.
