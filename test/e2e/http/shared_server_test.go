@@ -407,10 +407,19 @@ func (s *listenStream) awaitEnd(t *testing.T, within time.Duration) ([]string, b
 // still held its slot in the process-wide stream ceiling too, while the entry
 // rebuilt for the same credential got a fresh counter of its own.
 //
-// The pressure is --max-http-clients=1, because that is the eviction path a test
-// can drive in a second: the idle sweep takes --pool-idle-timeout and never
-// fires here at all any more, since an entry with a live subscription is no
-// longer counted as idle.
+// The pressure is --max-http-clients=1, and that number is the whole reason a
+// subscriber is evicted at all. Size pressure prefers an entry that is not busy
+// and takes a busy one only when every entry is busy, which a pool of one
+// always is: what this drives is that fallback, chosen because the pool is
+// bounded before it is polite. Raise the maximum and the arriving credential
+// evicts nothing, since there is room; fill it with quiet callers and they go
+// first. Before that preference existed the tail went unconditionally, so a
+// caller could evict every quiet subscriber in a pool by presenting
+// --max-http-clients credentials of its own.
+//
+// The idle sweep is the other eviction path and never fires here: it takes
+// --pool-idle-timeout, and an entry with a live subscription is not idle by
+// that measure either.
 func TestSharedServer_AnEvictedCredentialsListenIsEnded(t *testing.T) {
 	const (
 		subscribedToken = "glpat-subscribed-then-evicted"

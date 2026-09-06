@@ -1268,6 +1268,147 @@ func TestEvictLRU_EmptyList(t *testing.T) {
 	}
 }
 
+// TestEvictLRU_SkipsBusyEntriesUntilOnlyBusyOnesAreLeft covers the half of
+// [WithInUse] that size pressure honours.
+//
+// The pool keeps two clocks and they used to disagree. lastUsed is refreshed by
+// pool hits, and a credential whose only activity is an open
+// subscriptions/listen produces none, so it sits at the LRU tail for as long as
+// its subscription lasts. The idle sweep declined to evict exactly those
+// entries while evictLRU took the tail unconditionally, which meant any caller
+// could evict every quiet subscriber in the pool by presenting
+// --max-http-clients credentials of its own, over and over.
+//
+// Skipping them is bounded by the fallback: an entry is passed over in favour
+// of another one, never in favour of the pool growing, so a pool in which
+// everything is busy still evicts its oldest.
+func TestEvictLRU_SkipsBusyEntriesUntilOnlyBusyOnesAreLeft(t *testing.T) {
+	const (
+		busyOne = "owner-subscribed-first"
+		busyTwo = "owner-subscribed-second"
+	)
+
+	cfg := testConfig(stubGitLabBase)
+	busy := map[string]bool{}
+	pool := New(cfg, testFactory(), WithMaxSize(3),
+		WithInUse(func(entry *Entry) bool { return busy[entry.Owner()] }))
+
+	// Filled oldest first, so the two subscribers are the entries at the tail:
+	// the arrangement that made this exploitable.
+	for _, token := range []string{"subscriber-one", "subscriber-two", "quiet-caller"} {
+		t.Run(token, func(t *testing.T) {
+			if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+				t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+			}
+		})
+	}
+
+	pool.mu.Lock()
+	pool.entries[sessionKey("subscriber-one", stubGitLabBase)].owner = busyOne
+	pool.entries[sessionKey("subscriber-two", stubGitLabBase)].owner = busyTwo
+	busy[busyOne] = true
+	busy[busyTwo] = true
+	pool.evictLRU()
+	pool.mu.Unlock()
+
+	if _, ok := pool.entries[sessionKey("quiet-caller", stubGitLabBase)]; ok {
+		t.Error("size pressure evicted a subscriber and kept the entry that was doing nothing")
+	}
+	for _, token := range []string{"subscriber-one", "subscriber-two"} {
+		if _, ok := pool.entries[sessionKey(token, stubGitLabBase)]; !ok {
+			t.Errorf("%s was evicted by size pressure while its subscription was open", token)
+		}
+	}
+	if pool.lru.Len() != pool.Size() {
+		t.Errorf("lru.Len() = %d, pool.Size() = %d: the list and the map must shrink together",
+			pool.lru.Len(), pool.Size())
+	}
+
+	// Nothing evictable left. The pool is bounded before it is polite, so the
+	// oldest goes anyway and [WithOnEvict] is what tells its client.
+	pool.mu.Lock()
+	pool.evictLRU()
+	pool.mu.Unlock()
+
+	if _, ok := pool.entries[sessionKey("subscriber-one", stubGitLabBase)]; ok {
+		t.Error("a pool of nothing but busy entries evicted none of them, so --max-http-clients is not a bound")
+	}
+	if _, ok := pool.entries[sessionKey("subscriber-two", stubGitLabBase)]; !ok {
+		t.Error("the fallback took a newer busy entry than the tail")
+	}
+}
+
+// TestEvictLRU_AnElementNamingNoEntry_IsDroppedFirst covers the stale element.
+//
+// The map and the list are kept in step, so this is defensive rather than a
+// state the pool produces; what it pins is that a list element with no entry
+// behind it is dropped rather than counted as busy, which would let a stale
+// element stand between size pressure and the entries it may take.
+func TestEvictLRU_AnElementNamingNoEntry_IsDroppedFirst(t *testing.T) {
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, testFactory(), WithMaxSize(3),
+		WithInUse(func(*Entry) bool { return true }))
+
+	if _, err := pool.GetOrCreate("token", stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate error: %v", err)
+	}
+
+	pool.mu.Lock()
+	pool.lru.PushBack("a-key-no-entry-answers-to")
+	pool.evictLRU()
+	kept := pool.lru.Len()
+	pool.mu.Unlock()
+
+	if kept != 1 {
+		t.Errorf("lru.Len() = %d, want 1: the stale element should have gone first", kept)
+	}
+	if _, ok := pool.entries[sessionKey("token", stubGitLabBase)]; !ok {
+		t.Error("the busy entry was evicted while a stale element was available to drop")
+	}
+}
+
+// TestEvictIdle_AKeptEntryMovesToTheFrontOfTheLRU pins the second half of the
+// same decision.
+//
+// Restarting lastUsed protects an entry from the next idle sweep and moves it
+// nowhere, so a credential whose only activity is a subscription stayed at the
+// tail: the sweep kept it and size pressure took it first. Both clocks have to
+// record the same decision. This also keeps [ServerPool.evictLRU]'s scan short,
+// since busy entries drift away from the tail instead of collecting at it.
+func TestEvictIdle_AKeptEntryMovesToTheFrontOfTheLRU(t *testing.T) {
+	const inUseOwner = "owner-with-an-open-subscription"
+
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, testFactory(), WithIdleTimeout(30*time.Minute),
+		WithInUse(func(entry *Entry) bool { return entry.Owner() == inUseOwner }))
+
+	// The subscriber goes in first, so it starts at the tail.
+	for _, token := range []string{"subscribed-token", "recent-token"} {
+		t.Run(token, func(t *testing.T) {
+			if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+				t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+			}
+		})
+	}
+
+	subscribedKey := sessionKey("subscribed-token", stubGitLabBase)
+	pool.mu.Lock()
+	pool.entries[subscribedKey].owner = inUseOwner
+	pool.entries[subscribedKey].lastUsed = time.Now().Add(-time.Hour)
+	pool.mu.Unlock()
+
+	pool.evictIdle()
+
+	pool.mu.Lock()
+	front, _ := pool.lru.Front().Value.(string)
+	pool.mu.Unlock()
+
+	if front != subscribedKey {
+		t.Error("the kept entry was left where it was, so the next size-pressure eviction takes " +
+			"the entry the sweep just decided to protect")
+	}
+}
+
 // TestGetOrCreate_EmptyGitLabURL verifies that GetOrCreate rejects an empty
 // GitLab URL to prevent sessions without a target instance.
 func TestGetOrCreate_EmptyGitLabURL(t *testing.T) {

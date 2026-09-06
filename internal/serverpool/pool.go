@@ -308,12 +308,18 @@ func WithOnEvict(fn func(*Entry)) Option {
 // quiet refreshes nothing here, and after --pool-idle-timeout it was evicted
 // with its subscriptions ended under it while it was being served correctly.
 //
-// It is consulted by idle eviction only. Size pressure and a credential GitLab
-// has refused both have to evict something, so there the entry goes and
-// [WithOnEvict] is what tells its client.
+// Idle eviction skips such an entry outright. Size pressure prefers an entry
+// that is not busy and takes a busy one only when every entry is
+// ([ServerPool.evictLRU]), because otherwise the protection was defeasible by
+// any caller willing to present --max-http-clients credentials of its own: the
+// busy entries are the ones sitting at the LRU tail, precisely because their
+// work does not pass through the pool. A credential GitLab has refused is
+// evicted whatever this says, since there is nothing left to protect, and
+// [WithOnEvict] is what tells the client in every case.
 //
 // Like the other callbacks it runs under the pool's write lock: it must be a
-// cheap read, must not block, and must not re-enter the pool.
+// cheap read, must not block, and must not re-enter the pool. Size pressure
+// calls it once per entry it passes over, so "cheap" is meant literally.
 func WithInUse(fn func(*Entry) bool) Option {
 	return func(p *ServerPool) { p.inUse = fn }
 }
@@ -1046,14 +1052,35 @@ func (p *ServerPool) dropEntry(key string) *Entry {
 	return entry
 }
 
-// evictLRU removes the least recently used entry. Must be called with
-// write lock held.
+// evictLRU removes the least recently used entry that is not doing work of its
+// own, falling back to the least recently used of all when every entry is.
+// Must be called with write lock held.
+//
+// Skipping the busy ones is what makes [WithInUse] a protection rather than a
+// delay. It used to take the tail unconditionally, which handed size pressure
+// exactly the entries the idle sweep had just decided to keep: a credential
+// whose only activity is an open subscriptions/listen refreshes nothing here,
+// so it sits at the tail, and any caller could evict every quiet subscriber in
+// the pool by presenting --max-http-clients credentials of its own, repeatably.
+// The idle sweep declining to evict those entries an hour in was not much of a
+// protection when a stranger could evict them in a second.
+//
+// The fallback is what keeps the pool bounded. An entry is only skipped in
+// favour of another one, never in favour of growing past --max-http-clients, so
+// a pool in which everything is busy still evicts its oldest — the case
+// TestSharedServer_AnEvictedCredentialsListenIsEnded drives with a maximum of
+// one. What a credential is told when that happens is [WithOnEvict]'s job.
+//
+// The scan costs one map lookup and one callback per entry it passes, under the
+// write lock, and only when a full pool takes a new credential. It is short in
+// practice because a kept entry is moved to the front by [ServerPool.evictIdle],
+// so busy entries drift away from the tail rather than accumulating at it.
 func (p *ServerPool) evictLRU() {
-	back := p.lru.Back()
-	if back == nil {
+	victim := p.lruVictimLocked()
+	if victim == nil {
 		return
 	}
-	key, _ := back.Value.(string)
+	key, _ := victim.Value.(string)
 	if entry := p.dropEntry(key); entry != nil {
 		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.metrics.Evictions.Add(1)
@@ -1064,7 +1091,26 @@ func (p *ServerPool) evictLRU() {
 			"enterprise", enterprise,
 		)
 	}
-	p.lru.Remove(back)
+	p.lru.Remove(victim)
+}
+
+// lruVictimLocked picks the element size pressure should drop: the least
+// recently used entry the caller does not report as busy, or the tail when
+// every entry is busy. Callers hold p.mu.
+func (p *ServerPool) lruVictimLocked() *list.Element {
+	back := p.lru.Back()
+	if back == nil || p.inUse == nil {
+		return back
+	}
+	for element := back; element != nil; element = element.Prev() {
+		key, _ := element.Value.(string)
+		// An element naming no entry is already stale, so dropping it costs
+		// nobody anything and tidies the list.
+		if entry, ok := p.entries[key]; !ok || !p.inUse(entry) {
+			return element
+		}
+	}
+	return back
 }
 
 // tokenHash returns a hex-encoded SHA-256 hash of the token.
@@ -1146,9 +1192,9 @@ func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 // refreshed by pool hits, and a credential whose only activity is an open
 // subscriptions/listen never produces one: its watcher polls GitLab directly.
 // After --pool-idle-timeout such a client looked exactly like an abandoned one.
-// [WithInUse] is how the caller answers that, and it is consulted here alone:
-// under size pressure and on a credential GitLab has refused, something has to
-// go, and there the ending is announced instead.
+// [WithInUse] is how the caller answers that. It is consulted by
+// [ServerPool.evictLRU] as well, so size pressure cannot take back what this
+// sweep grants; only a credential GitLab has refused is evicted regardless.
 func (p *ServerPool) evictIdle() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -1165,7 +1211,16 @@ func (p *ServerPool) evictIdle() {
 			// Kept, and its clock restarted: an entry doing work the pool
 			// cannot see is not idle, and rechecking it every sweep would
 			// otherwise cost a callback per sweep for as long as the work runs.
+			//
+			// Moved in the LRU as well, because the pool keeps two clocks and
+			// this decision has to reach both. Restarting lastUsed alone left
+			// the entry where it was — at the tail, since a subscription
+			// refreshes nothing here — so the sweep protected it and size
+			// pressure took it first. [ServerPool.evictLRU] is what enforces
+			// the decision; this is what keeps the ordering honest, and what
+			// keeps that scan short.
 			entry.lastUsed = time.Now()
+			p.lru.MoveToFront(entry.element)
 			continue
 		}
 		gitlabURL, enterprise := entryConfigLogValues(entry)

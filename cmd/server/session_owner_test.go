@@ -229,9 +229,9 @@ func TestSessionOwners_SendingMiddleware_DeliversOnlyToTheOwningSession(t *testi
 			// cases above all survive that deletion: each has exactly one of
 			// the two absences, so the comparison still refuses them for the
 			// other one.
-			name:      "an untagged notification to a session with no recorded owner is dropped",
-			session:   unrecorded,
-			tag:       "",
+			name:    "an untagged notification to a session with no recorded owner is dropped",
+			session: unrecorded,
+			tag:     "",
 			wantWhyNo: "an untagged notification was delivered to a session this server never recorded, " +
 				"which is the pair of absences that compare equal",
 		},

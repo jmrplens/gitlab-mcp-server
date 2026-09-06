@@ -223,10 +223,25 @@ re-initializes.
 The other half is not evicting in the first place. `lastUsed` is refreshed by
 pool hits, and a credential whose only activity is a subscription produces none:
 its watcher polls GitLab directly and its listen is one request the client holds
-open rather than repeats. `serverpool.WithInUse` is what the idle sweep asks
-before dropping such an entry, and it is asked there alone. Size pressure and a
-credential GitLab has refused still evict, and the teardown above is what tells
-the client.
+open rather than repeats. `serverpool.WithInUse` is what the pool asks before
+dropping such an entry, and **both** eviction paths ask it. The idle sweep skips
+a busy entry outright and moves it to the front of the LRU, so the two clocks
+record the same decision; size pressure prefers an entry that is not busy and
+takes a busy one only when every entry is busy.
+
+Consulting it on the idle path alone was not a protection, because the two
+clocks then disagreed in exactly the attacker's favour. A quiet subscriber sits
+at the LRU tail precisely because its work does not pass through the pool, and
+`evictLRU` took the tail, so any caller could evict every quiet subscriber in
+the pool by presenting `--max-http-clients` credentials of its own, repeatably.
+An hour's protection from the sweep is worth little against a second's from a
+stranger.
+
+The preference is bounded rather than absolute: an entry is passed over in
+favour of another one, never in favour of the pool growing past
+`--max-http-clients`, so a pool in which everything is busy still evicts its
+oldest, and a credential GitLab has refused is evicted whatever `WithInUse`
+says. The teardown above is what tells the client in every one of those cases.
 
 ### The invariant
 
@@ -311,8 +326,10 @@ writing.
   GitLab directly and its listen is one request the client never repeats, so
   `lastUsed` never moves and `--pool-idle-timeout` would have evicted a client
   that was being served correctly. `serverpool.WithInUse` is what the pool asks
-  before an idle sweep, and it is asked on that path alone, because size
-  pressure and a revoked credential have to evict something. And ending the
+  before evicting, on both paths: the idle sweep skips such an entry and moves
+  it to the front of the LRU, and size pressure prefers an entry that is not
+  busy, falling back to the oldest only when every entry is busy. A revoked
+  credential is evicted regardless. And ending the
   watchers is not by itself ending the subscription: `Manager.Close` is the one
   stop path that fires no `OnStop`, so nothing reaches `listenStreams.stoppedFor`
   and the client's stream would stay open and silent. The eviction closes that
