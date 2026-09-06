@@ -3,6 +3,7 @@ package achievements
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -131,14 +132,6 @@ type AvatarInput struct {
 	AvatarContentBase64 string `json:"avatar_content_base64,omitempty" jsonschema:"Base64-encoded avatar image bytes. Alternative to avatar_file_path. Only one of the two should be provided"`
 }
 
-// CursorInput is the connection-style pagination every list action accepts.
-type CursorInput struct {
-	After  string `json:"after,omitempty"  jsonschema:"Cursor for forward pagination, taken from a previous response pagination.end_cursor"`
-	Before string `json:"before,omitempty" jsonschema:"Cursor for backward pagination, taken from a previous response pagination.start_cursor"`
-	First  *int64 `json:"first,omitempty"  jsonschema:"Number of items to return from the start of the page (default 20, max 100)"`
-	Last   *int64 `json:"last,omitempty"   jsonschema:"Number of items to return from the end of the page, for backward pagination"`
-}
-
 // CreateInput defines the input for creating an achievement in a namespace.
 type CreateInput struct {
 	NamespaceID int64  `json:"namespace_id" jsonschema:"Numeric ID of the group or project namespace that will own the achievement,required"`
@@ -192,21 +185,21 @@ type UserAchievementReorderInput struct {
 type UserListInput struct {
 	Username      string `json:"username" jsonschema:"Account name of the user whose awards to list, without a leading at sign,required"`
 	IncludeHidden *bool  `json:"include_hidden,omitempty" jsonschema:"Include awards the user hid from their profile. Only the user themself and namespace or instance maintainers and owners see these"`
-	CursorInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // ListInput defines the input for listing the achievements a namespace defines.
 type ListInput struct {
 	FullPath string  `json:"full_path" jsonschema:"Full path of the group or project namespace such as my-group or my-group/my-project,required"`
 	IDs      []int64 `json:"ids,omitempty" jsonschema:"Numeric achievement IDs to restrict the result to. Omit to list every achievement in the namespace"`
-	CursorInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // RecipientsInput defines the input for listing the awards of one achievement.
 type RecipientsInput struct {
 	FullPath      string `json:"full_path" jsonschema:"Full path of the group or project namespace that owns the achievement,required"`
 	AchievementID int64  `json:"achievement_id" jsonschema:"Numeric ID of the achievement whose awards to list,required"`
-	CursorInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // UniqueUsersInput defines the input for listing the distinct recipients of one
@@ -214,7 +207,7 @@ type RecipientsInput struct {
 type UniqueUsersInput struct {
 	FullPath      string `json:"full_path" jsonschema:"Full path of the group or project namespace that owns the achievement,required"`
 	AchievementID int64  `json:"achievement_id" jsonschema:"Numeric ID of the achievement whose recipients to count,required"`
-	CursorInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // Create defines a new achievement in a namespace.
@@ -418,8 +411,12 @@ func UserList(ctx context.Context, client *gitlabclient.Client, input UserListIn
 		return UserAchievementListOutput{}, toolutil.ErrRequiredString(opUserList, "username")
 	}
 
+	cursor, err := input.Resolve()
+	if err != nil {
+		return UserAchievementListOutput{}, fmt.Errorf("%s: %w", opUserList, err)
+	}
 	opts := &gl.ListUserAchievementsOptions{IncludeHidden: input.IncludeHidden}
-	opts.After, opts.Before, opts.First, opts.Last = input.resolve()
+	opts.After, opts.Before, opts.First, opts.Last = cursorOptions(cursor)
 
 	awards, resp, err := client.GL().Achievements.ListUserAchievements(username, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -441,8 +438,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredString(opList, "full_path")
 	}
 
+	cursor, err := input.Resolve()
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("%s: %w", opList, err)
+	}
 	opts := &gl.ListAchievementsOptions{IDs: input.IDs}
-	opts.After, opts.Before, opts.First, opts.Last = input.resolve()
+	opts.After, opts.Before, opts.First, opts.Last = cursorOptions(cursor)
 
 	achievements, resp, err := client.GL().Achievements.ListAchievements(fullPath, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -470,8 +471,12 @@ func Recipients(ctx context.Context, client *gitlabclient.Client, input Recipien
 		return UserAchievementListOutput{}, toolutil.ErrRequiredInt64(opRecipients, "achievement_id")
 	}
 
+	cursor, err := input.Resolve()
+	if err != nil {
+		return UserAchievementListOutput{}, fmt.Errorf("%s: %w", opRecipients, err)
+	}
 	opts := &gl.ListAchievementRecipientsOptions{}
-	opts.After, opts.Before, opts.First, opts.Last = input.resolve()
+	opts.After, opts.Before, opts.First, opts.Last = cursorOptions(cursor)
 
 	awards, resp, err := client.GL().Achievements.ListAchievementRecipients(fullPath, input.AchievementID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -497,8 +502,12 @@ func UniqueUsers(ctx context.Context, client *gitlabclient.Client, input UniqueU
 		return UniqueUsersOutput{}, toolutil.ErrRequiredInt64(opUniqueUsers, "achievement_id")
 	}
 
+	cursor, err := input.Resolve()
+	if err != nil {
+		return UniqueUsersOutput{}, fmt.Errorf("%s: %w", opUniqueUsers, err)
+	}
 	opts := &gl.ListAchievementUniqueUsersOptions{}
-	opts.After, opts.Before, opts.First, opts.Last = input.resolve()
+	opts.After, opts.Before, opts.First, opts.Last = cursorOptions(cursor)
 
 	users, resp, err := client.GL().Achievements.ListAchievementUniqueUsers(fullPath, input.AchievementID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -545,45 +554,30 @@ func (a AvatarInput) upload(operation string) (*gl.GraphQLUpload, func(), error)
 	return upload, cleanup, nil
 }
 
-// resolve returns the cursor options in the SDK's own shape.
+// cursorOptions restates a resolved cursor in the SDK's own option shape,
+// which counts in int64 where the shared helper counts in int.
 //
-// Only one of first and last is ever set. Not because the connection refuses
-// both, which it does not: graphql-ruby applies first and then last, so a
-// request carrying the pair is answered by an intersection nobody asked for.
-// One at a time is what makes the direction the caller chose the direction
-// they get.
-//
-// A page size is requested even when the caller named none, so that a list
-// action never asks the instance for every award it holds.
-func (c CursorInput) resolve() (after, before *string, first, last *int64) {
-	if c.After != "" {
-		after = &c.After
+// The direction itself is decided by the shared helper rather than here, so
+// that this domain and the ones querying GraphQL directly answer a backward
+// request the same way. The rule that helper applies is that the cursor picks
+// the direction and the count only sizes the page: a bare before used to reach
+// GitLab beside a first, which the keyset connections answer with the head of
+// the list, so a caller walking start_cursor back through a list looped on page
+// one with no error to show for it.
+func cursorOptions(cursor toolutil.GraphQLCursor) (after, before *string, first, last *int64) {
+	if cursor.After != "" {
+		after = new(cursor.After)
 	}
-	if c.Before != "" {
-		before = &c.Before
+	if cursor.Before != "" {
+		before = new(cursor.Before)
 	}
-	switch {
-	case c.First != nil:
-		first = new(clampPageSize(*c.First))
-	case c.Last != nil:
-		last = new(clampPageSize(*c.Last))
-	default:
-		first = new(int64(toolutil.GraphQLDefaultFirst))
+	if cursor.First != nil {
+		first = new(int64(*cursor.First))
+	}
+	if cursor.Last != nil {
+		last = new(int64(*cursor.Last))
 	}
 	return after, before, first, last
-}
-
-// clampPageSize bounds a requested page size to what GitLab accepts on a
-// connection, the way toolutil.GraphQLPaginationInput.EffectiveFirst does for
-// the page-number surfaces.
-func clampPageSize(n int64) int64 {
-	if n < 1 {
-		return 1
-	}
-	if n > toolutil.GraphQLMaxFirst {
-		return toolutil.GraphQLMaxFirst
-	}
-	return n
 }
 
 // pagination reads the cursor metadata the SDK hangs off the response, which is

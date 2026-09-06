@@ -191,6 +191,29 @@ func resolveHandler(childPath string) http.HandlerFunc {
 // List
 // --------------------------------------------------------------------------
 
+// backwardCursorHandler answers a children page and asserts the variables a
+// backward request put on the wire: before and last, and no first.
+//
+// The children connection is array-backed, so it answers first beside last with
+// the intersection of the two, which is the head of the list: the page the
+// caller was already on, returned silently.
+func backwardCursorHandler(t *testing.T) http.Handler {
+	t.Helper()
+	return graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetHierarchy": func(w http.ResponseWriter, r *http.Request) {
+		vars, _ := testutil.ParseGraphQLVariables(r)
+		if last, ok := vars["last"].(float64); !ok || int(last) != 5 {
+			t.Errorf("last = %v, want 5", vars["last"])
+		}
+		if before, ok := vars["before"].(string); !ok || before != "abc" {
+			t.Errorf("before = %v, want abc", vars["before"])
+		}
+		if first, ok := vars["first"]; ok {
+			t.Errorf("first = %v, want it unset when the caller paged backwards", first)
+		}
+		testutil.RespondGraphQL(w, http.StatusOK, gqlChildrenData)
+	}})
+}
+
 // TestList verifies the List handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -251,6 +274,26 @@ func TestList(t *testing.T) {
 					t.Fatalf("got %d issues, want 1", len(out.Issues))
 				}
 			},
+		},
+		{
+			name:    "pages backward without first",
+			input:   ListInput{FullPath: testFullPath, IID: 1, Last: new(5), Before: "abc"},
+			handler: backwardCursorHandler(t),
+			check: func(t *testing.T, out ListOutput) {
+				t.Helper()
+				if len(out.Issues) != 1 {
+					t.Fatalf("got %d issues, want 1", len(out.Issues))
+				}
+			},
+		},
+		{
+			name:  "refuses first and last together",
+			input: ListInput{FullPath: testFullPath, IID: 1, First: new(10), Last: new(5)},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+				t.Error("List() reached GitLab with a contradictory page request")
+				testutil.RespondGraphQL(w, http.StatusOK, gqlChildrenData)
+			}}),
+			wantErr: "first and last cannot be combined",
 		},
 		{
 			name:  "returns empty list when no children",
@@ -346,6 +389,29 @@ func assertChildIssueFields(t *testing.T, issue ChildOutput) {
 	}
 	if len(issue.Labels) != 2 || issue.Labels[0] != "bug" {
 		t.Errorf("Labels = %v, want [bug critical]", issue.Labels)
+	}
+}
+
+// TestList_GraphQLErrorsAreReported verifies that a document GitLab refused is
+// answered with its errors rather than as a missing epic.
+//
+// GitLab returns HTTP 200 with a top-level errors array and a null namespace,
+// which client-go leaves for the caller to notice, so the nil check would
+// otherwise blame the group path and IID for a fault in the query.
+func TestList_GraphQLErrorsAreReported(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQLError(w, http.StatusOK, "Field 'children' doesn't accept argument 'state'")
+	}})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{FullPath: testFullPath, IID: 1})
+	if err == nil {
+		t.Fatalf("List() = %+v, want the GraphQL errors reported", out)
+	}
+	if !strings.Contains(err.Error(), "doesn't accept argument") {
+		t.Errorf("List() error = %v, want it to carry the GitLab message", err)
+	}
+	if strings.Contains(err.Error(), "not found") {
+		t.Errorf("List() error = %v, want it not to blame the epic", err)
 	}
 }
 

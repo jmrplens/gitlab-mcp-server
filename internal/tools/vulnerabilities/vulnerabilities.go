@@ -68,9 +68,9 @@ type Item struct {
 // GraphQL queries.
 
 const queryListVulnerabilities = `
-query($projectPath: ID!, $first: Int!, $after: String, $severity: [String!], $state: [VulnerabilityState!], $scanner: [String!], $reportType: [VulnerabilityReportType!], $hasIssues: Boolean, $hasResolution: Boolean, $sort: VulnerabilitySort) {
+query($projectPath: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [String!], $state: [VulnerabilityState!], $scanner: [String!], $reportType: [VulnerabilityReportType!], $hasIssues: Boolean, $hasResolution: Boolean, $sort: VulnerabilitySort) {
   project(fullPath: $projectPath) {
-    vulnerabilities(first: $first, after: $after, severity: $severity, state: $state, scanner: $scanner, reportType: $reportType, hasIssues: $hasIssues, hasResolution: $hasResolution, sort: $sort) {
+    vulnerabilities(first: $first, after: $after, last: $last, before: $before, severity: $severity, state: $state, scanner: $scanner, reportType: $reportType, hasIssues: $hasIssues, hasResolution: $hasResolution, sort: $sort) {
       nodes {
         id
         title
@@ -358,7 +358,7 @@ type ListInput struct {
 	HasIssues     *bool    `json:"has_issues,omitempty" jsonschema:"Filter by whether a linked issue exists"`
 	HasResolution *bool    `json:"has_resolution,omitempty" jsonschema:"Filter by whether a resolution exists"`
 	Sort          string   `json:"sort,omitempty" jsonschema:"Sort order: severity_desc, severity_asc, detected_desc, detected_asc"`
-	toolutil.GraphQLPaginationInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // ListOutput is the output for listing project vulnerabilities.
@@ -374,8 +374,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredString("list_vulnerabilities", "project_path")
 	}
 
+	pageVars, err := input.Variables(queryListVulnerabilities)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("list_vulnerabilities: %w", err)
+	}
 	vars := toolutil.MergeVariables(
-		input.Variables(),
+		pageVars,
 		map[string]any{"projectPath": input.ProjectPath},
 	)
 	if len(input.Severity) > 0 {
@@ -404,9 +408,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Data struct {
 			Project *gqlProjectVulnerabilities `json:"project"`
 		} `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
 	}
 
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query:     queryListVulnerabilities,
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
@@ -414,7 +419,15 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithHint("list_vulnerabilities", err, "verify the project fullPath is correct and your token has access to security features")
 	}
 
+	// GitLab answers a rejected document with HTTP 200 and a top-level errors
+	// array, which client-go does not turn into an error. Reporting it here
+	// matters more than elsewhere: the branch below answers a project that
+	// resolves over REST with an empty page, so a refused query would be read
+	// as a project with no vulnerabilities.
 	if resp.Data.Project == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("list_vulnerabilities", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 		if _, _, projectErr := client.GL().Projects.GetProject(input.ProjectPath, nil, gl.WithContext(ctx)); projectErr == nil {
 			return ListOutput{Vulnerabilities: []Item{}}, nil
 		}

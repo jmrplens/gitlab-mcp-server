@@ -123,11 +123,11 @@ func bodyGuidance(valueSource, example string) toolutil.ParameterGuidance {
 func decorateEpicDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_list_epic_discussions":
-		options.Usage = "List all discussion threads on one group epic, including system notes and threaded replies, via the Work Items GraphQL API. Use this when the prompt asks for an epic's comment threads or conversation history, or before replying to a thread with gitlab_add_epic_discussion_note. Supports cursor-based keyset pagination (first/after)."
+		options.Usage = "List all discussion threads on one group epic, including system notes and threaded replies, via the Work Items GraphQL API. Use this when the prompt asks for an epic's comment threads or conversation history, or before replying to a thread with gitlab_add_epic_discussion_note. Supports cursor-based keyset pagination. Pages forward only: this GitLab connection takes first and after, and rejects last and before."
 		options.Aliases = []string{"gitlab_list_epic_discussions", "list epic discussions", "show epic comment threads", "get epic conversation"}
 		options.RelatedActions = []string{actionDiscussionGet, actionDiscussionCreate, actionEpicGet, actionEpicNoteList}
 		options.ParameterGuidance = epicScopeGuidance()
-		options.IndividualTool.Description = "List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list."
+		options.IndividualTool.Description = "List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list."
 	case "gitlab_get_epic_discussion":
 		options.Usage = "Fetch one discussion thread on a group epic by its discussion_id, returning every note in the thread. Use this after gitlab_list_epic_discussions when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_epic_discussion", "get epic discussion", "show epic discussion thread", "fetch epic discussion"}

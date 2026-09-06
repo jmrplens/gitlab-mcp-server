@@ -49,6 +49,8 @@ Search and list CI/CD Catalog resources. Supports text search, scope filtering, 
 | `sort`    | string |    No    | Sort order: `NAME_ASC` (default), `NAME_DESC`, `LATEST_RELEASED_AT_ASC`, `LATEST_RELEASED_AT_DESC`, `STAR_COUNT_ASC`, `STAR_COUNT_DESC` |
 | `first`   | int    |    No    | Number of items per page (default: 20)                                                                                                  |
 | `after`   | string |    No    | Cursor for forward pagination                                                                                                           |
+| `last`    | int    |    No    | Number of items per page when paging backward. Cannot be combined with `first`                                                          |
+| `before`  | string |    No    | Cursor for backward pagination, from a previous response's `start_cursor`                                                               |
 
 ### `gitlab_get_catalog_resource`
 

@@ -173,15 +173,20 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_PaginationSelection verifies that the caller's page-size choice
-// decides which of the SDK's mutually exclusive first/last arguments is sent:
-// the SDK ignores Last whenever First is set, so a request that only asked to
-// page backward must not carry First at all.
+// TestList_PaginationSelection verifies that the caller's request decides which
+// of the SDK's mutually exclusive first/last arguments is sent: the SDK ignores
+// Last whenever First is set, so a request that asked to page backward must not
+// carry First at all.
+//
+// The before cases are the ones the shared resolution added. A start cursor
+// sent beside first is not backward pagination on any GitLab connection, so the
+// cursor decides the direction and the count only sizes the page.
 func TestList_PaginationSelection(t *testing.T) {
 	cases := []struct {
 		name      string
 		first     *int
 		last      *int
+		before    string
 		wantVar   string
 		wantValue float64
 		absentVar string
@@ -191,6 +196,8 @@ func TestList_PaginationSelection(t *testing.T) {
 		{name: "last only", last: new(3), wantVar: "last", wantValue: 3, absentVar: "first"},
 		{name: "last clamped to minimum", last: new(0), wantVar: "last", wantValue: 1, absentVar: "first"},
 		{name: "last clamped to maximum", last: new(5000), wantVar: "last", wantValue: float64(toolutil.GraphQLMaxFirst), absentVar: "first"},
+		{name: "before alone pages backward", before: "BEFORE", wantVar: "last", wantValue: float64(toolutil.GraphQLDefaultFirst), absentVar: "first"},
+		{name: "before sizes the page from first", first: new(7), before: "BEFORE", wantVar: "last", wantValue: 7, absentVar: "first"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -216,11 +223,36 @@ func TestList_PaginationSelection(t *testing.T) {
 				NamespacePath: "my-group",
 				First:         tc.first,
 				Last:          tc.last,
+				Before:        tc.before,
 			}
 			if _, err := List(context.Background(), client, input); err != nil {
 				t.Fatalf("List() unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+// TestList_ContradictoryPageSizes verifies that naming both first and last is
+// refused before the SDK is called. The SDK would drop Last silently, which
+// would answer a backward request with a forward page.
+func TestList_ContradictoryPageSizes(t *testing.T) {
+	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"savedViews(first:": func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("List() reached GitLab with a contradictory page request")
+			testutil.RespondGraphQL(w, http.StatusOK, `{"namespace":{"savedViews":{"nodes":[]}}}`)
+		},
+	})
+
+	_, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		NamespacePath: "my-group",
+		First:         new(10),
+		Last:          new(5),
+	})
+	if err == nil {
+		t.Fatal("List() error = nil, want a refusal naming the conflict")
+	}
+	if !strings.Contains(err.Error(), "first and last cannot be combined") {
+		t.Errorf("List() error = %v, want it to name the conflict", err)
 	}
 }
 

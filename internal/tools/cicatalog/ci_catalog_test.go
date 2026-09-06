@@ -254,6 +254,91 @@ func TestList_Pagination(t *testing.T) {
 	_ = out
 }
 
+// TestList_GraphQLErrorsAreReported verifies that a document GitLab refused is
+// answered with its errors rather than with an empty page.
+//
+// GitLab returns HTTP 200 with a top-level errors array and no data, which
+// client-go leaves for the caller to notice. This connection has no container
+// to come back missing, so without the check a refused query and a catalog
+// with no resources are the same answer.
+func TestList_GraphQLErrorsAreReported(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQLError(w, http.StatusOK, "Field 'ciCatalogResources' doesn't accept argument 'topics'")
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{})
+	if err == nil {
+		t.Fatalf("List() = %+v, want the GraphQL errors reported", out)
+	}
+	if !strings.Contains(err.Error(), "doesn't accept argument") {
+		t.Errorf("List() error = %v, want it to carry the GitLab message", err)
+	}
+}
+
+// TestList_BackwardPagination verifies that a caller following start_cursor
+// backwards is sent before and last, and no first.
+//
+// The absence of first is the assertion that matters. GitLab's keyset
+// connection behind ciCatalogResources refuses first beside last outright, so
+// a request carrying both would fail rather than return the previous page.
+func TestList_BackwardPagination(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"ciCatalogResources": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
+			}
+			if last, ok := vars["last"].(float64); !ok || int(last) != 5 {
+				t.Errorf("last = %v, want 5", vars["last"])
+			}
+			if vars["before"] != "cursor111" {
+				t.Errorf("before = %v, want cursor111", vars["before"])
+			}
+			if first, ok := vars["first"]; ok {
+				t.Errorf("first = %v, want it unset when the caller paged backwards", first)
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"ciCatalogResources": {
+					"nodes": [`+sampleResourceNode+`],
+					"pageInfo": {"hasNextPage": true, "hasPreviousPage": false, "endCursor": "cursor456", "startCursor": "cursor111"}
+				}
+			}`)
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{Last: new(5), Before: "cursor111"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Resources) != 1 {
+		t.Errorf("got %d resources, want 1", len(out.Resources))
+	}
+}
+
+// TestList_ContradictoryPageSizes verifies that naming both first and last is
+// refused before a request is made, rather than being resolved by a guess.
+// GitLab answers the pair with "Can only provide either first or last, not
+// both", and there is no reading of it that is not one direction discarded.
+func TestList_ContradictoryPageSizes(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("List() reached GitLab with a contradictory page request")
+			testutil.RespondGraphQL(w, http.StatusOK, `{"ciCatalogResources": {"nodes": [], "pageInfo": {}}}`)
+		},
+	})
+
+	_, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{First: new(10), Last: new(5)})
+	if err == nil {
+		t.Fatal("List() error = nil, want a refusal naming the conflict")
+	}
+	if !strings.Contains(err.Error(), "first and last cannot be combined") {
+		t.Errorf("List() error = %v, want it to name the conflict", err)
+	}
+}
+
 // Get tests.
 
 // TestGet_ByFullPath verifies that retrieving a CI catalog resource by its

@@ -232,6 +232,112 @@ func TestList_Pagination(t *testing.T) {
 	}
 }
 
+// TestList_GraphQLErrorsAreReported verifies that a document GitLab refused is
+// answered with its errors rather than as a missing group.
+//
+// GitLab returns HTTP 200 with a top-level errors array and a null group, which
+// client-go leaves for the caller to notice, so the nil check below would
+// otherwise blame the group path for a fault in the query.
+func TestList_GraphQLErrorsAreReported(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"customEmoji": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQLError(w, http.StatusOK, "Field 'customEmoji' doesn't accept argument 'last'")
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{GroupPath: "my-group"})
+	if err == nil {
+		t.Fatalf("List() = %+v, want the GraphQL errors reported", out)
+	}
+	if !strings.Contains(err.Error(), "doesn't accept argument") {
+		t.Errorf("List() error = %v, want it to carry the GitLab message", err)
+	}
+	if strings.Contains(err.Error(), "not found") {
+		t.Errorf("List() error = %v, want it not to blame the group path", err)
+	}
+}
+
+// TestList_BackwardPagination verifies that a caller following start_cursor
+// backwards is sent before and last, and no first.
+//
+// The absence of first is the assertion that matters. GitLab's keyset
+// connections refuse first beside last outright, and the ones backed by an
+// array answer the pair with the head of the list, so a request carrying both
+// is either an error or the page the caller had already read.
+func TestList_BackwardPagination(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"customEmoji": func(w http.ResponseWriter, r *http.Request) {
+			assertBackwardCursor(t, r)
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"group": {
+					"customEmoji": {
+						"nodes": [`+sampleEmojiNode+`],
+						"pageInfo": {"hasNextPage": true, "hasPreviousPage": false, "endCursor": "cursor1", "startCursor": null}
+					}
+				}
+			}`)
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		GroupPath: "my-group",
+		Last:      new(5),
+		Before:    "cursor1",
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Emoji) != 1 {
+		t.Errorf("got %d emoji, want 1", len(out.Emoji))
+	}
+}
+
+// TestList_ContradictoryPageSizes verifies that naming both first and last is
+// refused before a request is made. GitLab answers the pair with "Can only
+// provide either first or last, not both", so guessing which one the caller
+// meant would only turn a clear refusal into a wrong page.
+func TestList_ContradictoryPageSizes(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"customEmoji": func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("List() reached GitLab with a contradictory page request")
+			testutil.RespondGraphQL(w, http.StatusOK, `{"group": {"customEmoji": {"nodes": []}}}`)
+		},
+	})
+
+	_, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		GroupPath: "my-group",
+		First:     new(10),
+		Last:      new(5),
+	})
+	if err == nil {
+		t.Fatal("List() error = nil, want a refusal naming the conflict")
+	}
+	if !strings.Contains(err.Error(), "first and last cannot be combined") {
+		t.Errorf("List() error = %v, want it to name the conflict", err)
+	}
+}
+
+// assertBackwardCursor checks the variables a backward page request puts on the
+// wire. It reports rather than aborting, because it runs on the server's
+// goroutine.
+func assertBackwardCursor(t *testing.T, r *http.Request) {
+	t.Helper()
+	vars, err := testutil.ParseGraphQLVariables(r)
+	if err != nil {
+		t.Errorf("ParseGraphQLVariables error: %v", err)
+		return
+	}
+	if last, ok := vars["last"].(float64); !ok || int(last) != 5 {
+		t.Errorf("last = %v, want 5", vars["last"])
+	}
+	if before, ok := vars["before"].(string); !ok || before != "cursor1" {
+		t.Errorf("before = %v, want cursor1", vars["before"])
+	}
+	if first, ok := vars["first"]; ok {
+		t.Errorf("first = %v, want it unset when the caller paged backwards", first)
+	}
+}
+
 // TestList_NullCreatedAt verifies the List_NullCreatedAt handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

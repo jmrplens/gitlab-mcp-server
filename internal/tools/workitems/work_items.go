@@ -3,6 +3,7 @@ package workitems
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -140,6 +141,12 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 // List.
 
 // ListInput is the input for listing work items.
+//
+// The cursor parameters come from the shared type because this connection is
+// one GitLab really does page in both directions: the SDK's own document
+// declares first, after, last and before, and the output reports a previous
+// page and a start cursor. Publishing only the forward half named a cursor no
+// parameter here could spend.
 type ListInput struct {
 	FullPath           string   `json:"full_path" jsonschema:"Full path of the project or group,required"`
 	State              string   `json:"state,omitempty" jsonschema:"Filter by state (opened/closed/all)"`
@@ -149,10 +156,9 @@ type ListInput struct {
 	LabelName          []string `json:"label_name,omitempty" jsonschema:"Filter by label names"`
 	Confidential       *bool    `json:"confidential,omitempty" jsonschema:"Filter by confidentiality"`
 	Sort               string   `json:"sort,omitempty" jsonschema:"Sort order"`
-	First              *int64   `json:"first,omitempty" jsonschema:"Number of items to return (cursor-based pagination)"`
-	After              string   `json:"after,omitempty" jsonschema:"Cursor for forward pagination"`
 	IncludeAncestors   *bool    `json:"include_ancestors,omitempty" jsonschema:"Include ancestor work items"`
 	IncludeDescendants *bool    `json:"include_descendants,omitempty" jsonschema:"Include descendant work items"`
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // ListOutput is the output for listing work items.
@@ -164,21 +170,29 @@ type ListOutput struct {
 
 const errHintWorkItemsFullPath = "verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)"
 
-// listWorkItemsDefaultFirst is the page size used when the caller names none,
-// preserved from the hand-written query this handler replaced.
-const listWorkItemsDefaultFirst = int64(20)
-
 // buildListOptions translates the tool input into SDK list options.
 //
 // Every filter the tool exposes has a direct counterpart on
 // [gl.ListWorkItemsOptions], which accepts a superset: assignee, milestone,
 // iteration, release, weight, CRM, reaction and date-range filters the tool
 // does not surface today.
-func buildListOptions(input ListInput) *gl.ListWorkItemsOptions {
-	first := listWorkItemsDefaultFirst
-	opts := &gl.ListWorkItemsOptions{First: &first}
-	if input.First != nil {
-		opts.First = input.First
+//
+// The cursor arrives already resolved, so exactly one of first and last
+// reaches GitLab: the cursor picks the direction and the count only sizes the
+// page.
+func buildListOptions(input ListInput, cursor toolutil.GraphQLCursor) *gl.ListWorkItemsOptions {
+	opts := &gl.ListWorkItemsOptions{}
+	if cursor.First != nil {
+		opts.First = new(int64(*cursor.First))
+	}
+	if cursor.Last != nil {
+		opts.Last = new(int64(*cursor.Last))
+	}
+	if cursor.After != "" {
+		opts.After = new(cursor.After)
+	}
+	if cursor.Before != "" {
+		opts.Before = new(cursor.Before)
 	}
 	if input.State != "" {
 		opts.State = &input.State
@@ -201,9 +215,6 @@ func buildListOptions(input ListInput) *gl.ListWorkItemsOptions {
 	if input.Sort != "" {
 		opts.Sort = &input.Sort
 	}
-	if input.After != "" {
-		opts.After = &input.After
-	}
 	if input.IncludeAncestors != nil {
 		opts.IncludeAncestors = input.IncludeAncestors
 	}
@@ -224,8 +235,15 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.FullPath == "" {
 		return ListOutput{}, toolutil.ErrRequiredString("list_work_items", "full_path")
 	}
+	// The direction is resolved by the shared helper rather than here, so that
+	// this domain and the ones querying GraphQL directly answer a backward
+	// request the same way.
+	cursor, err := input.Resolve()
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("list_work_items: %w", err)
+	}
 
-	items, resp, err := client.GL().WorkItems.ListWorkItems(input.FullPath, buildListOptions(input), gl.WithContext(ctx))
+	items, resp, err := client.GL().WorkItems.ListWorkItems(input.FullPath, buildListOptions(input, cursor), gl.WithContext(ctx))
 	if err != nil {
 		// A query-level failure arrives as GraphQLResponseError with HTTP 200,
 		// so the status-keyed hint would never fire for it.
@@ -488,20 +506,30 @@ type WorkItemTypeListOutput struct {
 }
 
 // ListWorkItemTypesInput defines parameters for listing work item types.
+//
+// The cursor parameters come from the shared type so that this connection,
+// which the SDK query pages in both directions, answers a backward request the
+// way every other cursor-paginated list here does.
 type ListWorkItemTypesInput struct {
 	FullPath      string `json:"full_path"            jsonschema:"Project or group full path (namespace path),required"`
 	Name          string `json:"name,omitempty"       jsonschema:"Filter by work item type name"`
 	OnlyAvailable bool   `json:"only_available,omitempty" jsonschema:"Return only available work item types"`
-	First         int64  `json:"first,omitempty"      jsonschema:"Number of types to return from the beginning (cursor pagination)"`
-	After         string `json:"after,omitempty"      jsonschema:"Cursor for forward pagination"`
-	Last          int64  `json:"last,omitempty"       jsonschema:"Number of types to return from the end (backward cursor pagination)"`
-	Before        string `json:"before,omitempty"     jsonschema:"Cursor for backward pagination"`
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // ListWorkItemTypes lists work item types (system-defined and custom) for a namespace.
 func ListWorkItemTypes(ctx context.Context, client *gitlabclient.Client, input ListWorkItemTypesInput) (WorkItemTypeListOutput, error) {
 	if input.FullPath == "" {
 		return WorkItemTypeListOutput{}, toolutil.ErrRequiredString("list_work_item_types", "full_path")
+	}
+	// The direction is resolved by the shared helper rather than here, so that
+	// this domain and the ones querying GraphQL directly answer a backward
+	// request the same way. A bare before used to reach GitLab with no count
+	// at all, and graphql-ruby then fills first from its own default page
+	// size, which answers the head of the list rather than the previous page.
+	cursor, err := input.Resolve()
+	if err != nil {
+		return WorkItemTypeListOutput{}, fmt.Errorf("list_work_item_types: %w", err)
 	}
 	opts := &gl.ListWorkItemTypesOptions{}
 	if input.Name != "" {
@@ -510,19 +538,17 @@ func ListWorkItemTypes(ctx context.Context, client *gitlabclient.Client, input L
 	if input.OnlyAvailable {
 		opts.OnlyAvailable = new(true)
 	}
-	if input.First > 0 {
-		first := input.First
-		opts.First = &first
+	if cursor.First != nil {
+		opts.First = new(int64(*cursor.First))
 	}
-	if input.After != "" {
-		opts.After = new(input.After)
+	if cursor.After != "" {
+		opts.After = new(cursor.After)
 	}
-	if input.Last > 0 {
-		last := input.Last
-		opts.Last = &last
+	if cursor.Last != nil {
+		opts.Last = new(int64(*cursor.Last))
 	}
-	if input.Before != "" {
-		opts.Before = new(input.Before)
+	if cursor.Before != "" {
+		opts.Before = new(cursor.Before)
 	}
 	types, resp, err := client.GL().WorkItems.ListWorkItemTypes(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {

@@ -67,13 +67,15 @@ type InputItem struct {
 // GraphQL queries.
 
 const queryListResources = `
-query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceSort, $first: Int!, $after: String) {
+query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceSort, $first: Int, $after: String, $last: Int, $before: String) {
   ciCatalogResources(
     search: $search
     scope: $scope
     sort: $sort
     first: $first
     after: $after
+    last: $last
+    before: $before
   ) {
     nodes {
       id
@@ -346,7 +348,7 @@ type ListInput struct {
 	Search string `json:"search,omitempty" jsonschema:"Search resources by name or description"`
 	Scope  string `json:"scope,omitempty" jsonschema:"Filter scope: ALL (default) or NAMESPACED"`
 	Sort   string `json:"sort,omitempty" jsonschema:"Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC"`
-	toolutil.GraphQLPaginationInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // ListOutput is the output for listing CI/CD Catalog resources.
@@ -358,7 +360,10 @@ type ListOutput struct {
 
 // List retrieves CI/CD Catalog resources via the GitLab GraphQL API.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	vars := input.Variables()
+	vars, err := input.Variables(queryListResources)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("list_catalog_resources: %w", err)
+	}
 	if input.Search != "" {
 		vars["search"] = input.Search
 	}
@@ -373,15 +378,26 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Data struct {
 			CiCatalogResources gqlCatalogConnection `json:"ciCatalogResources"`
 		} `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
 	}
 
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query:     queryListResources,
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("list_catalog_resources", err,
 			"the CI/CD Catalog requires GitLab 16.7+; scope must be one of {ALL, NAMESPACED}; sort one of {NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC}")
+	}
+
+	// GitLab answers a rejected document with HTTP 200 and a top-level errors
+	// array, which client-go does not turn into an error. This connection has
+	// no container to come back missing, so the empty page is the only sign
+	// anything went wrong, and the errors are what the caller needs instead.
+	if len(resp.Data.CiCatalogResources.Nodes) == 0 {
+		if graphQLErr := toolutil.GraphQLTopLevelError("list_catalog_resources", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 	}
 
 	items := make([]ResourceItem, 0, len(resp.Data.CiCatalogResources.Nodes))
