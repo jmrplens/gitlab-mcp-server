@@ -55,7 +55,8 @@ func (c *TokenCache) Get(gitlabURL, token string) (*auth.TokenInfo, bool) {
 		// would throw that away and send the next request back to GitLab. This
 		// call still reports a miss, which is what it observed.
 		c.mu.Lock()
-		if current, stillThere := c.entries[key]; stillThere && expired(current.expiresAt) {
+		current, stillThere := c.entries[key]
+		if stillStale(current, stillThere) {
 			delete(c.entries, key)
 		}
 		c.mu.Unlock()
@@ -126,6 +127,20 @@ func (c *TokenCache) Cleanup() {
 // code says, which is enough reason to say the other thing.
 func expired(deadline time.Time) bool {
 	return expiredAt(time.Now(), deadline)
+}
+
+// stillStale reports whether an entry re-read under the write lock is still
+// the expired one a read observed under the read lock, and so may be deleted.
+//
+// It is a function of its own because both of its false answers come from a
+// race no test can schedule: between releasing the read lock and taking the
+// write lock, another goroutine may have deleted the entry (present is false)
+// or reverified the token and stored a live one (the deadline has moved into
+// the future). Deleting in either case throws away work and sends the next
+// request back to GitLab, so the rule is worth stating and asserting on its
+// own rather than left as a condition only a lucky interleaving reaches.
+func stillStale(entry cacheEntry, present bool) bool {
+	return present && expired(entry.expiresAt)
 }
 
 // expiredAt is [expired] against a caller-supplied instant, for a sweep that

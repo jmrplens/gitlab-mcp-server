@@ -158,6 +158,12 @@ func (r *RejectedTokens) evictLocked() {
 	if len(r.entries) < r.max {
 		return
 	}
+	// The map is non-empty here: the early return above fired unless at least
+	// r.max entries survived the expiry sweep, and r.max is positive whenever
+	// this cache is enabled. So the loop always names a key, and guarding the
+	// delete against the empty string would only be a guard against a state
+	// that cannot be reached — and a no-op even if it were, since deleting an
+	// absent key does nothing.
 	var oldestKey string
 	var oldestAt time.Time
 	for key, entry := range r.entries {
@@ -165,9 +171,7 @@ func (r *RejectedTokens) evictLocked() {
 			oldestKey, oldestAt = key, entry.expiresAt
 		}
 	}
-	if oldestKey != "" {
-		delete(r.entries, oldestKey)
-	}
+	delete(r.entries, oldestKey)
 }
 
 // Len returns the number of entries held, expired ones included.
