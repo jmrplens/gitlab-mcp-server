@@ -27,6 +27,65 @@ correctly.
 | Schema model evaluation | `cmd/eval_mcp_surfaces --preset schema-enterprise`        | Mock catalog                       | Models can select tools/actions and shape arguments from the MCP schema and descriptions.      |
 | Docker model evaluation | `cmd/eval_mcp_surfaces --preset docker-* --execute-tools` | Docker GitLab CE                   | Models can drive real MCP calls against a populated GitLab instance, including safe mutations. |
 
+## Beyond Statement Coverage
+
+Statement coverage is at or near 100% across `cmd/` and `internal/`, so it no
+longer answers the question it is usually asked. Two tools answer what it
+cannot, and both are run by hand on the package being worked on rather than
+over the tree:
+
+| Tool                                    | Command                                         | What it finds                                                                                           |
+| --------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Condition coverage ([gobco][gobco])     | `make coverage-conditions PKG=./internal/oauth` | An operand of a compound condition that no test ever evaluated both ways: a covered line, half decided. |
+| Mutation testing ([gremlins][gremlins]) | `make coverage-mutants PKG=./internal/oauth`    | A line every test runs and none asserts: the tool flips an operator or a boundary and asks who notices. |
+
+[gobco]: https://github.com/rillig/gobco
+[gremlins]: https://github.com/go-gremlins/gremlins
+
+### What they cost, and why the figures are not generated
+
+Measured on an 8-core machine, September 2026, one package at a time:
+
+| Package                        | Own test time | gobco | gremlins |
+| ------------------------------ | ------------: | ----: | -------: |
+| `internal/config`              |         1.5 s |   4 s |    128 s |
+| `internal/oauth`               |         0.2 s |   6 s |     88 s |
+| `internal/gitlab`              |         8.0 s |  68 s |    229 s |
+| `internal/serverpool`          |         1.0 s |  69 s |    207 s |
+| `internal/tools/actioncatalog` |         0.5 s |  68 s |        — |
+| `internal/subscriptions`       |         1.5 s |  72 s |        — |
+| `internal/tools/dynamic`       |        35.0 s | 231 s |        — |
+| `internal/tools`               |        89.2 s | 283 s |        — |
+
+Four packages therefore cost about eleven minutes of mutation testing and
+another two and a half of condition coverage, against roughly six minutes for
+the whole-tree coverage pass `cmd/gen_testing_docs` runs. Extending either to
+the packages that carry logic would be four to five times the generator's
+current cost, which is why neither figure is a generated column in
+[Testing Reference](testing.md): a number nobody can afford to regenerate goes
+stale in the file while looking current.
+
+**gobco cannot analyse a package with build-constrained files at all.** It
+copies every `.go` file into its work directory ignoring `//go:build`, so
+`internal/toolutil` and `cmd/server` both fail with a redeclaration panic
+(`openLeafNoFollow`, `isConnRefused`). Those two are covered by mutation
+testing only.
+
+### Reading a survivor
+
+Not every survivor is a gap. Three kinds cannot be killed by any test and
+should be recorded rather than chased:
+
+- **A boundary whose two sides agree at the boundary.** Flipping `>` to `>=`
+  where both branches assign the same value at the boundary changes nothing.
+  Six of the retry-clamp mutants in `internal/gitlab` are this shape.
+- **A guard that a second guard makes unobservable.** The negative token
+  cache checks "disabled" in both `RecordKind` and `Lookup`, so removing the
+  second changes no answer.
+- **A tool artifact.** Mutations inside package-level constant initializers
+  and `switch { case … }` expressions are reported as not covered because
+  neither carries a statement counter, not because no test reaches them.
+
 ## When To Use Each Layer
 
 Use unit tests for implementation changes and regression coverage. Use E2E
