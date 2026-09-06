@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -36,9 +37,16 @@ func runFairness(opts options, root string) error {
 		return err
 	}
 	out := resolve(root, opts.fairnessJSON)
-	if out == resolve(root, opts.record) {
-		return fmt.Errorf("-fairness-json names %s, which is the published record: "+
-			"give the fairness run a path of its own", rel(root, out))
+	// Held against the published path as well as against whatever -json names,
+	// because the published one is a constant and the flag is not: compared
+	// only against the flag, redirecting -json elsewhere disarmed the guard and
+	// left the record, whose charts and tables are gated by a byte comparison,
+	// writable by this mode.
+	for _, published := range []string{opts.record, defaultRecord} {
+		if out == resolve(root, published) {
+			return fmt.Errorf("-fairness-json names %s, which is the published record: "+
+				"give the fairness run a path of its own", rel(root, out))
+		}
 	}
 
 	r, cleanup, err := newHarness(opts, root)
@@ -179,6 +187,23 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 	return measured, err
 }
 
+// refusalFloor is the fewest refusals an arm with the bound in force may
+// record, and it is a quantity rather than a presence.
+//
+// Half of what the plan's own arithmetic says the noisy population offered
+// above the bound, and never less than one so a bound with no bucket behind it
+// is still held to having fired. Half rather than all of it because a refusal
+// competes with everything else the phase is doing: a request the driver could
+// not send and one that timed out are neither served nor refused, and holding
+// the control to the full arithmetic would fail an arm for the host being busy.
+func refusalFloor(plan fairnessPlan) float64 {
+	return max(1, math.Ceil(boundFireShare*plan.refusalsExpected(plan.Noisy)))
+}
+
+// boundFireShare is how much of the expected refusal count the positive
+// control demands.
+const boundFireShare = 0.5
+
 // checkArm applies the two controls an arm has to pass, and returns what it
 // failed as notes.
 //
@@ -205,10 +230,11 @@ func checkArm(plan fairnessPlan, arm FairnessArm) ([]string, error) {
 	}
 	switch arm.Arm {
 	case armOn:
-		if !arm.refusedAnything() {
-			return notes, fmt.Errorf("%w: %s was supposed to be in force and refused nothing. "+
+		if got, want := arm.refusals(), refusalFloor(plan); float64(got) < want {
+			return notes, fmt.Errorf("%w: %s was supposed to be in force and refused %d requests, against the %.0f "+
+				"this control needs, which is %.0f%% of the %.0f the noisy population offered above it. "+
 				"A build without the bound, a mistyped switch and two populations sharing one bucket all look like this",
-				errBoundDidNotFire, plan.Bound.Label)
+				errBoundDidNotFire, plan.Bound.Label, got, want, boundFireShare*100, plan.refusalsExpected(plan.Noisy))
 		}
 	default:
 		if arm.refusedAnything() {
@@ -302,10 +328,23 @@ func paceCredential(ctx context.Context, in paceInput) {
 // issue performs one request and files what it did.
 func issue(ctx context.Context, in paceInput, verb verbSpec, intended time.Time) {
 	sent := time.Now()
+	giveUp := intended.Add(in.deadline)
+	if !sent.Before(giveUp) {
+		// The deadline is anchored at the intended instant, so a driver this
+		// far behind would enter the call with a context that has already
+		// expired: the transport returns a deadline without a byte reaching
+		// the server. Filed as a tick the driver never sent, because the
+		// outcome it would otherwise land in is the one that means the tenant
+		// gave up on the server, and a harness failure counted there reads as
+		// starvation and inflates the very ceiling genuine starvation hides
+		// under.
+		in.tally.dropped(in.pop, verb)
+		return
+	}
 	// Anchored at the intended instant rather than at the send, so a request
 	// held up by the driver is given up on when a client would have given up
 	// rather than being granted a fresh deadline the moment it leaves.
-	callCtx, cancel := context.WithDeadline(ctx, intended.Add(in.deadline))
+	callCtx, cancel := context.WithDeadline(ctx, giveUp)
 	_, err := in.conn.rpc.call(callCtx, verb.Method, verb.params(in.call))
 	cancel()
 	in.tally.record(in.pop, verb, observation{
@@ -394,7 +433,10 @@ func (t *fairTally) offered(pop string, verb verbSpec) {
 	t.entry(pop, verb).intended++
 }
 
-// dropped records a tick the driver could not hold a slot for.
+// dropped records a tick the driver did not send: one it could hold no slot
+// for, or one it reached so late that the request's own deadline had already
+// passed. Both are the harness failing to run the schedule, which is a
+// different statement from anything the server did.
 func (t *fairTally) dropped(pop string, verb verbSpec) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

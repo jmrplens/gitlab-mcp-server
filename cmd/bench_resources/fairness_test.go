@@ -248,6 +248,11 @@ func TestFairnessPlan_Validate_RefusesAPlanThatWouldMeasureSomethingElse(t *test
 			edit: func(o *options) { o.fairnessPhase = 5 * time.Second; o.fairnessQuietRate = 0.1 },
 			want: "too few for a percentile",
 		},
+		{
+			name: "a quiet population the bound would refuse",
+			edit: func(o *options) { o.fairnessQuietRate = 60 },
+			want: "is not the quiet tenant",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -312,6 +317,156 @@ func TestBoundSpec_Drain_DerivesTheLeadInFromTheBucketRatherThanAConstant(t *tes
 		_, err := fairnessPlanFor(opts)
 		if err == nil || !strings.Contains(err.Error(), "would never refuse it") {
 			t.Errorf("fairnessPlanFor = %v, want the noisy population refused as too quiet", err)
+		}
+	})
+}
+
+// TestBoundSpec_MeteredOffered_CountsOnlyTheVerbsTheBoundRefuses verifies a
+// population is weighed against a bound by what reaches the bucket rather than
+// by its rate.
+//
+// The two are the same number only for a population whose every verb the bound
+// meters, and every judgement about a population is derived from it: whether
+// the noisy one will be refused at all, how long the burst takes to drain,
+// whether the quiet one is quiet, and how much the bound should have refused.
+func TestBoundSpec_MeteredOffered_CountsOnlyTheVerbsTheBoundRefuses(t *testing.T) {
+	listings, err := boundByID("tools-list-rps")
+	if err != nil {
+		t.Fatalf("boundByID: %v", err)
+	}
+	cases := []struct {
+		name  string
+		verbs []string
+		rate  float64
+		want  float64
+	}{
+		{name: "a population of the metered verb alone", verbs: []string{verbList}, rate: 20, want: 20},
+		{name: "one alternating it with an unmetered verb", verbs: []string{verbCall, verbList}, rate: 20, want: 10},
+		{name: "one the bound never looks at", verbs: []string{verbCall}, rate: 20, want: 0},
+		{name: "one with no verbs at all", rate: 20, want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := listings.meteredOffered(populationSpec{Rate: tc.rate, Verbs: tc.verbs})
+			if got != tc.want {
+				t.Errorf("meteredOffered = %g, want %g", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBoundSpec_QuietRate_ComesFromTheBoundRatherThanAConstant verifies the
+// rate a quiet population takes by default leaves it under every declared
+// bound, which one constant cannot do.
+//
+// The shipped bucket meters ten requests a second and the listing bucket it
+// derives meters one, so the two-a-second default that leaves the first a
+// tenfold margin sat exactly on the second: the quiet tenant of that
+// comparison was one jitter away from being refused by the bound it was
+// supposed to be protected by, and a run that refused it would have reported
+// on a tenant it was turning away.
+func TestBoundSpec_QuietRate_ComesFromTheBoundRatherThanAConstant(t *testing.T) {
+	for _, bound := range fairnessBounds {
+		t.Run(bound.ID, func(t *testing.T) {
+			rate := bound.quietRate()
+			if rate <= 0 || rate > defaultQuietRate {
+				t.Errorf("quietRate = %g, want a positive rate no busier than the shipped %g", rate, defaultQuietRate)
+			}
+			if bound.Bucket == nil {
+				return
+			}
+			offered := bound.meteredOffered(populationSpec{Rate: rate, Verbs: bound.QuietVerbs})
+			if ceiling := quietMaxShare * bound.Bucket.meteredRate(); offered > ceiling {
+				t.Errorf("the default quiet population offers %g against a ceiling of %g", offered, ceiling)
+			}
+		})
+	}
+	t.Run("a bound that meters no rate has no quiet ceiling", func(t *testing.T) {
+		// The listen ceiling's shape: it refuses a held resource rather than a
+		// rate, so there is no rate a quiet population could sit on top of.
+		plan := fairnessPlan{Bound: boundSpec{}, Quiet: populationSpec{Rate: 1000, Verbs: []string{verbCall}}}
+		if err := plan.quietIsQuiet(); err != nil {
+			t.Errorf("quietIsQuiet = %v, want no ceiling where the bound meters no rate", err)
+		}
+	})
+	t.Run("a bound whose quiet verbs it never meters", func(t *testing.T) {
+		unmetered := boundSpec{
+			Bucket:     &bucketSpec{Rate: 10, Burst: 40},
+			Refusals:   []refusalSpec{{Status: httpOK, TextPrefix: "x", Method: methodSubscriptionsListen}},
+			QuietVerbs: []string{verbCall},
+		}
+		if got := unmetered.quietRate(); got != defaultQuietRate {
+			t.Errorf("quietRate = %g, want the shipped default when the bound meters none of the quiet verbs", got)
+		}
+	})
+	t.Run("and the plan takes it when the flag names none", func(t *testing.T) {
+		opts := fairnessOptions()
+		opts.fairness = "tools-list-rps"
+		opts.fairnessQuietRate = 0
+		opts.fairnessNoisyRate = 20
+		// The shipped phase, because a quiet rate derived from a bound metered
+		// once a second is slow enough that a shorter one cannot fill a
+		// percentile, which is the trade the derivation makes.
+		opts.fairnessPhase = defaultFairnessPhase
+		plan, err := fairnessPlanFor(opts)
+		if err != nil {
+			t.Fatalf("fairnessPlanFor: %v", err)
+		}
+		bound, _ := boundByID("tools-list-rps")
+		if plan.Quiet.Rate != bound.quietRate() {
+			t.Errorf("quiet rate = %g, want the %g the bound names", plan.Quiet.Rate, bound.quietRate())
+		}
+	})
+}
+
+// TestFairnessPlan_RefusalsExpected_IsWhatThePopulationOffersAboveTheBound
+// verifies the arithmetic the positive control weighs an arm against, which is
+// what makes that control a quantity rather than a presence.
+//
+// A bound that fired once in three thousand requests and a bound absent from
+// the build are the same arm to a control that only asks whether anything was
+// refused.
+func TestFairnessPlan_RefusalsExpected_IsWhatThePopulationOffersAboveTheBound(t *testing.T) {
+	bucket, err := boundByID("tools-call-rps")
+	if err != nil {
+		t.Fatalf("boundByID: %v", err)
+	}
+	plan := fairnessPlan{Bound: bucket, Phase: 10 * time.Second}
+	cases := []struct {
+		name string
+		pop  populationSpec
+		want float64
+	}{
+		{
+			name: "twice the bound, four credentials, ten seconds",
+			pop:  populationSpec{Credentials: 4, Rate: 20, Verbs: []string{verbCall}},
+			want: 400,
+		},
+		{
+			name: "half its ticks metered halves what it offers",
+			pop:  populationSpec{Credentials: 4, Rate: 20, Verbs: []string{verbCall, verbList}},
+			want: 0,
+		},
+		{
+			name: "a population under the bound offers nothing above it",
+			pop:  populationSpec{Credentials: 4, Rate: 5, Verbs: []string{verbCall}},
+			want: 0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := plan.refusalsExpected(tc.pop); got != tc.want {
+				t.Errorf("refusalsExpected = %g, want %g", got, tc.want)
+			}
+			if floor := refusalFloor(fairnessPlan{Bound: plan.Bound, Phase: plan.Phase, Noisy: tc.pop}); floor < 1 {
+				t.Errorf("refusalFloor = %g, want a bound to be held to having fired at all", floor)
+			}
+		})
+	}
+	t.Run("a bound with no bucket expects none", func(t *testing.T) {
+		none := fairnessPlan{Bound: boundSpec{}, Phase: time.Second}
+		if got := none.refusalsExpected(populationSpec{Credentials: 4, Rate: 20}); got != 0 {
+			t.Errorf("refusalsExpected = %g, want nothing derivable without a bucket", got)
 		}
 	})
 }

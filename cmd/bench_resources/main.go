@@ -123,7 +123,8 @@ func parseFlags() options {
 	flag.StringVar(&opts.fairnessSurface, "fairness-surface", surfaceDynamic, "tool surface a fairness run drives")
 	flag.IntVar(&opts.fairnessQuiet, "fairness-quiet", defaultQuietCredentials, "credentials in the quiet population")
 	flag.IntVar(&opts.fairnessNoisy, "fairness-noisy", defaultNoisyCredentials, "credentials in the noisy population")
-	flag.Float64Var(&opts.fairnessQuietRate, "fairness-quiet-rate", defaultQuietRate, "requests per second each quiet credential offers")
+	flag.Float64Var(&opts.fairnessQuietRate, "fairness-quiet-rate", 0,
+		"requests per second each quiet credential offers; 0 takes a quarter of what the bound meters, capped at 2")
 	flag.Float64Var(&opts.fairnessNoisyRate, "fairness-noisy-rate", defaultNoisyRate, "requests per second each noisy credential offers")
 	flag.DurationVar(&opts.fairnessPhase, "fairness-phase", defaultFairnessPhase, "measured window per arm")
 	flag.DurationVar(&opts.fairnessLeadIn, "fairness-lead-in", defaultFairnessLeadIn, "unmeasured window before each arm's phase, which drains the bound's burst")
@@ -147,10 +148,20 @@ func parseFlags() options {
 // validate refuses the flag values that would produce a record rather than an
 // error.
 //
-// All are only checked for a run that measures. -render and -check read the
-// committed record and never reach a ticker or a round, so refusing them there
-// would reject a redraw over a number it does not use.
+// All but the first are only checked for a run that measures. -render and
+// -check read the committed record and never reach a ticker or a round, so
+// refusing them there would reject a redraw over a number it does not use.
+//
+// The fairness check is above that short-circuit because a fairness run is a
+// measurement whatever else was asked for: below it, -check with -fairness
+// passed validation and then measured both arms for minutes while claiming to
+// verify committed artifacts, and -sample-interval 0 reached the ticker it is
+// checked for here and panicked the process a phase later.
 func (o options) validate() error {
+	if o.fairness != "" && (o.render || o.check) {
+		return fmt.Errorf("-fairness measures two servers and draws nothing, so it cannot be combined with %s, "+
+			"which draws the committed artifacts and measures nothing", renderFlagName(o))
+	}
 	if o.render || o.check {
 		return nil
 	}
@@ -176,6 +187,15 @@ func (o options) validate() error {
 	return nil
 }
 
+// renderFlagName names whichever of the two drawing flags was given, so the
+// refusal above names the flag the caller typed.
+func renderFlagName(o options) string {
+	if o.check {
+		return "-check"
+	}
+	return "-render"
+}
+
 // getwd is the working directory, a seam so the one failure os.Getwd has
 // (a directory removed underneath the process) can be driven.
 var getwd = os.Getwd
@@ -189,12 +209,18 @@ var getwd = os.Getwd
 // the working directory is not an error there; relative paths resolve against
 // the working directory instead. Every other run does need the root, and a
 // missing one is reported as before.
+//
+// A fairness run is that same shape and says so itself rather than being made
+// to say it with -no-render, which is a flag about rendering and means nothing
+// in a mode that renders nothing: the mode returns before the record is read
+// or a chart is drawn. What it still needs is a binary, since building one is
+// the one thing here that does read the checkout.
 func locateRoot(opts options) (string, error) {
 	root, err := mcpsurface.ProjectRoot()
 	if err == nil {
 		return root, nil
 	}
-	if opts.noRender && opts.binary != "" {
+	if (opts.noRender || opts.fairness != "") && opts.binary != "" {
 		cwd, wdErr := getwd()
 		if wdErr != nil {
 			return "", fmt.Errorf("get working directory: %w", wdErr)
