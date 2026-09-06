@@ -1304,13 +1304,8 @@ func registerMergeRequestNotesResource(server registrar, base *gitlabclient.Clie
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		uri := strings.TrimSuffix(req.Params.URI, "/notes")
-		projectID, mrIIDStr := extractTwoParts(uri, uriProjectPrefix, "/mr/")
-		if projectID == "" || mrIIDStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		mrIID, err := strconv.ParseInt(mrIIDStr, 10, 64)
-		if err != nil {
+		projectID, mrIID, ok := extractMRSubcollection(req.Params.URI, "/notes")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		notes, resp, err := client.GL().Notes.ListMergeRequestNotes(projectID, mrIID, &gl.ListMergeRequestNotesOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
@@ -1356,13 +1351,8 @@ func registerMergeRequestDiscussionsResource(server registrar, base *gitlabclien
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		uri := strings.TrimSuffix(req.Params.URI, "/discussions")
-		projectID, mrIIDStr := extractTwoParts(uri, uriProjectPrefix, "/mr/")
-		if projectID == "" || mrIIDStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		mrIID, err := strconv.ParseInt(mrIIDStr, 10, 64)
-		if err != nil {
+		projectID, mrIID, ok := extractMRSubcollection(req.Params.URI, "/discussions")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(projectID, mrIID, &gl.ListMergeRequestDiscussionsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
@@ -1539,15 +1529,7 @@ func registerLabelResource(server registrar, base *gitlabclient.Client) {
 		if err != nil {
 			return nil, wrapErr("failed to get label", err)
 		}
-		out := LabelResourceOutput{
-			ID:                     l.ID,
-			Name:                   l.Name,
-			Color:                  l.Color,
-			Description:            l.Description,
-			OpenIssuesCount:        l.OpenIssuesCount,
-			OpenMergeRequestsCount: l.OpenMergeRequestsCount,
-		}
-		return marshalResourceJSON(out)
+		return marshalResourceJSON(labelToResourceOutput(l))
 	})
 }
 
@@ -1719,6 +1701,27 @@ func extractTwoParts(uri, prefix, separator string) (first, second string) {
 	return parts[0], parts[1]
 }
 
+// extractMRSubcollection splits a "gitlab://project/{id}/mr/{iid}/{listSuffix}"
+// URI into the project and the merge request IID it names, with ok false when
+// the URI does not carry both.
+//
+// The sub-collections of one merge request are read by separate handlers that
+// diverge only after this point, so the segment they agree on is parsed once:
+// the two of them disagreeing about which URI is a not-found is the failure
+// this shape is prone to, and there is nothing left here for them to disagree
+// about.
+func extractMRSubcollection(uri, listSuffix string) (projectID string, mrIID int64, ok bool) {
+	projectID, iidStr := extractTwoParts(strings.TrimSuffix(uri, listSuffix), uriProjectPrefix, "/mr/")
+	if projectID == "" || iidStr == "" {
+		return "", 0, false
+	}
+	iid, err := strconv.ParseInt(iidStr, 10, 64)
+	if err != nil {
+		return "", 0, false
+	}
+	return projectID, iid, true
+}
+
 // readProjectIntResource is the shared handler for resources that
 // extract a (projectID, int64) pair from the URI and dispatch to a
 // GitLab API call. The supplied separator and operation label are used
@@ -1834,6 +1837,38 @@ func marshalResourceList(v any, page listPage) (*mcp.ReadResourceResult, error) 
 	return result, nil
 }
 
+// snippetToResourceOutput converts a GitLab snippet to the resource output.
+//
+// One function for both scopes because the personal and the project snippet
+// endpoints answer with the same client-go type, so a field added to the
+// output has one place to be filled rather than two that must agree.
+func snippetToResourceOutput(s *gl.Snippet) SnippetResourceOutput {
+	return SnippetResourceOutput{
+		ID:          s.ID,
+		Title:       s.Title,
+		FileName:    s.FileName,
+		Description: s.Description,
+		Visibility:  s.Visibility,
+		WebURL:      s.WebURL,
+	}
+}
+
+// labelToResourceOutput converts a GitLab label to the resource output.
+//
+// Group labels reach it through a conversion rather than a second function:
+// client-go declares GroupLabel as a defined type over Label, so the two have
+// one field set by construction and cannot drift apart underneath this.
+func labelToResourceOutput(l *gl.Label) LabelResourceOutput {
+	return LabelResourceOutput{
+		ID:                     l.ID,
+		Name:                   l.Name,
+		Color:                  l.Color,
+		Description:            l.Description,
+		OpenIssuesCount:        l.OpenIssuesCount,
+		OpenMergeRequestsCount: l.OpenMergeRequestsCount,
+	}
+}
+
 // pipelineToResourceOutput converts a GitLab API [gl.Pipeline] to the
 // MCP resource output format, mapping the ID, IID, status, ref, SHA,
 // web URL, and source.
@@ -1872,29 +1907,24 @@ func registerDeploymentResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconDeploy,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/deployment/")
-		if projectID == "" || idStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		d, _, err := client.GL().Deployments.GetProjectDeployment(projectID, id, gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get deployment", err)
-		}
-		out := DeploymentResourceOutput{
-			ID:     d.ID,
-			IID:    d.IID,
-			Ref:    d.Ref,
-			SHA:    d.SHA,
-			Status: d.Status,
-		}
-		if d.Environment != nil {
-			out.Environment = d.Environment.Name
-		}
-		return marshalResourceJSON(out)
+		return readProjectIntResource(ctx, req, "/deployment/", "failed to get deployment",
+			func(projectID string, id int64) (DeploymentResourceOutput, error) {
+				d, _, err := client.GL().Deployments.GetProjectDeployment(projectID, id, gl.WithContext(ctx))
+				if err != nil {
+					return DeploymentResourceOutput{}, err
+				}
+				out := DeploymentResourceOutput{
+					ID:     d.ID,
+					IID:    d.IID,
+					Ref:    d.Ref,
+					SHA:    d.SHA,
+					Status: d.Status,
+				}
+				if d.Environment != nil {
+					out.Environment = d.Environment.Name
+				}
+				return out, nil
+			})
 	})
 }
 
@@ -1913,26 +1943,20 @@ func registerEnvironmentResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconEnvironment,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/environment/")
-		if projectID == "" || idStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		env, _, err := client.GL().Environments.GetEnvironment(projectID, int64(id), gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get environment", err)
-		}
-		out := EnvironmentResourceOutput{
-			ID:    env.ID,
-			Name:  env.Name,
-			Slug:  env.Slug,
-			State: env.State,
-			Tier:  env.Tier,
-		}
-		return marshalResourceJSON(out)
+		return readProjectIntResource(ctx, req, "/environment/", "failed to get environment",
+			func(projectID string, id int64) (EnvironmentResourceOutput, error) {
+				env, _, err := client.GL().Environments.GetEnvironment(projectID, id, gl.WithContext(ctx))
+				if err != nil {
+					return EnvironmentResourceOutput{}, err
+				}
+				return EnvironmentResourceOutput{
+					ID:    env.ID,
+					Name:  env.Name,
+					Slug:  env.Slug,
+					State: env.State,
+					Tier:  env.Tier,
+				}, nil
+			})
 	})
 }
 
@@ -1950,29 +1974,23 @@ func registerJobResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconJob,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/job/")
-		if projectID == "" || idStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		j, _, err := client.GL().Jobs.GetJob(projectID, id, gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get job", err)
-		}
-		out := JobResourceOutput{
-			ID:            j.ID,
-			Name:          j.Name,
-			Stage:         j.Stage,
-			Status:        j.Status,
-			Ref:           j.Ref,
-			Duration:      j.Duration,
-			FailureReason: j.FailureReason,
-			WebURL:        j.WebURL,
-		}
-		return marshalResourceJSON(out)
+		return readProjectIntResource(ctx, req, "/job/", "failed to get job",
+			func(projectID string, id int64) (JobResourceOutput, error) {
+				j, _, err := client.GL().Jobs.GetJob(projectID, id, gl.WithContext(ctx))
+				if err != nil {
+					return JobResourceOutput{}, err
+				}
+				return JobResourceOutput{
+					ID:            j.ID,
+					Name:          j.Name,
+					Stage:         j.Stage,
+					Status:        j.Status,
+					Ref:           j.Ref,
+					Duration:      j.Duration,
+					FailureReason: j.FailureReason,
+					WebURL:        j.WebURL,
+				}, nil
+			})
 	})
 }
 
@@ -2002,15 +2020,7 @@ func registerSnippetResource(server registrar, base *gitlabclient.Client) {
 		if err != nil {
 			return nil, wrapErr("failed to get snippet", err)
 		}
-		out := SnippetResourceOutput{
-			ID:          s.ID,
-			Title:       s.Title,
-			FileName:    s.FileName,
-			Description: s.Description,
-			Visibility:  s.Visibility,
-			WebURL:      s.WebURL,
-		}
-		return marshalResourceJSON(out)
+		return marshalResourceJSON(snippetToResourceOutput(s))
 	})
 }
 
@@ -2029,27 +2039,14 @@ func registerProjectSnippetResource(server registrar, base *gitlabclient.Client)
 		Icons:       toolutil.IconSnippet,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/snippet/")
-		if projectID == "" || idStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		s, _, err := client.GL().ProjectSnippets.GetSnippet(projectID, int64(id), gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get project snippet", err)
-		}
-		out := SnippetResourceOutput{
-			ID:          s.ID,
-			Title:       s.Title,
-			FileName:    s.FileName,
-			Description: s.Description,
-			Visibility:  s.Visibility,
-			WebURL:      s.WebURL,
-		}
-		return marshalResourceJSON(out)
+		return readProjectIntResource(ctx, req, "/snippet/", "failed to get project snippet",
+			func(projectID string, id int64) (SnippetResourceOutput, error) {
+				s, _, err := client.GL().ProjectSnippets.GetSnippet(projectID, id, gl.WithContext(ctx))
+				if err != nil {
+					return SnippetResourceOutput{}, err
+				}
+				return snippetToResourceOutput(s), nil
+			})
 	})
 }
 
@@ -2091,25 +2088,19 @@ func registerDeployKeyResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconKey,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/deploy_key/")
-		if projectID == "" || idStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		k, _, err := client.GL().DeployKeys.GetDeployKey(projectID, id, gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get deploy key", err)
-		}
-		out := DeployKeyResourceOutput{
-			ID:          k.ID,
-			Title:       k.Title,
-			Key:         k.Key,
-			Fingerprint: k.Fingerprint,
-		}
-		return marshalResourceJSON(out)
+		return readProjectIntResource(ctx, req, "/deploy_key/", "failed to get deploy key",
+			func(projectID string, id int64) (DeployKeyResourceOutput, error) {
+				k, _, err := client.GL().DeployKeys.GetDeployKey(projectID, id, gl.WithContext(ctx))
+				if err != nil {
+					return DeployKeyResourceOutput{}, err
+				}
+				return DeployKeyResourceOutput{
+					ID:          k.ID,
+					Title:       k.Title,
+					Key:         k.Key,
+					Fingerprint: k.Fingerprint,
+				}, nil
+			})
 	})
 }
 
@@ -2128,20 +2119,14 @@ func registerBoardResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconBoard,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/board/")
-		if projectID == "" || idStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		b, _, err := client.GL().Boards.GetIssueBoard(projectID, int64(id), gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get board", err)
-		}
-		out := BoardResourceOutput{ID: b.ID, Name: b.Name}
-		return marshalResourceJSON(out)
+		return readProjectIntResource(ctx, req, "/board/", "failed to get board",
+			func(projectID string, id int64) (BoardResourceOutput, error) {
+				b, _, err := client.GL().Boards.GetIssueBoard(projectID, id, gl.WithContext(ctx))
+				if err != nil {
+					return BoardResourceOutput{}, err
+				}
+				return BoardResourceOutput{ID: b.ID, Name: b.Name}, nil
+			})
 	})
 }
 
@@ -2213,14 +2198,6 @@ func registerGroupLabelResource(server registrar, base *gitlabclient.Client) {
 		if err != nil {
 			return nil, wrapErr("failed to get group label", err)
 		}
-		out := LabelResourceOutput{
-			ID:                     l.ID,
-			Name:                   l.Name,
-			Color:                  l.Color,
-			Description:            l.Description,
-			OpenIssuesCount:        l.OpenIssuesCount,
-			OpenMergeRequestsCount: l.OpenMergeRequestsCount,
-		}
-		return marshalResourceJSON(out)
+		return marshalResourceJSON(labelToResourceOutput((*gl.Label)(l)))
 	})
 }

@@ -117,7 +117,7 @@ func TestFormatMutateMarkdown(t *testing.T) {
 // TestPrettyJSON_Unmarshalable verifies that a value json cannot marshal falls
 // back to its Go rendering instead of producing an empty section.
 func TestPrettyJSON_Unmarshalable(t *testing.T) {
-	if got := prettyJSON(make(chan int)); got == "" {
+	if prettyJSON(make(chan int)) == "" {
 		t.Error("prettyJSON() = empty, want a fallback rendering")
 	}
 }
@@ -132,7 +132,7 @@ func TestMarkdownFormattersRegistered(t *testing.T) {
 	}
 	for name, out := range outputs {
 		t.Run(name, func(t *testing.T) {
-			if result := toolutil.MarkdownForResult(out); result == nil {
+			if toolutil.MarkdownForResult(out) == nil {
 				t.Errorf("MarkdownForResult(%T) = nil, want a registered formatter", out)
 			}
 		})

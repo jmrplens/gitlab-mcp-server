@@ -14,6 +14,10 @@ const (
 	// back with, not one the add and edit endpoints grant; the handlers treat
 	// 0 as the field left unset and refuse the request before it leaves.
 	membershipNoAccessGrant = "0 (No access) is read back on a membership but never granted: doc/api/members.md lists it under valid access levels while the add and edit handlers (members.go, group_members.go) treat 0 as access_level left unset and refuse the call"
+	// memberRoleBaseLevels: a custom role is based on a role a member can
+	// hold, which leaves out both ends of AccessLevelValue and the minimal
+	// access level in between.
+	memberRoleBaseLevels = "doc/api/member_roles.md#add-a-member-role-to-an-instance lists 10 (Guest) through 50 (Owner) as the valid base access levels"
 	// broadcastTargetLevels: the roles a banner can target are the membership
 	// roles proper, without the two ends of AccessLevelValue.
 	broadcastTargetLevels = "doc/api/broadcast_messages.md lists target_access_levels as 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer) and 50 (Owner); 5 (Minimal access) and 60 (Admin) are AccessLevelValue constants outside that set"
@@ -73,9 +77,9 @@ func buildAcceptedEnumGaps() map[string]string {
 		"groupldap.AddInput.group_access=60":                 "doc/api/group_ldap_links.md#add-an-ldap-group-link lists 0 (No access) through 50 (Owner); " + membershipNoAdmin,
 		"groupsaml.AddInput.access_level=60":                 "doc/api/saml.md#add-a-saml-group-link lists 0 (No access) through 50 (Owner); " + membershipNoAdmin,
 
-		"memberroles.CreateInstanceInput.base_access_level=0":  "doc/api/member_roles.md#add-a-member-role-to-an-instance lists 10 (Guest) through 50 (Owner) as the valid base access levels",
-		"memberroles.CreateInstanceInput.base_access_level=5":  "doc/api/member_roles.md#add-a-member-role-to-an-instance lists 10 (Guest) through 50 (Owner) as the valid base access levels",
-		"memberroles.CreateInstanceInput.base_access_level=60": "doc/api/member_roles.md#add-a-member-role-to-an-instance lists 10 (Guest) through 50 (Owner) as the valid base access levels",
+		"memberroles.CreateInstanceInput.base_access_level=0":  memberRoleBaseLevels,
+		"memberroles.CreateInstanceInput.base_access_level=5":  memberRoleBaseLevels,
+		"memberroles.CreateInstanceInput.base_access_level=60": memberRoleBaseLevels,
 
 		"broadcastmessages.CreateInput.target_access_levels=0":  broadcastTargetLevels,
 		"broadcastmessages.CreateInput.target_access_levels=5":  broadcastTargetLevels,

@@ -2846,3 +2846,60 @@ func TestRegister_ClientBoundToContext_ReadsFromTheBoundInstance(t *testing.T) {
 		})
 	}
 }
+
+// TestPageOf_ReadsCompletenessFromTheResponse covers the _meta a collection
+// resource carries, which is the only way a reader learns that it holds part
+// of a collection rather than all of it.
+//
+// The case that matters is the third: an endpoint GitLab paginates by keyset
+// sends no X-Total, so a total of zero is silence rather than a count, and
+// completeness has to be read from NextPage instead. Taking the total as the
+// answer there would report a truncated page as the whole collection.
+func TestPageOf_ReadsCompletenessFromTheResponse(t *testing.T) {
+	cases := []struct {
+		name string
+		resp *gl.Response
+		want listPage
+	}{
+		{
+			name: "no response to read",
+			resp: nil,
+			want: listPage{Returned: 3, Complete: true},
+		},
+		{
+			name: "a counted collection with nothing after it",
+			resp: &gl.Response{TotalItems: 3},
+			want: listPage{Returned: 3, Total: 3, Complete: true},
+		},
+		{
+			name: "an uncounted collection with a page after it",
+			resp: &gl.Response{NextPage: 2},
+			want: listPage{Returned: 3, Complete: false},
+		},
+		{
+			name: "a counted collection with a page after it",
+			resp: &gl.Response{TotalItems: 90, NextPage: 2},
+			want: listPage{Returned: 3, Total: 90, Complete: false},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := pageOf(3, tc.resp); got != tc.want {
+				t.Errorf("pageOf(3, %+v) = %+v, want %+v", tc.resp, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMarshalResourceList_UnmarshalableValue_FailsRatherThanEmitsAnEmptyList
+// pins the error path, which no resource reaches with real GitLab data and
+// which would otherwise answer a read with an empty body and no error.
+func TestMarshalResourceList_UnmarshalableValue_FailsRatherThanEmitsAnEmptyList(t *testing.T) {
+	result, err := marshalResourceList(make(chan int), listPage{Returned: 1, Complete: true})
+	if err == nil {
+		t.Fatal("marshalResourceList accepted a value encoding/json cannot marshal")
+	}
+	if result != nil {
+		t.Errorf("marshalResourceList returned %+v alongside its error, want nil", result)
+	}
+}

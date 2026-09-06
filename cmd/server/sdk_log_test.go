@@ -224,7 +224,7 @@ func TestSDKLogHandler_WithAttrsKeepsTheHandlerWrapping(t *testing.T) {
 	if got := records[0]["msg"]; got != "resource subscribed" {
 		t.Errorf("the surviving record is %q, want the one that is not session chatter", got)
 	}
-	if got := records[0]["component"]; got != "sdk" {
+	if records[0]["component"] != "sdk" {
 		t.Errorf("the attached attribute was lost: %v", records[0])
 	}
 }
@@ -262,7 +262,7 @@ func TestSDKLogHandler_GroupedAttributesAreLeftAlone(t *testing.T) {
 	if !ok {
 		t.Fatalf("the group is missing: %v", records[0])
 	}
-	if got := group["level"]; got != "info" {
+	if group["level"] != "info" {
 		t.Errorf("grouped attribute renamed to something else: %v", group)
 	}
 	if got := records[0]["level"]; got != "INFO" {

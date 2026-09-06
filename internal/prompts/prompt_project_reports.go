@@ -23,7 +23,7 @@ const (
 )
 
 // registerProjectReportPrompts registers all project-level report prompts.
-func registerProjectReportPrompts(server registrar, client *gitlabclient.Client) {
+func registerProjectReportPrompts(server promptAdder, client *gitlabclient.Client) {
 	registerBranchMRSummaryPrompt(server, client)
 	registerProjectActivityReportPrompt(server, client)
 	registerMRDiscussionHealthPrompt(server, client)
@@ -32,7 +32,7 @@ func registerProjectReportPrompts(server registrar, client *gitlabclient.Client)
 }
 
 // registerBranchMRSummaryPrompt registers the branch_mr_summary prompt.
-func registerBranchMRSummaryPrompt(server registrar, client *gitlabclient.Client) {
+func registerBranchMRSummaryPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "branch_mr_summary",
 		Title:       toolutil.TitleFromName("branch_mr_summary"),
@@ -102,7 +102,7 @@ func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req
 }
 
 // registerProjectActivityReportPrompt registers the project_activity_report prompt.
-func registerProjectActivityReportPrompt(server registrar, client *gitlabclient.Client) {
+func registerProjectActivityReportPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "project_activity_report",
 		Title:       toolutil.TitleFromName("project_activity_report"),
@@ -193,7 +193,7 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 }
 
 // registerMRDiscussionHealthPrompt registers the mr_discussion_health prompt.
-func registerMRDiscussionHealthPrompt(server registrar, client *gitlabclient.Client) {
+func registerMRDiscussionHealthPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_discussion_health",
 		Title:       toolutil.TitleFromName("mr_discussion_health"),
@@ -311,7 +311,7 @@ func countDiscussionThreads(info *mrDiscussionInfo, discussions []*gl.Discussion
 }
 
 // registerUnassignedItemsPrompt registers the unassigned_items prompt.
-func registerUnassignedItemsPrompt(server registrar, client *gitlabclient.Client) {
+func registerUnassignedItemsPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "unassigned_items",
 		Title:       toolutil.TitleFromName("unassigned_items"),
@@ -377,7 +377,7 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 }
 
 // registerStaleItemsReportPrompt registers the stale_items_report prompt.
-func registerStaleItemsReportPrompt(server registrar, client *gitlabclient.Client) {
+func registerStaleItemsReportPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "stale_items_report",
 		Title:       toolutil.TitleFromName("stale_items_report"),

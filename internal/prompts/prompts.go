@@ -98,7 +98,7 @@ func Register(server *mcp.Server, client *gitlabclient.Client, opts ...RegisterO
 // build the shape. On stdio, and in every test that registers a real client,
 // nothing is ever bound and For returns the captured client unchanged, so the
 // call is invisible there.
-func registerAll(server registrar, client *gitlabclient.Client) {
+func registerAll(server promptAdder, client *gitlabclient.Client) {
 	registerSummarizeMRChangesPrompt(server, client)
 	registerReviewMRPrompt(server, client)
 	registerSummarizePipelineStatusPrompt(server, client)
@@ -135,7 +135,7 @@ func registerAll(server registrar, client *gitlabclient.Client) {
 }
 
 // registerSummarizeMRChangesPrompt registers the summarize_mr_changes prompt.
-func registerSummarizeMRChangesPrompt(server registrar, client *gitlabclient.Client) {
+func registerSummarizeMRChangesPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_mr_changes",
 		Title:       toolutil.TitleFromName("summarize_mr_changes"),
@@ -175,7 +175,7 @@ func handleSummarizeMRChanges(ctx context.Context, client *gitlabclient.Client, 
 }
 
 // registerReviewMRPrompt registers the review_mr prompt.
-func registerReviewMRPrompt(server registrar, client *gitlabclient.Client) {
+func registerReviewMRPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "review_mr",
 		Title:       toolutil.TitleFromName("review_mr"),
@@ -298,7 +298,7 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 }
 
 // registerSummarizePipelineStatusPrompt registers the summarize_pipeline_status prompt.
-func registerSummarizePipelineStatusPrompt(server registrar, client *gitlabclient.Client) {
+func registerSummarizePipelineStatusPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_pipeline_status",
 		Title:       toolutil.TitleFromName("summarize_pipeline_status"),
@@ -378,7 +378,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 }
 
 // registerSuggestMRReviewersPrompt registers the suggest_mr_reviewers prompt.
-func registerSuggestMRReviewersPrompt(server registrar, client *gitlabclient.Client) {
+func registerSuggestMRReviewersPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "suggest_mr_reviewers",
 		Title:       toolutil.TitleFromName("suggest_mr_reviewers"),
@@ -433,7 +433,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 }
 
 // registerGenerateReleaseNotesPrompt registers the generate_release_notes prompt.
-func registerGenerateReleaseNotesPrompt(server registrar, client *gitlabclient.Client) {
+func registerGenerateReleaseNotesPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "generate_release_notes",
 		Title:       toolutil.TitleFromName("generate_release_notes"),
@@ -593,7 +593,7 @@ func writeReleaseNotesStats(b *strings.Builder, comparison *gl.Compare) {
 }
 
 // registerSummarizeOpenMRsPrompt registers the summarize_open_mrs prompt.
-func registerSummarizeOpenMRsPrompt(server registrar, client *gitlabclient.Client) {
+func registerSummarizeOpenMRsPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_open_mrs",
 		Title:       toolutil.TitleFromName("summarize_open_mrs"),
@@ -650,7 +650,7 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 }
 
 // registerProjectHealthCheckPrompt registers the project_health_check prompt.
-func registerProjectHealthCheckPrompt(server registrar, client *gitlabclient.Client) {
+func registerProjectHealthCheckPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "project_health_check",
 		Title:       toolutil.TitleFromName("project_health_check"),
@@ -748,7 +748,7 @@ func countBranchStats(branches []*gl.Branch) (merged, stale int) {
 }
 
 // registerCompareBranchesPrompt registers the compare_branches prompt.
-func registerCompareBranchesPrompt(server registrar, client *gitlabclient.Client) {
+func registerCompareBranchesPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "compare_branches",
 		Title:       toolutil.TitleFromName("compare_branches"),
@@ -816,7 +816,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 }
 
 // registerDailyStandupPrompt registers the daily_standup prompt.
-func registerDailyStandupPrompt(server registrar, client *gitlabclient.Client) {
+func registerDailyStandupPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "daily_standup",
 		Title:       toolutil.TitleFromName("daily_standup"),
@@ -978,7 +978,7 @@ func writeIssueSection(b *strings.Builder, heading, username string, issues []*g
 }
 
 // registerTeamMemberWorkloadPrompt registers the team_member_workload prompt.
-func registerTeamMemberWorkloadPrompt(server registrar, client *gitlabclient.Client) {
+func registerTeamMemberWorkloadPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "team_member_workload",
 		Title:       toolutil.TitleFromName("team_member_workload"),
@@ -1124,7 +1124,7 @@ func writeCountRow(b *strings.Builder, label string, count int, fetchErr error) 
 }
 
 // registerUserStatsPrompt registers the user_stats prompt.
-func registerUserStatsPrompt(server registrar, client *gitlabclient.Client) {
+func registerUserStatsPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "user_stats",
 		Title:       toolutil.TitleFromName("user_stats"),
@@ -1348,7 +1348,7 @@ func safeLen(count int, err error) int {
 }
 
 // registerMRRiskAssessmentPrompt registers the mr_risk_assessment prompt.
-func registerMRRiskAssessmentPrompt(server registrar, client *gitlabclient.Client) {
+func registerMRRiskAssessmentPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_risk_assessment",
 		Title:       toolutil.TitleFromName("mr_risk_assessment"),

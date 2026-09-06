@@ -271,12 +271,59 @@ func TestToolManifestHelpers_DefensiveBranches(t *testing.T) {
 		t.Fatalf("rewriteSeeAlso(nil resolver) = %q, want description unchanged: %q", got, withSeeAlso)
 	}
 
+	// A resolver that recognizes none of the names must drop the clause
+	// whole. Keeping it would print "See also: ." to the model, and the
+	// names were dropped precisely because this surface cannot be told to
+	// call them, so a dangling clause would be an instruction to nowhere.
+	knowsNothing := func(string) (string, bool) { return "", false }
+	if got := rewriteSeeAlso(withSeeAlso, knowsNothing); got != "Get one project." {
+		t.Fatalf("rewriteSeeAlso(unknown names) = %q, want the clause removed entirely", got)
+	}
+
 	// newSeeAlsoIndex(nil) must not panic on a nil catalog and must report
 	// "no names known" via a nil map, which is what makes rewriteSeeAlso's
 	// resolvers built on top of it drop every "See also:" reference instead
 	// of indexing a non-existent catalog.
 	if index := newSeeAlsoIndex(nil); index != nil {
 		t.Fatalf("newSeeAlsoIndex(nil) = %v, want nil", index)
+	}
+}
+
+// TestNewToolSurfaceSnapshot_SubscriptionsSection_FollowsWhatIsOffered covers
+// the manifest's subscriptions block, which is how a client discovers that
+// resources/subscribe is answered here and for which URI templates.
+//
+// The section is absent rather than empty when nothing is subscribable, which
+// is the minimal capability surface. Both directions are asserted because the
+// failure that matters is the pair coming apart: a client reading
+// "supported" and subscribing would be refused, and one reading nothing would
+// poll instead of subscribing to a server that would have told it.
+func TestNewToolSurfaceSnapshot_SubscriptionsSection_FollowsWhatIsOffered(t *testing.T) {
+	templates := []string{
+		"gitlab://project/{project_id}/issue/{issue_iid}",
+		"gitlab://project/{project_id}/pipeline/{pipeline_id}",
+	}
+	offered := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
+		Surface:                  toolSurfaceIndividual,
+		SubscribableURITemplates: templates,
+	})
+	subscriptions := offered.manifest.Subscriptions
+	if subscriptions == nil {
+		t.Fatal("no subscriptions section on a server that lists subscribable templates")
+	}
+	if !subscriptions.Supported {
+		t.Error("the section reports subscriptions unsupported while listing subscribable templates")
+	}
+	if !reflect.DeepEqual(subscriptions.SubscribableURITemplates, templates) {
+		t.Errorf("SubscribableURITemplates = %v, want %v", subscriptions.SubscribableURITemplates, templates)
+	}
+	if !strings.Contains(subscriptions.Notification, "notifications/resources/updated") {
+		t.Errorf("Notification = %q, want the notification a subscriber waits for", subscriptions.Notification)
+	}
+
+	withheld := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{Surface: toolSurfaceIndividual})
+	if withheld.manifest.Subscriptions != nil {
+		t.Errorf("subscriptions advertised (%+v) by a server that offers none", withheld.manifest.Subscriptions)
 	}
 }
 

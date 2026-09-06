@@ -199,7 +199,7 @@ func TestExcludeFromCatalog_NothingToExclude_ReturnsTheSameCatalog(t *testing.T)
 	t.Parallel()
 
 	catalog := actioncatalog.NewCatalog()
-	if got := ExcludeFromCatalog(catalog, nil); got != catalog {
+	if ExcludeFromCatalog(catalog, nil) != catalog {
 		t.Error("ExcludeFromCatalog with no patterns returned a different catalog")
 	}
 }

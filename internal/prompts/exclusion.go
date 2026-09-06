@@ -10,14 +10,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// registrar is the subset of *mcp.Server that prompt registration uses.
+// promptAdder is the subset of *mcp.Server that prompt registration uses.
 //
 // The registration helpers take this interface rather than the concrete server
 // so a wrapper can decide, per prompt, whether the call reaches the server at
 // all. That is the only place the decision fits: every prompt in this package
 // is registered through [addPrompt], and a filter there covers all 37 without
 // any of them knowing it exists.
-type registrar interface {
+//
+// Named for its one method, as Go names a one-method interface, while the
+// concrete types satisfying it are named for what they are: an
+// [excludingRegistrar] is a registrar, and adding prompts is what it can do.
+// The sibling in internal/resources keeps the plain name because it carries
+// two methods and so has no method to be named after.
+type promptAdder interface {
 	AddPrompt(prompt *mcp.Prompt, handler mcp.PromptHandler)
 }
 
@@ -137,7 +143,7 @@ var promptBackingActions = map[string][]string{
 // calls stay a flat list of what this server offers, and the narrowing stays
 // one decision in one place.
 type excludingRegistrar struct {
-	inner    registrar
+	inner    promptAdder
 	excluded map[string]struct{}
 }
 
@@ -151,7 +157,7 @@ func (r *excludingRegistrar) AddPrompt(prompt *mcp.Prompt, handler mcp.PromptHan
 // registrarFor returns the registrar the registration calls should be given
 // for these options: the plain one when nothing is excluded, and a filtering
 // wrapper otherwise.
-func registrarFor(inner registrar, opts []RegisterOptions) registrar {
+func registrarFor(inner promptAdder, opts []RegisterOptions) promptAdder {
 	excluded := excludedPromptNames(opts)
 	if len(excluded) == 0 {
 		return inner
@@ -209,7 +215,7 @@ func excludedPromptNames(opts []RegisterOptions) map[string]struct{} {
 // once for all 37, including the ones that read several endpoints and would
 // otherwise fail differently depending on which read came first.
 type attributedRegistrar struct {
-	inner registrar
+	inner promptAdder
 	base  *gitlabclient.Client
 }
 
@@ -224,6 +230,6 @@ func (r *attributedRegistrar) AddPrompt(prompt *mcp.Prompt, handler mcp.PromptHa
 
 // attributed wraps inner so every prompt registered through it refuses an
 // unattributed request. See [attributedRegistrar].
-func attributed(inner registrar, base *gitlabclient.Client) registrar {
+func attributed(inner promptAdder, base *gitlabclient.Client) promptAdder {
 	return &attributedRegistrar{inner: inner, base: base}
 }

@@ -23,13 +23,13 @@ var (
 )
 
 // registerGitWorkflowPrompts registers prompts for Git history and MR authoring quality.
-func registerGitWorkflowPrompts(server registrar, client *gitlabclient.Client) {
+func registerGitWorkflowPrompts(server promptAdder, client *gitlabclient.Client) {
 	registerAuditCommitHygienePrompt(server, client)
 	registerMRDescriptionQualityPrompt(server, client)
 }
 
 // registerAuditCommitHygienePrompt registers the audit_commit_hygiene prompt.
-func registerAuditCommitHygienePrompt(server registrar, client *gitlabclient.Client) {
+func registerAuditCommitHygienePrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "audit_commit_hygiene",
 		Title:       toolutil.TitleFromName("audit_commit_hygiene"),
@@ -94,7 +94,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 }
 
 // registerMRDescriptionQualityPrompt registers the mr_description_quality prompt.
-func registerMRDescriptionQualityPrompt(server registrar, client *gitlabclient.Client) {
+func registerMRDescriptionQualityPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_description_quality",
 		Title:       toolutil.TitleFromName("mr_description_quality"),

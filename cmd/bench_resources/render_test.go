@@ -788,7 +788,7 @@ func TestWriteSection_ChangedUnderCheck_ReportsWithoutWriting(t *testing.T) {
 	if err != nil || !changed {
 		t.Errorf("writeSection -check = (%v, %v), want a reported change", changed, err)
 	}
-	if got := readFileForTest(t, path); got != original {
+	if readFileForTest(t, path) != original {
 		t.Error("-check rewrote the page")
 	}
 
