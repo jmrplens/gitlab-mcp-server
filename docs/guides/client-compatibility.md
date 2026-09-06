@@ -97,7 +97,7 @@ later also resolves the semicolon rejection at the gateway
 
 ## Client limits worth knowing
 
-These are client-side constraints, not server behavior. The default `dynamic` surface (2 tools) fits every client; the `meta` surface (~33–50 tools) fits everywhere except Cursor's cap; the `individual` surface only suits clients without tool caps.
+These are client-side constraints, not server behavior. The default `dynamic` surface (2 tools) fits every client; the `meta` surface (32 to 50 tools, by tier) fits everywhere except Cursor's cap; the `individual` surface only suits clients without tool caps.
 
 | Client                                                                      | Limit                                                                                                                                                                                                                                                                                                         |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

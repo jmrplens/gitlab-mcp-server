@@ -128,7 +128,9 @@ introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextpro
 - The server neither reads nor sets the `Mcp-Session-Id` header. Every POST is
   a self-contained JSON-RPC exchange — no `initialize` round-trip is required.
 - GET and DELETE on the MCP endpoint return `405 Method Not Allowed`
-  (`Allow: POST`). `/health` and `/.well-known/*` endpoints are unaffected.
+  (`Allow: POST`) once the request is authenticated; in legacy mode they are
+  answered without a credential, in OAuth mode a request without one is
+  answered `401` first. `/health` and `/.well-known/*` are unaffected.
 - Synchronous server-initiated requests are rejected by the SDK because no
   client channel outlives the request. Clients on protocol `2026-07-28` keep
   full elicitation through multi-round-trip requests (MRTR), which travel in
@@ -368,14 +370,14 @@ If both headers are present in legacy mode, `PRIVATE-TOKEN` wins. In OAuth mode 
 
 #### Missing Token
 
-A request with no token is rejected with `401 Unauthorized`, an RFC 9110 challenge, and a JSON-RPC error body naming both accepted headers:
+A request with no token is rejected with `401 Unauthorized`, an RFC 9110 challenge, and a JSON-RPC error body naming both accepted headers. The body echoes the id of the request it refuses, and carries no `id` at all when the request had none:
 
 ```http
 HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer realm="gitlab-mcp-server"
 Content-Type: application/json
 
-{"jsonrpc":"2.0","id":null,"error":{"code":-40100,"message":"Authentication required: send a GitLab personal access token as 'Authorization: Bearer <glpat-...>' or 'PRIVATE-TOKEN: <glpat-...>'. ..."}}
+{"jsonrpc":"2.0","id":1,"error":{"code":-40100,"message":"Authentication required: send a GitLab personal access token as 'Authorization: Bearer <glpat-...>' or 'PRIVATE-TOKEN: <glpat-...>'. ..."}}
 ```
 
 The challenge deliberately omits the `resource_metadata` parameter. Clients discover an OAuth authorization server through that parameter, and legacy mode has none — advertising it would start a discovery flow that cannot complete. Use `--auth-mode=oauth` for a challenge that does point at [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata.
@@ -410,7 +412,9 @@ Every other outcome — a transport error, a `5xx`, a `404` from an instance tha
 
 Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status.
 
-`GET` and `DELETE` skip the credential check **only under the default `--stateless`**, where they receive `405 Method Not Allowed` whatever they carry — the answer protocol 2026-07-28 prescribes for them, and gating them would replace it with a `401`. Under `--stateless=false` they are not inert: a `GET` opens a session's standalone SSE stream and reads the server-initiated messages meant for its owner, and a `DELETE` terminates the session. There they are authenticated and ownership-checked exactly like a `POST`, so learning a session ID is not enough to read or end someone else's session.
+In legacy mode `GET` and `DELETE` skip the credential check **only under the default `--stateless`**, where they receive `405 Method Not Allowed` whatever they carry — the answer protocol 2026-07-28 prescribes for them, and gating them would replace it with a `401`. Under `--stateless=false` they are not inert: a `GET` opens a session's standalone SSE stream and reads the server-initiated messages meant for its owner, and a `DELETE` terminates the session. There they are authenticated and ownership-checked exactly like a `POST`, so learning a session ID is not enough to read or end someone else's session.
+
+Under `--auth-mode=oauth` there is no such exemption in either transport mode. The Bearer guard is mounted outside that gate and exempts only a CORS preflight, so an unauthenticated `GET` or `DELETE` is answered `401` with the RFC 9728 challenge; the `405` appears once the request carries a credential the instance accepts.
 
 ## Authentication Modes
 
@@ -914,12 +918,15 @@ The **GitLab token** always varies per client. The **GitLab URL** can vary per c
 
 ### Server Logs
 
-The server logs key events to stderr in JSON format:
+The server logs key events to stderr in JSON format. Durations are `slog`'s
+rendering of a Go `time.Duration`, which is an integer count of nanoseconds
+rather than a string, and the startup line carries `version`, `commit`, `build`
+and `config_digest` as well, elided here for width:
 
 ```json
-{"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","max_clients":100,"session_timeout":"30m0s"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","enterprise":false,"enterprise_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","enterprise":true,"enterprise_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
+{"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","auth_mode":"legacy","max_clients":100,"session_timeout":1800000000000,"stateless":true,"json_response":false,"trusted_proxy_header":"","trusted_proxies":null,"drain_delay":0}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
 {"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
 {"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"gitlab_url":"https://gitlab.com","enterprise":false}
 {"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}

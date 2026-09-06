@@ -14,7 +14,7 @@ The gitlab-mcp-server binary is a statically compiled Go executable:
 
 | Metric                                       | Value                               |
 | -------------------------------------------- | ----------------------------------- |
-| Binary size (stripped release build)         | ~49 MB                              |
+| Binary size (stripped release build)         | ~55 MB                              |
 | HTTP process idle, before any credential     | ~40 MiB RSS                         |
 | stdio process with one client, catalog built | 190 to 330 MiB RSS, by tool surface |
 

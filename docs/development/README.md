@@ -27,6 +27,7 @@ the full testing reference live in subfolders here.
 | [Testing](testing/README.md)                                              | Unit, E2E, and AI model-evaluation documentation                           |
 | [Architecture Decision Records](adr/README.md)                            | The recorded architectural decisions (ADRs)                                |
 | [Upstream Bugs and Gaps](upstream-bugs.md)                                | Defects found in dependencies, and what we contributed back                |
+| [Documentation Audit, September 2026](documentation-audit-2026-09.md)     | The five end-to-end paths executed, the organisation review, and the plan  |
 | [Repository Settings](repository-settings.md)                             | Release-pipeline settings that live on GitHub rather than in the tree      |
 
 **Looking for something else?**
