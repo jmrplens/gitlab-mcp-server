@@ -352,9 +352,9 @@ graph TD
 
 `--max-http-clients` decides how often any of that happens. Set it above the simultaneous client population and an arriving credential evicts nobody; frequent eviction means the number is below the population.
 
-An entry is busy while its credential holds an open `subscriptions/listen` stream or at least one watcher. On the default stateless transport it must hold a stream, because a session-era `resources/subscribe` is refused there unless it arrived through a listen, and open streams are capped at 512 per process. A pool of 513 entries or more therefore cannot be made entirely busy, so the fallback that takes a subscriber's entry never fires. That costs about 25 MiB of tenancy at the measured 50 KiB per entry, against an upper bound of 10000 for the flag.
+An entry is busy while its credential holds an open `subscriptions/listen` stream or at least one resource watcher, and both are bounded across the process: 512 open streams and 512 concurrent watchers, neither configurable. At most 1024 entries can be busy at once, so a pool of 1025 or more cannot be made entirely busy and the fallback that takes a subscriber's entry never fires. That costs about 50 MiB of tenancy at the measured 50 KiB per entry, against an upper bound of 10000 for the flag.
 
-Under `--stateless=false` no pool size makes it unreachable yet: a session-era subscribe creates a watcher with no held connection, and watchers are capped at ten per credential and by nothing per process. A process-wide watcher ceiling is tracked in [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561).
+The default stateless transport needs less: a session-era `resources/subscribe` is refused there unless it arrived through a listen, so a watcher cannot exist without a stream and 513 entries already make the fallback unreachable.
 
 ### Timeout model: HTTP layer vs MCP session
 
