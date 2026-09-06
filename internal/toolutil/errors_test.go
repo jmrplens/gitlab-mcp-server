@@ -1706,6 +1706,102 @@ func TestClassifyError_UnboundClient_SaysTheRequestWasNeverSent(t *testing.T) {
 	}
 }
 
+// TestWrapErr_UnboundClient_ComposesTheWholeMessageWithoutTheSyntheticHost
+// covers the string a model actually reads, which is not what ClassifyError
+// returns.
+//
+// The classification was right and the composition was not. Each wrapper ends
+// with %w of the cause, and for this cause that renders as
+// `Get "https://gitlab.invalid/api/v4/...": gitlab client is unbound: ...`, so
+// the model was handed the attribution sentence followed by the DNS wild-goose
+// chase the sentence exists to prevent. Asserting on ClassifyError's return
+// value could never have caught that: it decides the sentence, not the
+// composition.
+//
+// A hint is dropped for the same reason: it advises about GitLab state, and
+// nothing was asked of GitLab.
+func TestWrapErr_UnboundClient_ComposesTheWholeMessageWithoutTheSyntheticHost(t *testing.T) {
+	cause := fmt.Errorf("list projects: %w", &url.Error{
+		Op:  "Get",
+		URL: "https://gitlab.invalid/api/v4/projects",
+		Err: gitlabclient.ErrUnboundClient,
+	})
+
+	wrappers := map[string]func() error{
+		"WrapErr":               func() error { return WrapErr("projectList", cause) },
+		"WrapErrWithMessage":    func() error { return WrapErrWithMessage("projectCreate", cause) },
+		"WrapErrWithHint":       func() error { return WrapErrWithHint("branchDelete", cause, "use gitlab_branch_unprotect first") },
+		"WrapErrWithStatusHint": func() error { return WrapErrWithStatusHint("branchDelete", cause, 404, "check the branch name") },
+	}
+
+	for name, wrap := range wrappers {
+		t.Run(name, func(t *testing.T) {
+			got := wrap()
+			text := got.Error()
+
+			if !strings.HasSuffix(text, UnattributedRequestMessage) {
+				t.Errorf("the composed message does not end with the attribution sentence:\n%s", text)
+			}
+			if strings.Contains(text, "gitlab.invalid") {
+				t.Errorf("the composed message names the synthetic host the shared catalog is registered "+
+					"against, for a request that never left this process:\n%s", text)
+			}
+			if strings.Contains(text, "gitlab client is unbound") {
+				t.Errorf("the composed message carries the developer-facing sentinel text:\n%s", text)
+			}
+			if strings.Contains(text, "Suggestion:") {
+				t.Errorf("the composed message advises about GitLab state for a request GitLab never saw:\n%s", text)
+			}
+			// The chain has to survive, or every IsHTTPStatus and sentinel
+			// check downstream changes meaning.
+			if !errors.Is(got, gitlabclient.ErrUnboundClient) {
+				t.Error("the wrapping lost the cause, so nothing downstream can recognise it any more")
+			}
+		})
+	}
+}
+
+// TestSanitizeError_UnboundClient_ExplainsItselfToTheHandlersThatNeverWrap
+// covers the forty-eight handlers that do not go through the wrapping helpers.
+//
+// They wrap their GitLab error with a plain fmt.Errorf, so they get no
+// attribution sentence at all and their message carries the synthetic host on
+// its own. Every action's error passes SanitizeError at its dispatcher, which
+// is where those handlers are answered for; their own context is kept, because
+// "listing group service accounts" is the useful half of the message.
+func TestSanitizeError_UnboundClient_ExplainsItselfToTheHandlersThatNeverWrap(t *testing.T) {
+	tests := map[string]error{
+		"as the transport reports it": fmt.Errorf("listing group service accounts: %w", &url.Error{
+			Op:  "Get",
+			URL: "https://gitlab.invalid/api/v4/groups/1/service_accounts",
+			Err: gitlabclient.ErrUnboundClient,
+		}),
+		// No round trip happened, so there is no *url.Error to swap and the
+		// sentinel's own words are what has to go.
+		"wrapped without a round trip": fmt.Errorf("listing group service accounts: %w", gitlabclient.ErrUnboundClient),
+	}
+
+	for name, err := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := SanitizeError(err)
+			text := got.Error()
+
+			if !strings.HasPrefix(text, "listing group service accounts: ") {
+				t.Errorf("the handler's own context was dropped:\n%s", text)
+			}
+			if !strings.Contains(text, UnattributedRequestMessage) {
+				t.Errorf("the message says nothing about why the request was never sent:\n%s", text)
+			}
+			if strings.Contains(text, "gitlab.invalid") || strings.Contains(text, "gitlab client is unbound") {
+				t.Errorf("the message still sends the reader after a host that does not exist:\n%s", text)
+			}
+			if !errors.Is(got, gitlabclient.ErrUnboundClient) {
+				t.Error("sanitizing lost the cause")
+			}
+		})
+	}
+}
+
 // TestUnattributedRequestError_IsAnInternalError covers the coded form the
 // resource and prompt surfaces answer with.
 //

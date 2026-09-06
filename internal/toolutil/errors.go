@@ -68,8 +68,39 @@ func (e *ToolError) Error() string {
 // wraps it with the operation name. All tool handlers funnel through here
 // so connectivity and auth problems are reported consistently.
 func WrapErr(operation string, err error) error {
+	if unattributed := wrapUnattributed(operation, err); unattributed != nil {
+		return unattributed
+	}
 	semantic := ClassifyError(err)
 	return fmt.Errorf("%s: %s: %w", operation, semantic, sanitize(err))
+}
+
+// wrapUnattributed returns the whole message for a request that never reached
+// GitLab because no credential was bound to it, or nil when that is not the
+// cause.
+//
+// The cause is deliberately not appended, which makes this the one wrapping in
+// this file that does not end with the error it wraps. Everywhere else that
+// tail is GitLab's own words and the useful half of the message; here it is
+// net/http's, and it reads "Get \"https://gitlab.invalid/api/v4/...\"" — a
+// synthetic host the shared catalog is registered against, for a request that
+// never left this process. So the model was handed the attribution sentence
+// followed by a DNS wild-goose chase, which is the exact hunt the sentence was
+// written to prevent. [ClassifyError] alone could not fix that: it decides the
+// sentence, not the composition.
+//
+// A hint goes the same way, for the same reason. It advises about GitLab state
+// ("use gitlab_branch_unprotect first"), and nothing was asked of GitLab.
+//
+// The chain is kept, so errors.Is and errors.As behave exactly as before.
+func wrapUnattributed(operation string, err error) error {
+	if !errors.Is(err, gitlabclient.ErrUnboundClient) {
+		return nil
+	}
+	return &sanitizedCauseError{
+		text:  operation + ": " + UnattributedRequestMessage,
+		cause: err,
+	}
 }
 
 // ClassifyError inspects the error chain and returns a short, human-friendly
@@ -490,11 +521,43 @@ func sanitize(err error) error {
 			}
 		}
 	}
+	text = replaceUnboundRendering(text, err)
 	text = flattenErrorText(text)
 	if text == original {
 		return err
 	}
 	return &sanitizedCauseError{text: text, cause: err}
+}
+
+// replaceUnboundRendering swaps the part of text that describes a request made
+// through the credential-less client for the sentence that explains it.
+//
+// The unbound client refuses at the transport, so net/http hands back a
+// *url.Error naming the synthetic host the shared catalog is registered
+// against. To a model that reads as a DNS failure against a hostname that does
+// not exist, for a request that never left this process.
+//
+// The four wrapping helpers answer this for themselves ([wrapUnattributed]) and
+// forty-eight handlers do not reach them: they wrap their GitLab error with a
+// plain fmt.Errorf, so their message carried the synthetic host and no
+// explanation at all. Every action's error passes [SanitizeError] at its
+// dispatcher, which is why the swap is made here too, and why those handlers
+// need no change to stop sending anyone hunting for a DNS record.
+//
+// The substring is replaced rather than the whole text, for the reason
+// [sanitize] gives: the handler's own context ("listing group service accounts")
+// is the useful half. The fallback replaces the sentinel's own words, for a
+// chain that never went through an HTTP round trip.
+func replaceUnboundRendering(text string, err error) string {
+	if !errors.Is(err, gitlabclient.ErrUnboundClient) {
+		return text
+	}
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
+		if raw := fmt.Sprintf("%v", urlErr); strings.Contains(text, raw) {
+			return strings.ReplaceAll(text, raw, UnattributedRequestMessage)
+		}
+	}
+	return strings.ReplaceAll(text, gitlabclient.ErrUnboundClient.Error(), UnattributedRequestMessage)
 }
 
 // SanitizeError returns err with a rendering that reflects no upstream response
@@ -580,6 +643,9 @@ func describeGitLabResponse(glErr *gl.ErrorResponse) string {
 // error detail helps the LLM understand what went wrong. Use WrapErr for
 // read-only operations where the generic classification suffices.
 func WrapErrWithMessage(operation string, err error) error {
+	if unattributed := wrapUnattributed(operation, err); unattributed != nil {
+		return unattributed
+	}
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {
@@ -597,6 +663,9 @@ func WrapErrWithMessage(operation string, err error) error {
 // The hint should be a concise suggestion starting with a verb (e.g., "use
 // gitlab_branch_list to verify the branch name").
 func WrapErrWithHint(operation string, err error, hint string) error {
+	if unattributed := wrapUnattributed(operation, err); unattributed != nil {
+		return unattributed
+	}
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {
