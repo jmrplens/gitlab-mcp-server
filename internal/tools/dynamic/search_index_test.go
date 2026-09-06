@@ -28,7 +28,11 @@ func TestSearchIndex_CandidateGenerationPreservesFullScanTopResults(t *testing.T
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			terms := normalizeSearchTerms(query)
-			indexed := sortAndLimitMatches(registry.scoredMatches(terms, scoreEntryWithExplanation), 5)
+			scored, err := registry.scoredMatches(t.Context(), terms, scoreEntryWithExplanation)
+			if err != nil {
+				t.Fatalf("scoredMatches(%q) error = %v", query, err)
+			}
+			indexed := sortAndLimitMatches(scored, 5)
 			fullScan := sortAndLimitMatches(fullScanScoredMatches(registry.entries, terms, scoreEntryWithExplanation), 5)
 			if len(fullScan) == 0 {
 				t.Fatalf("full scan returned no lexical matches for %q", query)

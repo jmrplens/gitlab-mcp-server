@@ -224,6 +224,7 @@ Dynamic mode is designed for repairable failures. Models should treat `isError: 
 | Failure                                 | Server response                                            | Model recovery                                                                                 |
 | --------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Missing find query                      | Error result with example query terms                      | Retry `gitlab_find_action` with domain, resource, verb, and filters                            |
+| Find query over 256 characters          | Error result naming the limit                              | Search for one thing at a time and call again for the next                                     |
 | Unknown action ID                       | Error result, often with `Did you mean ...?` canonical IDs | Find the suggested canonical action ID                                                         |
 | Ambiguous alias                         | Error result listing the valid canonical targets           | Pick one listed `domain.action` ID and find or describe it                                     |
 | Invalid params                          | Backing handler validation error                           | Call `gitlab_find_action` and rebuild `params` from `input_schema`                             |
@@ -317,6 +318,7 @@ Current internal limits and safety rules:
 
 | Rule                         | Behavior                                                                                                                       |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Query length                 | At most 256 characters, published as the query's `maxLength`. A longer query is refused, never truncated                       |
 | Result count                 | `limit` defaults to 20 and is capped at 50                                                                                     |
 | High-confidence threshold    | Top result needs score at least 80 and a margin of at least 15 over the next result                                            |
 | Required query-term matches  | 1-2 meaningful terms must all match; longer queries may miss one term                                                          |

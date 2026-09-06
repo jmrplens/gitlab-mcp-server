@@ -19,7 +19,7 @@ Search the local GitLab action catalog. Read-only and no GitLab API call. Use wh
 
 - `explain` (boolean): When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact.
 - `limit` (integer): Maximum number of matches to return. Defaults to 20 and is capped at 50.
-- `query` (string) (required): Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable.
+- `query` (string) (required): Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable. At most 256 characters: a longer query is refused, not truncated.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

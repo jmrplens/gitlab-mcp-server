@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -47,6 +48,9 @@ const (
 	// executeActionActionParam is the top-level input property carrying the
 	// canonical action ID for gitlab_execute_action.
 	executeActionActionParam = "action"
+	// findQueryParam is the input property carrying the search query for
+	// gitlab_find_action, and the one the length bound is published on.
+	findQueryParam = "query"
 	// executeActionHeaderSuffix is the value of the SEP-2243 x-mcp-header
 	// annotation on the action property, so MCP-aware gateways can route and
 	// observe calls by canonical action ID without inspecting the JSON-RPC
@@ -164,9 +168,47 @@ type DescribeOutput struct {
 	Actions []ActionDescription `json:"actions" jsonschema:"Detailed action descriptions."`
 }
 
+// MaxSearchQueryLength is the longest query the catalog search accepts, in
+// characters.
+//
+// A search costs the query's word count times the size of the catalog, three
+// times over: the lexical pass, the fuzzy pass that a query matching nothing
+// always reaches, and one pass per window of the segmented pass. Nothing
+// bounded the query, and a request body may be 4 MiB, which is hundreds of
+// thousands of words.
+//
+// Measured by BenchmarkFind_PathologicalQuery against the Free catalog, with
+// words that match nothing: two words cost 14 ms and 1.7 MB, eight words
+// 229 ms and 6.8 MB, and a query filling this bound 0.8 s and 20 MB. So the
+// bound is what makes one call's cost a number at all.
+//
+// 256 characters is around forty words, comfortably above every query the
+// tool's own description suggests and above anything a model has been
+// observed to send.
+//
+// It is a count of characters rather than bytes, because that is what JSON
+// Schema's maxLength counts, and the schema and this check have to refuse the
+// same queries.
+const MaxSearchQueryLength = 256
+
+// overLength reports whether a query exceeds [MaxSearchQueryLength].
+func overLength(query string) bool {
+	return utf8.RuneCountInString(query) > MaxSearchQueryLength
+}
+
+// queryTooLongMessage says what was wrong and what to send instead. It refuses
+// rather than truncating: a silently shortened query answers a question the
+// caller did not ask, and the caller cannot tell that it happened.
+func queryTooLongMessage(tool, query string) string {
+	return fmt.Sprintf(
+		"%s: query is too long (%d characters, limit %d). Search for one thing at a time, such as merge request approve or pipeline retry, and call again for the next.",
+		tool, utf8.RuneCountInString(query), MaxSearchQueryLength,
+	)
+}
+
 // FindInput is the input for gitlab_find_action.
 type FindInput struct {
-	Query   string `json:"query" jsonschema:"Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable."`
+	Query   string `json:"query" jsonschema:"Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable. At most 256 characters: a longer query is refused, not truncated."`
 	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum number of matches to return. Defaults to 20 and is capped at 50."`
 	Explain bool   `json:"explain,omitempty" jsonschema:"When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact."`
 }
@@ -339,7 +381,30 @@ func buildFindInputSchema() *jsonschema.Schema {
 			"tool", findToolName, "error", err)
 		return nil
 	}
-	toolutil.ShareSchema(schema)
+	toolutil.ShareSchema(annotateQueryLength(schema))
+	return schema
+}
+
+// annotateQueryLength publishes [MaxSearchQueryLength] on the query property,
+// so a client sees the bound in the schema rather than discovering it from a
+// refusal. The struct tag cannot carry it: the tag is the description, and
+// every other keyword is set on the derived schema.
+//
+// A schema without that property is returned unchanged, so a shape change
+// degrades to an unpublished bound rather than a panic. The handler refuses
+// over-long queries either way.
+func annotateQueryLength(schema *jsonschema.Schema) *jsonschema.Schema {
+	if schema == nil {
+		return nil
+	}
+	query, ok := schema.Properties[findQueryParam]
+	if !ok || query == nil {
+		slog.Warn("dynamic: find action input schema has no query property, skipping the length bound",
+			"tool", findToolName)
+		return schema
+	}
+	maxLength := MaxSearchQueryLength
+	query.MaxLength = &maxLength
 	return schema
 }
 
@@ -578,8 +643,14 @@ func (r *Registry) Search(ctx context.Context, _ *mcp.CallToolRequest, input Sea
 	if query == "" {
 		return toolutil.ErrorResult("catalog search: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), SearchOutput{}, nil
 	}
+	if overLength(query) {
+		return toolutil.ErrorResult(queryTooLongMessage("catalog search", query)), SearchOutput{}, nil
+	}
 
-	matches := r.searchMatches(ctx, query, input.Limit, input.Explain)
+	matches, err := r.searchMatches(ctx, query, input.Limit, input.Explain)
+	if err != nil {
+		return nil, SearchOutput{}, fmt.Errorf("catalog search: search stopped before it finished: %w", err)
+	}
 
 	results := make([]SearchResult, 0, len(matches))
 	for _, match := range matches {
@@ -643,6 +714,18 @@ func (r *Registry) Find(ctx context.Context, req *mcp.CallToolRequest, input Fin
 		toolutil.LogToolRefusal(ctx, req, FindActionToolName, toolutil.RefusalInvalidParams)
 		return toolutil.ErrorResult("gitlab_find_action: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), FindOutput{}, nil
 	}
+	if overLength(query) {
+		toolutil.LogToolRefusal(ctx, req, FindActionToolName, toolutil.RefusalInvalidParams)
+		return toolutil.ErrorResult(queryTooLongMessage("gitlab_find_action", query)), FindOutput{}, nil
+	}
+
+	// The deadline every catalog action runs under, which this tool passed
+	// through none of: it is registered directly rather than through one of
+	// the WrapAction functions, because its work is the catalog rather than a
+	// GitLab call. That made the entry point of the default surface the one
+	// registered tool with no bound on how long a call could run.
+	ctx, cancel := toolutil.WithActionDeadline(ctx)
+	defer cancel()
 
 	// Logged like any other tool call, which it had not been. This is the
 	// entry point of the default surface (half of everything a model does
@@ -651,7 +734,13 @@ func (r *Registry) Find(ctx context.Context, req *mcp.CallToolRequest, input Fin
 	// is also the "find query" half of ADR-0011 IMP-008.
 	defer toolutil.LogToolCallAll(ctx, req, FindActionToolName, start, nil, nil)
 
-	matches := r.searchMatches(ctx, query, input.Limit, input.Explain)
+	// A cancelled search is an error rather than an empty result: the caller
+	// asked a question that was never answered, and answering "no matches"
+	// would be a different answer than the one the catalog holds.
+	matches, err := r.searchMatches(ctx, query, input.Limit, input.Explain)
+	if err != nil {
+		return nil, FindOutput{}, fmt.Errorf("gitlab_find_action: search stopped before it finished: %w", err)
+	}
 	results := make([]FindResult, 0, len(matches))
 	for _, match := range matches {
 		description := describeEntry(match.entry)
@@ -1847,7 +1936,14 @@ func addSchemaPropertyTags(add tagCollector, schema map[string]any) {
 	}
 }
 
-func (r *Registry) searchMatches(ctx context.Context, query string, limit int, explain bool) []scoredActionEntry {
+// searchMatches scores the catalog against one query.
+//
+// It returns the caller's context error rather than a result when the search
+// was abandoned: the passes below are the whole cost of a find, they grow with
+// the query's word count times the size of the catalog, and until they
+// observed cancellation a client that hung up paid for its search anyway, as
+// did the action deadline, which could not end one.
+func (r *Registry) searchMatches(ctx context.Context, query string, limit int, explain bool) ([]scoredActionEntry, error) {
 	limit = normalizedLimit(limit)
 	terms := normalizeSearchTerms(query)
 	searchScorer := scoreEntryWithoutExplanation
@@ -1856,18 +1952,28 @@ func (r *Registry) searchMatches(ctx context.Context, query string, limit int, e
 		searchScorer = scoreEntryWithExplanation
 		fuzzyScorer = fuzzyScoreEntryWithExplanation
 	}
-	matches := r.scoredMatches(terms, searchScorer)
+	matches, err := r.scoredMatches(ctx, terms, searchScorer)
+	if err != nil {
+		return nil, err
+	}
 	fuzzyUsed := false
 	destructiveFuzzySuppressions := 0
 	if fuzzyModeForMatches(matches, limit) != fuzzyDisabled {
-		fuzzyMatches := r.scoredMatches(terms, fuzzyScorer)
+		fuzzyMatches, fuzzyErr := r.scoredMatches(ctx, terms, fuzzyScorer)
+		if fuzzyErr != nil {
+			return nil, fuzzyErr
+		}
 		beforeFilter := len(fuzzyMatches)
 		fuzzyMatches = filterUnsafeFuzzyMatches(terms, fuzzyMatches)
 		destructiveFuzzySuppressions = beforeFilter - len(fuzzyMatches)
 		fuzzyUsed = len(fuzzyMatches) > 0
 		matches = mergeBestMatches(matches, fuzzyMatches)
 	}
-	if segmented := r.segmentedSearchMatchesWithScorer(terms, limit, searchScorer); len(segmented) > 0 {
+	segmented, segmentedErr := r.segmentedSearchMatchesWithScorer(ctx, terms, limit, searchScorer)
+	if segmentedErr != nil {
+		return nil, segmentedErr
+	}
+	if len(segmented) > 0 {
 		matches = mergeBestMatches(matches, segmented)
 	}
 	matches = adjustServiceAccountVerbScores(matches, terms)
@@ -1878,7 +1984,7 @@ func (r *Registry) searchMatches(ctx context.Context, query string, limit int, e
 	matches = r.annotateAmbiguousMatches(query, matches)
 	recordSearchRuntimeMetrics(len(matches), fuzzyUsed, ambiguousAlias, lowConfidence, destructiveFuzzySuppressions)
 	logDynamicSearch(ctx, query, matches, fuzzyUsed, ambiguousAlias, destructiveFuzzySuppressions)
-	return matches
+	return matches, nil
 }
 
 func logDynamicSearch(ctx context.Context, query string, matches []scoredActionEntry, fuzzyUsed, ambiguousAlias bool, destructiveFuzzySuppressions int) {
@@ -1906,9 +2012,21 @@ func scoreEntryWithoutExplanation(entry actionEntry, terms []searchTerm) (int, S
 	return scoreEntry(entry, terms), ScoringExplanation{}
 }
 
-func (r *Registry) scoredMatches(terms []searchTerm, scorer searchScorer) []scoredActionEntry {
+// cancellationCheckInterval is how many candidates are scored between two
+// looks at the context. Reading a context's error takes a lock, and scoring
+// one entry is a few string comparisons, so checking on every entry would cost
+// more than the work it guards. A batch of 64 bounds the overshoot at well
+// under a millisecond on the largest catalog while costing nothing measurable.
+const cancellationCheckInterval = 64
+
+func (r *Registry) scoredMatches(ctx context.Context, terms []searchTerm, scorer searchScorer) ([]scoredActionEntry, error) {
 	matches := make([]scoredActionEntry, 0)
-	for _, entryIndex := range r.SearchIndex.candidateEntryIndexes(terms) {
+	for position, entryIndex := range r.SearchIndex.candidateEntryIndexes(terms) {
+		if position%cancellationCheckInterval == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if entryIndex < 0 || entryIndex >= len(r.entries) {
 			continue
 		}
@@ -1918,7 +2036,7 @@ func (r *Registry) scoredMatches(terms []searchTerm, scorer searchScorer) []scor
 			matches = append(matches, scoredActionEntry{entry: entry, score: score, explanation: explanation})
 		}
 	}
-	return matches
+	return matches, nil
 }
 
 func fuzzyModeForMatches(matches []scoredActionEntry, limit int) fuzzyCandidateMode {
@@ -1984,9 +2102,9 @@ func termMatchesResourceSignal(term string, document searchDocument) bool {
 	return false
 }
 
-func (r *Registry) segmentedSearchMatchesWithScorer(terms []searchTerm, limit int, scorer searchScorer) []scoredActionEntry {
+func (r *Registry) segmentedSearchMatchesWithScorer(ctx context.Context, terms []searchTerm, limit int, scorer searchScorer) ([]scoredActionEntry, error) {
 	if !shouldRunSegmentedSearch(terms, limit) {
-		return nil
+		return nil, nil
 	}
 
 	bestByID := make(map[string]scoredActionEntry)
@@ -1994,7 +2112,14 @@ func (r *Registry) segmentedSearchMatchesWithScorer(terms []searchTerm, limit in
 	for windowSize := maxWindow; windowSize >= minSegmentTerms; windowSize-- {
 		for start := 0; start+windowSize <= len(terms); start++ {
 			window := terms[start : start+windowSize]
-			for _, match := range r.scoredMatches(window, scorer) {
+			// One full scoring pass per window, so this loop is where a long
+			// query multiplies the catalog. scoredMatches checks the context
+			// inside each pass as well.
+			windowMatches, err := r.scoredMatches(ctx, window, scorer)
+			if err != nil {
+				return nil, err
+			}
+			for _, match := range windowMatches {
 				match.score += windowSize * segmentTermBoost
 				match.explanation.TotalScore = match.score
 				current, ok := bestByID[match.entry.ID]
@@ -2009,7 +2134,7 @@ func (r *Registry) segmentedSearchMatchesWithScorer(terms []searchTerm, limit in
 	for _, match := range bestByID {
 		matches = append(matches, match)
 	}
-	return matches
+	return matches, nil
 }
 
 func adjustServiceAccountVerbScores(matches []scoredActionEntry, terms []searchTerm) []scoredActionEntry {
