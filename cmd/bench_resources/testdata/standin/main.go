@@ -15,6 +15,13 @@
 // STANDIN_FAIL names one JSON-RPC method the stand-in refuses with an error
 // result, which is how the tests reach the harness's failure branches without
 // a server that is actually broken.
+//
+// A positive --rate-limit-rps turns on a per-credential token bucket over the
+// method STANDIN_REFUSE_METHOD names, refusing in the two shapes the real
+// limiter uses. It exists so the fairness scenario's accounting, its positive
+// control and the difference between its two arms can be driven without a real
+// server; the shapes are exact because telling a refusal from a failure is the
+// one thing that harness does which a canned answer would let drift.
 package main
 
 import (
@@ -31,19 +38,69 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 const (
 	failEnv = "STANDIN_FAIL"
-	version = "standin"
-	commit  = "0123456789abcdef0123456789abcdef01234567"
+	// refuseEnv names the method the crude bound meters; tools/call when unset,
+	// which is what the shipped limiter meters first.
+	refuseEnv = "STANDIN_REFUSE_METHOD"
+	version   = "standin"
+	commit    = "0123456789abcdef0123456789abcdef01234567"
+	// The refusal the real limiter writes, in both of its shapes.
+	refusalPrefix = "rate limit exceeded for "
+	refusalSuffix = "; retry after a short backoff"
+	refusalCode   = -42900
 )
 
 // request is the subset of a JSON-RPC request the stand-in reads.
 type request struct {
 	ID     json.RawMessage `json:"id"`
 	Method string          `json:"method"`
+	// credential and tool come from the request's headers rather than its body,
+	// because the bound is per credential and the refusal names the tool.
+	credential string
+	tool       string
 }
+
+// bound is the per-credential limit a positive --rate-limit-rps turns on.
+//
+// One token bucket per credential and method, which is the real limiter's
+// shape and not an approximation of it. A counter would have been simpler and
+// wrong for this harness in particular: the fairness scenario spends an
+// unmeasured lead-in draining the burst so that its measured window reports
+// the bound rather than a bucket that started full, and a cumulative counter
+// has nothing to drain and never refills, so a quiet population offering well
+// under the limit would be refused as surely as a noisy one.
+type bound struct {
+	mu      sync.Mutex
+	on      bool
+	method  string
+	rps     float64
+	burst   int
+	buckets map[string]*rate.Limiter
+}
+
+// allow reports whether this credential may have this request now.
+func (b *bound) allow(req request) bool {
+	if !b.on || req.Method != b.method {
+		return true
+	}
+	b.mu.Lock()
+	key := req.credential + " " + req.Method
+	bucket, ok := b.buckets[key]
+	if !ok {
+		bucket = rate.NewLimiter(rate.Limit(b.rps), b.burst)
+		b.buckets[key] = bucket
+	}
+	b.mu.Unlock()
+	return bucket.Allow()
+}
+
+// limit is the process-wide bound, built from the flags in main.
+var limit = &bound{buckets: map[string]*rate.Limiter{}}
 
 // rpcError is a JSON-RPC error object.
 type rpcError struct {
@@ -56,11 +113,20 @@ func main() {
 	addr := flag.String("http-addr", "", "listen address in HTTP mode")
 	flag.String("gitlab-url", "", "accepted and ignored")
 	flag.String("tool-surface", "", "accepted and ignored")
-	flag.Int("rate-limit-rps", 0, "accepted and ignored")
+	rps := flag.Float64("rate-limit-rps", 0, "positive turns on the crude per-credential bound below")
+	burst := flag.Int("rate-limit-burst", 1, "requests of the metered method served per credential before the bound refuses")
 	flag.Int("max-http-clients", 0, "accepted and ignored")
 	telemetry := flag.Bool("telemetry", false, "send one export to OTEL_EXPORTER_OTLP_ENDPOINT, as the real server's exporters would")
 	pprofAddr := flag.String("pprof-addr", "", "serve net/http/pprof on this address, on a listener of its own, as the real server does")
 	flag.Parse()
+
+	limit.on = *rps > 0
+	limit.rps = *rps
+	limit.burst = max(1, *burst)
+	limit.method = os.Getenv(refuseEnv)
+	if limit.method == "" {
+		limit.method = "tools/call"
+	}
 
 	if *telemetry {
 		exportTelemetry(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
@@ -169,6 +235,8 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Mcp-Method does not name the request's method", http.StatusBadRequest)
 		return
 	}
+	req.credential = r.Header.Get("PRIVATE-TOKEN")
+	req.tool = r.Header.Get("Mcp-Name")
 	w.Header().Set("Content-Type", "text/event-stream")
 	fmt.Fprintf(w, "event: message\ndata: %s\n\n", respond(req))
 }
@@ -199,6 +267,8 @@ func respond(req request) []byte {
 	var result any
 	var failure *rpcError
 	switch {
+	case !limit.allow(req):
+		result, failure = refusal(req)
 	case os.Getenv(failEnv) == req.Method:
 		failure = &rpcError{Code: -32000, Message: "the stand-in refused " + req.Method}
 	case req.Method == "tools/list":
@@ -217,6 +287,33 @@ func respond(req request) []byte {
 		failure = &rpcError{Code: -32601, Message: "method not found: " + req.Method}
 	}
 
+	return encode(req, result, failure)
+}
+
+// refusal is what the bound answers with, in whichever of the two shapes the
+// method's result can carry.
+//
+// tools/call comes back as a **successful** response whose result is flagged
+// isError, with the message as its only mark; every other method comes back as
+// a JSON-RPC error carrying the 429-mirroring code. Both are HTTP 200, which
+// is what separates them from the per-address lockout the harness must not
+// count as this bound's refusal.
+func refusal(req request) (any, *rpcError) {
+	if req.Method == "tools/call" {
+		name := req.tool
+		if name == "" {
+			name = req.Method
+		}
+		return map[string]any{
+			"content": []map[string]any{{"type": "text", "text": refusalPrefix + name + refusalSuffix}},
+			"isError": true,
+		}, nil
+	}
+	return nil, &rpcError{Code: refusalCode, Message: refusalPrefix + req.Method + refusalSuffix}
+}
+
+// encode wraps a result or a failure in the JSON-RPC envelope.
+func encode(req request, result any, failure *rpcError) []byte {
 	envelope := map[string]any{"jsonrpc": "2.0", "id": req.ID}
 	if failure != nil {
 		envelope["error"] = failure

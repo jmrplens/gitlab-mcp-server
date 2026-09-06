@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -78,6 +79,78 @@ func TestCheckResponse_ClassifiesResults(t *testing.T) {
 				t.Errorf("checkResponse(%s) error = %v, want error %v", tc.payload, err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// TestCheckResponse_KeepsTheTextARefusalIsIdentifiedBy verifies a failed tool
+// result carries its message forward.
+//
+// On this wire a refused tools/call is a successful HTTP 200 response with a
+// well formed result and no code anywhere: its text is the only thing that
+// separates "the bound said no" from "the tool broke", and the fairness
+// scenario cannot tell them apart without it. The second decode happens only
+// on this path, because a successful result on the individual surface is
+// megabytes of content and decoding all of it into strings on every call would
+// put the driver's own cost into every latency this command publishes.
+func TestCheckResponse_KeepsTheTextARefusalIsIdentifiedBy(t *testing.T) {
+	payload := `{"jsonrpc":"2.0","id":1,"result":{"isError":true,"content":[{"type":"text",` +
+		`"text":"rate limit exceeded for gitlab_find_action; retry after a short backoff"}]}}`
+	err := checkResponse([]byte(payload))
+	var toolErr *toolResultError
+	if !errors.As(err, &toolErr) {
+		t.Fatalf("checkResponse = %v, want a typed tool-result failure", err)
+	}
+	if !strings.HasPrefix(toolErr.Text, "rate limit exceeded for ") {
+		t.Errorf("text = %q, want the message the server sent", toolErr.Text)
+	}
+	if !strings.Contains(toolErr.Error(), "rate limit exceeded") {
+		t.Errorf("Error = %q, want it to name the text", toolErr.Error())
+	}
+	if got := (&toolResultError{}).Error(); got != "the tool returned an error result" {
+		t.Errorf("Error with no text = %q, want the plain sentence", got)
+	}
+}
+
+// TestFirstResultText_AnswersEmptyForAPayloadWithNothingToRead verifies the
+// second decode is safe on every shape a failed result can arrive in.
+func TestFirstResultText_AnswersEmptyForAPayloadWithNothingToRead(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{name: "a payload that is not JSON", payload: `<html>`, want: ""},
+		{name: "a result with no content", payload: `{"result":{"isError":true}}`, want: ""},
+		{name: "content with no text in it", payload: `{"result":{"content":[{"type":"image"}]}}`, want: ""},
+		{name: "the first text block", payload: `{"result":{"content":[{"text":""},{"text":"second"}]}}`, want: "second"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := firstResultText([]byte(tc.payload)); got != tc.want {
+				t.Errorf("firstResultText = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHTTPStatusError_KeepsTheStatusAndReadsAsItAlwaysDid verifies a refused
+// response carries its status without changing the message anything
+// downstream prints.
+//
+// The status is what separates the per-credential rate limit from the
+// per-address authentication lockout: both answer JSON-RPC -42900, one at HTTP
+// 200 and one at 429, and counting the lockout as the bound's refusal would
+// turn a throttled run into an apparent fairness result.
+func TestHTTPStatusError_KeepsTheStatusAndReadsAsItAlwaysDid(t *testing.T) {
+	err := error(&httpStatusError{Method: "tools/list", Status: 429, Snippet: "too many"})
+	if got, want := err.Error(), "tools/list: HTTP 429: too many"; got != want {
+		t.Errorf("Error = %q, want %q", got, want)
+	}
+	if got := responseStatus(fmt.Errorf("wrapped: %w", err)); got != 429 {
+		t.Errorf("responseStatus = %d, want the status through the wrapping", got)
+	}
+	if got := responseStatus(errors.New("no status here")); got != httpOK {
+		t.Errorf("responseStatus = %d, want a response the transport accepted to read as 200", got)
 	}
 }
 

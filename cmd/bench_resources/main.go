@@ -28,6 +28,10 @@ const (
 	defaultSitePageEN = "site/src/content/docs/performance/resource-benchmark.mdx"
 	defaultSitePageES = "site/src/content/docs/es/performance/resource-benchmark.mdx"
 	defaultProfiles   = "bench/profiles"
+	// The fairness document is written under bench/, which is not committed:
+	// its rendering waits on the chart rework, and until then it is a
+	// developer artifact rather than a published one.
+	defaultFairnessRecord = "bench/fairness.json"
 )
 
 // options are the command's flags.
@@ -60,6 +64,21 @@ type options struct {
 	recordSet       bool
 	clientsSet      bool
 	stepDurationSet bool
+	// The fairness scenario. It is a mode rather than a member of the matrix:
+	// its arms are two processes started with different switches, which no
+	// scenarioPlan describes, and keeping it out of the matrix is what keeps
+	// the published record and its byte-compared charts untouched.
+	fairness          string
+	fairnessJSON      string
+	fairnessSurface   string
+	fairnessQuiet     int
+	fairnessNoisy     int
+	fairnessQuietRate float64
+	fairnessNoisyRate float64
+	fairnessPhase     time.Duration
+	fairnessLeadIn    time.Duration
+	fairnessDeadline  time.Duration
+	fairnessRepeats   int
 }
 
 // exitProcess is the exit main takes on failure, so a test can drive main
@@ -98,6 +117,18 @@ func parseFlags() options {
 	flag.IntVar(&opts.memoryBudget, "memory-budget", 0, "resident set, in MiB, beyond which a series step is not started; 0 takes 80% of the host's available memory")
 	flag.StringVar(&opts.profiles, "profiles", defaultProfiles, "directory the series writes its CPU and heap profiles under; empty writes none")
 	flag.BoolVar(&opts.noRender, "no-render", false, "measure and write the record and profiles, then stop: for a host with no repository to render into")
+	flag.StringVar(&opts.fairness, "fairness", "",
+		"measure a fairness comparison for the named bound instead of the matrix, one of: "+strings.Join(boundIDs(), ", "))
+	flag.StringVar(&opts.fairnessJSON, "fairness-json", defaultFairnessRecord, "document a fairness run writes; never the published record")
+	flag.StringVar(&opts.fairnessSurface, "fairness-surface", surfaceDynamic, "tool surface a fairness run drives")
+	flag.IntVar(&opts.fairnessQuiet, "fairness-quiet", defaultQuietCredentials, "credentials in the quiet population")
+	flag.IntVar(&opts.fairnessNoisy, "fairness-noisy", defaultNoisyCredentials, "credentials in the noisy population")
+	flag.Float64Var(&opts.fairnessQuietRate, "fairness-quiet-rate", defaultQuietRate, "requests per second each quiet credential offers")
+	flag.Float64Var(&opts.fairnessNoisyRate, "fairness-noisy-rate", defaultNoisyRate, "requests per second each noisy credential offers")
+	flag.DurationVar(&opts.fairnessPhase, "fairness-phase", defaultFairnessPhase, "measured window per arm")
+	flag.DurationVar(&opts.fairnessLeadIn, "fairness-lead-in", defaultFairnessLeadIn, "unmeasured window before each arm's phase, which drains the bound's burst")
+	flag.DurationVar(&opts.fairnessDeadline, "fairness-deadline", defaultFairnessDeadline, "how long a request may take from its intended dispatch before a client would have given up")
+	flag.IntVar(&opts.fairnessRepeats, "fairness-repeats", defaultFairnessRepeats, "how many times the pair of arms is run, alternating their order")
 	flag.Parse()
 
 	flag.Visit(func(f *flag.Flag) {
@@ -183,6 +214,11 @@ func execute(opts options) error {
 	if err != nil {
 		return err
 	}
+	// Before anything reads the record: a fairness run writes a document of
+	// its own and draws nothing, so it must never reach readRun or renderAll.
+	if opts.fairness != "" {
+		return runFairness(opts, root)
+	}
 
 	recordPath := resolve(root, opts.record)
 	if !opts.render && !opts.check {
@@ -213,35 +249,11 @@ func measure(opts options, root string) (*Run, error) {
 		return nil, err
 	}
 
-	binary := opts.binary
-	if binary == "" {
-		built, buildErr := buildServer(root)
-		if buildErr != nil {
-			return nil, buildErr
-		}
-		defer func() { _ = os.RemoveAll(filepath.Dir(built)) }()
-		binary = built
+	r, cleanup, err := newHarness(opts, root)
+	if err != nil {
+		return nil, err
 	}
-
-	stub := startStubGitLab()
-	defer stub.close()
-	sink := startOTLPSink()
-	defer sink.close()
-
-	profilesDir := ""
-	if opts.profiles != "" {
-		profilesDir = resolve(root, opts.profiles)
-	}
-	r := &runner{
-		binary:         binary,
-		stub:           stub,
-		otlp:           sink,
-		sampleInterval: opts.sampleInterval,
-		progress:       progressFunc(opts.verbose),
-		report:         progressFunc(true),
-		profilesDir:    profilesDir,
-		budgetMiB:      memoryBudgetMiB(opts.memoryBudget),
-	}
+	defer cleanup()
 
 	run := &Run{
 		Schema:      resultSchema,
