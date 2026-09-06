@@ -1015,7 +1015,14 @@ func TestRunWithContext_SuccessHTTPMetaTools(t *testing.T) {
 }
 
 // TestRunWithContext_SuccessStdio verifies that [runWithContext] in stdio mode
-// returns promptly when the context is already canceled.
+// returns promptly, and reports no error, when the context is already canceled.
+//
+// Both halves are the assertion. A cancelled context is how a signal reaches
+// this call, and [serveStdio] maps it to a clean return precisely so a
+// shutdown the operator asked for does not exit nonzero; returning at all is
+// the other half, because the startup goroutine outlives the transport and a
+// stdio shutdown that waited on it would hang the process a client has
+// already let go of.
 func TestRunWithContext_SuccessStdio(t *testing.T) {
 	srv := newMockGitLabServer(t)
 	t.Setenv("GITLAB_URL", srv.URL)
@@ -1025,9 +1032,17 @@ func TestRunWithContext_SuccessStdio(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately so stdio exits immediately
 
-	err := runWithContext(ctx, nil)
-	// With a canceled context, stdio server returns immediately (error or nil)
-	_ = err
+	errCh := make(chan error, 1)
+	go func() { errCh <- runWithContext(ctx, nil) }()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("runWithContext() = %v, want nil: a cancelled context is an ordinary shutdown", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("runWithContext() did not return after its context was cancelled")
+	}
 }
 
 // TestRunWithContext_InvalidConfig verifies that [runWithContext] returns an
@@ -2883,7 +2898,7 @@ func TestNewDepthLimitedBody_ADisabledLimit_PassesTheBodyThrough(t *testing.T) {
 	for _, limit := range []int{0, -1} {
 		t.Run(strconv.Itoa(limit), func(t *testing.T) {
 			t.Parallel()
-			if got := newDepthLimitedBody(body, limit); got != body {
+			if newDepthLimitedBody(body, limit) != body {
 				t.Errorf("newDepthLimitedBody(limit=%d) wrapped the body, want it returned unchanged", limit)
 			}
 		})
@@ -3128,21 +3143,6 @@ func TestDoToolSearch_NoMatches_SaysSo(t *testing.T) {
 	if out := stdout(); !strings.Contains(out, `No actions found matching "zzzz-nothing-is-called-this"`) {
 		t.Errorf("stdout = %q, want the no-match sentence naming the query", out)
 	}
-}
-
-// TestRunStdio_PingSucceeds verifies the success path for Ping in runStdio,
-// where the GitLab mock returns a valid version response.
-func TestRunStdio_PingSucceeds(t *testing.T) {
-	srv := newMockGitLabServer(t)
-	t.Setenv("GITLAB_URL", srv.URL)
-	t.Setenv("GITLAB_TOKEN", testToken)
-	t.Setenv("META_TOOLS", "false")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := runWithContext(ctx, nil)
-	_ = err
 }
 
 // TestServeHTTP_RequestWithToken verifies that the HTTP handler processes
@@ -3613,7 +3613,7 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d: %s", resp.StatusCode, http.StatusUnauthorized, respBody)
 	}
-	if challenge := resp.Header.Get("WWW-Authenticate"); challenge == "" {
+	if resp.Header.Get("WWW-Authenticate") == "" {
 		t.Error("401 without WWW-Authenticate violates RFC 9110")
 	}
 	if !strings.Contains(respBody, "\"jsonrpc\"") {
@@ -4801,7 +4801,7 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 	// but not with a valid OAuth metadata JSON.
 	if resp.StatusCode == http.StatusOK {
 		var meta map[string]any
-		if decErr := json.NewDecoder(resp.Body).Decode(&meta); decErr == nil {
+		if json.NewDecoder(resp.Body).Decode(&meta) == nil {
 			if _, hasServers := meta["authorization_servers"]; hasServers {
 				t.Error("legacy mode should NOT serve OAuth metadata, but found authorization_servers")
 			}
@@ -6818,7 +6818,7 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 	}
 	// The origin is echoed, never "*": these requests carry Authorization,
 	// and a browser rejects the wildcard on a credentialed request.
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got == "*" {
+	if rec.Header().Get("Access-Control-Allow-Origin") == "*" {
 		t.Error("a credentialed endpoint must echo the origin, not answer with *")
 	}
 	if !slices.Contains(rec.Header().Values("Vary"), "Origin") {
@@ -6920,7 +6920,7 @@ func TestCorsMiddleware_ActualRequest_ExposesTransportHeaders(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Expose-Headers"); got != corsExposeHeaders {
 		t.Errorf("Access-Control-Expose-Headers = %q, want %q", got, corsExposeHeaders)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "" {
+	if rec.Header().Get("Access-Control-Allow-Methods") != "" {
 		t.Error("Access-Control-Allow-Methods belongs to a preflight response only")
 	}
 }

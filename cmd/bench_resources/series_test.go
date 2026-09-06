@@ -394,7 +394,9 @@ func newSeriesFixture(t *testing.T, steps []int, budget float64) *seriesFixture 
 // walk runs the steps against a target and returns the result.
 func (f *seriesFixture) walk(t *testing.T, r *runner, tgt target) SeriesScenario {
 	t.Helper()
-	r.walkSteps(t.Context(), f.plan, tgt, f.profiler, f.sampler, f.call, &f.result, &f.conns)
+	r.walkSteps(t.Context(), seriesInput{
+		plan: f.plan, tgt: tgt, profiler: f.profiler, sampler: f.sampler, call: f.call,
+	}, &f.result, &f.conns)
 	t.Cleanup(func() { closeConns(f.conns) })
 	return f.result
 }

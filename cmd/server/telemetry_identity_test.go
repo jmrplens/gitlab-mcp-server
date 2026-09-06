@@ -42,7 +42,7 @@ func TestIdentityRedactor_OneInstanceServesEverySignal(t *testing.T) {
 	if first != second {
 		t.Error("two calls produced two redactors; the same user would get two different digests")
 	}
-	if users := telemetryUsers(); users == nil {
+	if telemetryUsers() == nil {
 		t.Error("the middleware was given no attributer while the policy names callers")
 	}
 }
@@ -59,7 +59,7 @@ func TestIdentityRedactor_NoneBuildsNothing(t *testing.T) {
 	if got := identityRedactor(); got != nil {
 		t.Errorf("policy none built a redactor (%v); nothing should name a caller", got)
 	}
-	if users := telemetryUsers(); users != nil {
+	if telemetryUsers() != nil {
 		t.Error("policy none gave the middleware an attributer")
 	}
 }

@@ -93,7 +93,9 @@ func (r *runner) runSeries(ctx context.Context, plan scenarioPlan) (SeriesScenar
 
 	var conns []*clientConn
 	defer func() { closeConns(conns) }()
-	r.walkSteps(ctx, plan, tgt, newPprofClient("http://"+tgt.pprofAddr), s, call, &result, &conns)
+	r.walkSteps(ctx, seriesInput{
+		plan: plan, tgt: tgt, profiler: newPprofClient("http://" + tgt.pprofAddr), sampler: s, call: call,
+	}, &result, &conns)
 
 	if len(result.Steps) == 0 {
 		return SeriesScenario{}, fmt.Errorf("no step completed: %s", result.StopReason)
@@ -104,26 +106,41 @@ func (r *runner) runSeries(ctx context.Context, plan scenarioPlan) (SeriesScenar
 	return result, nil
 }
 
+// seriesInput is everything one series is walked with that does not change
+// between its steps: the plan being followed, the server process it is
+// followed against, and the instruments trained on that process for the
+// length of the run.
+//
+// These five travel together because the walk holds them all fixed while the
+// result and the connection list it accumulates into are the only things that
+// move, and a signature that listed all seven side by side read as seven
+// interchangeable arguments.
+type seriesInput struct {
+	plan     scenarioPlan
+	tgt      target
+	profiler *pprofClient
+	sampler  *sampler
+	call     toolCall
+}
+
 // walkSteps runs the planned counts in order until one of the guards stops
 // the series, admitting credentials into conns as it goes so the caller can
 // close them whatever happened.
-func (r *runner) walkSteps(ctx context.Context, plan scenarioPlan, tgt target, profiler *pprofClient,
-	s *sampler, call toolCall, result *SeriesScenario, conns *[]*clientConn,
-) {
-	for i, count := range plan.Steps {
+func (r *runner) walkSteps(ctx context.Context, in seriesInput, result *SeriesScenario, conns *[]*clientConn) {
+	for i, count := range in.plan.Steps {
 		if stop := r.budgetStop(result.Steps, count); stop != nil {
 			result.stopBefore(i, stop)
 			return
 		}
-		admitted, admitErr := r.admit(ctx, tgt, len(*conns), count)
+		admitted, admitErr := r.admit(ctx, in.tgt, len(*conns), count)
 		*conns = append(*conns, admitted...)
 		if admitErr != nil {
 			result.stopBefore(i, &SeriesStop{Kind: stopFailure, NextClients: count, Error: admitErr.Error()})
 			return
 		}
 		step := r.runStep(ctx, stepInput{
-			plan: plan, call: call, conns: *conns, sampler: s, profiler: profiler,
-			capacity: slices.Max(plan.Steps),
+			plan: in.plan, call: in.call, conns: *conns, sampler: in.sampler, profiler: in.profiler,
+			capacity: slices.Max(in.plan.Steps),
 		})
 		result.Steps = append(result.Steps, step)
 		result.StoppedAt = step.Clients

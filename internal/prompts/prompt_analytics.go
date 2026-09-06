@@ -26,7 +26,7 @@ import (
 //   - release_cadence: time-between-releases analysis with a release history table.
 //   - weekly_team_recap: group-level weekly recap combining merged MRs, open
 //     MRs, and open issues.
-func registerAnalyticsPrompts(server registrar, client *gitlabclient.Client) {
+func registerAnalyticsPrompts(server promptAdder, client *gitlabclient.Client) {
 	registerMergeVelocityPrompt(server, client)
 	registerReleaseReadinessPrompt(server, client)
 	registerReleaseCadencePrompt(server, client)
@@ -34,7 +34,7 @@ func registerAnalyticsPrompts(server registrar, client *gitlabclient.Client) {
 }
 
 // registerMergeVelocityPrompt registers the merge_velocity prompt.
-func registerMergeVelocityPrompt(server registrar, client *gitlabclient.Client) {
+func registerMergeVelocityPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "merge_velocity",
 		Title:       toolutil.TitleFromName("merge_velocity"),
@@ -141,7 +141,7 @@ func writeDailyMergeChart(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 }
 
 // registerReleaseReadinessPrompt registers the release_readiness prompt.
-func registerReleaseReadinessPrompt(server registrar, client *gitlabclient.Client) {
+func registerReleaseReadinessPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "release_readiness",
 		Title:       toolutil.TitleFromName("release_readiness"),
@@ -246,7 +246,7 @@ func readinessLabel(blockers int) string {
 }
 
 // registerReleaseCadencePrompt registers the release_cadence prompt.
-func registerReleaseCadencePrompt(server registrar, client *gitlabclient.Client) {
+func registerReleaseCadencePrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "release_cadence",
 		Title:       toolutil.TitleFromName("release_cadence"),
@@ -362,7 +362,7 @@ func releaseDate(r *gl.Release) time.Time {
 }
 
 // registerWeeklyTeamRecapPrompt registers the weekly_team_recap prompt.
-func registerWeeklyTeamRecapPrompt(server registrar, client *gitlabclient.Client) {
+func registerWeeklyTeamRecapPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "weekly_team_recap",
 		Title:       toolutil.TitleFromName("weekly_team_recap"),

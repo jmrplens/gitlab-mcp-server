@@ -1240,7 +1240,7 @@ func TestNewTransportBudget_WithoutALimiter_IsAbsent(t *testing.T) {
 		t.Errorf("newTransportBudget(nil) = %+v, want nil", budget)
 	}
 	limiter := serverpool.NewAuthRateLimiter(2, authFailureWindow)
-	if got := newTransportBudget(limiter).rateLimiter(); got != limiter {
+	if newTransportBudget(limiter).rateLimiter() != limiter {
 		t.Error("rateLimiter() did not hand back the limiter the budget wraps")
 	}
 }

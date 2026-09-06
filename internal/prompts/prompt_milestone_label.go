@@ -16,7 +16,7 @@ import (
 )
 
 // registerMilestoneLabelPrompts registers all milestone and label prompts.
-func registerMilestoneLabelPrompts(server registrar, client *gitlabclient.Client) {
+func registerMilestoneLabelPrompts(server promptAdder, client *gitlabclient.Client) {
 	registerMilestoneProgressPrompt(server, client)
 	registerLabelDistributionPrompt(server, client)
 	registerGroupMilestoneProgressPrompt(server, client)
@@ -63,7 +63,7 @@ func writeDueDateSection(b *strings.Builder, dueDate *gl.ISOTime) {
 }
 
 // registerMilestoneProgressPrompt registers the milestone_progress prompt.
-func registerMilestoneProgressPrompt(server registrar, client *gitlabclient.Client) {
+func registerMilestoneProgressPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "milestone_progress",
 		Title:       toolutil.TitleFromName("milestone_progress"),
@@ -143,7 +143,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 }
 
 // registerLabelDistributionPrompt registers the label_distribution prompt.
-func registerLabelDistributionPrompt(server registrar, client *gitlabclient.Client) {
+func registerLabelDistributionPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "label_distribution",
 		Title:       toolutil.TitleFromName("label_distribution"),
@@ -223,7 +223,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 }
 
 // registerGroupMilestoneProgressPrompt registers the group_milestone_progress prompt.
-func registerGroupMilestoneProgressPrompt(server registrar, client *gitlabclient.Client) {
+func registerGroupMilestoneProgressPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "group_milestone_progress",
 		Title:       toolutil.TitleFromName("group_milestone_progress"),
@@ -292,7 +292,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 }
 
 // registerProjectContributorsPrompt registers the project_contributors prompt.
-func registerProjectContributorsPrompt(server registrar, client *gitlabclient.Client) {
+func registerProjectContributorsPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "project_contributors",
 		Title:       toolutil.TitleFromName("project_contributors"),

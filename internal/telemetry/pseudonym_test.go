@@ -101,7 +101,7 @@ func TestResourcePseudonym_IsKeyedNotPlain(t *testing.T) {
 
 	sum := sha256.Sum256([]byte(uri))
 
-	if got := keys.ResourcePseudonym(uri); got == hex.EncodeToString(sum[:])[:16] {
+	if keys.ResourcePseudonym(uri) == hex.EncodeToString(sum[:])[:16] {
 		t.Error("the digest equals an unkeyed hash of the URI, so it is enumerable rather than pseudonymous")
 	}
 }

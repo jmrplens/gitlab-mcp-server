@@ -146,7 +146,7 @@ func TestIsInteractiveTerminal_IsFalseForAFile(t *testing.T) {
 // The name is printed for the reader to type, so an empty string would leave
 // the line unusable.
 func TestExecutableName_FallsBackToTheProjectName(t *testing.T) {
-	if got := executableName(); got == "" {
+	if executableName() == "" {
 		t.Error("executableName returned an empty string; the --help line would be unusable")
 	}
 }

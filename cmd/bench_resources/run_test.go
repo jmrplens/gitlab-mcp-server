@@ -430,7 +430,7 @@ func TestRunScenario_HTTP_FillsEveryPublishedFigure(t *testing.T) {
 	// Telemetry was on, so the endpoint the harness configured must have
 	// been reached: a plan that says telemetry while nothing is exported
 	// would publish figures for a configuration that was never measured.
-	if got := r.otlp.requests.Load(); got == 0 {
+	if r.otlp.requests.Load() == 0 {
 		t.Error("the OTLP sink received no export from a scenario with telemetry on")
 	}
 }
