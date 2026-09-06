@@ -854,7 +854,7 @@ func TestSessionOwners_EndSessionsWithoutStreams_TellsOnlyTheClientsNoStreamTold
 			// orphan list must not take the loop down.
 			owners.endSessionsWithoutStreams([]*mcp.ServerSession{nil, session}, told)
 
-			if got := sessionEnded(t, session, time.Second); got != tt.wantEnded {
+			if sessionEnded(t, session, time.Second) != tt.wantEnded {
 				if tt.wantEnded {
 					t.Error("the session was left open, so a client whose only activity was a " +
 						"session-era subscribe is never told its credential is gone")

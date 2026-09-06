@@ -1329,7 +1329,10 @@ var stdioStartupDrainTimeout = 5 * time.Second //nolint:gochecknoglobals // test
 // binary is a cache hit and finishes before a closed pipe has even been
 // noticed, and a test that relied on the build being slow had nothing left to
 // outlive.
-var stdioStartupGate = func(context.Context) {} //nolint:gochecknoglobals // test seam
+var stdioStartupGate = func(context.Context) { //nolint:gochecknoglobals // test seam
+	// Nothing to hold at runtime: the build starts at once. A test that needs
+	// it to outlive serving swaps in a function that waits.
+}
 
 // Catalog construction hooks, replaceable in tests.
 //

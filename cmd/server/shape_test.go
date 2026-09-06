@@ -753,7 +753,7 @@ func TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned(t *test
 	if got := binding.sessions.ownerOf(session); got != "" {
 		t.Errorf("ownerOf = %q after the eviction, want none: the gate would go on accepting that session", got)
 	}
-	if got := binding.credentials.get(entry.Owner()); got != nil {
+	if binding.credentials.get(entry.Owner()) != nil {
 		t.Error("the evicted entry's state is still filed; it keeps a GitLab client and a watcher set reachable")
 	}
 	waitFor(t, func() bool { return state.subs.manager.Len() == 0 && streamCtx.Err() != nil })

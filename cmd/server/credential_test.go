@@ -570,10 +570,10 @@ func TestServerShell_StateFor_ABoundRequest_OverridesTheDefault(t *testing.T) {
 	if got := shell.stateFor(ctx); got != bound {
 		t.Errorf("stateFor(bound) = %v, want the request's own credential", got)
 	}
-	if got := shell.rateLimiterFor(ctx); got != bound.limiter {
+	if shell.rateLimiterFor(ctx) != bound.limiter {
 		t.Error("the rate limiter came from the shell rather than the request's credential; one tenant would throttle another")
 	}
-	if got := shell.listenCounterFor(ctx); got != bound.listen {
+	if shell.listenCounterFor(ctx) != bound.listen {
 		t.Error("the listen counter came from the shell; one budget would be shared by every tenant")
 	}
 	if got := shell.subscriptionRuntimeFor(ctx); got != bound.subs {
