@@ -30,7 +30,7 @@ func noteAuthorUsername(n NoteOutput) string {
 func FormatNoteMarkdownString(n NoteOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Discussion Note #%d\n\n", n.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, noteAuthorUsername(n))
+	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(noteAuthorUsername(n)))
 	if n.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(n.CreatedAt))
 	}

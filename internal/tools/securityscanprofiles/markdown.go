@@ -12,7 +12,8 @@ import (
 func FormatMutationMarkdown(out MutationOutput) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Security Scan Profile\n\n%s\n\n", out.Message)
-	fmt.Fprintf(&sb, "- Profile: `%s`\n", out.SecurityScanProfileID)
+	// Echoed from the caller's own argument.
+	fmt.Fprintf(&sb, "- Profile: `%s`\n", toolutil.EscapeMdTableCell(out.SecurityScanProfileID))
 	if len(out.ProjectIDs) > 0 {
 		fmt.Fprintf(&sb, "- Projects: %s\n", joinInts(out.ProjectIDs))
 	}
@@ -27,7 +28,7 @@ func FormatMutationMarkdown(out MutationOutput) string {
 func FormatListProjectStatusesMarkdown(out ListProjectStatusesOutput) string {
 	var sb strings.Builder
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	fmt.Fprintf(&sb, "## Scan Profile Statuses: %s\n\n", out.ProjectFullPath)
+	fmt.Fprintf(&sb, "## Scan Profile Statuses: %s\n\n", toolutil.EscapeMdHeading(out.ProjectFullPath))
 
 	if len(out.Statuses) == 0 {
 		sb.WriteString("No scan profile statuses found.\n")

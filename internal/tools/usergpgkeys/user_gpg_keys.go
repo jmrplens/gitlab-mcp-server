@@ -265,7 +265,9 @@ func FormatMarkdownString(o Output) string {
 	if len(keyPreview) > 80 {
 		keyPreview = keyPreview[:80] + "..."
 	}
-	fmt.Fprintf(&b, "- **Key**: `%s`\n", keyPreview)
+	// The preview is truncated rather than constrained, and an armored GPG
+	// block carries whatever the key's owner put in its user ID packet.
+	fmt.Fprintf(&b, "- **Key**: `%s`\n", toolutil.EscapeMdTableCell(keyPreview))
 	if o.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(o.CreatedAt))
 	}

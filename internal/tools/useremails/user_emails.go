@@ -220,7 +220,8 @@ func FormatListMarkdownString(out ListOutput) string {
 		if e.ConfirmedAt != "" {
 			confirmed = e.ConfirmedAt
 		}
-		fmt.Fprintf(&sb, "| %d | %s | %s |\n", e.ID, e.Email, confirmed)
+		//gitlab:allow-unescaped confirmed: a timestamp this package formatted itself, or the dash this loop substitutes.
+		fmt.Fprintf(&sb, "| %d | %s | %s |\n", e.ID, toolutil.EscapeMdTableCell(e.Email), confirmed)
 	}
 	return sb.String()
 }
@@ -230,8 +231,11 @@ func FormatMarkdownString(out Output) string {
 	var sb strings.Builder
 	sb.WriteString("## Email\n\n")
 	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Email**: %s\n", out.Email)
+	// GitLab validates an address with a regexp that forbids only '@' and
+	// whitespace, so '|' and '<' both pass.
+	fmt.Fprintf(&sb, "- **Email**: %s\n", toolutil.EscapeMdTableCell(out.Email))
 	if out.ConfirmedAt != "" {
+		//gitlab:allow-unescaped out.ConfirmedAt: a timestamp this package formatted itself from the time client-go parsed.
 		fmt.Fprintf(&sb, "- **Confirmed At**: %s\n", out.ConfirmedAt)
 	}
 	return sb.String()

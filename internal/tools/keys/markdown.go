@@ -23,13 +23,16 @@ func FormatMarkdownString(out Output) string {
 	b.WriteString("## SSH Key\n\n")
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
 	if out.Title != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdTitle, out.Title)
+		fmt.Fprintf(&b, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(out.Title))
 	}
-	fmt.Fprintf(&b, "- **Key**: `%s`\n", truncateKey(out.Key))
+	// The key is truncated here rather than constrained, and its trailing
+	// comment is whatever the key's owner typed.
+	fmt.Fprintf(&b, "- **Key**: `%s`\n", toolutil.EscapeMdTableCell(truncateKey(out.Key)))
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
 	}
-	fmt.Fprintf(&b, "- **User**: %s (ID: %d, @%s)\n", out.User.Name, out.User.ID, out.User.Username)
+	fmt.Fprintf(&b, "- **User**: %s (ID: %d, @%s)\n",
+		toolutil.EscapeMdTableCell(out.User.Name), out.User.ID, toolutil.EscapeMdTableCell(out.User.Username))
 	toolutil.WriteHints(&b, "Use `gitlab_get_key_by_fingerprint` to look up a key by its fingerprint")
 	return b.String()
 }

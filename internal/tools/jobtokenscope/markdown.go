@@ -33,7 +33,8 @@ func FormatListInboundAllowlistMarkdown(out ListInboundAllowlistOutput) *mcp.Cal
 	sb.WriteString("| ID | Name | Path | URL |\n")
 	sb.WriteString("|----|------|------|-----|\n")
 	for _, p := range out.Projects {
-		fmt.Fprintf(&sb, "| %d | %s | %s | [View](%s) |\n", p.ID, toolutil.EscapeMdTableCell(p.Name), p.PathWithNamespace, p.WebURL)
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", p.ID, toolutil.EscapeMdTableCell(p.Name),
+			toolutil.EscapeMdTableCell(p.PathWithNamespace), toolutil.MdTitleLink("View", p.WebURL))
 	}
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks, "Use `gitlab_add_project_job_token_allowlist` to add a project")
 	return toolutil.ToolResultWithMarkdown(sb.String())
@@ -54,7 +55,8 @@ func FormatListGroupAllowlistMarkdown(out ListGroupAllowlistOutput) *mcp.CallToo
 	sb.WriteString("| ID | Name | Path | URL |\n")
 	sb.WriteString("|----|------|------|-----|\n")
 	for _, g := range out.Groups {
-		fmt.Fprintf(&sb, "| %d | %s | %s | [View](%s) |\n", g.ID, toolutil.EscapeMdTableCell(g.Name), g.FullPath, g.WebURL)
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", g.ID, toolutil.EscapeMdTableCell(g.Name),
+			toolutil.EscapeMdTableCell(g.FullPath), toolutil.MdTitleLink("View", g.WebURL))
 	}
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks, "Use `gitlab_add_group_job_token_allowlist` to add a group")
 	return toolutil.ToolResultWithMarkdown(sb.String())

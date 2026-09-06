@@ -17,6 +17,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Key", "Process Mode"))
 	for _, g := range out.Groups {
+		//gitlab:allow-unescaped g.ProcessMode: a resource group process mode GitLab picks from a fixed set (unordered, oldest_first, newest_first).
 		fmt.Fprintf(&sb, "| %d | %s | %s |\n", g.ID, toolutil.EscapeMdTableCell(g.Key), g.ProcessMode)
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_get_resource_group` to view details or edit process mode")
@@ -26,7 +27,9 @@ func FormatListMarkdown(out ListOutput) string {
 // FormatGroupMarkdown renders a single resource group summary.
 func FormatGroupMarkdown(g ResourceGroupItem) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Resource Group\n\n- **ID**: %d\n- **Key**: %s\n- **Process Mode**: %s\n", g.ID, g.Key, g.ProcessMode)
+	// The key is the resource_group name written in .gitlab-ci.yml.
+	fmt.Fprintf(&b, "## Resource Group\n\n- **ID**: %d\n- **Key**: %s\n- **Process Mode**: %s\n",
+		g.ID, toolutil.EscapeMdTableCell(g.Key), g.ProcessMode)
 	toolutil.WriteHints(&b, "Use `gitlab_list_resource_group_upcoming_jobs` to see upcoming jobs for this group")
 	return b.String()
 }
@@ -41,7 +44,8 @@ func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
 	}
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status", "Stage"))
 	for _, j := range out.Jobs {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", j.ID, toolutil.EscapeMdTableCell(j.Name), j.Status, j.Stage)
+		//gitlab:allow-unescaped j.Status: a job status, GitLab's own build state (created, running, success, failed and the rest).
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", j.ID, toolutil.EscapeMdTableCell(j.Name), j.Status, toolutil.EscapeMdTableCell(j.Stage))
 	}
 	toolutil.WriteHints(&sb, "Use job tools to view logs or retry specific jobs")
 	return sb.String()

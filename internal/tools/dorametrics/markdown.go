@@ -21,6 +21,7 @@ func FormatMarkdown(out Output, metric string) string {
 	}
 	sb.WriteString("| Date | Value |\n|------|-------|\n")
 	for _, m := range out.Metrics {
+		//gitlab:allow-unescaped m.Date: the day GitLab reports the metric for, a YYYY-MM-DD date.
 		fmt.Fprintf(&sb, "| %s | %.4f |\n", m.Date, m.Value)
 	}
 	fmt.Fprintf(&sb, "\n**Total data points:** %d\n", len(out.Metrics))

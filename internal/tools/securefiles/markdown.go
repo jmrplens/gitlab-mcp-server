@@ -28,6 +28,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	sb.WriteString("| ID | Name | Checksum Algorithm | Expires At |\n|----|------|-----------|-----------|\n")
 	for _, f := range out.Files {
+		//gitlab:allow-unescaped f.ChecksumAlgorithm: a digest algorithm name GitLab picks from a fixed set (sha256).
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", f.ID, toolutil.EscapeMdTableCell(f.Name), f.ChecksumAlgorithm, expiryOrDash(f.ExpiresAt))
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
@@ -38,12 +39,17 @@ func FormatListMarkdown(out ListOutput) string {
 // FormatShowMarkdown formats a secure file as markdown.
 func FormatShowMarkdown(f SecureFileItem) string {
 	var b strings.Builder
+	//gitlab:allow-unescaped f.Checksum: a file digest GitLab computed, hexadecimal digits only.
+	//gitlab:allow-unescaped f.ChecksumAlgorithm: a digest algorithm name GitLab picks from a fixed set (sha256).
 	fmt.Fprintf(&b, "## Secure File\n\n- **ID**: %d\n- **Name**: %s\n- **Checksum**: %s\n- **Algorithm**: %s\n- **Created At**: %s\n- **Expires At**: %s\n",
-		f.ID, f.Name, f.Checksum, f.ChecksumAlgorithm, toolutil.FormatTimePtr(f.CreatedAt), toolutil.FormatTimePtr(f.ExpiresAt))
+		f.ID, toolutil.EscapeMdTableCell(f.Name), f.Checksum, f.ChecksumAlgorithm, toolutil.FormatTimePtr(f.CreatedAt), toolutil.FormatTimePtr(f.ExpiresAt))
 	if f.Metadata != nil {
 		m := f.Metadata
+		// Everything below is read out of the certificate whoever uploaded the
+		// file supplied, so its common names are whatever they put in it.
 		fmt.Fprintf(&b, "\n### Certificate Metadata\n\n- **ID**: %s\n- **Expires At**: %s\n- **Issuer CN**: %s\n- **Subject CN**: %s\n",
-			m.ID, toolutil.FormatTimePtr(m.ExpiresAt), m.Issuer.CN, m.Subject.CN)
+			toolutil.EscapeMdTableCell(m.ID), toolutil.FormatTimePtr(m.ExpiresAt),
+			toolutil.EscapeMdTableCell(m.Issuer.CN), toolutil.EscapeMdTableCell(m.Subject.CN))
 	}
 	toolutil.WriteHints(&b, "Use `gitlab_show_secure_file` to download this file")
 	return b.String()

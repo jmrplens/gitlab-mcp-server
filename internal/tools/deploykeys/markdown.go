@@ -10,14 +10,18 @@ import (
 // FormatOutputMarkdown formats a single deploy key.
 func FormatOutputMarkdown(o Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Deploy Key: %s (ID: %d)\n\n", o.Title, o.ID)
+	// A deploy key title is free text, and this server's own deploy_key.add and
+	// deploy_key.update send it.
+	fmt.Fprintf(&b, "## Deploy Key: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(o.Title), o.ID)
 	fmt.Fprintf(&b, "| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&b, "| ID | %d |\n", o.ID)
-	fmt.Fprintf(&b, "| Title | %s |\n", o.Title)
+	fmt.Fprintf(&b, "| Title | %s |\n", toolutil.EscapeMdTableCell(o.Title))
 	if o.Fingerprint != "" {
+		//gitlab:allow-unescaped o.Fingerprint: an MD5 fingerprint GitLab derives from the key, colon-separated hexadecimal digits.
 		fmt.Fprintf(&b, "| Fingerprint | %s |\n", o.Fingerprint)
 	}
 	if o.FingerprintSHA256 != "" {
+		//gitlab:allow-unescaped o.FingerprintSHA256: a SHA256 fingerprint GitLab derives from the key, base64 digits after a "SHA256:" prefix.
 		fmt.Fprintf(&b, "| SHA256 | %s |\n", o.FingerprintSHA256)
 	}
 	fmt.Fprintf(&b, "| Can Push | %t |\n", o.CanPush)
@@ -50,7 +54,9 @@ func FormatListMarkdown(o ListOutput) string {
 	b.WriteString("|---|---|---|---|---|\n")
 	for _, k := range o.DeployKeys {
 		fmt.Fprintf(&b, "| %d | %s | %t | %s | %s |\n",
-			k.ID, k.Title, k.CanPush, k.Fingerprint, k.CreatedAt)
+			//gitlab:allow-unescaped k.Fingerprint: an MD5 fingerprint GitLab derives from the key, colon-separated hexadecimal digits.
+			//gitlab:allow-unescaped k.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
+			k.ID, toolutil.EscapeMdTableCell(k.Title), k.CanPush, k.Fingerprint, k.CreatedAt)
 	}
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(
@@ -65,14 +71,16 @@ func FormatListMarkdown(o ListOutput) string {
 // FormatInstanceOutputMarkdown formats a single instance deploy key.
 func FormatInstanceOutputMarkdown(o InstanceOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Instance Deploy Key: %s (ID: %d)\n\n", o.Title, o.ID)
+	fmt.Fprintf(&b, "## Instance Deploy Key: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(o.Title), o.ID)
 	fmt.Fprintf(&b, "| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&b, "| ID | %d |\n", o.ID)
-	fmt.Fprintf(&b, "| Title | %s |\n", o.Title)
+	fmt.Fprintf(&b, "| Title | %s |\n", toolutil.EscapeMdTableCell(o.Title))
 	if o.Fingerprint != "" {
+		//gitlab:allow-unescaped o.Fingerprint: an MD5 fingerprint GitLab derives from the key, colon-separated hexadecimal digits.
 		fmt.Fprintf(&b, "| Fingerprint | %s |\n", o.Fingerprint)
 	}
 	if o.FingerprintSHA256 != "" {
+		//gitlab:allow-unescaped o.FingerprintSHA256: a SHA256 fingerprint GitLab derives from the key, base64 digits after a "SHA256:" prefix.
 		fmt.Fprintf(&b, "| SHA256 | %s |\n", o.FingerprintSHA256)
 	}
 	if o.CreatedAt != "" {
@@ -85,14 +93,16 @@ func FormatInstanceOutputMarkdown(o InstanceOutput) string {
 		b.WriteString("\n### Projects with Write Access\n\n")
 		b.WriteString("| ID | Name | Path |\n|---|---|---|\n")
 		for _, p := range o.ProjectsWithWriteAccess {
-			fmt.Fprintf(&b, "| %d | %s | %s |\n", p.ID, p.Name, p.PathWithNamespace)
+			fmt.Fprintf(&b, "| %d | %s | %s |\n", p.ID,
+				toolutil.EscapeMdTableCell(p.Name), toolutil.EscapeMdTableCell(p.PathWithNamespace))
 		}
 	}
 	if len(o.ProjectsWithReadonlyAccess) > 0 {
 		b.WriteString("\n### Projects with Readonly Access\n\n")
 		b.WriteString("| ID | Name | Path |\n|---|---|---|\n")
 		for _, p := range o.ProjectsWithReadonlyAccess {
-			fmt.Fprintf(&b, "| %d | %s | %s |\n", p.ID, p.Name, p.PathWithNamespace)
+			fmt.Fprintf(&b, "| %d | %s | %s |\n", p.ID,
+				toolutil.EscapeMdTableCell(p.Name), toolutil.EscapeMdTableCell(p.PathWithNamespace))
 		}
 	}
 	toolutil.WriteHints(
@@ -117,7 +127,8 @@ func FormatInstanceListMarkdown(o InstanceListOutput) string {
 	b.WriteString("|---|---|---|---|---|\n")
 	for _, k := range o.DeployKeys {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
-			k.ID, k.Title, k.Fingerprint, k.CreatedAt, k.ExpiresAt)
+			//gitlab:allow-unescaped k.ExpiresAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
+			k.ID, toolutil.EscapeMdTableCell(k.Title), k.Fingerprint, k.CreatedAt, k.ExpiresAt)
 	}
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(

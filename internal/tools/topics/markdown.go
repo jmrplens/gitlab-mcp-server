@@ -34,16 +34,17 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 // FormatTopicMarkdown formats a single topic.
 func FormatTopicMarkdown(t TopicItem) *mcp.CallToolResult {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Topic: %s (ID: %d)\n\n", t.Name, t.ID)
+	// A topic's name and title are both free text an administrator types.
+	fmt.Fprintf(&sb, "## Topic: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(t.Name), t.ID)
 	if t.Title != "" {
-		fmt.Fprintf(&sb, toolutil.FmtMdTitle, t.Title)
+		fmt.Fprintf(&sb, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(t.Title))
 	}
 	if t.Description != "" {
 		toolutil.WriteDescription(&sb, t.Description)
 	}
 	fmt.Fprintf(&sb, "- **Projects**: %d\n", t.TotalProjectsCount)
 	if t.AvatarURL != "" {
-		fmt.Fprintf(&sb, "- **Avatar**: %s\n", t.AvatarURL)
+		fmt.Fprintf(&sb, "- **Avatar**: %s\n", toolutil.EscapeMdTableCell(t.AvatarURL))
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_update_topic` to modify this topic")
 	return toolutil.ToolResultWithMarkdown(sb.String())

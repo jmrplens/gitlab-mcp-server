@@ -7,6 +7,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// The values below reach a cell in this file with no escaper on them, because
+// each is a word GitLab picked from a fixed set rather than text anybody typed.
+// The five event kinds share them, so one declaration covers every table here.
+//
+//gitlab:allow-unescaped e.Action: a resource event action GitLab writes, either add or remove.
+//gitlab:allow-unescaped out.Action: a resource event action GitLab writes, either add or remove.
+//gitlab:allow-unescaped e.State: the state a state event recorded, one of GitLab's own set (closed, opened, merged).
+//gitlab:allow-unescaped out.State: the state a state event recorded, one of GitLab's own set (closed, opened, merged).
+//gitlab:allow-unescaped e.ResourceType: the kind of thing the event hangs on, which GitLab names Issue, MergeRequest or Epic.
+//gitlab:allow-unescaped out.ResourceType: the kind of thing the event hangs on, which GitLab names Issue, MergeRequest or Epic.
+
 // FormatLabelEventsMarkdown formats a list of label events.
 func FormatLabelEventsMarkdown(out ListLabelEventsOutput) string {
 	if len(out.Events) == 0 {
@@ -132,28 +143,35 @@ func FormatWeightEventsMarkdown(out ListWeightEventsOutput) string {
 	return sb.String()
 }
 
-// eventUsername returns the username of an event's user, or "" when absent.
+// eventUsername returns the username of an event's user as a table cell, or ""
+// when absent.
+//
+// This accessor and the three below exist only to fill the cells of this
+// file's tables, so each escapes what it returns rather than leaving the
+// question to a dozen call sites. A label name and the two titles are text a
+// person typed, and GitLab's only rule on a label name is that it holds no
+// comma.
 func eventUsername(u *EventUserOutput) string {
 	if u == nil {
 		return ""
 	}
-	return u.Username
+	return toolutil.EscapeMdTableCell(u.Username)
 }
 
-// labelName returns a label event label's name, or "" when absent.
+// labelName returns a label event label's name as a table cell, or "" when absent.
 func labelName(l *LabelEventLabelOutput) string {
 	if l == nil {
 		return ""
 	}
-	return l.Name
+	return toolutil.EscapeMdTableCell(l.Name)
 }
 
-// milestoneTitle returns a milestone's title, or "" when absent.
+// milestoneTitle returns a milestone's title as a table cell, or "" when absent.
 func milestoneTitle(m *MilestoneOutput) string {
 	if m == nil {
 		return ""
 	}
-	return m.Title
+	return toolutil.EscapeMdTableCell(m.Title)
 }
 
 // milestoneID returns a milestone's id, or 0 when absent.
@@ -164,12 +182,12 @@ func milestoneID(m *MilestoneOutput) int64 {
 	return m.ID
 }
 
-// iterationTitle returns an iteration's title, or "" when absent.
+// iterationTitle returns an iteration's title as a table cell, or "" when absent.
 func iterationTitle(it *IterationOutput) string {
 	if it == nil {
 		return ""
 	}
-	return it.Title
+	return toolutil.EscapeMdTableCell(it.Title)
 }
 
 // iterationID returns an iteration's id, or 0 when absent.

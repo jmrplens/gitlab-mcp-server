@@ -19,6 +19,7 @@ func FormatMarkdown(e Output) string {
 	fmt.Fprintf(&sb, "| Entity Type | %s |\n", toolutil.EscapeMdTableCell(e.EntityType))
 	fmt.Fprintf(&sb, "| Event Name | %s |\n", toolutil.EscapeMdTableCell(e.EventName))
 	fmt.Fprintf(&sb, "| Event Type | %s |\n", toolutil.EscapeMdTableCell(e.EventType))
+	//gitlab:allow-unescaped e.CreatedAt: a timestamp this package formatted itself from the time client-go parsed.
 	fmt.Fprintf(&sb, "| Created At | %s |\n", e.CreatedAt)
 	if e.Details.AuthorName != "" {
 		fmt.Fprintf(&sb, "| Author Name | %s |\n", toolutil.EscapeMdTableCell(e.Details.AuthorName))
@@ -30,6 +31,7 @@ func FormatMarkdown(e Output) string {
 		fmt.Fprintf(&sb, "| Target Details | %s |\n", toolutil.EscapeMdTableCell(e.Details.TargetDetails))
 	}
 	if e.Details.IPAddress != "" {
+		//gitlab:allow-unescaped e.Details.IPAddress: GitLab records the address the request arrived from, so it is an IP literal.
 		fmt.Fprintf(&sb, "| IP Address | %s |\n", e.Details.IPAddress)
 	}
 	if e.Details.EntityPath != "" {

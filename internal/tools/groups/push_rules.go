@@ -326,9 +326,13 @@ func writePushRuleRegex(b *strings.Builder, r PushRuleOutput) {
 		{"Author Email Regex", r.AuthorEmailRegex},
 		{"File Name Regex", r.FileNameRegex},
 	}
+	//gitlab:allow-unescaped re.label: the labels are the compiled-in strings of the literal above.
 	for _, re := range regexes {
 		if re.value != "" {
-			fmt.Fprintf(b, "- **%s**: `%s`\n", re.label, re.value)
+			// A push rule is a regular expression a maintainer types, where
+			// '|' is the alternation operator, so an ordinary rule ends the
+			// list item on its own.
+			fmt.Fprintf(b, "- **%s**: `%s`\n", re.label, toolutil.EscapeMdTableCell(re.value))
 		}
 	}
 }
@@ -346,6 +350,7 @@ func writePushRuleFlags(b *strings.Builder, r PushRuleOutput) {
 		{"Reject Unsigned Commits", r.RejectUnsignedCommits},
 		{"Reject Non-DCO Commits", r.RejectNonDCOCommits},
 	}
+	//gitlab:allow-unescaped f.label: the labels are the compiled-in strings of the literal above.
 	for _, f := range flags {
 		fmt.Fprintf(b, "- **%s**: %v\n", f.label, f.value)
 	}

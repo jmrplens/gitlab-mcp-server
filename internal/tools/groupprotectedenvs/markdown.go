@@ -16,14 +16,16 @@ func FormatOutputMarkdown(out Output) string {
 		b.WriteString("\n### Deploy Access Levels\n\n")
 		b.WriteString("| ID | Level | Description |\n| --- | --- | --- |\n")
 		for _, l := range out.DeployAccessLevels {
-			fmt.Fprintf(&b, "| %d | %d | %s |\n", l.ID, l.AccessLevel, l.AccessLevelDescription)
+			// GitLab's access-level description is a role name for a plain rule
+			// but a user's display name or a group's name for a granular one.
+			fmt.Fprintf(&b, "| %d | %d | %s |\n", l.ID, l.AccessLevel, toolutil.EscapeMdTableCell(l.AccessLevelDescription))
 		}
 	}
 	if len(out.ApprovalRules) > 0 {
 		b.WriteString("\n### Approval Rules\n\n")
 		b.WriteString("| ID | Level | Description | Required |\n| --- | --- | --- | --- |\n")
 		for _, r := range out.ApprovalRules {
-			fmt.Fprintf(&b, "| %d | %d | %s | %d |\n", r.ID, r.AccessLevel, r.AccessLevelDescription, r.RequiredApprovalCount)
+			fmt.Fprintf(&b, "| %d | %d | %s | %d |\n", r.ID, r.AccessLevel, toolutil.EscapeMdTableCell(r.AccessLevelDescription), r.RequiredApprovalCount)
 		}
 	}
 	toolutil.WriteHints(

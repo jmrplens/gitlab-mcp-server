@@ -262,7 +262,9 @@ func FormatListMarkdownString(out ListOutput) string {
 			expires = t.ExpiresAt
 		}
 		fmt.Fprintf(&sb, "| %d | %s | %v | %s | %s |\n",
-			t.ID, t.Name, t.Active, strings.Join(t.Scopes, ", "), expires)
+			//gitlab:allow-unescaped strings.Join(t.Scopes, ", "): a scope is one of the fixed identifiers GitLab accepts on creation and refuses anything outside.
+			//gitlab:allow-unescaped expires: toOutput renders the expiry with time.Time.Format, so the cell is digits and dashes, or the literal dash.
+			t.ID, toolutil.EscapeMdTableCell(t.Name), t.Active, strings.Join(t.Scopes, ", "), expires)
 	}
 	return sb.String()
 }
@@ -272,13 +274,16 @@ func FormatMarkdownString(out Output) string {
 	var sb strings.Builder
 	sb.WriteString("## Impersonation Token\n\n")
 	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Name**: %s\n", out.Name)
+	fmt.Fprintf(&sb, "- **Name**: %s\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&sb, "- **Active**: %v\n", out.Active)
+	//gitlab:allow-unescaped strings.Join(out.Scopes, ", "): a scope is one of the fixed identifiers GitLab accepts on creation and refuses anything outside.
 	fmt.Fprintf(&sb, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
 	if out.ExpiresAt != "" {
+		//gitlab:allow-unescaped out.ExpiresAt: both token shapes render the expiry with time.Time.Format, so it is digits and dashes.
 		fmt.Fprintf(&sb, "- **Expires At**: %s\n", out.ExpiresAt)
 	}
 	if out.Token != "" {
+		//gitlab:allow-unescaped out.Token: the secret GitLab generated, which the reader has to copy back verbatim.
 		fmt.Fprintf(&sb, "- **Token**: `%s`\n", out.Token)
 	}
 	return sb.String()
@@ -289,11 +294,11 @@ func FormatPATMarkdownString(out PATOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Personal Access Token\n\n")
 	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Name**: %s\n", out.Name)
+	fmt.Fprintf(&sb, "- **Name**: %s\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&sb, "- **Active**: %v\n", out.Active)
 	fmt.Fprintf(&sb, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
 	if out.Description != "" {
-		fmt.Fprintf(&sb, "- **Description**: %s\n", out.Description)
+		fmt.Fprintf(&sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(out.Description))
 	}
 	fmt.Fprintf(&sb, "- **User ID**: %d\n", out.UserID)
 	if out.ExpiresAt != "" {

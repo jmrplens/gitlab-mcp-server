@@ -74,6 +74,7 @@ func FormatBulkUpdateMarkdown(out BulkUpdateOutput) string {
 	sb.WriteString(toolutil.EmojiSuccess + " Security attributes updated in bulk.\n\n")
 	sb.WriteString(fieldValueTableHeader)
 	sb.WriteString(fieldValueTableSeparator)
+	//gitlab:allow-unescaped out.Mode: a security attribute mode GitLab picks from a fixed set.
 	fmt.Fprintf(&sb, "| Mode | `%s` |\n", out.Mode)
 	fmt.Fprintf(&sb, "| Attributes | `%v` |\n", out.AttributeIDs)
 	if len(out.GroupIDs) > 0 {
@@ -95,6 +96,7 @@ func writeAttributeTable(sb *strings.Builder, out Output) {
 		fmt.Fprintf(sb, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
 	}
 	if out.EditableState != "" {
+		//gitlab:allow-unescaped out.EditableState: an editable state GitLab picks from a fixed set.
 		fmt.Fprintf(sb, "| Editable state | `%s` |\n", out.EditableState)
 	}
 	if out.SecurityCategory != nil {

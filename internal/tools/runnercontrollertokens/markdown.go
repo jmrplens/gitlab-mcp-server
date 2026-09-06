@@ -16,6 +16,7 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&b, "- **Controller ID**: %d\n", out.RunnerControllerID)
 	toolutil.WriteDescription(&b, out.Description)
 	if out.Token != "" {
+		//gitlab:allow-unescaped out.Token: the secret GitLab minted, which the reader has to copy back verbatim.
 		fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
 	}
 	if out.LastUsedAt != "" {
@@ -40,6 +41,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
 	for _, t := range out.Tokens {
 		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s |\n",
+			//gitlab:allow-unescaped t.LastUsedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
+			//gitlab:allow-unescaped t.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
 			t.ID, t.RunnerControllerID, toolutil.EscapeMdTableCell(t.Description), t.LastUsedAt, t.CreatedAt)
 	}
 	toolutil.WritePagination(&b, out.Pagination)

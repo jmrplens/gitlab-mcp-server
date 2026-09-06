@@ -11,12 +11,13 @@ import (
 func FormatUploadMarkdown(u UploadOutput) string {
 	var b strings.Builder
 	b.WriteString("## File Uploaded\n\n")
-	fmt.Fprintf(&b, "- **Alt**: %s\n", u.Alt)
-	fmt.Fprintf(&b, "- **URL**: %s\n", u.URL)
+	fmt.Fprintf(&b, "- **Alt**: %s\n", toolutil.EscapeMdTableCell(u.Alt))
+	fmt.Fprintf(&b, "- **URL**: %s\n", toolutil.EscapeMdTableCell(u.URL))
 	if u.FullURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, u.FullURL)
+		toolutil.WriteMdURL(&b, u.FullURL)
 	}
-	fmt.Fprintf(&b, "- **Markdown**: `%s`\n", u.Markdown)
+	// GitLab builds this snippet around the file name whoever uploaded it chose.
+	fmt.Fprintf(&b, "- **Markdown**: `%s`\n", toolutil.EscapeMdTableCell(u.Markdown))
 	toolutil.WriteHints(
 		&b,
 		toolutil.HintPreserveLinks,

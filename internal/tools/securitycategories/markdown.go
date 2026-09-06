@@ -20,9 +20,11 @@ func FormatOutputMarkdown(out Output) string {
 	}
 	fmt.Fprintf(&sb, "| Multiple selection | %t |\n", out.MultipleSelection)
 	if out.EditableState != "" {
+		//gitlab:allow-unescaped out.EditableState: an editable state GitLab picks from a fixed set.
 		fmt.Fprintf(&sb, "| Editable state | `%s` |\n", out.EditableState)
 	}
 	if out.TemplateType != "" {
+		//gitlab:allow-unescaped out.TemplateType: a template type GitLab picks from a fixed set.
 		fmt.Fprintf(&sb, "| Template type | `%s` |\n", out.TemplateType)
 	}
 	if len(out.SecurityAttributes) > 0 {
@@ -34,7 +36,9 @@ func FormatOutputMarkdown(out Output) string {
 				&sb, "| `%d` | %s | `%s` | `%s` |\n",
 				attribute.ID,
 				toolutil.EscapeMdTableCell(attribute.Name),
+				//gitlab:allow-unescaped attribute.Color: a color GitLab validates as a hex literal.
 				attribute.Color,
+				//gitlab:allow-unescaped attribute.EditableState: an editable state GitLab picks from a fixed set.
 				attribute.EditableState,
 			)
 		}

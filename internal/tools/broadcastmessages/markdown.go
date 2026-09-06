@@ -20,6 +20,9 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	}
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Message", "Type", "Active", "Starts", "Ends"))
 	for _, m := range out.Messages {
+		//gitlab:allow-unescaped m.BroadcastType: a broadcast type GitLab picks from a fixed set (banner, notification).
+		//gitlab:allow-unescaped m.StartsAt: a timestamp toMessageItem formatted itself, with time.Time.Format as RFC 3339.
+		//gitlab:allow-unescaped m.EndsAt: a timestamp toMessageItem formatted itself, with time.Time.Format as RFC 3339.
 		fmt.Fprintf(&sb, "| %d | %s | %s | %v | %s | %s |\n",
 			m.ID, toolutil.EscapeMdTableCell(m.Message), m.BroadcastType, m.Active, m.StartsAt, m.EndsAt)
 	}
@@ -33,7 +36,8 @@ func FormatMessageMarkdown(item MessageItem) *mcp.CallToolResult {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "# Broadcast Message #%d\n\n", item.ID)
 	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
-	fmt.Fprintf(&sb, "| Message | %s |\n", item.Message)
+	fmt.Fprintf(&sb, "| Message | %s |\n", toolutil.EscapeMdTableCell(item.Message))
+	//gitlab:allow-unescaped item.BroadcastType: a broadcast type GitLab picks from a fixed set (banner, notification).
 	fmt.Fprintf(&sb, "| Type | %s |\n", item.BroadcastType)
 	fmt.Fprintf(&sb, "| Active | %v |\n", item.Active)
 	fmt.Fprintf(&sb, "| Dismissable | %v |\n", item.Dismissable)
@@ -44,10 +48,12 @@ func FormatMessageMarkdown(item MessageItem) *mcp.CallToolResult {
 		fmt.Fprintf(&sb, "| Ends At | %s |\n", toolutil.FormatTime(item.EndsAt))
 	}
 	if item.Theme != "" {
+		//gitlab:allow-unescaped item.Theme: a broadcast theme GitLab picks from a fixed set of color names (indigo, light-indigo, blue and the rest).
 		fmt.Fprintf(&sb, "| Theme | %s |\n", item.Theme)
 	}
 	if item.TargetPath != "" {
-		fmt.Fprintf(&sb, "| Target Path | %s |\n", item.TargetPath)
+		// A target path is a path glob an administrator types into the message.
+		fmt.Fprintf(&sb, "| Target Path | %s |\n", toolutil.EscapeMdTableCell(item.TargetPath))
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_update_broadcast_message` to modify this message")
 	return toolutil.ToolResultWithMarkdown(sb.String())

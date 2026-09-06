@@ -110,7 +110,9 @@ func TestAuditProject_Settings(t *testing.T) {
 			"Merge Settings",
 			"Push Rules",
 			"Commit message regex",
-			"^(feat|fix|docs):.*",
+			// The pipe of the alternation is entity-encoded, because it would
+			// otherwise be read as the end of the cell holding the rule.
+			"^(feat&#124;fix&#124;docs):.*",
 			"Storage Statistics",
 		}
 		for _, want := range checks {

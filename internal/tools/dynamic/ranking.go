@@ -2,7 +2,8 @@ package dynamic
 
 import (
 	"fmt"
-	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -147,6 +148,16 @@ type ScoringExplanation struct {
 	Reasons       []MatchReason `json:"reasons,omitempty" jsonschema:"Deterministic match reasons that contributed to the score."`
 }
 
+// explanationSummary renders one scoring explanation as a table cell.
+//
+// The matched value it quotes is catalog text, but not always an identifier:
+// on the schema-description branch it is a whole property description reduced
+// to its words, and those are ordinary English. Two in the served catalog
+// carry the characters at issue today, "Order by: id | name | username" and
+// "(GitLab < 14 only)". This used to fold the pipe and the newline through a
+// local helper and leave the angle bracket alone, which is half of the rule
+// the shared escaper is, and a package-local half of a rule is how the next
+// reader learns the wrong one.
 func explanationSummary(explanation *ScoringExplanation) string {
 	if explanation == nil || len(explanation.Reasons) == 0 {
 		return "-"
@@ -163,7 +174,7 @@ func explanationSummary(explanation *ScoringExplanation) string {
 	if reason.Fuzzy {
 		text = fmt.Sprintf("%s fuzzy-matched %q", reason.Field, matched)
 	}
-	return markdownTableText(text)
+	return toolutil.EscapeMdTableCell(text)
 }
 
 func hasSearchExplanations(results []SearchResult) bool {
@@ -194,10 +205,4 @@ func ambiguousTargetsFromSearchResults(results []SearchResult) []string {
 		}
 	}
 	return nil
-}
-
-func markdownTableText(text string) string {
-	text = strings.ReplaceAll(text, "|", "\\|")
-	text = strings.ReplaceAll(text, "\n", " ")
-	return text
 }

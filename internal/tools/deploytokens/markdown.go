@@ -10,14 +10,16 @@ import (
 // FormatOutputMarkdown formats a single deploy token.
 func FormatOutputMarkdown(o Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Deploy Token: %s (ID: %d)\n\n", o.Name, o.ID)
+	fmt.Fprintf(&b, "## Deploy Token: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(o.Name), o.ID)
 	b.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&b, "| ID | %d |\n", o.ID)
-	fmt.Fprintf(&b, "| Name | %s |\n", o.Name)
-	fmt.Fprintf(&b, "| Username | %s |\n", o.Username)
+	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(o.Name))
+	fmt.Fprintf(&b, "| Username | %s |\n", toolutil.EscapeMdTableCell(o.Username))
 	if o.Token != "" {
+		//gitlab:allow-unescaped o.Token: the secret GitLab generated, which the reader has to copy back verbatim.
 		fmt.Fprintf(&b, "| Token | %s |\n", o.Token)
 	}
+	//gitlab:allow-unescaped strings.Join(o.Scopes, ", "): deploy token scopes, which GitLab accepts only from its own fixed set.
 	fmt.Fprintf(&b, "| Scopes | %s |\n", strings.Join(o.Scopes, ", "))
 	fmt.Fprintf(&b, "| Revoked | %t |\n", o.Revoked)
 	fmt.Fprintf(&b, "| Expired | %t |\n", o.Expired)
@@ -44,8 +46,9 @@ func FormatListMarkdown(o ListOutput) string {
 	}
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Username", "Scopes", "Revoked", "Expired"))
 	for _, t := range o.DeployTokens {
+		//gitlab:allow-unescaped strings.Join(t.Scopes, ", "): deploy token scopes, which GitLab accepts only from its own fixed set.
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %t | %t |\n",
-			t.ID, t.Name, t.Username, strings.Join(t.Scopes, ", "), t.Revoked, t.Expired)
+			t.ID, toolutil.EscapeMdTableCell(t.Name), toolutil.EscapeMdTableCell(t.Username), strings.Join(t.Scopes, ", "), t.Revoked, t.Expired)
 	}
 	toolutil.WritePagination(&b, o.Pagination)
 	toolutil.WriteHints(

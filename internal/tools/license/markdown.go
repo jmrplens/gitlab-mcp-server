@@ -15,6 +15,7 @@ func FormatLicenseMarkdown(item Item) *mcp.CallToolResult {
 	fmt.Fprintf(&sb, "## License #%d\n\n", item.ID)
 	sb.WriteString("| Property | Value |\n")
 	sb.WriteString("|----------|-------|\n")
+	//gitlab:allow-unescaped item.Plan: a license plan GitLab picks from a fixed set (free, premium, ultimate and the trial variants).
 	fmt.Fprintf(&sb, "| Plan | %s |\n", item.Plan)
 	fmt.Fprintf(&sb, "| Expired | %v |\n", item.Expired)
 	fmt.Fprintf(&sb, "| Active Users | %d |\n", item.ActiveUsers)
@@ -32,7 +33,8 @@ func FormatLicenseMarkdown(item Item) *mcp.CallToolResult {
 		fmt.Fprintf(&sb, "| Created At | %s |\n", toolutil.FormatTime(item.CreatedAt))
 	}
 	fmt.Fprintf(&sb, "| Licensee | %s (%s) - %s |\n",
-		item.Licensee.Name, item.Licensee.Company, item.Licensee.Email)
+		toolutil.EscapeMdTableCell(item.Licensee.Name), toolutil.EscapeMdTableCell(item.Licensee.Company),
+		toolutil.EscapeMdTableCell(item.Licensee.Email))
 	toolutil.WriteHints(&sb, "Check license expiry date and plan for renewal if needed")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }

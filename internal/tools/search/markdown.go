@@ -2,6 +2,7 @@ package search
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
@@ -51,8 +52,9 @@ func FormatMRsMarkdown(out MergeRequestsOutput) string {
 	b.WriteString("| IID | Title | State | Author | Project | Source -> Target |\n")
 	b.WriteString(toolutil.TblSep6Col)
 	for _, mr := range out.MergeRequests {
-		fmt.Fprintf(&b, "| [!%d](%s) | %s | %s %s | %s | %s | %s -> %s |\n",
-			mr.IID, mr.WebURL,
+		//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
+		fmt.Fprintf(&b, "| %s | %s | %s %s | %s | %s | %s -> %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL),
 			toolutil.EscapeMdTableCell(mr.Title),
 			toolutil.MRStateEmoji(mr.State), mr.State,
 			toolutil.EscapeMdTableCell(mergerequests.AuthorName(mr)),
@@ -80,8 +82,9 @@ func FormatIssuesMarkdown(out IssuesOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, i := range out.Issues {
 		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n",
-			i.IID, i.WebURL,
+		//gitlab:allow-unescaped i.State: an issue state, one of GitLab's fixed set (opened, closed).
+		fmt.Fprintf(&b, "| %s | %s | %s %s | %s | %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL),
 			toolutil.EscapeMdTableCell(i.Title),
 			toolutil.IssueStateEmoji(i.State), i.State,
 			toolutil.EscapeMdTableCell(issues.AuthorName(i)),
@@ -106,8 +109,8 @@ func FormatCommitsMarkdown(out CommitsOutput) string {
 	b.WriteString("| Short ID | Title | Author | Date |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, c := range out.Commits {
-		fmt.Fprintf(&b, "| [%s](%s) | %s | %s | %s |\n",
-			toolutil.EscapeMdTableCell(c.ShortID), c.WebURL,
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+			toolutil.MdTitleLink(c.ShortID, c.WebURL),
 			toolutil.EscapeMdTableCell(c.Title),
 			toolutil.EscapeMdTableCell(c.AuthorName),
 			toolutil.EscapeMdTableCell(c.CommittedDate))
@@ -135,8 +138,10 @@ func FormatMilestonesMarkdown(out MilestonesOutput) string {
 		if due == "" {
 			due = "\u2014"
 		}
-		fmt.Fprintf(&b, "| [%d](%s) | %s | %s | %s |\n",
-			m.IID, m.WebURL,
+		//gitlab:allow-unescaped m.State: a milestone state, one of GitLab's fixed set (active, closed).
+		//gitlab:allow-unescaped due: a due date the SDK's ISOTime rendered as digits and dashes, or the em dash substituted just above.
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+			toolutil.MdTitleLink(strconv.FormatInt(m.IID, 10), m.WebURL),
 			toolutil.EscapeMdTableCell(m.Title),
 			m.State,
 			due)
@@ -163,7 +168,9 @@ func FormatNotesMarkdown(out NotesOutput) string {
 	for _, n := range out.Notes {
 		fmt.Fprintf(&b, fmtTableRow4Col,
 			toolutil.EscapeMdTableCell(n.Author),
+			//gitlab:allow-unescaped n.NoteableType: the GitLab class a note hangs on (Issue, MergeRequest, Snippet, Commit, Epic), never text anybody types.
 			n.NoteableType,
+			//gitlab:allow-unescaped noteableRef(n.NoteableType, n.NoteableIID): that same class name and an integer IID, so the reference carries nothing a cell reacts to.
 			noteableRef(n.NoteableType, n.NoteableIID),
 			toolutil.EscapeMdTableCell(truncateBody(n.Body, 80)))
 	}
@@ -178,10 +185,9 @@ func FormatProjectsMarkdown(out ProjectsOutput) string {
 	rows := make([]searchResultRow, 0, len(out.Projects))
 	for _, p := range out.Projects {
 		rows = append(rows, searchResultRow{
-			fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(p.Name), p.WebURL),
-			toolutil.EscapeMdTableCell(p.PathWithNamespace),
-			p.Visibility,
-			toolutil.EscapeMdTableCell(p.DefaultBranch),
+			Title:    p.Name,
+			TitleURL: p.WebURL,
+			Cells:    [3]string{p.PathWithNamespace, p.Visibility, p.DefaultBranch},
 		})
 	}
 	return formatSearchResultList("Project", len(out.Projects), out.Pagination, "No projects found.", "| Name | Path | Visibility | Default Branch |", rows,
@@ -189,7 +195,24 @@ func FormatProjectsMarkdown(out ProjectsOutput) string {
 		"Use gitlab_project action 'get' with the project path to see full details")
 }
 
-type searchResultRow [4]string
+// searchResultRow is one row of a four-column search result table, carried as
+// the values GitLab returned rather than as finished cells.
+//
+// Escaping them is [formatSearchResultList]'s job, so no caller can hand the
+// table a value that still has a pipe or an angle bracket in it. The callers
+// used to build the first column themselves as "[%s](%s)" around a
+// cell-escaped title, and the cell escaper leaves ']' alone: a snippet titled
+// "Fix login](http://attacker.invalid/x)" closed the label and pointed the
+// link at a host that is not GitLab, on this server's own instruction, since
+// the list carries HintPreserveLinks.
+type searchResultRow struct {
+	// Title and TitleURL are the first column: the result's name, linked to
+	// its page when GitLab returned one.
+	Title    string
+	TitleURL string
+	// Cells are the three remaining columns, in the order the header names them.
+	Cells [3]string
+}
 
 func formatSearchResultList(kind string, count int, pagination toolutil.PaginationOutput, emptyMessage, header string, rows []searchResultRow, hints ...string) string {
 	var b strings.Builder
@@ -204,7 +227,11 @@ func formatSearchResultList(kind string, count int, pagination toolutil.Paginati
 	b.WriteByte('\n')
 	b.WriteString(toolutil.TblSep4Col)
 	for _, row := range rows {
-		fmt.Fprintf(&b, fmtTableRow4Col, row[0], row[1], row[2], row[3])
+		fmt.Fprintf(&b, fmtTableRow4Col,
+			toolutil.MdTitleLink(row.Title, row.TitleURL),
+			toolutil.EscapeMdTableCell(row.Cells[0]),
+			toolutil.EscapeMdTableCell(row.Cells[1]),
+			toolutil.EscapeMdTableCell(row.Cells[2]))
 	}
 	toolutil.WritePagination(&b, pagination)
 	toolutil.WriteHints(&b, hints...)
@@ -216,10 +243,9 @@ func FormatSnippetsMarkdown(out SnippetsOutput) string {
 	rows := make([]searchResultRow, 0, len(out.Snippets))
 	for _, s := range out.Snippets {
 		rows = append(rows, searchResultRow{
-			fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(s.Title), s.WebURL),
-			toolutil.EscapeMdTableCell(s.FileName),
-			s.Visibility,
-			toolutil.EscapeMdTableCell(s.Author),
+			Title:    s.Title,
+			TitleURL: s.WebURL,
+			Cells:    [3]string{s.FileName, s.Visibility, s.Author},
 		})
 	}
 	return formatSearchResultList("Snippet", len(out.Snippets), out.Pagination, "No snippets found.", "| Title | File | Visibility | Author |", rows,
@@ -239,8 +265,9 @@ func FormatUsersMarkdown(out UsersOutput) string {
 	b.WriteString("| Username | Name | State |\n")
 	b.WriteString(toolutil.TblSep3Col)
 	for _, u := range out.Users {
-		fmt.Fprintf(&b, "| [@%s](%s) | %s | %s |\n",
-			toolutil.EscapeMdTableCell(u.Username), u.WebURL,
+		//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
+		fmt.Fprintf(&b, "| %s | %s | %s |\n",
+			toolutil.MdTitleLink("@"+u.Username, u.WebURL),
 			toolutil.EscapeMdTableCell(u.Name),
 			u.State)
 	}
@@ -266,6 +293,7 @@ func FormatWikiMarkdown(out WikiOutput) string {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(w.Title),
 			toolutil.EscapeMdTableCell(w.Slug),
+			//gitlab:allow-unescaped w.Format: a wiki format, a gl.WikiFormatValue GitLab picks from a fixed set (markdown, rdoc, asciidoc, org).
 			w.Format)
 	}
 	toolutil.WritePagination(&b, out.Pagination)

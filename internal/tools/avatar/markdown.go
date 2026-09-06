@@ -10,7 +10,7 @@ import (
 // FormatMarkdown formats the avatar output as markdown.
 func FormatMarkdown(out GetOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Avatar\n\n- **URL**: %s\n", out.AvatarURL)
+	fmt.Fprintf(&b, "## Avatar\n\n- **URL**: %s\n", toolutil.EscapeMdTableCell(out.AvatarURL))
 	toolutil.WriteHints(&b, "Use the avatar URL directly in your application")
 	return b.String()
 }

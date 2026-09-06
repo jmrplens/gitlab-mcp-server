@@ -20,8 +20,19 @@ func ParseOptionalTime(s string) *time.Time {
 }
 
 // FormatTime converts an RFC3339 timestamp string to a human-readable format
-// ("2 Jan 2006 15:04 UTC"). Returns the original string unchanged if parsing
-// fails, so existing callers remain safe.
+// ("2 Jan 2006 15:04 UTC"), falling back to the date-only layout and then to
+// the string it was given.
+//
+// Every one of this function's callers writes the result straight into
+// Markdown, so the fallback runs it through [EscapeMdTableCell] rather than
+// returning it as it arrived. A value that reaches the fallback is by
+// definition not a timestamp, which leaves only two ways to get there: a field
+// this server formatted itself and a field carrying whatever GitLab put in it.
+// Returning the second verbatim put a pipe, a newline and a '<' into a table
+// cell from 155 call sites, and telling each of those call sites to escape a
+// timestamp would have taught the next reader that a date needs escaping.
+// Escaping here costs nothing that renders: neither layout's output contains
+// any character the escaper touches.
 func FormatTime(s string) string {
 	if s == "" {
 		return ""
@@ -34,7 +45,7 @@ func FormatTime(s string) string {
 	if err == nil {
 		return t.Format("2 Jan 2006")
 	}
-	return s
+	return EscapeMdTableCell(s)
 }
 
 // FormatTimePtr renders an optional *time.Time as RFC 3339, or "" when nil.

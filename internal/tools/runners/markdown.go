@@ -15,6 +15,8 @@ func FormatOutputMarkdown(out Output) string {
 	b.WriteString(toolutil.TblSep2Col)
 	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
+	//gitlab:allow-unescaped out.RunnerType: a runner type GitLab picks from a fixed set (instance_type, group_type, project_type).
+	//gitlab:allow-unescaped out.Status: a runner status GitLab derives from when the runner last contacted it (online, offline, stale, never_contacted).
 	fmt.Fprintf(&b, "| Type | %s |\n", out.RunnerType)
 	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
 	fmt.Fprintf(&b, "| Paused | %s |\n", toolutil.BoolEmoji(out.Paused))
@@ -36,12 +38,15 @@ func FormatDetailsMarkdown(out DetailsOutput) string {
 	b.WriteString(toolutil.TblSep2Col)
 	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
+	//gitlab:allow-unescaped out.RunnerType: a runner type GitLab picks from a fixed set (instance_type, group_type, project_type).
+	//gitlab:allow-unescaped out.Status: a runner status GitLab derives from when the runner last contacted it (online, offline, stale, never_contacted).
 	fmt.Fprintf(&b, "| Type | %s |\n", out.RunnerType)
 	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
 	fmt.Fprintf(&b, "| Paused | %s |\n", toolutil.BoolEmoji(out.Paused))
 	fmt.Fprintf(&b, "| Shared | %s |\n", toolutil.BoolEmoji(out.IsShared))
 	fmt.Fprintf(&b, "| Online | %s |\n", toolutil.BoolEmoji(out.Online))
 	fmt.Fprintf(&b, "| Locked | %s |\n", toolutil.BoolEmoji(out.Locked))
+	//gitlab:allow-unescaped out.AccessLevel: a runner access level GitLab picks from a fixed set (not_protected, ref_protected), and refuses any other value on register and update.
 	fmt.Fprintf(&b, "| Access Level | %s |\n", out.AccessLevel)
 	fmt.Fprintf(&b, "| Run Untagged | %s |\n", toolutil.BoolEmoji(out.RunUntagged))
 	if len(out.TagList) > 0 {
@@ -83,6 +88,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range out.Runners {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %t | %t |\n",
+			//gitlab:allow-unescaped r.RunnerType: the list rows carry the same runner type enum the single-runner table writes.
+			//gitlab:allow-unescaped r.Status: the list rows carry the same status enum the single-runner table writes.
 			r.ID, toolutil.EscapeMdTableCell(r.Name), r.RunnerType, r.Status, r.Paused, r.IsShared)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -106,7 +113,10 @@ func FormatJobListMarkdown(out JobListOutput) string {
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, j := range out.Jobs {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %.1fs |\n",
-			j.ID, toolutil.EscapeMdTableCell(j.Name), j.Status, j.Stage, toolutil.EscapeMdTableCell(j.Ref), j.Duration)
+			//gitlab:allow-unescaped j.Status: a job status, GitLab's own build state (created, running, success, failed and the rest).
+			// The stage name is written in .gitlab-ci.yml, and the jobs package
+			// escapes the same field in both of its tables.
+			j.ID, toolutil.EscapeMdTableCell(j.Name), j.Status, toolutil.EscapeMdTableCell(j.Stage), toolutil.EscapeMdTableCell(j.Ref), j.Duration)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b, "Use gitlab_job action 'get' with job_id for full job details")
@@ -117,6 +127,7 @@ func FormatJobListMarkdown(out JobListOutput) string {
 func FormatAuthTokenMarkdown(out AuthTokenOutput) string {
 	var b strings.Builder
 	b.WriteString("## Runner Authentication Token\n\n")
+	//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, which the reader has to copy back verbatim.
 	fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
 	if out.ExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(out.ExpiresAt))
@@ -129,6 +140,7 @@ func FormatAuthTokenMarkdown(out AuthTokenOutput) string {
 func FormatRegTokenMarkdown(out AuthTokenOutput) string {
 	var b strings.Builder
 	b.WriteString("## Runner Registration Token\n\n")
+	//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, which the reader has to copy back verbatim.
 	fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
 	if out.ExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(out.ExpiresAt))
@@ -148,7 +160,13 @@ func FormatManagerListMarkdown(out ManagerListOutput) string {
 	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, m := range out.Managers {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s | %s |\n",
-			m.ID, toolutil.EscapeMdTableCell(m.SystemID), m.Version, m.Platform, m.Architecture, m.Status, m.IPAddress)
+			// The version, platform and architecture come out of the info
+			// payload the runner process posts, which GitLab length-checks and
+			// nothing else, and this server's own runner.register writes them.
+			//gitlab:allow-unescaped m.Status: a manager status GitLab derives from when the manager last contacted it (online, offline, stale, never_contacted).
+			//gitlab:allow-unescaped m.IPAddress: GitLab fills this from the address the manager connected from, never from the info payload beside it.
+			m.ID, toolutil.EscapeMdTableCell(m.SystemID), toolutil.EscapeMdTableCell(m.Version),
+			toolutil.EscapeMdTableCell(m.Platform), toolutil.EscapeMdTableCell(m.Architecture), m.Status, m.IPAddress)
 	}
 	toolutil.WriteHints(&b, "Use action 'get' with runner_id for full runner information")
 	return b.String()

@@ -12,7 +12,9 @@ func FormatMergeCheckMarkdown(out MergeStatusCheckOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## External Status Check: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, "- **External URL**: %s\n", out.ExternalURL)
+	// The external URL is whatever the maintainer who added the check typed.
+	fmt.Fprintf(&b, "- **External URL**: %s\n", toolutil.EscapeMdTableCell(out.ExternalURL))
+	//gitlab:allow-unescaped out.Status: an external status check state GitLab picks from a fixed set (passed, failed, pending).
 	fmt.Fprintf(&b, toolutil.FmtMdStatus, out.Status)
 	toolutil.WriteHints(
 		&b,
@@ -28,12 +30,13 @@ func FormatProjectCheckMarkdown(out ProjectStatusCheckOutput) string {
 	fmt.Fprintf(&b, "## External Status Check: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
 	fmt.Fprintf(&b, "- **Project ID**: %d\n", out.ProjectID)
-	fmt.Fprintf(&b, "- **External URL**: %s\n", out.ExternalURL)
+	// The external URL is whatever the maintainer who added the check typed.
+	fmt.Fprintf(&b, "- **External URL**: %s\n", toolutil.EscapeMdTableCell(out.ExternalURL))
 	fmt.Fprintf(&b, "- **HMAC**: %s\n", toolutil.BoolEmoji(out.HMAC))
 	if len(out.ProtectedBranches) > 0 {
 		fmt.Fprintf(&b, "- **Protected Branches**: %d\n", len(out.ProtectedBranches))
 		for _, pb := range out.ProtectedBranches {
-			fmt.Fprintf(&b, "  - %s (ID: %d)\n", pb.Name, pb.ID)
+			fmt.Fprintf(&b, "  - %s (ID: %d)\n", toolutil.EscapeMdTableCell(pb.Name), pb.ID)
 		}
 	}
 	toolutil.WriteHints(

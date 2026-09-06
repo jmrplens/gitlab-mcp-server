@@ -26,6 +26,7 @@ func FormatListMarkdown(out ListOutput) string {
 			&b, "| #%d | %s | %s | %s | %s | %s |\n",
 			issue.IID,
 			toolutil.EscapeMdTableCell(issue.Title),
+			//gitlab:allow-unescaped issue.State: an issue state, one of GitLab's fixed set (opened, closed).
 			issue.State,
 			toolutil.EscapeMdTableCell(issue.Author),
 			toolutil.EscapeMdTableCell(labels),
@@ -51,9 +52,11 @@ func FormatAssignMarkdown(out AssignOutput, action string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Epic Issue %s\n\n", action)
 	if out.EpicGID != "" {
+		//gitlab:allow-unescaped out.EpicGID: a GraphQL global id GitLab mints, gid://gitlab/Epic/ and a number.
 		fmt.Fprintf(&b, "- **Epic**: %s\n", out.EpicGID)
 	}
 	if out.ChildGID != "" {
+		//gitlab:allow-unescaped out.ChildGID: a GraphQL global id GitLab mints, gid://gitlab/Issue/ and a number.
 		fmt.Fprintf(&b, "- **Issue**: %s\n", out.ChildGID)
 	}
 	toolutil.WriteHints(

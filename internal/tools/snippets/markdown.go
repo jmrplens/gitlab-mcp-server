@@ -27,23 +27,25 @@ const hintUpdateSnippet = "Use action 'update' to modify a personal snippet; for
 // FormatMarkdown formats a single snippet as markdown.
 func FormatMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Snippet #%d: %s\n\n", out.ID, out.Title)
+	fmt.Fprintf(&b, "## Snippet #%d: %s\n\n", out.ID, toolutil.EscapeMdHeading(out.Title))
 	b.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&b, "| Title | %s |\n", out.Title)
+	fmt.Fprintf(&b, "| Title | %s |\n", toolutil.EscapeMdTableCell(out.Title))
 	if out.FileName != "" {
-		fmt.Fprintf(&b, "| File Name | %s |\n", out.FileName)
+		fmt.Fprintf(&b, "| File Name | %s |\n", toolutil.EscapeMdTableCell(out.FileName))
 	}
 	if out.Description != "" {
 		fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
 	}
+	//gitlab:allow-unescaped out.Visibility: a snippet visibility GitLab answers as private, internal or public.
 	fmt.Fprintf(&b, "| Visibility | %s |\n", out.Visibility)
 	if out.Author != nil {
-		fmt.Fprintf(&b, "| Author | %s (@%s) |\n", out.Author.Name, out.Author.Username)
+		fmt.Fprintf(&b, "| Author | %s (@%s) |\n",
+			toolutil.EscapeMdTableCell(out.Author.Name), toolutil.EscapeMdTableCell(out.Author.Username))
 	}
 	if out.ProjectID != 0 {
 		if pp := extractProjectPath(out.WebURL); pp != "" {
-			fmt.Fprintf(&b, "| Project | %s |\n", pp)
+			fmt.Fprintf(&b, "| Project | %s |\n", toolutil.EscapeMdTableCell(pp))
 		} else {
 			fmt.Fprintf(&b, "| Project ID | %d |\n", out.ProjectID)
 		}
@@ -118,7 +120,10 @@ func FormatContentMarkdown(out ContentOutput) string {
 // FormatFileContentMarkdown formats snippet file content as markdown.
 func FormatFileContentMarkdown(out FileContentOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Snippet #%d File: %s (ref: %s)\n\n", out.SnippetID, out.FileName, out.Ref)
+	// Both are echoed from the caller's own arguments, and a git ref may hold
+	// '|', '<' and '>'.
+	fmt.Fprintf(&b, "## Snippet #%d File: %s (ref: %s)\n\n", out.SnippetID,
+		toolutil.EscapeMdHeading(out.FileName), toolutil.EscapeMdHeading(out.Ref))
 	b.WriteString(toolutil.MarkdownFencedBlock("", out.Content))
 	toolutil.WriteHints(
 		&b,

@@ -27,13 +27,14 @@ func FormatListMarkdown(out ListOutput) string {
 	sb.WriteString("| ID | MR | Title | Branch | Status | User | Duration |\n")
 	sb.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, t := range out.Trains {
-		mr := fmt.Sprintf("!%d", t.MergeRequest.IID)
-		if t.MergeRequest.WebURL != "" {
-			mr = fmt.Sprintf("[!%d](%s)", t.MergeRequest.IID, t.MergeRequest.WebURL)
-		}
+		mr := toolutil.MdTitleLink(fmt.Sprintf("!%d", t.MergeRequest.IID), t.MergeRequest.WebURL)
+		// A branch name is not an identifier: git check-ref-format permits
+		// '|', '<' and '>'.
+		//gitlab:allow-unescaped t.Status: a merge-train car state GitLab's own state machine writes (created, idle, stale, fresh, merging, merged).
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %s | %s | %ds |\n",
 			t.ID, mr, toolutil.EscapeMdTableCell(t.MergeRequest.Title),
-			t.TargetBranch, t.Status, userName(t.User), t.Duration)
+			toolutil.EscapeMdTableCell(t.TargetBranch), t.Status,
+			toolutil.EscapeMdTableCell(userName(t.User)), t.Duration)
 	}
 	toolutil.WriteListSummary(&sb, len(out.Trains), out.Pagination)
 	toolutil.WritePagination(&sb, out.Pagination)
@@ -46,15 +47,15 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&sb, "## Merge Train #%d\n\n", out.ID)
 	sb.WriteString("| Property | Value |\n|---|---|\n")
 	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
+	//gitlab:allow-unescaped out.Status: a merge-train car state GitLab's own state machine writes (created, idle, stale, fresh, merging, merged).
 	fmt.Fprintf(&sb, "| Status | %s |\n", out.Status)
-	fmt.Fprintf(&sb, "| Target Branch | %s |\n", out.TargetBranch)
-	mr := fmt.Sprintf("!%d - %s", out.MergeRequest.IID, toolutil.EscapeMdTableCell(out.MergeRequest.Title))
-	if out.MergeRequest.WebURL != "" {
-		mr = fmt.Sprintf("[!%d](%s) - %s", out.MergeRequest.IID, out.MergeRequest.WebURL, toolutil.EscapeMdTableCell(out.MergeRequest.Title))
-	}
+	fmt.Fprintf(&sb, "| Target Branch | %s |\n", toolutil.EscapeMdTableCell(out.TargetBranch))
+	mr := fmt.Sprintf("%s - %s",
+		toolutil.MdTitleLink(fmt.Sprintf("!%d", out.MergeRequest.IID), out.MergeRequest.WebURL),
+		toolutil.EscapeMdTableCell(out.MergeRequest.Title))
 	fmt.Fprintf(&sb, "| Merge Request | %s |\n", mr)
 	if name := userName(out.User); name != "" {
-		fmt.Fprintf(&sb, "| User | %s |\n", name)
+		fmt.Fprintf(&sb, "| User | %s |\n", toolutil.EscapeMdTableCell(name))
 	}
 	if out.Pipeline != nil && out.Pipeline.ID > 0 {
 		fmt.Fprintf(&sb, "| Pipeline | #%d |\n", out.Pipeline.ID)

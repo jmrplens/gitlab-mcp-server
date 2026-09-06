@@ -283,6 +283,18 @@ func FormatThroughValue(render func(Item) string, item Item) string {
 	return fmt.Sprintf("| %s |\n", render(item))
 }
 
+// FormatDelegated hands its whole value to a helper that reads a field of it.
+// The helper's parameter is bound to this call's argument, so the field is
+// answered by where that argument came from rather than by every caller of the
+// helper.
+func FormatDelegated(item Item) string {
+	return fmt.Sprintf("| %s |\n", delegated(item))
+}
+
+func delegated(it Item) string {
+	return it.Title
+}
+
 // FormatPositional reads a field of a struct built positionally.
 func FormatPositional() string {
 	pair := Pair{"a|b", "c"}

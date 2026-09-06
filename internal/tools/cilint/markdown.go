@@ -21,14 +21,16 @@ func FormatOutputMarkdown(v Output) string {
 	if len(v.Errors) > 0 {
 		b.WriteString("### Errors\n\n")
 		for _, e := range v.Errors {
-			fmt.Fprintf(&b, "- %s\n", e)
+			// A lint message quotes the user's own CI file back, job and stage
+			// names included.
+			fmt.Fprintf(&b, "- %s\n", toolutil.EscapeMdTableCell(e))
 		}
 		b.WriteString("\n")
 	}
 	if len(v.Warnings) > 0 {
 		b.WriteString("### Warnings\n\n")
 		for _, w := range v.Warnings {
-			fmt.Fprintf(&b, "- %s\n", w)
+			fmt.Fprintf(&b, "- %s\n", toolutil.EscapeMdTableCell(w))
 		}
 		b.WriteString("\n")
 	}
@@ -38,6 +40,7 @@ func FormatOutputMarkdown(v Output) string {
 		b.WriteString("| --- | --- | --- |\n")
 		for _, inc := range v.Includes {
 			fmt.Fprintf(&b, "| %s | %s | %s |\n",
+				//gitlab:allow-unescaped inc.Type: an include kind GitLab names, one of local, file, remote, template or component.
 				inc.Type, toolutil.EscapeMdTableCell(inc.Location), toolutil.EscapeMdTableCell(inc.ContextProject))
 		}
 		b.WriteString("\n")

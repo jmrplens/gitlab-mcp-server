@@ -29,6 +29,8 @@ func writeGroupDatadogActiveLine(sb *strings.Builder, active bool) {
 
 // writeGroupDatadogSlugLine emits the Slug line for a Datadog integration,
 // using the supplied default when the Slug is empty.
+//
+//gitlab:allow-unescaped fallback(slug, groupDatadogDefaultTitle): the same type-derived slug as i.Slug, here always the literal datadog, with a compiled-in default when the response omits it.
 func writeGroupDatadogSlugLine(sb *strings.Builder, slug string) {
 	fmt.Fprintf(sb, groupDatadogSlugLineFmt, fallback(slug, groupDatadogDefaultTitle))
 }
@@ -39,7 +41,9 @@ func writeGroupDatadogStringField(sb *strings.Builder, label, value string) {
 	if value == "" {
 		return
 	}
-	fmt.Fprintf(sb, groupDatadogLabelValueFmt, label, value)
+	// Every caller passes a Datadog configuration string, which this server's
+	// own set action sends and GitLab stores verbatim.
+	fmt.Fprintf(sb, groupDatadogLabelValueFmt, label, toolutil.EscapeMdTableCell(value))
 }
 
 // writeGroupDatadogBoolField emits a single label-bool line when the
@@ -63,7 +67,7 @@ func writeGroupDatadogTimestamp(sb *strings.Builder, label, value string) {
 // writeGroupDatadogHeader emits the top-level "## Group Datadog Integration"
 // heading. headingSuffix lets the mutate formatter reuse the same body.
 func writeGroupDatadogHeader(sb *strings.Builder, i GroupDatadogItem, headingSuffix string) {
-	fmt.Fprintf(sb, groupDatadogHeaderFmt, headingSuffix, fallback(i.Title, groupDatadogDefaultTitle))
+	fmt.Fprintf(sb, groupDatadogHeaderFmt, headingSuffix, toolutil.EscapeMdHeading(fallback(i.Title, groupDatadogDefaultTitle)))
 }
 
 // formatGroupDatadogItem renders the common body of a group-level Datadog
@@ -118,6 +122,7 @@ func formatListMarkdownString(out ListOutput) string {
 	sb.WriteString("| ID | Title | Slug | Active |\n")
 	sb.WriteString("|----|-------|------|--------|\n")
 	for _, i := range out.Integrations {
+		//gitlab:allow-unescaped i.Slug: GitLab derives an integration's slug from the integration type rather than from anything a person writes, and every value it takes is a URL path segment such as jira.
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", i.ID, toolutil.EscapeMdTableCell(i.Title), i.Slug, yesNo(i.Active))
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_get_integration` to view details of a specific integration")
@@ -128,7 +133,10 @@ func formatListMarkdownString(out ListOutput) string {
 func formatGetMarkdownString(out GetOutput) string {
 	i := out.Integration
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Integration: %s\n\n", i.Title)
+	// The title is a locale-dependent display name GitLab returns, and older
+	// self-managed instances let a person fill it in for some integrations;
+	// this file's own tables escape the same field.
+	fmt.Fprintf(&sb, "## Integration: %s\n\n", toolutil.EscapeMdHeading(i.Title))
 	fmt.Fprintf(&sb, toolutil.FmtMdID, i.ID)
 	fmt.Fprintf(&sb, "- **Slug**: %s\n", i.Slug)
 	writeGroupDatadogActiveLine(&sb, i.Active)
@@ -165,7 +173,7 @@ func formatSetGroupDatadogMarkdownString(out SetGroupDatadogOutput) string {
 // integration set/get formatters.
 func formatIntegrationItemString(heading string, i IntegrationItem) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## %s: %s\n\n", heading, fallback(i.Title, i.Slug))
+	fmt.Fprintf(&sb, "## %s: %s\n\n", heading, toolutil.EscapeMdHeading(fallback(i.Title, i.Slug)))
 	fmt.Fprintf(&sb, toolutil.FmtMdID, i.ID)
 	fmt.Fprintf(&sb, "- **Slug**: %s\n", i.Slug)
 	writeGroupDatadogActiveLine(&sb, i.Active)
@@ -202,6 +210,7 @@ func formatGroupIntegrationListString(out ListGroupIntegrationsOutput) string {
 	sb.WriteString("| ID | Title | Slug | Active |\n")
 	sb.WriteString("|----|-------|------|--------|\n")
 	for _, i := range out.Integrations {
+		//gitlab:allow-unescaped i.Slug: GitLab derives an integration's slug from the integration type rather than from anything a person writes, and every value it takes is a URL path segment such as jira.
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", i.ID, toolutil.EscapeMdTableCell(i.Title), i.Slug, yesNo(i.Active))
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_get_group_integration` to view details of a specific group integration")

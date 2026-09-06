@@ -83,6 +83,7 @@ var wantFindings = []string{
 	"mdcase table-cell *item.Author",
 	"mdcase table-cell []string{…}",
 	"mdcase table-cell cells",
+	"mdcase table-cell delegated(item)",
 	"mdcase table-cell item.Extra.(string)",
 	"mdcase table-cell item.State",
 	"mdcase table-cell item.Title",

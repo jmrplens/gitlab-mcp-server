@@ -30,10 +30,11 @@ func FormatOutputMarkdown(br Output) string {
 	fmt.Fprintf(&b, "- **Default**: %v\n", br.Default)
 	fmt.Fprintf(&b, "- **Merged**: %v\n", br.Merged)
 	if br.Commit != nil {
+		//gitlab:allow-unescaped br.Commit.ID: a commit SHA, hexadecimal by construction.
 		fmt.Fprintf(&b, "- **Commit**: %s\n", br.Commit.ID)
 	}
 	if br.WebURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, br.WebURL)
+		toolutil.WriteMdURL(&b, br.WebURL)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -56,10 +57,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| Name | Protected | Default | Merged |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, br := range out.Branches {
-		name := toolutil.EscapeMdTableCell(br.Name)
-		if br.WebURL != "" {
-			name = fmt.Sprintf("[%s](%s)", name, br.WebURL)
-		}
+		name := toolutil.MdTitleLink(br.Name, br.WebURL)
 		fmt.Fprintf(&b, "| %s | %v | %v | %v |\n", name, br.Protected, br.Default, br.Merged)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
