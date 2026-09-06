@@ -429,6 +429,20 @@ the same upstream. It exists to protect operators against runaway agents and noi
 clients, not to replace upstream throttling: GitLab itself remains the canonical
 rate-limit authority.
 
+`tools/list` is metered too, and for the opposite reason: it reaches no GitLab
+at all, and spends the processor every tenant of the process is waiting for. One
+listing on the individual surface marshals about 3.2 MB and is the majority of
+that surface's processor time, so a client listing in a loop starves its
+co-tenants while a bucket counting requests to GitLab sees nothing. It draws on
+a bucket of its own, refilled at a tenth of the tool-call rate, which is what
+keeps a drained tool-call bucket from refusing a client's discovery. The burst
+is the configured one, undivided: the refill is what bounds a client listing in
+a loop, while the burst is what a fleet of clients sharing one credential spends
+when they all reconnect at once, and a refused listing is worse than a refused
+call because no model is in that loop to read the message and retry. The
+listings the server makes against itself while it starts, to count its tools and
+build the `gitlab://tools` manifest, are not charged to it.
+
 Whether it is on out of the box depends on the transport. **HTTP mode enables it
 by default** (`--rate-limit-rps=10`), because that deployment is shared — every
 call it forwards is charged to its own egress address, so one looping client's
@@ -494,18 +508,21 @@ whether to back off, batch differently, or surface the problem to the user. The
 refusal is also counted as a metric and logged at WARN, one line per ten-second
 window carrying the number of refusals it stands for, since the arrival rate
 minus the limit is unbounded and a line per event would flood the log. A
-`resources/read`, `resources/subscribe`, `subscriptions/listen` or
-`prompts/get` has no error flag in its result, so it is refused with a JSON-RPC
-error carrying code `-42900`, the code that mirrors HTTP 429 on the transport
-gates, and a message naming the method:
+`resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get`
+or `tools/list` has no error flag in its result, so it is refused with a
+JSON-RPC error carrying code `-42900`, the code that mirrors HTTP 429 on the
+transport gates, and a message naming the method:
 
 ```text
 rate limit exceeded for resources/read; retry after a short backoff
 ```
 
-All five draw on the same bucket, since each reaches GitLab with the caller's
-credential. `tools/list`, `resources/list`, `prompts/list`, `initialize` and
-the other methods the server answers from its own catalog are **not** gated.
+The first four draw on the same bucket as `tools/call`, since each reaches
+GitLab with the caller's credential; `tools/list` draws on its own, refilled at
+a tenth of that one's rate, since what it spends is the shared processor rather
+than the upstream. `resources/list`, `prompts/list`, `initialize` and the other methods
+the server answers from its own catalog are **not** gated: they are small, and
+metering something cheap buys nothing and costs a concept.
 
 ### Defense-in-depth
 

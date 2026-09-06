@@ -55,7 +55,10 @@ identity, per-user tiering and per-user rate limiting. A gateway holding one
 shared credential collapses the whole population onto a single pool entry, a
 single rate-limit bucket and a single GitLab identity: every action is
 attributed to that one user in GitLab's audit log, and `--rate-limit-rps`
-becomes a limit for the entire deployment rather than per caller.
+becomes a limit for the entire deployment rather than per caller. Discovery is
+part of that budget, on a bucket of its own refilled a tenth as fast and holding
+the same burst, so size `--rate-limit-burst` for the number of clients that
+reconnect together: each of them lists once as it connects.
 
 If the deployment publishes several instances with repeated `--gitlab-url`, the
 gateway must also forward `GITLAB-URL`, and a request without it is refused

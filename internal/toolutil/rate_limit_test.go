@@ -223,21 +223,321 @@ func TestAttachRateLimit_GatesTheOtherDoorsToGitLab(t *testing.T) {
 	}
 }
 
-// TestAttachRateLimit_ListNotGated verifies that tools/list bypasses the
-// limiter so clients can always discover available tools regardless of
-// burst exhaustion.
-func TestAttachRateLimit_ListNotGated(t *testing.T) {
+// TestAttachRateLimit_ListDrawsOnABucketOfItsOwn pins the third bucket, and
+// the property the exemption it replaced used to provide.
+//
+// tools/list bypassed the limiter entirely, on the reason recorded beside the
+// switch: it reaches no upstream. That reason was the wrong axis once one
+// process served many tenants. A listing on the individual surface marshals
+// about 3.2 MB and is the majority of that surface's processor time, so a
+// client listing in a loop spends the processor its co-tenants are waiting for
+// while the shared bucket, which counts requests to GitLab, sees nothing.
+//
+// It cannot be metered on the tool-call bucket. Draining that one would then
+// refuse a client's discovery, which is exactly what the exemption existed to
+// prevent and what the separate bucket keeps. Nor can it be a weighted charge
+// on it: rate.AllowN refuses unconditionally whenever the weight is over the
+// burst, and the end-to-end suite runs a server with --rate-limit-burst=1.
+func TestAttachRateLimit_ListDrawsOnABucketOfItsOwn(t *testing.T) {
 	t.Parallel()
+
+	t.Run("draining the tool-call bucket does not refuse a listing", func(t *testing.T) {
+		t.Parallel()
+		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+		registerEchoTool(server)
+		// A token per thousand seconds, so the bucket these calls empty cannot
+		// refill before the listing below arrives. At one per second a slow
+		// runner could refill it in between, and the assertion would hold even
+		// if the listing were drawing on the bucket it is meant to be apart
+		// from.
+		AttachRateLimit(server, NewRateLimiter(0.001, 1))
+
+		session, ctx := connectClient(t, server)
+		// One token and no refill: three calls in a row leave the tool-call
+		// bucket empty whatever the machine's timing.
+		for i := range 3 {
+			if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo"}); err != nil {
+				t.Fatalf("CallTool #%d: %v", i+1, err)
+			}
+		}
+
+		if _, err := session.ListTools(ctx, nil); err != nil {
+			t.Fatalf("a listing was refused by the bucket the tool calls emptied: %v", err)
+		}
+	})
+
+	t.Run("a listing is charged and refused once its own bucket is empty", func(t *testing.T) {
+		t.Parallel()
+		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+		registerEchoTool(server)
+		// A burst of one carries through to the catalog bucket, refilled a
+		// tenth as often as this already glacial rate, so the second listing
+		// arrives at an empty bucket on any machine.
+		AttachRateLimit(server, NewRateLimiter(0.001, 1))
+
+		session, ctx := connectClient(t, server)
+		if _, err := session.ListTools(ctx, nil); err != nil {
+			t.Fatalf("the first listing was refused although its bucket was full: %v", err)
+		}
+
+		_, err := session.ListTools(ctx, nil)
+		if err == nil {
+			t.Fatal("a second listing succeeded; tools/list is not being charged to any bucket")
+		}
+		var rpcErr *jsonrpc.Error
+		if !errors.As(err, &rpcErr) {
+			t.Fatalf("tools/list over budget: error %T %v, want a JSON-RPC error", err, err)
+		}
+		if rpcErr.Code != rateLimitedErrorCode {
+			t.Errorf("tools/list over budget: code %d, want %d", rpcErr.Code, rateLimitedErrorCode)
+		}
+		if !strings.Contains(rpcErr.Message, "rate limit") || !strings.Contains(rpcErr.Message, methodToolsList) {
+			t.Errorf("tools/list over budget: message %q, want it to name the limit and the method", rpcErr.Message)
+		}
+	})
+}
+
+// TestAttachRateLimit_InternalInspectionIsNotCharged pins that the listings the
+// server makes against itself leave the caller's catalog bucket alone.
+//
+// The server lists its own tools several times while it starts, over in-memory
+// sessions that travel the same receiving middlewares a client's requests do.
+// Metering tools/list therefore charged startup to the deployment's own bucket,
+// and on a server run with --rate-limit-burst=1 the second of those listings
+// was refused: the tool manifest resource failed to build before any client had
+// connected. That is what [WithInternalInspection] exists for, and this is the
+// assertion that keeps a future listing from being added without it.
+func TestAttachRateLimit_InternalInspectionIsNotCharged(t *testing.T) {
+	t.Parallel()
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 	registerEchoTool(server)
+	// A burst of one leaves the catalog bucket one token, so a startup that
+	// spent tokens would be visible on the second listing.
 	AttachRateLimit(server, NewRateLimiter(1, 1))
 
-	session, ctx := connectClient(t, server)
 	for i := range 5 {
-		if _, err := session.ListTools(ctx, nil); err != nil {
-			t.Fatalf("ListTools #%d: %v", i+1, err)
+		tools, err := ListRegisteredTools(t.Context(), server, "inspection")
+		if err != nil {
+			t.Fatalf("internal listing #%d was refused: %v", i+1, err)
+		}
+		if len(tools) == 0 {
+			t.Fatalf("internal listing #%d returned no tools", i+1)
 		}
 	}
+
+	// The token a client came for is still there.
+	session, ctx := connectClient(t, server)
+	if _, err := session.ListTools(ctx, nil); err != nil {
+		t.Fatalf("a client's first listing was refused after the server inspected itself: %v", err)
+	}
+}
+
+// TestAttachRateLimit_ExemptMethodsStayExempt pins the other half of the
+// switch: the methods the limiter deliberately leaves alone.
+//
+// The decision recorded beside them is that initialize, resources/list and
+// prompts/list are small, and that metering something cheap buys nothing and
+// costs a concept. Nothing asserted it, so moving one of them into a metered
+// case would have passed the whole suite. The buckets are emptied first, since
+// a method is only shown to be exempt while there is nothing left to spend.
+func TestAttachRateLimit_ExemptMethodsStayExempt(t *testing.T) {
+	t.Parallel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	registerEchoTool(server)
+	server.AddResource(&mcp.Resource{URI: "test://one", Name: "one"},
+		func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+			return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: req.Params.URI, Text: "hi"}}}, nil
+		})
+	server.AddPrompt(&mcp.Prompt{Name: "greet"},
+		func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			return &mcp.GetPromptResult{Messages: []*mcp.PromptMessage{{Role: "user", Content: &mcp.TextContent{Text: "hi"}}}}, nil
+		})
+	// One token in each bucket and a refill of one per thousand seconds, so
+	// what is spent below stays spent for the rest of the test.
+	AttachRateLimit(server, NewRateLimiter(0.001, 1))
+
+	session, ctx := connectClient(t, server)
+	if _, err := session.ListTools(ctx, nil); err != nil {
+		t.Fatalf("the first listing was refused although its bucket was full: %v", err)
+	}
+	if _, err := session.ListTools(ctx, nil); err == nil {
+		t.Fatal("the catalog bucket was not emptied; the assertions below would prove nothing")
+	}
+	res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo"})
+	if callErr != nil {
+		t.Fatalf("tools/call inside the burst: %v", callErr)
+	}
+	if res.IsError {
+		t.Fatal("the first tool call was refused although its bucket was full")
+	}
+	if res, callErr = session.CallTool(ctx, &mcp.CallToolParams{Name: "echo"}); callErr != nil || !res.IsError {
+		t.Fatal("the tool-call bucket was not emptied; the assertions below would prove nothing")
+	}
+
+	exempt := []struct {
+		method string
+		call   func() error
+	}{
+		{"resources/list", func() error { _, err := session.ListResources(ctx, nil); return err }},
+		{"prompts/list", func() error { _, err := session.ListPrompts(ctx, nil); return err }},
+	}
+	for _, tc := range exempt {
+		t.Run(tc.method, func(t *testing.T) {
+			t.Parallel()
+			for i := range 3 {
+				if err := tc.call(); err != nil {
+					t.Fatalf("%s #%d was refused with every bucket empty: %v", tc.method, i+1, err)
+				}
+			}
+		})
+	}
+
+	t.Run("initialize", func(t *testing.T) {
+		t.Parallel()
+		// A second client on the same server, so a second handshake, with both
+		// buckets already empty. connectClient fails the test if the handshake
+		// is refused, and this is the one exemption a client cannot work
+		// around: a refused initialize is a connection that never opens.
+		second, secondCtx := connectClient(t, server)
+		if _, err := second.ListResources(secondCtx, nil); err != nil {
+			t.Fatalf("the session opened with both buckets empty could not be used: %v", err)
+		}
+	})
+}
+
+// TestAttachRateLimit_InspectionMarkCoversListingsOnly pins how far the mark
+// [WithInternalInspection] sets reaches.
+//
+// It exists so the listings the server makes against itself at startup are not
+// charged to the deployment's own bucket. That reasoning stops at listings: a
+// method reaching GitLab spends the caller's credential whoever asked for it,
+// so a marked session must still be metered for tool calls. Nothing else pins
+// the boundary, and widening the check in the switch is a one-word edit.
+func TestAttachRateLimit_InspectionMarkCoversListingsOnly(t *testing.T) {
+	t.Parallel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	registerEchoTool(server)
+	AttachRateLimit(server, NewRateLimiter(0.001, 1))
+
+	// Connected the way ListRegisteredTools connects: the handler context
+	// descends from the marked one the server side was given.
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(WithInternalInspection(ctx), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil)
+	session, connectErr := client.Connect(ctx, clientTransport, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	for i := range 3 {
+		if _, err := session.ListTools(ctx, nil); err != nil {
+			t.Fatalf("marked listing #%d was refused: %v", i+1, err)
+		}
+	}
+
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo"}); err != nil {
+		t.Fatalf("the first tool call on a marked session: %v", err)
+	}
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo"})
+	if err != nil {
+		t.Fatalf("the second tool call on a marked session: %v", err)
+	}
+	if !res.IsError {
+		t.Error("a marked session's tool calls are not metered; the mark must exempt listings only, since a call spends the credential whoever asked for it")
+	}
+}
+
+// TestForCatalog_IsDerivedOnceAndKept verifies the memoization the per-request
+// resolver makes necessary, and that the derivation slows the refill without
+// shrinking the burst.
+//
+// A bucket derived per request would arrive full on every call, so tools/list
+// would be metered in name only. The burst is the other half: it is what a
+// fleet of clients sharing one credential spends when they all connect at
+// once, and dividing it too would make the first listing of the fifth client
+// through a shared-credential gateway the tightest budget in the deployment.
+// The end-to-end suite meets the same edge from below, running a server with
+// --rate-limit-burst=1, where anything smaller than one token would refuse
+// every listing for as long as it ran.
+func TestForCatalog_IsDerivedOnceAndKept(t *testing.T) {
+	t.Parallel()
+
+	limiter := NewRateLimiter(10, 40)
+	first := limiter.forCatalog()
+	if first == nil {
+		t.Fatal("forCatalog() returned nil for a configured limiter")
+	}
+	if second := limiter.forCatalog(); second != first {
+		t.Errorf("forCatalog() returned a new bucket on the second call (%p then %p)", first, second)
+	}
+	if first == limiter {
+		t.Error("forCatalog() returned the tool bucket itself, so listings share it")
+	}
+	if got, want := first.limiter.Burst(), 40; got != want {
+		t.Errorf("catalog burst = %d, want %d: the burst is the parent's, so a fleet on one credential can all connect", got, want)
+	}
+	if got, want := float64(first.limiter.Limit()), 10.0/catalogDivisor; got != want {
+		t.Errorf("catalog rps = %g, want %g", got, want)
+	}
+	// The reporting window travels with the bucket, or a window set on the
+	// parent would govern every refusal except a listing's.
+	if got, want := first.throttleWindow, limiter.throttleWindow; got != want {
+		t.Errorf("catalog throttle window = %v, want the parent's %v", got, want)
+	}
+
+	t.Run("the announced listing rate is the bucket's own", func(t *testing.T) {
+		t.Parallel()
+		// The startup line prints this figure so an operator meets it before a
+		// refusal does. Computed anywhere but from the divisor, it would drift
+		// from the bucket it claims to describe.
+		announced := CatalogListingRPS(10)
+		if want := float64(NewRateLimiter(10, 40).forCatalog().limiter.Limit()); announced != want {
+			t.Errorf("CatalogListingRPS(10) = %g, want the catalog bucket's own %g", announced, want)
+		}
+	})
+
+	t.Run("a burst of one stays usable", func(t *testing.T) {
+		t.Parallel()
+		tight := NewRateLimiter(1, 1).forCatalog()
+		if got := tight.limiter.Burst(); got != 1 {
+			t.Errorf("catalog burst = %d for a configured burst of 1, want 1; a bucket of zero refuses every listing", got)
+		}
+		if !tight.allow() {
+			t.Error("the catalog bucket refused the first listing on a server configured with --rate-limit-burst=1")
+		}
+	})
+
+	t.Run("a disabled limiter stays disabled", func(t *testing.T) {
+		t.Parallel()
+		var absent *RateLimiter
+		if got := absent.forCatalog(); got != nil {
+			t.Errorf("(*RateLimiter)(nil).forCatalog() = %p, want nil", got)
+		}
+		if got := absent.slowed(catalogDivisor); got != nil {
+			t.Errorf("slowed(nil) = %+v, want nil so the middleware stays a no-op", got)
+		}
+	})
+
+	t.Run("a bucketless limiter yields nil rather than itself", func(t *testing.T) {
+		t.Parallel()
+		// Handing back the receiver would alias the listing bucket onto the
+		// tool-call one, and a drained tool-call bucket would then refuse
+		// discovery, which is the property the separate bucket exists to keep.
+		bucketless := &RateLimiter{}
+		if got := bucketless.slowed(catalogDivisor); got != nil {
+			t.Errorf("slowed() = %p on a limiter with no bucket, want nil rather than the receiver %p", got, bucketless)
+		}
+		if got := bucketless.forCatalog(); got != nil {
+			t.Errorf("forCatalog() = %p on a limiter with no bucket, want nil", got)
+		}
+	})
 }
 
 // TestExtractToolName verifies the middleware helper handles nil requests,
@@ -493,9 +793,10 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 			wantContains: []string{`"tool":"tools/call"`},
 		},
 		{
-			// A limiter built without going through NewRateLimiter, which the
-			// scaled() completion limiter is, must not divide by an unset
-			// window.
+			// A limiter built without going through NewRateLimiter must not
+			// divide by an unset window. The derived buckets carry their
+			// parent's, so this is now reachable only by hand, which is
+			// exactly how a future derivation that forgot to would arrive.
 			name:  "a zero window falls back to the default",
 			build: func() *RateLimiter { return &RateLimiter{limiter: rate.NewLimiter(1, 1)} },
 			refuse: func(r *RateLimiter) {
@@ -584,7 +885,11 @@ func TestAttachRateLimit_CompletionOverBudget_AnswersWithNoSuggestions(t *testin
 	}, func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return &mcp.GetPromptResult{}, nil
 	})
-	AttachRateLimit(server, NewRateLimiter(1, 1))
+	// A token per thousand seconds, so the ten the completion bucket starts
+	// with are all it will ever have here. At one per second it refilled faster
+	// than thirteen round trips could drain it whenever the machine was busy,
+	// and the test then reported the method as ungated.
+	AttachRateLimit(server, NewRateLimiter(0.001, 1))
 
 	session, ctx := connectClient(t, server)
 

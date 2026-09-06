@@ -19,7 +19,9 @@ func ListRegisteredTools(ctx context.Context, server *mcp.Server, clientName str
 	}
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	// Marked so the rate limiter knows this listing is the server asking
+	// itself, and leaves the caller's catalog bucket alone.
+	serverSession, err := server.Connect(WithInternalInspection(ctx), serverTransport, nil)
 	if err != nil {
 		return nil, fmt.Errorf("connect server: %w", err)
 	}
