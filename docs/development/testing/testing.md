@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,236 |
-| Unit test functions                                   | 13,635 |
+| Total test functions                                  | 14,292 |
+| Unit test functions                                   | 13,691 |
 | E2E test functions                                    |    601 |
 | cmd test functions                                    |  2,506 |
-| Test files (internal/)                                |    508 |
+| Test files (internal/)                                |    511 |
 | Test files (cmd/)                                     |    151 |
 | Test files (test/e2e/)                                |    237 |
-| Tool sub-packages tested                              |    176 |
+| Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     21 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.2% |
-| Overall coverage (`go test ./internal/...`)           |  98.4% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
+| Overall coverage (`go test ./internal/...`)           |  98.5% |
 | Average package coverage                              |  98.7% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,670 | 82.0% |
-| `TestFunc` (no underscore)             |    967 |  6.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,599 | 11.2% |
+| `TestFunc_Scenario` (2-part)           | 11,715 | 82.0% |
+| `TestFunc` (no underscore)             |    976 |  6.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,601 | 11.2% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,330 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (176) |          8,467 |        355 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,523 |        358 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            601 |        237 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,506 |        151 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,236** |    **896** |                                                                                                 |
+| **Total**               |     **14,292** |    **899** |                                                                                                 |
 
 ### Core Packages
 
@@ -71,7 +71,7 @@
 | oauth         |        78 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
 | prompts       |       280 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
-| resources     |       191 |    99.5% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
+| resources     |       191 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
 | serverpool    |       116 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                             |
 | subscriptions |        90 |    98.5% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
@@ -112,12 +112,13 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 176 tested sub-packages (click to expand)</summary>
+<summary>All 177 tested sub-packages (click to expand)</summary>
 
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        97 |          2 |   100.0% |        18 |
+| achievements            |        56 |          3 |   100.0% |        12 |
 | actioncatalog           |        44 |          5 |    99.1% |         0 |
 | actioncompat            |        44 |          2 |   100.0% |         1 |
 | adminspecs              |         6 |          1 |   100.0% |        92 |
@@ -292,7 +293,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |        95 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        50 |          4 |   100.0% |         7 |
-| **Total**               | **8,467** |    **355** |          | **1,175** |
+| **Total**               | **8,523** |    **358** |          | **1,187** |
 
 </details>
 
@@ -368,7 +369,7 @@
 | oauth         |   100.0% |
 | progress      |    83.8% |
 | prompts       |   100.0% |
-| resources     |    99.5% |
+| resources     |   100.0% |
 | serverpool    |   100.0% |
 | subscriptions |    98.5% |
 | telemetry     |    93.1% |
@@ -382,6 +383,7 @@
 | tools (orch.)           |    98.9% |
 | accessrequests          |   100.0% |
 | accesstokens            |   100.0% |
+| achievements            |   100.0% |
 | actioncatalog           |    99.1% |
 | actioncompat            |   100.0% |
 | adminspecs              |   100.0% |

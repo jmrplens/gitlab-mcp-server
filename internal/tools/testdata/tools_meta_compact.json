@@ -1697,6 +1697,493 @@
     }
   },
   {
+    "name": "gitlab_achievement",
+    "description": "Use {\"action\":\"list\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_achievement.\u003caction\u003e.\nAction guidance:\n- award: Award an achievement to one user, creating an award record with its own id. That new id, not the achievement_id passed in, is what achievement.revoke and the user_achievement actions take. An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers.\n- create: Define a new achievement in a group or project namespace, addressed by its numeric namespace_id rather than its path. Creating an achievement does not give it to anyone. Hand it out afterwards with achievement.award. Send an avatar as exactly one of avatar_file_path (a local image the MCP server reads, unavailable when the server is reached over HTTP) or avatar_content_base64 (inline bytes), together with avatar_filename.\n- delete: Delete an achievement definition from its namespace. Every award ever made from it goes with it, so prefer achievement.revoke when the intent is to take the badge back from one person rather than to retire the badge itself.\n- list: List the achievements a namespace defines, found by its full_path and paginated by cursor. This is the action that turns a namespace path into the numeric achievement_id every other action needs. It returns badge definitions, not who holds them, which is what achievement.recipients answers.\n- recipients: List every award of one achievement, including repeat awards to the same person and awards already revoked. Use achievement.unique_users instead to count distinct holders, and achievement.user_list to look at one person rather than one badge. Each entry carries the user_achievement_id that revoke and delete take.\n- revoke: Revoke one award, taking the badge back from its holder while keeping the record and stamping who revoked it and when. Use achievement.user_achievement_delete instead to erase the record outright, and achievement.delete to retire the badge for everyone. An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers.\n- unique_users: List the distinct users who hold one achievement, counting a person once however many times they were awarded it. Use achievement.recipients instead when the award records themselves are wanted, because this action returns user profiles and carries no user_achievement_id to revoke or delete with.\n- update: Change an existing achievement's name, description, or avatar, addressed by its numeric achievement_id. Every field is optional and an omitted one keeps its current value, so this cannot be used to clear a description. Send an avatar as exactly one of avatar_file_path (a local image the MCP server reads, unavailable when the server is reached over HTTP) or avatar_content_base64 (inline bytes), together with avatar_filename.\n- user_achievement_delete: Erase one award record outright, leaving no trace that the badge was ever held. Use achievement.revoke instead when the history should be kept, and achievement.delete to retire the badge itself. An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers.\n- user_achievement_reorder: Set the order one user's awards appear in on their profile, highest priority first. Pass every award ID of that one user in the wanted order, since the mutation reads the whole sequence rather than moving a single entry. Read the current order from achievement.user_list.\n- user_achievement_update: Change one award, which today means whether the recipient's profile displays it. This edits an award, not the badge behind it, so use achievement.update to rename or re-illustrate the achievement everyone holds. An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers.\n- user_list: List the awards one user holds, found by username and paginated by cursor. This is the person-centered view: achievement.recipients answers the opposite question, who holds one badge. Set include_hidden to also return awards the user hid from their profile, which only they and namespace maintainers or owners can see.\nParameter guidance:\n- award.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.\n- award.award_message. Source: Short note shown with the award, written by the caller, up to 200 characters. Avoid: GitLab rejects an award_message longer than 200 characters.\n- award.user_id: scope_user. Source: Numeric ID of the recipient, from user.list or user.get. Avoid: user_id is numeric. The username string belongs to achievement.user_list instead.\n- create.avatar_content_base64: inline_file_content. Source: Base64-encoded image bytes, for when no local path is available or the server is remote. Avoid: Send exactly one of avatar_file_path or avatar_content_base64, never both.\n- create.avatar_file_path: local_file_path. Source: Absolute path to an image on the machine the MCP server runs on. Avoid: Send exactly one of avatar_file_path or avatar_content_base64, never both., A server reached over HTTP refuses this parameter, because the path would name its own disk rather than the caller's. Send avatar_content_base64 there.\n- create.avatar_filename. Source: File name to record for the upload, such as badge.png. Avoid: Required whenever an avatar is sent by either route, because GitLab identifies the upload part by its file name.\n- create.name. Source: Display name for the badge, chosen by the caller.\n- create.namespace_id: scope_namespace. Source: Numeric ID of the owning group or project namespace, from group.get or project.get. Avoid: namespace_id is numeric here. The list and recipients actions take a path instead, in full_path.\n- delete.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.\n- list.after: pagination_cursor. Source: The pagination.end_cursor value of the previous response. Avoid: These endpoints paginate by opaque cursor, so page and per_page are not accepted., Page backwards with before and last, taking the cursor from pagination.start_cursor.\n- list.first: pagination_limit. Source: How many items to return, chosen by the caller, between 1 and 100 and defaulting to 20. Avoid: Set first for forward paging or last for backward paging, never both., A value above 100 is clamped to 100 rather than refused.\n- list.full_path: scope_namespace. Source: Full path of the owning group or project, from group.list or project.list. Avoid: full_path is a path string. The numeric namespace_id belongs to achievement.create instead.\n- list.ids. Source: Numeric achievement ids to narrow the listing to. Avoid: Omitting ids lists every achievement in the namespace rather than none.\n- recipients.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.\n- recipients.after: pagination_cursor. Source: The pagination.end_cursor value of the previous response. Avoid: These endpoints paginate by opaque cursor, so page and per_page are not accepted., Page backwards with before and last, taking the cursor from pagination.start_cursor.\n- recipients.first: pagination_limit. Source: How many items to return, chosen by the caller, between 1 and 100 and defaulting to 20. Avoid: Set first for forward paging or last for backward paging, never both., A value above 100 is clamped to 100 rather than refused.\n- recipients.full_path: scope_namespace. Source: Full path of the owning group or project, from group.list or project.list. Avoid: full_path is a path string. The numeric namespace_id belongs to achievement.create instead.\n- revoke.user_achievement_id: user_achievement_id. Source: Numeric award id from achievement.recipients or achievement.user_list. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::UserAchievement/88 global ID.\n- unique_users.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.\n- unique_users.after: pagination_cursor. Source: The pagination.end_cursor value of the previous response. Avoid: These endpoints paginate by opaque cursor, so page and per_page are not accepted., Page backwards with before and last, taking the cursor from pagination.start_cursor.\n- unique_users.first: pagination_limit. Source: How many items to return, chosen by the caller, between 1 and 100 and defaulting to 20. Avoid: Set first for forward paging or last for backward paging, never both., A value above 100 is clamped to 100 rather than refused.\n- unique_users.full_path: scope_namespace. Source: Full path of the owning group or project, from group.list or project.list. Avoid: full_path is a path string. The numeric namespace_id belongs to achievement.create instead.\n- update.achievement_id: achievement_id. Source: Numeric id from a prior achievement.list response. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::Achievement/15 global ID.\n- update.avatar_content_base64: inline_file_content. Source: Base64-encoded image bytes, for when no local path is available or the server is remote. Avoid: Send exactly one of avatar_file_path or avatar_content_base64, never both.\n- update.avatar_file_path: local_file_path. Source: Absolute path to an image on the machine the MCP server runs on. Avoid: Send exactly one of avatar_file_path or avatar_content_base64, never both., A server reached over HTTP refuses this parameter, because the path would name its own disk rather than the caller's. Send avatar_content_base64 there.\n- update.avatar_filename. Source: File name to record for the upload, such as badge.png. Avoid: Required whenever an avatar is sent by either route, because GitLab identifies the upload part by its file name.\n- user_achievement_delete.user_achievement_id: user_achievement_id. Source: Numeric award id from achievement.recipients or achievement.user_list. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::UserAchievement/88 global ID.\n- user_achievement_reorder.user_achievement_ids: user_achievement_id_list. Source: Award IDs from a prior achievement.user_list response, listed in the wanted order. Avoid: These are award IDs, not achievement IDs, and they must all belong to one user., At least one ID is required, and the whole sequence is replaced rather than merged.\n- user_achievement_update.show_on_profile. Source: Whether the recipient's profile displays the award. Avoid: Omitting the field leaves the current visibility alone rather than hiding the award.\n- user_achievement_update.user_achievement_id: user_achievement_id. Source: Numeric award id from achievement.recipients or achievement.user_list. Avoid: An achievement_id names a badge the namespace defines. A user_achievement_id names one award of that badge to one person, and the two are different numbers., Pass the plain number, not the gid://gitlab/Achievements::UserAchievement/88 global ID.\n- user_list.after: pagination_cursor. Source: The pagination.end_cursor value of the previous response. Avoid: These endpoints paginate by opaque cursor, so page and per_page are not accepted., Page backwards with before and last, taking the cursor from pagination.start_cursor.\n- user_list.first: pagination_limit. Source: How many items to return, chosen by the caller, between 1 and 100 and defaulting to 20. Avoid: Set first for forward paging or last for backward paging, never both., A value above 100 is clamped to 100 rather than refused.\n- user_list.include_hidden. Source: Whether to include awards the recipient hid from their profile. Avoid: Hidden awards come back only for the user themself and for namespace or instance maintainers and owners, so another caller sees no difference.\n- user_list.username: scope_user. Source: Account name from user.list, without a leading at sign. Avoid: This action takes the username string. The numeric user_id belongs to achievement.award instead.\n\nGitLab achievement actions.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "award"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "achievement_id": {
+                  "type": "integer"
+                },
+                "award_message": {
+                  "type": "string"
+                },
+                "user_id": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "create"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "avatar_content_base64": {
+                  "type": "string"
+                },
+                "avatar_content_type": {
+                  "type": "string"
+                },
+                "avatar_file_path": {
+                  "type": "string"
+                },
+                "avatar_filename": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "namespace_id": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "delete"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "achievement_id": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "list"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "after": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": "string"
+                },
+                "first": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "full_path": {
+                  "type": "string"
+                },
+                "ids": {
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "last": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "recipients"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "achievement_id": {
+                  "type": "integer"
+                },
+                "after": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": "string"
+                },
+                "first": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "full_path": {
+                  "type": "string"
+                },
+                "last": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "revoke"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "user_achievement_id": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "unique_users"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "achievement_id": {
+                  "type": "integer"
+                },
+                "after": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": "string"
+                },
+                "first": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "full_path": {
+                  "type": "string"
+                },
+                "last": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "update"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "achievement_id": {
+                  "type": "integer"
+                },
+                "avatar_content_base64": {
+                  "type": "string"
+                },
+                "avatar_content_type": {
+                  "type": "string"
+                },
+                "avatar_file_path": {
+                  "type": "string"
+                },
+                "avatar_filename": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "user_achievement_delete"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "user_achievement_id": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "user_achievement_reorder"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "user_achievement_ids": {
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "user_achievement_update"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "show_on_profile": {
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "user_achievement_id": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "user_list"
+            },
+            "params": {
+              "additionalProperties": true,
+              "properties": {
+                "after": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": "string"
+                },
+                "first": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "include_hidden": {
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "last": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "username": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "action",
+            "params"
+          ]
+        }
+      ],
+      "properties": {
+        "action": {
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object. See the tool description for the per-action parameter list.",
+          "enum": [
+            "award",
+            "create",
+            "delete",
+            "list",
+            "recipients",
+            "revoke",
+            "unique_users",
+            "update",
+            "user_achievement_delete",
+            "user_achievement_reorder",
+            "user_achievement_update",
+            "user_list"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad. Runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped. For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://tools/{tool}.{action}` (replace placeholders with the tool name and the chosen action).",
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
     "name": "gitlab_admin",
     "description": "Use {\"action\":\"alert_metric_image_delete\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_admin.\u003caction\u003e.\nAction guidance:\n- alert_metric_image_delete: Delete a metric image from an alert. Provide project_id, alert_iid, and image id.\n- alert_metric_image_list: List the metric images attached to an alert in a project's incident/alert management. Provide project_id and alert_iid.\n- alert_metric_image_update: Update the url or url_text of an existing alert metric image. Provide project_id, alert_iid, and image id.\n- alert_metric_image_upload: Upload a metric image to an alert in a project. Provide project_id, alert_iid, and the image file. Optionally a url and url_text.\n- app_statistics_get: Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access.\n- appearance_get: Read the current GitLab application appearance and branding settings. Use this for logos, banners, PWA labels, and instance message colors rather than general application settings or version metadata.\n- appearance_update: Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately.\n- application_create: Create an instance-level OAuth application (admin only). Provide name, redirect_uri, and scopes. Optionally mark it confidential or trusted.\n- application_delete: Delete an instance-level OAuth application by id (admin only), revoking its credentials.\n- application_list: List instance-level OAuth applications registered for the GitLab instance (admin only).\n- application_renew_secret: Renew (rotate) the secret of an instance-level OAuth application by id (admin only). The previous secret is invalidated immediately, so update every client that uses it with the new value returned.\n- broadcast_message_create: Create a broadcast message banner or notification (admin only). Provide message text and optionally theme, target_path, broadcast_type, dismissable, starts_at, and ends_at.\n- broadcast_message_delete: Delete a broadcast message by id (admin only), removing the banner or notification from the instance.\n- broadcast_message_get: Get one broadcast message by id.\n- broadcast_message_list: List all broadcast messages shown to users across the instance, including active and scheduled banners and notifications.\n- broadcast_message_update: Update a broadcast message by id (admin only). Send only the fields to change such as message, theme, schedule, or target.\n- bulk_import_cancel: Cancel an in-progress bulk import (direct-transfer migration) by id.\n- bulk_import_entity_failures: List the failures recorded for one bulk import entity, useful for diagnosing partial migrations. Provide import id and entity id.\n- bulk_import_entity_get: Get one entity (group or project) within a bulk import by import id and entity id to inspect its migration status.\n- bulk_import_entity_list: List the entities (groups and projects) being migrated within a bulk import, with per-entity status. Provide the bulk import id.\n- bulk_import_get: Get one bulk import (direct-transfer migration) by id to inspect its overall status.\n- bulk_import_list: List bulk imports (direct-transfer migrations) started by the authenticated user, with their status.\n- bulk_import_start: Start a group/project migration by direct transfer from another GitLab instance (admin/maintainer). Provide the source instance URL, access token, and entities to import.\n- cluster_agent_delete: Delete a GitLab Agent for Kubernetes from a project by project_id and agent id.\n- cluster_agent_get: Get one GitLab Agent for Kubernetes by project_id and agent id.\n- cluster_agent_list: List the GitLab Agents for Kubernetes registered in a project. Provide project_id.\n- cluster_agent_register: Register a new GitLab Agent for Kubernetes in a project. Provide project_id and the agent name.\n- cluster_agent_token_create: Create a token for a GitLab Agent for Kubernetes. Provide project_id, agent id, and a token name.\n- cluster_agent_token_get: Get one cluster agent token by project_id, agent id, and token id.\n- cluster_agent_token_list: List the tokens for a GitLab Agent for Kubernetes. Provide project_id and agent id.\n- cluster_agent_token_revoke: Revoke a cluster agent token by project_id, agent id, and token id, immediately invalidating it.\n- custom_attr_delete: Delete a custom attribute by key from a user, group, or project (admin only).\n- custom_attr_get: Get one custom attribute by key for a user, group, or project (admin only).\n- custom_attr_list: List custom attributes set on a user, group, or project (admin only). Custom attributes are admin-only key/value metadata.\n- custom_attr_set: Set (create or update) a custom attribute by key on a user, group, or project (admin only). Provide key and value.\n- db_migration_mark: Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.\n- dependency_proxy_delete: Purge the dependency proxy cache for a group, freeing storage used by cached upstream images. Provide the group id.\n- error_tracking_create: Create an error-tracking client key for a project's integrated error tracking. Provide project_id.\n- error_tracking_delete: Delete an error-tracking client key from a project by project_id and key id.\n- error_tracking_get_settings: Get the integrated error-tracking settings for a project, including whether it is enabled. Provide project_id.\n- error_tracking_list: List the error-tracking client keys configured for a project (used by the integrated error tracking feature). Provide project_id.\n- error_tracking_update_settings: Enable or disable integrated error tracking for a project. Provide project_id and the active flag (and integrated mode where applicable).\n- feature_delete: Delete a feature flag by name (admin only), removing all of its gates and resetting it to its default state.\n- feature_list: List all defined feature flags and their current gate state on the instance. Use list_feature_definitions for the flag catalog with metadata.\n- feature_list_definitions: List feature flag definitions (the catalog) with metadata such as type, group, default state, and introduction milestone.\n- feature_set: Set or update a feature flag's gate (admin only). Provide name and a value such as true/false, a percentage, or scope it to feature_group, user, group, project, or namespace.\n- import_bitbucket: Import a repository from Bitbucket Cloud into GitLab. Provide Bitbucket credentials, the source repo, and the target namespace.\n- import_bitbucket_server: Import a repository from a self-hosted Bitbucket Server into GitLab. Provide the Bitbucket Server URL, credentials, the source project/repo, and the target namespace.\n- import_cancel_github: Cancel an in-progress GitHub import for a project. Provide the project_id of the importing project.\n- import_gists: Import the authenticated user's GitHub gists into GitLab snippets. Provide a GitHub personal access token.\n- import_github: Import a repository from GitHub into GitLab. Provide a GitHub personal access token, the repo_id, and the target namespace.\n- license_add: Install a new GitLab Enterprise license (admin only). Provide the license key string. Replaces the active license entitlements.\n- license_delete: Delete an installed license by id (admin only). Removing the active license downgrades the instance to Community/Free features.\n- license_get: Get the currently installed GitLab Enterprise license, including plan, expiration, user limits, and add-on entitlements. Requires administrator access.\n- metadata_get: Read GitLab instance metadata such as version and revision. Do not use this for application settings.\n- plan_limits_change: Change plan limits for a plan (admin only). Provide plan_name and only the limit keys to change, such as ci_pipeline_size or import file sizes.\n- plan_limits_get: Get the configured plan limits for a plan (admin only). Provide plan_name (e.g. default, free, premium) to read its resource caps.\n- secure_file_create: Upload a CI/CD secure file to a project. Provide project_id, the name, and the file content.\n- secure_file_delete: Remove a CI/CD secure file from a project by project_id and secure file id.\n- secure_file_get: Get metadata for one CI/CD secure file by project_id and secure file id.\n- secure_file_list: List the CI/CD secure files stored for a project (certificates, provisioning profiles, and similar). Provide project_id.\n- settings_get: Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information.\n- settings_update: Update GitLab application (instance) settings such as sign-up restrictions, default visibility, CI/CD defaults, rate limits, and feature toggles. Send only the keys to change. Requires administrator access.\n- sidekiq_compound_metrics: Get all Sidekiq metrics in one call: queue, process, and job statistics combined.\n- sidekiq_job_stats: Get aggregate Sidekiq job statistics for the instance such as processed, failed, and enqueued counts.\n- sidekiq_process_metrics: Get Sidekiq process metrics for the instance, listing running Sidekiq processes and their state.\n- sidekiq_queue_metrics: Get Sidekiq background-job queue metrics for the instance, including per-queue backlog and latency.\n- system_hook_add: Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable.\n- system_hook_delete: Delete an instance system hook by id (admin only), stopping it from receiving global event notifications.\n- system_hook_delete_url_variable: Delete one URL variable from an instance system hook (admin only). Provide the hook id and variable key.\n- system_hook_edit: Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification.\n- system_hook_get: Get one instance system hook by its numeric hook id.\n- system_hook_list: List instance-wide system hooks that fire on global events such as project, group, user, and key changes. Distinct from per-project webhooks.\n- system_hook_set_url_variable: Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value.\n- system_hook_test: Fire a test event against an instance system hook by id to verify it is reachable and configured correctly.\n- terraform_state_delete: Delete a Terraform state by project_id and state name (admin/maintainer). Removes all versions of the state.\n- terraform_state_get: Get one Terraform state by project_id and state name, including its lock status.\n- terraform_state_list: List the Terraform states stored in a project's Terraform state backend. Provide project_id.\n- terraform_state_lock: Lock a Terraform state to prevent concurrent applies. Provide project_id and the state name.\n- terraform_state_unlock: Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name. Do not send the state name as id.\n- terraform_version_delete: Delete a single version of a Terraform state by project_id, state name, and serial/version number.\n- topic_create: Create a new instance project topic (admin only). Provide name and optionally title, description, and avatar.\n- topic_delete: Delete a project topic by id (admin only). Projects keep their other topics. This only removes the topic definition.\n- topic_get: Get one instance project topic by its numeric topic id.\n- topic_list: List instance project topics, optionally filtered by a search term. Topics group related projects across the instance.\n- topic_update: Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, or avatar.\n- usage_data_metric_definitions: Get the Service Ping metric definitions (the dictionary describing each usage metric, its category, and data type).\n- usage_data_non_sql_metrics: Get the non-SQL Service Ping metrics for the instance (metrics not derived from database queries).\n- usage_data_queries: Get the SQL queries that GitLab uses to build Service Ping metrics, useful for auditing what usage data is collected.\n- usage_data_service_ping: Get the latest Service Ping (usage data) payload that GitLab reports for the instance.\n- usage_data_track_event: Track a single internal usage event (admin only). Provide the event name and optional context for usage analytics.\n- usage_data_track_events: Track multiple internal usage events in one call (admin only). Provide an array of events with names and context.\nParameter guidance:\n- alert_metric_image_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_upload.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- appearance_update.message_background_color: hex_color. Source: Hex color string such as #e75e40 for the appearance banner background. Avoid: Provide a CSS-style hex color such as #ffffff. Do not send color names or RGB tuples.\n- appearance_update.message_font_color: hex_color. Source: Hex color string such as #ffffff for the appearance banner text. Avoid: Provide a CSS-style hex color such as #000000. Do not send color names or RGB tuples.\n- cluster_agent_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_register.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_revoke.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- dependency_proxy_delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- error_tracking_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_get_settings.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_update_settings.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- import_cancel_github.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_state_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_state_lock.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_state_unlock.name: terraform_state_name. Source: Terraform state name from the prompt or admin.terraform_state_list output. Avoid: Do not send the state name as id. Use params.name.\n- terraform_state_unlock.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_version_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- usage_data_track_event.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.\n- usage_data_track_event.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n\nGitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab-to-GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.\nWhen to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).\nNOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).\n\nBehavior:\n- Idempotent reads: settings_get / appearance_get / *_list / *_get / sidekiq_* / app_statistics_get / metadata_get / usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions / plan_limits_get / feature_list / feature_list_definitions.\n- settings_update / appearance_update / feature_set / plan_limits_change / custom_attr_set / error_tracking_update_settings are idempotent (same input -\u003e same state). license_add / system_hook_add / system_hook_test / broadcast_message_create / application_create / bulk_import_start / import_github / import_bitbucket / import_bitbucket_server / import_gists are NON-idempotent (re-invocation creates duplicates or new background jobs).\n- Side effects: license_add / system_hook_add / broadcast_message_create / settings_update / feature_set apply instance-wide IMMEDIATELY (all sessions affected). bulk_import_* and import_* queue long-running async migrations. Poll bulk_import_get / bulk_import_entity_* until status='finished'. usage_data_track_event posts to Snowplow when send_to_snowplow=true. application_create returns the OAuth secret only ONCE.\n- Destructive: *_delete, license_delete, system_hook_delete, feature_delete, application_delete, broadcast_message_delete, custom_attr_delete, cluster_agent_delete, dependency_proxy_delete, secure_file_delete, terraform_state_delete / terraform_state_unlock, db_migration_mark, bulk_import_cancel and import_cancel_github are irreversible. db_migration_mark may corrupt the schema if used incorrectly.\n\nReturns: resource object for *_get/*_create/*_update/*_set/*_add. Metrics object for Sidekiq/usage_data/app_statistics/metadata. Paginated array for *_list / feature_list_definitions. {success, message} for *_delete/*_revoke/*_purge/*_unlock.\nErrors: 401/403 forbidden (hint: most actions require admin token), 404 not found, 400 invalid params (hint: license must be base64-encoded. System hook url must be https).\n\nParam conventions: * = required. List actions accept page, per_page.\n\nTopics:\n- topic_list: search\n- topic_get / topic_delete: topic_id*\n- topic_create: name*, title, description\n- topic_update: topic_id*, name, title, description\n\nSettings \u0026 appearance:\n- settings_get / appearance_get: (no params). If the task says \"read current instance settings\" or \"get instance settings\", call settings_get, not broadcast_message_list.\n- settings_update: settings (map of setting_name to value)\n- appearance_update: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines\n\nBroadcast messages:\n- broadcast_message_list: (no params) lists existing broadcast messages only. It does not read instance settings.\n- broadcast_message_get / broadcast_message_delete: id*\n- broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable (bool), target_path, target_access_levels\n- broadcast_message_update: id*, message, starts_at, ends_at, broadcast_type, theme, dismissable\n\nInstance feature flags:\n- feature_list / feature_list_definitions: (no params)\n- feature_set: name*, value*, key, feature_group, user, group, namespace, project, repository, force (bool)\n- feature_delete: name*\n\nLicense:\n- license_get: (no params)\n- license_add: license* (Base64-encoded)\n- license_delete: id*\n\nSystem hooks:\n- system_hook_list: (no params)\n- system_hook_get / system_hook_test / system_hook_delete: id*\n- system_hook_add: url*, token, signing_token, push_events, push_events_branch_filter, branch_filter_strategy, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification\n- system_hook_edit: id*, url, name, description, token, signing_token, push_events, push_events_branch_filter, branch_filter_strategy, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification\n- system_hook_set_url_variable: id*, key*, value*\n- system_hook_delete_url_variable: id*, key*\n\nSidekiq metrics: sidekiq_queue_metrics / sidekiq_process_metrics / sidekiq_job_stats / sidekiq_compound_metrics (no params).\n\nPlan limits:\n- plan_limits_get: plan_name\n- plan_limits_change: plan_name*, conan_max_file_size, generic_packages_max_file_size, helm_max_file_size, maven_max_file_size, npm_max_file_size, nuget_max_file_size, pypi_max_file_size, terraform_module_max_file_size\n\nUsage data:\n- usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions: (no params)\n- usage_data_track_event: event*, send_to_snowplow (bool), namespace_id, project_id\n- usage_data_track_events: events* (array)\n\nOAuth applications:\n- application_list: (no params)\n- application_create: name*, redirect_uri*, scopes*, confidential (bool)\n- application_delete: id*\n\nMisc:\n- db_migration_mark: version*, database\n- app_statistics_get / metadata_get: (no params)\n\nCustom attributes:\n- custom_attr_list: resource_type* (user/group/project), resource_id*\n- custom_attr_get / custom_attr_delete: resource_type*, resource_id*, key*\n- custom_attr_set: resource_type*, resource_id*, key*, value*\n\nBulk import:\n- bulk_import_start: url*, access_token*, entities* (array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)})\n- bulk_import_list: status, page, per_page\n- bulk_import_get: id*\n- bulk_import_cancel: id*\n- bulk_import_entity_list: bulk_import_id, status, page, per_page\n- bulk_import_entity_get: bulk_import_id*, entity_id*\n- bulk_import_entity_failures: bulk_import_id*, entity_id*\n\nError tracking:\n- error_tracking_list: project_id*\n- error_tracking_create: project_id*\n- error_tracking_delete: project_id*, key_id*\n- error_tracking_get_settings: project_id*\n- error_tracking_update_settings: project_id*, active (bool), integrated (bool)\n\nAlert metric images:\n- alert_metric_image_list: project_id*, alert_iid*\n- alert_metric_image_upload: project_id*, alert_iid*, url*, url_text\n- alert_metric_image_update: project_id*, alert_iid*, image_id*, url, url_text\n- alert_metric_image_delete: project_id*, alert_iid*, image_id*\n\nSecure files:\n- secure_file_list: project_id*\n- secure_file_get / secure_file_delete: project_id*, file_id*\n- secure_file_create: project_id*, name*, content* (base64-encoded)\n\nTerraform states:\n- terraform_state_list: project_path*\n- terraform_state_get: project_path*, name*\n- terraform_state_delete / terraform_state_lock / terraform_state_unlock: project_id*, name*\n- terraform_version_delete: project_id*, name*, serial*\n\nCluster agents:\n- cluster_agent_list: project_id*\n- cluster_agent_get / cluster_agent_delete: project_id*, agent_id*\n- cluster_agent_register: project_id*, name*\n- cluster_agent_token_list: project_id*, agent_id*\n- cluster_agent_token_get / cluster_agent_token_revoke: project_id*, agent_id*, token_id*\n- cluster_agent_token_create: project_id*, agent_id*, name*\n\nImports:\n- import_github: personal_access_token*, repo_id*, target_namespace*, new_name\n- import_bitbucket: bitbucket_username*, bitbucket_app_password*, repo_path*, target_namespace*, new_name\n- import_bitbucket_server: bitbucket_server_url*, bitbucket_server_username*, personal_access_token*, bitbucket_server_project*, bitbucket_server_repo*, new_namespace, new_name\n- import_cancel_github: project_id*\n- import_gists: personal_access_token*\n- dependency_proxy_delete: group_id*. Purges the group's dependency proxy cache\n\nParameter constraints (beyond schema):\n- broadcast_message_create.broadcast_type is one of banner, notification. Theme is a CSS hex color (e.g. '#E75E40'). target_access_levels uses GitLab numeric levels [10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner]. starts_at/ends_at are ISO 8601 timestamps and ends_at MUST be \u003e starts_at.\n- feature_set.value accepts 'true' / 'false' / a 0-100 integer (percentage of time/actors) / 'actor:\u003cid\u003e'. The optional key disambiguates 'percentage_of_time' vs 'percentage_of_actors'. User/group/namespace/project/repository scope the gate and are mutually-exclusive with each other.\n- plan_limits_change.*_max_file_size are sizes in BYTES. 0 disables the limit. Omitted fields keep their current value (partial update).\n- license_add.license is the Base64 of the raw .gitlab-license file (not the file path).\n- system_hook_add.url MUST be https when enable_ssl_verification=true. Token is sent as X-Gitlab-Token on every delivery.\n- application_create.scopes is a SPACE-separated string of OAuth scopes (e.g. 'api read_user'). Confidential=false enables PKCE for public clients. The client_secret is returned ONCE on creation and cannot be retrieved later.\n- cluster_agent_token_create returns the token ONCE. Revoke + re-create to rotate.\n- secure_file_create.content is Base64-encoded. Max size 5 MiB.\n- custom_attr_set.resource_type is one of user, group, project and (resource_type, resource_id, key) is a unique upsert key.\n- bulk_import_start.entities[].source_type is one of group_entity, project_entity. migrate_projects and migrate_memberships apply only to group_entity. destination_namespace must already exist on the target instance.\n- import_bitbucket_server.bitbucket_server_project is the project KEY (usually uppercase, from the Bitbucket URL), not the display name.\n- usage_data_track_event: namespace_id and project_id are mutually-exclusive context refs (provide at most one). send_to_snowplow=false keeps the event internal to GitLab.\n- db_migration_mark.database is one of main, ci. Defaults to 'main'. Marking a non-applied migration corrupts schema_migrations. Verify first via metadata_get.\n- terraform_state_lock fails if the state is already locked. Unlock breaks any active client session holding the lock.\n- topic_create.name must be globally unique (slug). Title is the display name shown in the UI.\n- List actions: page defaults to 1, per_page defaults to 20 (GitLab cap is 100).\n\nSee also: gitlab_user (user CRUD), gitlab_server (MCP server health and updates), gitlab_group / gitlab_project (group/project admin), gitlab_access (tokens, deploy keys, access requests).",
     "inputSchema": {

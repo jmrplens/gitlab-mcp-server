@@ -30,18 +30,18 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | By instance tier: ~854 Free/CE; ~1007 Premium; ~1073 Ultimate (self-managed) / ~1079 on GitLab.com Ultimate with Orbit |
-| Catalog groups            | By instance tier: 28 Free/CE; 34 Premium; 45 Ultimate                                                       |
-| Meta-mode tools           | 32 base (Free/CE) / 38 Premium / 49 self-managed Ultimate / 50 GitLab.com Ultimate (Orbit)                 |
+| MCP Tools (individual)    | By instance tier: ~866 Free/CE; ~1019 Premium; ~1085 Ultimate (self-managed) / ~1091 on GitLab.com Ultimate with Orbit |
+| Catalog groups            | By instance tier: 29 Free/CE; 35 Premium; 46 Ultimate                                                       |
+| Meta-mode tools           | 33 base (Free/CE) / 39 Premium / 50 self-managed Ultimate / 51 GitLab.com Ultimate (Orbit)                 |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
 | Completion argument names | 18                                                                                                           |
 | MCP Capabilities          | 4 (progress, elicitation, completions, resource subscriptions)                     |
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
-| Source files (tools)      | 766 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 369 test files under `internal/tools/`                                                                       |
-| Go packages               | 246 in the main module (`go list ./...`); the README's 252 also counts the e2e modules. 178 under `internal/tools/...` (the root package plus 177 domain sub-packages) |
+| Source files (tools)      | 775 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 373 test files under `internal/tools/`                                                                       |
+| Go packages               | 252 in the main module (`go list ./...`); the README's 254 also counts the e2e modules. 179 under `internal/tools/...` (the root package plus 178 domain sub-packages) |
 
 ### Orbit live tests
 
@@ -102,7 +102,7 @@ gitlab-mcp-server/
 │   ├── telemetry/               # The one place that knows the OpenTelemetry SDK: exporters, identity policy, metric views
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 177 internal/tools packages
+│   ├── tools/                   # Tool orchestration layer + 178 internal/tools packages
 │   │   ├── action_catalog.go    # Builds the canonical action catalog from domain ActionSpecs (pruneSchemaFieldsByTier)
 │   │   ├── catalog_filter.go    # FilterActionCatalog: read-only, token-scope and --exclude-tools filters, with what each removed
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
@@ -111,6 +111,7 @@ gitlab-mcp-server/
 │   │   ├── dynamiccatalog/      # Build(): the dynamic catalog assembled the way the server assembles it (cmd/server and the e2e suite alike)
 │   │   ├── markdown.go          # Thin delegator to the type-based Markdown registry (toolutil.MarkdownForResult)
 │   │   ├── meta_tool.go         # Route wrappers (wrapAction, wrapVoidAction, routeAction) and the meta parameter-schema mode; AddMetaTool/AddReadOnlyMetaTool live in toolutil/meta_tool.go
+│   │   ├── achievements/        # Achievement definitions and their awards (GraphQL, cursor-paginated)
 │   │   ├── branches/            # Branch & protected branch tools
 │   │   ├── cilint/              # CI lint tools
 │   │   ├── civariables/         # CI variable tools
@@ -228,7 +229,7 @@ Every documentation example must name a tool the surface it shows actually regis
 
 ### Error handling in tool handlers
 
-Four error wrapping functions in `internal/toolutil/errors.go`, used across the 177 packages under `internal/tools/`:
+Four error wrapping functions in `internal/toolutil/errors.go`, used across the 178 packages under `internal/tools/`:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
@@ -684,7 +685,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (177 `internal/tools` packages; tools by tier: ~854 Free/CE, ~1007 Premium, ~1073 Ultimate self-managed, ~1079 GitLab.com Ultimate) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (178 `internal/tools` packages; tools by tier: ~866 Free/CE, ~1019 Premium, ~1085 Ultimate self-managed, ~1091 GitLab.com Ultimate) |
 | ADR-0005 | Meta-tool consolidation into a compact domain catalog          | Accepted (refines ADR-0004; its runtime mechanics are superseded by the catalog-first architecture of ADR-0014) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
@@ -704,7 +705,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package family is split into 177 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
+The `internal/tools/` package family is split into 178 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks
@@ -720,7 +721,7 @@ Markdown formatters use a type-based registry in `internal/toolutil/md_registry.
 - `toolutil.RegisterMarkdownResult[T](fn)` — registers a formatter for `*mcp.CallToolResult` types
 - `toolutil.MarkdownForResult(result any)` — looks up and invokes the registered formatter by `reflect.Type`
 - `internal/tools/markdown.go` is a thin delegator (~16 lines) that calls `toolutil.MarkdownForResult`
-- ~564 registrations across 159 sub-packages, validated by `TestAllMarkdownFormattersRegistered`
+- ~578 registrations across 166 sub-packages, validated by `TestAllMarkdownFormattersRegistered`
 
 ### Dynamic toolset mode
 

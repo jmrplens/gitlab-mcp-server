@@ -324,10 +324,11 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 1073 = 1065 + 7 work item saved view actions (get/list/create/
+		// 1085 = 1073 + 12 achievement actions (Free, client-go v2.64.0).
+		// The 1073 was 1065 + 7 work item saved view actions (get/list/create/
 		// update/delete/subscribe/unsubscribe, Free, client-go v2.62.0)
 		// + 1 Dependency Firewall package evaluation (Premium).
-		const expectedTools = 1073
+		const expectedTools = 1085
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -343,11 +344,12 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 854 = 868 −11 group webhooks −3 MR dependencies gated to Premium
+		// 866 = 854 + 12 achievement actions (Free, client-go v2.64.0). The 854
+		// was 868 −11 group webhooks −3 MR dependencies gated to Premium
 		// (group_webhooks.md and merge request dependencies are
 		// Premium/Ultimate). See cmd/audit_edition_tier. The base moved from
 		// 861 with the 7 work item saved view actions, which are Free.
-		const expectedTools = 854
+		const expectedTools = 866
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -396,8 +398,8 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 32 base, 49 with enterprise.
-// Base count is 28 meta-tools + 4 standalone gitlab_interactive_* elicitation
+// the expected number of meta-tools: 33 base, 50 with enterprise.
+// Base count is 29 meta-tools + 4 standalone gitlab_interactive_* elicitation
 // tools that cannot be folded into action+params meta-tools (they require
 // multi-round MCP elicitation/create exchanges with the client).
 func TestRegisterAllMeta_ToolCount(t *testing.T) {
@@ -411,7 +413,8 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 32
+		// 33 = 32 + gitlab_achievement meta-tool (Free, client-go v2.64.0).
+		const expectedTools = 33
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -426,8 +429,9 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 49 = 48 + gitlab_security_scan_profile meta-tool (Ultimate, client-go v2.45.0).
-		const expectedTools = 49
+		// 50 = 49 + gitlab_achievement meta-tool (Free, client-go v2.64.0).
+		// The 49 was 48 + gitlab_security_scan_profile (Ultimate, client-go v2.45.0).
+		const expectedTools = 50
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -569,6 +573,7 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 
 	expectedNames := map[string]bool{
 		"gitlab_access":                true,
+		"gitlab_achievement":           true,
 		"gitlab_admin":                 true,
 		"gitlab_attestation":           true,
 		"gitlab_audit_event":           true,

@@ -5,6 +5,7 @@ package tools
 func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
 		buildAccessActionSpecs,
+		buildAchievementActionSpecs,
 		buildAdminActionSpecs,
 		buildAttestationActionSpecs,
 		buildAuditEventActionSpecs,
