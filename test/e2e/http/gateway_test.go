@@ -37,7 +37,7 @@ const substitutionTarget = "QQcatalogueQQ"
 // serves went through it. A substitution wired to a surface the gateway does
 // not read would pass every unit test and change nothing the gateway sees.
 func TestGateway_DescriptionSubstitutionsRewriteTheServedCatalog(t *testing.T) {
-	gitlab := startFakeGitLabServingAProject(t)
+	gitlab := startFakeGitLabServingProjects(t)
 	srv := startServer(t, nil,
 		"--gitlab-url="+gitlab.URL,
 		"--description-substitutions="+substitutionSource+"="+substitutionTarget,

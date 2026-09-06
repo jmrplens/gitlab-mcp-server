@@ -1119,6 +1119,12 @@ func newSubscriptionShape(
 	if redactor := telemetryResources(); redactor != nil {
 		opts.ResourceAttributes = redactor.ResourceAttributes
 	}
+	// Every shape shares the process ceiling unless the caller brought a gate
+	// of its own, which only a test does: withSubscriptionOptions is how a test
+	// gets a ceiling small enough to reach without opening 512 subscriptions.
+	if opts.SharedWatchers == nil {
+		opts.SharedWatchers = processWatchers
+	}
 	index := &atomic.Pointer[resources.HandlerIndex]{}
 	// Seeded with the unnarrowed index so the machinery behaves exactly as it
 	// did before registration exists to narrow it. Registration replaces it
@@ -1578,6 +1584,39 @@ type listenLimits struct {
 // so a per-server counter alone would be per-token and multiply by however
 // many tokens the caller holds.
 var processListenStreams = &listenCounter{}
+
+// maxWatchersPerProcess bounds concurrent resource watchers across every
+// credential this process serves, as maxListenStreamsPerProcess bounds streams.
+//
+// It is the same number for a reason that is worth one sentence rather than a
+// subtraction: a pool entry counts as busy when it holds a listen stream or a
+// watcher, both of which are now bounded process-wide, so at rest the number of
+// busy entries cannot exceed the sum, and --max-http-clients above 1024 makes
+// the pool's busy eviction fallback unreachable on both transports. Two
+// different numbers would make that rule two sentences and an arithmetic step.
+//
+// It is generous next to any real client: 512 watchers is more than fifty
+// credentials at the per-credential cap of ten, or 512 credentials watching one
+// resource each, where a real client watches a handful. And it is affordable,
+// because a watcher is a goroutine, a timer, a 32 byte digest and a subscriber
+// set, plus one request per interval: 512 of them at the five second floor is
+// about 102 outbound requests a second from this process, and about 34 at the
+// fifteen second base. Nothing changes per credential, where
+// [subscriptions.Options.MaxWatchers] still holds one GitLab user to ten
+// watchers and so to two requests a second at the floor, well inside the 120 a
+// minute an authenticated user gets from a throttled self-managed instance.
+//
+// Like the stream ceiling it is deliberately not configurable, and for the same
+// reason: the per-credential number multiplies by however many credentials a
+// caller holds, so only this one bounds the process, and an operator who can
+// raise it can undo the bound. The lever an operator does have is
+// --max-http-clients.
+const maxWatchersPerProcess = 512
+
+// processWatchers is the watcher ceiling every subscription shape shares. It is
+// a value the shape injects rather than state internal/subscriptions holds,
+// because that package knows nothing about the process it runs in.
+var processWatchers = subscriptions.NewWatcherGate(maxWatchersPerProcess)
 
 // listenLimitsFromEnv builds the ceilings for one server, reading the
 // per-server override and sharing the process-wide counter.

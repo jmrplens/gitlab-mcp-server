@@ -10500,6 +10500,7 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 	}
 	for _, reason := range want {
 		t.Run(reason, func(t *testing.T) {
+			t.Parallel()
 			if !strings.Contains(string(encoded), `"`+reason+`"`) {
 				t.Errorf("the serialized card does not name %q:\n%s", reason, encoded)
 			}

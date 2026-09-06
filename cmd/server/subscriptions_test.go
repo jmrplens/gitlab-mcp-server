@@ -2401,6 +2401,97 @@ func TestListenLimit_OtherMethodsAreNotCounted(t *testing.T) {
 	}
 }
 
+// TestNewSubscriptionShape_TakesTheProcessWatcherCeiling verifies production
+// gets the shared ceiling and a test can still bring its own.
+//
+// There is one place a manager is built, and it takes its gate from the shape,
+// so this is the whole of the wiring: a shape without the gate would leave
+// every watcher in the process unbounded except per credential, which is the
+// hole on --stateless=false that issue 561 asked to close.
+func TestNewSubscriptionShape_TakesTheProcessWatcherCeiling(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	client := subscriptionGitLabClient(t, gitlab.URL)
+	cfg := subscriptionCfg(config.CapabilitySurfaceFull)
+
+	t.Run("nothing injected takes the process ceiling", func(t *testing.T) {
+		shape := newSubscriptionShape(client, cfg, subscriptions.Options{})
+		if shape.opts.SharedWatchers != processWatchers {
+			t.Error("the shape did not take the process watcher ceiling, so nothing bounds watchers across credentials")
+		}
+	})
+
+	t.Run("an injected gate is kept", func(t *testing.T) {
+		opts := fastOptions()
+		opts.SharedWatchers = subscriptions.NewWatcherGate(1)
+		shape := newSubscriptionShape(client, cfg, opts)
+		if shape.opts.SharedWatchers != opts.SharedWatchers {
+			t.Error("the caller's gate was replaced, so a test cannot reach the ceiling without opening 512 subscriptions")
+		}
+	})
+}
+
+// TestWatcherCeiling_IsTheSameNumberAsTheStreamCeiling pins the arithmetic the
+// operator's lever is documented with.
+//
+// A pooled entry counts as busy when it holds a listen stream or a watcher, so
+// the number of busy entries at rest cannot exceed the sum of the two
+// process-wide ceilings, and --max-http-clients above that sum makes the pool's
+// busy eviction fallback unreachable. The guides state that sum as one number.
+// Raising one ceiling alone would leave them stating the wrong one.
+func TestWatcherCeiling_IsTheSameNumberAsTheStreamCeiling(t *testing.T) {
+	if maxWatchersPerProcess != maxListenStreamsPerProcess {
+		t.Errorf("watcher ceiling %d, stream ceiling %d: the documented lever is their sum, so both docs move with either",
+			maxWatchersPerProcess, maxListenStreamsPerProcess)
+	}
+}
+
+// TestSubscriptionShape_TheWatcherCeilingBindsAcrossCredentials verifies the
+// gate reaches every credential's manager, and that reaching it refuses the
+// newcomer instead of taking somebody else's watch.
+//
+// One credential per manager is the shape ADR-0020 builds, and a credential is
+// one API call to mint, so this is the ceiling that actually bounds the
+// process. The refusal is checked as the client would see it, since a sentinel
+// the wire renders as code 0 would reach a client as "unknown error".
+func TestSubscriptionShape_TheWatcherCeilingBindsAcrossCredentials(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	client := subscriptionGitLabClient(t, gitlab.URL)
+	opts := fastOptions()
+	opts.SharedWatchers = subscriptions.NewWatcherGate(1)
+	shape := newSubscriptionShape(client, subscriptionCfg(config.CapabilitySurfaceFull), opts)
+
+	holder := shape.newRuntime("owner-holding", client)
+	t.Cleanup(holder.manager.Close)
+	newcomer := shape.newRuntime("owner-arriving", client)
+	t.Cleanup(newcomer.manager.Close)
+
+	if err := holder.manager.Subscribe(t.Context(), testSession, "gitlab://project/42/pipeline/99"); err != nil {
+		t.Fatalf("the holding credential's subscribe: %v", err)
+	}
+
+	err := newcomer.manager.Subscribe(t.Context(), testSession, "gitlab://project/43/pipeline/99")
+	if !errors.Is(err, subscriptions.ErrTooManySubscriptions) {
+		t.Fatalf("a second credential's subscribe past the shared ceiling = %v, want ErrTooManySubscriptions", err)
+	}
+	var wireErr *jsonrpc.Error
+	if !errors.As(wireSubscribeError(err), &wireErr) {
+		t.Fatalf("the refusal reaches the wire as %T, want a *jsonrpc.Error carrying a deliberate code", err)
+	}
+	if wireErr.Code != codeServerBusy {
+		t.Errorf("code = %d, want %d: the request is well formed and a later retry can succeed",
+			wireErr.Code, codeServerBusy)
+	}
+	if !strings.Contains(wireErr.Message, "server-wide") {
+		t.Errorf("message = %q, want it to name which ceiling was reached", wireErr.Message)
+	}
+	if got := holder.manager.Len(); got != 1 {
+		t.Errorf("the holding credential keeps %d watchers, want 1: no watch of another credential may be taken", got)
+	}
+	if got := newcomer.manager.Len(); got != 0 {
+		t.Errorf("the refused credential holds %d watchers, want 0", got)
+	}
+}
+
 // TestListenLimitsFromEnv verifies that the ceilings are configurable and that
 // anything that is not a positive number leaves the defaults in place.
 func TestListenLimitsFromEnv(t *testing.T) {

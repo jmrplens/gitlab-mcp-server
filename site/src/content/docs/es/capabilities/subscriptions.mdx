@@ -47,7 +47,9 @@ La cadencia de sondeo se adapta al recurso:
 | Sin campo de ciclo  | 15s        | una página wiki, un archivo, un label            |
 | Concesión degradada | 10min      | 30 minutos sin ninguna petición en la sesión     |
 
-Los vigilantes usan el token de GitLab del propio suscriptor, con un tope de **10 vigilantes por credencial** (una entrada del pool por token+URL en modo HTTP). El peor caso — diez vigilantes al suelo de 5s — son 120 peticiones/minuto; diez degradados cuestan una. Un 429 de GitLab pausa todos los vigilantes con retroceso exponencial (30s doblando hasta 5 minutos).
+Los vigilantes usan el token de GitLab del propio suscriptor, con un tope de **10 vigilantes por credencial** (una entrada del pool por token+URL en modo HTTP) y de **512 por proceso**. El peor caso — diez vigilantes al suelo de 5s — son 120 peticiones/minuto; diez degradados cuestan una. Un 429 de GitLab pausa todos los vigilantes con retroceso exponencial (30s doblando hasta 5 minutos).
+
+El tope por proceso existe porque acuñar una credencial es una llamada a la API, así que un número por credencial se multiplica por cuantas tenga quien llama. Rechaza en lugar de hacer sitio: detener el vigilante de una credencial para arrancar el de otra es un intercambio que este servidor no hace. Ninguno de los dos topes es configurable, y ambos rechazos dicen cuál se alcanzó.
 
 Nada se retira por estar «terminado»: GitLab no tiene estado terminal — un pipeline reintentado reutiliza su ID y vuelve a ejecutarse, un issue cerrado se reabre — así que un vigilante solo termina cuando el cliente se desuscribe, su sesión se desconecta, el recurso devuelve 401/403/404, se alcanza el tope de vida de 24 horas, es desalojado para hacer sitio en el tope de vigilantes, o el pool suelta la entrada de la credencial por presión de `--max-http-clients`. Este último caso prefiere una entrada que no esté atendiendo una suscripción y se lleva una ocupada solo cuando todas las entradas del pool lo están; cuando ocurre, los vigilantes se detienen, las peticiones `subscriptions/listen` abiertas se completan y basta con reconectar, porque la credencial no tiene nada malo.
 
@@ -121,6 +123,7 @@ Un `resources/subscribe` heredado rechazado lleva un código JSON-RPC deliberado
 | URI deliberadamente no suscribible                                                         | `-32602` (parámetros inválidos)                                                       |
 | Recurso ilegible en la lectura de autorización (401/403/404)                               | `-32602` — el mismo código con el que el SDK responde un `resources/read` desconocido |
 | Límite de peticiones, cupo de watchers sin ningún watch desalojable, o servidor apagándose | `-32000` (servidor ocupado — transitorio, reintente más tarde)                        |
+| Vigilantes por proceso en 512                                                              | `-32000`, con `server-wide` en el mensaje                                             |
 | Fallo transitorio de GitLab en la primera lectura                                          | `-32603` (error interno)                                                              |
 | `resources/subscribe` en HTTP sin estado                                                   | `-32600` — use `subscriptions/listen` en su lugar                                     |
 

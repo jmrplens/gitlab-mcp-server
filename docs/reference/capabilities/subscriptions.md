@@ -153,22 +153,37 @@ are in [HTTP Server Mode](../../guides/http-server-mode.md#4-pool-eviction).
 
 ## Limits
 
-| Limit                   | Value                      | Why                                                                                                 |
-| ----------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
-| Watchers per credential | 10                         | A watcher polls with the subscriber's own token, so this is the ceiling on one credential's polling |
-| Floor interval          | 5s                         | Ten watchers at 5s would be 120 requests a minute — an entire default budget                        |
-| Rate-limit pause        | 30s, doubling to 5 minutes | GitLab enforces limits per user, so one 429 pauses every watcher                                    |
+| Limit                   | Value                      | Why                                                                                                                                          |
+| ----------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Watchers per credential | 10                         | A watcher polls with the subscriber's own token, so this is the ceiling on one credential's polling                                          |
+| Watchers per process    | 512                        | A credential is one API call to mint, so a per-credential number multiplies by however many a caller holds; only this one bounds the process |
+| Floor interval          | 5s                         | Ten watchers at 5s would be 120 requests a minute — an entire default budget                                                                 |
+| Rate-limit pause        | 30s, doubling to 5 minutes | GitLab enforces limits per user, so one 429 pauses every watcher                                                                             |
 
 At the 15s base, ten watchers cost 40 requests a minute. Once demoted, the
 same ten cost one. A self-managed instance's default is 7,200 authenticated
 requests an hour (120 a minute), and that limit is disabled unless an
 administrator enables it.
 
-When the cap is reached, a new subscription evicts the **longest-demoted**
-watch rather than being refused — a subscriber who is actively waiting wins
-the slot over one whose own inactivity already devalued it, and the watch
-that has been slow the longest is the one to go. If every watch is still
-active, the new subscription is refused with an error.
+When the per-credential cap is reached, a new subscription evicts the
+**longest-demoted** watch rather than being refused — a subscriber who is
+actively waiting wins the slot over one whose own inactivity already devalued
+it, and the watch that has been slow the longest is the one to go. If every
+watch is still active, the new subscription is refused with an error.
+
+The process ceiling only ever refuses. Making room there would mean stopping
+some other credential's watch to start this one, and nothing about the arriving
+subscription makes it worth more than the one already running; within a
+credential the demoted-watch eviction above still applies, because that is a
+subscriber reclaiming a slot it already holds. Both refusals carry `-32000`: the
+process one says `server-wide` in as many words, and the per-credential one
+carries that credential's own count and limit, so a client's error says which
+ceiling it met and an operator reading it knows whether the number to look at is
+that caller's or the deployment's. Neither ceiling is configurable: the
+per-credential one multiplies by however many credentials a caller holds, and an
+operator who could raise the process one could undo the bound. The lever an
+operator does have is `--max-http-clients`, which decides how many credentials
+the pool serves at once.
 
 ## Error codes
 
@@ -181,6 +196,7 @@ error would marshal as:
 | URI is deliberately not subscribable                                       | `-32602` (invalid params)                                                   | No — pick a subscribable URI     |
 | Resource unreadable on the authorization read (401/403/404)                | `-32602` — the code the SDK itself answers an unknown `resources/read` with | Only if the resource appears     |
 | Rate limited, watcher cap with no evictable watch, or server shutting down | `-32000` (implementation-defined server busy)                               | Yes — the condition is transient |
+| Watchers per process at 512                                                | `-32000`, with `server-wide` in the message                                 | Yes, the condition is transient  |
 | Transient GitLab failure on the first read                                 | `-32603` (internal error)                                                   | Yes                              |
 | `resources/subscribe` on stateless HTTP                                    | `-32600` (invalid request for this session state)                           | No — use `subscriptions/listen`  |
 
