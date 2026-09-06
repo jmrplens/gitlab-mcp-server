@@ -1,0 +1,116 @@
+# Race detector workflow for gitlab-mcp-server
+#
+# Nothing in this repository ran `go test -race` until this workflow existed:
+# every test job in ci.yml runs the suite without it, and `make test-race`
+# passed no `-timeout`, so it died on the ten-minute default partway through
+# internal/tools (issue 536).
+#
+# Where it runs, and where it deliberately does not. Not on every push: the
+# unit suite takes minutes without the detector and the better part of an hour
+# with it, which is a cost a pull request should not pay for a class of defect
+# that is rare and not introduced by most changes. Instead:
+#
+#   * at release, called by release.yml in parallel with the E2E gate, so a
+#     race cannot reach a tag;
+#   * once a week on main, beside the scheduled E2E run, so a race introduced
+#     this week surfaces this week rather than at the next tag.
+#
+# This is a workflow of its own rather than a job in ci.yml for the same reason
+# e2e.yml is: ci.yml converges on one job, "CI", which is the single check
+# branch protection requires, and a job added there becomes a gate on every
+# pull request. Nothing here reaches that graph, so the required check is
+# unchanged.
+#
+# Reusable, not copied. release.yml calls this file the way it calls e2e.yml,
+# so the commands a maintainer can run by hand from the dispatch menu are the
+# commands the release gate runs.
+
+name: Race Detector
+
+on:
+  schedule:
+    # Mondays, 06:23 UTC: the same day as the scheduled E2E run and after it,
+    # off the hour for the reason recorded in e2e.yml, since GitHub delays runs
+    # that pile up on round times.
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # The whole unit suite, tooling included, under the detector.
+  #
+  # `go test -timeout` bounds each package's test binary, not the run, so the
+  # number has to cover the worst single package rather than their sum. That is
+  # internal/tools, at about 976 s under the detector against 113 s without it
+  # on a developer machine (issue 536), so roughly 8.6x. Its tests run in
+  # sequence within the package, so what decides its runtime here is per-core
+  # speed rather than the runner's four cores, and 60m leaves better than
+  # double. It still ends a genuine deadlock with every goroutine stack
+  # printed, which a job-level kill does not.
+  #
+  # The job bound is what covers the whole set: go test compiles and runs up to
+  # GOMAXPROCS package binaries at once, so having half the cores roughly
+  # doubles the wall time even where no single package got slower.
+  unit:
+    name: "🏁 Race (unit suite)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: go mod download
+      - name: Unit suite under the race detector
+        run: go test -race -count=1 -timeout 60m ./cmd/... ./internal/...
+
+  # The two transport modules, which are here because they are the only tests
+  # that drive the shipped binary as a process. `go test -race` instruments the
+  # test binary alone, so on its own it would watch the harness and say nothing
+  # about the server, which is the half worth watching: the harness passes the
+  # detector on to the binary it builds through a build-tag seam
+  # (harness_race_test.go in each module), and sets GORACE=halt_on_error=1 so a
+  # detected race stops the server rather than being printed into a log nobody
+  # reads.
+  #
+  # A race build shares no cache with an ordinary one, so the first build is a
+  # cold build of the whole dependency tree. It is done here rather than inside
+  # the test's five-minute bound.
+  transport:
+    name: "🏁 Race (${{ matrix.name }} transport e2e)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      # Both modules report. Stopping at the first failure would hide a second,
+      # different one.
+      fail-fast: false
+      matrix:
+        include:
+          - name: HTTP
+            tag: httpe2e
+            dir: ./test/e2e/http/
+          - name: stdio
+            tag: stdioe2e
+            dir: ./test/e2e/stdio/
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: go mod download
+      - name: Warm the race build cache
+        run: go build -race -o /dev/null ./cmd/server
+      # 45m rather than the 900s these modules carry without the detector.
+      # Every test here starts a server, and an instrumented one takes several
+      # seconds to reach /health where an ordinary one takes under two, so the
+      # module's runtime is dominated by a per-test cost that the detector
+      # multiplies. The bound is here to end a hang with goroutine stacks, not
+      # to express how long the module should take.
+      - name: Transport module under the race detector
+        env:
+          TAG: ${{ matrix.tag }}
+          DIR: ${{ matrix.dir }}
+        run: go test -race -tags "$TAG" -count=1 -timeout 45m "$DIR"

@@ -229,7 +229,7 @@ Unit tests live alongside the code in each sub-package. They use `net/http/httpt
 
 ```bash
 make test            # Standard tests with coverage
-make test-race       # Tests with race detector
+make test-race       # Tests with race detector (RACE_TIMEOUT=60m per package; the suite takes the better part of an hour)
 make coverage-conditions PKG=./internal/foo   # gobco: boolean conditions never evaluated both ways (each is a missing case)
 make coverage-mutants PKG=./internal/foo      # gremlins: mutation testing; Lived 0 and Not covered 0 is the gate on a changed package
 go test ./internal/... -count=1      # Run all unit tests (199 packages)

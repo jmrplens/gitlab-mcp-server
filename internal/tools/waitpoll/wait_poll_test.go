@@ -173,10 +173,26 @@ func TestPoll_TickerContinuesUntilTerminal(t *testing.T) {
 
 // TestPoll_TimeoutReturnsLastItem verifies timeout returns the last observed
 // non-terminal item and TimedOut=true.
+//
+// This is where the property jobs.TestJobWait_Timeout cannot pin deterministically
+// is pinned instead: the poll callback here ignores its context and returns at
+// once, so a status is always read before the deadline, with no I/O to lose the
+// race to.
+//
+// The durations are keyed on the seconds value rather than left to
+// fastDuration, which returns a millisecond for both and so left the ticker and
+// the deadline racing: whenever the ticker won, a second poll ran and Value was
+// 2. Making the interval an hour is what the assertion on Value = 1 means.
 func TestPoll_TimeoutReturnsLastItem(t *testing.T) {
 	opts, _ := pollOptions("running")
 	opts.IntervalSeconds = 60
 	opts.TimeoutSeconds = 1
+	opts.PollDuration = func(seconds int) time.Duration {
+		if seconds == opts.TimeoutSeconds {
+			return time.Millisecond
+		}
+		return time.Hour
+	}
 
 	result, err := Poll(context.Background(), opts)
 	if err != nil {

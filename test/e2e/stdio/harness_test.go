@@ -85,9 +85,12 @@ func serverBinary(t *testing.T) string {
 			// go build -o writes exactly the name it is given.
 			out += ".exe"
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		// The build arguments and the bound come from the race seam, so a
+		// `go test -race` run builds an instrumented server rather than
+		// driving an uninstrumented one (harness_race_test.go).
+		ctx, cancel := context.WithTimeout(context.Background(), serverBuildTimeout)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/server")
+		cmd := exec.CommandContext(ctx, "go", serverBuildArgs(out)...) //#nosec G204 -- every argument is a constant chosen by a build tag, plus a path this function got from os.MkdirTemp; nothing here comes from outside the test.
 		cmd.Dir = repoRoot()
 		if output, runErr := cmd.CombinedOutput(); runErr != nil {
 			errBuild = fmt.Errorf("building cmd/server: %w\n%s", runErr, output)
@@ -133,6 +136,10 @@ type session struct {
 	exited chan struct{}
 	// state is what the reaper found, for the callers that report an exit code.
 	state atomic.Pointer[os.ProcessState]
+	// expectedExit is set by [session.waitExit], which every helper that asks
+	// the server to stop goes through. Without it the cleanup cannot tell an
+	// exit a test was about from one the server took by itself.
+	expectedExit atomic.Bool
 
 	mu     sync.Mutex
 	stderr strings.Builder
@@ -192,6 +199,9 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 	cmd.Dir = dir
 
 	environ := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
+	// Before the caller's own entries, so a test that needs to say something
+	// else about GORACE still can.
+	environ = append(environ, raceEnviron()...)
 	for k, v := range env {
 		environ = append(environ, k+"="+v)
 	}
@@ -258,6 +268,20 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 	}()
 
 	t.Cleanup(func() {
+		// Asked before stdin is closed, because closing it is how this harness
+		// asks the server to stop and an exit after that says nothing. A
+		// process already gone at this point went on its own, which under
+		// GORACE=halt_on_error=1 is what a race report looks like: the report
+		// lands in the captured stderr of a test that made its last assertion
+		// and passed, and nothing else would ever mention it.
+		if !s.expectedExit.Load() {
+			select {
+			case <-s.exited:
+				t.Errorf("the server exited on its own during the test (%s), which no test here asks it to do\nstderr: %s",
+					s.exitStatus(), s.stderrText())
+			default:
+			}
+		}
 		_ = stdin.Close()
 		cancel()
 		// Not Cmd.Wait: the reaper above already collected the child, so this
@@ -385,6 +409,15 @@ func (s *session) alive() bool {
 	default:
 		return true
 	}
+}
+
+// exitStatus describes how the process ended, in a form that makes sense
+// whether or not the reaper had recorded it by the time it was asked.
+func (s *session) exitStatus() string {
+	if state := s.state.Load(); state != nil {
+		return state.String()
+	}
+	return "exit status not recorded"
 }
 
 // stderrText returns everything the server has logged so far.
@@ -600,6 +633,11 @@ func (s *session) closeStdinAndWait(t *testing.T, within time.Duration) (code in
 // its own when the process does.
 func (s *session) waitExit(t *testing.T, within time.Duration) (code int, exited bool) {
 	t.Helper()
+
+	// Every helper that asks the server to stop arrives here, so this is the
+	// one place that has to record that the exit about to happen is the test's
+	// own doing and not a finding.
+	s.expectedExit.Store(true)
 
 	done := make(chan *os.ProcessState, 1)
 	go func() {

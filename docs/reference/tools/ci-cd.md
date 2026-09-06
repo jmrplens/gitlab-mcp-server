@@ -260,7 +260,9 @@ Delete all artifacts across an entire project. This is a destructive operation.
 
 ### `gitlab_job_wait`
 
-Wait for a CI/CD job to reach a terminal state (success, failed, canceled, skipped, manual). Polls the job status at a configurable interval and sends progress notifications. Returns the final job details when done or when the timeout is reached.
+Wait for a CI/CD job to reach a terminal state (success, failed, canceled, skipped, manual). Polls the job status at a configurable interval and sends progress notifications. Returns the final job details when done, and on a timeout the last details it managed to read, with `timed_out` set.
+
+`timeout_seconds` bounds the whole call, the poll in flight included, so a timeout shorter than one round trip to the instance returns `timed_out` with an empty `final_status`: the wait ended before any status had been read, and reporting one would be reporting a status nobody looked at. Give the wait at least as long as a `gitlab_job_get` takes against your instance.
 
 | Parameter          | Required | Default | Description                                |
 | ------------------ | -------- | ------- | ------------------------------------------ |

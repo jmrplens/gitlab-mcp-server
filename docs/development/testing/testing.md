@@ -24,7 +24,7 @@
 | cmd test functions                                    |  2,507 |
 | Test files (internal/)                                |    508 |
 | Test files (cmd/)                                     |    151 |
-| Test files (test/e2e/)                                |    233 |
+| Test files (test/e2e/)                                |    237 |
 | Tool sub-packages tested                              |    176 |
 | Core packages tested                                  |     21 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.2% |
@@ -48,9 +48,9 @@
 | Core packages           |          2,327 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (176) |          8,467 |        355 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            601 |        233 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| E2E integration         |            601 |        237 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,507 |        151 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,234** |    **892** |                                                                                                 |
+| **Total**               |     **14,234** |    **896** |                                                                                                 |
 
 ### Core Packages
 
