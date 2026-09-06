@@ -2155,7 +2155,7 @@ func WrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Conte
 		if err != nil {
 			return nil, err
 		}
-		ctx, cancel := withActionDeadline(ctx)
+		ctx, cancel := WithActionDeadline(ctx)
 		defer cancel()
 		return fn(ctx, client.For(ctx), input)
 	}
@@ -2173,7 +2173,7 @@ func WrapVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Cont
 		if err != nil {
 			return nil, err
 		}
-		ctx, cancel := withActionDeadline(ctx)
+		ctx, cancel := WithActionDeadline(ctx)
 		defer cancel()
 		return nil, fn(ctx, client.For(ctx), input)
 	}
@@ -2188,7 +2188,7 @@ func WrapActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx co
 		if err != nil {
 			return nil, err
 		}
-		ctx, cancel := withActionDeadline(ctx)
+		ctx, cancel := WithActionDeadline(ctx)
 		defer cancel()
 		return fn(ctx, RequestFromContext(ctx), client.For(ctx), input)
 	}
@@ -2207,7 +2207,7 @@ func WrapVoidActionWithRequest[T any](client *gitlabclient.Client, fn func(ctx c
 		if err != nil {
 			return nil, err
 		}
-		ctx, cancel := withActionDeadline(ctx)
+		ctx, cancel := WithActionDeadline(ctx)
 		defer cancel()
 		return nil, fn(ctx, RequestFromContext(ctx), client.For(ctx), input)
 	}

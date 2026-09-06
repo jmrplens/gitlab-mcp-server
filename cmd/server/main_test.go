@@ -2704,9 +2704,9 @@ func TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported(t *t
 }
 
 // TestDoToolSearch_ACatalogThatCannotBeBuilt_IsReported covers the search
-// refusing over a catalog it cannot assemble, on the two surfaces that build
-// one: the meta registration failing, and the dynamic catalog failing at
-// either of its two steps.
+// refusing over a catalog it cannot assemble, at either of the two steps that
+// build one. The surface no longer changes which catalog is built, so both
+// cases run on the default one.
 func TestDoToolSearch_ACatalogThatCannotBeBuilt_IsReported(t *testing.T) {
 	forced := errors.New("forced catalog failure")
 	cases := []struct {
@@ -2716,18 +2716,7 @@ func TestDoToolSearch_ACatalogThatCannotBeBuilt_IsReported(t *testing.T) {
 		want    string
 	}{
 		{
-			name:    "meta registration fails",
-			surface: config.ToolSurfaceMeta,
-			arrange: func(t *testing.T) {
-				t.Helper()
-				original := registerAllMeta
-				t.Cleanup(func() { registerAllMeta = original })
-				registerAllMeta = func(*mcp.Server, *gitlabclient.Client, edition.Tier) error { return forced }
-			},
-			want: "forced catalog failure",
-		},
-		{
-			name:    "the dynamic catalog fails to build",
+			name:    "the action catalog fails to build",
 			surface: config.ToolSurfaceDynamic,
 			arrange: func(t *testing.T) {
 				t.Helper()
@@ -2741,7 +2730,7 @@ func TestDoToolSearch_ACatalogThatCannotBeBuilt_IsReported(t *testing.T) {
 		},
 		{
 			name:    "the standalone actions fail to join it",
-			surface: config.ToolSurfaceDynamic,
+			surface: config.ToolSurfaceMeta,
 			arrange: func(t *testing.T) {
 				t.Helper()
 				original := addStandaloneCatalog
@@ -2800,22 +2789,6 @@ func inspectionFailures(t *testing.T, forced error) []struct {
 				return nil, forced
 			}
 		}},
-	}
-}
-
-// TestDoToolSearch_InMemoryFailures_AreWrapped covers the search's own
-// in-memory session failing at each step, which no input reaches and which
-// the search reports rather than printing an empty listing over.
-func TestDoToolSearch_InMemoryFailures_AreWrapped(t *testing.T) {
-	forced := errors.New("forced inspection failure")
-	for _, tc := range inspectionFailures(t, forced) {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.arrange(t)
-			err := doToolSearch("issue", config.ToolSurfaceMeta, edition.Free)
-			if !errors.Is(err, forced) || !strings.Contains(err.Error(), "error") {
-				t.Errorf("doToolSearch() = %v, want the %s failure wrapped", err, tc.name)
-			}
-		})
 	}
 }
 
@@ -3152,7 +3125,7 @@ func TestDoToolSearch_NoMatches_SaysSo(t *testing.T) {
 		t.Fatalf("doToolSearch: %v", err)
 	}
 
-	if out := stdout(); !strings.Contains(out, `No tools found matching "zzzz-nothing-is-called-this"`) {
+	if out := stdout(); !strings.Contains(out, `No actions found matching "zzzz-nothing-is-called-this"`) {
 		t.Errorf("stdout = %q, want the no-match sentence naming the query", out)
 	}
 }
@@ -3873,29 +3846,283 @@ func TestResolveHTTPTier(t *testing.T) {
 	}
 }
 
-// TestDoToolSearch_HonorsToolSurface verifies tool search can inspect each
-// selectable tool surface instead of always searching the legacy meta setting.
-func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
+// TestDoToolSearch_AnswersTheSameOnEverySurface pins the fix for a search
+// that answered nothing on the surface most deployments run.
+//
+// It used to list a server's REGISTERED tools, and the default dynamic surface
+// registers two, so "issue list" found nothing at all unless the operator had
+// configured the individual surface. The catalog is the same whatever the
+// surface, so the actions found are now the same too, and the surface decides
+// only how each row says to call one.
+func TestDoToolSearch_AnswersTheSameOnEverySurface(t *testing.T) {
 	tests := []struct {
 		name        string
 		toolSurface string
-		query       string
+		wantCall    string
 	}{
-		{name: "meta", toolSurface: config.ToolSurfaceMeta, query: "project"},
-		{name: "individual", toolSurface: config.ToolSurfaceIndividual, query: "project"},
-		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, query: "find"},
+		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, wantCall: "gitlab_execute_action"},
+		{name: "meta", toolSurface: config.ToolSurfaceMeta, wantCall: "gitlab_issue action=list"},
+		{name: "individual", toolSurface: config.ToolSurfaceIndividual, wantCall: "gitlab_issue_list"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout := captureStdout(t)
 
-			if searchErr := doToolSearch(tt.query, tt.toolSurface, edition.Free); searchErr != nil {
+			if searchErr := doToolSearch("issue list", tt.toolSurface, edition.Free); searchErr != nil {
 				t.Fatalf("doToolSearch() error: %v", searchErr)
 			}
-			if out := stdout(); !strings.Contains(out, "Found") {
-				t.Fatalf("tool search output missing matches: %s", out)
+			out := stdout()
+			if !strings.Contains(out, "issue.list") {
+				t.Errorf("stdout = %q, want the canonical action ID a caller passes to gitlab_execute_action", out)
+			}
+			if !strings.Contains(out, tt.wantCall) {
+				t.Errorf("stdout = %q, want it to name %q, which is how this surface calls that action", out, tt.wantCall)
 			}
 		})
+	}
+}
+
+// TestToolSearchSettings_FlagsBeatTheEnvironmentAndTheEnvironmentIsRead pins
+// the precedence of the two settings a search runs under.
+//
+// The dispatch used to read the HTTP flags alone, so a stdio deployment that
+// had set GITLAB_MCP_TOOL_SURFACE or GITLAB_MCP_TIER searched the default
+// surface at the Free tier whatever it was configured to serve, and an
+// Ultimate-only action the operator could see in their own client was not
+// found.
+func TestToolSearchSettings_FlagsBeatTheEnvironmentAndTheEnvironmentIsRead(t *testing.T) {
+	tests := []struct {
+		name        string
+		env         map[string]string
+		hcfg        httpConfig
+		wantSurface string
+		wantTier    edition.Tier
+	}{
+		{
+			name:        "nothing set at all",
+			wantSurface: config.DefaultToolSurface,
+			wantTier:    edition.Free,
+		},
+		{
+			name:        "the environment alone",
+			env:         map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual", "GITLAB_MCP_TIER": "ultimate"},
+			wantSurface: config.ToolSurfaceIndividual,
+			wantTier:    edition.Ultimate,
+		},
+		{
+			name:        "the legacy spellings of both",
+			env:         map[string]string{"GITLAB_MCP_META_TOOLS": "true", "GITLAB_ENTERPRISE": "true"},
+			wantSurface: config.ToolSurfaceMeta,
+			wantTier:    edition.Ultimate,
+		},
+		{
+			name:        "a flag over the environment",
+			env:         map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual", "GITLAB_MCP_TIER": "ultimate"},
+			hcfg:        httpConfig{toolSurface: config.ToolSurfaceMeta, tier: "premium", tierSet: true},
+			wantSurface: config.ToolSurfaceMeta,
+			wantTier:    edition.Premium,
+		},
+		{
+			name:        "the legacy flag over the environment",
+			env:         map[string]string{"GITLAB_MCP_TOOL_SURFACE": "meta"},
+			hcfg:        httpConfig{metaTools: false, metaToolsSet: true},
+			wantSurface: config.ToolSurfaceIndividual,
+			wantTier:    edition.Free,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearToolSearchEnv(t)
+			for name, value := range tt.env {
+				t.Setenv(name, value)
+			}
+
+			hcfg := tt.hcfg
+			surface, tier, err := toolSearchSettings(&hcfg)
+			if err != nil {
+				t.Fatalf("toolSearchSettings() error = %v", err)
+			}
+			if surface != tt.wantSurface {
+				t.Errorf("surface = %q, want %q", surface, tt.wantSurface)
+			}
+			if tier != tt.wantTier {
+				t.Errorf("tier = %v, want %v", tier, tt.wantTier)
+			}
+		})
+	}
+}
+
+// TestToolSearchSettings_RefusesAValueItCannotParse pins that a mistyped
+// surface or tier is reported rather than silently replaced by the default,
+// whichever layer it came from.
+func TestToolSearchSettings_RefusesAValueItCannotParse(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		hcfg httpConfig
+		want string
+	}{
+		{name: "an unknown surface in the environment", env: map[string]string{"GITLAB_MCP_TOOL_SURFACE": "sideways"}, want: "TOOL_SURFACE"},
+		{name: "an unknown surface on the flag", hcfg: httpConfig{toolSurface: "sideways"}, want: "TOOL_SURFACE"},
+		{name: "an unknown tier in the environment", env: map[string]string{"GITLAB_MCP_TIER": "platinum"}, want: "TIER"},
+		{name: "an unknown tier on the flag", hcfg: httpConfig{tier: "platinum", tierSet: true}, want: "tier"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearToolSearchEnv(t)
+			for name, value := range tt.env {
+				t.Setenv(name, value)
+			}
+
+			hcfg := tt.hcfg
+			_, _, err := toolSearchSettings(&hcfg)
+			if err == nil {
+				t.Fatal("toolSearchSettings() = nil error, want the value refused")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %v, want it to name %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// clearToolSearchEnv removes every variable the search resolves its surface
+// and tier from, so a developer's own shell cannot decide what a case
+// observes.
+func clearToolSearchEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{
+		"GITLAB_MCP_TOOL_SURFACE", "TOOL_SURFACE",
+		"GITLAB_MCP_META_TOOLS", "META_TOOLS",
+		"GITLAB_MCP_TIER", "TIER", "GITLAB_ENTERPRISE",
+	} {
+		t.Setenv(name, "")
+	}
+}
+
+// TestToolSearchCallForm_NamesWhatEachSurfaceRegisters covers the one column
+// that differs per surface, including the action no surface names a tool for.
+func TestToolSearchCallForm_NamesWhatEachSurfaceRegisters(t *testing.T) {
+	action := actioncatalog.Action{
+		ID:             "issue.list",
+		ToolName:       "gitlab_issue",
+		Domain:         "issue",
+		Name:           "list",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list"},
+	}
+	unprojected := actioncatalog.Action{ID: "issue.hidden", ToolName: "gitlab_issue", Domain: "issue", Name: "hidden"}
+
+	tests := []struct {
+		name    string
+		surface string
+		action  actioncatalog.Action
+		want    string
+	}{
+		{name: "dynamic names the individual tool as a cross-reference", surface: config.ToolSurfaceDynamic, action: action, want: "gitlab_issue_list"},
+		{name: "individual names the tool it registers", surface: config.ToolSurfaceIndividual, action: action, want: "gitlab_issue_list"},
+		{name: "meta names the group tool and the action argument", surface: config.ToolSurfaceMeta, action: action, want: "gitlab_issue action=list"},
+		{name: "an action with no individual tool", surface: config.ToolSurfaceIndividual, action: unprojected, want: toolSearchNoTool},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := toolSearchCallForm(tt.surface, tt.action); got != tt.want {
+				t.Errorf("toolSearchCallForm(%q) = %q, want %q", tt.surface, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo covers what the
+// search reads: a person types the canonical ID, the tool name they saw in a
+// client, an alias, a tag, or words from the description, and each has to
+// find the action.
+func TestMatchCatalogActions_MatchesEveryNameAnActionAnswersTo(t *testing.T) {
+	actions := []actioncatalog.Action{
+		{
+			ID:             "issue.list",
+			ToolName:       "gitlab_issue",
+			Domain:         "issue",
+			Name:           "list",
+			Aliases:        []string{"issues.search"},
+			Tags:           []string{"triage"},
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list", Description: "List issues in a project."},
+		},
+		{
+			ID:             "project.get",
+			ToolName:       "gitlab_project",
+			Domain:         "project",
+			Name:           "get",
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_project_get", Description: "Get one project."},
+		},
+	}
+
+	tests := []struct {
+		name  string
+		terms []string
+		want  []string
+	}{
+		{name: "the canonical ID", terms: []string{"issue.list"}, want: []string{"issue.list"}},
+		{name: "the individual tool name", terms: []string{"gitlab_issue_list"}, want: []string{"issue.list"}},
+		{name: "the meta group tool", terms: []string{"gitlab_project"}, want: []string{"project.get"}},
+		{name: "an alias", terms: []string{"issues.search"}, want: []string{"issue.list"}},
+		{name: "a tag", terms: []string{"triage"}, want: []string{"issue.list"}},
+		{name: "words from the description", terms: []string{"list", "project"}, want: []string{"issue.list"}},
+		{name: "every term must match", terms: []string{"issue", "nothing-matches-this"}, want: nil},
+		{name: "a term matching both", terms: []string{"gitlab_"}, want: []string{"issue.list", "project.get"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matches := matchCatalogActions(actions, tt.terms, config.ToolSurfaceDynamic)
+			got := make([]string, 0, len(matches))
+			for _, match := range matches {
+				got = append(got, match.action)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("matchCatalogActions(%v) = %v, want %v", tt.terms, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestActionSearchDescription_FallsBackToUsage covers an action with no
+// individual tool description, which the meta-only ones have.
+func TestActionSearchDescription_FallsBackToUsage(t *testing.T) {
+	action := actioncatalog.Action{ID: "issue.hidden", Usage: "  the usage line  "}
+	if got := actionSearchDescription(action); got != "the usage line" {
+		t.Errorf("actionSearchDescription() = %q, want the trimmed usage line", got)
+	}
+}
+
+// TestTruncateDescription_KeepsTheTableOneLinePerAction pins the width the
+// table is printed at, including the boundary where truncation starts.
+func TestTruncateDescription_KeepsTheTableOneLinePerAction(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "short enough to print whole", input: "List issues.", want: "List issues."},
+		{name: "exactly the width", input: strings.Repeat("a", 80), want: strings.Repeat("a", 80)},
+		{name: "one over the width", input: strings.Repeat("a", 81), want: strings.Repeat("a", 77) + "..."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := truncateDescription(tt.input); got != tt.want {
+				t.Errorf("truncateDescription() = %q (%d chars), want %q", got, len([]rune(got)), tt.want)
+			}
+		})
+	}
+}
+
+// TestDoToolSearch_AnEmptyQueryDoesNothing covers the guard on a query of
+// only whitespace, which the flag can carry.
+func TestDoToolSearch_AnEmptyQueryDoesNothing(t *testing.T) {
+	stdout := captureStdout(t)
+	if err := doToolSearch("   ", config.ToolSurfaceDynamic, edition.Free); err != nil {
+		t.Fatalf("doToolSearch() error = %v", err)
+	}
+	if out := stdout(); out != "" {
+		t.Errorf("stdout = %q, want nothing printed for a query with no terms", out)
 	}
 }
 
@@ -4719,60 +4946,6 @@ func TestRunHTTP_InvalidGitLabURL(t *testing.T) {
 	}
 }
 
-// TestHostValidationMiddleware_BlockedHost verifies that the middleware
-// returns 403 when the Host header does not match any allowed value.
-func TestHostValidationMiddleware_BlockedHost(t *testing.T) {
-	allowed := map[string]bool{"localhost": true, "127.0.0.1": true}
-	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := hostValidationMiddleware(allowed, inner)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://evil.example.com/", nil)
-	req.Host = "evil.example.com"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 for blocked host, got %d", rr.Code)
-	}
-}
-
-// TestHostValidationMiddleware_ARequestNamingNoHostIsServed covers the health
-// check every polling balancer sends.
-//
-// The middleware exists against DNS rebinding, which needs a browser to
-// resolve a name the attacker controls to the loopback address; the browser
-// then puts that name in the Host header, and no browser omits it. A request
-// carrying none is therefore outside what this guards, and refusing it had a
-// cost: HAProxy's `option httpchk` sends no Host unless one is configured, so
-// a listener bound to a specific address answered every check with 403 and was
-// marked permanently DOWN by a balancer doing exactly what it was told.
-func TestHostValidationMiddleware_ARequestNamingNoHostIsServed(t *testing.T) {
-	t.Parallel()
-
-	served := false
-	handler := hostValidationMiddleware(
-		map[string]bool{"localhost": true, "127.0.0.1": true},
-		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			served = true
-			w.WriteHeader(http.StatusOK)
-		}),
-	)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1/health", nil)
-	req.Host = ""
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if !served {
-		t.Error("a request with no Host header was refused; a polling balancer's health check carries none")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-}
-
 // TestCorsAllowHeaders_FollowTheAuthMode pins what the preflight actually
 // permits, per mode.
 //
@@ -4859,7 +5032,7 @@ func TestSecurityHeaders_CoverRejectionsToo(t *testing.T) {
 	})
 	handler := securityHeadersMiddleware(
 		inboundLimits{maxDepth: maxInboundJSONDepth},
-		hostValidationMiddleware(map[string]bool{"localhost": true}, inner),
+		hostValidationMiddleware(newHostGuard("localhost:8080", "", trustedProxies{}), inner),
 	)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://evil.example.com/", http.NoBody)
@@ -4883,44 +5056,6 @@ func TestSecurityHeaders_CoverRejectionsToo(t *testing.T) {
 				t.Errorf("%s = %q, want %q", name, got, value)
 			}
 		})
-	}
-}
-
-// TestHostValidationMiddleware_AllowedHost verifies that the middleware
-// passes through when the Host header matches.
-func TestHostValidationMiddleware_AllowedHost(t *testing.T) {
-	allowed := map[string]bool{"localhost": true}
-	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := hostValidationMiddleware(allowed, inner)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost/", nil)
-	req.Host = "localhost"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 for allowed host, got %d", rr.Code)
-	}
-}
-
-// TestHostValidationMiddleware_HostWithPort verifies that the middleware
-// strips the port from the Host header before checking the allow list.
-func TestHostValidationMiddleware_HostWithPort(t *testing.T) {
-	allowed := map[string]bool{"localhost": true}
-	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := hostValidationMiddleware(allowed, inner)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:8080/", nil)
-	req.Host = "localhost:8080"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 for allowed host with port, got %d", rr.Code)
 	}
 }
 
@@ -5012,68 +5147,6 @@ func TestRemoveNonReadOnlyTools(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("after removal: %d tools, want 1", count)
-	}
-}
-
-// TestAllowedHosts_Localhost verifies that allowedHosts returns the expected
-// set for a localhost binding.
-func TestAllowedHosts_Localhost(t *testing.T) {
-	hosts := allowedHosts("127.0.0.1:8080")
-	if hosts == nil {
-		t.Fatal("expected non-nil hosts for localhost binding")
-	}
-	if !hosts["127.0.0.1"] {
-		t.Error("missing 127.0.0.1")
-	}
-	if !hosts["localhost"] {
-		t.Error("missing localhost")
-	}
-}
-
-// TestAllowedHosts_AllInterfaces verifies that allowedHosts returns nil
-// for 0.0.0.0 (bind to all interfaces), which skips host validation.
-func TestAllowedHosts_AllInterfaces(t *testing.T) {
-	hosts := allowedHosts("0.0.0.0:8080")
-	if hosts != nil {
-		t.Error("expected nil hosts for 0.0.0.0 (all interfaces)")
-	}
-}
-
-// TestAllowedHosts_EmptyHost verifies that allowedHosts returns nil
-// for an empty host, which means all interfaces.
-func TestAllowedHosts_EmptyHost(t *testing.T) {
-	hosts := allowedHosts(":8080")
-	if hosts != nil {
-		t.Error("expected nil hosts for empty host")
-	}
-}
-
-// TestAllowedHosts_UnixSocket_SkipsValidation pins that a listener on a
-// unix socket gets no Host allow-list, whatever form its path takes.
-//
-// The native form matters: on Windows it carries a drive letter, and
-// SplitHostPort read that letter as the host, so a socket server there
-// refused every request whose Host was not "C". The POSIX and relative
-// forms passed before by accident, having no colon to split on, and are
-// pinned so the decision no longer depends on that.
-func TestAllowedHosts_UnixSocket_SkipsValidation(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		addr string
-	}{
-		{name: "an absolute POSIX path", addr: "/run/gitlab-mcp/mcp.sock"},
-		{name: "a relative path", addr: "./mcp.sock"},
-		{name: "the platform's native form", addr: filepath.Join(t.TempDir(), "mcp.sock")},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if hosts := allowedHosts(tt.addr); hosts != nil {
-				t.Errorf("allowedHosts(%q) = %v, want nil: a socket client's Host header is arbitrary", tt.addr, hosts)
-			}
-		})
 	}
 }
 
@@ -5743,33 +5816,6 @@ func TestNewHTTPServer_HeaderCeiling_IsFarBelowTheStandardLibraryDefault(t *test
 	if srv.MaxHeaderBytes >= http.DefaultMaxHeaderBytes {
 		t.Errorf("MaxHeaderBytes = %d, which is not below the standard library's %d default",
 			srv.MaxHeaderBytes, http.DefaultMaxHeaderBytes)
-	}
-}
-
-// TestHostValidationMiddleware_LogsABoundedHost verifies that the refusal an
-// unauthenticated caller triggers cannot write an arbitrary amount to the log.
-//
-// The Host header is caller-supplied and was logged verbatim, so the refusal
-// meant to protect against DNS rebinding was also the cheapest way to fill an
-// operator's disk. The bounded prefix keeps the line diagnostic, since a
-// rebinding attempt is recognizable from its first bytes, and host_len keeps
-// the fact that it was truncated visible.
-func TestHostValidationMiddleware_LogsABoundedHost(t *testing.T) {
-	var logged bytes.Buffer
-	previous := slog.Default()
-	t.Cleanup(func() { slog.SetDefault(previous) })
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
-
-	handler := hostValidationMiddleware(map[string]bool{"localhost": true}, http.NotFoundHandler())
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost/mcp", http.NoBody)
-	req.Host = strings.Repeat("a", 32_000)
-	handler.ServeHTTP(httptest.NewRecorder(), req)
-
-	if logged.Len() > 4096 {
-		t.Errorf("a single refused request wrote %d bytes of log for a %d byte Host", logged.Len(), len(req.Host))
-	}
-	if !strings.Contains(logged.String(), `"host_len":32000`) {
-		t.Errorf("the log does not report the real Host length: %s", logged.String())
 	}
 }
 
@@ -7184,7 +7230,7 @@ func TestTransportRejections_AreJSONRPCErrorsNotPlainText(t *testing.T) {
 	}{
 		{
 			name:    "host validation",
-			handler: hostValidationMiddleware(map[string]bool{"localhost": true}, http.HandlerFunc(reached)),
+			handler: hostValidationMiddleware(newHostGuard("localhost:8080", "", trustedProxies{}), http.HandlerFunc(reached)),
 			request: func(ctx context.Context) *http.Request {
 				req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/mcp", strings.NewReader("{}"))
 				req.Host = "rebound.example"

@@ -413,19 +413,41 @@ startup and belongs on a single-user local deployment only. The full table is in
 
 ### What every proxy has to get right
 
-| Requirement                     | Why                                                                                                                                                                                           |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No response buffering           | Streamable HTTP answers with `text/event-stream`. A buffering proxy turns a live stream into one delivery at the end                                                                          |
-| Long read timeout               | A `subscriptions/listen` stream is silent between notifications. The server's SSE keep-alive fires every 25 seconds, under nginx's 60-second default, but a quiet stream still wants headroom |
-| HTTP/1.1 upstream               | HTTP/1.0 to the upstream has no chunked transfer, which is what an SSE body uses                                                                                                              |
-| Forward `Authorization`         | OAuth mode reads the bearer token from it; stripping it turns every request into a `401`                                                                                                      |
-| Forward `PRIVATE-TOKEN`         | Legacy mode's header                                                                                                                                                                          |
-| Forward `GITLAB-URL`            | Selects the instance when several are published                                                                                                                                               |
-| Real client address             | `--trusted-proxy-header` names the header the proxy sets and `--trusted-proxies` the addresses it connects from, so the authentication-failure limiter counts callers rather than the proxy   |
-| Route `/.well-known/` unchanged | In OAuth mode the RFC 9728 metadata lives at the **host root**, not under the path prefix                                                                                                     |
-| Add no CORS headers             | The server answers preflight itself. Two `Access-Control-Allow-Origin` headers is a CORS failure, not a merge                                                                                 |
+| Requirement                          | Why                                                                                                                                                                                           |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declare the host with `--public-url` | The proxy forwards the client's `Host`, and a host nobody declared is refused with `403` as a DNS-rebinding attempt. `--public-url` is what declares it                                       |
+| No response buffering                | Streamable HTTP answers with `text/event-stream`. A buffering proxy turns a live stream into one delivery at the end                                                                          |
+| Long read timeout                    | A `subscriptions/listen` stream is silent between notifications. The server's SSE keep-alive fires every 25 seconds, under nginx's 60-second default, but a quiet stream still wants headroom |
+| HTTP/1.1 upstream                    | HTTP/1.0 to the upstream has no chunked transfer, which is what an SSE body uses                                                                                                              |
+| Forward `Authorization`              | OAuth mode reads the bearer token from it; stripping it turns every request into a `401`                                                                                                      |
+| Forward `PRIVATE-TOKEN`              | Legacy mode's header                                                                                                                                                                          |
+| Forward `GITLAB-URL`                 | Selects the instance when several are published                                                                                                                                               |
+| Real client address                  | `--trusted-proxy-header` names the header the proxy sets and `--trusted-proxies` the addresses it connects from, so the authentication-failure limiter counts callers rather than the proxy   |
+| Route `/.well-known/` unchanged      | In OAuth mode the RFC 9728 metadata lives at the **host root**, not under the path prefix                                                                                                     |
+| Add no CORS headers                  | The server answers preflight itself. Two `Access-Control-Allow-Origin` headers is a CORS failure, not a merge                                                                                 |
 
-Three of those repay a longer look.
+Four of those repay a longer look.
+
+**`--public-url` is what makes the forwarded host acceptable.** Every proxy
+below preserves the client's `Host` and connects to the server over loopback,
+which is also the shape of a DNS-rebinding attack: a page resolves a name the
+attacker controls to the loopback address and the browser reaches the local
+server with that name in `Host`. The server refuses a host it was never told
+about, so a deployment reached as `mcp.example.com` starts with
+`--public-url=https://mcp.example.com` and the same request is served. Anything
+else is still refused with `403`, on `/health` as well as on `/mcp`.
+
+Two further ways a host becomes acceptable. A request from an address listed in
+`--trusted-proxies` may carry whatever host that hop forwards, since the
+operator has already vouched for it, and this one does stand in for
+`--public-url`: a deployment fronting several names can list the proxy instead
+of naming each host, and a request from an address nobody listed is still
+refused. `--public-url` remains required in OAuth mode, where it is the RFC 9728
+resource identifier, and remains what declares a host for a request that reaches
+the listener from anywhere else. The other way is a listener bound to `0.0.0.0`
+or `::` and reached on a routable address: it is not a local server, so the
+rebinding rule does not apply to it. A request that carries no `Host` at all is
+served in every shape, which is what a balancer health check sends.
 
 **The metadata path is at the host root.** `--public-url` is the RFC 9728
 resource identifier, and the metadata URL is derived by inserting the well-known

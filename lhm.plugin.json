@@ -72,7 +72,8 @@
             "type": "integer"
           },
           "query": {
-            "description": "Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable.",
+            "description": "Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable. At most 256 characters: a longer query is refused, not truncated.",
+            "maxLength": 256,
             "type": "string"
           }
         },

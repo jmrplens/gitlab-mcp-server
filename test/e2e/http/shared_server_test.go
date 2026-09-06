@@ -28,6 +28,14 @@ import (
 	"time"
 )
 
+// crossTenantQuiet is how long a stream that must receive nothing is watched
+// before the assertion that it received nothing is made.
+//
+// It is a quiet period rather than a deadline: every frame restarts it, so a
+// burst is waited out. Two seconds is far longer than a delivery on loopback
+// takes, and it is spent only by the two tests that assert an absence.
+const crossTenantQuiet = 2 * time.Second
+
 // listenBody is a subscriptions/listen asking for one resource, as a
 // 2026-07-28 client sends it.
 func listenBody(id int, uri string) string {
@@ -154,8 +162,18 @@ func (s *listenStream) awaitFrame(t *testing.T, want string, within time.Duratio
 	}
 }
 
-// drain returns every frame delivered so far without waiting for more.
-func (s *listenStream) drain() []string {
+// settle returns every frame this stream delivers until it has been quiet for
+// the given duration.
+//
+// Reading what is buffered and no more would be the wrong question. A shared
+// server hands one notification to its subscribers in turn, so the tenant that
+// is meant to have it can be served first, and a check made the moment that one
+// arrives runs before a leak to the other tenant would have been written. The
+// leak is then absent from the assertion rather than from the wire. Waiting for
+// quiet gives it a bounded chance to appear, and keeps whatever does.
+func (s *listenStream) settle(t *testing.T, quiet time.Duration) []string {
+	t.Helper()
+
 	var seen []string
 	for {
 		select {
@@ -164,7 +182,9 @@ func (s *listenStream) drain() []string {
 				return seen
 			}
 			seen = append(seen, frame)
-		default:
+		case err := <-s.failure:
+			t.Fatalf("reading the listen stream: %v", err)
+		case <-time.After(quiet):
 			return seen
 		}
 	}
@@ -451,11 +471,11 @@ func TestSharedServer_TwoCredentialsOnOneURIEachSeeOnlyTheirOwnWatcher(t *testin
 		t.Errorf("the update carries no watch state, which every notification this server sends does:\n%s", update)
 	}
 
-	// Drained once and added to what the acknowledgement wait already took. A
-	// second drain returns an empty slice, since the frames are read off a
-	// channel, so a check that drains again iterates nothing and passes
-	// whatever the idle tenant had actually received.
-	idleFrames = append(idleFrames, idle.drain()...)
+	// Collected once, after the busy tenant's update, and added to what the
+	// acknowledgement wait already took: the frames are read off a channel, so
+	// a second collection would iterate nothing and pass whatever the idle
+	// tenant had actually received.
+	idleFrames = append(idleFrames, idle.settle(t, crossTenantQuiet)...)
 
 	// Whatever the idle tenant received, none of it may be a resource update:
 	// its own resource never changed, so an update on this stream is somebody
@@ -528,7 +548,7 @@ func TestSharedServer_ARevokedCredentialReceivesNothing(t *testing.T) {
 		t.Fatalf("the tenant that kept access received no update, so nothing was delivered to filter; frames: %v", seen)
 	}
 
-	for _, frame := range revoked.drain() {
+	for _, frame := range revoked.settle(t, crossTenantQuiet) {
 		if strings.Contains(frame, "notifications/resources/updated") {
 			t.Errorf("the revoked tenant was told the resource changed:\n%s", frame)
 		}

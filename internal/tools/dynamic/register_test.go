@@ -9,9 +9,12 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -2612,6 +2615,350 @@ func TestAnnotateActionHeader_DegenerateSchemas_ReturnedUnchanged(t *testing.T) 
 	}
 }
 
+// longQuery returns a query of the given character length made of words that
+// match nothing, which is the shape whose cost the length bound exists to
+// hold down.
+func longQuery(t *testing.T, length int) string {
+	t.Helper()
+	query := strings.TrimSpace(strings.Repeat("zqxvfh ", length/7+2))
+	return query[:length]
+}
+
+// TestFind_AnOverLongQueryIsRefusedNotTruncated pins the bound on what a
+// single call may cost.
+//
+// A find scores the query's word count against the whole catalog three times
+// over, and nothing bounded the query: a request body may be 4 MiB, which is
+// hundreds of thousands of words. Truncating would be worse than refusing,
+// because the caller would be answered a question they did not ask and could
+// not tell.
+func TestFind_AnOverLongQueryIsRefusedNotTruncated(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	tests := []struct {
+		name    string
+		query   string
+		refused bool
+	}{
+		{name: "at the limit", query: longQuery(t, MaxSearchQueryLength), refused: false},
+		{name: "one character over", query: longQuery(t, MaxSearchQueryLength+1), refused: true},
+		{name: "far over", query: longQuery(t, MaxSearchQueryLength*40), refused: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Find(t.Context(), nil, FindInput{Query: tt.query, Limit: 5})
+			if err != nil {
+				t.Fatalf("Find() error = %v", err)
+			}
+			if result == nil {
+				t.Fatal("Find() result = nil")
+			}
+			if result.IsError != tt.refused {
+				t.Fatalf("Find() IsError = %v, want %v", result.IsError, tt.refused)
+			}
+			if !tt.refused {
+				return
+			}
+			text := textContent(result)
+			if !strings.Contains(text, "too long") || !strings.Contains(text, strconv.Itoa(MaxSearchQueryLength)) {
+				t.Errorf("refusal = %q, want it to say the query is too long and name the limit", text)
+			}
+			if output.Count != 0 || len(output.Results) != 0 {
+				t.Errorf("Find() output = %+v, want nothing searched", output)
+			}
+		})
+	}
+}
+
+// TestFind_TheBoundIsMeasuredOnTheQueryAsItArrived pins which string the bound
+// is applied to, on both entry points.
+//
+// The handler trims the query before searching, and the bound used to be
+// measured after that. The schema publishes the same number as maxLength,
+// which a validating client or gateway applies to the raw string, so a
+// 257-character query whose surrounding whitespace left 256 was refused before
+// it arrived by one deployment and answered by another. Whatever the two do,
+// they have to do the same thing.
+func TestFind_TheBoundIsMeasuredOnTheQueryAsItArrived(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	// One character over the bound, of which the last is a space: trimming
+	// would bring it back to the limit exactly.
+	padded := longQuery(t, MaxSearchQueryLength) + " "
+
+	t.Run("find", func(t *testing.T) {
+		result, output, err := registry.Find(t.Context(), nil, FindInput{Query: padded, Limit: 5})
+		if err != nil {
+			t.Fatalf("Find() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Find() result = %+v, want a refusal", result)
+		}
+		if text := textContent(result); !strings.Contains(text, "too long") {
+			t.Errorf("refusal = %q, want it to say the query is too long", text)
+		}
+		if output.Count != 0 {
+			t.Errorf("Find() output.Count = %d, want nothing searched", output.Count)
+		}
+	})
+
+	t.Run("search", func(t *testing.T) {
+		result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: padded})
+		if err != nil {
+			t.Fatalf("Search() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Search() result = %+v, want a refusal", result)
+		}
+		if output.Count != 0 {
+			t.Errorf("Search() output.Count = %d, want nothing searched", output.Count)
+		}
+	})
+}
+
+// TestSearch_AnOverLongQueryIsRefused pins the same bound on the other entry
+// point into the same scorer, so the cost cannot be reached around the find
+// tool.
+func TestSearch_AnOverLongQueryIsRefused(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: longQuery(t, MaxSearchQueryLength+1)})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Search() result = %+v, want a refusal", result)
+	}
+	if !strings.Contains(textContent(result), "too long") {
+		t.Errorf("refusal = %q, want it to say the query is too long", textContent(result))
+	}
+	if output.Count != 0 {
+		t.Errorf("Search() output.Count = %d, want 0", output.Count)
+	}
+}
+
+// TestFindInputSchema_PublishesTheQueryLengthBound pins that a client can see
+// the limit before it sends anything, rather than discovering it from a
+// refusal.
+func TestFindInputSchema_PublishesTheQueryLengthBound(t *testing.T) {
+	schema := findInputSchema()
+	if schema == nil {
+		t.Fatal("findInputSchema() = nil")
+	}
+	query, ok := schema.Properties[findQueryParam]
+	if !ok || query == nil {
+		t.Fatalf("schema has no %q property: %+v", findQueryParam, schema.Properties)
+	}
+	if query.MaxLength == nil {
+		t.Fatal("query.MaxLength = nil, want the published bound")
+	}
+	if *query.MaxLength != MaxSearchQueryLength {
+		t.Errorf("query.MaxLength = %d, want %d", *query.MaxLength, MaxSearchQueryLength)
+	}
+	if !strings.Contains(query.Description, strconv.Itoa(MaxSearchQueryLength)) {
+		t.Errorf("query description = %q, want it to name the limit as well", query.Description)
+	}
+}
+
+// TestAnnotateQueryLength_ASchemaWithoutTheQueryPropertyIsUnchanged covers the
+// degradation path: a shape change leaves the bound unpublished rather than
+// panicking, and the handler refuses over-long queries either way.
+func TestAnnotateQueryLength_ASchemaWithoutTheQueryPropertyIsUnchanged(t *testing.T) {
+	if got := annotateQueryLength(nil); got != nil {
+		t.Errorf("annotateQueryLength(nil) = %v, want nil", got)
+	}
+
+	empty := &jsonschema.Schema{Type: "object"}
+	if got := annotateQueryLength(empty); got != empty {
+		t.Errorf("annotateQueryLength(schema without query) = %v, want the same schema", got)
+	}
+
+	nilQuery := &jsonschema.Schema{
+		Type:       "object",
+		Properties: map[string]*jsonschema.Schema{findQueryParam: nil},
+	}
+	if got := annotateQueryLength(nilQuery); got != nilQuery {
+		t.Errorf("annotateQueryLength(schema with nil query) = %v, want the same schema", got)
+	}
+}
+
+// TestFind_ObservesCancellation pins that an abandoned call stops costing.
+//
+// The scoring passes are the whole cost of a find and they never looked at the
+// context, so a client that hung up was scored for anyway, and the action
+// deadline could not end one either. The error is returned rather than an
+// empty result: "no matches" is a different answer from "never finished".
+func TestFind_ObservesCancellation(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	result, output, err := registry.Find(ctx, nil, FindInput{Query: "project delete", Limit: 5})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Find(cancelled) error = %v, want context.Canceled", err)
+	}
+	if result != nil {
+		t.Errorf("Find(cancelled) result = %+v, want nil", result)
+	}
+	if output.Count != 0 {
+		t.Errorf("Find(cancelled) output.Count = %d, want 0", output.Count)
+	}
+}
+
+// TestSearch_ObservesCancellation pins the same on the second entry point.
+func TestSearch_ObservesCancellation(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if _, _, err := registry.Search(ctx, nil, SearchInput{Query: "project delete"}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Search(cancelled) error = %v, want context.Canceled", err)
+	}
+}
+
+// TestFind_RunsUnderTheActionDeadline pins that the deadline every catalog
+// action runs under reaches this one too.
+//
+// gitlab_find_action is registered directly rather than through one of the
+// WrapAction functions, because its work is the catalog rather than a GitLab
+// call, and that left the entry point of the default surface as the one
+// registered tool a caller could keep running for as long as they liked.
+func TestFind_RunsUnderTheActionDeadline(t *testing.T) {
+	previous := toolutil.ActionTimeout()
+	t.Cleanup(func() { toolutil.SetActionTimeout(previous) })
+	toolutil.SetActionTimeout(time.Nanosecond)
+
+	registry := NewRegistry(testRoutes(t))
+
+	// A deadline in the past is not the same as a context that reports one:
+	// both `Done` and `Err` on a timer context wait for the timer to fire, and
+	// on a platform whose timer resolution is coarser than a scan of this
+	// registry the search finishes first. Passing a context that has already
+	// expired asks the question the name asks, whether the search observes the
+	// deadline it is given, and answers it the same way on every platform.
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	_, _, err := registry.Find(expired, nil, FindInput{Query: "project delete", Limit: 5})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Find() error = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+// TestWithActionDeadline_BoundsTheSearchWhenOneIsConfigured covers the other
+// half, which the test above deliberately does not: that the search is given a
+// deadline at all when one is configured, and is left alone when none is.
+func TestWithActionDeadline_BoundsTheSearchWhenOneIsConfigured(t *testing.T) {
+	previous := toolutil.ActionTimeout()
+	t.Cleanup(func() { toolutil.SetActionTimeout(previous) })
+
+	cases := []struct {
+		name         string
+		timeout      time.Duration
+		wantDeadline bool
+	}{
+		{name: "configured", timeout: time.Hour, wantDeadline: true},
+		{name: "disabled", timeout: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			toolutil.SetActionTimeout(tc.timeout)
+			bounded, cancel := toolutil.WithActionDeadline(context.Background())
+			defer cancel()
+
+			if _, ok := bounded.Deadline(); ok != tc.wantDeadline {
+				t.Errorf("the search context carries a deadline: %v, want %v", ok, tc.wantDeadline)
+			}
+		})
+	}
+}
+
+// TestScoredMatches_StopsOnCancellation covers the loop the deadline has to
+// reach: the one that scores candidates, which is where a long query spends
+// its time.
+func TestScoredMatches_StopsOnCancellation(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if _, err := registry.scoredMatches(ctx, normalizeSearchTerms("project"), scoreEntryWithoutExplanation); !errors.Is(err, context.Canceled) {
+		t.Fatalf("scoredMatches(cancelled) error = %v, want context.Canceled", err)
+	}
+}
+
+// TestSegmentedSearchMatches_StopsOnCancellation covers the pass that
+// multiplies the catalog by the query's window count, which is what makes a
+// long query expensive.
+func TestSegmentedSearchMatches_StopsOnCancellation(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	terms := normalizeSearchTerms("merge request approve project delete pipeline retry")
+	if _, err := registry.segmentedSearchMatchesWithScorer(ctx, terms, defaultLimit, scoreEntryWithoutExplanation); !errors.Is(err, context.Canceled) {
+		t.Fatalf("segmentedSearchMatchesWithScorer(cancelled) error = %v, want context.Canceled", err)
+	}
+}
+
+// countdownContext is cancelled after a fixed number of checks, so a test can
+// place the cancellation between two of a search's passes.
+//
+// A real deadline cannot: whichever pass happens to be running when the clock
+// fires is the one that stops, and which pass that is depends on the machine.
+// A search runs a lexical pass, then a fuzzy pass when the lexical one found
+// too little, then one pass per segment window, and each of them has to stop.
+type countdownContext struct {
+	context.Context
+	remaining int
+}
+
+// Err reports cancellation once the allowance is spent. It is not safe for
+// concurrent use, which a search does not need: the passes run in sequence.
+func (c *countdownContext) Err() error {
+	if c.remaining > 0 {
+		c.remaining--
+		return nil
+	}
+	return context.Canceled
+}
+
+// TestSearchMatches_EveryPassStopsOnCancellation pins that the cancellation
+// reaches each pass of a search rather than only the first.
+//
+// The lexical pass is the one a cancelled context stops before anything else
+// runs, so it is the only one a plain cancelled context can cover. The other
+// two are where a long query actually spends its time.
+func TestSearchMatches_EveryPassStopsOnCancellation(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	tests := []struct {
+		name string
+		// query decides which passes run: one that matches nothing falls
+		// through to the fuzzy pass, and one with five or more terms runs the
+		// segmented pass.
+		query string
+		// allowance is how many context checks succeed before cancellation,
+		// which places it inside a chosen pass.
+		allowance int
+	}{
+		{name: "the lexical pass", query: "project delete", allowance: 0},
+		{name: "the fuzzy pass", query: "zzzzzzzz", allowance: 1},
+		// Two: the lexical pass and the fuzzy pass this query also runs, so
+		// the cancellation lands on the first segment window.
+		{name: "the segmented pass", query: "merge request approve project delete pipeline retry", allowance: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &countdownContext{Context: t.Context(), remaining: tt.allowance}
+			if _, err := registry.searchMatches(ctx, tt.query, defaultLimit, false); !errors.Is(err, context.Canceled) {
+				t.Fatalf("searchMatches(%q) error = %v, want context.Canceled", tt.query, err)
+			}
+		})
+	}
+}
+
 // TestRegisterCatalogFindExecuteTools_FindAcceptsNaturalLanguageAndReturnsSchema
 // verifies that the registered MCP tool accepts plain search phrases and returns
 // the schema payload needed for the next execute call.
@@ -4260,7 +4607,11 @@ func TestRegistry_HelperCoverage(t *testing.T) {
 
 	t.Run("segmented search ignores short queries", func(t *testing.T) {
 		registry := NewRegistry(testRoutes(t))
-		if got := registry.segmentedSearchMatchesWithScorer(normalizeSearchTerms("project get"), defaultLimit, scoreEntryWithoutExplanation); got != nil {
+		got, err := registry.segmentedSearchMatchesWithScorer(t.Context(), normalizeSearchTerms("project get"), defaultLimit, scoreEntryWithoutExplanation)
+		if err != nil {
+			t.Fatalf("segmentedSearchMatchesWithScorer(short query) error = %v", err)
+		}
+		if got != nil {
 			t.Fatalf("segmentedSearchMatchesWithScorer(short query) = %v, want nil", got)
 		}
 	})
@@ -4440,9 +4791,12 @@ func TestSearchRuntimeMetrics_RecordQualitySignals(t *testing.T) {
 		{Alias: "danger.delete", Canonical: "package.delete"},
 	})
 
-	registry.searchMatches(context.Background(), "zzzzzzzz", 5, false)
-	registry.searchMatches(context.Background(), "merje requesy", 5, false)
-	registry.searchMatches(context.Background(), "danger.delete", 5, false)
+	// sequential: three searches accumulating into one metrics snapshot.
+	for _, query := range []string{"zzzzzzzz", "merje requesy", "danger.delete"} {
+		if _, err := registry.searchMatches(t.Context(), query, 5, false); err != nil {
+			t.Fatalf("searchMatches(%q) error = %v", query, err)
+		}
+	}
 
 	metrics := SearchRuntimeMetricsSnapshot()
 	if metrics.Searches != 3 {
@@ -4720,7 +5074,10 @@ func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
 func TestScoredMatchesAndDestructiveFuzzyBranches(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 	registry.SearchIndex.byToken["project"] = []int{-1, 0, len(registry.entries)}
-	matches := registry.scoredMatches(normalizeSearchTerms("project"), scoreEntryWithoutExplanation)
+	matches, err := registry.scoredMatches(t.Context(), normalizeSearchTerms("project"), scoreEntryWithoutExplanation)
+	if err != nil {
+		t.Fatalf("scoredMatches(corrupted index) error = %v", err)
+	}
 	if len(matches) == 0 {
 		t.Fatalf("scoredMatches(corrupted index) = %+v, want valid matches", matches)
 	}
@@ -5190,6 +5547,74 @@ func TestCompactParamList_EdgeCases(t *testing.T) {
 	}
 }
 
+// BenchmarkFind_PathologicalQuery measures the worst query a caller can now
+// send: words that match nothing, so the lexical pass returns nothing, the
+// fuzzy pass runs over the whole catalog, and the segmented pass runs one more
+// pass per window.
+//
+// It exists because that cost was unbounded. A query was accepted at whatever
+// length a 4 MiB request body allows, which is hundreds of thousands of words,
+// and the cost grows with the word count times the size of the catalog. The
+// case at [MaxSearchQueryLength] is the ceiling a caller can now reach, and it
+// is here so a change to the scorer cannot quietly raise it: the shorter cases
+// beside it are the shape of the growth.
+func BenchmarkFind_PathologicalQuery(b *testing.B) {
+	registry := benchmarkRegistry(b)
+	ctx := context.Background()
+
+	// Nonsense words of a realistic length, none of which is a catalog token,
+	// so nothing prunes the candidate set at any stage.
+	word := func(i int) string { return fmt.Sprintf("zqx%04dvfh", i) }
+	queryOf := func(words int) string {
+		parts := make([]string, 0, words)
+		for i := range words {
+			parts = append(parts, word(i))
+		}
+		return strings.Join(parts, " ")
+	}
+	// The longest query the tool accepts, built by filling to the character
+	// bound rather than by counting words, since that bound is what a caller
+	// is held to.
+	atLimit := func() string {
+		query := ""
+		for i := 0; ; i++ {
+			next := query
+			if next != "" {
+				next += " "
+			}
+			next += word(i)
+			if len(next) > MaxSearchQueryLength {
+				return query
+			}
+			query = next
+		}
+	}
+
+	cases := []struct {
+		name  string
+		query string
+	}{
+		{name: "two_words", query: queryOf(2)},
+		{name: "eight_words", query: queryOf(8)},
+		{name: "at_the_length_limit", query: atLimit()},
+	}
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			if overLength(tc.query) {
+				b.Fatalf("benchmark query is %d characters, above the %d the tool accepts", utf8.RuneCountInString(tc.query), MaxSearchQueryLength)
+			}
+			input := FindInput{Query: tc.query, Limit: 20}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				if _, _, err := registry.Find(ctx, nil, input); err != nil {
+					b.Fatalf("Find() error: %v", err)
+				}
+			}
+		})
+	}
+}
+
 // BenchmarkSearch_BaselineMetaCatalog measures dynamic search throughput and
 // allocations against the captured meta catalog plus standalone routes. It
 // preserves the benchmark coverage migrated from register_benchmark_test.go.
@@ -5243,13 +5668,18 @@ func BenchmarkSearch_FieldAwareIndex(b *testing.B) {
 		"project delete",
 	}
 
+	ctx := b.Context()
 	for _, query := range queries {
 		terms := normalizeSearchTerms(query)
 		b.Run(benchmarkName(query)+"/indexed", func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
-				matches := sortAndLimitMatches(registry.scoredMatches(terms, scoreEntryWithExplanation), 20)
+				scored, err := registry.scoredMatches(ctx, terms, scoreEntryWithExplanation)
+				if err != nil {
+					b.Fatalf("scoredMatches(%q) error: %v", query, err)
+				}
+				matches := sortAndLimitMatches(scored, 20)
 				if len(matches) == 0 {
 					b.Fatalf("indexed search returned no matches for %q", query)
 				}
@@ -6225,6 +6655,11 @@ func TestRegistryShapeFor_SharedCatalogReusesOneShape(t *testing.T) {
 // verifies the two schemas every dynamic server registers are one shared
 // pointer each and match what the SDK derives itself, and that a derivation
 // failure leaves the field nil for the SDK to fill.
+//
+// The find schema is the SDK's derivation plus one keyword: the query's
+// maxLength, which the struct tag cannot carry and which is set on the derived
+// schema. The comparison spells that difference out rather than applying the
+// annotator it is checking.
 func TestFindAndExecuteInputSchemas_AreSharedAndFallBackWhenDerivationFails(t *testing.T) {
 	findSchema := findInputSchema()
 	if !toolutil.SchemaShared(findSchema) || findSchema != findInputSchema() {
@@ -6238,6 +6673,8 @@ func TestFindAndExecuteInputSchemas_AreSharedAndFallBackWhenDerivationFails(t *t
 	if err != nil {
 		t.Fatalf("jsonschema.For[FindInput]() error = %v", err)
 	}
+	maxLength := MaxSearchQueryLength
+	want.Properties[findQueryParam].MaxLength = &maxLength
 	wantJSON, err := json.Marshal(want)
 	if err != nil {
 		t.Fatalf("encoding the SDK's find schema: %v", err)

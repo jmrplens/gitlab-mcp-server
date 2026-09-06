@@ -38,10 +38,15 @@ func ActionTimeout() time.Duration {
 	return time.Duration(actionTimeoutNanos.Load())
 }
 
-// withActionDeadline derives the context an action runs under: the caller's,
+// WithActionDeadline derives the context an action runs under: the caller's,
 // bounded by the configured deadline when there is one. The cancel function
 // is always safe to call.
-func withActionDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+//
+// Exported for the one model-facing handler that is not a catalog action and
+// so passes through none of the WrapAction functions: the dynamic surface's
+// gitlab_find_action, whose cost is the catalog rather than a GitLab call and
+// which was therefore the only registered tool with no deadline at all.
+func WithActionDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
 	d := ActionTimeout()
 	if d <= 0 {
 		return ctx, func() { /* no deadline was added, so there is nothing to cancel */ }

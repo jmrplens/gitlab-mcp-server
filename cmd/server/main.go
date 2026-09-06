@@ -248,7 +248,7 @@ func main() {
 	flag.BoolVar(&probeHealth, "probe", false, "Ask the running instance's /health and exit 0 when it answers (the container HEALTHCHECK); reads the listener off that instance's flags, or probes the URL, unix:<path> or host:port given after the flag, an https one pinned to --tls-cert when that is given too")
 	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
 	flag.StringVar(&envFile, "env-file", "", "Dotenv file to load besides ~/.gitlab-mcp-server.env; the same setting as GITLAB_MCP_ENV_FILE, and wins over it")
-	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
+	flag.StringVar(&toolSearch, "tool-search", "", "Search the action catalog by name, alias, tag or description and exit; prints each canonical action ID beside the tool the configured surface names it")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
 	flag.StringVar(&transport, "transport", "", "Transport to serve: stdio, http, or auto. Empty defers to --http. auto serves HTTP only when stdin is "+os.DevNull+", which is what a container started without -i gives, and stdio for the pipe every MCP client provides")
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
@@ -280,7 +280,7 @@ func main() {
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP); believed only from the peers named in --trusted-proxies, which it requires")
 	flag.StringVar(&hcfg.trustedProxies, "trusted-proxies", "", "Comma-separated addresses or CIDR ranges of the reverse proxies whose --trusted-proxy-header is believed (e.g. 127.0.0.1,10.0.0.0/8); required with --trusted-proxy-header")
 	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
-	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-server rate limit, in requests/second, on every call that reaches GitLab (0 disables it)")
+	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-credential rate limit, in requests/second, on every call that reaches GitLab; each pooled token and URL pair draws on its own bucket (0 disables it)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so nothing above the transport closes idle connections; set a positive duration to recycle idle connections sooner")
@@ -369,15 +369,9 @@ func main() {
 	}
 
 	if toolSearch != "" {
-		toolSurface, _, surfaceErr := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(&hcfg))
-		if surfaceErr != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", surfaceErr)
-			exitProcess(1)
-			return
-		}
-		searchTier, _, tierErr := resolveHTTPTier(&hcfg)
-		if tierErr != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", tierErr)
+		toolSurface, searchTier, searchErr := toolSearchSettings(&hcfg)
+		if searchErr != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", searchErr)
 			exitProcess(1)
 			return
 		}
@@ -469,7 +463,11 @@ FLAGS
                             HEALTHCHECK). The listener is read off that instance's own flags, a TLS one
                             pinned to its -tls-cert; a URL, unix:<path> or host:port after the flag
                             probes that instead, an https one pinned to -tls-cert when given before it
-  -tool-search string       Search tools by name/description and exit
+  -tool-search string       Search the action catalog by name, alias, tag or description and exit. Prints
+                            each canonical action ID, which is what gitlab_execute_action takes, beside the
+                            tool the configured surface names it. The surface and the tier come from
+                            -tool-surface and -tier when passed, and otherwise from GITLAB_MCP_TOOL_SURFACE
+                            and GITLAB_MCP_TIER, so a stdio deployment searches what it serves
   -log-level string         Logging verbosity: debug|info|warn|error (default info)
   -pprof-addr string        Serve Go's profiling handlers (net/http/pprof) on this loopback address, e.g.
                             127.0.0.1:6060, on a listener of their own, started before the transport.
@@ -539,7 +537,7 @@ FLAGS
   -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -drain-delay dur          After SIGTERM, answer /health with 503 draining for this long before closing the
                             listener, so a balancer takes the instance out first (default 0: close at once)
-  -rate-limit-rps float     Per-server rate limit on every call that reaches GitLab (default 10; 0 disables it)
+  -rate-limit-rps float     Per-credential rate limit on every call that reaches GitLab (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP); requires -trusted-proxies
@@ -581,7 +579,7 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names to exclude (default empty)
   GITLAB_MCP_IGNORE_SCOPES          Skip PAT scope detection: true/false (default false)
   GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Maximum upload/file size for upload tools (default 2GB)
-  GITLAB_MCP_RATE_LIMIT_RPS         Per-server rate limit on every call that reaches GitLab (default 0, disabled)
+  GITLAB_MCP_RATE_LIMIT_RPS         Per-credential rate limit on every call that reaches GitLab (default 0, disabled)
   GITLAB_MCP_RATE_LIMIT_BURST       Token-bucket burst size when the rate limit is on (default 40)
   GITLAB_MCP_STDIO_MAX_LINE_BYTES   Longest stdio message accepted, in bytes (default 4 MiB). Raise it
                                     only for a client that inlines large base64 payloads; a longer line
@@ -1379,7 +1377,6 @@ var (
 	buildActionCatalog      = gitlabtools.BuildActionCatalog      //nolint:gochecknoglobals // test seam
 	sharedMetaCatalog       = gitlabtools.SharedMetaCatalog       //nolint:gochecknoglobals // test seam
 	sharedIndividualCatalog = gitlabtools.SharedIndividualCatalog //nolint:gochecknoglobals // test seam
-	registerAllMeta         = gitlabtools.RegisterAllMeta         //nolint:gochecknoglobals // test seam
 	addStandaloneCatalog    = dynamictools.AddStandaloneCatalog   //nolint:gochecknoglobals // test seam
 )
 
@@ -2708,9 +2705,14 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
 	rootHandler = corsMiddleware(cfg, rootHandler)
-	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
-		rootHandler = hostValidationMiddleware(hosts, rootHandler)
-	}
+	// Always installed, because the policy it applies is not always a set of
+	// declared hosts: a wildcard bind declares none and still has to refuse a
+	// name nobody declared on a connection that arrived over loopback, which
+	// is the rule the SDK used to apply for the MCP endpoint alone.
+	rootHandler = hostValidationMiddleware(
+		newHostGuard(httpAddr, cfg.PublicURL, trustedProxiesOf(cfg.TrustedProxies)),
+		rootHandler,
+	)
 	// Second outermost, so the span covers host validation, CORS and the
 	// credential check as well as the handler. That placement is the whole
 	// point: the MCP span starts after authentication, so it never exists for
@@ -3124,6 +3126,16 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 		Stateless:           cfg.Stateless,
 		JSONResponse:        cfg.JSONResponse,
 		MaxRequestBodyBytes: cfg.MaxRequestBodyBytes,
+		// The SDK refuses a non-loopback Host on a connection accepted over
+		// loopback, which is every reverse proxy in the deployment guide:
+		// they preserve the client's Host and connect to 127.0.0.1. The check
+		// is worth keeping and is kept, in [hostGuard], which is the only
+		// layer that can see --public-url and --trusted-proxies and so can
+		// tell a declared host from a rebinding attempt. Leaving both on
+		// would refuse here what the guard admitted, and the SDK's refusal is
+		// plain text besides, which is the one body shape a Streamable HTTP
+		// client must not be handed.
+		DisableLocalhostProtection: true,
 		// Always propagate client aborts into handler contexts so in-flight
 		// GitLab API calls are cancelled when the POST is abandoned. The SDK
 		// applies this to new-protocol (2026-07-28) requests only, and only
@@ -3467,33 +3479,6 @@ func parseLogLevel(s string) slog.Level {
 		return slog.LevelError
 	default:
 		return slog.LevelInfo
-	}
-}
-
-// allowedHosts computes the set of valid Host header values based on the
-// listen address. Returns nil when binding to all interfaces (0.0.0.0/::),
-// which skips host validation — suitable for reverse-proxy deployments.
-//
-// A unix socket gets nil as well, and explicitly. The check exists against
-// DNS rebinding, which needs a browser to reach the listener by name, and no
-// name resolves to a file on disk; the Host a socket client sends is whatever
-// its HTTP library needs to build a request, "unix" as often as not. Deriving
-// a set from the path used to work on Linux only by accident, because
-// SplitHostPort found no colon there; on Windows it found the drive letter's,
-// and a server on C:\...\mcp.sock served nothing but a client naming host "C".
-func allowedHosts(addr string) map[string]bool {
-	if isUnixSocketAddr(addr) {
-		return nil
-	}
-	host, _, _ := net.SplitHostPort(addr)
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		return nil
-	}
-	return map[string]bool{
-		host:        true,
-		"localhost": true,
-		"127.0.0.1": true,
-		"::1":       true,
 	}
 }
 
@@ -3858,45 +3843,6 @@ func loggedHeaderPrefix(value string) string {
 		return value
 	}
 	return value[:loggedHeaderPrefixBytes] + "..."
-}
-
-// hostValidationMiddleware rejects requests whose Host header does not match
-// the allowed set, mitigating DNS rebinding attacks on local servers.
-func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			host = h
-		}
-		// A request naming no host at all is not the attack this guards
-		// against. DNS rebinding works by making a browser resolve a name the
-		// attacker controls to the loopback address, and the browser then puts
-		// that name in the Host header; no browser omits it. What does omit it
-		// is a health check: HAProxy's `option httpchk` sends no Host unless
-		// one is configured, so a listener bound to 127.0.0.1 answered every
-		// check with 403 and was marked permanently DOWN by a balancer that
-		// was working correctly. Refusing it bought nothing, since anything
-		// able to send a header-less request can reach the listener directly
-		// and does not need a browser to do it for it.
-		if r.Host == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if !allowed[host] {
-			slog.WarnContext(r.Context(), "request blocked: invalid Host header", //#nosec G706 -- slog structured args are not interpolated
-				"host", loggedHeaderPrefix(r.Host), "host_len", len(r.Host))
-			// JSON-RPC rather than http.Error's plain text, for the same
-			// reason the cross-origin refusal is: an unparseable 4xx body
-			// reads to a Streamable HTTP client as a pre-negotiation server.
-			(&gateFailure{
-				status:  http.StatusForbidden,
-				code:    errCodeForbidden,
-				message: "Request refused: the Host header names a host this deployment does not serve.",
-			}).write(w, r)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // serverCardSubscriptions describes the subscription surface, or nil when this
@@ -4441,86 +4387,200 @@ var (
 	exitProcess      = os.Exit
 )
 
-// doToolSearch builds the selected MCP tool catalog, searches tool names and
-// descriptions with case-insensitive AND matching, and prints matching tool
-// names with the first description line.
+// toolSearchMatch is one catalog action a search matched, in the shape it is
+// printed.
+type toolSearchMatch struct {
+	// action is the canonical ID, which is what gitlab_execute_action takes
+	// and the one name every surface shares.
+	action string
+	// tool is how the configured surface names this action: the individual
+	// tool, the meta group tool with its action argument, or "-" for an
+	// action the individual surface does not project.
+	tool string
+	// description is the one-line summary, trimmed for the table.
+	description string
+}
+
+// toolSearchNoTool is printed for an action the configured surface names no
+// tool for, which on the individual surface means it is not reachable there
+// and on the dynamic surface only means there is no second name to give.
+const toolSearchNoTool = "-"
+
+// doToolSearch prints the canonical catalog actions matching every search
+// term, case-insensitively.
+//
+// It searches the CATALOG rather than the registered tools, which is what it
+// used to do. On the default dynamic surface a server registers exactly two
+// tools, so every search but one for "find" or "execute" answered "No tools
+// found" on the surface most deployments run. The catalog is the same whatever
+// the surface, so the answer is now too, and the surface decides only how each
+// row says to call the action.
 func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 	terms := strings.Fields(strings.ToLower(query))
 	if len(terms) == 0 {
 		return nil
 	}
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
+	catalog, err := buildToolSearchCatalog(tier)
+	if err != nil {
+		return err
+	}
 
 	// EffectiveToolSurface answers one of exactly these three, so there is no
 	// fourth case to refuse.
-	switch config.EffectiveToolSurface(true, toolSurface) {
-	case config.ToolSurfaceMeta:
-		if err := registerAllMeta(server, nil, tier); err != nil {
-			return err
-		}
-	case config.ToolSurfaceIndividual:
-		gitlabtools.RegisterAll(server, nil, tier)
-	case config.ToolSurfaceDynamic:
-		catalog, err := buildToolSearchCatalog(tier)
-		if err != nil {
-			return err
-		}
-		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-	}
-
-	st, ct := newInspectionTransports()
-	ctx := context.Background()
-
-	serverSession, err := connectInspectionServer(server, ctx, st)
-	if err != nil {
-		return fmt.Errorf("connect error: %w", err)
-	}
-	defer serverSession.Close()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "search-client", Version: "0"}, nil)
-	session, err := connectInspectionClient(mcpClient, ctx, ct)
-	if err != nil {
-		return fmt.Errorf("connect error: %w", err)
-	}
-	defer session.Close()
-
-	result, err := listInspectionTools(session, ctx)
-	if err != nil {
-		return fmt.Errorf("list tools error: %w", err)
-	}
-
-	var matches []*mcp.Tool
-	for _, t := range result.Tools {
-		haystack := strings.ToLower(t.Name + " " + t.Description)
-		allMatch := true
-		for _, term := range terms {
-			if !strings.Contains(haystack, term) {
-				allMatch = false
-				break
-			}
-		}
-		if allMatch {
-			matches = append(matches, t)
-		}
-	}
-
+	surface := config.EffectiveToolSurface(true, toolSurface)
+	matches := matchCatalogActions(catalog.Actions(), terms, surface)
 	if len(matches) == 0 {
-		fmt.Printf("No tools found matching %q\n", query)
+		fmt.Printf("No actions found matching %q (tier %s, %s surface)\n", query, tier, surface)
 		return nil
 	}
 
-	fmt.Printf("Found %d tool(s) matching %q:\n\n", len(matches), query)
-	fmt.Printf("%-45s %s\n", "NAME", "DESCRIPTION")
+	fmt.Printf("Found %d action(s) matching %q (tier %s, %s surface):\n", len(matches), query, tier, surface)
+	fmt.Printf("%s\n\n", toolSearchCallHint(surface))
+	fmt.Printf("%-42s %-45s %s\n", "ACTION", "TOOL", "DESCRIPTION")
 	fmt.Println(strings.Repeat("-", 120))
-	for _, t := range matches {
-		desc := t.Description
-		if len([]rune(desc)) > 80 {
-			desc = string([]rune(desc)[:77]) + "..."
-		}
-		fmt.Printf("%-45s %s\n", t.Name, desc)
+	for _, match := range matches {
+		fmt.Printf("%-42s %-45s %s\n", match.action, match.tool, match.description)
 	}
 	return nil
+}
+
+// matchCatalogActions returns the actions whose searchable text contains every
+// term, ordered by canonical ID so two runs of one query agree.
+func matchCatalogActions(actions []actioncatalog.Action, terms []string, surface string) []toolSearchMatch {
+	matches := make([]toolSearchMatch, 0, len(actions))
+	for _, action := range actions {
+		if !matchesAllTerms(actionSearchText(action), terms) {
+			continue
+		}
+		matches = append(matches, toolSearchMatch{
+			action:      string(action.ID),
+			tool:        toolSearchCallForm(surface, action),
+			description: truncateDescription(actionSearchDescription(action)),
+		})
+	}
+	slices.SortFunc(matches, func(a, b toolSearchMatch) int { return strings.Compare(a.action, b.action) })
+	return matches
+}
+
+// matchesAllTerms reports whether haystack contains every term. AND rather
+// than ranked relevance: this is a person grepping their own surface, and a
+// query that names two things should narrow rather than widen.
+func matchesAllTerms(haystack string, terms []string) bool {
+	for _, term := range terms {
+		if !strings.Contains(haystack, term) {
+			return false
+		}
+	}
+	return true
+}
+
+// actionSearchText is what one action is searched by: every name it answers
+// to, plus its description. The individual tool name is in here because a
+// person searching for one usually types the name they saw in a client, and
+// the canonical ID because that is what they will pass to
+// gitlab_execute_action.
+func actionSearchText(action actioncatalog.Action) string {
+	parts := []string{
+		string(action.ID),
+		action.IndividualTool.Name,
+		action.ToolName,
+		action.Domain,
+		action.Name,
+		actionSearchDescription(action),
+	}
+	parts = append(parts, action.Aliases...)
+	parts = append(parts, action.Tags...)
+	return strings.ToLower(strings.Join(parts, " "))
+}
+
+// actionSearchDescription is the summary shown and searched, preferring the
+// individual tool's description because it is the one written per action.
+func actionSearchDescription(action actioncatalog.Action) string {
+	if description := strings.TrimSpace(action.IndividualTool.Description); description != "" {
+		return description
+	}
+	return strings.TrimSpace(action.Usage)
+}
+
+// toolSearchCallForm is how the configured surface names one action.
+func toolSearchCallForm(surface string, action actioncatalog.Action) string {
+	if surface == config.ToolSurfaceMeta {
+		return action.ToolName + " action=" + action.Name
+	}
+	// Individual and dynamic both show the individual tool name: on one it is
+	// the call, and on the other it is the cross-reference a reader coming
+	// from another client's tool list needs.
+	if name := strings.TrimSpace(action.IndividualTool.Name); name != "" {
+		return name
+	}
+	return toolSearchNoTool
+}
+
+// toolSearchCallHint says how to call a listed action on the configured
+// surface, since the canonical ID alone is the call on only one of the three.
+func toolSearchCallHint(surface string) string {
+	switch surface {
+	case config.ToolSurfaceIndividual:
+		return `Call the tool named under TOOL. An action shown as "-" is not registered on this surface.`
+	case config.ToolSurfaceMeta:
+		return "Call the tool named under TOOL with that action argument."
+	default:
+		return `Call gitlab_execute_action with {"action": "<ACTION>", "params": {...}}. TOOL is the name the individual surface would register.`
+	}
+}
+
+// truncateDescription keeps the table one line per action.
+func truncateDescription(description string) string {
+	const maxWidth = 80
+	runes := []rune(description)
+	if len(runes) <= maxWidth {
+		return description
+	}
+	return string(runes[:maxWidth-3]) + "..."
+}
+
+// toolSearchSettings resolves the surface and the tier a --tool-search runs
+// under: an explicitly passed flag first, then the environment, then the
+// default. That is the precedence every other setting follows, and the
+// environment half was missing.
+//
+// The flags are HTTP mode's spelling. A stdio deployment configures its
+// surface and tier through GITLAB_MCP_TOOL_SURFACE and GITLAB_MCP_TIER, so a
+// search reading only the flags searched the default surface at the Free tier
+// whatever the operator had configured, and answered nothing for an
+// Ultimate-only action they could see in their own client.
+//
+// config.Load is not used, though it resolves the same two settings: it also
+// demands GITLAB_URL and GITLAB_TOKEN, and a search that inspects the catalog
+// offline must not require credentials.
+func toolSearchSettings(hcfg *httpConfig) (surface string, tier edition.Tier, err error) {
+	// The same files the server reads, so a surface set in
+	// ~/.gitlab-mcp-server.env is the surface searched.
+	config.LoadEnvFiles()
+
+	surface, _, err = config.ParseToolSurface(config.Getenv("TOOL_SURFACE"), config.Getenv("META_TOOLS"))
+	if err != nil {
+		return "", edition.Free, err
+	}
+	if strings.TrimSpace(hcfg.toolSurface) != "" || hcfg.metaToolsSet {
+		surface, _, err = config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
+		if err != nil {
+			return "", edition.Free, err
+		}
+	}
+
+	tier, _, err = config.TierFromEnv()
+	if err != nil {
+		return "", edition.Free, err
+	}
+	if hcfg.tierSet {
+		tier, _, err = resolveHTTPTier(hcfg)
+		if err != nil {
+			return "", edition.Free, err
+		}
+	}
+	return surface, tier, nil
 }
 
 func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {

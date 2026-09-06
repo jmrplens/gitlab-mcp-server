@@ -44,7 +44,7 @@ You talk to your AI assistant; it does the GitLab work. No project IDs, API endp
 
 <!-- START TOKEN CLAIM -->
 
-**10,336 tokens of startup context by default, the same on every GitLab tier (1,671 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
+**10,355 tokens of startup context by default, the same on every GitLab tier (1,690 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
 
 <!-- END TOKEN CLAIM -->
 
@@ -275,12 +275,12 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               858 | n/a                            |              1,501 |         8,835 |       10,336 |
-| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               858 | n/a                            |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,011 | n/a                            |              1,501 |         8,835 |       10,336 |
-| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,011 | n/a                            |              1,501 |           170 |        1,671 |
-| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,077 | n/a                            |              1,501 |         8,835 |       10,336 |
-| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,077 | n/a                            |              1,501 |           170 |        1,671 |
+| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               858 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               858 | n/a                            |              1,520 |           170 |        1,690 |
+| `dynamic` / `full` (default)                                                | Premium  |             2 |             1,011 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Premium  |             2 |             1,011 | n/a                            |              1,520 |           170 |        1,690 |
+| `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,077 | n/a                            |              1,520 |         8,835 |       10,355 |
+| `dynamic` / `minimal`                                                       | Ultimate |             2 |             1,077 | n/a                            |              1,520 |           170 |        1,690 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_MCP_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -467,21 +467,21 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,152 |     235,694 |
-| Unit tests (`_test.go`)  |       658 |     388,512 |
-| End-to-end tests         |       239 |      63,799 |
-| **Total**                | **2,049** | **688,005** |
+| Source (`.go`, non-test) |     1,153 |     236,134 |
+| Unit tests (`_test.go`)  |       659 |     389,774 |
+| End-to-end tests         |       239 |      63,946 |
+| **Total**                | **2,051** | **689,854** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,790 |
-| . Exported (public)             |  2,862 |
-| . Unexported (private)          |  5,928 |
-| Unit test functions (`TestXxx`) | 13,567 |
-| Subtests (`t.Run(...)`)         |  5,210 |
-| End-to-end test functions       |    598 |
+| Source functions                |  8,810 |
+| . Exported (public)             |  2,864 |
+| . Unexported (private)          |  5,946 |
+| Unit test functions (`TestXxx`) | 13,598 |
+| Subtests (`t.Run(...)`)         |  5,233 |
+| End-to-end test functions       |    601 |
 
 ### Ratios worth noting
 
@@ -489,18 +489,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.65× more tests than code |
 | Average source file length         |                 ~205 lines |
-| Average test file length           |                 ~590 lines |
-| Comment lines in source            |  38,146 (~16.2% of source) |
+| Average test file length           |                 ~591 lines |
+| Comment lines in source            |  38,363 (~16.2% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 7,389 |
-| `defer` statements                 | 1,292 |
-| `struct` types defined             | 2,939 |
-| `//nolint` suppressions            |   315 |
+| `if err != nil` checks             | 7,399 |
+| `defer` statements                 | 1,291 |
+| `struct` types defined             | 2,941 |
+| `//nolint` suppressions            |   314 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
@@ -515,15 +515,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,565 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 10,354 lines |
+| Longest source file | `cmd/server/main.go`. 4,625 lines       |
+| Longest test file   | `cmd/server/main_test.go`. 10,400 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,285 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 13,693 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,293 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 13,706 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

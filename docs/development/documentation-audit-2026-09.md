@@ -206,10 +206,12 @@ in the page with a compose file beside it.
 
 ### Path 5: reverse proxies, LAN and public
 
-**This path does not work as written, and it is the most serious finding in the
+**This path did not work as written, and it was the most serious finding in the
 audit.** Every reverse-proxy configuration `docs/guides/remote-deployment.md`
-publishes is answered `403 Forbidden` on every request, `/health` included, for
-the most common deployment shape.
+publishes was answered `403 Forbidden` on every request, `/health` included, for
+the most common deployment shape. Fixed in 2.8.0: see the resolution under
+[D1](#d1-the-host-guards-refuse-every-documented-reverse-proxy). What follows is
+the finding as it was reproduced.
 
 Reproduced with the real nginx, the documented configuration copied verbatim
 from `docs/guides/remote-deployment.md:465-502`:
@@ -537,6 +539,16 @@ code:
 Whichever is chosen, `test/e2e/http/proxy_test.go` needs a case whose nginx
 sends a non-loopback `Host`, because the present one cannot fail.
 
+**Resolved in 2.8.0**, as option 2 without the new flag: the host `--public-url`
+advertises is declared, a peer listed in `--trusted-proxies` may forward
+whatever host it heard, and `DisableLocalhostProtection` is set unconditionally
+because the SDK's copy of the rule cannot see either flag. The rule it applied
+is reproduced in `cmd/server/host_guard.go`, for the whole handler chain rather
+than the MCP endpoint alone, so a host nobody declared is still refused. The
+missing case is `TestProxy_ForwardedPublicHostIsServed` and its refusal twin,
+which forward the `Host` themselves rather than through nginx, since a proxy
+reached at `127.0.0.1` forwards a loopback host and cannot express this one.
+
 ### D2: the tool-search flag ignores the environment that configures stdio
 
 | Side | Location                                                                  |
@@ -558,6 +570,15 @@ GITLAB_MCP_TIER=ultimate --tool-surface=individual --tool-search epic  ->  Found
 Since the environment variables are the stdio spelling and the flags are
 documented under HTTP mode, a stdio operator searching their own surface always
 searches the default dynamic surface, which has two tools.
+
+**Resolved in 2.8.0.** `toolSearchSettings` resolves both settings the way
+every other one is resolved, an explicitly passed flag first and then the
+environment, without `config.Load`, which would demand credentials a catalog
+search does not need. The search itself now reads the canonical catalog rather
+than a server's registered tools, so the actions it finds no longer depend on
+the surface at all: the surface decides only whether a row is named by its
+individual tool, its meta group tool plus an action argument, or by the
+canonical ID `gitlab_execute_action` takes.
 
 ### D3: two documented upper bounds are enforced only where the setting is inert
 

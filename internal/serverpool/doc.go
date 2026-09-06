@@ -1,10 +1,16 @@
-// Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.
+// Package serverpool manages a pool of credential entries keyed by GitLab token and URL.
 //
 // Each unique GitLab Personal Access Token and GitLab URL pair gets its own
-// [*mcp.Server], GitLab client, and server-scoped configuration snapshot with
-// independently registered tools, resources, prompts, detected token scopes,
-// and detected CE/EE edition. This provides zero cross-contamination between
-// HTTP clients by construction: each client operates on its own server entry.
+// [Entry]: a GitLab client, the configuration resolved for it (detected token
+// scopes, detected CE/EE edition, any read-only narrowing), the user it belongs
+// to, and an opaque [Entry.Owner] that names it wherever a shared component has
+// to say whose work it is doing. The MCP server an entry is served by is *not*
+// its own: one server is built per configuration shape and answers for every
+// credential that resolves to that shape, since what a server holds — the tool
+// catalog, the resources, the prompts — is decided by the configuration and
+// never by the credential. Isolation is therefore not "a server each" but
+// "a client each": every request runs under the client its own entry carries,
+// and anything that was ever keyed on the server is keyed on the entry instead.
 //
 // The pool has a configurable maximum size ([WithMaxSize]) and uses LRU
 // eviction when the limit is reached. Token plus URL hashes (SHA-256) are used
@@ -16,7 +22,7 @@
 //
 // # Isolation Model
 //
-// HTTP requests are routed to per-identity server entries:
+// HTTP requests are routed to per-identity entries:
 //
 //	HTTP request
 //	    |
@@ -27,10 +33,12 @@
 //	ServerPool.GetOrCreate
 //	    |
 //	    v
-//	per-token, per-URL MCP server
+//	per-token, per-URL entry -> the server built for its configuration shape
 //
-// This design keeps token scopes, edition detection, read-only mode, safe mode,
-// tools, resources, and prompts isolated between concurrent HTTP clients.
+// This design keeps token scopes, edition detection, read-only mode and safe
+// mode resolved per credential, while the tools, resources and prompts they
+// select are built once and shared by every credential that selects the same
+// ones.
 //
 // # Usage
 //

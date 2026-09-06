@@ -578,6 +578,17 @@ func ParseTierFlag(value string) (tier edition.Tier, explicit bool, err error) {
 	return parseTierEnv(value)
 }
 
+// TierFromEnv resolves the tier the way [Load] does, from GITLAB_MCP_TIER with
+// the deprecated GITLAB_ENTERPRISE as a fallback, and reports whether either
+// named one.
+//
+// Exported for the one caller that needs this setting without the rest of a
+// configuration: --tool-search inspects the catalog offline, so it must not
+// demand the GitLab URL and token [Load] validates.
+func TierFromEnv() (tier edition.Tier, explicit bool, err error) {
+	return resolveTierEnv(Getenv("TIER"), os.Getenv("GITLAB_ENTERPRISE"))
+}
+
 func parseEnvBool(name string, defaultValue bool) (bool, error) {
 	value, err := parseBool(Getenv(name), defaultValue)
 	if err != nil {
