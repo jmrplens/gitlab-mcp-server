@@ -1,9 +1,9 @@
 # Release pipeline for gitlab-mcp-server
 #
 # Triggers: tag push matching v*, and a manual dispatch that REHEARSES.
-# Pipeline: Preflight → E2E (the reusable e2e.yml) → Docker → GoReleaser →
+# Pipeline: Preflight → E2E (e2e.yml) + Race (race.yml) → Docker → GoReleaser →
 #           per-publisher jobs → Winget
-# If E2E tests fail, nothing is released.
+# If either gate fails, nothing is released.
 #
 # Rehearsal. Every publisher job below was added after 2.7.5 shipped, so none
 # of them had run for real, and the first real run would have been the next
@@ -147,11 +147,28 @@ jobs:
     permissions:
       contents: read
 
+  # Beside the E2E gate rather than behind it: neither consumes anything the
+  # other produces, and the detector is the longer of the two, so running them
+  # in series would add its whole runtime to every release.
+  #
+  # It gates because a data race is exactly the defect that reaches a tag
+  # otherwise. Nothing in ci.yml runs the detector, by decision (issue 536): the
+  # unit suite takes the better part of an hour under it, which no pull request
+  # should pay, so a release is the first moment the question is asked at all.
+  # The gate sits in front of `docker` for the same reason the E2E gate does,
+  # that being the first job that publishes anything.
+  race:
+    name: "🏁 Race gate"
+    needs: [preflight]
+    uses: ./.github/workflows/race.yml
+    permissions:
+      contents: read
+
   docker:
     name: "🐳 Docker"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [preflight, e2e]
+    needs: [preflight, e2e, race]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     # No `environment:` — this job never ran under one, and adding it would

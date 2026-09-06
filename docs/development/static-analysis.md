@@ -256,6 +256,21 @@ GitHub Actions uses the same separation as Make:
 
 Separate jobs for `goimports`, `gofmt`, `go vet`, `modernize`, `gosec`, and `staticcheck` are intentionally omitted because `golangci-lint` already covers them with the repository configuration.
 
+### The race detector
+
+The race detector is a gate of its own, in `.github/workflows/race.yml`, and it deliberately does not run on a pull request. The unit suite takes minutes without it and the better part of an hour with it, which no push should pay for a class of defect that most changes cannot introduce. It runs in two places instead:
+
+| When            | How                                                                                                   | What it covers                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Every release   | `release.yml` calls `race.yml` beside the E2E gate, in front of the first job that publishes anything | so a race cannot reach a tag                      |
+| Mondays, weekly | the workflow's own `schedule`, beside the scheduled E2E run                                           | so a race introduced this week surfaces this week |
+
+Three jobs run there: the whole unit suite (`go test -race ./cmd/... ./internal/...`), and the two transport end-to-end modules, which are the only tests that drive the shipped binary as a process. `go test -race` instruments the test binary alone, so each transport harness passes the flag on to the server it builds through a build-tag seam (`harness_race_test.go` beside `harness_norace_test.go` in `test/e2e/http` and `test/e2e/stdio`) and starts it with `GORACE=halt_on_error=1`, or a detected race would be printed to a log and the run would stay green.
+
+Every one of those runs carries an explicit `-timeout`, and so does `make test-race`. Go's default is ten minutes **per package binary**, and `internal/tools` alone takes about 976 s under the detector against 113 s without it, so before the timeouts existed the target could not finish and reported a timeout rather than a race. `RACE_TIMEOUT` in the Makefile is that bound; it is a bound and not an expectation, there to end a deadlock with every goroutine stack printed.
+
+Nothing here reaches the `CI` workflow's graph, so the single required check is unchanged.
+
 ## GitLab CI Example
 
 ```yaml

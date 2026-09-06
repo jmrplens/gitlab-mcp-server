@@ -129,8 +129,15 @@ test-short:
 	go test -count=1 $(PKGS)
 
 ## test-race: run all unit tests with race detector enabled
+# The timeout is explicit because go test's default is ten minutes per package
+# binary and internal/tools alone takes about 976 s under the detector, against
+# 113 s without it, so this target could never finish and reported a timeout
+# rather than a race (issue 536). 60m is the same bound the Race Detector
+# workflow carries, and it is a bound rather than an expectation: it exists to
+# end a deadlock with every goroutine stack printed.
+RACE_TIMEOUT ?= 60m
 test-race:
-	go test -v -race -coverprofile=coverage.out $(PKGS)
+	go test -v -race -timeout $(RACE_TIMEOUT) -coverprofile=coverage.out $(PKGS)
 
 ## test-pkg: run tests for a specific package domain (usage: make test-pkg PKG=branches)
 test-pkg:

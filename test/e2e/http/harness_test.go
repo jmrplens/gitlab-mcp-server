@@ -84,9 +84,12 @@ func serverBinary(t *testing.T) string {
 			// go build -o writes exactly the name it is given.
 			out += ".exe"
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		// The build arguments and the bound come from the race seam, so a
+		// `go test -race` run builds an instrumented server rather than
+		// driving an uninstrumented one (harness_race_test.go).
+		ctx, cancel := context.WithTimeout(context.Background(), serverBuildTimeout)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/server")
+		cmd := exec.CommandContext(ctx, "go", serverBuildArgs(out)...) //#nosec G204 -- every argument is a constant chosen by a build tag, plus a path this function got from os.MkdirTemp; nothing here comes from outside the test.
 		cmd.Dir = repoRoot()
 		if output, runErr := cmd.CombinedOutput(); runErr != nil {
 			errBuild = fmt.Errorf("building cmd/server: %w\n%s", runErr, output)
@@ -240,6 +243,9 @@ func tryStartServerOnPort(t *testing.T, port int, env map[string]string, flags .
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
 	)
+	// Before the caller's own entries, so a test that needs to say something
+	// else about GORACE still can.
+	cmd.Env = append(cmd.Env, raceEnviron()...)
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
