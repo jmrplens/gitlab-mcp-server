@@ -186,7 +186,13 @@ func TestAuthRateLimiter_CapAdmitsNewKeysOnceRecordsLapse(t *testing.T) {
 // treating a lapsed record as a new key would refuse to reset it and leave a
 // returning client pinned to whatever count it had when the flood started.
 func TestAuthRateLimiter_LapsedRecordIsReplacedInPlace(t *testing.T) {
-	limiter := NewAuthRateLimiter(2, 50*time.Millisecond)
+	// An hour, so that nothing lapses by itself while the table is filled.
+	// With a window of milliseconds this test read as if it were fast, and on
+	// a slower machine the filler loop outlasted the window: the record this
+	// test is about was pruned as lapsed before the test could lapse it, and
+	// the next line dereferenced a map entry that was no longer there. The one
+	// record that must lapse is lapsed below, by moving its own timestamp.
+	limiter := NewAuthRateLimiter(2, time.Hour)
 
 	limiter.RecordFailure("10.0.0.1")
 	limiter.RecordFailure("10.0.0.1")
@@ -200,8 +206,14 @@ func TestAuthRateLimiter_LapsedRecordIsReplacedInPlace(t *testing.T) {
 		limiter.RecordFailure("filler-" + strconv.Itoa(i))
 	}
 	limiter.mu.Lock()
-	limiter.failures["10.0.0.1"].firstAt = time.Now().Add(-2 * limiter.window)
+	blocked, tracked := limiter.failures["10.0.0.1"]
+	if tracked {
+		blocked.firstAt = time.Now().Add(-2 * limiter.window)
+	}
 	limiter.mu.Unlock()
+	if !tracked {
+		t.Fatal("the blocked client's record was dropped while the table was filled, so there is nothing to lapse")
+	}
 
 	limiter.RecordFailure("10.0.0.1")
 

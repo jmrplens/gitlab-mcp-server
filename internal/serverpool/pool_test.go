@@ -3283,8 +3283,23 @@ func TestEvictStaleCredential_KeepsWhatIsNotStale(t *testing.T) {
 			age:  time.Hour,
 		},
 		{
-			name:    "a genuinely stale entry is evicted",
-			age:     time.Nanosecond,
+			// Backdated rather than waited out. A one-nanosecond ceiling and
+			// one elapsed nanosecond are not the same thing: Windows reads its
+			// monotonic clock in ticks, so two calls inside one tick are the
+			// same instant, time.Since answers zero, and nothing is ever older
+			// than any ceiling. This case failed there and nowhere else.
+			name: "a genuinely stale entry is evicted",
+			age:  time.Minute,
+			prepare: func(t *testing.T, pool *ServerPool) {
+				t.Helper()
+				pool.mu.Lock()
+				defer pool.mu.Unlock()
+				entry, ok := pool.entries[key]
+				if !ok {
+					t.Fatal("the entry to age is not in the pool")
+				}
+				entry.lastValidated = time.Now().Add(-time.Hour)
+			},
 			wantOut: true,
 		},
 	}
