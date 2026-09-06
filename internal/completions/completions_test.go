@@ -7,8 +7,12 @@ package completions
 import (
 	"bytes"
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1535,6 +1539,13 @@ func TestComplete_ContextBoundClient_UsesBoundClient(t *testing.T) {
 
 // completableArguments is every argument name [Handler.Complete] answers for,
 // with the sibling arguments each one needs resolved before it will search.
+//
+// The names are not the source of truth. The two switches in completions.go
+// are, and [TestComplete_EveryCaseOfBothSwitchesIsDriven] holds this list to
+// them: a case added there and forgotten here is a search that resolves the
+// stored client forever, autocompleting to nothing with nothing on the wire and
+// nothing in the log. The resolved siblings do have to be supplied by hand,
+// since the dispatcher's requirements are not readable off a case label.
 var completableArguments = []struct {
 	name     string
 	ref      string
@@ -1577,6 +1588,95 @@ func completeRequest(ref, name string, resolved map[string]string) *mcp.Complete
 		req.Params.Context = &mcp.CompleteContext{Arguments: resolved}
 	}
 	return req
+}
+
+// TestComplete_EveryCaseOfBothSwitchesIsDriven holds the hand-kept list of
+// completable arguments to the code that decides them.
+//
+// The credential test below walks that list, and a list is only as good as the
+// last person who remembered it. The resource and prompt surfaces have no such
+// gap: their loops walk what registration produced. Here the source of truth is
+// two switch statements, so this reads their case labels out of the file and
+// requires the list to name every one.
+//
+// What a miss costs is why it is worth parsing Go in a test. A new case that
+// resolves the stored client instead of the request's would autocomplete to
+// nothing for every caller of a shared server, forever, with nothing on the
+// wire and nothing in the log, because the contract here is to answer empty
+// rather than to fail. That is indistinguishable from a correct search of an
+// instance with no matches.
+func TestComplete_EveryCaseOfBothSwitchesIsDriven(t *testing.T) {
+	switches := map[string]string{
+		"completePromptArg":   refPrompt,
+		"completeResourceArg": refResource,
+	}
+
+	listed := map[string]bool{}
+	for _, arg := range completableArguments {
+		listed[arg.ref+"/"+arg.name] = true
+	}
+
+	for method, ref := range switches {
+		t.Run(method, func(t *testing.T) {
+			cases := argumentSwitchCases(t, method)
+			if len(cases) == 0 {
+				t.Fatalf("no case labels were read out of %s; the parse found nothing to check", method)
+			}
+			for _, name := range cases {
+				if !listed[ref+"/"+name] {
+					t.Errorf("%s answers for %q and no test drives it: a search there could resolve the "+
+						"handler's own credential-less client and answer empty forever, which is what a "+
+						"correct search of an empty instance also does", method, name)
+				}
+			}
+		})
+	}
+}
+
+// argumentSwitchCases returns the argument names one of the dispatchers in
+// completions.go answers for, read from its switch over the argument name.
+//
+// It reads the source rather than exporting a table from the package on
+// purpose: a table would be a second thing to keep in step, and the switch
+// would still be what runs.
+func argumentSwitchCases(t *testing.T, method string) []string {
+	t.Helper()
+
+	parsed, err := parser.ParseFile(token.NewFileSet(), "completions.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing completions.go: %v", err)
+	}
+
+	var names []string
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		fn, ok := node.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != method {
+			return true
+		}
+		ast.Inspect(fn.Body, func(inner ast.Node) bool {
+			clause, isClause := inner.(*ast.CaseClause)
+			if !isClause {
+				return true
+			}
+			// A clause with no expressions is `default`, which answers empty
+			// and is the one outcome that needs no credential.
+			for _, expr := range clause.List {
+				literal, isLiteral := expr.(*ast.BasicLit)
+				if !isLiteral || literal.Kind != token.STRING {
+					continue
+				}
+				value, unquoteErr := strconv.Unquote(literal.Value)
+				if unquoteErr != nil {
+					t.Errorf("case label %s in %s is not a string literal this can read", literal.Value, method)
+					continue
+				}
+				names = append(names, value)
+			}
+			return true
+		})
+		return false
+	})
+	return names
 }
 
 // TestComplete_NeverUsesTheClientTheHandlerWasBuiltWith walks every argument the
@@ -1644,5 +1744,38 @@ func TestComplete_AnUnattributedRequest_IsAnsweredEmptyAndSaidOutLoud(t *testing
 	}
 	if !strings.Contains(logged.String(), toolutil.UnattributedRequestMessage) {
 		t.Errorf("nothing was logged at warn level about a completion that could not be attributed:\n%s", logged.String())
+	}
+}
+
+// TestComplete_AnAbandonedRequest_IsNotBlamedOnTheWiring covers the legitimate
+// cause of the same state.
+//
+// An abandoned POST takes its carrier with it, and the carrier is where the
+// credential is read from, so a client that stopped typing produces exactly the
+// unattributed state a wiring defect produces. Warning about it fills an
+// operator's log with wiring defects that are editors closing a popup, and the
+// warn level is the whole point of the message: it is there to be noticed.
+//
+// The tools path gets this apart for free, because ClassifyError checks
+// cancellation before anything else.
+func TestComplete_AnAbandonedRequest_IsNotBlamedOnTheWiring(t *testing.T) {
+	var logged bytes.Buffer
+	restore := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(restore) })
+
+	handler := NewHandler(gitlabclient.NewUnboundClient("https://gitlab.invalid"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := handler.Complete(ctx, completeRequest(refPrompt, "project_id", nil))
+	if err != nil {
+		t.Fatalf("Complete returned %v; an abandoned completion must not become an error", err)
+	}
+	if result == nil || len(result.Completion.Values) != 0 {
+		t.Fatalf("Complete returned %v, want an empty completion", result)
+	}
+	if strings.Contains(logged.String(), toolutil.UnattributedRequestMessage) {
+		t.Errorf("a client that pressed stop was logged at warn as a wiring defect:\n%s", logged.String())
 	}
 }

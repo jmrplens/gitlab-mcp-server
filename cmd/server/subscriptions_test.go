@@ -963,6 +963,24 @@ func TestSubscriptionShape_Handlers_ARequestBoundToNoCredential_IsRefused(t *tes
 	if runtime.manager.Len() != 0 {
 		t.Errorf("watchers = %d after two refusals, want 0", runtime.manager.Len())
 	}
+
+	t.Run("an abandoned request is answered with why it ended", func(t *testing.T) {
+		// The one legitimate cause of the same state: a POST the client
+		// abandoned takes its carrier with it, and the carrier is where the
+		// credential is read from. Calling that a wiring defect and asking for
+		// a report is wrong about a client that pressed stop.
+		gone := errors.New("the caller went away")
+		abandoned, cancel := context.WithCancelCause(t.Context())
+		cancel(gone)
+
+		err := subscribe(abandoned, &mcp.SubscribeRequest{
+			Session: testSession,
+			Params:  &mcp.SubscribeParams{URI: uri},
+		})
+		if !errors.Is(err, gone) {
+			t.Errorf("subscribe error = %v, want %v; a client that went away is not a wiring defect", err, gone)
+		}
+	})
 }
 
 // TestServerNotifier_ResourceUpdated_TagsWhatTheFilterReads drives the notifier

@@ -216,7 +216,7 @@ type attributedRegistrar struct {
 func (r *attributedRegistrar) AddPrompt(prompt *mcp.Prompt, handler mcp.PromptHandler) {
 	r.inner.AddPrompt(prompt, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		if r.base.For(ctx).IsUnbound() {
-			return nil, toolutil.UnattributedRequestError()
+			return nil, toolutil.UnattributedRequestErrorFor(ctx)
 		}
 		return handler(ctx, req)
 	})

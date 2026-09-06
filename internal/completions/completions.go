@@ -64,6 +64,18 @@ func (h *Handler) Complete(ctx context.Context, req *mcp.CompleteRequest) (*mcp.
 		// that fixes itself, while this one is a wiring defect on this side
 		// that never will, and it presents as an editor with no suggestions,
 		// forever, with nothing on the wire and nothing in the log.
+		//
+		// Unless the request is already over. An abandoned POST takes its
+		// carrier with it, and the carrier is where the credential is read
+		// from, so a client that stopped typing produces exactly this state
+		// legitimately. Warning about it would fill an operator's log with
+		// wiring defects that are editors closing a popup. The tools path gets
+		// this apart for free, because ClassifyError checks cancellation first.
+		if cause := context.Cause(ctx); cause != nil {
+			slog.DebugContext(ctx, "completion: the request was over before it could be attributed",
+				"ref", req.Params.Ref.Type, "argument", req.Params.Argument.Name, "cause", cause)
+			return emptyResult(), nil
+		}
 		slog.WarnContext(ctx, "completion: "+toolutil.UnattributedRequestMessage,
 			"ref", req.Params.Ref.Type, "argument", req.Params.Argument.Name)
 		return emptyResult(), nil

@@ -321,6 +321,37 @@ func TestRegisteredResources_AnUnattributedRead_IsRefusedAsSuch(t *testing.T) {
 	}
 }
 
+// TestRegisteredResources_AnAbandonedRead_IsNotBlamedOnTheWiring covers the
+// legitimate cause of an unattributed read.
+//
+// A POST the client abandoned takes its carrier with it, and the carrier is
+// where the credential is read from, so a client that went away reaches this
+// guard in exactly the state a wiring defect reaches it in. The refusal asks
+// the caller to report a bug, which is the wrong thing to say about a request
+// that was already over.
+func TestRegisteredResources_AnAbandonedRead_IsNotBlamedOnTheWiring(t *testing.T) {
+	unbound := gitlabclient.NewUnboundClient("https://gitlab.invalid")
+	index := NewHandlerIndex(unbound)
+
+	handler, ok := index["gitlab://user/current"]
+	if !ok {
+		t.Fatal("the current-user resource is no longer registered under that URI")
+	}
+
+	gone := errors.New("the caller went away")
+	abandoned, cancel := context.WithCancelCause(context.Background())
+	cancel(gone)
+
+	_, err := handler(abandoned, &mcp.ReadResourceRequest{Params: &mcp.ReadResourceParams{URI: "gitlab://user/current"}})
+
+	if !errors.Is(err, gone) {
+		t.Errorf("an abandoned read was answered %v, want the reason it ended", err)
+	}
+	if err != nil && strings.Contains(err.Error(), toolutil.UnattributedRequestMessage) {
+		t.Errorf("a client that went away was told to report a wiring defect: %v", err)
+	}
+}
+
 // TestRegisteredResources_ABoundRead_ReachesTheHandler covers the other side of
 // the guard: a request that did bring a credential is not refused by it.
 func TestRegisteredResources_ABoundRead_ReachesTheHandler(t *testing.T) {

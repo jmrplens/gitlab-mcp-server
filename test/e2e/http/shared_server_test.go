@@ -764,9 +764,15 @@ func TestSharedServer_PerCredentialLimitsProveTheBindingRunsOutermost(t *testing
 
 	t.Run("the rate-limit bucket is the credential's own", func(t *testing.T) {
 		gitlab := startTwoTenantGitLab(t, firstToken, secondToken)
+		// One token in the bucket and a refill of one per thousand seconds, so
+		// the bucket the first credential drains stays empty for the rest of
+		// the test. At one per second a slow runner could refill it between the
+		// two calls below, and the second credential would then pass on a
+		// refill rather than on a bucket of its own: the assertion would hold
+		// with the binding in the wrong place.
 		srv := startServer(t, nil,
 			"--gitlab-url="+gitlab.URL,
-			"--rate-limit-rps=1",
+			"--rate-limit-rps=0.001",
 			"--rate-limit-burst=1",
 		)
 
@@ -778,7 +784,7 @@ func TestSharedServer_PerCredentialLimitsProveTheBindingRunsOutermost(t *testing
 			}
 		}
 		if !drained {
-			t.Fatal("15 calls at one request per second never drained a bucket of one, so nothing was limited")
+			t.Fatal("15 calls against a bucket of one that does not refill were never limited")
 		}
 
 		if got := findActionAs(t, srv, secondToken); isRateLimited(got.body) {

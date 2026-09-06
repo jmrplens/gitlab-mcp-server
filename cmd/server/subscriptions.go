@@ -912,7 +912,7 @@ func (s *subscriptionShape) handlers(runtimeFor func(context.Context) *subscript
 	subscribe = func(ctx context.Context, req *mcp.SubscribeRequest) error {
 		runtime := runtimeFor(ctx)
 		if runtime == nil {
-			return errUnboundSubscribe
+			return unboundSubscribeError(ctx)
 		}
 		if s.stateless {
 			return runtime.bridge.subscribeUnlessStateless(ctx, req)
@@ -922,7 +922,7 @@ func (s *subscriptionShape) handlers(runtimeFor func(context.Context) *subscript
 	unsubscribe = func(ctx context.Context, req *mcp.UnsubscribeRequest) error {
 		runtime := runtimeFor(ctx)
 		if runtime == nil {
-			return errUnboundSubscribe
+			return unboundSubscribeError(ctx)
 		}
 		return runtime.bridge.Unsubscribe(ctx, req)
 	}
@@ -938,9 +938,27 @@ func (s *subscriptionShape) handlers(runtimeFor func(context.Context) *subscript
 // side. Failing here rather than watching with the unbound client is the same
 // fail-closed choice [github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab.NewUnboundClient]
 // makes for tool handlers.
+//
+// It keeps the noun ("subscription", because that is what was asked for) and
+// otherwise says what the tool, resource and prompt surfaces say, clause for
+// clause. The clause that nothing was sent is the one that matters and the one
+// that had gone missing here: an operator meeting this and one of the others
+// should see one fact, not two symptoms of it.
 var errUnboundSubscribe = &jsonrpc.Error{
-	Code:    jsonrpc.CodeInternalError,
-	Message: "this subscription could not be attributed to a credential; retry, and report it if it persists",
+	Code: jsonrpc.CodeInternalError,
+	Message: "this subscription could not be attributed to a credential and was not sent to GitLab; " +
+		"retry, and report it if it persists",
+}
+
+// unboundSubscribeError is [errUnboundSubscribe] for a request that is still
+// live, and the reason it ended for one that is not. See
+// [toolutil.UnattributedRequestErrorFor], which decides the same question for
+// the other three surfaces.
+func unboundSubscribeError(ctx context.Context) error {
+	if cause := context.Cause(ctx); cause != nil {
+		return cause
+	}
+	return errUnboundSubscribe
 }
 
 // ErrStatelessSubscribe explains why a legacy subscription cannot be

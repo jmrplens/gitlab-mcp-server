@@ -48,6 +48,34 @@ func UnattributedRequestError() error {
 	}
 }
 
+// UnattributedRequestErrorFor is [UnattributedRequestError] for a request that
+// is still live, and the reason it ended for one that is not.
+//
+// Not every unattributed request is a wiring defect, which is what the message
+// says it is. A POST the client abandoned takes its carrier with it, and the
+// carrier is where the credential is read from, so the binding finds nothing
+// and the handler resolves the credential-less client: a legitimate cause,
+// answered with a sentence asking the caller to report a bug. The tools path
+// never had this problem, because [ClassifyError] checks cancellation first and
+// that check is what it hits.
+//
+// Consulting the context is what tells them apart. A cancelled request is over
+// and nobody is reading the answer, so what matters is only that it is not
+// blamed on the wiring in a log an operator does read.
+//
+// One cause it cannot distinguish, and does not claim to: the pool evicting the
+// entry between the gate resolving it and the gate looking up its state. The
+// request is alive and unattributable, and the honest thing to tell that caller
+// is exactly what the message already says, since retrying rebuilds the entry.
+func UnattributedRequestErrorFor(ctx context.Context) error {
+	if ctx != nil {
+		if cause := context.Cause(ctx); cause != nil {
+			return cause
+		}
+	}
+	return UnattributedRequestError()
+}
+
 // ToolError represents a structured error from a tool handler.
 type ToolError struct {
 	Tool       string `json:"tool"`

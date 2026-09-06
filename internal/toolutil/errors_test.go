@@ -4,6 +4,7 @@
 package toolutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -1820,5 +1821,58 @@ func TestUnattributedRequestError_IsAnInternalError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), UnattributedRequestMessage) {
 		t.Errorf("error = %q, want it to carry %q", err, UnattributedRequestMessage)
+	}
+}
+
+// TestUnattributedRequestErrorFor_BlamesTheWiringOnlyForALiveRequest covers the
+// one legitimate cause that reaches the attribution guards.
+//
+// A POST the client abandoned takes its carrier with it, and the carrier is
+// where the credential is read from, so the binding finds nothing and the
+// handler resolves the credential-less client. That is a client pressing stop,
+// answered with a sentence asking them to report a bug and, on the completion
+// path, written at warn. The tools path never had the problem: ClassifyError
+// checks cancellation first and that check is what it hits.
+func TestUnattributedRequestErrorFor_BlamesTheWiringOnlyForALiveRequest(t *testing.T) {
+	callerGone := errors.New("the caller went away")
+
+	cancelled, cancel := context.WithCancelCause(context.Background())
+	cancel(callerGone)
+
+	plain, stop := context.WithCancel(context.Background())
+	stop()
+
+	tests := map[string]struct {
+		ctx  context.Context
+		want error
+	}{
+		"a live request is the wiring defect the message describes": {
+			ctx:  context.Background(),
+			want: UnattributedRequestError(),
+		},
+		"a request with no context at all": {
+			// Nothing reaches this today; it is here because the answer must
+			// be the refusal rather than a nil error, which the caller would
+			// read as success.
+			want: UnattributedRequestError(),
+		},
+		"an abandoned request is answered with why it ended": {
+			ctx:  cancelled,
+			want: callerGone,
+		},
+		"a cancellation with no cause of its own": {
+			ctx:  plain,
+			want: context.Canceled,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := UnattributedRequestErrorFor(tt.ctx)
+
+			if got.Error() != tt.want.Error() {
+				t.Errorf("UnattributedRequestErrorFor = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

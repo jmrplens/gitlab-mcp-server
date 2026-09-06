@@ -177,7 +177,7 @@ func (r *attributedRegistrar) AddResourceTemplate(template *mcp.ResourceTemplate
 func (r *attributedRegistrar) guard(handler mcp.ResourceHandler) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		if r.base.For(ctx).IsUnbound() {
-			return nil, toolutil.UnattributedRequestError()
+			return nil, toolutil.UnattributedRequestErrorFor(ctx)
 		}
 		return handler(ctx, req)
 	}

@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -342,6 +343,37 @@ func TestRegisteredPrompts_AnUnattributedRequest_IsRefusedAsSuch(t *testing.T) {
 				t.Errorf("%s answered %q, want the unattributed-request refusal", name, err)
 			}
 		})
+	}
+}
+
+// TestRegisteredPrompts_AnAbandonedRequest_IsNotBlamedOnTheWiring covers the
+// legitimate cause of an unattributed request.
+//
+// A POST the client abandoned takes its carrier with it, and the carrier is
+// where the credential is read from, so a client that pressed stop reaches this
+// guard in exactly the state a wiring defect reaches it in. The refusal asks
+// the caller to report a bug, which is the wrong thing to say about a request
+// that was already over.
+func TestRegisteredPrompts_AnAbandonedRequest_IsNotBlamedOnTheWiring(t *testing.T) {
+	unbound := gitlabclient.NewUnboundClient("https://gitlab.invalid")
+	handlers := registeredPrompts(unbound)
+
+	handler, ok := handlers["summarize_mr_changes"]
+	if !ok {
+		t.Fatal("summarize_mr_changes is no longer registered")
+	}
+
+	gone := errors.New("the caller went away")
+	abandoned, cancel := context.WithCancelCause(context.Background())
+	cancel(gone)
+
+	_, err := handler(abandoned, promptRequest("summarize_mr_changes"))
+
+	if !errors.Is(err, gone) {
+		t.Errorf("an abandoned prompts/get was answered %v, want the reason it ended", err)
+	}
+	if err != nil && strings.Contains(err.Error(), toolutil.UnattributedRequestMessage) {
+		t.Errorf("a client that went away was told to report a wiring defect: %v", err)
 	}
 }
 

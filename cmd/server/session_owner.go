@@ -284,6 +284,26 @@ func (o *sessionOwners) dropIDLocked(owner, id string) {
 // It runs inside [credentialStates.bindCredential], which is what put the
 // credential on the context, and does nothing at all on a request nothing bound
 // (stdio, the in-memory transport, a test's own server).
+//
+// # The one process-wide lock left on the request path
+//
+// [sessionOwners.record] takes o.mu, and there is one sessionOwners per
+// process, so every stateful request serializes on it for the length of two map
+// reads and up to four map writes. Nothing else on the request path does: the
+// rate-limit bucket, the listen counter and the watchers are all per credential
+// since ADR-0020, and the pool's own lock is taken by the gate before the MCP
+// layer is reached.
+//
+// It is recorded rather than changed. The critical section is a few map
+// operations with no allocation and no I/O, [worthRecording] keeps the default
+// stateless transport out of it entirely (there the map is touched only by a
+// session that subscribes), and the same-owner fast path returns after one read
+// and one write. Sharding it by session pointer, or dropping to a sync.Map,
+// would trade that for a structure whose eviction path can no longer be one
+// atomic sweep, which is the operation correctness depends on. Measure before
+// changing it: at the point this was written no profile showed contention here,
+// and the reason to write it down is that a future middleware taking the same
+// lock per request would inherit a bottleneck nobody documented.
 func (o *sessionOwners) recordingMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 		owner := ownerOfRequest(ctx)
