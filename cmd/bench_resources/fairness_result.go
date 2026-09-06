@@ -19,11 +19,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -106,8 +103,9 @@ type FairnessMethod struct {
 	Method string `json:"method"`
 	Detail string `json:"detail,omitempty"`
 	// Intended is every tick the schedule reached; Dropped is those the driver
-	// could not hold a slot for; Dispatched is the rest, and the four outcomes
-	// below sum to it.
+	// never sent, whether because it could hold no slot or because it arrived
+	// past the request's own deadline; Dispatched is the rest, and the four
+	// outcomes below sum to it.
 	Intended   int `json:"intended"`
 	Dropped    int `json:"dropped"`
 	Dispatched int `json:"dispatched"`
@@ -162,8 +160,14 @@ type FairnessComparison struct {
 	// LatenessShiftMs is how much the driver's own dispatch lateness moved
 	// between the arms, on the same scale as the delta above.
 	LatenessShiftMs float64 `json:"lateness_shift_ms"`
-	Direction       string  `json:"direction"`
-	Reason          string  `json:"reason"`
+	// ServedShare is the smallest share of the quiet population's dispatched
+	// requests that completed in any arm the comparison read, and it is
+	// repeated in the reason below rather than only stored here. A percentile
+	// is quoted, and a percentile quoted without the survivorship behind it is
+	// the one reading error this whole scenario exists to prevent.
+	ServedShare float64 `json:"served_share"`
+	Direction   string  `json:"direction"`
+	Reason      string  `json:"reason"`
 }
 
 // FairnessVerdict is the run's answer.
@@ -206,7 +210,27 @@ const offeredTolerance = 0.10
 
 // judgeFairness compares the arms and returns the per-method comparisons and
 // the run's verdict.
+//
+// The order of the gates is the honesty, and the first two were the other way
+// round until a reader pointed out what that cost.
+//
+// The quiet regression comes first because it is the only answer here that
+// needs no comparison at all: that the bound refused the tenant it exists to
+// protect, or that the tenant gave up on more requests with it in force, is a
+// fact about one pair of arms and holds however few repetitions were run and
+// whatever else about the pair was irregular. Behind the repetition-count gate
+// it was unreachable at -fairness-repeats=1, so the single run in which the
+// bound turned the quiet tenant away was reported as no difference; behind the
+// comparability gate it was discarded in favor of the more procedural answer
+// whenever anything else had also gone wrong.
+//
+// Everything after it is a comparison and needs both arms to be the same
+// experiment, so those gates run in the order of how specific their sentence
+// is.
 func judgeFairness(doc *FairnessDoc) ([]FairnessComparison, FairnessVerdict) {
+	if quiet := quietRegression(doc); quiet != "" {
+		return nil, FairnessVerdict{Direction: directionWorse, Reason: quiet}
+	}
 	if blocked := comparabilityFailure(doc); blocked != "" {
 		return nil, FairnessVerdict{Direction: directionNotComparable, Reason: blocked}
 	}
@@ -217,15 +241,67 @@ func judgeFairness(doc *FairnessDoc) ([]FairnessComparison, FairnessVerdict) {
 				"variation of the machine; raise -fairness-repeats",
 		}
 	}
-	if quiet := quietRegression(doc); quiet != "" {
-		return nil, FairnessVerdict{Direction: directionWorse, Reason: quiet}
-	}
 	if idle := saturationFailure(doc); idle != "" {
 		return nil, FairnessVerdict{Direction: directionIndistinguishable, Reason: idle}
 	}
 
 	comparisons := compareQuiet(doc)
-	return comparisons, summarizeDirections(comparisons)
+	verdict := summarizeDirections(comparisons)
+	// Asked only of a claim that the bound helped, and last. The harness
+	// competing for its own host is an alternative explanation for an
+	// improvement and not for a regression: a quiet tenant that came out worse
+	// while the driver was busier is worse for one more reason, not for one
+	// fewer.
+	if verdict.Direction == directionBetter {
+		if confound := driverConfound(doc); confound != "" {
+			return comparisons, FairnessVerdict{Direction: directionNotComparable, Reason: confound}
+		}
+	}
+	return comparisons, verdict
+}
+
+// driverConfound reports an improvement the harness could have caused by
+// getting out of its own way.
+//
+// The driver shares the host with the server it measures and costs very
+// different amounts in the two arms: parsing a two-kilobyte refusal is nothing
+// beside a hundred-and-seventy-kilobyte result, so with the bound in force it
+// hands the host back exactly where the quiet tenant is supposed to look
+// better. When it handed back at least as much as the server itself did, the
+// harness is at least as good an explanation for the improvement as the bound,
+// and no arithmetic here can separate them.
+//
+// This is the second reading of that effect and not a replacement for the
+// first. The dispatch lateness the per-method gate uses is captured before the
+// call and so cannot see the response decode, which is the larger half and the
+// half that differs most between the arms; this one is the processor time both
+// halves are inside, measured directly, and it was being recorded and never
+// consulted.
+func driverConfound(doc *FairnessDoc) string {
+	var byDriver, byServer []float64
+	for _, repeat := range doc.Repeats {
+		off, offOK := repeat.arm(armOff)
+		on, onOK := repeat.arm(armOn)
+		if !offOK || !onOK {
+			continue
+		}
+		byDriver = append(byDriver, off.Process.DriverCoresBusy-on.Process.DriverCoresBusy)
+		byServer = append(byServer, off.Process.CoresBusy-on.Process.CoresBusy)
+	}
+	if len(byDriver) == 0 {
+		return ""
+	}
+	freedByDriver, freedByServer := medianOf(byDriver), medianOf(byServer)
+	if freedByDriver <= 0 || freedByDriver < freedByServer {
+		return ""
+	}
+	return fmt.Sprintf(
+		"the driver handed back %.2f of the host's cores with the bound in force against the %.2f the server itself "+
+			"handed back, so the harness competing for the machine is at least as good an explanation for the quiet "+
+			"population's improvement as the bound is: measure again with the driver on another host, or with a noisy "+
+			"population whose refusals cost the driver less to read",
+		freedByDriver, freedByServer,
+	)
 }
 
 // comparabilityFailure names the first reason the arms cannot be compared at
@@ -246,6 +322,9 @@ func comparabilityFailure(doc *FairnessDoc) string {
 		// driver could not send is also a pair of arms that offered different
 		// work, and the more specific sentence is the useful one.
 		if reason := quietWasDropped(repeat.Index, off, on); reason != "" {
+			return reason
+		}
+		if reason := quietSurvived(repeat.Index, off, on); reason != "" {
 			return reason
 		}
 		// Both ways round, because one direction only sees what the arm it
@@ -320,6 +399,53 @@ func quietWasDropped(index int, arms ...FairnessArm) string {
 	return ""
 }
 
+// quietSurvived refuses a repetition in which most of the quiet population's
+// requests never completed, whichever arm they were in.
+//
+// The percentiles this scenario publishes are over served requests alone,
+// which is what keeps a refusal out of them. The cost of that is a distribution
+// whose meaning depends on how much of the population reached it: three
+// requests out of a hundred and sixty, in both arms, still produce two
+// percentiles and a difference between them, and nothing above this would
+// object, since the arms dispatched the same work, the bound refused nobody
+// quiet, and neither arm's timeouts rose against the other's. A verdict
+// computed from the survivors of a catastrophe is not a verdict about the
+// population, so it is refused rather than qualified.
+//
+// The floor is deliberately well below a healthy run: a quiet tenant losing a
+// tenth of its requests to a contended host is the interesting case this
+// scenario exists for, and refusing to compare it would throw away the finding
+// along with the noise.
+func quietSurvived(index int, arms ...FairnessArm) string {
+	for _, arm := range arms {
+		quiet, ok := arm.population(populationQuiet)
+		if !ok {
+			continue
+		}
+		for _, method := range quiet.Methods {
+			if method.Dispatched == 0 {
+				continue
+			}
+			share := float64(method.Served) / float64(method.Dispatched)
+			if share < quietSurvivorshipFloor {
+				return fmt.Sprintf(
+					"repetition %d, the %s arm: %d of the quiet population's %d dispatched %s requests completed (%.0f%%), "+
+						"below the %.0f%% a comparison of served percentiles needs; what survived a phase that lost "+
+						"most of the population is not that population's experience",
+					index+1, arm.Arm, method.Served, method.Dispatched, method.Method,
+					share*100, quietSurvivorshipFloor*100,
+				)
+			}
+		}
+	}
+	return ""
+}
+
+// quietSurvivorshipFloor is the share of the quiet population's dispatched
+// requests that must have completed for its served percentiles to stand for
+// the population.
+const quietSurvivorshipFloor = 0.75
+
 // quietRegression names the first way the quiet population was worse off with
 // the bound on, and the empty string when it was not.
 //
@@ -336,20 +462,32 @@ func quietWasDropped(index int, arms ...FairnessArm) string {
 // answered here or by the arm's own controls. A fourth check would be a fourth
 // name for one of these three, and it would be the one that fired, hiding the
 // specific answer behind a general one.
+//
+// The survivorship floor above is not that fourth check: it asks how much of
+// the population completed at all, in each arm on its own, which the identity
+// says nothing about because it holds just as well when both arms lost almost
+// everything.
 func quietRegression(doc *FairnessDoc) string {
+	if refused := quietWasRefused(doc); refused != "" {
+		return refused
+	}
+	return quietGaveUpMore(doc)
+}
+
+// quietWasRefused names the first repetition in which the bound turned the
+// quiet population away.
+//
+// One refusal is enough and needs no counterpart in the other arm: it is the
+// bound acting on the tenant it exists to protect, which is a categorical
+// finding rather than a quantity to be weighed against the run's noise.
+func quietWasRefused(doc *FairnessDoc) string {
 	for _, repeat := range doc.Repeats {
-		off, _ := repeat.arm(armOff)
 		on, _ := repeat.arm(armOn)
-		offQuiet, offOK := off.population(populationQuiet)
-		onQuiet, onOK := on.population(populationQuiet)
-		if !offOK || !onOK {
+		quiet, ok := on.population(populationQuiet)
+		if !ok {
 			continue
 		}
-		for _, method := range onQuiet.Methods {
-			before, found := offQuiet.method(method.Method)
-			if !found {
-				continue
-			}
+		for _, method := range quiet.Methods {
 			if method.Refused > 0 {
 				return fmt.Sprintf(
 					"repetition %d: the bound refused %d of the quiet population's %d %s requests. "+
@@ -357,14 +495,51 @@ func quietRegression(doc *FairnessDoc) string {
 					repeat.Index+1, method.Refused, method.Intended, method.Method,
 				)
 			}
-			if method.TimedOut > before.TimedOut {
-				return fmt.Sprintf(
-					"repetition %d: the quiet population gave up on %d %s requests with the bound on against %d with it off, "+
-						"so whatever its latency did, it got less work done",
-					repeat.Index+1, method.TimedOut, method.Method, before.TimedOut,
-				)
-			}
 		}
+	}
+	return ""
+}
+
+// quietGaveUpMore reports a quiet population that abandoned more requests with
+// the bound in force, when every repetition says so.
+//
+// Every repetition, rather than any one of them, and the difference between
+// those two is the difference between a measurement and a coin. A timeout is a
+// tail event on a contended host: the first real run of this scenario against
+// the shipped bucket lost one of a hundred and twenty quiet calls in the arm
+// with the bound on and fifteen of them in the arm with it off, and a check
+// that fires on any single repetition read the one and reported that the bound
+// left the quiet tenant worse off. On a host contended enough for the question
+// to be worth asking, that check answers "worse" whichever way the machine
+// jitters, and a scenario whose answer is settled before it runs is not
+// measuring anything.
+//
+// This is the same agreement rule the latency comparison applies to its own
+// deltas, for the same reason and stated in the same words: one disturbed
+// window may not carry the answer.
+func quietGaveUpMore(doc *FairnessDoc) string {
+	for _, method := range quietMethods(doc) {
+		pairs := methodPairs(doc, method)
+		if len(pairs) == 0 {
+			continue
+		}
+		rose := true
+		for _, pair := range pairs {
+			rose = rose && pair.on.TimedOut > pair.off.TimedOut
+		}
+		if !rose {
+			continue
+		}
+		on, off := 0, 0
+		for _, pair := range pairs {
+			on += pair.on.TimedOut
+			off += pair.off.TimedOut
+		}
+		return fmt.Sprintf(
+			"the quiet population gave up on %d %s requests with the bound on against %d with it off, in every one of "+
+				"the %d repetitions, so whatever its latency did, it got less work done",
+			on, method, off, len(pairs),
+		)
 	}
 	return ""
 }
@@ -434,10 +609,13 @@ func compareMethod(doc *FairnessDoc, method string) FairnessComparison {
 		}
 	}
 	latenessShifts := make([]float64, 0, len(pairs))
+	out.ServedShare = 1
 	for _, pair := range pairs {
 		out.DeltasMs = append(out.DeltasMs, round(servedAt(pair.off, out.Metric)-servedAt(pair.on, out.Metric)))
 		latenessShifts = append(latenessShifts, math.Abs(pair.off.Lateness.P99-pair.on.Lateness.P99))
+		out.ServedShare = min(out.ServedShare, servedShare(pair.off), servedShare(pair.on))
 	}
+	out.ServedShare = round(out.ServedShare)
 	out.MedianDeltaMs = round(medianOf(out.DeltasMs))
 	out.SpreadMs = round(spreadOf(out.DeltasMs))
 	out.LatenessShiftMs = round(medianOf(latenessShifts))
@@ -467,6 +645,18 @@ func methodPairs(doc *FairnessDoc, method string) []methodPair {
 	return pairs
 }
 
+// servedShare is how much of what one method dispatched came back served,
+// which is the survivorship the compared percentile is over. A method that
+// dispatched nothing has no survivorship rather than none of it, and reports
+// the whole of what it dispatched, so it cannot pull a comparison down on its
+// own.
+func servedShare(method FairnessMethod) float64 {
+	if method.Dispatched == 0 {
+		return 1
+	}
+	return float64(method.Served) / float64(method.Dispatched)
+}
+
 // servedAt reads the compared percentile out of a method's served
 // distribution. Served alone: a refused request has its own distribution and
 // never enters this one.
@@ -484,7 +674,11 @@ func servedAt(method FairnessMethod, metric string) float64 {
 // disturbed window cannot carry the answer. Then the difference has to exceed
 // the spread between repetitions, which is the only measure of host noise a
 // handful of them offers, and is why the field is called a direction and not a
-// significance.
+// significance. That gate is weaker than it sounds at two repetitions, and
+// worth stating rather than leaving to be derived: with two same-signed
+// deltas, the median beating the spread reduces to the larger delta being
+// under three times the smaller, which is an agreement test and no more.
+// Repetitions past the second are what make it stronger.
 //
 // The last gate is the driver's own, and it is the one this scenario would be
 // dishonest without. The driver shares the host with the server it measures,
@@ -519,11 +713,18 @@ func decide(c FairnessComparison) (direction, reason string) {
 		)
 	}
 	if c.MedianDeltaMs > 0 {
-		return directionBetter, fmt.Sprintf("the quiet population's served %s fell by %.3f ms, beyond the %.3f ms spread between repetitions",
-			c.Metric, c.MedianDeltaMs, c.SpreadMs)
+		return directionBetter, fmt.Sprintf("the quiet population's served %s fell by %.3f ms, beyond the %.3f ms spread between repetitions, %s",
+			c.Metric, c.MedianDeltaMs, c.SpreadMs, survivorship(c.ServedShare))
 	}
-	return directionWorse, fmt.Sprintf("the quiet population's served %s rose by %.3f ms, beyond the %.3f ms spread between repetitions",
-		c.Metric, -c.MedianDeltaMs, c.SpreadMs)
+	return directionWorse, fmt.Sprintf("the quiet population's served %s rose by %.3f ms, beyond the %.3f ms spread between repetitions, %s",
+		c.Metric, -c.MedianDeltaMs, c.SpreadMs, survivorship(c.ServedShare))
+}
+
+// survivorship is the clause every quotable direction ends on, so the sentence
+// a reader copies out carries how much of the population the percentile was
+// over.
+func survivorship(share float64) string {
+	return fmt.Sprintf("over the %.0f%% of the quiet population's requests that completed", share*100)
 }
 
 // sameSign reports whether every repetition moved the same way. A zero is not
@@ -612,18 +813,24 @@ func (a FairnessArm) served() int {
 	return total
 }
 
-// refusedAnything reports whether this arm recorded a refusal at all, which is
-// the positive control both arms are held to from opposite sides.
-func (a FairnessArm) refusedAnything() bool {
+// refusals is every request this arm had refused, which is what the positive
+// control weighs against the number the plan says the bound should have
+// refused.
+func (a FairnessArm) refusals() int {
+	total := 0
 	for _, pop := range a.Populations {
 		for _, method := range pop.Methods {
-			if method.Refused > 0 {
-				return true
-			}
+			total += method.Refused
 		}
 	}
-	return false
+	return total
 }
+
+// refusedAnything reports whether this arm recorded a refusal at all, which is
+// what the arm with the bound off is held to: there, any refusal at all is
+// something other than the bound under test, and one is as damning as a
+// thousand.
+func (a FairnessArm) refusedAnything() bool { return a.refusals() > 0 }
 
 // summary is the line an arm prints as it completes.
 //
@@ -677,33 +884,5 @@ func boundRecord(plan fairnessPlan) FairnessBound {
 // writeFairness writes the document, in the shape every other committed JSON
 // artifact here has.
 func writeFairness(path string, doc *FairnessDoc) error {
-	data, err := marshalRecord(doc, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode the fairness record: %w", err)
-	}
-	data = append(data, '\n')
-	if mkErr := os.MkdirAll(filepath.Dir(path), 0o750); mkErr != nil {
-		return fmt.Errorf("create %s: %w", filepath.Dir(path), mkErr)
-	}
-	if writeErr := os.WriteFile(path, data, 0o600); writeErr != nil {
-		return fmt.Errorf("write %s: %w", path, writeErr)
-	}
-	return nil
-}
-
-// readFairness loads a written document, refusing a schema this build cannot
-// read.
-func readFairness(path string) (*FairnessDoc, error) {
-	data, err := os.ReadFile(path) // #nosec G304 -- the path is this command's own flag
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
-	}
-	var doc FairnessDoc
-	if unmarshalErr := json.Unmarshal(data, &doc); unmarshalErr != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, unmarshalErr)
-	}
-	if doc.Schema != fairnessSchema {
-		return nil, fmt.Errorf("%s: fairness schema %d, this build reads %d", path, doc.Schema, fairnessSchema)
-	}
-	return &doc, nil
+	return writeJSON(path, doc, "the fairness record")
 }

@@ -3,12 +3,39 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
+
+// readFairness loads a written document, refusing a schema this build cannot
+// read.
+//
+// A test helper rather than production code, and deliberately so: nothing in
+// the command reads a fairness document back. The mode writes one and prints
+// its verdict, and the renderer that will read it waits on the chart rework,
+// so a reader kept beside the writer would be a function whose only callers
+// are the tests that cover it. What it is for is the round trip below, which
+// is the only check that the document a run writes is the document this
+// package's own shapes describe.
+func readFairness(path string) (*FairnessDoc, error) {
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is a test's own temporary directory
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	var doc FairnessDoc
+	if unmarshalErr := json.Unmarshal(data, &doc); unmarshalErr != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, unmarshalErr)
+	}
+	if doc.Schema != fairnessSchema {
+		return nil, fmt.Errorf("%s: fairness schema %d, this build reads %d", path, doc.Schema, fairnessSchema)
+	}
+	return &doc, nil
+}
 
 // methodFixture is one population's record for one method, spelled so a test
 // can state only the number it is about.
@@ -51,11 +78,12 @@ func (f methodFixture) build() FairnessMethod {
 
 // armFixture is one arm of a repetition.
 type armFixture struct {
-	arm       string
-	coresBusy float64
-	quiet     []methodFixture
-	noisy     []methodFixture
-	notes     []string
+	arm             string
+	coresBusy       float64
+	driverCoresBusy float64
+	quiet           []methodFixture
+	noisy           []methodFixture
+	notes           []string
 	// dropQuiet removes the quiet population altogether, for the paths that
 	// answer when the arms did not drive the same tenants.
 	dropQuiet bool
@@ -65,7 +93,7 @@ type armFixture struct {
 func (f armFixture) build() FairnessArm {
 	arm := FairnessArm{
 		Arm: f.arm, Comparable: len(f.notes) == 0, Notes: f.notes,
-		Process: FairnessProcess{CoresBusy: f.coresBusy},
+		Process: FairnessProcess{CoresBusy: f.coresBusy, DriverCoresBusy: f.driverCoresBusy},
 	}
 	if !f.dropQuiet {
 		quiet := FairnessPopulation{Name: populationQuiet, Credentials: 8, RatePerCredential: 2}
@@ -101,6 +129,25 @@ func saturated(arm string, quietP99 float64) armFixture {
 	return atLoad(arm, 6, quietP99)
 }
 
+// atProcess is an arm with what its two processes cost named, for the cases
+// about which of them handed the host back between the arms.
+func atProcess(arm string, coresBusy, driverCoresBusy, quietP99 float64) armFixture {
+	f := saturated(arm, quietP99)
+	f.coresBusy, f.driverCoresBusy = coresBusy, driverCoresBusy
+	return f
+}
+
+// gaveUp is an arm whose quiet population abandoned some of its requests, with
+// the tail of the ones that survived.
+func gaveUp(arm string, timedOut int, quietP99 float64) armFixture {
+	f := saturated(arm, quietP99)
+	f.quiet = []methodFixture{{
+		method: methodToolsCall, intended: 200, served: 200 - timedOut, timedOut: timedOut,
+		p50: quietP99 / 2, p99: quietP99, latenessP99: 0.1,
+	}}
+	return f
+}
+
 // atLoad is the same arm with the host busyness named, for the cases about a
 // machine nothing contended for.
 func atLoad(arm string, coresBusy, quietP99 float64) armFixture {
@@ -111,22 +158,48 @@ func atLoad(arm string, coresBusy, quietP99 float64) armFixture {
 	}
 }
 
-// TestJudgeFairness_ReportsBetterOnlyWhenTheQuietTenantReallyIs verifies the
-// verdict over every answer it can give, and in particular that it can say no.
+// verdictCase is one document and the answer it must be given.
+type verdictCase struct {
+	name          string
+	doc           *FairnessDoc
+	wantDirection string
+	wantReason    string
+}
+
+// runVerdictCases judges each document and holds the answer to its direction,
+// its reason and its being writable: a verdict that cannot be encoded is a run
+// whose whole measurement is lost at the last step.
+func runVerdictCases(t *testing.T, cases []verdictCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			comparisons, verdict := judgeFairness(tc.doc)
+			if verdict.Direction != tc.wantDirection {
+				t.Errorf("direction = %q (%s), want %q", verdict.Direction, verdict.Reason, tc.wantDirection)
+			}
+			if !strings.Contains(verdict.Reason, tc.wantReason) {
+				t.Errorf("reason = %q, want it to mention %q", verdict.Reason, tc.wantReason)
+			}
+			tc.doc.Comparisons = comparisons
+			if _, err := json.Marshal(tc.doc); err != nil {
+				t.Errorf("the verdict produced a document that cannot be written: %v", err)
+			}
+		})
+	}
+}
+
+// TestJudgeFairness_ReportsBetterOnlyWhenTheQuietTenantReallyIs verifies every
+// answer the verdict can give about a pair of arms it is willing to compare,
+// and in particular that it can say no.
 //
 // The cases are the ways a fairness report lies if nobody guards them. A bound
 // that refuses the quiet tenant improves its surviving percentiles by killing
-// the slow work; a host nothing contended for cannot show a per-credential
-// bound helping anybody; arms that offered different work are two experiments;
-// and a driver whose own dispatch lateness moved by as much as the improvement
-// claimed is as likely the cause as the server.
+// the slow work; a quiet population that abandoned more requests got less done
+// whatever its latency did; and a host nothing contended for cannot show a
+// per-credential bound helping anybody, since contention is the only channel
+// such a bound has to the quiet tenant.
 func TestJudgeFairness_ReportsBetterOnlyWhenTheQuietTenantReallyIs(t *testing.T) {
-	cases := []struct {
-		name          string
-		doc           *FairnessDoc
-		wantDirection string
-		wantReason    string
-	}{
+	runVerdictCases(t, []verdictCase{
 		{
 			name:          "the quiet tail fell in every repetition, beyond their spread",
 			doc:           fairnessDocOf(8, []armFixture{saturated(armOff, 20), saturated(armOn, 10)}, []armFixture{saturated(armOn, 10), saturated(armOff, 20)}),
@@ -152,24 +225,6 @@ func TestJudgeFairness_ReportsBetterOnlyWhenTheQuietTenantReallyIs(t *testing.T)
 			wantReason:    "is inside the",
 		},
 		{
-			name: "the driver's own lateness moved by as much as the improvement",
-			doc: func() *FairnessDoc {
-				doc := fairnessDocOf(8,
-					[]armFixture{saturated(armOff, 20), saturated(armOn, 10)},
-					[]armFixture{saturated(armOn, 10), saturated(armOff, 20)})
-				for _, repeat := range doc.Repeats {
-					for i := range repeat.Arms {
-						if repeat.Arms[i].Arm == armOff {
-							repeat.Arms[i].Populations[0].Methods[0].Lateness.P99 = 12
-						}
-					}
-				}
-				return doc
-			}(),
-			wantDirection: directionNotComparable,
-			wantReason:    "dispatch lateness moved by",
-		},
-		{
 			name: "one repetition carries no measure of host noise",
 			doc:  fairnessDocOf(8, []armFixture{saturated(armOff, 20), saturated(armOn, 10)}),
 
@@ -184,6 +239,55 @@ func TestJudgeFairness_ReportsBetterOnlyWhenTheQuietTenantReallyIs(t *testing.T)
 			wantDirection: directionIndistinguishable,
 			wantReason:    "kept only 0.20 of the host's 8 cores busy",
 		},
+		{
+			name: "the bound refused the tenant it exists to protect",
+			doc: fairnessDocOf(8,
+				[]armFixture{
+					saturated(armOff, 20),
+					{arm: armOn, coresBusy: 6, quiet: []methodFixture{{method: methodToolsCall, intended: 200, served: 190, refused: 10, p99: 1}}, noisy: []methodFixture{noisyAt(1000, 0)}},
+				},
+				[]armFixture{saturated(armOn, 10), saturated(armOff, 20)}),
+			wantDirection: directionWorse,
+			wantReason:    "the one it turned away",
+		},
+		{
+			// In both repetitions, which is what tells a bound that starves
+			// the quiet tenant from a host that dropped one request in one
+			// window. The surviving tail is far better with the bound on, so
+			// this is also the case that would be published as an improvement
+			// if the check below the latency comparison rather than above it.
+			name: "the quiet tenant gave up on more requests with the bound on, in every repetition",
+			doc: fairnessDocOf(8,
+				[]armFixture{saturated(armOff, 20), gaveUp(armOn, 10, 1)},
+				[]armFixture{gaveUp(armOn, 10, 1), saturated(armOff, 20)}),
+			wantDirection: directionWorse,
+			wantReason:    "gave up on 20 tools/call requests with the bound on against 0",
+		},
+		{
+			// The same rise, in one repetition of two, against a fall of
+			// fifteen in the other: the shape the first real run of this
+			// scenario produced, and which used to be reported as the bound
+			// leaving the quiet tenant worse off.
+			name: "one repetition lost a request the other did not",
+			doc: fairnessDocOf(8,
+				[]armFixture{saturated(armOff, 20), gaveUp(armOn, 1, 10)},
+				[]armFixture{saturated(armOn, 10), gaveUp(armOff, 15, 20)}),
+			wantDirection: directionBetter,
+			wantReason:    "fell by 10.000 ms",
+		},
+	})
+}
+
+// TestJudgeFairness_RefusesToCompareWhatIsNotOneExperiment verifies every way
+// the verdict declines to answer at all.
+//
+// A direction is only meaningful between two arms that were the same
+// experiment on a machine that was contended for, measured over enough of the
+// quiet population to stand for it, by a harness that did not itself move
+// between the arms. Each case below breaks one of those, and each would
+// otherwise have produced a number that reads exactly like an answer.
+func TestJudgeFairness_RefusesToCompareWhatIsNotOneExperiment(t *testing.T) {
+	runVerdictCases(t, []verdictCase{
 		{
 			name: "an arm that failed a control",
 			doc: fairnessDocOf(8,
@@ -250,28 +354,6 @@ func TestJudgeFairness_ReportsBetterOnlyWhenTheQuietTenantReallyIs(t *testing.T)
 			wantReason:    "did not drive tools/list",
 		},
 		{
-			name: "the bound refused the tenant it exists to protect",
-			doc: fairnessDocOf(8,
-				[]armFixture{
-					saturated(armOff, 20),
-					{arm: armOn, coresBusy: 6, quiet: []methodFixture{{method: methodToolsCall, intended: 200, served: 190, refused: 10, p99: 1}}, noisy: []methodFixture{noisyAt(1000, 0)}},
-				},
-				[]armFixture{saturated(armOn, 10), saturated(armOff, 20)}),
-			wantDirection: directionWorse,
-			wantReason:    "the one it turned away",
-		},
-		{
-			name: "the quiet tenant gave up on more requests with the bound on",
-			doc: fairnessDocOf(8,
-				[]armFixture{
-					saturated(armOff, 20),
-					{arm: armOn, coresBusy: 6, quiet: []methodFixture{{method: methodToolsCall, intended: 200, served: 190, timedOut: 10, p99: 1}}, noisy: []methodFixture{noisyAt(1000, 0)}},
-				},
-				[]armFixture{saturated(armOn, 10), saturated(armOff, 20)}),
-			wantDirection: directionWorse,
-			wantReason:    "gave up on 10",
-		},
-		{
 			name: "an arm whose schedule did not run to its end",
 			doc: fairnessDocOf(8,
 				[]armFixture{
@@ -286,6 +368,63 @@ func TestJudgeFairness_ReportsBetterOnlyWhenTheQuietTenantReallyIs(t *testing.T)
 			wantReason:    "did not run to its end",
 		},
 		{
+			// Both arms lost the same share, so the arms offered the same
+			// work, no quiet request was refused and neither arm's timeouts
+			// rose against the other's: every gate above this one passes, and
+			// a difference between two three-sample percentiles would have
+			// been published as the quiet population's experience.
+			name: "almost none of the quiet population's requests completed, in either arm",
+			doc: fairnessDocOf(8,
+				[]armFixture{
+					{
+						arm: armOff, coresBusy: 6,
+						quiet: []methodFixture{{method: methodToolsCall, intended: 160, served: 3, timedOut: 157, p50: 1900, p99: 1900}},
+						noisy: []methodFixture{noisyAt(1000, 0)},
+					},
+					{
+						arm: armOn, coresBusy: 6,
+						quiet: []methodFixture{{method: methodToolsCall, intended: 160, served: 3, timedOut: 157, p50: 50, p99: 50}},
+						noisy: []methodFixture{noisyAt(1000, 0)},
+					},
+				},
+				[]armFixture{saturated(armOn, 10), saturated(armOff, 20)}),
+			wantDirection: directionNotComparable,
+			wantReason:    "below the 75% a comparison of served percentiles needs",
+		},
+		{
+			// The driver's own dispatch lateness, which is the harness's cost
+			// read on the same scale as the claim.
+			name: "the driver's own lateness moved by as much as the improvement",
+			doc: func() *FairnessDoc {
+				doc := fairnessDocOf(8,
+					[]armFixture{saturated(armOff, 20), saturated(armOn, 10)},
+					[]armFixture{saturated(armOn, 10), saturated(armOff, 20)})
+				for _, repeat := range doc.Repeats {
+					for i := range repeat.Arms {
+						if repeat.Arms[i].Arm == armOff {
+							repeat.Arms[i].Populations[0].Methods[0].Lateness.P99 = 12
+						}
+					}
+				}
+				return doc
+			}(),
+			wantDirection: directionNotComparable,
+			wantReason:    "dispatch lateness moved by",
+		},
+		{
+			// And the same effect read as processor time, which covers the
+			// response decode the lateness above is captured too early to see:
+			// parsing a two-kilobyte refusal is nothing beside a
+			// hundred-and-seventy-kilobyte result, so the driver frees a core
+			// in exactly the arm that is supposed to look better.
+			name: "the harness freed more of the host than the server did",
+			doc: fairnessDocOf(8,
+				[]armFixture{atProcess(armOff, 6, 2, 20), atProcess(armOn, 5.5, 0, 10)},
+				[]armFixture{atProcess(armOn, 5.5, 0, 10), atProcess(armOff, 6, 2, 20)}),
+			wantDirection: directionNotComparable,
+			wantReason:    "the driver handed back 2.00 of the host's cores",
+		},
+		{
 			name: "the quiet population issued nothing at all",
 			doc: fairnessDocOf(8,
 				[]armFixture{{arm: armOff, coresBusy: 6, noisy: []methodFixture{noisyAt(1000, 0)}}, {arm: armOn, coresBusy: 6, noisy: []methodFixture{noisyAt(1000, 0)}}},
@@ -293,19 +432,165 @@ func TestJudgeFairness_ReportsBetterOnlyWhenTheQuietTenantReallyIs(t *testing.T)
 			wantDirection: directionNotComparable,
 			wantReason:    "issued nothing to compare",
 		},
+	})
+}
+
+// TestJudgeFairness_AnswersWorseFromASingleRepetition verifies the one answer
+// here that needs no comparison survives a run with nothing to compare against.
+//
+// That the bound refused the tenant it exists to protect is a fact about one
+// pair of arms, and it held whatever else about the pair was irregular. Behind
+// the repetition-count gate, where it used to sit, a run at -fairness-repeats=1
+// in which the bound turned the quiet tenant away was reported as no
+// difference: the flag that disabled the check is one documented flag from the
+// default, and the numbers it hid are the numbers this whole scenario exists
+// to surface.
+func TestJudgeFairness_AnswersWorseFromASingleRepetition(t *testing.T) {
+	refusedQuiet := armFixture{
+		arm: armOn, coresBusy: 6,
+		quiet: []methodFixture{{method: methodToolsCall, intended: 120, served: 78, refused: 42, p50: 1, p99: 1}},
+		noisy: []methodFixture{noisyAt(400, 600)},
+	}
+	cases := []struct {
+		name string
+		doc  *FairnessDoc
+	}{
+		{
+			name: "one repetition",
+			doc:  fairnessDocOf(8, []armFixture{saturated(armOff, 20), refusedQuiet}),
+		},
+		{
+			// And ahead of the procedural answer, which used to win: the more
+			// specific sentence is the useful one, and it is also the more
+			// damning.
+			name: "one repetition whose other arm also failed a control",
+			doc: fairnessDocOf(8, []armFixture{
+				{arm: armOff, coresBusy: 6, notes: []string{"something else refused"}},
+				refusedQuiet,
+			}),
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			comparisons, verdict := judgeFairness(tc.doc)
-			if verdict.Direction != tc.wantDirection {
-				t.Errorf("direction = %q (%s), want %q", verdict.Direction, verdict.Reason, tc.wantDirection)
+			_, verdict := judgeFairness(tc.doc)
+			if verdict.Direction != directionWorse {
+				t.Errorf("direction = %q (%s), want %q", verdict.Direction, verdict.Reason, directionWorse)
 			}
-			if !strings.Contains(verdict.Reason, tc.wantReason) {
-				t.Errorf("reason = %q, want it to mention %q", verdict.Reason, tc.wantReason)
+			if !strings.Contains(verdict.Reason, "the one it turned away") {
+				t.Errorf("reason = %q, want it to name the tenant the bound refused", verdict.Reason)
 			}
-			tc.doc.Comparisons = comparisons
-			if _, err := json.Marshal(tc.doc); err != nil {
-				t.Errorf("the verdict produced a document that cannot be written: %v", err)
+		})
+	}
+}
+
+// TestMethodPairs_TakeBothArmsFromOneRepetition verifies the two arms compared
+// are the two arms of the same repetition.
+//
+// The file this lives in says a pair assembled from two runs must not be
+// constructible, and the fixtures did not hold the code to it: most of them
+// carry identical numbers in both repetitions, so pairing every repetition's
+// on arm against the first one's off arm left the suite green. The deltas here
+// are asserted one by one rather than through the direction they fold into,
+// and the numbers are chosen so that the two pairings disagree about that
+// direction as well.
+func TestMethodPairs_TakeBothArmsFromOneRepetition(t *testing.T) {
+	doc := fairnessDocOf(8,
+		[]armFixture{saturated(armOff, 30), saturated(armOn, 20)},
+		[]armFixture{saturated(armOn, 20), saturated(armOff, 21)})
+
+	comparisons, verdict := judgeFairness(doc)
+	if len(comparisons) != 1 {
+		t.Fatalf("comparisons = %+v, want one method compared", comparisons)
+	}
+	want := []float64{10, 1}
+	if !slices.Equal(comparisons[0].DeltasMs, want) {
+		t.Errorf("deltas = %v, want %v: each is one repetition's own two arms", comparisons[0].DeltasMs, want)
+	}
+	// Pairing every on arm against the first repetition's off arm gives 10 and
+	// 10, whose median clears a spread of nothing.
+	if verdict.Direction != directionIndistinguishable {
+		t.Errorf("direction = %q (%s), want %q", verdict.Direction, verdict.Reason, directionIndistinguishable)
+	}
+}
+
+// TestDecide_QuotesTheSurvivorshipBehindThePercentile verifies the sentence a
+// reader copies out carries how much of the population reached the percentile
+// it names.
+//
+// The percentiles here are over served requests alone, which is what keeps a
+// refusal out of them; the cost is that their meaning depends on how much of
+// the population survived into them, and a direction quoted without that is
+// the one reading error this scenario exists to prevent.
+func TestDecide_QuotesTheSurvivorshipBehindThePercentile(t *testing.T) {
+	lossy := func(arm string, p99 float64) armFixture {
+		return armFixture{
+			arm: arm, coresBusy: 6,
+			quiet: []methodFixture{{method: methodToolsCall, intended: 200, served: 180, timedOut: 20, p50: p99 / 2, p99: p99, latenessP99: 0.1}},
+			noisy: []methodFixture{noisyAt(1000, 0)},
+		}
+	}
+	doc := fairnessDocOf(8,
+		[]armFixture{lossy(armOff, 20), lossy(armOn, 10)},
+		[]armFixture{lossy(armOn, 10), lossy(armOff, 20)})
+	comparisons, verdict := judgeFairness(doc)
+	if verdict.Direction != directionBetter {
+		t.Fatalf("direction = %q (%s), want %q", verdict.Direction, verdict.Reason, directionBetter)
+	}
+	if !strings.Contains(verdict.Reason, "over the 90% of the quiet population's requests that completed") {
+		t.Errorf("reason = %q, want the survivorship in the sentence", verdict.Reason)
+	}
+	if len(comparisons) != 1 || comparisons[0].ServedShare != 0.9 {
+		t.Errorf("comparisons = %+v, want the served share recorded as well as quoted", comparisons)
+	}
+	t.Run("a method that dispatched nothing pulls no comparison down", func(t *testing.T) {
+		if got := servedShare(FairnessMethod{}); got != 1 {
+			t.Errorf("servedShare = %g, want a method with nothing dispatched to report no loss", got)
+		}
+	})
+}
+
+// TestDriverConfound_AnswersOnlyWhenTheHarnessIsTheBetterExplanation verifies
+// the direct reading of the harness's own cost, which was recorded and never
+// consulted.
+func TestDriverConfound_AnswersOnlyWhenTheHarnessIsTheBetterExplanation(t *testing.T) {
+	withProcess := func(arm string, cores, driver float64) armFixture {
+		return atProcess(arm, cores, driver, 10)
+	}
+	cases := []struct {
+		name     string
+		doc      *FairnessDoc
+		wantSaid bool
+	}{
+		{
+			name: "the server freed more than the harness did",
+			doc: fairnessDocOf(8,
+				[]armFixture{withProcess(armOff, 5, 1), withProcess(armOn, 3, 0.5)},
+				[]armFixture{withProcess(armOn, 3, 0.5), withProcess(armOff, 5, 1)}),
+		},
+		{
+			name: "the harness was busier with the bound in force",
+			doc: fairnessDocOf(8,
+				[]armFixture{withProcess(armOff, 5, 0.5), withProcess(armOn, 3, 1)},
+				[]armFixture{withProcess(armOn, 3, 1), withProcess(armOff, 5, 0.5)}),
+		},
+		{
+			name: "the harness freed as much as the server",
+			doc: fairnessDocOf(8,
+				[]armFixture{withProcess(armOff, 5, 2), withProcess(armOn, 3, 0)},
+				[]armFixture{withProcess(armOn, 3, 0), withProcess(armOff, 5, 2)}),
+			wantSaid: true,
+		},
+		{
+			name:     "a repetition that ran one arm is not read",
+			doc:      fairnessDocOf(8, []armFixture{withProcess(armOff, 5, 2)}),
+			wantSaid: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := driverConfound(tc.doc)
+			if (got != "") != tc.wantSaid {
+				t.Errorf("driverConfound = %q, want said = %v", got, tc.wantSaid)
 			}
 		})
 	}
@@ -338,6 +623,34 @@ func TestQuietRegression_SkipsWhatItCannotCompare(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := quietRegression(tc.doc); got != "" {
 				t.Errorf("quietRegression = %q, want nothing it cannot compare to be called a regression", got)
+			}
+		})
+	}
+}
+
+// TestQuietSurvived_SkipsWhatCarriesNoSurvivorship verifies the floor reads
+// around an arm the driver never gave a quiet population and a method that
+// dispatched nothing, both of which the gates above this one answer for.
+func TestQuietSurvived_SkipsWhatCarriesNoSurvivorship(t *testing.T) {
+	cases := []struct {
+		name string
+		arms []FairnessArm
+	}{
+		{
+			name: "an arm with no quiet population",
+			arms: []FairnessArm{armFixture{arm: armOn, dropQuiet: true}.build()},
+		},
+		{
+			name: "a method that dispatched nothing",
+			arms: []FairnessArm{armFixture{
+				arm: armOn, quiet: []methodFixture{{method: methodToolsCall, intended: 20, dropped: 20}},
+			}.build()},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := quietSurvived(0, tc.arms...); got != "" {
+				t.Errorf("quietSurvived = %q, want nothing where there is no survivorship to judge", got)
 			}
 		})
 	}

@@ -24,4 +24,5 @@
 //	go run ./cmd/bench_resources/ -render         # redraw from the record
 //	go run ./cmd/bench_resources/ -check          # is the drawing current?
 //	go run ./cmd/bench_resources/ -quick -json /tmp/x.json
+//	go run ./cmd/bench_resources/ -fairness tools-call-rps  # is the quiet tenant better off?
 package main

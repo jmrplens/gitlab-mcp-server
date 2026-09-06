@@ -468,9 +468,17 @@ var marshalRecord = json.MarshalIndent
 // writeRun writes the record as indented JSON with a trailing newline, the
 // shape every other committed JSON artifact in this repository has.
 func writeRun(path string, run *Run) error {
-	data, err := marshalRecord(run, "", "  ")
+	return writeJSON(path, run, "results")
+}
+
+// writeJSON writes one document in that shape, and is the only place that
+// shape is spelled: the trailing newline, the two-space indent and the
+// permissions are what the byte comparison in -check reads back, so a second
+// copy of them is a second thing to keep in step with the first.
+func writeJSON[T any](path string, doc *T, what string) error {
+	data, err := marshalRecord(doc, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode results: %w", err)
+		return fmt.Errorf("encode %s: %w", what, err)
 	}
 	data = append(data, '\n')
 	if mkErr := os.MkdirAll(filepath.Dir(path), 0o750); mkErr != nil {

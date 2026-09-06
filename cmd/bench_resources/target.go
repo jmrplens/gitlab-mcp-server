@@ -207,7 +207,13 @@ func withoutConfig(environ []string) []string {
 // fairness scenario measures exactly that saying-no, and it substitutes this
 // list rather than adding to it, so a reader of ps sees one setting for the
 // bound and not two.
-var limiterOffArgs = []string{"--rate-limit-rps=0"}
+var limiterOffArgs = []string{limiterOffArg}
+
+// limiterOffArg turns the per-credential limiter off. It is a constant rather
+// than a shared slice because each fairness plan owns its own argument list,
+// and a plan that appended to a slice it shared with another would change that
+// other plan's arm.
+const limiterOffArg = "--rate-limit-rps=0"
 
 // httpTarget is one server process serving many credentials.
 type httpTarget struct {
