@@ -1663,9 +1663,15 @@ func TestCreateServer_DynamicSurface_ReportsWhatTheExclusionRemoved(t *testing.T
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
 
 	client := newMockGitLabClient(t)
+	// The catalog is shared per configuration and the exclusion is logged when
+	// the catalog is built, so a second build of this exact key in one test
+	// binary is a cache hit that logs nothing. A pattern no tool matches, unique
+	// to this run, keeps the key fresh without changing what the exclusion
+	// removes.
+	fresh := fmt.Sprintf("zz_never_registered_%d", time.Now().UnixNano())
 	mustCreateServer(t, client, &config.ServerConfig{
 		ToolSurface:  config.ToolSurfaceDynamic,
-		ExcludeTools: []string{"gitlab_issue_delete"},
+		ExcludeTools: []string{"gitlab_issue_delete", fresh},
 	})
 
 	if !strings.Contains(logged.String(), `"msg":"excluded catalog actions by configuration","excluded":1`) {
