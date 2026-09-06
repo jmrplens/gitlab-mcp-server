@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -1188,5 +1190,68 @@ func TestDescribe_ParamShapesWithoutTheirOwnTest(t *testing.T) {
 				t.Errorf("%s = %q (recorded=%v), want %q", AttrGenAIToolName, got, recorded, tt.wantToolName)
 			}
 		})
+	}
+}
+
+// TestMiddleware_ASessionIdReachesTheSpanAndNeverTheMetric covers the one
+// attribute this middleware records on one signal and deliberately withholds
+// from the other.
+//
+// The convention marks mcp.session.id Recommended, and its own instrument table
+// omits it: it is one value per connected client, so on a metric it is an
+// unbounded dimension the deployment's own client population sizes, and the SDK
+// answers an exhausted series budget by collapsing the overflow into a single
+// bucket rather than by refusing it. A span has no series budget, so it keeps
+// the value, which is what makes a single client's requests findable.
+//
+// Driven over a stateful streamable HTTP server because that is the only
+// transport that mints a session id at all: stdio and the in-memory transports
+// have none, and the default stateless HTTP mode gives each POST its own
+// session with no id.
+func TestMiddleware_ASessionIdReachesTheSpanAndNeverTheMetric(t *testing.T) {
+	recorder := newRecorder(t)
+	previousTracer := otel.GetTracerProvider()
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)))
+	t.Cleanup(func() { otel.SetTracerProvider(previousTracer) })
+
+	reader, restore := newMetricRecorder(t)
+	t.Cleanup(restore)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server.AddReceivingMiddleware(Middleware(Options{Transport: TransportTCP}))
+
+	handler := mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{Stateless: false},
+	)
+	endpoint := httptest.NewServer(handler)
+	t.Cleanup(endpoint.Close)
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), &mcp.StreamableClientTransport{Endpoint: endpoint.URL}, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	if _, listErr := session.ListTools(t.Context(), nil); listErr != nil {
+		t.Fatalf("tools/list: %v", listErr)
+	}
+	if closeErr := session.Close(); closeErr != nil {
+		t.Fatalf("client close: %v", closeErr)
+	}
+
+	span := findSpan(t, recorder, "tools/list")
+	recorded, present := attrOf(span, AttrMCPSessionID)
+	if !present {
+		t.Fatal("no mcp.session.id on the span of a stateful session; the convention marks it Recommended")
+	}
+	if recorded.AsString() == "" {
+		t.Error("mcp.session.id was recorded empty, which names no session")
+	}
+
+	for _, kv := range collectedAttributes(t, reader) {
+		if kv.Key == AttrMCPSessionID {
+			t.Errorf("mcp.session.id = %q is a metric dimension; it mints one time series per connected client",
+				kv.Value.AsString())
+		}
 	}
 }

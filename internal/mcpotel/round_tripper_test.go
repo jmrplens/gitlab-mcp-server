@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
@@ -245,5 +246,67 @@ func TestServerPort_SchemeDefaultsCollapse(t *testing.T) {
 				t.Errorf("serverPort(%q) = %d, want %d", raw, got, want)
 			}
 		})
+	}
+}
+
+// TestNewTransport_ADeclaredHostAndItsPortLabelTheMetric covers the branch the
+// bounding rule exists to keep open.
+//
+// The half that refuses an undeclared host is checked directly on
+// boundedServerAddress; this is the other half, and it has to run through a
+// real round trip because that is the only place the pair is assembled. A host
+// the operator declared is carried verbatim, with its port, which is what makes
+// the instrument useful to a deployment publishing more than one instance: two
+// ports on one host are two endpoints, not one.
+func TestNewTransport_ADeclaredHostAndItsPortLabelTheMetric(t *testing.T) {
+	previous := metricServerAddresses.Load()
+	t.Cleanup(func() { metricServerAddresses.Store(previous) })
+
+	reader, restore := newMetricRecorder(t)
+	t.Cleanup(restore)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	endpoint, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("parsing the upstream URL: %v", err)
+	}
+	SetMetricServerAddresses([]string{endpoint.Hostname()})
+
+	// Built after the meter provider is installed: the transport resolves its
+	// instrument once, at construction.
+	client := &http.Client{Transport: NewTransport(nil)}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, upstream.URL+"/api/v4/version", nil)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("the round trip failed: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	recorded := collectedHistogram(t, reader, "http.client.request.duration")
+	histogram, ok := recorded.Data.(metricdata.Histogram[float64])
+	if !ok {
+		t.Fatalf("data is %T, want a float64 histogram", recorded.Data)
+	}
+	if len(histogram.DataPoints) != 1 {
+		t.Fatalf("recorded %d data points, want 1", len(histogram.DataPoints))
+	}
+
+	attrs := histogram.DataPoints[0].Attributes
+	address, hasAddress := attrs.Value(attrServerAddress)
+	if !hasAddress {
+		t.Fatal("the metric carries no server.address for a declared host")
+	}
+	if address.AsString() != endpoint.Hostname() {
+		t.Errorf("server.address = %q, want the declared %q", address.AsString(), endpoint.Hostname())
+	}
+	if _, hasPort := attrs.Value(attrServerPort); !hasPort {
+		t.Error("the metric carries no server.port beside a declared host, so two ports on one host collapse into one series")
 	}
 }
