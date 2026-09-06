@@ -1033,7 +1033,7 @@ that forwards its prefix rather than stripping it.
 - [Enterprise Deployments](enterprise-deployment.md) — serving hundreds of people: sizing, balancing at scale, MCP gateways, TLS and certificate rotation, operations
 - [Configuration](../reference/configuration.md) — full configuration reference
 - [Architecture](../concepts/architecture.md) — system architecture with diagrams
-- [Resource Consumption](../concepts/resource-consumption.md) — memory and CPU analysis at scale
+- [Resource Consumption](../reference/resource-consumption.md) — memory and CPU analysis at scale
 - [Security](../concepts/security.md) — security model and best practices
 - [OAuth App Setup](oauth-app-setup.md) — creating GitLab OAuth applications for MCP clients
 - [IDE Configuration](ide-configuration.md) — per-IDE MCP JSON configuration examples

@@ -1,0 +1,152 @@
+---
+title: MCP Gateways
+description: "What an MCP gateway in front of this server changes: catalog validation, the credential's path, sessions and subscriptions, caching, tool renaming, and routing by canonical action ID."
+datePublished: "2026-09-06"
+faq:
+  - q: "Will a gateway reject this server's catalog?"
+    a: "Nothing in it should trip a validator. Everything the server lists on any surface (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`) is pure ASCII prose with no semicolons, descriptions, titles and schema-embedded descriptions included, and `make check-gateway-chars` gates that in CI. For a rule of your own, `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` rewrites listed text on the way out without touching names, URIs, patterns, constants, enum values or tool-call payloads."
+  - q: "Should the gateway hold one credential for everyone?"
+    a: "Only if you accept what it costs. A gateway holding one shared credential collapses the whole population onto a single pool entry, a single rate-limit bucket and a single GitLab identity: every action is attributed to that one user in GitLab's audit log, and `--rate-limit-rps` becomes a limit for the entire deployment rather than per caller. Forwarding the caller's own credential is the only arrangement that preserves per-user identity, tiering and rate limiting."
+  - q: "Do my tool names survive the gateway?"
+    a: "Often not. In the configuration verified here, `gitlab_find_action` was re-exposed as `gitlab-mcp-gitlab-find-action`: underscores became dashes and the gateway's own name for the server was prefixed. Any prompt, skill or documentation that names a tool has to be written against the gateway's names rather than this server's."
+---
+
+import FAQ from "../../../components/FAQ.astro";
+
+An MCP gateway sits between clients and this server, validates the catalog it
+serves, re-exposes it under names of its own, and may add authentication, rate
+limiting and observability. Five things change.
+
+## The catalog is validated before it is admitted
+
+Gateways refuse catalogs under rules their operator chooses, and a refusal is
+usually all-or-nothing: one bad description and none of the tools are admitted.
+One production gateway rejected any tool whose description contained a
+semicolon.
+
+Everything this server lists (`tools/list` on any surface, `prompts/list`,
+`resources/list`, `resources/templates/list`) is pure ASCII prose with no
+semicolons, descriptions, titles and schema-embedded descriptions included.
+`make check-gateway-chars` gates it in CI.
+
+For the next rule, which is yours and not ours,
+`GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` rewrites listed text on the way out:
+
+```bash
+# Replace every semicolon with a period, for a gateway that refuses them.
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
+  --description-substitutions=';=.'
+```
+
+It covers descriptions and titles across tools, prompts, resources and resource
+templates, and never touches names, URIs, `pattern`, `const`, enum values or
+tool-call payloads. A malformed value refuses startup rather than serving the
+gateway the unrewritten catalog it already rejected. See
+[Compatibility](/gitlab-mcp-server/compatibility/) for the full rule set.
+
+## The credential has to reach the server
+
+This server holds no credential of its own: every request carries the caller's,
+as `PRIVATE-TOKEN` or `Authorization: Bearer`. A gateway must therefore either
+forward the caller's credential or hold one of its own and present it.
+
+Forwarding the caller's is the only arrangement that preserves per-user
+identity, per-user tiering and per-user rate limiting. A gateway holding one
+shared credential collapses the whole population onto a single pool entry, a
+single rate-limit bucket and a single GitLab identity: every action is
+attributed to that one user in GitLab's audit log, and `--rate-limit-rps`
+becomes a limit for the entire deployment rather than per caller.
+
+If the deployment publishes several instances with repeated `--gitlab-url`, the
+gateway must also forward `GITLAB-URL`, and a request without it is refused
+rather than resolved to a default.
+
+## Sessions and subscriptions may not survive
+
+Run gateways against the default `--stateless=true`. Each POST is then
+self-contained, no `Mcp-Session-Id` has to survive the gateway, and a gateway
+that pools connections or fans out across instances cannot break a session it
+does not know it is carrying.
+
+Do not assume subscriptions pass through. A gateway re-advertises its own
+capabilities to its clients, and it is free to advertise fewer than the servers
+behind it. The worked configuration below negotiates `resources.subscribe: true`
+with this server and then advertises `subscribe: false` to its own clients, so
+no client behind it can subscribe at all. Check what your gateway advertises
+before promising subscriptions to anyone.
+
+## What a gateway may cache
+
+Every cacheable result carries SEP-2549 hints. Almost everything is `private`,
+because catalogs and resource content are filtered by the caller's token scopes
+and licensing tier and must never be served from a shared intermediary cache.
+The prompt catalog is the one exception and is marked `public`.
+
+A gateway that ignores `cacheScope` and caches a `tools/list` across callers
+will serve one caller's tier-filtered catalog to another. That is a gateway
+misconfiguration this server cannot prevent, and it is worth checking for
+explicitly: pinning `--tier` and `--ignore-scopes` makes every caller's catalog
+identical, which removes the hazard at the cost of the per-caller filtering.
+
+## A worked gateway configuration
+
+Verified against [mcp-context-forge](https://github.com/IBM/mcp-context-forge)
+0.9.0. Register this server as an upstream gateway peer with the credential
+travelling in a forwarded header:
+
+```bash
+curl -sS -X POST https://gateway.example.com/gateways \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "gitlab_mcp",
+        "url": "https://mcp.example.com/mcp",
+        "transport": "STREAMABLEHTTP",
+        "auth_type": "authheaders",
+        "auth_headers": [{"key": "PRIVATE-TOKEN", "value": "glpat-..."}]
+      }'
+```
+
+What that produced, exactly:
+
+- The gateway reported `reachable: true`, negotiated `prompts`, `resources`
+  (with `subscribe: true`), `tools` and `completions`, and fetched the catalog.
+  On the default dynamic surface that is two tools.
+- **The tool names change.** `gitlab_find_action` is re-exposed as
+  `gitlab-mcp-gitlab-find-action`: underscores become dashes and the gateway's
+  own name for the server is prefixed. Any prompt, skill or documentation that
+  names a tool has to be written against the gateway's names, not this server's.
+- **Descriptions pass through unchanged**, which is the ASCII property doing its
+  job.
+- **The gateway advertises `resources.subscribe: false` to its own clients**,
+  having negotiated `true` with this server.
+- Its own `/rpc` convenience endpoint re-validated a successful tool result and
+  reported it as an error while carrying the real answer in
+  `structuredContent`; its MCP endpoint at `/mcp/` did not. Prefer the MCP
+  endpoint, and treat a gateway's non-MCP facade as a separate thing to test.
+
+The credential shown above is one held by the gateway, which is the shape that
+collapses every caller onto one GitLab identity. Use the gateway's per-user
+credential pass-through if it has one.
+
+## Routing by action
+
+On the dynamic surface, the `action` property of `gitlab_execute_action` carries
+the SEP-2243 `x-mcp-header` annotation, which the SDK turns into the wire header
+`Mcp-Param-Action`. A gateway or a balancer can therefore route, rate-limit and
+observe calls by canonical action ID without parsing the JSON-RPC body:
+
+```nginx
+# Send everything that mutates through a stricter limiter, by reading a header.
+map $http_mcp_param_action $mcp_action_zone {
+    default            "read";
+    "~^issue\.create$" "write";
+    "~^project\."      "write";
+}
+```
+
+The header is advisory: it reflects what the client declared, so use it for
+routing and observability, never as an authorization decision. The server's own
+per-action gating is what decides whether a call is allowed.
+
+<FAQ />

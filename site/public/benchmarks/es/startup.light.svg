@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="900" height="480" role="img" aria-label="Lo que espera un cliente. Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500" role="img" aria-label="Lo que espera un cliente. Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar. Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, linux/amd64, go1.27.1. Compilación 2.7.6-0.20260906004147-2a92f7ec4445 (2a92f7ec), 2026-09-06.">
 <title>Lo que espera un cliente</title>
-<rect width="900" height="480" fill="#ffffff"/>
+<rect width="900" height="500" fill="#ffffff"/>
 <text x="30" y="30" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="17" font-weight="600" fill="#24292f">Lo que espera un cliente</text>
 <text x="30" y="50" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#59636e">Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar</text>
 <rect x="76" y="92" width="794" height="312" fill="#f6f8fa"/>
@@ -21,6 +21,8 @@
 <line x1="76" y1="92.0" x2="870" y2="92.0" stroke="#d1d9e0" stroke-width="1"/>
 <text x="68" y="96.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">10000</text>
 <text x="18" y="248.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#59636e" text-anchor="middle" transform="rotate(-90 18 248.0)">milisegundos (escala logarítmica)</text>
+<text x="473.0" y="446" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" text-anchor="middle" fill="#59636e">superficie de herramientas</text>
+<text x="30" y="488" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" fill="#59636e">Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, linux/amd64, go1.27.1. Compilación 2.7.6-0.20260906004147-2a92f7ec4445 (2a92f7ec), 2026-09-06.</text>
 <rect x="106.1" y="269.3" width="66.8" height="134.7" fill="#6d28d9"/>
 <text x="139.5" y="265.3" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">53</text>
 <rect x="174.9" y="201.9" width="66.8" height="202.1" fill="#c2410c"/>

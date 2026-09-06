@@ -249,7 +249,7 @@ Key characteristics:
 - **Thread-safe** — `sync.RWMutex` with double-check locking
 - **Clean shutdown** — `Close()` stops all servers and releases resources
 
-See [HTTP Server Mode](../guides/http-server-mode.md) for architecture diagrams and [Resource Consumption](resource-consumption.md) for capacity planning.
+See [HTTP Server Mode](../guides/http-server-mode.md) for architecture diagrams and [Resource Consumption](../reference/resource-consumption.md) for capacity planning.
 
 ### Test Utilities (`internal/testutil`)
 
@@ -656,7 +656,7 @@ Collection **resources** are a different case, and the difference is in the prot
 ### Internal Documentation
 
 - [HTTP Server Mode](../guides/http-server-mode.md) — multi-client HTTP architecture and session lifecycle
-- [Resource Consumption](resource-consumption.md) — memory, CPU, and capacity planning
+- [Resource Consumption](../reference/resource-consumption.md) — memory, CPU, and capacity planning
 - [Configuration](../reference/configuration.md) — environment variables, CLI flags, and setup
 - [Development](../development/development.md) — building, testing, and contributing
 - [Capabilities](../reference/capabilities/README.md) — all 4 capabilities in detail

@@ -180,3 +180,20 @@ func (h HostInfo) describe(l labels) string {
 	parts = append(parts, h.GoVersion)
 	return strings.Join(parts, ", ")
 }
+
+// describeShort renders the host for a figure's bottom edge: the processor,
+// how many threads it has, the platform and the toolchain.
+//
+// The kernel and the installed memory are dropped rather than abbreviated.
+// Both belong in the sentence under the measurements, which has the width for
+// them; on a chart they would push the build off the canvas, and neither
+// answers the question a chart read on its own raises, which is what machine
+// and what build.
+func (h HostInfo) describeShort(l labels) string {
+	parts := []string{h.CPUModel}
+	if h.CPUs > 0 {
+		parts = append(parts, strconv.Itoa(h.CPUs)+" "+l.HostCPUs)
+	}
+	parts = append(parts, h.OS+"/"+h.Arch, h.GoVersion)
+	return strings.Join(parts, ", ")
+}

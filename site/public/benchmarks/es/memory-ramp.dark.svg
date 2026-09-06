@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="900" height="480" role="img" aria-label="Memoria residente según llegan credenciales. Modo HTTP: cada token distinto construye su propio catálogo en el pool">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500" role="img" aria-label="Memoria residente según llegan credenciales. Modo HTTP, credenciales admitidas de una en una: la primera construye el catálogo y el resto lo encuentra construido. Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, linux/amd64, go1.27.1. Compilación 2.7.6-0.20260906004147-2a92f7ec4445 (2a92f7ec), 2026-09-06.">
 <title>Memoria residente según llegan credenciales</title>
-<rect width="900" height="480" fill="#0d1117"/>
+<rect width="900" height="500" fill="#0d1117"/>
 <text x="30" y="30" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="17" font-weight="600" fill="#e6edf3">Memoria residente según llegan credenciales</text>
-<text x="30" y="50" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#8b949e">Modo HTTP: cada token distinto construye su propio catálogo en el pool</text>
+<text x="30" y="50" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#8b949e">Modo HTTP, credenciales admitidas de una en una: la primera construye el catálogo y el resto lo encuentra construido</text>
 <rect x="76" y="92" width="794" height="312" fill="#161b22"/>
 <rect x="76.0" y="61.0" width="11" height="11" rx="2" fill="#a78bfa"/>
 <text x="92.0" y="70.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11.5" fill="#e6edf3">dynamic</text>
@@ -19,7 +19,8 @@
 <line x1="76" y1="92.0" x2="870" y2="92.0" stroke="#30363d" stroke-width="1"/>
 <text x="68" y="96.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#8b949e">600</text>
 <text x="18" y="248.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#8b949e" text-anchor="middle" transform="rotate(-90 18 248.0)">Conjunto residente (MiB)</text>
-<text x="473.0" y="466" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" text-anchor="middle" fill="#8b949e">credenciales activas (entradas del pool)</text>
+<text x="473.0" y="446" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" text-anchor="middle" fill="#8b949e">credenciales activas (entradas del pool)</text>
+<text x="30" y="488" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" fill="#8b949e">Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, linux/amd64, go1.27.1. Compilación 2.7.6-0.20260906004147-2a92f7ec4445 (2a92f7ec), 2026-09-06.</text>
 <text x="76.0" y="424" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="middle" fill="#8b949e">1</text>
 <text x="189.4" y="424" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="middle" fill="#8b949e">2</text>
 <text x="302.9" y="424" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="middle" fill="#8b949e">3</text>

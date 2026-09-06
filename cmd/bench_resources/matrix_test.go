@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // testSettings are matrix settings for a test: the given rounds, and the
@@ -27,6 +29,50 @@ func pointPlans(plans []scenarioPlan) []scenarioPlan {
 		}
 	}
 	return out
+}
+
+// TestPublishedMatrix_ClientLadder verifies the point scenarios admit the
+// documented number of clients, and the two properties that number was chosen
+// for.
+//
+// The HTTP ladder must stay strictly below `--max-http-clients`'s own default,
+// because a point scenario passes no pool flag: at or above it the pool would
+// evict a credential the scenario had already admitted, and the "all clients"
+// column would be a measurement of eviction. It must also sit well past the
+// point where the host saturates, which the concurrency series puts at about
+// five concurrently calling credentials, or the column would be one
+// credential's cost repeated rather than anything measured under contention.
+//
+// The stdio ladder is smaller on purpose: each client is a whole process with
+// its own catalog, and the question stdio answers is a developer machine
+// rather than a shared deployment. It is asserted to be smaller rather than
+// equal, so a well-meaning change that made the two ladders match would have
+// to say so here.
+func TestPublishedMatrix_ClientLadder(t *testing.T) {
+	if httpPointClients >= config.DefaultMaxHTTPClients {
+		t.Errorf("httpPointClients = %d, which is not below the pool's own default of %d; the scenario would measure eviction",
+			httpPointClients, config.DefaultMaxHTTPClients)
+	}
+	const saturationKnee = 5
+	if httpPointClients <= saturationKnee {
+		t.Errorf("httpPointClients = %d, which is not past the %d-credential saturation knee", httpPointClients, saturationKnee)
+	}
+	if stdioPointClients >= httpPointClients {
+		t.Errorf("stdioPointClients = %d is not smaller than httpPointClients = %d; one process per client is the whole difference",
+			stdioPointClients, httpPointClients)
+	}
+
+	for _, plan := range pointPlans(publishedMatrix(testSettings(3))) {
+		t.Run(plan.ID, func(t *testing.T) {
+			want := stdioPointClients
+			if plan.Transport == transportHTTP {
+				want = httpPointClients
+			}
+			if plan.Clients != want {
+				t.Errorf("%s admits %d clients, want %d", plan.ID, plan.Clients, want)
+			}
+		})
+	}
 }
 
 // TestPublishedMatrix_CoversEveryAxis verifies the committed matrix exercises

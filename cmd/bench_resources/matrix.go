@@ -1,11 +1,12 @@
 // matrix.go declares what gets measured.
 //
 // The axes are the ones that actually move the numbers: the transport, because
-// stdio gives every client its own process and HTTP gives every credential its
-// own pooled catalog; the tool surface, because one registers two tools and
-// another about a thousand; telemetry, because exporting is work the server
-// would not otherwise do; and concurrency, in both of its meanings, since
-// clients and in-flight requests cost different things.
+// stdio gives every client its own process while HTTP serves every credential
+// from one, sharing a built catalog per configuration; the tool surface,
+// because one registers two tools and another about a thousand; telemetry,
+// because exporting is work the server would not otherwise do; and
+// concurrency, in both of its meanings, since clients and in-flight requests
+// cost different things.
 
 package main
 
@@ -95,6 +96,30 @@ var quickSeriesSteps = []int{1, 2, 5}
 
 const quickStepDuration = 2 * time.Second
 
+// The credential and process counts of the point scenarios.
+//
+// httpPointClients is the ladder a reader sees on the memory and ramp figures.
+// It sits at 64 for three reasons. It is past the point where the host
+// saturates, which the series puts at about five concurrently calling
+// credentials, so "all clients" is a figure measured under real contention
+// rather than one credential's cost repeated. It is below the pool's own
+// default of 100, so the scenario runs the shipped `--max-http-clients` and
+// nothing it admitted is evicted before it is measured; the harness passes no
+// pool flag for a point scenario, unlike a series. And it stays out of the
+// concurrency series' way, which is what covers one to a thousand: the point
+// scenarios exist for the axes the series does not measure, namely stdio,
+// telemetry, resources/list latency, the goroutine count off a traceback
+// signal, and the serial ramp.
+//
+// stdioPointClients is smaller because each one is a whole process with its
+// own catalog: eight on the individual surface is already about 2 GiB, and
+// eight is a busy developer host rather than a shared deployment, which is
+// the question stdio answers.
+const (
+	httpPointClients  = 64
+	stdioPointClients = 8
+)
+
 // seriesPlan builds the concurrency series for one surface. Parallelism
 // follows the point scenarios' rule: the individual surface runs fewer
 // requests in flight because its tools/list is three megabytes.
@@ -112,17 +137,21 @@ func seriesPlan(surface string, parallel int, settings matrixSettings) scenarioP
 // the same parallelism would measure how fast this machine can serialize
 // rather than what the server costs. The three series come last so the point
 // figures are on disk before the hour the series can take begins.
+//
+// The client counts are httpPointClients and stdioPointClients, which document
+// why those two numbers and not others.
 func publishedMatrix(settings matrixSettings) []scenarioPlan {
 	rounds := settings.rounds
+	stdioN, httpN := stdioPointClients, httpPointClients
 	return []scenarioPlan{
-		{ID: "stdio-dynamic", Transport: transportStdio, Surface: surfaceDynamic, Clients: 4, Parallel: 4, Rounds: rounds},
-		{ID: "stdio-meta", Transport: transportStdio, Surface: surfaceMeta, Clients: 4, Parallel: 4, Rounds: rounds},
-		{ID: "stdio-individual", Transport: transportStdio, Surface: surfaceIndividual, Clients: 4, Parallel: 2, Rounds: rounds},
-		{ID: "stdio-dynamic-telemetry", Transport: transportStdio, Surface: surfaceDynamic, Telemetry: true, Clients: 4, Parallel: 4, Rounds: rounds},
-		{ID: "http-dynamic", Transport: transportHTTP, Surface: surfaceDynamic, Clients: 8, Parallel: 4, Rounds: rounds},
-		{ID: "http-meta", Transport: transportHTTP, Surface: surfaceMeta, Clients: 8, Parallel: 4, Rounds: rounds},
-		{ID: "http-individual", Transport: transportHTTP, Surface: surfaceIndividual, Clients: 8, Parallel: 2, Rounds: rounds},
-		{ID: "http-dynamic-telemetry", Transport: transportHTTP, Surface: surfaceDynamic, Telemetry: true, Clients: 8, Parallel: 4, Rounds: rounds},
+		{ID: "stdio-dynamic", Transport: transportStdio, Surface: surfaceDynamic, Clients: stdioN, Parallel: 4, Rounds: rounds},
+		{ID: "stdio-meta", Transport: transportStdio, Surface: surfaceMeta, Clients: stdioN, Parallel: 4, Rounds: rounds},
+		{ID: "stdio-individual", Transport: transportStdio, Surface: surfaceIndividual, Clients: stdioN, Parallel: 2, Rounds: rounds},
+		{ID: "stdio-dynamic-telemetry", Transport: transportStdio, Surface: surfaceDynamic, Telemetry: true, Clients: stdioN, Parallel: 4, Rounds: rounds},
+		{ID: "http-dynamic", Transport: transportHTTP, Surface: surfaceDynamic, Clients: httpN, Parallel: 4, Rounds: rounds},
+		{ID: "http-meta", Transport: transportHTTP, Surface: surfaceMeta, Clients: httpN, Parallel: 4, Rounds: rounds},
+		{ID: "http-individual", Transport: transportHTTP, Surface: surfaceIndividual, Clients: httpN, Parallel: 2, Rounds: rounds},
+		{ID: "http-dynamic-telemetry", Transport: transportHTTP, Surface: surfaceDynamic, Telemetry: true, Clients: httpN, Parallel: 4, Rounds: rounds},
 		seriesPlan(surfaceDynamic, 4, settings),
 		seriesPlan(surfaceMeta, 4, settings),
 		seriesPlan(surfaceIndividual, 2, settings),

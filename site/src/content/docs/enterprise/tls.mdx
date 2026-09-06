@@ -1,0 +1,128 @@
+---
+title: TLS
+description: "Where to terminate TLS, the listener's own certificate, rotation in place with no restart, client certificates, and what a unix socket costs the authentication failure budget at scale."
+datePublished: "2026-09-06"
+faq:
+  - q: "Can I rotate the TLS certificate without restarting?"
+    a: "Yes. Write the new pair over the same paths and the next handshake presents it; connections already open keep the old certificate until they are replaced. The certificate is served through a callback that stats both files on each handshake and re-reads them when either changed. A half-written pair, or files briefly unreadable, keeps the previous certificate in service and logs the reason once. No signal is needed, and `SIGHUP` is not a reload: it is unhandled and terminates the process."
+  - q: "Does the listener do mTLS?"
+    a: "No. It requests no client certificate and verifies none; authentication on it is the bearer credential, in either supported mode. Mutual TLS at the edge is a property of the proxy in front, which is where it belongs for a deployment with many clients anyway, since the proxy is what holds the client CA and the revocation list."
+  - q: "Is a unix socket the right choice for a same-machine proxy?"
+    a: "It removes the network hop rather than encrypting it, which is usually what you want. It has one cost at scale: a unix socket has no peer address, and the authentication failure budget is keyed on the caller's address, so every caller behind the proxy shares one budget. Ten failed authentications a minute from anywhere answer `429` to everybody for a minute. Bind loopback TCP with `--trusted-proxy-header` and `--trusted-proxies` if per-caller failure accounting matters more than the hop."
+---
+
+import FAQ from "../../../components/FAQ.astro";
+
+## Where to terminate
+
+| Where the proxy is      | What to do                                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| On the same machine     | `--http-addr=/run/gitlab-mcp/server.sock`. No network hop to encrypt, no certificate to rotate |
+| On another machine      | `--tls-cert` and `--tls-key` on the listener, with the proxy verifying it                      |
+| Terminating for clients | The proxy's own certificate, plus one of the two rows above for the hop behind it              |
+
+The unix socket removes the hop rather than encrypting it, and under Docker that
+hop is not "just loopback": the path runs through docker-proxy and a bridge
+network. It has one cost at scale, described at the end of this page.
+
+## The listener's own TLS
+
+```bash
+gitlab-mcp-server --http --http-addr=:8443 \
+  --gitlab-url=https://gitlab.example.com \
+  --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
+```
+
+Both flags or neither: a certificate without its key is a deployment that
+believes it is encrypting and is not, and startup refuses it. TLS 1.2 is the
+floor and no maximum is set, so a current client negotiates TLS 1.3 and 1.2 is
+reached only by a client that cannot go higher. Anything below 1.2 is refused.
+Both properties are pinned by tests that drive the real binary.
+
+## Certificate rotation without downtime
+
+**Write the new pair over the old paths. There is nothing else to do.** The
+certificate is served through a callback that checks the two files on each
+handshake and re-reads them when either has changed, so the next handshake
+presents the new certificate. Connections already open keep the old one until
+they are replaced, which is correct and is how every rotation works.
+
+Concretely, with certbot or any renewal tool that writes the same paths:
+
+```bash
+# The renewal hook needs no signal and no restart.
+certbot renew --deploy-hook "true"
+```
+
+Three properties of that path, each covered by a test:
+
+- **A half-written rotation keeps serving.** Writing a certificate and its key
+  is two writes, and between them the pair on disk does not match. The
+  previously loaded certificate stays in service until the pair is whole again,
+  and the failure is logged once rather than once per handshake.
+- **Unreadable files keep serving.** A renewal that unlinks before it writes, or
+  a mount briefly absent, does not take the listener down.
+- **Nothing is re-read while nothing changed.** The staleness check is two
+  `stat` calls; the parse happens only when the size or modification time moved.
+
+There is no reload signal and none is needed. `SIGHUP` is not handled and, under
+its default disposition, terminates the process; do not send it.
+
+The first load is still strict: at startup a path that does not exist or a key
+that does not match its certificate is a named startup error, because that is
+the one moment there is nothing to fall back to and an operator is watching.
+
+## Client certificates
+
+**The listener does not do mTLS.** It requests no client certificate and
+verifies none; authentication on it is the bearer credential, in either
+supported mode. Mutual TLS at the edge is therefore a property of the proxy in
+front, which is where it belongs for a deployment with many clients anyway,
+since the proxy is what holds the client CA and the revocation list:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+
+    ssl_client_certificate /etc/ssl/clients-ca.pem;
+    ssl_verify_client on;
+    ssl_verify_depth 2;
+
+    location / {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        # Pass the verified identity on for logging, never for authorization:
+        # the server authorizes on the GitLab credential.
+        proxy_set_header X-Client-DN $ssl_client_s_dn;
+    }
+}
+```
+
+For the proxy-to-server hop, `proxy_ssl_verify on` with
+`proxy_ssl_trusted_certificate` pointed at your private CA is the pairing for
+`--tls-cert` on the listener.
+
+## The unix socket, and what it costs at scale
+
+A unix socket has no peer address. The authentication failure budget is keyed on
+the caller's address, so on a socket **every caller shares one budget**: ten
+failed authentications a minute from anywhere behind the proxy answer `429` to
+everybody for a minute. `--trusted-proxy-header` cannot repair it either, since
+the header is believed only from a peer that parses as an address, and no socket
+peer does.
+
+The alternative is one line: bind loopback TCP instead and tell the server who
+the proxy is.
+
+```bash
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+  --gitlab-url=https://gitlab.example.com \
+  --trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1,::1
+```
+
+Keep the socket where the caller population is small or entirely trusted, and
+where removing the hop matters more than per-caller failure accounting.
+
+<FAQ />

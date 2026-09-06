@@ -1,0 +1,141 @@
+---
+title: Operación a escala
+description: "Llevar la flota: actualizaciones progresivas, comparar config_digest entre instancias, telemetría con muchos usuarios, salida fija para las listas de permitidos de GitLab, los secretos que guarda un despliegue y qué vigilar."
+datePublished: "2026-09-06"
+faq:
+  - q: "¿Qué compara realmente config_digest?"
+    a: "Si dos instancias sirven el mismo catálogo. Cubre superficie de herramientas, superficie de capacidades, esquema de parámetros meta, tier y si se fijó, detección de ámbitos, solo lectura, modo seguro y herramientas excluidas. No cubre TLS, direcciones, límites de peticiones ni tamaños de pool, así que no detecta una instancia que difiera solo en eso, y una compilación de otra versión con los mismos ajustes reporta el mismo digest a propósito: `build` es el campo que responde qué versión ejecuta cada instancia."
+  - q: "¿Puede un balanceador leer un 200 de /health como que GitLab está arriba?"
+    a: "No. `/health` no hace ninguna llamada a GitLab y no comprueba a propósito su accesibilidad, y no hay endpoint de readiness aparte. Responde `200` mientras sirve y `503` una vez solicitada la parada, con `status`, `version`, `commit`, `build`, `config_digest`, `started_at` y `uptime_seconds`, y no necesita credencial."
+  - q: "¿Qué señal de monitorización duele más a escala?"
+    a: "Los fallos de autenticación por dirección. Sin `--trusted-proxy-header` y `--trusted-proxies`, los fallos de todos los clientes se cargan a la dirección del balanceador, así que diez tokens malos por minuto desde cualquier punto de la población responden `429` a todo el despliegue durante un minuto. Configura ambos flags en cualquier instancia detrás de un proxy."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
+
+## Actualizaciones progresivas
+
+1. Arranca cada instancia con `--drain-delay` igual o mayor que un intervalo de
+   detección del balanceador.
+2. Renueva una instancia cada vez. Con hash consistente, los clientes fijados a
+   ella se mueven a una vecina, construyen allí una entrada de pool y vuelven
+   cuando regresa.
+3. Compara `config_digest` en toda la flota después de la renovación, antes de
+   darla por terminada.
+
+Una compilación de otra versión con los mismos ajustes reporta el mismo
+`config_digest`, así que una actualización no dispara la comparación. Es
+deliberado: el digest responde a "¿sirven estas instancias el mismo catálogo?",
+no a "¿son estas instancias la misma compilación?"; eso lo responde `build`.
+
+## `/health` y `config_digest` en una flota
+
+`GET /health` no necesita credencial y no hace ninguna llamada a GitLab.
+Responde `200` mientras sirve y `503` una vez solicitada la parada, con
+`status`, `version`, `commit`, `build`, `config_digest`, `started_at` y
+`uptime_seconds`.
+
+```bash
+for host in 10.0.0.11 10.0.0.12 10.0.0.13; do
+  printf '%s ' "$host"
+  curl -fsS "http://$host:8080/health" |
+    python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["build"], d["config_digest"], d["status"])'
+done
+```
+
+Todas las instancias tras un balanceador deben reportar el mismo
+`config_digest`, o una de ellas sirve un catálogo distinto a quien le llegue y
+nada más lo detecta: las llamadas funcionan todas, y solo difiere el conjunto de
+acciones disponibles. El digest cubre superficie de herramientas, superficie de
+capacidades, esquema de parámetros meta, tier y si se fijó, detección de
+ámbitos, solo lectura, modo seguro y herramientas excluidas. **No** cubre TLS,
+direcciones, límites de peticiones ni tamaños de pool, así que no detecta una
+instancia que difiera solo en eso.
+
+`/health` no comprueba a propósito la accesibilidad de GitLab, así que un
+balanceador no debe leer un `200` como "GitLab está arriba", y no hay endpoint
+de readiness aparte.
+
+## Telemetría con muchos usuarios
+
+La telemetría está desactivada por defecto y va a un colector que configuras tú.
+Tres ajustes importan cuando la población de clientes es grande:
+
+- **`--telemetry-identity`** decide qué se registra sobre quién hizo una llamada:
+  `none` (por defecto, no registra a nadie), `pseudonymous` (un digest con clave
+  que correlaciona las llamadas de un cliente sin nombrarlo) o `full`. La
+  identidad nunca llega a una métrica bajo ninguna política.
+- **`GITLAB_MCP_TELEMETRY_IDENTITY_KEY`** es lo que hace que `pseudonymous`
+  coincida entre réplicas. Vacío, cada proceso genera su propia clave, así que un
+  mismo cliente es un seudónimo distinto en cada instancia y un recuento de
+  usuarios distintos no significa nada en una flota. Ponla cuando las réplicas
+  deban coincidir, y mantenla lejos de donde acabe la telemetría: los
+  identificadores de usuario de GitLab son lo bastante pequeños como para
+  enumerarlos contra una clave conocida, y eso convierte la clave en la
+  "información adicional" que devuelve un seudónimo a una persona.
+- **`--telemetry-tool-name`** vale `auto` por defecto, lo que mantiene
+  `gen_ai.tool.name` como dimensión de métrica en las superficies dinámica y
+  meta y la descarta en la individual, donde mil nombres de herramienta
+  agotarían el límite de cardinalidad del SDK y colapsarían la cola larga en un
+  único cubo de desbordamiento.
+
+Consulta [OpenTelemetry](/gitlab-mcp-server/es/operations/telemetry/) para el
+panorama completo.
+
+## Salida fija para las listas de permitidos de GitLab
+
+GitLab aplica sus propios límites de peticiones y sus listas de direcciones
+permitidas por dirección de origen. Instancias tras una pasarela NAT con
+dirección estable son un solo cliente para GitLab; instancias con direcciones
+públicas efímeras son varias impredecibles, y no se puede escribir una lista de
+permitidos para ellas. Dale a la flota una dirección de salida fija antes de
+pedirle a una persona administradora de GitLab que la permita.
+
+## Secretos
+
+No hay credencial de servidor que proteger: en modo HTTP cada petición lleva el
+token de quien llama y `/health` no necesita ninguno. Lo que sí guarda el
+despliegue:
+
+- **La sal de afinidad.** Un fichero que lee el balanceador, modo 0600, fuera
+  del repositorio. Es la sal de una función de distribución más que una
+  primitiva de seguridad, pero filtrarla convierte la clave de enrutado en una
+  huella de token confirmable.
+- **La clave privada TLS**, si el listener termina TLS. Ahora rotable en
+  caliente sin reinicio.
+- **`GITLAB_MCP_TELEMETRY_IDENTITY_KEY`**, si la telemetría seudonimizada está
+  activa. No tiene flag a propósito: los argumentos de proceso son legibles a
+  través de `/proc` por cualquier principal local. `GITLAB_TOKEN` tampoco lo
+  tiene, por la misma razón.
+
+Los tokens del pool viven en memoria mientras dura su entrada, porque un cliente
+no puede llamar a GitLab sin uno, y el pool se indexa por digest para que
+recorrer sus estructuras de búsqueda no dé ninguna credencial. No se escribe
+nada en disco. Los registros llevan los últimos cuatro caracteres de un token y
+nada más.
+
+## Qué vigilar
+
+| Señal                                        | Dónde                     | Por qué importa                                                                       |
+| -------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------- |
+| Igualdad de `config_digest` entre instancias | `/health`                 | El único detector de una instancia que sirve otro catálogo                            |
+| `status` y el código HTTP                    | `/health`                 | `503 draining` es la señal para el balanceador, no un fallo                           |
+| `build` por instancia                        | `/health`                 | Qué versión ejecuta realmente cada instancia                                          |
+| Pico de conjunto residente                   | Métricas del host         | Lo que dimensiona el proceso son las llamadas en vuelo, no las credenciales           |
+| Tiempo de CPU por llamada                    | Telemetría                | El techo son los hilos divididos entre esto                                           |
+| Desalojos del pool                           | Registros                 | Desalojar a menudo significa que `--max-http-clients` está por debajo de la población |
+| Tasa de `429`                                | Registros del balanceador | Distingue el limitador por credencial del presupuesto de autenticación                |
+| Fallos de autenticación por dirección        | Registros                 | Diez por minuto bloquean una dirección                                                |
+
+<Aside type="danger" title="La trampa que más duele a escala">
+
+Sin `--trusted-proxy-header` y `--trusted-proxies`, los fallos de autenticación
+de todos los clientes se cargan a la dirección del balanceador, así que diez
+tokens malos por minuto desde cualquier punto de la población responden `429` a
+todo el despliegue durante un minuto. Configura ambos flags en cualquier
+instancia detrás de un proxy.
+
+</Aside>
+
+<FAQ />

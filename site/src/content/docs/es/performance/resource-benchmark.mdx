@@ -8,7 +8,7 @@ faq:
   - q: "¿Por qué la primera llamada de un token nuevo tarda tanto?"
     a: "Está pagando el registro. El proceso responde a `/health` en unos 52 ms sin tener ningún catálogo; la primera credencial de una configuración construye el suyo, y eso tardó 0,39 segundos en dynamic, 0,41 en meta y 1,27 en individual en la máquina medida. Cualquier llamada posterior se sirve ya del catálogo construido, y también cualquier credencial posterior de esa misma configuración, porque el servidor se construye una vez por forma de configuración y se comparte. La espera vuelve cuando el pool recupera la entrada, lo que deciden `--pool-idle-timeout` y `--max-http-clients`."
   - q: "¿La superficie de herramientas cambia la memoria que necesita el servidor?"
-    a: "Para lo que cuesta mantener una credencial ya no la cambia en absoluto: 51 KiB por credencial en dynamic, 52 en meta y 29 en individual, en superficies cuyo número de herramientas registradas difiere en un factor de quinientos, porque el servidor y su catálogo se construyen una vez por forma de configuración y se comparten. Bajo carga las superficies sí se separan, y tampoco por número de herramientas: meta es la más barata por credencial que llama, 0,84 MiB frente a 4,05 de dynamic y 4,00 de individual, que es lo que una superficie reserva mientras responde a una llamada. Lo que la superficie sí cambia es el tamaño de un `tools/list`: 12 KB en dynamic, 599 KB en meta y 3,2 MB en individual, es decir, una respuesta en caliente de unos milisegundos frente a un tercio de segundo, y 105 ms de tiempo de procesador para la llamada media en individual, donde una de cada dos llamadas es uno de esos listados."
+    a: "Para lo que cuesta mantener una credencial no la cambia en absoluto: 51 KiB por credencial en dynamic, 52 en meta y 29 en individual, en superficies cuyo número de herramientas registradas difiere en un factor de quinientos, porque el servidor y su catálogo se construyen una vez por forma de configuración y se comparten. Bajo carga las superficies sí se separan, y tampoco por número de herramientas: meta es la más barata por credencial que llama, 0,84 MiB frente a 4,05 de dynamic y 4,00 de individual, que es lo que una superficie reserva mientras responde a una llamada. Lo que la superficie sí cambia es el tamaño de un `tools/list`: 12 KB en dynamic, 599 KB en meta y 3,2 MB en individual, es decir, una respuesta en caliente de unos milisegundos frente a un tercio de segundo, y 105 ms de tiempo de procesador para la llamada media en individual, donde una de cada dos llamadas es uno de esos listados."
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -36,9 +36,12 @@ ajustes que de verdad mueven esas cifras.
   cientos de milisegundos a segundo y medio. Ninguna llamada posterior vuelve a
   pagarlo, aunque en `individual` un `tools/list` en caliente sigue costando un
   tercio de segundo.
-- **La superficie de herramientas ya no cambia lo que cuesta mantener una
-  credencial**, y sigue decidiéndolo todo sobre las respuestas: un `tools/list`
-  ocupa 12 KB en `dynamic` y 3,2 MB en `individual`.
+- **La superficie de herramientas no cambia lo que cuesta mantener una
+  credencial**, y lo decide todo sobre las respuestas: un `tools/list` ocupa
+  12 KB en `dynamic` y 3,2 MB en `individual`.
+- **Estas son las cifras de esta versión.** La máquina de referencia se vuelve
+  a medir en cada versión y estos valores se sustituyen, sin comparación con lo
+  que fueron.
 
 </Aside>
 
@@ -55,12 +58,26 @@ que una máquina de desarrollo y la integración continua midan lo mismo.
 Todo lo que sigue lo regenera una sola orden, `make bench-resources`, que
 ejecuta el banco de pruebas y redibuja las gráficas a partir del registro que
 escribe. La máquina, la compilación y el método aparecen en el texto bajo el
-encabezado, porque una cifra de memoria residente sin ellos no es accionable.
+encabezado y en el borde inferior de cada gráfica, porque una cifra de memoria
+residente sin ellos no es accionable.
 
-Los escenarios puntuales se quedan en ocho credenciales. Un despliegue
-compartido atiende a cientos, así que el banco de pruebas ejecuta además una
-**serie de concurrencia** por superficie: un solo proceso HTTP al que se le
-dan por turnos 1, 2, 5, 10, 20, 50, 100, 200, 500 y 1000 credenciales
+**Esta página es una instantánea, y solo eso.** Cada versión vuelve a medir en
+la máquina de referencia y sustituye estos valores por completo: sin columna de
+"antes", sin proporción frente a una ejecución anterior, sin histórico. Una
+cifra comparada con una ejecución cuyo código ya no existe no dice nada sobre
+la instancia que estás dimensionando.
+
+Los **escenarios puntuales** ejecutan 64 credenciales en HTTP y 8 procesos en
+stdio, admitiéndolos de uno en uno y cargándolos después todos a la vez. 64
+queda muy por encima del punto en que la máquina se satura y por debajo del
+límite por defecto del pool, que es 100, así que el escenario ejecuta la
+configuración que se distribuye y mide contención real; 8 en stdio, porque cada
+uno es un proceso entero con su propio catálogo y ocho clientes simultáneos son
+una máquina de desarrollo ocupada.
+
+Un despliegue compartido atiende a cientos, así que el banco de pruebas ejecuta
+además una **serie de concurrencia** por superficie: un solo proceso HTTP al
+que se le dan por turnos 1, 2, 5, 10, 20, 50, 100, 200, 500 y 1000 credenciales
 distintas, cada una calentada con un `tools/list`, y que se mide en cada
 recuento durante una fase estable de diez segundos en la que todas las
 credenciales llaman sin parar a `tools/call` y `tools/list`. Cada paso
@@ -74,11 +91,10 @@ lecturas responden a preguntas distintas: el conjunto residente de la fase
 estable es lo que cuestan N credenciales mientras todas están llamando, y la
 lectura en reposo, tomada al terminar la carga y forzando una recolección, es
 lo que cuesta mantenerlas. La primera se mide en megabytes por credencial y la
-segunda en kilobytes, así que publicar la primera como si fuera la segunda,
-que es lo que hacía esta página, exagera el coste de una credencial del pool en
-tres órdenes de magnitud. El conjunto residente en reposo se registra junto al
-heap en reposo y va por detrás de él, porque liberar el montículo no devuelve
-las páginas: el recolector de Go las devuelve según su propio calendario.
+segunda en kilobytes, así que ninguna sustituye a la otra. El conjunto
+residente en reposo se registra junto al heap en reposo y va por detrás de él,
+porque liberar el montículo no devuelve las páginas: el recolector de Go las
+devuelve según su propio calendario.
 
 Una serie se detiene antes de tumbar la máquina: antes de cada paso se estima, a partir de los
 pasos anteriores, la memoria residente que alcanzaría, y el resto de la lista
@@ -87,27 +103,6 @@ memoria disponible del equipo salvo que se indique otro); un paso cuyo p99 de
 `tools/call` pase de 30 segundos es el último que se ejecuta. Dónde se detuvo
 cada serie, y por qué, se indica bajo su tabla. En la ejecución publicada aquí
 no se detuvo ninguna: las tres llegaron a mil credenciales.
-
-## Qué ha cambiado desde la ejecución anterior
-
-Las cifras de esta página venían de una ejecución anterior en la misma máquina,
-y se han movido dos órdenes de magnitud. Ambas midieron el pico de conjunto
-residente bajo carga de la misma forma, así que esa es la comparación justa
-entre ellas; la columna de reposo no tiene predecesora, porque la ejecución
-anterior no tomaba ninguna lectura en reposo.
-
-| Ejecución                              | Commit     | Carga, pico de conjunto residente por credencial que llama   | Reposo, heap vivo por credencial | La serie llegó a |
-| -------------------------------------- | ---------- | ------------------------------------------------------------ | -------------------------------- | ---------------- |
-| Un servidor MCP por credencial         | `afecf6ce` | 130,9 MiB en `dynamic`, 63,5 en `meta`, 90,8 en `individual` | sin medir                        | 100, 200 y 100   |
-| Un servidor por forma de configuración | `2a92f7ec` | 4,05 MiB en `dynamic`, 0,84 en `meta`, 4,00 en `individual`  | 50,9 KiB, 52,1, 29,1             | 1000 en las tres |
-
-La pendiente de la ejecución anterior cargaba con el catálogo de herramientas
-que cada credencial del pool construía para sí; lo que queda son las peticiones
-en vuelo, que ninguna cantidad de compartición elimina. Conviene señalar que
-aquellos 130,9 MiB también eran una cifra de carga, y se publicaron en esta
-página como si fueran de reposo. Ese error de presentación es justo lo que
-viene a cerrar la lectura en reposo, así que no leas los nuevos 50,9 KiB como
-su sucesor: miden magnitudes distintas.
 
 <Aside type="caution" title="Léelas como formas, no como constantes">
 Una máquina, un sistema operativo, una cadena de herramientas de Go. Las
@@ -252,18 +247,19 @@ Ajustado sobre estos pasos: el pico de conjunto residente bajo carga crece 4.00 
 **stdio.** Un proceso por cliente, y el proceso empieza a construir su
 catálogo nada más arrancar, así que no hay ningún estado de reposo en el que
 ahorrar memoria. Entre 108 y 254 MiB por proceso según la superficie, con
-picos algo mayores bajo carga. Entre procesos no se comparte nada: una máquina
-de desarrollo con un solo cliente no lo notará, y un equipo con cuatro de
-ellos midió entre 438 MiB y 1,04 GiB en total.
+picos algo mayores bajo carga. Entre procesos no se comparte nada, así que el
+coste es una línea recta en el número de clientes: una máquina de desarrollo
+con un solo cliente no lo notará, y la columna "todos los clientes" es lo que
+pesan ocho juntos.
 
 **HTTP.** Parte de entre 36 y 40 MiB para un proceso que no atiende a nadie y
 suma un catálogo por cada configuración distinta, que construye la primera
 credencial que lo pide y comparten todas las demás credenciales de esa misma
-configuración. Los escenarios de ocho credenciales midieron 0, 1 y -3 MiB por
-credencial adicional en `dynamic`, `meta` e `individual`, es decir, nada por
-encima del ruido de una lectura de conjunto residente: ocho credenciales en
-`dynamic` cuestan los mismos 114 MiB que una. Lo que queda por dimensionar es
-el trabajo concurrente.
+configuración. Eso es lo que informa la columna "por cliente extra": 0, 1 y -3
+MiB en `dynamic`, `meta` e `individual`, es decir, nada por encima del ruido de
+una lectura de conjunto residente, a lo largo de una escalera que admite 64
+credenciales de una en una. Lo que queda por dimensionar es el trabajo
+concurrente, que es la columna de pico contigua.
 
 **Hay dos ejes, y solo uno de ellos es el pool.** Mantener una credencial
 cuesta 50,9 KiB de heap vivo en reposo en `dynamic`, 52,1 KiB en `meta` y 29,1
@@ -342,10 +338,12 @@ make bench-resources-render   # redibujar desde el registro, sin medir
 make check-bench-resources    # comprobar que las gráficas cuadran con el registro
 ```
 
-Los escenarios puntuales tardan unos minutos, la mayor parte construyendo un
-catálogo por cliente, que es justo el coste que se está midiendo y no una
-sobrecarga del arnés; las series tardan después lo que la memoria del equipo
-les permita, hasta un cuarto de hora por superficie. Las series también pueden
+Los ocho escenarios puntuales tardan entre cinco y diez minutos en la máquina
+de referencia: la mitad stdio se va casi entera en construir un catálogo por
+proceso, que es justo el coste que se está midiendo y no una sobrecarga del
+arnés, y la mitad HTTP se va en servir 64 credenciales a la vez. Las series
+tardan después lo que la memoria del equipo les permita, hasta un cuarto de
+hora por superficie. Las series también pueden
 medirse en un equipo y dibujarse en otro: compila el driver y el servidor, y en
 el equipo con memoria ejecuta el driver con `-binary`, `-json`, `-profiles` y
 `-no-render`, que no lee nada de ningún repositorio; después copia el registro

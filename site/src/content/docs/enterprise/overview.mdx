@@ -1,0 +1,96 @@
+---
+title: Enterprise Deployments
+description: "Serve hundreds of people from one GitLab MCP Server deployment: what changes at that size, and where each part of it is written down."
+datePublished: "2026-09-06"
+faq:
+  - q: "Do I still need token affinity across instances?"
+    a: "For ordinary calls it is an optimisation rather than a requirement: an instance a caller moves to already has the catalog built, so the move costs a credential probe, a licensing lookup and a client. Affinity still keeps one rate-limit bucket and one identity probe per caller instead of one per instance. It is mandatory for two things: legacy stateful sessions, which live in the process that minted the session id, and resource subscriptions, whose watchers are held by one process."
+  - q: "What is the one setting people forget behind a proxy?"
+    a: "`--trusted-proxy-header` together with `--trusted-proxies`. Without them every caller's authentication failures are charged to the balancer's address, and ten bad tokens a minute from anywhere in the population answers `429` to the entire deployment for a minute. Each flag is refused without the other."
+  - q: "Why does HAProxy mark every instance DOWN?"
+    a: "`option httpchk` sends no `Host` header unless one is configured, and a server bound to a specific host used to refuse such a request with 403. Version 2.8.0 serves it, because a request naming no host is not the DNS-rebinding attack that check exists for. On an older server, add `hdr Host your.host.name` to the `http-check send` line, which is good practice either way."
+---
+
+import { Aside, CardGrid, LinkCard } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
+
+[Remote Deployment](/gitlab-mcp-server/operations/remote-deployment/) stands the
+server up for other people: a service unit, a container, a reverse proxy, a
+certificate, and a first pass at several instances. This section is what changes
+when "other people" is hundreds of them.
+
+Everything here is HTTP mode. Read
+[HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) first if the
+pool, the instance allow-list and the authentication modes are not already
+familiar.
+
+<Aside type="tip" title="At a glance">
+
+- **Sizing is two questions, not one.** Holding a credential is nearly free;
+  serving calls is where an instance runs out.
+- **Affinity is an optimisation for ordinary calls and a requirement for
+  stateful sessions and subscriptions.**
+- **Certificate rotation needs no restart.** Write the new pair over the same
+  paths; the next handshake presents it.
+- **Behind any proxy, set `--trusted-proxy-header` and `--trusted-proxies`.**
+  Without them every caller's authentication failures are charged to the
+  balancer's address, and ten a minute answers `429` to the whole deployment.
+
+</Aside>
+
+## In the order an operator meets them
+
+<CardGrid>
+	<LinkCard
+		title="Sizing a deployment"
+		href="/gitlab-mcp-server/performance/sizing/"
+		description="How many people one instance holds: what a credential, a configuration shape and a call each cost, and the knobs worth turning."
+	/>
+	<LinkCard
+		title="Load balancing"
+		href="/gitlab-mcp-server/enterprise/load-balancing/"
+		description="Consistent hashing on a salted digest, worked nginx and HAProxy configurations, drain windows, and retries that never replay a delivered call."
+	/>
+	<LinkCard
+		title="MCP gateways"
+		href="/gitlab-mcp-server/enterprise/mcp-gateways/"
+		description="What a gateway does to the catalog, to the credential, to sessions and to caching, with one configuration verified end to end."
+	/>
+	<LinkCard
+		title="TLS"
+		href="/gitlab-mcp-server/enterprise/tls/"
+		description="Where to terminate, the listener's own certificate, rotation in place without a restart, client certificates, and what a unix socket costs at scale."
+	/>
+	<LinkCard
+		title="Operations at scale"
+		href="/gitlab-mcp-server/enterprise/operations/"
+		description="Rolling updates, comparing config_digest across a fleet, telemetry with many users, fixed egress, secrets, and what to monitor."
+	/>
+</CardGrid>
+
+## What is different about this server at scale
+
+**It holds no credential of its own.** Every request carries the caller's token,
+as `PRIVATE-TOKEN` or `Authorization: Bearer`, so there is no server token to
+protect, `/health` needs no authentication, and per-user identity, tiering and
+rate limiting survive as long as the credential does. Every design decision in
+this section follows from that: affinity, gateways and the rate limiter are all
+questions about the credential's path to the process.
+
+**One MCP server is built per configuration shape, not per credential.** A
+credential is a GitLab client and its bookkeeping, and the registered catalog is
+shared by everyone whose configuration matches, which is what makes a large
+population cheap to hold and a busy one expensive to serve. The design and its
+invariants are recorded in
+[ADR-0020](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0020-one-server-per-configuration-shape.md).
+
+**Nothing here needs a reverse proxy to be correct.** The binary answers its own
+CORS preflights, its own 404s and its own security headers, terminates TLS, and
+listens on a unix socket. A proxy is for what a proxy is good at: many clients,
+one certificate, one address.
+
+<FAQ />
+
+For the complete technical reference in one page, see
+[`docs/guides/enterprise-deployment.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/enterprise-deployment.md)
+in the repository.
