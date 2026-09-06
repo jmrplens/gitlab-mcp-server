@@ -136,6 +136,10 @@ type session struct {
 	exited chan struct{}
 	// state is what the reaper found, for the callers that report an exit code.
 	state atomic.Pointer[os.ProcessState]
+	// expectedExit is set by [session.waitExit], which every helper that asks
+	// the server to stop goes through. Without it the cleanup cannot tell an
+	// exit a test was about from one the server took by itself.
+	expectedExit atomic.Bool
 
 	mu     sync.Mutex
 	stderr strings.Builder
@@ -264,6 +268,20 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 	}()
 
 	t.Cleanup(func() {
+		// Asked before stdin is closed, because closing it is how this harness
+		// asks the server to stop and an exit after that says nothing. A
+		// process already gone at this point went on its own, which under
+		// GORACE=halt_on_error=1 is what a race report looks like: the report
+		// lands in the captured stderr of a test that made its last assertion
+		// and passed, and nothing else would ever mention it.
+		if !s.expectedExit.Load() {
+			select {
+			case <-s.exited:
+				t.Errorf("the server exited on its own during the test (%s), which no test here asks it to do\nstderr: %s",
+					s.exitStatus(), s.stderrText())
+			default:
+			}
+		}
 		_ = stdin.Close()
 		cancel()
 		// Not Cmd.Wait: the reaper above already collected the child, so this
@@ -391,6 +409,15 @@ func (s *session) alive() bool {
 	default:
 		return true
 	}
+}
+
+// exitStatus describes how the process ended, in a form that makes sense
+// whether or not the reaper had recorded it by the time it was asked.
+func (s *session) exitStatus() string {
+	if state := s.state.Load(); state != nil {
+		return state.String()
+	}
+	return "exit status not recorded"
 }
 
 // stderrText returns everything the server has logged so far.
@@ -606,6 +633,11 @@ func (s *session) closeStdinAndWait(t *testing.T, within time.Duration) (code in
 // its own when the process does.
 func (s *session) waitExit(t *testing.T, within time.Duration) (code int, exited bool) {
 	t.Helper()
+
+	// Every helper that asks the server to stop arrives here, so this is the
+	// one place that has to record that the exit about to happen is the test's
+	// own doing and not a finding.
+	s.expectedExit.Store(true)
 
 	done := make(chan *os.ProcessState, 1)
 	go func() {

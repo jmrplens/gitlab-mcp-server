@@ -270,13 +270,28 @@ func tryStartServerOnPort(t *testing.T, port int, env map[string]string, flags .
 	// rather than by sending: everything that asks whether the server is still
 	// there has to be able to ask, and a value can only be taken once. It was
 	// sent once, and the cleanup then blocked forever on a channel the health
-	// wait had already drained.
+	// wait had already drained. The wait's own error is recorded beside it,
+	// which is safe to read once the close has been observed.
+	//
+	// The cleanup asks, before it asks the process to stop, whether it is
+	// already gone. An exit nobody asked for is what a race report looks like
+	// under GORACE=halt_on_error=1, and it can land after the request that
+	// tripped it was already answered: no assertion fails, the report goes to
+	// the captured output of a test that passed, and the exit status is the
+	// only thing left saying anything happened.
+	var waitErr error
 	exited := make(chan struct{})
 	go func() {
-		_ = cmd.Wait()
+		waitErr = cmd.Wait()
 		close(exited)
 	}()
 	t.Cleanup(func() {
+		select {
+		case <-exited:
+			t.Errorf("the server exited on its own during the test (%s), which no test here asks it to do:\n%s",
+				describeExit(waitErr, cmd), logs())
+		default:
+		}
 		cancel()
 		<-exited
 	})
@@ -340,6 +355,23 @@ func listenAddrIn(logs string) string {
 		}
 	}
 	return ""
+}
+
+// describeExit names how the process ended: its recorded status when there is
+// one, and the error from the wait otherwise.
+//
+// The status is what to report. A server that handles its termination signal
+// exits 0, so the wait error alone says "<nil>" about a process that is
+// certainly gone, which is the least useful thing a message about an exit
+// could say.
+func describeExit(waitErr error, cmd *exec.Cmd) string {
+	if state := cmd.ProcessState; state != nil {
+		return state.String()
+	}
+	if waitErr != nil {
+		return waitErr.Error()
+	}
+	return "exit status not recorded"
 }
 
 // lockedWriter serializes writes from the process's two pipes into one buffer
