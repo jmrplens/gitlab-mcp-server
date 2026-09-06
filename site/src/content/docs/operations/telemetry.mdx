@@ -173,17 +173,33 @@ The action attribute is the only thing that tells them apart.
 
 ### Metrics
 
-| Instrument                      | Unit | What it answers                              |
-| ------------------------------- | ---- | -------------------------------------------- |
-| `mcp.server.operation.duration` | `s`  | how long requests take, by method and action |
-| `mcp.client.operation.duration` | `s`  | how long this server waits on the client     |
-| `http.client.request.duration`  | `s`  | how long GitLab takes                        |
-| `mcp.server.session.duration`   | `s`  | how long a client stays connected            |
+| Instrument                             | Unit         | What it answers                                     |
+| -------------------------------------- | ------------ | --------------------------------------------------- |
+| `mcp.server.operation.duration`        | `s`          | how long requests take, by method and action        |
+| `mcp.client.operation.duration`        | `s`          | how long this server waits on the client            |
+| `http.client.request.duration`         | `s`          | how long GitLab takes                               |
+| `mcp.server.session.duration`          | `s`          | how long a client stays connected                   |
+| `gitlab_mcp.credential_pool.entries`   | `{entry}`    | how many credentials the pool holds (HTTP mode)     |
+| `gitlab_mcp.credential_pool.capacity`  | `{entry}`    | how many it may hold, which is `--max-http-clients` |
+| `gitlab_mcp.credential_pool.evictions` | `{eviction}` | entries dropped, split by reason                    |
 
 `mcp.server.session.duration` is deliberately not recorded under the default
 stateless HTTP transport, where each POST is its own session: the histogram
 would be a copy of `mcp.server.operation.duration` under a name promising
 something else.
+
+The three credential-pool instruments carry this server's own namespace rather
+than the convention's `mcp.`, because a credential pool is this deployment's
+concept and not the protocol's. `gitlab_mcp.credential_pool.eviction.reason`
+takes one of seven values: `size_pressure`, `size_pressure_busy`, `idle`,
+`stale_credential`, `rejected_credential`, `invalid_credential` and `rebuild`.
+All seven are exported from process start, zeros included, so a panel is never
+empty for the ambiguous reason.
+
+`size_pressure_busy` is the one to alert on: it is the only path that ends a
+subscription somebody is waiting on, it means the pool held nothing quiet to
+take, and it has a matching `WARN` line carrying `in_use=true` and the
+`max_size` to raise.
 
 One attribute the convention asks for is missing, and it cannot be supplied:
 `jsonrpc.request.id`. The Go SDK gives a receiving middleware no access to the
