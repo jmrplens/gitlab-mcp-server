@@ -1,0 +1,132 @@
+---
+title: TLS
+description: "Dónde terminar TLS, el certificado del propio listener, la rotación en caliente sin reinicio, los certificados de cliente y lo que un socket unix le cuesta al presupuesto de fallos de autenticación a escala."
+datePublished: "2026-09-06"
+faq:
+  - q: "¿Puedo rotar el certificado TLS sin reiniciar?"
+    a: "Sí. Escribe el par nuevo sobre las mismas rutas y el siguiente handshake lo presenta; las conexiones ya abiertas conservan el certificado anterior hasta que se sustituyen. El certificado se sirve mediante una función que hace stat de ambos ficheros en cada handshake y los relee cuando alguno cambió. Un par escrito a medias, o ficheros ilegibles un instante, mantienen el certificado anterior en servicio y registran el motivo una sola vez. No hace falta ninguna señal, y `SIGHUP` no es una recarga: no está gestionada y termina el proceso."
+  - q: "¿El listener hace mTLS?"
+    a: "No. No pide certificado de cliente ni verifica ninguno; la autenticación en él es la credencial bearer, en cualquiera de los dos modos soportados. El TLS mutuo en el borde es una propiedad del proxy de delante, que es donde corresponde en un despliegue con muchos clientes, porque el proxy es quien tiene la CA de clientes y la lista de revocación."
+  - q: "¿Es un socket unix la opción correcta para un proxy en la misma máquina?"
+    a: "Elimina el salto de red en lugar de cifrarlo, que suele ser lo que quieres. Tiene un coste a escala: un socket unix no tiene dirección de par, y el presupuesto de fallos de autenticación se indexa por la dirección de quien llama, así que todos los clientes detrás del proxy comparten un presupuesto. Diez autenticaciones fallidas por minuto desde cualquier punto responden `429` a todo el mundo durante un minuto. Enlaza TCP de loopback con `--trusted-proxy-header` y `--trusted-proxies` si la contabilidad de fallos por cliente te importa más que el salto."
+---
+
+import FAQ from "../../../../components/FAQ.astro";
+
+## Dónde terminar
+
+| Dónde está el proxy      | Qué hacer                                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------------------------- |
+| En la misma máquina      | `--http-addr=/run/gitlab-mcp/server.sock`. Sin salto de red que cifrar ni certificado que rotar |
+| En otra máquina          | `--tls-cert` y `--tls-key` en el listener, con el proxy verificándolo                           |
+| Terminando para clientes | El certificado del propio proxy, más una de las dos filas anteriores para el salto de detrás    |
+
+El socket unix elimina el salto en lugar de cifrarlo, y bajo Docker ese salto no
+es "solo loopback": el camino pasa por docker-proxy y una red bridge. Tiene un
+coste a escala, descrito al final de esta página.
+
+## El TLS del propio listener
+
+```bash
+gitlab-mcp-server --http --http-addr=:8443 \
+  --gitlab-url=https://gitlab.example.com \
+  --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
+```
+
+Ambos flags o ninguno: un certificado sin su clave es un despliegue que cree que
+está cifrando y no lo está, y el arranque lo rechaza. TLS 1.2 es el suelo y no
+se fija máximo, así que un cliente actual negocia TLS 1.3 y a 1.2 solo llega el
+que no puede subir más. Todo lo anterior a 1.2 se rechaza. Ambas propiedades
+están fijadas por pruebas que ejecutan el binario real.
+
+## Rotación de certificado sin caída
+
+**Escribe el par nuevo sobre las rutas antiguas. No hay nada más que hacer.** El
+certificado se sirve mediante una función que comprueba ambos ficheros en cada
+handshake y los relee cuando alguno ha cambiado, así que el siguiente handshake
+presenta el certificado nuevo. Las conexiones ya abiertas conservan el anterior
+hasta que se sustituyen, que es lo correcto y como funciona cualquier rotación.
+
+En concreto, con certbot o cualquier herramienta de renovación que escriba las
+mismas rutas:
+
+```bash
+# El hook de renovación no necesita ni señal ni reinicio.
+certbot renew --deploy-hook "true"
+```
+
+Tres propiedades de ese camino, cada una cubierta por una prueba:
+
+- **Una rotación escrita a medias sigue sirviendo.** Escribir un certificado y
+  su clave son dos escrituras, y entre ellas el par en disco no casa. El
+  certificado ya cargado sigue en servicio hasta que el par vuelve a estar
+  completo, y el fallo se registra una vez y no una por handshake.
+- **Ficheros ilegibles siguen sirviendo.** Una renovación que borra antes de
+  escribir, o un montaje ausente un instante, no tumba el listener.
+- **No se relee nada mientras nada cambia.** La comprobación son dos llamadas a
+  `stat`; el análisis solo ocurre cuando cambia el tamaño o la fecha.
+
+No hace falta señal de recarga y no hay ninguna. `SIGHUP` no está gestionada y,
+con su disposición por defecto, termina el proceso; no la envíes.
+
+La primera carga sigue siendo estricta: al arrancar, una ruta inexistente o una
+clave que no casa con su certificado es un error de arranque con nombre, porque
+ese es el único momento en el que no hay nada a lo que recurrir y hay alguien
+mirando.
+
+## Certificados de cliente
+
+**El listener no hace mTLS.** No pide certificado de cliente ni verifica
+ninguno; la autenticación en él es la credencial bearer, en cualquiera de los
+dos modos soportados. El TLS mutuo en el borde es por tanto una propiedad del
+proxy de delante, que es donde corresponde en un despliegue con muchos clientes,
+porque el proxy es quien tiene la CA de clientes y la lista de revocación:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+
+    ssl_client_certificate /etc/ssl/clients-ca.pem;
+    ssl_verify_client on;
+    ssl_verify_depth 2;
+
+    location / {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        # Pasa la identidad verificada para registro, nunca para autorizar:
+        # el servidor autoriza con la credencial de GitLab.
+        proxy_set_header X-Client-DN $ssl_client_s_dn;
+    }
+}
+```
+
+Para el salto entre el proxy y el servidor, `proxy_ssl_verify on` con
+`proxy_ssl_trusted_certificate` apuntando a tu CA privada es la pareja de
+`--tls-cert` en el listener.
+
+## El socket unix, y lo que cuesta a escala
+
+Un socket unix no tiene dirección de par. El presupuesto de fallos de
+autenticación se indexa por la dirección de quien llama, así que sobre un socket
+**todos los clientes comparten un presupuesto**: diez autenticaciones fallidas
+por minuto desde cualquier punto detrás del proxy responden `429` a todo el
+mundo durante un minuto. `--trusted-proxy-header` tampoco lo arregla, porque la
+cabecera solo se cree desde un par que se analiza como dirección, y ningún par
+de socket lo hace.
+
+La alternativa es una línea: enlaza TCP de loopback y dile al servidor quién es
+el proxy.
+
+```bash
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+  --gitlab-url=https://gitlab.example.com \
+  --trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1,::1
+```
+
+Quédate con el socket donde la población de clientes sea pequeña o de plena
+confianza, y donde eliminar el salto importe más que la contabilidad de fallos
+por cliente.
+
+<FAQ />

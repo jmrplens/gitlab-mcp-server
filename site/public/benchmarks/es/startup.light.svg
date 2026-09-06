@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="900" height="480" role="img" aria-label="Lo que espera un cliente. Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500" role="img" aria-label="Lo que espera un cliente. Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar. Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, linux/amd64, go1.27.1. Compilación 2.7.6-0.20260906081503-18bed59da189 (18bed59d), 2026-09-06.">
 <title>Lo que espera un cliente</title>
-<rect width="900" height="480" fill="#ffffff"/>
+<rect width="900" height="500" fill="#ffffff"/>
 <text x="30" y="30" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="17" font-weight="600" fill="#24292f">Lo que espera un cliente</text>
 <text x="30" y="50" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#59636e">Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar</text>
 <rect x="76" y="92" width="794" height="312" fill="#f6f8fa"/>
@@ -11,35 +11,35 @@
 <rect x="383.0" y="61.0" width="11" height="11" rx="2" fill="#0e7490"/>
 <text x="399.0" y="70.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11.5" fill="#24292f">tools/list ya en caliente (p50)</text>
 <line x1="76" y1="404.0" x2="870" y2="404.0" stroke="#d1d9e0" stroke-width="1"/>
-<text x="68" y="408.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">1.0</text>
-<line x1="76" y1="326.0" x2="870" y2="326.0" stroke="#d1d9e0" stroke-width="1"/>
-<text x="68" y="330.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">10</text>
-<line x1="76" y1="248.0" x2="870" y2="248.0" stroke="#d1d9e0" stroke-width="1"/>
-<text x="68" y="252.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">100</text>
-<line x1="76" y1="170.0" x2="870" y2="170.0" stroke="#d1d9e0" stroke-width="1"/>
-<text x="68" y="174.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">1000</text>
+<text x="68" y="408.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">10</text>
+<line x1="76" y1="300.0" x2="870" y2="300.0" stroke="#d1d9e0" stroke-width="1"/>
+<text x="68" y="304.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">100</text>
+<line x1="76" y1="196.0" x2="870" y2="196.0" stroke="#d1d9e0" stroke-width="1"/>
+<text x="68" y="200.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">1000</text>
 <line x1="76" y1="92.0" x2="870" y2="92.0" stroke="#d1d9e0" stroke-width="1"/>
 <text x="68" y="96.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#59636e">10000</text>
 <text x="18" y="248.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#59636e" text-anchor="middle" transform="rotate(-90 18 248.0)">milisegundos (escala logarítmica)</text>
-<rect x="106.1" y="269.3" width="66.8" height="134.7" fill="#6d28d9"/>
-<text x="139.5" y="265.3" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">53</text>
-<rect x="174.9" y="201.9" width="66.8" height="202.1" fill="#c2410c"/>
-<text x="208.3" y="197.9" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">390</text>
-<rect x="243.7" y="366.8" width="66.8" height="37.2" fill="#0e7490"/>
-<text x="277.1" y="362.8" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">3.0</text>
+<text x="473.0" y="446" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" text-anchor="middle" fill="#59636e">superficie de herramientas</text>
+<text x="30" y="488" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" fill="#59636e">Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, linux/amd64, go1.27.1. Compilación 2.7.6-0.20260906081503-18bed59da189 (18bed59d), 2026-09-06.</text>
+<rect x="106.1" y="323.7" width="66.8" height="80.3" fill="#6d28d9"/>
+<text x="139.5" y="319.7" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">59</text>
+<rect x="174.9" y="247.7" width="66.8" height="156.3" fill="#c2410c"/>
+<text x="208.3" y="243.7" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">319</text>
+<rect x="243.7" y="370.1" width="66.8" height="33.9" fill="#0e7490"/>
+<text x="277.1" y="366.1" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">21</text>
 <text x="208.3" y="424" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12.5" text-anchor="middle" fill="#24292f">dynamic</text>
-<rect x="370.8" y="270.2" width="66.8" height="133.8" fill="#6d28d9"/>
-<text x="404.2" y="266.2" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">52</text>
-<rect x="439.6" y="200.4" width="66.8" height="203.6" fill="#c2410c"/>
-<text x="473.0" y="196.4" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">408</text>
-<rect x="508.4" y="273.3" width="66.8" height="130.7" fill="#0e7490"/>
-<text x="541.8" y="269.3" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">47</text>
+<rect x="370.8" y="330.2" width="66.8" height="73.8" fill="#6d28d9"/>
+<text x="404.2" y="326.2" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">51</text>
+<rect x="439.6" y="247.0" width="66.8" height="157.0" fill="#c2410c"/>
+<text x="473.0" y="243.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">324</text>
+<rect x="508.4" y="255.2" width="66.8" height="148.8" fill="#0e7490"/>
+<text x="541.8" y="251.2" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">270</text>
 <text x="473.0" y="424" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12.5" text-anchor="middle" fill="#24292f">meta</text>
-<rect x="635.4" y="269.8" width="66.8" height="134.2" fill="#6d28d9"/>
-<text x="668.9" y="265.8" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">52</text>
-<rect x="704.3" y="161.9" width="66.8" height="242.1" fill="#c2410c"/>
-<text x="737.7" y="157.9" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">1269</text>
-<rect x="773.1" y="207.8" width="66.8" height="196.2" fill="#0e7490"/>
-<text x="806.5" y="203.8" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">328</text>
+<rect x="635.4" y="330.1" width="66.8" height="73.9" fill="#6d28d9"/>
+<text x="668.9" y="326.1" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">51</text>
+<rect x="704.3" y="185.0" width="66.8" height="219.0" fill="#c2410c"/>
+<text x="737.7" y="181.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">1277</text>
+<rect x="773.1" y="156.6" width="66.8" height="247.4" fill="#0e7490"/>
+<text x="806.5" y="152.6" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#24292f">2394</text>
 <text x="737.7" y="424" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12.5" text-anchor="middle" fill="#24292f">individual</text>
 </svg>

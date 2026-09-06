@@ -206,15 +206,23 @@ func siteBlock(run *Run, l labels) string {
 // measuredOn is the sentence that makes the numbers actionable: without the
 // machine, the build and the method, a resident set is a rumor.
 func measuredOn(run *Run, l labels) string {
+	return fmt.Sprintf(l.MeasuredOn,
+		run.Host.describe(l), buildLabel(run), run.GeneratedAt, run.Settings.Rounds, run.Settings.SampleIntervalMs)
+}
+
+// buildLabel names the server binary a record was measured against: its
+// version and the commit it was built from, or "unknown" when the record
+// carries neither, which is a claim worth making explicitly rather than
+// leaving an empty slot in a sentence.
+func buildLabel(run *Run) string {
 	build := run.Server.Version
 	if run.Server.Commit != "" {
 		build += " (" + shortCommit(run.Server.Commit) + ")"
 	}
 	if strings.TrimSpace(build) == "" {
-		build = "unknown"
+		return "unknown"
 	}
-	return fmt.Sprintf(l.MeasuredOn,
-		run.Host.describe(l), build, run.GeneratedAt, run.Settings.Rounds, run.Settings.SampleIntervalMs)
+	return build
 }
 
 // shortCommit trims a commit to the width the rest of the documentation uses.

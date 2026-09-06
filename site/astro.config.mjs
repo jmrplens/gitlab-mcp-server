@@ -763,16 +763,6 @@ export default defineConfig({
 							translations: { es: "Despliegue remoto" },
 						},
 						{
-							slug: "operations/enterprise-deployment",
-							label: "Enterprise Deployments",
-							translations: { es: "Despliegues empresariales" },
-						},
-						{
-							slug: "operations/resource-benchmark",
-							label: "Resource Benchmark",
-							translations: { es: "Consumo de recursos" },
-						},
-						{
 							slug: "operations/error-handling",
 							label: "Error Handling",
 							translations: { es: "Errores y formato" },
@@ -791,6 +781,62 @@ export default defineConfig({
 							slug: "operations/troubleshooting",
 							label: "Troubleshooting",
 							translations: { es: "Solución de problemas" },
+						},
+					],
+				},
+				{
+					// Performance and resources: what the server costs to run and
+					// how to size for it. The measurement record and the sizing
+					// advice derived from it were split between operations/ and
+					// concepts/, so an operator answering "how big a container?"
+					// had to find two unrelated pages first.
+					label: "Performance",
+					translations: { es: "Rendimiento" },
+					items: [
+						{
+							slug: "performance/sizing",
+							label: "Sizing a Deployment",
+							translations: { es: "Dimensionar un despliegue" },
+						},
+						{
+							slug: "performance/resource-benchmark",
+							label: "Resource Benchmark",
+							translations: { es: "Consumo de recursos" },
+						},
+					],
+				},
+				{
+					// Enterprise deployment, in the order an operator meets it.
+					// One page carrying sizing, balancing, gateways, TLS and
+					// operations was too long to navigate and impossible to link
+					// into precisely.
+					label: "Enterprise Deployment",
+					translations: { es: "Despliegue empresarial" },
+					items: [
+						{
+							slug: "enterprise/overview",
+							label: "Overview",
+							translations: { es: "Descripción general" },
+						},
+						{
+							slug: "enterprise/load-balancing",
+							label: "Load Balancing",
+							translations: { es: "Balanceo de carga" },
+						},
+						{
+							slug: "enterprise/mcp-gateways",
+							label: "MCP Gateways",
+							translations: { es: "Pasarelas MCP" },
+						},
+						{
+							slug: "enterprise/tls",
+							label: "TLS",
+							translations: { es: "TLS" },
+						},
+						{
+							slug: "enterprise/operations",
+							label: "Operations at Scale",
+							translations: { es: "Operación a escala" },
 						},
 					],
 				},

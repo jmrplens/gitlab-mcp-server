@@ -1,0 +1,179 @@
+---
+title: Sizing a Deployment
+description: "How many people one instance holds, and what actually decides it: what a credential costs at rest, what a configuration shape costs once, what a call costs, and the knobs worth turning at scale."
+datePublished: "2026-09-06"
+faq:
+  - q: "How much memory does one pooled credential cost?"
+    a: "At rest with no connection open, 7.7 KiB on the dynamic surface, 8.3 KiB on meta and 8.5 KiB on individual. The catalog, its schemas, the discovery index and the MCP server itself are shared per configuration shape, so what a credential holds is its GitLab client, its rate-limit bucket, its listen counter, its watchers and its sessions, which is why the figure barely moves with the surface. It is the live heap of an idle process; a credential holding a connection also costs the buffers behind it, and one with requests in flight costs what those requests allocate, which is the term that actually sizes an instance."
+  - q: "How many calls a second can one instance serve?"
+    a: "Threads divided by processor time per call. On the benchmark's reference host, an Intel i5-14400 with 16 threads, a call costs about 8 ms on the dynamic and meta surfaces and about 120 ms on individual, and the measured series plateaus at roughly 1,800 calls a second on dynamic, reached by five concurrently busy credentials and using fourteen of the sixteen threads. The individual surface plateaus near 130 calls a second, because one `tools/list` there costs fifteen times what a whole dynamic call does."
+  - q: "Is `--max-http-clients` how I size the memory?"
+    a: "No. It bounds how many credentials the pool keeps, and a pooled credential is tens of kilobytes, so its default of 100 bounds about five mebibytes. Sizing an instance against it is wrong in both directions: it neither reserves that memory nor limits what the callers behind those credentials allocate while their requests are served. Size from how many callers will have requests in flight at the same moment."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
+
+<Aside type="tip" title="At a glance">
+
+- **Sizing is two questions, not one.** Holding a credential is nearly free
+  (7.7 KiB at rest on the dynamic surface); serving calls is where an instance
+  runs out.
+- **Pinning `--tier` is a sizing decision.** It removes the tier from the
+  configuration shape key and collapses up to three registered catalogs into
+  one.
+- **`--max-http-clients` is not a memory setting.** Its default of 100 bounds
+  about five mebibytes of tenancy.
+- **The ceiling is threads divided by processor time per call**, and everything
+  past it is queueing rather than a server that got slower.
+
+</Aside>
+
+Everything on this page is HTTP mode, and everything on it comes from the
+[resource benchmark](/gitlab-mcp-server/performance/resource-benchmark/), which
+measures the real binary and names the machine it ran on. The reference host is
+an Intel i5-14400 with 16 threads, and it is re-measured for every release.
+
+Read [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) first if the
+pool, the instance allow-list and the authentication modes are not already
+familiar.
+
+## Two quantities, not one
+
+**Holding a credential is nearly free.** The catalog, its schemas, the discovery
+index and the tool manifest are shared per configuration, and the MCP server
+itself is shared per configuration **shape**, so what a credential costs is its
+GitLab client, its rate-limit bucket, its listen counter, its watchers and its
+sessions.
+
+**Serving a call is where an instance runs out.** Per-call processor time is
+the term that binds, and it is untouched by any of that sharing. Everything
+below follows from keeping those two apart.
+
+## What a credential costs at rest
+
+Measured at rest with no connection open, a pooled credential costs **7.7 KiB on
+the dynamic surface, 8.3 KiB on meta and 8.5 KiB on individual**. It is the same
+figure three times over, because what a credential holds is its GitLab client
+and its bookkeeping rather than its tools.
+
+The shipped regression probe takes the same reading with the test harness's
+connections kept alive: run on an AMD Ryzen 5 3550H (8 threads, 60.8 GiB, Go
+1.27.1), the live heap grows 0.14 MiB between one credential and twenty on the
+dynamic surface and 0.16 MiB on individual.
+
+Three things bound that measurement:
+
+- It is the **live heap** after a collection, not the resident set. The resident
+  set is larger and does not shrink promptly, because Go returns memory to the
+  operating system lazily.
+- It is **with no connection open**. A credential holding one also costs the
+  buffers behind it, which the resource benchmark measures separately.
+- It is **at rest**. A credential with requests in flight costs what those
+  requests allocate. Any per-credential figure measured under load mixes tenancy
+  with load and cannot be multiplied by a credential count.
+
+## What a configuration shape costs, once
+
+A **shape** is everything that decides what a server registers: tool surface,
+capability surface, meta parameter-schema mode, tier and whether it was pinned,
+GitLab.com or self-managed, read-only including the narrowing a `read_api` token
+causes, safe mode, excluded tools, token scopes, and whether the transport is
+stateless. Every credential hashing to one shape is served by one MCP server.
+
+A process holding one registered shape and one credential has a live heap of
+about **38 MiB on the dynamic surface and 88 MiB on individual**, from the same
+run on the same host, at rest. An HTTP process with no credential at all, and
+therefore no shape registered, holds about 35 MiB resident on the reference
+host.
+
+| Input               | Values in one deployment                                                               |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| Tier                | 1 with `--tier` pinned; up to 3 (free, premium, ultimate) when detected per credential |
+| Token scopes        | 2, because only `admin_mode` changes the catalog                                       |
+| Scope detection     | 2, or 1 with `--ignore-scopes`                                                         |
+| Read-only narrowing | 2 when the operator did not set `--read-only`, 1 when they did                         |
+| GitLab.com or not   | 1, or 2 for a deployment publishing both                                               |
+| Everything else     | 1 each; they are process settings                                                      |
+
+A deployment with `--tier` pinned and `--ignore-scopes` produces exactly one
+shape. A typical one produces two to eight. Each costs one catalog build
+(measured at 1.8 seconds on the dynamic surface and 3.0 on individual) paid once
+for the process rather than once per credential.
+
+## What a call costs
+
+On the reference host, under the concurrency series' load of four requests in
+flight per credential on the dynamic and meta surfaces and two on individual:
+
+| Surface      | Processor time per call | What dominates it                                  |
+| ------------ | ----------------------- | -------------------------------------------------- |
+| `dynamic`    | about 8 ms              | The SDK's result marshalling and schema validation |
+| `meta`       | about 8 ms              | The same                                           |
+| `individual` | about 120 ms            | Marshalling a 3 MB `tools/list` response           |
+
+```text
+calls per second ceiling  =  usable threads  /  processor seconds per call
+```
+
+`16 / 0.008` is 2,000 calls a second in theory. The measured series plateaus at
+about **1,800 calls a second** on the dynamic surface, reached by five
+credentials each keeping four requests in flight, and never exceeded no matter
+how many more credentials are added; that plateau is fourteen of the host's
+sixteen threads. The individual surface plateaus at about **130 calls a second**
+on the same host.
+
+Use it to size, not as a promise: your GitLab is across a network this
+measurement did not cross.
+
+## The worked example
+
+Five hundred developers, an editor each, on the default dynamic surface, against
+one Ultimate self-managed instance, with `--tier=ultimate` pinned.
+
+**Memory.** One shape, so one catalog: about 38 MiB of live heap. Five hundred
+credentials at 7.7 KiB is under 4 MiB. Tenancy is not the term that sizes this
+deployment; the peak resident set is decided by how many calls are in flight.
+A 512 MiB floor is the right starting point, and the first thing to measure is
+the peak resident set under your own traffic rather than the credential count.
+
+**Processor.** Five hundred editors do not make five hundred concurrent calls.
+Fifty calls a second is `50 × 0.008 = 0.4` of a thread on the reference host. A
+thousand is eight threads, a little over half of one reference host's ceiling; add
+a second instance for headroom rather than for memory.
+
+**Reach for a second instance for availability first.** The ceiling that usually
+binds a busy deployment is GitLab's own rate limit against one token, which no
+number of instances raises.
+
+## The knobs, and what to set them to
+
+| Setting                                   | Default     | At scale                                                                                                                                                                                              |
+| ----------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--max-http-clients`                      | `100`       | Set it above your expected simultaneous population; upper bound 10000. Eviction is no longer cheap: it ends that credential's subscriptions and closes its listen streams                             |
+| `--pool-idle-timeout`                     | `1h`        | Leave it. The sweep runs every quarter of the timeout with a one-minute floor. An entry with live watchers or open listen streams is never idle-evicted                                               |
+| `--revalidate-interval`                   | `15m`       | The sweep is serial with a ten second timeout per entry, so a large pool against a slow instance costs up to `entries × 10s` per round. An entry older than an hour is rebuilt on next use regardless |
+| `--rate-limit-rps` / `--rate-limit-burst` | `10` / `40` | Per credential **per process**. Several instances multiply it unless affinity pins each caller to one                                                                                                 |
+| `--action-timeout`                        | `65m`       | Above the longest wait any action offers. Lower it only if you would rather fail a pipeline wait than hold a goroutine                                                                                |
+| `GITLAB_MCP_MAX_LISTEN_STREAMS`           | `64`        | Per credential. A second ceiling of 512 per process is deliberately not configurable                                                                                                                  |
+| `--session-timeout`                       | `30m`       | Only under `--stateless=false`. Under the default transport a session ends with its POST                                                                                                              |
+| `--http-idle-timeout`                     | `0`         | Leave it disabled. A positive value cuts long-lived streams                                                                                                                                           |
+| `--drain-delay`                           | `0`         | Set it to at least one balancer detection interval                                                                                                                                                    |
+
+Two further limits are not configurable: ten resource watchers per credential,
+and ten failed authentications a minute per client address before that address
+is answered `429` for a minute.
+
+## What does not scale with the credential count
+
+- **The registered catalog**, paid once per shape.
+- **The catalog build**, likewise. A credential arriving at a shape another
+  credential already built waits for nothing.
+- **Goroutines**, which are per watcher, per open listen stream and per live
+  session rather than per credential. A credential doing nothing has none.
+
+<FAQ />
+
+Once one instance is not enough, the next question is how callers are
+distributed across several:
+[Load Balancing](/gitlab-mcp-server/enterprise/load-balancing/).

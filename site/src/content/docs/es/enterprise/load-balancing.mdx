@@ -1,0 +1,257 @@
+---
+title: Balanceo de carga
+description: "Varias instancias tras un balanceador: para qué sirve la afinidad, hash consistente sobre un digest con sal, configuraciones trabajadas de nginx y HAProxy, ventanas de drenaje y reintentos que nunca repiten una llamada entregada."
+datePublished: "2026-09-06"
+faq:
+  - q: "¿Cuál debe ser la clave de afinidad?"
+    a: "Un digest con sal de la credencial, nunca la credencial. Una clave de afinidad acaba en la memoria del balanceador, en su registro de acceso si el formato nombra la variable, y en la selección de upstream que gobierna; un token bearer en bruto en cualquiera de esos sitios es una fuga de credencial con pasos extra. La sal es lo que hace el trabajo de seguridad: sin ella la clave es una huella del token que cualquiera con un token candidato podría confirmar."
+  - q: "¿Es seguro que el balanceador reintente una petición fallida?"
+    a: "Solo cuando se puede demostrar que la petición nunca llegó a una instancia. Un `tools/call` de MCP puede crear una incidencia, fusionar una petición o borrar una rama, así que un balanceador que reintenta un POST ya entregado convierte una llamada mutadora en dos y ninguno de los dos lados puede notarlo. En nginx eso significa `proxy_next_upstream error timeout` y nada más; en HAProxy, `option redispatch` desactivado y `retry-on` en su valor por defecto."
+  - q: "¿Por qué mi ventana de drenaje no parece hacer nada en nginx?"
+    a: "nginx open source no tiene comprobación activa de salud. `max_fails` y `fail_timeout` son pasivos: una instancia sale de rotación solo después de que fallen peticiones reales contra ella, así que las peticiones que descubren el fallo son las que fallaron. Nada consulta `/health`, así que nadie observa el cambio a `503 draining`. Usa un balanceador que consulte, o quita la instancia del upstream y recarga antes de señalarla."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
+
+La [guía de despliegue remoto](/gitlab-mcp-server/es/operations/remote-deployment/)
+explica las tres distribuciones (round robin, hash por dirección, hash por token)
+y trae un primer balanceador nginx trabajado. Esta página es lo que necesita
+encima un despliegue con mucha gente.
+
+## Para qué sirve la afinidad
+
+Para las llamadas ordinarias la afinidad es una optimización. La instancia a la
+que se mueve un cliente ya tiene el catálogo construido, así que el movimiento
+cuesta un sondeo de credencial, una consulta de licencia y un cliente. Lo que
+aporta: un cubo de límite por cliente en lugar de uno por instancia, un sondeo de
+licencia e identidad por cliente en lugar de uno por instancia, y una entrada de
+pool que se mantiene caliente en vez de reconstruirse en cada instancia por turno
+y desalojarse de cada una por turno.
+
+Dos cosas no son preferencias. Una sesión con estado (`--stateless=false`) vive
+en el proceso que acuñó su `Mcp-Session-Id`, y otra instancia responde a ese
+identificador con `404`. Las suscripciones a recursos son watchers que mantiene
+un proceso. Si usas cualquiera de las dos, la afinidad es un requisito.
+
+## Hash consistente sobre un conjunto de instancias cambiante
+
+Usa hash consistente, no un módulo: quitar una de tres instancias reubica
+entonces alrededor de un tercio de los clientes en lugar de barajarlos a todos,
+que es la diferencia entre una actualización progresiva que calienta un pool frío
+y otra que los calienta todos. Ambas configuraciones de abajo dicen
+`consistent`.
+
+Haz hash de un **digest con sal de la credencial**, nunca de la credencial. Una
+clave de afinidad acaba en la memoria del balanceador, en su registro de acceso
+si el formato nombra la variable, y en la selección de upstream que gobierna. La
+sal es lo que hace el trabajo de seguridad: sin ella la clave es una huella del
+token que cualquiera con un token candidato podría confirmar.
+
+Tres detalles deciden si la afinidad se sostiene:
+
+- **Normaliza antes de hacer hash.** Quita el prefijo `Bearer` y los espacios
+  que lo rodean. El mismo token escrito de dos formas da dos hashes.
+- **Recae en la dirección, no en nada.** Una clave vacía hace que todas las
+  peticiones sin credencial caigan en la misma instancia.
+- **Demuéstralo, no lo supongas.** Una clave de hash que el balanceador no
+  resuelve le hace caer en round robin en silencio, y eso se parece mucho a un
+  despliegue que funciona hasta que alguien lo cuenta.
+
+## nginx
+
+nginx hace hash de una cadena con variables él mismo, así que la sal entra en la
+expresión de la clave sin llegar a ser nunca una variable registrable. No hace
+falta ningún módulo de terceros.
+
+```nginx
+# Mantén la sal fuera del repositorio: inclúyela desde un fichero 0600.
+map $host $mcp_salt {
+    default "una-sal-larga-y-aleatoria-por-despliegue";
+}
+
+# La credencial bearer, sin su prefijo de esquema.
+map $http_authorization $mcp_bearer {
+    default                     "";
+    "~*^Bearer[ ]+(?<tok>\S+)$" $tok;
+}
+
+# Los clientes en modo legacy envían PRIVATE-TOKEN en su lugar.
+map $mcp_bearer $mcp_credential {
+    default $mcp_bearer;
+    ""      $http_private_token;
+}
+
+# Sin credencial: recae en la dirección del cliente.
+map $mcp_credential $mcp_affinity {
+    default $mcp_credential;
+    ""      $remote_addr;
+}
+
+upstream gitlab_mcp {
+    hash "$mcp_salt$mcp_affinity" consistent;
+    server 10.0.0.11:8080 max_fails=2 fail_timeout=10s;
+    server 10.0.0.12:8080 max_fails=2 fail_timeout=10s;
+    server 10.0.0.13:8080 max_fails=2 fail_timeout=10s;
+    keepalive 32;
+}
+
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+
+    location / {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+
+        # Reintenta solo lo que nunca se entregó.
+        proxy_next_upstream error timeout;
+        proxy_next_upstream_tries 2;
+    }
+
+    location /.well-known/oauth-protected-resource {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+    }
+}
+```
+
+No registres `$mcp_affinity` ni `$mcp_credential`.
+
+<Aside type="caution" title="nginx open source no tiene comprobación activa de salud">
+
+`max_fails` y `fail_timeout` son pasivos: una instancia sale de rotación solo
+después de que fallen peticiones reales contra ella, así que las peticiones que
+descubren el fallo son las que fallaron. Una ventana de drenaje no le aporta
+nada a nginx, porque nada consulta `/health`. Usa un balanceador que consulte, o
+quita la instancia del upstream y recarga antes de señalarla.
+
+</Aside>
+
+## HAProxy
+
+HAProxy calcula el digest en su propia configuración, así que no hay que confiar
+en nadie para mantener la credencial en bruto fuera de una clave de enrutado, y
+consulta `/health`, que es lo que hace que la ventana de drenaje signifique algo.
+
+```haproxy
+global
+  daemon
+defaults
+  mode http
+  timeout connect 2s
+  timeout client 1h
+  timeout server 1h
+  retries 1
+  option http-server-close
+
+frontend mcp
+  bind *:443 ssl crt /etc/ssl/private/mcp.example.com.pem
+  # La credencial, de cualquiera de las dos cabeceras, sin el prefijo Bearer.
+  http-request set-var(txn.cred) req.hdr(PRIVATE-TOKEN)
+  http-request set-var(txn.cred) req.hdr(Authorization),regsub(^[Bb]earer\ +,) if !{ req.hdr(PRIVATE-TOKEN) -m found }
+  # Sin credencial: la dirección del cliente, para que lo anónimo se reparta.
+  http-request set-var(txn.cred) src,ipmask(32,128) if !{ var(txn.cred) -m found }
+  default_backend mcp_servers
+
+backend mcp_servers
+  # Enruta por un digest con sal, nunca por la credencial.
+  balance hash var(txn.cred),concat(una-sal-larga-y-aleatoria-por-despliegue),sha1,hex
+  hash-type consistent
+  option httpchk
+  http-check send meth GET uri /health
+  http-check expect status 200
+  server one 10.0.0.11:8080 check inter 2s fall 2 rise 2
+  server two 10.0.0.12:8080 check inter 2s fall 2 rise 2
+  server three 10.0.0.13:8080 check inter 2s fall 2 rise 2
+```
+
+`option httpchk` no envía cabecera `Host` salvo que se configure una, y un
+servidor enlazado a un host concreto con `--http-addr` respondía a esa petición
+con `403`, lo que marcaba todas las instancias como caídas de forma permanente.
+Ahora se sirve: una petición que no nombra ningún host no es el ataque de DNS
+rebinding contra el que existe esa comprobación, porque un navegador siempre
+envía uno. Añadir `hdr Host mcp.example.com` a la línea `http-check send` sigue
+siendo buena práctica y es obligatorio contra un servidor anterior.
+
+`retries 1` sin `option redispatch` es la mitad deliberada: HAProxy reintenta un
+fallo de conexión y nunca una petición que ya entregó, así que un `tools/call`
+que creó una incidencia y luego perdió su respuesta no se repite en otra
+instancia.
+
+## Expulsión por salud y ventana de drenaje
+
+Con `SIGTERM` el proceso se marca en drenaje antes que nada. Desde ese momento
+`/health` responde `503` con `"status": "draining"` y `Cache-Control: no-store`,
+**mientras el listener sigue abierto y sirviendo peticiones reales**. Por defecto
+no se mantiene abierto nada de tiempo, así que un balanceador suele descubrir la
+parada por una petición fallida y no por el cambio.
+
+`--drain-delay` es la ventana. Ponla al menos en un intervalo completo de
+detección de tu balanceador: con la configuración de HAProxy de arriba,
+`inter 2s fall 2` detecta en cuatro segundos, así que `--drain-delay=10s` es
+holgado. La secuencia es: llega la señal, `/health` cambia a `503`, el
+balanceador deja de enviar trabajo nuevo mientras la instancia sigue atendiendo
+el que tiene, transcurre la ventana, se cierra el listener y las peticiones en
+vuelo disponen de quince segundos para terminar.
+
+Máximo cinco minutos. Se aplica solo al modo HTTP, porque stdio no tiene ningún
+listener que mantener abierto.
+
+## Reintentos que nunca repiten una petición entregada
+
+Un `tools/call` de MCP puede crear una incidencia, fusionar una petición o
+borrar una rama. Un balanceador que reintenta un POST ya entregado en una segunda
+instancia convierte una llamada mutadora en dos, y ni el cliente ni el servidor
+pueden notarlo.
+
+- **nginx**: `proxy_next_upstream error timeout` y nada más. No añadas nunca
+  `non_idempotent` ni `http_500`: ambos hacen que nginx repita una petición que
+  se entregó y se respondió.
+- **HAProxy**: deja `option redispatch` desactivado y `retry-on` en su valor por
+  defecto de fallos de conexión.
+- **Cualquier otro**: la regla es que un reintento solo es seguro cuando se puede
+  demostrar que la petición nunca llegó a una instancia. Nada en el protocolo MCP
+  hace idempotente por ti una llamada entregada.
+
+## Cuando una pasarela oculta al cliente
+
+Detrás de una CDN, una pasarela de API o una malla de servicios, la conexión que
+ve el balanceador viene de la pasarela y la credencial puede haberse sustituido.
+
+- **La afinidad tiene que basarse en algo que la pasarela conserve.** Si la
+  pasarela termina la autenticación y emite su propia credencial aguas abajo, haz
+  hash de esa; si reenvía la original, de la original; si no hace ninguna de las
+  dos, no tienes clave y el round robin es la opción honesta.
+- **Hay que decirle al limitador cuál es la dirección real**, o cargará los
+  fallos de todos los clientes a la pasarela. Define `--trusted-proxy-header` con
+  la cabecera que ponga tu pasarela y `--trusted-proxies` con sus direcciones; la
+  cabecera solo se cree en una conexión desde una dirección de la lista, y cada
+  flag se rechaza sin el otro. Para `X-Forwarded-For` el valor se lee desde la
+  derecha, saltando saltos que estén a su vez en la lista, así que el primero por
+  el que nadie responde es el cliente.
+
+Lo que una pasarela le hace al catálogo en sí está en
+[Pasarelas MCP](/gitlab-mcp-server/es/enterprise/mcp-gateways/).
+
+## El limitador se multiplica
+
+`--rate-limit-rps` es por credencial del pool dentro de un proceso. Tres
+instancias significan hasta tres cubos para un mismo cliente salvo que la
+afinidad lo fije en una. Con afinidad por token el número configurado es el
+número; con round robin, o lo divides entre el número de instancias o pones el
+límite real en el balanceador.
+
+La misma multiplicación se aplica a `--revalidate-interval`: el mismo token se
+vuelve a comprobar una vez por cada instancia que lo tenga.
+
+<FAQ />

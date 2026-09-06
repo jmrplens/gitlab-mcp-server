@@ -15,7 +15,9 @@
  * than described twice.
  *
  * Sizing is stated on the elements so the page does not reflow when the files
- * land; the figures are all drawn on the same 900x480 canvas.
+ * land; the figures are all drawn on the same 900x500 canvas, whose last
+ * twenty pixels are the host and build each figure carries along its bottom
+ * edge (see `chartH` in cmd/bench_resources/chart.go).
  */
 interface Props {
 	/** Figure name, without the scheme or extension. */
@@ -38,7 +40,7 @@ const dark = `${base}/benchmarks/${lang}/${name}.dark.svg`;
 		src={light}
 		alt={alt}
 		width="900"
-		height="480"
+		height="500"
 		loading="lazy"
 		decoding="async"
 	/>
@@ -48,7 +50,7 @@ const dark = `${base}/benchmarks/${lang}/${name}.dark.svg`;
 		alt=""
 		aria-hidden="true"
 		width="900"
-		height="480"
+		height="500"
 		loading="lazy"
 		decoding="async"
 	/>

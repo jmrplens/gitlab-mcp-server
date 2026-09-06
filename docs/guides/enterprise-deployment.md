@@ -17,24 +17,24 @@ already familiar.
 
 ## Two quantities, not one
 
-Sizing this server used to be one question, because holding a credential and
-serving a call cost the same kind of thing. It is now two, and they have
-different answers.
+Sizing this server is two questions, and they have different answers.
 
-**Holding a credential is nearly free.** Up to version 2.8.0 an HTTP deployment
-built one MCP server per credential, so the resident set was a straight line in
-the number of pooled credentials and the slope was one registered tool catalog.
-The catalog, its schemas, the discovery index and the tool manifest are now
-shared per configuration, and the MCP server itself is shared per configuration
-**shape**, so what a credential costs is its GitLab client, its rate-limit
-bucket, its listen counter, its watchers and its sessions.
+**Holding a credential is nearly free.** The catalog, its schemas, the discovery
+index and the tool manifest are shared per configuration, and the MCP server
+itself is shared per configuration **shape**, so what a credential costs is its
+GitLab client, its rate-limit bucket, its listen counter, its watchers and its
+sessions.
 [ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)
 records the design and its invariants.
 
-**Serving a call costs exactly what it did.** The sharing work did not touch the
-per-call path, and per-call processor time is where an instance actually runs
-out. Everything in the sizing section below follows from keeping those two
-apart.
+**Serving a call is where an instance runs out.** Per-call processor time is the
+term that binds, and no amount of sharing touches it. Everything in the sizing
+section below follows from keeping those two apart.
+
+This page's figures come from the
+[resource record](../reference/resource-benchmark.md), which is re-measured on
+its reference host for every release. They are the current build's costs, with
+no comparison against earlier ones.
 
 ## Sizing an instance
 
@@ -112,7 +112,7 @@ dynamic and meta surfaces and two on individual:
 | ------------ | ----------------------- | -------------------------------------------------- |
 | `dynamic`    | about 8 ms              | The SDK's result marshalling and schema validation |
 | `meta`       | about 8 ms              | The same                                           |
-| `individual` | about 130 ms            | Marshalling a 3 MB `tools/list` response           |
+| `individual` | about 120 ms            | Marshalling a 3 MB `tools/list` response           |
 
 The arithmetic that follows is the only one that matters for capacity:
 
@@ -121,12 +121,12 @@ calls per second ceiling  =  usable threads  /  processor seconds per call
 ```
 
 On the reference host, `16 / 0.008` is 2,000 calls a second in theory. The
-measured series plateaus at about **1,650 calls a second** on the dynamic
+measured series plateaus at about **1,800 calls a second** on the dynamic
 surface, reached by five credentials each keeping four requests in flight, and
 never exceeded no matter how many more credentials are added; that plateau is
-thirteen of the host's sixteen threads.
-The individual surface plateaus at about **106 calls a second** on the same
-host, because one `tools/list` there costs sixteen times what a whole dynamic
+fourteen of the host's sixteen threads.
+The individual surface plateaus at about **130 calls a second** on the same
+host, because one `tools/list` there costs fifteen times what a whole dynamic
 call does.
 
 Use it to size, not as a promise. Your instance's GitLab is on the other side of
@@ -149,7 +149,7 @@ under your own traffic rather than the credential count.
 Take the number actually in flight: if the busy hour sees fifty calls a second,
 that is `50 × 0.008 = 0.4` of a thread on the reference host, and the deployment
 is bound by nothing. If it sees a thousand, that is eight threads and one
-instance of the reference host's size is at about two thirds of its ceiling; add
+instance of the reference host's size is a little over half its ceiling; add
 the second instance for headroom rather than for memory.
 
 **Reach for a second instance for availability first.** A single instance holds
@@ -191,12 +191,11 @@ explains the three distributions (round robin, address hash, token hash) and
 carries a worked nginx balancer. This section is what a deployment with many
 users needs on top of it.
 
-### What affinity is still worth
+### What affinity is worth
 
-Affinity used to be close to mandatory, because a caller that moved paid a whole
-catalog build on the instance it moved to. It no longer does: the instance it
-lands on has the shape built already, and building a pool entry there is a
-credential probe, a licensing lookup and a client. What affinity still buys:
+For ordinary calls affinity is an optimisation: the instance a caller lands on
+has the shape built already, and building a pool entry there is a credential
+probe, a licensing lookup and a client. What affinity buys:
 
 - **One rate-limit bucket per caller instead of one per instance.**
 - **One licensing and identity probe per caller instead of one per instance.**

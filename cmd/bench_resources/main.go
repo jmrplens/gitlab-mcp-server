@@ -25,8 +25,8 @@ const (
 	defaultDocCharts  = "docs/reference/benchmarks"
 	defaultSiteCharts = "site/public/benchmarks"
 	defaultDocPage    = "docs/reference/resource-benchmark.md"
-	defaultSitePageEN = "site/src/content/docs/operations/resource-benchmark.mdx"
-	defaultSitePageES = "site/src/content/docs/es/operations/resource-benchmark.mdx"
+	defaultSitePageEN = "site/src/content/docs/performance/resource-benchmark.mdx"
+	defaultSitePageES = "site/src/content/docs/es/performance/resource-benchmark.mdx"
 	defaultProfiles   = "bench/profiles"
 )
 

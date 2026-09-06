@@ -19,15 +19,26 @@ import (
 
 // Figure geometry. One place, so the light and dark renderings cannot drift
 // apart and every chart on the page lines up with the others.
+// The canvas is twenty pixels taller than the plot needs so that every figure
+// can carry the host and the build it was measured on along its bottom edge. A
+// chart travels: it is embedded, screenshotted and quoted away from the page
+// that states the machine, and a resident-set curve with no machine attached
+// is a number nobody can act on.
 const (
 	chartW = 900
-	chartH = 480
+	chartH = 500
 	padL   = 76
 	padR   = 30
 	padT   = 92
-	padB   = 76
+	padB   = 96
 	plotW  = chartW - padL - padR
 	plotH  = chartH - padT - padB
+
+	// xAxisTitleY and provenanceY are measured from the plot rather than from
+	// the bottom edge, so growing the canvas moves the footer and leaves the
+	// axis title where it sits under its tick labels.
+	xAxisTitleY = padT + plotH + 42
+	provenanceY = chartH - 12
 
 	fontStack = `font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"`
 )
@@ -51,9 +62,17 @@ type barSeries struct {
 
 // barSpec is a grouped bar chart.
 type barSpec struct {
-	Title      string
-	Subtitle   string
-	YAxis      string
+	Title    string
+	Subtitle string
+	YAxis    string
+	// XAxis names what the categories are. A bar chart's categories carry
+	// their own labels, but "dynamic, meta, individual" only reads as a tool
+	// surface to somebody who already knows, and a figure has to be legible
+	// away from the page that says so.
+	XAxis string
+	// Provenance is the machine and build the figure was measured on, drawn
+	// along the bottom edge so the chart carries it wherever it is quoted.
+	Provenance string
 	Categories []string
 	Series     []barSeries
 	// Log selects a base-10 vertical axis, which the startup and latency
@@ -88,13 +107,16 @@ type lineMarker struct {
 
 // lineSpec is a line chart over a numeric X axis.
 type lineSpec struct {
-	Title     string
-	Subtitle  string
-	XAxis     string
-	YAxis     string
-	Series    []lineSeries
-	Format    func(float64) string
-	Threshold *thresholdLine
+	Title    string
+	Subtitle string
+	XAxis    string
+	YAxis    string
+	// Provenance is the machine and build the figure was measured on, drawn
+	// along the bottom edge so the chart carries it wherever it is quoted.
+	Provenance string
+	Series     []lineSeries
+	Format     func(float64) string
+	Threshold  *thresholdLine
 	// LogX lays the X axis out in decades and labels it at the series' own
 	// points rather than at every integer, which is what a credential count
 	// running from one to a thousand needs: on a linear axis the first nine
@@ -114,11 +136,15 @@ type canvas struct {
 
 // newCanvas opens a figure with its ground painted: a transparent SVG would
 // borrow whatever ground it lands on, and these are read on two of them.
-func newCanvas(p palette, title, subtitle string) *canvas {
+//
+// The provenance joins the accessible name as well as the bottom edge, because
+// a reader who cannot see the footer is exactly the reader who cannot fall back
+// to the surrounding prose either.
+func newCanvas(p palette, title, subtitle, provenance string) *canvas {
 	c := &canvas{p: p}
 	fmt.Fprintf(&c.sb,
 		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d" role="img" aria-label="%s">`+"\n",
-		chartW, chartH, chartW, chartH, xmlEscape(title+". "+subtitle))
+		chartW, chartH, chartW, chartH, xmlEscape(joinNonEmpty(". ", title, subtitle, provenance)))
 	fmt.Fprintf(&c.sb, "<title>%s</title>\n", xmlEscape(title))
 	fmt.Fprintf(&c.sb, `<rect width="%d" height="%d" fill="%s"/>`+"\n", chartW, chartH, p.Page)
 	fmt.Fprintf(&c.sb, `<text x="%d" y="30" %s font-size="17" font-weight="600" fill="%s">%s</text>`+"\n",
@@ -185,8 +211,18 @@ func (c *canvas) axisLabels(yAxis, xAxis string) {
 	}
 	if xAxis != "" {
 		fmt.Fprintf(&c.sb, `<text x="%.1f" y="%d" %s font-size="12" text-anchor="middle" fill="%s">%s</text>`+"\n",
-			padL+plotW/2.0, chartH-14, fontStack, c.p.Muted, xmlEscape(xAxis))
+			padL+plotW/2.0, xAxisTitleY, fontStack, c.p.Muted, xmlEscape(xAxis))
 	}
+}
+
+// provenance writes the machine and build along the bottom edge, so a figure
+// lifted out of its page still says what it is a measurement of.
+func (c *canvas) provenance(text string) {
+	if text == "" {
+		return
+	}
+	fmt.Fprintf(&c.sb, `<text x="%d" y="%d" %s font-size="10" fill="%s">%s</text>`+"\n",
+		padL-46, provenanceY, fontStack, c.p.Muted, xmlEscape(text))
 }
 
 // gridLine draws one horizontal rule with its value label.
@@ -334,7 +370,7 @@ func renderBars(p palette, spec barSpec) string {
 		sc, ticks = linearScale(maxValue * 1.12)
 	}
 
-	c := newCanvas(p, spec.Title, spec.Subtitle)
+	c := newCanvas(p, spec.Title, spec.Subtitle, spec.Provenance)
 	labels := make([]string, 0, len(spec.Series))
 	for _, series := range spec.Series {
 		labels = append(labels, series.Label)
@@ -343,7 +379,8 @@ func renderBars(p palette, spec barSpec) string {
 	for _, tick := range ticks {
 		c.gridLine(sc.pos(tick), format(tick))
 	}
-	c.axisLabels(spec.YAxis, "")
+	c.axisLabels(spec.YAxis, spec.XAxis)
+	c.provenance(spec.Provenance)
 
 	bandW := float64(plotW) / float64(len(spec.Categories))
 	groupW := bandW * 0.78
@@ -522,7 +559,7 @@ func renderLines(p palette, spec lineSpec) string {
 	}
 	xPos := xMapper(spec, e)
 
-	c := newCanvas(p, spec.Title, spec.Subtitle)
+	c := newCanvas(p, spec.Title, spec.Subtitle, spec.Provenance)
 	entries := make([]legendEntry, 0, len(spec.Series))
 	for i, series := range spec.Series {
 		entries = append(entries, legendEntry{label: series.Label, color: seriesColor(p, spec, i), dashed: series.Dashed})
@@ -532,6 +569,7 @@ func renderLines(p palette, spec lineSpec) string {
 		c.gridLine(sc.pos(tick), format(tick))
 	}
 	c.axisLabels(spec.YAxis, spec.XAxis)
+	c.provenance(spec.Provenance)
 
 	for _, x := range xTicks(spec, e) {
 		fmt.Fprintf(&c.sb, `<text x="%.1f" y="%d" %s font-size="11" text-anchor="middle" fill="%s">%.0f</text>`+"\n",

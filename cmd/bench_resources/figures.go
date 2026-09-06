@@ -12,6 +12,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // figure is one chart, renderable in either palette.
@@ -29,9 +30,14 @@ type figure struct {
 type labels struct {
 	Code string
 
-	MemoryTitle     string
-	MemorySubtitle  string
-	MemoryY         string
+	MemoryTitle    string
+	MemorySubtitle string
+	MemoryY        string
+	// SurfaceX and MethodX name what a bar chart's categories are, since
+	// "dynamic" and "tools/call" only read as a tool surface and an MCP
+	// method to somebody who already knows.
+	SurfaceX        string
+	MethodX         string
 	MemoryStdioOne  string
 	MemoryHTTPOne   string
 	MemoryHTTPAll   string
@@ -87,6 +93,12 @@ type labels struct {
 	SeriesStopFailure   string
 
 	MeasuredOn string
+	// ChartProvenance is the same claim as MeasuredOn, short enough to sit
+	// along a figure's bottom edge: the machine, the build and the date. A
+	// chart gets embedded, screenshotted and quoted away from the page that
+	// states those, and a memory curve with no machine attached is a number
+	// nobody can act on.
+	ChartProvenance string
 	// HostCPUs, HostRAM and HostKernel are the words the machine's own
 	// description is written with. The sentence naming the host is prose, so
 	// it is translated like the rest of it rather than left in English inside
@@ -126,14 +138,16 @@ func englishLabels() labels {
 	return labels{
 		Code:                  "en",
 		MemoryTitle:           "Resident memory by tool surface",
-		MemorySubtitle:        "stdio holds one catalog per process; HTTP holds one per credential in the pool",
+		MemorySubtitle:        "stdio holds one catalog per process, HTTP one per configuration shared by every credential",
 		MemoryY:               "Resident set (MiB)",
+		SurfaceX:              "tool surface",
+		MethodX:               "MCP method",
 		MemoryStdioOne:        "stdio, one process",
 		MemoryHTTPOne:         "HTTP, one credential",
 		MemoryHTTPAll:         "HTTP, %d credentials",
 		MemoryThreshold:       "512 MiB",
 		RampTitle:             "Resident memory as credentials arrive",
-		RampSubtitle:          "HTTP mode: every distinct token builds its own catalog in the pool",
+		RampSubtitle:          "HTTP mode, credentials admitted one at a time: the first builds the catalog, the rest find it built",
 		RampX:                 "live credentials (pool entries)",
 		StartupTitle:          "What a client waits for",
 		StartupSubtitle:       "HTTP mode, log scale: the catalog is built on the first tools/list, not at startup",
@@ -176,6 +190,7 @@ func englishLabels() labels {
 		SeriesStopLatency:  "Stopped at %d credentials: the tools/call p99 reached %.0f ms, above the %d ms ceiling.",
 		SeriesStopFailure:  "Stopped at %d credentials: admitting the credentials of the next step (%d) failed: %s.",
 		MeasuredOn:         "Measured on %s, build %s, %s. %d rounds per method, resident set sampled every %d ms.",
+		ChartProvenance:    "Measured on %s. Build %s, %s.",
 		HostCPUs:           "logical CPUs",
 		HostRAM:            "GiB RAM",
 		HostKernel:         "kernel",
@@ -221,14 +236,16 @@ func spanishLabels() labels {
 	return labels{
 		Code:                  "es",
 		MemoryTitle:           "Memoria residente por superficie de herramientas",
-		MemorySubtitle:        "stdio mantiene un catálogo por proceso; HTTP mantiene uno por credencial en el pool",
+		MemorySubtitle:        "stdio mantiene un catálogo por proceso, HTTP uno por configuración compartido por todas las credenciales",
 		MemoryY:               "Conjunto residente (MiB)",
+		SurfaceX:              "superficie de herramientas",
+		MethodX:               "método MCP",
 		MemoryStdioOne:        "stdio, un proceso",
 		MemoryHTTPOne:         "HTTP, una credencial",
 		MemoryHTTPAll:         "HTTP, %d credenciales",
 		MemoryThreshold:       "512 MiB",
 		RampTitle:             "Memoria residente según llegan credenciales",
-		RampSubtitle:          "Modo HTTP: cada token distinto construye su propio catálogo en el pool",
+		RampSubtitle:          "Modo HTTP, credenciales admitidas de una en una: la primera construye el catálogo y el resto lo encuentra construido",
 		RampX:                 "credenciales activas (entradas del pool)",
 		StartupTitle:          "Lo que espera un cliente",
 		StartupSubtitle:       "Modo HTTP, escala logarítmica: el catálogo se construye en el primer tools/list, no al arrancar",
@@ -271,6 +288,7 @@ func spanishLabels() labels {
 		SeriesStopLatency:  "Detenida en %d credenciales: el p99 de tools/call alcanzó %.0f ms, por encima del techo de %d ms.",
 		SeriesStopFailure:  "Detenida en %d credenciales: no se pudieron admitir las credenciales del siguiente paso (%d): %s.",
 		MeasuredOn:         "Medido en %s, compilación %s, %s. %d rondas por método, conjunto residente muestreado cada %d ms.",
+		ChartProvenance:    "Medido en %s. Compilación %s, %s.",
 		HostCPUs:           "CPU lógicas",
 		HostRAM:            "GiB de RAM",
 		HostKernel:         "núcleo",
@@ -333,6 +351,17 @@ func buildFigures(run *Run, l labels) []figure {
 	startup, latency := startupSpec(run, l), latencySpec(run, l)
 	seriesMemory, seriesLatency, seriesCPU := seriesMemorySpec(run, l), seriesLatencySpec(run, l), seriesCPUSpec(run, l)
 
+	// Every figure carries the same provenance, stamped here rather than in
+	// each builder so a figure added later cannot be drawn without one.
+	stamp := chartProvenance(run, l)
+	memory.Provenance = stamp
+	startup.Provenance = stamp
+	latency.Provenance = stamp
+	ramp.Provenance = stamp
+	seriesMemory.Provenance = stamp
+	seriesLatency.Provenance = stamp
+	seriesCPU.Provenance = stamp
+
 	var out []figure
 	add := func(name string, series int, render func(palette) string) {
 		if series > 0 {
@@ -347,6 +376,36 @@ func buildFigures(run *Run, l labels) []figure {
 	add(figureSeriesLatency, len(seriesLatency.Series), func(p palette) string { return renderLines(p, seriesLatency) })
 	add(figureSeriesCPU, len(seriesCPU.Series), func(p palette) string { return renderLines(p, seriesCPU) })
 	return out
+}
+
+// chartProvenance is the line every figure carries along its bottom edge: the
+// machine, the build and the day.
+//
+// It is deliberately shorter than the sentence under the "Measurements"
+// heading. That sentence has a paragraph's width to spend and names the kernel,
+// the installed memory, the round count and the sampling interval; this one has
+// a chart's width, and what a reader needs from a chart read on its own is
+// which machine and which build, not how the sampler was configured. The
+// date rather than the timestamp for the same reason: two runs on one day are
+// already told apart by the commit.
+func chartProvenance(run *Run, l labels) string {
+	if l.ChartProvenance == "" {
+		return ""
+	}
+	return fmt.Sprintf(l.ChartProvenance, run.Host.describeShort(l), buildLabel(run), measurementDay(run))
+}
+
+// measurementDay trims a record's timestamp to its date, leaving anything that
+// is not an RFC 3339 timestamp alone: a record written by hand for a test is
+// still worth printing.
+func measurementDay(run *Run) string {
+	const dateLen = len(time.DateOnly)
+	if len(run.GeneratedAt) >= dateLen {
+		if _, err := time.Parse(time.DateOnly, run.GeneratedAt[:dateLen]); err == nil {
+			return run.GeneratedAt[:dateLen]
+		}
+	}
+	return run.GeneratedAt
 }
 
 // orderedSeries lists the record's series in surface order, which is the
@@ -501,6 +560,7 @@ func memorySpec(run *Run, l labels) barSpec {
 		Title:      l.MemoryTitle,
 		Subtitle:   l.MemorySubtitle,
 		YAxis:      l.MemoryY,
+		XAxis:      l.SurfaceX,
 		Categories: surfaces,
 		Series:     series,
 		Format:     func(v float64) string { return fmt.Sprintf("%.0f", v) },
@@ -558,6 +618,7 @@ func startupSpec(run *Run, l labels) barSpec {
 		Title:      l.StartupTitle,
 		Subtitle:   l.StartupSubtitle,
 		YAxis:      l.StartupY,
+		XAxis:      l.SurfaceX,
 		Categories: surfaces,
 		Series:     []barSeries{ready, cold, warm},
 		Log:        true,
@@ -602,6 +663,7 @@ func latencySpec(run *Run, l labels) barSpec {
 		Title:      l.LatencyTitle,
 		Subtitle:   l.LatencySubtitle,
 		YAxis:      l.StartupY,
+		XAxis:      l.MethodX,
 		Categories: methods,
 		Series:     series,
 		Log:        true,

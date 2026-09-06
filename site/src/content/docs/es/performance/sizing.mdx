@@ -1,0 +1,185 @@
+---
+title: Dimensionar un despliegue
+description: "Cuánta gente cabe en una instancia y qué lo decide de verdad: lo que cuesta una credencial en reposo, lo que cuesta una forma de configuración una sola vez, lo que cuesta una llamada y los mandos que merece la pena tocar a escala."
+datePublished: "2026-09-06"
+faq:
+  - q: "¿Cuánta memoria cuesta una credencial en el pool?"
+    a: "En reposo y sin ninguna conexión abierta, 7,7 KiB en la superficie dinámica, 8,3 KiB en la meta y 8,5 KiB en la individual. El catálogo, sus esquemas, el índice de descubrimiento y el propio servidor MCP se comparten por forma de configuración, así que lo que guarda una credencial es su cliente de GitLab, su cubo de límite de peticiones, su contador de listen, sus watchers y sus sesiones, y por eso la cifra apenas cambia con la superficie. Es el heap vivo de un proceso ocioso; una credencial que mantiene una conexión cuesta además los búferes que hay detrás, y una con peticiones en vuelo cuesta lo que esas peticiones reserven, que es el término que realmente dimensiona una instancia."
+  - q: "¿Cuántas llamadas por segundo aguanta una instancia?"
+    a: "Hilos divididos entre el tiempo de CPU por llamada. En el host de referencia del benchmark, un Intel i5-14400 con 16 hilos, una llamada cuesta unos 8 ms en las superficies dinámica y meta y unos 120 ms en la individual, y la serie medida se estanca en torno a 1.800 llamadas por segundo en la dinámica, alcanzadas con cinco credenciales ocupadas a la vez y usando catorce de los dieciséis hilos. La superficie individual se estanca cerca de 130 llamadas por segundo, porque un `tools/list` allí cuesta quince veces lo que una llamada dinámica entera."
+  - q: "¿Dimensiono la memoria con `--max-http-clients`?"
+    a: "No. Acota cuántas credenciales mantiene el pool, y una credencial del pool son decenas de kilobytes, así que su valor por defecto de 100 acota unos cinco mebibytes. Dimensionar una instancia con él es erróneo en ambos sentidos: ni reserva esa memoria ni limita lo que reservan los llamantes que hay detrás de esas credenciales mientras se atienden sus peticiones. Dimensiona por cuántos llamantes tendrán peticiones en vuelo a la vez."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
+
+<Aside type="tip" title="De un vistazo">
+
+- **Dimensionar son dos preguntas, no una.** Mantener una credencial es casi
+  gratis (7,7 KiB en reposo en la superficie dinámica); servir llamadas es donde
+  se agota una instancia.
+- **Fijar `--tier` es una decisión de dimensionado.** Saca el tier de la clave de
+  forma de configuración y colapsa hasta tres catálogos registrados en uno.
+- **`--max-http-clients` no es un ajuste de memoria.** Su valor por defecto de
+  100 acota unos cinco mebibytes de ocupación.
+- **El techo son los hilos divididos entre el tiempo de CPU por llamada**, y todo
+  lo que hay más allá es cola, no un servidor que se haya vuelto más lento.
+
+</Aside>
+
+Todo lo de esta página es modo HTTP, y todo viene del
+[consumo de recursos](/gitlab-mcp-server/es/performance/resource-benchmark/), que
+mide el binario real y nombra la máquina en la que se ejecutó. El host de
+referencia es un Intel i5-14400 con 16 hilos, y se vuelve a medir en cada
+versión.
+
+Lee primero [Servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) si el
+pool, la lista de instancias permitidas y los modos de autenticación no te
+resultan ya familiares.
+
+## Dos magnitudes, no una
+
+**Mantener una credencial es casi gratis.** El catálogo, sus esquemas, el índice
+de descubrimiento y el manifiesto de herramientas se comparten por
+configuración, y el propio servidor MCP se comparte por **forma** de
+configuración, así que lo que cuesta una credencial es su cliente de GitLab, su
+cubo de límite de peticiones, su contador de listen, sus watchers y sus
+sesiones.
+
+**Servir una llamada es donde una instancia se agota.** El tiempo de CPU por
+llamada es el término que limita, y la compartición no lo toca. Todo lo que
+sigue sale de mantener esas dos cosas separadas.
+
+## Lo que cuesta una credencial en reposo
+
+Medida en reposo y sin ninguna conexión abierta, una credencial del pool cuesta
+**7,7 KiB en la superficie dinámica, 8,3 KiB en la meta y 8,5 KiB en la
+individual**. Es la misma cifra tres veces, porque lo que guarda una credencial
+es su cliente de GitLab y su contabilidad, no sus herramientas.
+
+La prueba de regresión que se distribuye toma la misma lectura con las
+conexiones del arnés de pruebas abiertas: ejecutada en un AMD Ryzen 5 3550H (8
+hilos, 60,8 GiB, Go 1.27.1), el heap vivo crece 0,14 MiB entre una credencial y
+veinte en la superficie dinámica y 0,16 MiB en la individual.
+
+Tres cosas acotan esa medida:
+
+- Es el **heap vivo** tras una recolección, no el conjunto residente. El
+  residente es mayor y no encoge de inmediato, porque Go devuelve memoria al
+  sistema operativo de forma perezosa.
+- Es **sin ninguna conexión abierta**. Una credencial que mantiene una cuesta
+  además los búferes que hay detrás, que el benchmark de recursos mide aparte.
+- Es **en reposo**. Una credencial con peticiones en vuelo cuesta lo que esas
+  peticiones reserven. Cualquier cifra por credencial medida bajo carga mezcla
+  ocupación con carga y no puede multiplicarse por un número de credenciales.
+
+## Lo que cuesta una forma de configuración, una sola vez
+
+Una **forma** es todo lo que decide qué registra un servidor: superficie de
+herramientas, superficie de capacidades, modo de esquema de parámetros de las
+meta-herramientas, tier y si se fijó, GitLab.com o autogestionado, solo lectura
+incluida la restricción que provoca un token `read_api`, modo seguro,
+herramientas excluidas, ámbitos del token y si el transporte es sin estado. Toda
+credencial cuyo hash caiga en una forma la sirve un único servidor MCP.
+
+Un proceso con una forma registrada y una credencial tiene un heap vivo de unos
+**38 MiB en la superficie dinámica y 88 MiB en la individual**, de la misma
+ejecución en el mismo host, en reposo. Un proceso HTTP sin ninguna credencial, y
+por tanto sin forma registrada, ocupa unos 35 MiB residentes en el host de
+referencia.
+
+| Entrada                    | Valores en un despliegue                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| Tier                       | 1 con `--tier` fijado; hasta 3 (free, premium, ultimate) cuando se detecta por credencial |
+| Ámbitos del token          | 2, porque solo `admin_mode` cambia el catálogo                                            |
+| Detección de ámbitos       | 2, o 1 con `--ignore-scopes`                                                              |
+| Restricción a solo lectura | 2 cuando el operador no fijó `--read-only`, 1 cuando sí                                   |
+| GitLab.com o no            | 1, o 2 en un despliegue que publica ambos                                                 |
+| Todo lo demás              | 1 cada uno; son ajustes de proceso                                                        |
+
+Un despliegue con `--tier` fijado y `--ignore-scopes` produce exactamente una
+forma. Uno típico produce entre dos y ocho. Cada una cuesta una construcción de
+catálogo (medida en 1,8 segundos en la superficie dinámica y 3,0 en la
+individual) pagada una vez por proceso en lugar de una vez por credencial.
+
+## Lo que cuesta una llamada
+
+En el host de referencia, bajo la carga de la serie de concurrencia: cuatro
+peticiones en vuelo por credencial en las superficies dinámica y meta, y dos en
+la individual.
+
+| Superficie   | Tiempo de CPU por llamada | Qué lo domina                          |
+| ------------ | ------------------------- | -------------------------------------- |
+| `dynamic`    | unos 8 ms                 | El serializado y la validación del SDK |
+| `meta`       | unos 8 ms                 | Lo mismo                               |
+| `individual` | unos 120 ms               | Serializar un `tools/list` de 3 MB     |
+
+```text
+techo de llamadas por segundo  =  hilos utilizables  /  segundos de CPU por llamada
+```
+
+`16 / 0,008` son 2.000 llamadas por segundo en teoría. La serie medida se
+estanca en unas **1.800 llamadas por segundo** en la superficie dinámica,
+alcanzadas con cinco credenciales que mantienen cuatro peticiones en vuelo cada
+una, y sin superarse por muchas credenciales más que se añadan; esa meseta son
+catorce de los dieciséis hilos del host. La superficie individual se estanca en
+unas **130 llamadas por segundo** en el mismo host.
+
+Úsalo para dimensionar, no como promesa: tu GitLab está al otro lado de una red
+que esta medida no cruzó.
+
+## El ejemplo trabajado
+
+Quinientas personas desarrollando, un editor cada una, en la superficie dinámica
+por defecto, contra una instancia Ultimate autogestionada, con `--tier=ultimate`
+fijado.
+
+**Memoria.** Una forma, luego un catálogo: unos 38 MiB de heap vivo. Quinientas
+credenciales a 7,7 KiB son menos de 4 MiB. La ocupación no es el término que
+dimensiona este despliegue; el pico de residente lo decide cuántas llamadas hay
+en vuelo. Un suelo de 512 MiB es el punto de partida correcto, y lo primero que
+hay que medir es el pico de residente con tu propio tráfico, no el número de
+credenciales.
+
+**CPU.** Quinientos editores no hacen quinientas llamadas concurrentes.
+Cincuenta llamadas por segundo son `50 × 0,008 = 0,4` de un hilo en el host de
+referencia. Mil son ocho hilos, algo más de la mitad del techo de un host de
+referencia; añade una segunda instancia por margen, no por memoria.
+
+**Busca una segunda instancia por disponibilidad, antes que por capacidad.** El
+techo que suele limitar a un despliegue ocupado es el propio límite de peticiones
+de GitLab contra un token, que ningún número de instancias eleva.
+
+## Los mandos, y a qué ponerlos
+
+| Ajuste                                    | Por defecto | A escala                                                                                                                                                                                                                                   |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--max-http-clients`                      | `100`       | Ponlo por encima de tu población simultánea esperada; máximo 10000. El desalojo ya no es barato: termina las suscripciones de esa credencial y cierra sus flujos de listen                                                                 |
+| `--pool-idle-timeout`                     | `1h`        | Déjalo. El barrido corre cada cuarto del tiempo de espera con un suelo de un minuto. Una entrada con watchers vivos o flujos de listen abiertos nunca se desaloja por inactividad                                                          |
+| `--revalidate-interval`                   | `15m`       | El barrido es secuencial con diez segundos de espera por entrada, así que un pool grande contra una instancia lenta cuesta hasta `entradas × 10 s` por ronda. Una entrada de más de una hora se reconstruye igualmente en el siguiente uso |
+| `--rate-limit-rps` / `--rate-limit-burst` | `10` / `40` | Por credencial **y por proceso**. Varias instancias lo multiplican salvo que la afinidad fije a cada cliente en una                                                                                                                        |
+| `--action-timeout`                        | `65m`       | Por encima de la espera más larga que ofrece cualquier acción. Bájalo solo si prefieres fallar una espera de pipeline a retener una goroutine                                                                                              |
+| `GITLAB_MCP_MAX_LISTEN_STREAMS`           | `64`        | Por credencial. Un segundo techo de 512 por proceso no es configurable a propósito                                                                                                                                                         |
+| `--session-timeout`                       | `30m`       | Solo con `--stateless=false`. Con el transporte por defecto, una sesión termina con su POST                                                                                                                                                |
+| `--http-idle-timeout`                     | `0`         | Déjalo desactivado. Un valor positivo corta los flujos de larga duración                                                                                                                                                                   |
+| `--drain-delay`                           | `0`         | Ponlo al menos en un intervalo de detección del balanceador                                                                                                                                                                                |
+
+Otros dos límites no son configurables: diez watchers de recursos por
+credencial, y diez autenticaciones fallidas por minuto y dirección de cliente
+antes de que esa dirección reciba `429` durante un minuto.
+
+## Lo que no crece con el número de credenciales
+
+- **El catálogo registrado**, que se paga una vez por forma.
+- **La construcción del catálogo**, igual. Una credencial que llega a una forma
+  que otra credencial ya construyó no espera nada.
+- **Las goroutines**, que son por watcher, por flujo de listen abierto y por
+  sesión viva, no por credencial. Una credencial que no hace nada no tiene
+  ninguna.
+
+<FAQ />
+
+Cuando una instancia deja de bastar, la siguiente pregunta es cómo se reparten
+los clientes entre varias:
+[Balanceo de carga](/gitlab-mcp-server/es/enterprise/load-balancing/).

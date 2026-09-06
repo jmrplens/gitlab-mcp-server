@@ -1,0 +1,132 @@
+---
+title: Operations at Scale
+description: "Running the fleet: rolling updates, comparing config_digest across instances, telemetry with many users, fixed egress for GitLab allow-lists, the secrets a deployment holds, and what to monitor."
+datePublished: "2026-09-06"
+faq:
+  - q: "What does config_digest actually compare?"
+    a: "Whether two instances serve the same catalog. It covers tool surface, capability surface, meta parameter schema, tier and whether it was pinned, scope detection, read-only, safe mode and excluded tools. It does not cover TLS, addresses, rate limits or pool sizes, so it will not catch an instance that differs only in those, and a build from a different version with the same settings reports the same digest on purpose: `build` is the field that answers which version each instance runs."
+  - q: "Can a balancer read a 200 from /health as GitLab being up?"
+    a: "No. `/health` performs no GitLab round trip and deliberately does not test reachability, and there is no separate readiness endpoint. It answers `200` while serving and `503` once shutdown was requested, with `status`, `version`, `commit`, `build`, `config_digest`, `started_at` and `uptime_seconds`, and it needs no credential."
+  - q: "Which monitoring signal bites hardest at scale?"
+    a: "Authentication failures per address. Without `--trusted-proxy-header` and `--trusted-proxies`, every caller's failures are charged to the balancer's address, so ten bad tokens a minute from anywhere in the population answers `429` to the entire deployment for a minute. Configure both flags on any instance behind a proxy."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
+
+## Rolling updates
+
+1. Start every instance with `--drain-delay` at or above one balancer detection
+   interval.
+2. Roll one instance at a time. Under consistent hashing the callers pinned to
+   it move to a neighbour, build a pool entry there, and come back when it
+   returns.
+3. Compare `config_digest` across the fleet after the roll, before declaring it
+   done.
+
+A build from a different version with the same settings reports the same
+`config_digest`, so an upgrade does not trip the comparison. That is deliberate:
+the digest answers "do these instances serve the same catalog", not "are these
+instances the same build". `build` answers the second.
+
+## `/health` and `config_digest` across a fleet
+
+`GET /health` needs no credential and performs no GitLab round trip. It answers
+`200` while serving and `503` once shutdown was requested, with `status`,
+`version`, `commit`, `build`, `config_digest`, `started_at` and
+`uptime_seconds`.
+
+```bash
+for host in 10.0.0.11 10.0.0.12 10.0.0.13; do
+  printf '%s ' "$host"
+  curl -fsS "http://$host:8080/health" |
+    python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["build"], d["config_digest"], d["status"])'
+done
+```
+
+Every instance behind one balancer must report the same `config_digest`, or one
+of them serves a different catalog to whichever clients reach it and nothing
+else notices: the calls all succeed, and only the set of available actions
+differs. The digest covers tool surface, capability surface, meta parameter
+schema, tier and whether it was pinned, scope detection, read-only, safe mode
+and excluded tools. It does **not** cover TLS, addresses, rate limits or pool
+sizes, so it will not catch an instance that differs only in those.
+
+`/health` deliberately does not test GitLab reachability, so a balancer must not
+read a `200` as "GitLab is up", and there is no separate readiness endpoint.
+
+## Telemetry with many users
+
+Telemetry is off by default and goes to a collector you configure. Three
+settings matter once the caller population is large:
+
+- **`--telemetry-identity`** decides what is recorded about who made a call:
+  `none` (the default, records nobody), `pseudonymous` (a keyed digest that
+  correlates one caller's calls without naming them), or `full`. Identity never
+  reaches a metric under any policy.
+- **`GITLAB_MCP_TELEMETRY_IDENTITY_KEY`** is what makes `pseudonymous` agree
+  across replicas. Left empty, each process generates its own key, so one caller
+  is a different pseudonym on each instance and a distinct-user count is
+  meaningless across a fleet. Set it when replicas must agree, and keep it away
+  from wherever the telemetry lands: GitLab user ids are small enough to
+  enumerate against a known key, which makes the key the "additional
+  information" that turns a pseudonym back into a person.
+- **`--telemetry-tool-name`** defaults to `auto`, which keeps
+  `gen_ai.tool.name` as a metric dimension on the dynamic and meta surfaces and
+  drops it on individual, where a thousand tool names would exhaust the SDK's
+  cardinality limit and collapse the long tail into one overflow bucket.
+
+See [OpenTelemetry](/gitlab-mcp-server/operations/telemetry/) for the full
+picture.
+
+## Fixed egress for GitLab allow-lists
+
+GitLab applies its own rate limits and any IP allow-lists per source address.
+Instances behind a NAT gateway with a stable address are one caller to GitLab;
+instances with ephemeral public addresses are several unpredictable ones, and an
+allow-list cannot be written for them. Give the fleet a fixed egress address
+before you ask a GitLab administrator to allow-list it.
+
+## Secrets
+
+There is no server credential to protect: in HTTP mode every request carries the
+caller's own token and `/health` needs none. What the deployment does hold:
+
+- **The affinity salt.** A file the balancer reads, mode 0600, not in the
+  repository. It is a distribution function's salt rather than a security
+  primitive, but leaking it turns the routing key into a confirmable token
+  fingerprint.
+- **The TLS private key**, if the listener terminates TLS. Rotatable in place
+  without a restart.
+- **`GITLAB_MCP_TELEMETRY_IDENTITY_KEY`**, if pseudonymous telemetry is on. It
+  has no flag on purpose: process arguments are readable through `/proc` by any
+  local principal. `GITLAB_TOKEN` has no flag for the same reason.
+
+Pooled tokens are held in memory for as long as their entry lives, because a
+client cannot call GitLab without one, and the pool is keyed by digest so a scan
+of its lookup structures yields no credential. Nothing is written to disk. Logs
+carry the last four characters of a token and nothing more.
+
+## What to monitor
+
+| Signal                                    | Where         | Why it matters                                                        |
+| ----------------------------------------- | ------------- | --------------------------------------------------------------------- |
+| `config_digest` equality across instances | `/health`     | The only detector of an instance serving a different catalog          |
+| `status` and the HTTP code                | `/health`     | `503 draining` is the balancer's cue, not a failure                   |
+| `build` per instance                      | `/health`     | Which version each instance is actually running                       |
+| Peak resident set                         | Host metrics  | The term that sizes the process is calls in flight, not credentials   |
+| Processor time per call                   | Telemetry     | The ceiling is threads divided by this                                |
+| Pool evictions                            | Logs          | Frequent eviction means `--max-http-clients` is below the population  |
+| `429` rate                                | Balancer logs | Distinguish the per-credential limiter from the authentication budget |
+| Authentication failures per address       | Logs          | Ten a minute blocks an address                                        |
+
+<Aside type="danger" title="The trap that bites hardest at scale">
+
+Without `--trusted-proxy-header` and `--trusted-proxies`, every caller's
+authentication failures are charged to the balancer's address, so ten bad tokens
+a minute from anywhere in the population answers `429` to the entire deployment
+for a minute. Configure both flags on any instance behind a proxy.
+
+</Aside>
+
+<FAQ />

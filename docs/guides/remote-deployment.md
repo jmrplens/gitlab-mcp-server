@@ -97,7 +97,7 @@ answered by GitLab with and without `AF_NETLINK` in the list.
 `MemoryMax=512M` is the documented floor for HTTP mode rather than a target. The
 base process is around 50 MB and each pooled token adds roughly 130 KB, so the
 default `--max-http-clients=100` lands near 63 MB. See
-[Resource Consumption](../concepts/resource-consumption.md) before sizing for
+[Resource Consumption](../reference/resource-consumption.md) before sizing for
 hundreds of callers.
 
 **A unix socket needs a fixed user.** `DynamicUser=yes` allocates a transient
@@ -946,6 +946,6 @@ thing affinity keeps to one.
 - [HTTP Server Mode](http-server-mode.md) for every flag, the server pool, and the OAuth derivation rules
 - [OAuth App Setup](oauth-app-setup.md) for creating the GitLab application clients authorize against
 - [Security](../concepts/security.md) for the threat model, CORS, and the hardening checklist
-- [Resource Consumption](../concepts/resource-consumption.md) for sizing an instance
+- [Resource Consumption](../reference/resource-consumption.md) for sizing an instance
 - [Telemetry](telemetry.md) for what an instance can report about itself
 - [Troubleshooting](troubleshooting.md) for symptoms and their usual causes

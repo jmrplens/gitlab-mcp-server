@@ -1,0 +1,160 @@
+---
+title: Pasarelas MCP
+description: "Qué cambia una pasarela MCP delante de este servidor: validación del catálogo, el camino de la credencial, sesiones y suscripciones, caché, renombrado de herramientas y enrutado por identificador canónico de acción."
+datePublished: "2026-09-06"
+faq:
+  - q: "¿Rechazará una pasarela el catálogo de este servidor?"
+    a: "No debería haber nada en él que haga saltar un validador. Todo lo que el servidor lista en cualquier superficie (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`) es prosa ASCII pura sin punto y coma, incluidas descripciones, títulos y las descripciones incrustadas en los esquemas, y `make check-gateway-chars` lo verifica en la integración continua. Para una regla propia, `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` reescribe el texto listado a la salida sin tocar nombres, URI, patrones, constantes, valores de enumeración ni cargas de llamadas a herramientas."
+  - q: "¿Debe la pasarela tener una sola credencial para todo el mundo?"
+    a: "Solo si aceptas lo que cuesta. Una pasarela con una única credencial compartida colapsa a toda la población en una sola entrada de pool, un solo cubo de límite y una sola identidad de GitLab: cada acción se atribuye a ese usuario en el registro de auditoría de GitLab, y `--rate-limit-rps` pasa a ser un límite para todo el despliegue en lugar de por cliente. Reenviar la credencial de quien llama es la única disposición que conserva identidad, tier y límite de peticiones por usuario."
+  - q: "¿Sobreviven mis nombres de herramienta a la pasarela?"
+    a: "A menudo no. En la configuración verificada aquí, `gitlab_find_action` se reexpuso como `gitlab-mcp-gitlab-find-action`: los guiones bajos pasaron a guiones y se antepuso el nombre que la pasarela le da al servidor. Cualquier prompt, skill o documentación que nombre una herramienta tiene que escribirse contra los nombres de la pasarela y no contra los de este servidor."
+---
+
+import FAQ from "../../../../components/FAQ.astro";
+
+Una pasarela MCP se sitúa entre los clientes y este servidor, valida el catálogo
+que sirve, lo reexpone con nombres propios y puede añadir autenticación, límite
+de peticiones y observabilidad. Cambian cinco cosas.
+
+## El catálogo se valida antes de admitirse
+
+Las pasarelas rechazan catálogos según reglas que elige su operador, y un
+rechazo suele ser todo o nada: una descripción mala y no se admite ninguna
+herramienta. Una pasarela en producción rechazaba cualquier herramienta cuya
+descripción contuviera un punto y coma.
+
+Todo lo que este servidor lista (`tools/list` en cualquier superficie,
+`prompts/list`, `resources/list`, `resources/templates/list`) es prosa ASCII
+pura sin punto y coma, incluidas descripciones, títulos y las descripciones
+incrustadas en los esquemas. `make check-gateway-chars` lo verifica en la
+integración continua.
+
+Para la siguiente regla, que es tuya y no nuestra,
+`GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` reescribe el texto listado a la salida:
+
+```bash
+# Sustituye cada punto y coma por un punto, para una pasarela que los rechace.
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
+  --description-substitutions=';=.'
+```
+
+Cubre descripciones y títulos en herramientas, prompts, recursos y plantillas de
+recurso, y nunca toca nombres, URI, `pattern`, `const`, valores de enumeración
+ni cargas de llamadas a herramientas. Un valor mal formado impide el arranque en
+lugar de servir a la pasarela el catálogo sin reescribir que ya rechazó.
+Consulta [Compatibilidad](/gitlab-mcp-server/es/compatibility/) para el conjunto
+completo de reglas.
+
+## La credencial tiene que llegar al servidor
+
+Este servidor no guarda ninguna credencial propia: cada petición lleva la de
+quien llama, como `PRIVATE-TOKEN` o `Authorization: Bearer`. Una pasarela tiene
+por tanto que reenviar la credencial de quien llama o tener una suya y
+presentarla.
+
+Reenviar la del cliente es la única disposición que conserva identidad, tier y
+límite de peticiones por usuario. Una pasarela con una única credencial
+compartida colapsa a toda la población en una sola entrada de pool, un solo cubo
+de límite y una sola identidad de GitLab: cada acción se atribuye a ese usuario
+en el registro de auditoría de GitLab, y `--rate-limit-rps` pasa a ser un límite
+para todo el despliegue en lugar de por cliente.
+
+Si el despliegue publica varias instancias con `--gitlab-url` repetido, la
+pasarela también debe reenviar `GITLAB-URL`, y una petición sin esa cabecera se
+rechaza en lugar de resolverse a un valor por defecto.
+
+## Las sesiones y las suscripciones pueden no sobrevivir
+
+Ejecuta las pasarelas contra el `--stateless=true` por defecto. Cada POST es
+entonces autocontenido, ningún `Mcp-Session-Id` tiene que sobrevivir a la
+pasarela, y una pasarela que agrupa conexiones o reparte entre instancias no
+puede romper una sesión que no sabe que lleva.
+
+No des por hecho que las suscripciones pasan. Una pasarela reanuncia sus propias
+capacidades a sus clientes, y es libre de anunciar menos de las que tienen los
+servidores detrás. La configuración trabajada de abajo negocia
+`resources.subscribe: true` con este servidor y luego anuncia `subscribe: false`
+a sus propios clientes, así que ningún cliente detrás de ella puede suscribirse.
+Comprueba qué anuncia tu pasarela antes de prometerle suscripciones a nadie.
+
+## Qué puede cachear una pasarela
+
+Todo resultado cacheable lleva las pistas de SEP-2549. Casi todo es `private`,
+porque los catálogos y el contenido de recursos se filtran por los ámbitos del
+token y el tier de licencia de quien llama y nunca deben servirse desde una
+caché intermedia compartida. El catálogo de prompts es la única excepción y se
+marca `public`.
+
+Una pasarela que ignore `cacheScope` y cachee un `tools/list` entre clientes
+servirá a uno el catálogo filtrado por el tier de otro. Es una mala
+configuración de la pasarela que este servidor no puede impedir, y merece la
+pena comprobarla explícitamente: fijar `--tier` y `--ignore-scopes` hace que el
+catálogo de todos los clientes sea idéntico, lo que elimina el riesgo a costa
+del filtrado por cliente.
+
+## Una configuración de pasarela trabajada
+
+Verificada contra [mcp-context-forge](https://github.com/IBM/mcp-context-forge)
+0.9.0. Registra este servidor como par de pasarela aguas arriba con la
+credencial viajando en una cabecera reenviada:
+
+```bash
+curl -sS -X POST https://gateway.example.com/gateways \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "gitlab_mcp",
+        "url": "https://mcp.example.com/mcp",
+        "transport": "STREAMABLEHTTP",
+        "auth_type": "authheaders",
+        "auth_headers": [{"key": "PRIVATE-TOKEN", "value": "glpat-..."}]
+      }'
+```
+
+Lo que produjo, exactamente:
+
+- La pasarela informó `reachable: true`, negoció `prompts`, `resources` (con
+  `subscribe: true`), `tools` y `completions`, y obtuvo el catálogo. En la
+  superficie dinámica por defecto son dos herramientas.
+- **Los nombres de herramienta cambian.** `gitlab_find_action` se reexpone como
+  `gitlab-mcp-gitlab-find-action`: los guiones bajos pasan a guiones y se
+  antepone el nombre que la pasarela le da al servidor. Cualquier prompt, skill
+  o documentación que nombre una herramienta tiene que escribirse contra los
+  nombres de la pasarela, no contra los de este servidor.
+- **Las descripciones pasan sin cambios**, que es la propiedad ASCII haciendo su
+  trabajo.
+- **La pasarela anuncia `resources.subscribe: false` a sus propios clientes**,
+  habiendo negociado `true` con este servidor.
+- Su endpoint de conveniencia `/rpc` revalidó un resultado correcto y lo informó
+  como error mientras llevaba la respuesta real en `structuredContent`; su
+  endpoint MCP en `/mcp/` no. Prefiere el endpoint MCP, y trata la fachada no
+  MCP de una pasarela como algo aparte que hay que probar.
+
+La credencial de arriba la tiene la pasarela, que es justo la forma que colapsa
+a todos los clientes en una sola identidad de GitLab. Usa el paso de credencial
+por usuario de tu pasarela si lo tiene.
+
+## Enrutar por acción
+
+En la superficie dinámica, la propiedad `action` de `gitlab_execute_action` lleva
+la anotación `x-mcp-header` de SEP-2243, que el SDK convierte en la cabecera de
+red `Mcp-Param-Action`. Una pasarela o un balanceador pueden por tanto enrutar,
+limitar y observar llamadas por identificador canónico de acción sin analizar el
+cuerpo JSON-RPC:
+
+```nginx
+# Manda todo lo que muta a un limitador más estricto, leyendo una cabecera.
+map $http_mcp_param_action $mcp_action_zone {
+    default            "read";
+    "~^issue\.create$" "write";
+    "~^project\."      "write";
+}
+```
+
+La cabecera es informativa: refleja lo que declaró el cliente, así que úsala
+para enrutado y observabilidad, nunca como decisión de autorización. Quien
+decide si una llamada está permitida es el control por acción del propio
+servidor.
+
+<FAQ />

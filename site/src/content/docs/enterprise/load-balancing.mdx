@@ -1,0 +1,252 @@
+---
+title: Load Balancing
+description: "Several instances behind one balancer: what affinity is worth, consistent hashing on a salted digest, worked nginx and HAProxy configurations, drain windows, and retries that never replay a delivered call."
+datePublished: "2026-09-06"
+faq:
+  - q: "What should the affinity key be?"
+    a: "A salted digest of the credential, never the credential. An affinity key ends up in the balancer's memory, in its access log if the log format names the variable, and in whatever upstream selection it drives; a raw bearer token in any of those is a credential leak with extra steps. The salt is what does the security work: without it the key is a token fingerprint anyone holding a candidate token could confirm."
+  - q: "Is it safe to let the balancer retry a failed request?"
+    a: "Only when the request provably never reached an instance. An MCP `tools/call` can create an issue, merge a request or delete a branch, so a balancer that retries a delivered POST turns one mutating call into two and neither side can tell. For nginx that means `proxy_next_upstream error timeout` and nothing else; for HAProxy, `option redispatch` off and `retry-on` at its default."
+  - q: "Why does my drain window seem to do nothing on nginx?"
+    a: "nginx open source has no active health check. `max_fails` and `fail_timeout` are passive: an instance is taken out only after real requests to it fail, so the requests that discover the failure are the ones that failed. Nothing polls `/health`, so nothing observes the `503 draining` flip. Use a balancer that polls, or remove the instance from the upstream and reload before you signal it."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
+
+The [remote deployment guide](/gitlab-mcp-server/operations/remote-deployment/)
+explains the three distributions (round robin, address hash, token hash) and
+carries a first worked nginx balancer. This page is what a deployment with many
+users needs on top of it.
+
+## What affinity is worth
+
+For ordinary calls affinity is an optimisation. An instance a caller moves to
+already has the catalog built, so the move costs a credential probe, a licensing
+lookup and a client. What it buys: one rate-limit bucket per caller instead of
+one per instance, one licensing and identity probe per caller instead of one per
+instance, and a pool entry that stays warm rather than being rebuilt on each
+instance in turn and evicted from each in turn.
+
+Two things are not preferences. A stateful session (`--stateless=false`) lives
+in the process that minted its `Mcp-Session-Id`, and another instance answers
+that id with `404`. Resource subscriptions are watchers held by one process. If
+you run either, affinity is a requirement.
+
+## Consistent hashing across a changing instance set
+
+Use consistent hashing, not a plain modulo: removing one of three instances then
+relocates roughly a third of the callers instead of reshuffling all of them,
+which is the difference between a rolling update that warms one cold pool and
+one that warms every pool. Both configurations below say `consistent`.
+
+Hash a **salted digest of the credential**, never the credential. An affinity key
+ends up in the balancer's memory, in its access log if the log format names the
+variable, and in whatever upstream selection it drives. The salt is what does
+the security work: without it the key is a token fingerprint anyone holding a
+candidate token could confirm.
+
+Three details decide whether the affinity holds at all:
+
+- **Normalize before hashing.** Strip the `Bearer` scheme prefix and surrounding
+  whitespace. The same token spelled two ways hashes two ways.
+- **Fall back to the address, not to nothing.** An empty key makes every
+  credential-less request hash identically onto one instance.
+- **Prove it rather than assume it.** A hash key the balancer cannot resolve
+  makes it fall back to round robin silently, which looks exactly like a working
+  deployment until someone counts.
+
+## nginx
+
+nginx hashes a string containing variables itself, so the salt goes into the key
+expression without ever becoming a loggable variable of its own. This needs no
+third-party module.
+
+```nginx
+# Keep the salt out of the repository: include it from a 0600 file.
+map $host $mcp_salt {
+    default "a-long-random-per-deployment-salt";
+}
+
+# The bearer credential, without its scheme prefix.
+map $http_authorization $mcp_bearer {
+    default                     "";
+    "~*^Bearer[ ]+(?<tok>\S+)$" $tok;
+}
+
+# Legacy-mode callers send PRIVATE-TOKEN instead.
+map $mcp_bearer $mcp_credential {
+    default $mcp_bearer;
+    ""      $http_private_token;
+}
+
+# No credential: fall back to the client address.
+map $mcp_credential $mcp_affinity {
+    default $mcp_credential;
+    ""      $remote_addr;
+}
+
+upstream gitlab_mcp {
+    hash "$mcp_salt$mcp_affinity" consistent;
+    server 10.0.0.11:8080 max_fails=2 fail_timeout=10s;
+    server 10.0.0.12:8080 max_fails=2 fail_timeout=10s;
+    server 10.0.0.13:8080 max_fails=2 fail_timeout=10s;
+    keepalive 32;
+}
+
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+
+    location / {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+
+        # Retry only what was never delivered.
+        proxy_next_upstream error timeout;
+        proxy_next_upstream_tries 2;
+    }
+
+    location /.well-known/oauth-protected-resource {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+    }
+}
+```
+
+Do not log `$mcp_affinity` or `$mcp_credential`.
+
+<Aside type="caution" title="nginx open source has no active health check">
+
+`max_fails` and `fail_timeout` are passive: an instance is taken out only after
+real requests to it fail, so the requests that discover the failure are the ones
+that failed. A drain window buys nginx nothing, because nothing polls `/health`.
+Use a balancer that polls, or remove the instance from the upstream and reload
+before you signal it.
+
+</Aside>
+
+## HAProxy
+
+HAProxy computes the digest in its own configuration, so nothing has to be
+trusted to keep the raw credential out of a routing key, and it polls `/health`,
+which is what makes the drain window mean anything.
+
+```haproxy
+global
+  daemon
+defaults
+  mode http
+  timeout connect 2s
+  timeout client 1h
+  timeout server 1h
+  retries 1
+  option http-server-close
+
+frontend mcp
+  bind *:443 ssl crt /etc/ssl/private/mcp.example.com.pem
+  # The credential, from either header, with the Bearer prefix removed.
+  http-request set-var(txn.cred) req.hdr(PRIVATE-TOKEN)
+  http-request set-var(txn.cred) req.hdr(Authorization),regsub(^[Bb]earer\ +,) if !{ req.hdr(PRIVATE-TOKEN) -m found }
+  # No credential: the client address, so anonymous requests spread.
+  http-request set-var(txn.cred) src,ipmask(32,128) if !{ var(txn.cred) -m found }
+  default_backend mcp_servers
+
+backend mcp_servers
+  # Route on a salted digest, never on the credential itself.
+  balance hash var(txn.cred),concat(a-long-random-per-deployment-salt),sha1,hex
+  hash-type consistent
+  option httpchk
+  http-check send meth GET uri /health
+  http-check expect status 200
+  server one 10.0.0.11:8080 check inter 2s fall 2 rise 2
+  server two 10.0.0.12:8080 check inter 2s fall 2 rise 2
+  server three 10.0.0.13:8080 check inter 2s fall 2 rise 2
+```
+
+`option httpchk` sends no `Host` header unless one is configured, and a server
+bound to a specific host with `--http-addr` used to answer such a request with
+`403`, which marked every instance permanently down. It is now served: a request
+naming no host is not the DNS-rebinding attack that check exists for, since a
+browser always sends one. Adding `hdr Host mcp.example.com` to the
+`http-check send` line is still good practice and is required against an older
+server.
+
+`retries 1` with no `option redispatch` is the deliberate half of this. HAProxy
+retries a connection failure and never a request it already delivered, so a
+`tools/call` that created an issue and then lost its response is not replayed on
+a second instance.
+
+## Health-driven ejection and the drain window
+
+On `SIGTERM` the process marks itself draining before anything else. From that
+moment `/health` answers `503` with `"status": "draining"` and
+`Cache-Control: no-store`, **while the listener stays open and keeps serving
+real requests**. By default it stays open for no time at all, so a balancer
+usually discovers the shutdown from a failed request rather than from the flip.
+
+`--drain-delay` is the window. Set it to at least one full detection interval of
+your balancer: for the HAProxy configuration above, `inter 2s fall 2` detects in
+four seconds, so `--drain-delay=10s` is comfortable. The sequence then is: the
+signal arrives, `/health` flips to `503`, the balancer stops sending new work
+while the instance still answers the work it has, the window elapses, the
+listener closes, and in-flight requests get fifteen seconds to finish.
+
+Upper bound five minutes. It applies to HTTP mode only, since stdio has no
+listener to hold open.
+
+## Retries that never replay a delivered request
+
+An MCP `tools/call` can create an issue, merge a request or delete a branch. A
+balancer that retries a delivered POST on a second instance turns one mutating
+call into two, and neither the client nor the server can tell.
+
+- **nginx**: `proxy_next_upstream error timeout` and nothing else. Never add
+  `non_idempotent`, and never add `http_500`: both make nginx replay a request
+  that was delivered and answered.
+- **HAProxy**: leave `option redispatch` off and `retry-on` at its default of
+  connection failures.
+- **Anything else**: the rule is that a retry is safe only when the request
+  provably never reached an instance. Nothing in the MCP protocol makes a
+  delivered call idempotent for you.
+
+## When a gateway hides the client
+
+Behind a CDN, an API gateway or a service mesh, the connection the balancer sees
+comes from the gateway and the credential may have been replaced.
+
+- **Affinity has to key on something the gateway preserves.** If the gateway
+  terminates authentication and issues its own credential downstream, hash that
+  one. If it forwards the original, hash the original. If it does neither, you
+  have no key and round robin is the honest choice.
+- **The rate limiter must be told the real address**, or it will charge every
+  caller's failures to the gateway. Set `--trusted-proxy-header` to the header
+  your gateway sets and `--trusted-proxies` to its addresses; the header is
+  believed only on a connection from a listed address, and each flag is refused
+  without the other. For `X-Forwarded-For` the value is read from the right,
+  skipping hops that are themselves listed, so the first hop nobody vouches for
+  is the client.
+
+What a gateway does to the catalog itself is
+[MCP Gateways](/gitlab-mcp-server/enterprise/mcp-gateways/).
+
+## The limiter multiplies
+
+`--rate-limit-rps` is per pooled credential inside one process. Three instances
+mean up to three buckets for one caller unless affinity pins it to one. With
+token affinity the configured number is the number; under round robin, either
+divide it by the instance count or put the real limit on the balancer.
+
+The same multiplication applies to `--revalidate-interval`: the same token is
+re-checked once per instance holding it.
+
+<FAQ />

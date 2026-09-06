@@ -472,6 +472,163 @@ func TestBuildFigures_WithSeries_AddsTheThreeSeriesFigures(t *testing.T) {
 	}
 }
 
+// TestSpecs_LabelBothAxes verifies every figure names what its axes are, in
+// the units they are in.
+//
+// A bar chart's categories carry their own labels, but "dynamic, meta,
+// individual" only reads as a tool surface to somebody who already knows, and
+// a figure has to be legible away from the page that says so. The vertical
+// axis is asserted for the same reason: a resident set with no unit on it is
+// three orders of magnitude ambiguous.
+func TestSpecs_LabelBothAxes(t *testing.T) {
+	run := sampleSeriesRun()
+	l := englishLabels()
+
+	bars := map[string]barSpec{
+		figureMemory:  memorySpec(run, l),
+		figureStartup: startupSpec(run, l),
+		figureLatency: latencySpec(run, l),
+	}
+	for name, spec := range bars {
+		t.Run(name, func(t *testing.T) {
+			if spec.XAxis == "" {
+				t.Errorf("the %s figure does not say what its categories are", name)
+			}
+			if spec.YAxis == "" {
+				t.Errorf("the %s figure does not say what its values are", name)
+			}
+		})
+	}
+
+	lines := map[string]lineSpec{
+		figureMemoryRamp:    rampSpec(run, l),
+		figureSeriesMemory:  seriesMemorySpec(run, l),
+		figureSeriesLatency: seriesLatencySpec(run, l),
+		figureSeriesCPU:     seriesCPUSpec(run, l),
+	}
+	for name, spec := range lines {
+		t.Run(name, func(t *testing.T) {
+			if spec.XAxis == "" {
+				t.Errorf("the %s figure does not label its horizontal axis", name)
+			}
+			if spec.YAxis == "" {
+				t.Errorf("the %s figure does not label its vertical axis", name)
+			}
+		})
+	}
+}
+
+// TestChartProvenance_NamesTheMachineAndTheBuild verifies the line every
+// figure carries along its bottom edge says which machine and which build the
+// numbers came from, in the language of the page the figure is going on.
+//
+// A chart travels: it is embedded, screenshotted and quoted away from the page
+// that states those, so a figure whose provenance was missing would be a
+// memory curve nobody could act on. The Spanish bundle is asserted beside the
+// English one because a rendered SVG is content rather than chrome, and a
+// Spanish page carrying an English sentence is half translated.
+func TestChartProvenance_NamesTheMachineAndTheBuild(t *testing.T) {
+	run := sampleRun()
+	for _, tc := range []struct {
+		l    labels
+		want []string
+	}{
+		{englishLabels(), []string{"Measured on", "Test CPU", "8 logical CPUs", "linux/amd64", "go1.27.1", "Build 2.7.6 (01234567)", "2026-09-04"}},
+		{spanishLabels(), []string{"Medido en", "Test CPU", "8 CPU lógicas", "linux/amd64", "go1.27.1", "Compilación 2.7.6 (01234567)", "2026-09-04"}},
+	} {
+		t.Run(tc.l.Code, func(t *testing.T) {
+			got := chartProvenance(run, tc.l)
+			for _, want := range tc.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("provenance %q does not mention %q", got, want)
+				}
+			}
+			// The kernel and the installed memory belong to the sentence under
+			// the measurements, which has the width for them; on a chart they
+			// would push the build off the canvas.
+			for _, unwanted := range []string{"6.1.0", "61"} {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("provenance %q carries %q, which the short host description drops", got, unwanted)
+				}
+			}
+		})
+	}
+}
+
+// TestChartProvenance_BundleWithoutATemplate_DrawsNothing verifies a label
+// bundle carrying no provenance template yields an empty string rather than a
+// format verb printed at a reader.
+func TestChartProvenance_BundleWithoutATemplate_DrawsNothing(t *testing.T) {
+	if got := chartProvenance(sampleRun(), labels{Code: "xx"}); got != "" {
+		t.Errorf("chartProvenance with no template = %q, want empty", got)
+	}
+}
+
+// TestBuildFigures_EveryFigureCarriesTheProvenance verifies the stamp is
+// applied in buildFigures rather than in each spec builder, so a figure added
+// later cannot be drawn without one.
+func TestBuildFigures_EveryFigureCarriesTheProvenance(t *testing.T) {
+	run := sampleSeriesRun()
+	want := chartProvenance(run, englishLabels())
+	if want == "" {
+		t.Fatal("the sample record produced no provenance to look for")
+	}
+	for _, fig := range buildFigures(run, englishLabels()) {
+		t.Run(fig.Name, func(t *testing.T) {
+			svg := fig.Render(testPalette())
+			if !strings.Contains(svg, xmlEscape(want)) {
+				t.Errorf("figure %s does not carry its provenance", fig.Name)
+			}
+		})
+	}
+}
+
+// TestMeasurementDay_TrimsATimestampAndLeavesAnythingElse verifies the chart
+// footer prints a date where the record holds an RFC 3339 timestamp, and
+// prints whatever it holds otherwise: a record written by hand for a test is
+// still worth naming.
+func TestMeasurementDay_TrimsATimestampAndLeavesAnythingElse(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"rfc3339", "2026-09-04T00:00:00Z", "2026-09-04"},
+		{"date only", "2026-09-04", "2026-09-04"},
+		{"too short", "2026-09", "2026-09"},
+		{"not a date", "sometime last Tuesday", "sometime last Tuesday"},
+		{"empty", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			run := sampleRun()
+			run.GeneratedAt = tc.in
+			if got := measurementDay(run); got != tc.want {
+				t.Errorf("measurementDay(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildLabel_FallsBackWhenTheRecordNamesNoBuild verifies a record with
+// neither a version nor a commit is described as "unknown" rather than leaving
+// an empty slot in the sentence, which would read as a build with no name.
+func TestBuildLabel_FallsBackWhenTheRecordNamesNoBuild(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		server ServerInfo
+		want   string
+	}{
+		{"version and commit", ServerInfo{Version: "2.7.6", Commit: "0123456789abcdef"}, "2.7.6 (01234567)"},
+		{"version only", ServerInfo{Version: "2.7.6"}, "2.7.6"},
+		{"short commit kept whole", ServerInfo{Version: "2.7.6", Commit: "abc"}, "2.7.6 (abc)"},
+		{"nothing", ServerInfo{}, "unknown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			run := sampleRun()
+			run.Server = tc.server
+			if got := buildLabel(run); got != tc.want {
+				t.Errorf("buildLabel = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestLatencySpec_MissingMethod_DrawsZero verifies a scenario that never
 // measured one of the three methods gets a zero bar for it rather than a
 // shifted one: the bars are positional, so dropping the entry would move

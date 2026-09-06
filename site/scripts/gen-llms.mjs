@@ -175,12 +175,26 @@ const SECTIONS = [
 			"operations/telemetry",
 			"operations/http-server",
 			"operations/remote-deployment",
-			"operations/enterprise-deployment",
-			"operations/resource-benchmark",
 			"operations/error-handling",
 			"operations/ci-cd",
 			"operations/docker-testing",
 			"operations/troubleshooting",
+		],
+	},
+	{
+		label: "Performance",
+		labelEs: "Rendimiento",
+		slugs: ["performance/sizing", "performance/resource-benchmark"],
+	},
+	{
+		label: "Enterprise Deployment",
+		labelEs: "Despliegue empresarial",
+		slugs: [
+			"enterprise/overview",
+			"enterprise/load-balancing",
+			"enterprise/mcp-gateways",
+			"enterprise/tls",
+			"enterprise/operations",
 		],
 	},
 	{

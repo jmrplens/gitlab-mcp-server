@@ -1,12 +1,14 @@
 ﻿# Resource Consumption
 
-This document describes the memory and CPU cost of gitlab-mcp-server in both stdio and HTTP modes, helping operators plan capacity for deployments. The figures are measured, not estimated: they come from `make bench-resources` on one machine and one build, published with their charts in the [Resource benchmark](../reference/resource-benchmark.md). That machine is an Intel i5-14400 with 16 logical CPUs and 62 GiB of RAM, on linux/amd64, kernel 6.12 and Go 1.27.1; the shape of the numbers carries to other hosts, the absolute values will not.
+This document describes the memory and CPU cost of gitlab-mcp-server in both stdio and HTTP modes, helping operators plan capacity for deployments. The figures are measured, not estimated: they come from `make bench-resources` on one machine and one build, published with their charts in the [Resource benchmark](resource-benchmark.md). That machine is an Intel i5-14400 with 16 logical CPUs and 62 GiB of RAM, on linux/amd64, kernel 6.12 and Go 1.27.1; the shape of the numbers carries to other hosts, the absolute values will not.
+
+**Every figure here is a snapshot of the current build.** The reference host is re-measured for each release and these values are replaced wholesale, with no comparison against what they were: a ratio against a run whose code no longer exists says nothing about the instance you are sizing. What moved between releases is [Resource Hot Spots](../development/resource-hot-spots.md).
 
 **Two costs, not one.** Holding a credential and serving one are separate questions here, and the answers are three orders of magnitude apart: a pooled credential is tens of kilobytes, while a credential with requests in flight is megabytes. Size an instance from how many callers will be calling at the same moment. `--max-http-clients` bounds the first of those and is not a memory setting.
 
 > **Diátaxis type**: Reference
 > **Audience**: ⚙️ Server administrators
-> **Prerequisites**: [HTTP Server Mode](../guides/http-server-mode.md), [Configuration](../reference/configuration.md)
+> **Prerequisites**: [HTTP Server Mode](../guides/http-server-mode.md), [Configuration](configuration.md)
 
 ---
 
@@ -17,8 +19,8 @@ The gitlab-mcp-server binary is a statically compiled Go executable:
 | Metric                                       | Value                               |
 | -------------------------------------------- | ----------------------------------- |
 | Binary size (stripped release build)         | ~55 MB                              |
-| HTTP process idle, before any credential     | 36 to 40 MiB RSS                    |
-| stdio process with one client, catalog built | 108 to 254 MiB RSS, by tool surface |
+| HTTP process idle, before any credential     | 35 to 38 MiB RSS                    |
+| stdio process with one client, catalog built | 106 to 277 MiB RSS, by tool surface |
 
 Resident set is read from the kernel rather than from Go's heap accounting, because the resident set is what a container limit is measured against and the two differ by more than a factor of two.
 
@@ -28,31 +30,31 @@ In stdio mode, each AI client (VS Code, Cursor, Copilot CLI, OpenCode) spawns it
 
 | Tool surface | One process | Each further process |
 | ------------ | ----------: | -------------------: |
-| `dynamic`    |    ~108 MiB |             ~110 MiB |
-| `meta`       |    ~109 MiB |             ~109 MiB |
-| `individual` |    ~254 MiB |             ~270 MiB |
+| `dynamic`    |    ~106 MiB |             ~106 MiB |
+| `meta`       |    ~107 MiB |             ~107 MiB |
+| `individual` |    ~277 MiB |             ~265 MiB |
 
-Four stdio clients on one host cost 438 MiB to 1.04 GiB together, peaking at 503 MiB to 1.11 GiB while all four are calling. Nothing is shared between them: a stdio process builds its own catalog and pays for it, which is the whole difference between this transport and HTTP mode. `dynamic` and `meta` now cost the same per process to within a mebibyte; `individual` is the outlier, at roughly two and a half times either, because its registered surface is about a thousand tools with their schemas.
+The cost is a straight line in the client count: nothing is shared between processes, and a stdio process builds its own catalog and pays for it, which is the whole difference between this transport and HTTP mode. The benchmark runs eight of them per scenario, and its "all clients" column is what eight weigh together. `dynamic` and `meta` cost the same per process to within a mebibyte; `individual` is the outlier, at roughly two and a half times either, because its registered surface is about a thousand tools with their schemas.
 
 ## HTTP Mode
 
-In HTTP mode, a single process serves all clients. Idle, before any credential has arrived, it holds 36 to 40 MiB and no tool catalog at all. The first credential of a configuration builds one, and every later credential of that configuration finds it ready, so memory follows the requests in flight rather than the number of credentials, sessions or tokens.
+In HTTP mode, a single process serves all clients. Idle, before any credential has arrived, it holds 35 to 38 MiB and no tool catalog at all. The first credential of a configuration builds one, and every later credential of that configuration finds it ready, so memory follows the requests in flight rather than the number of credentials, sessions or tokens.
 
 ### Per-Token Pool Entry Cost
 
-A pool entry is credential state: a GitLab client, a rate-limit bucket, a listen counter, a watcher set, and the sessions that credential holds open. The catalog and its schemas are built once per configuration and shared, and the MCP server itself is built once per configuration shape and shared by every credential that hashes to it ([ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)). What a credential costs to hold therefore no longer depends on which tools are registered.
+A pool entry is credential state: a GitLab client, a rate-limit bucket, a listen counter, a watcher set, and the sessions that credential holds open. The catalog and its schemas are built once per configuration and shared, and the MCP server itself is built once per configuration shape and shared by every credential that hashes to it ([ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)). What a credential costs to hold is therefore independent of which tools are registered.
 
 The concurrency series measures it directly, at every step from one credential to a thousand, as a live heap read with the load stopped and a collection forced:
 
 | Tool surface | Each further credential, settled live heap | A thousand credentials, settled live heap | Settled resident set |
 | ------------ | -----------------------------------------: | ----------------------------------------: | -------------------: |
-| `dynamic`    |                                   50.9 KiB |                                  88.7 MiB |             0.31 GiB |
-| `meta`       |                                   52.1 KiB |                                  83.1 MiB |             0.24 GiB |
-| `individual` |                                   29.1 KiB |                                 116.6 MiB |             0.31 GiB |
+| `dynamic`    |                                   50.6 KiB |                                  88.3 MiB |             0.28 GiB |
+| `meta`       |                                   52.6 KiB |                                  83.5 MiB |             0.24 GiB |
+| `individual` |                                   29.8 KiB |                                 117.4 MiB |             0.32 GiB |
 
-Memory per credential used to go the other way from what the tool counts suggest: `individual` cost the least per additional credential despite registering about a thousand tools, because pooled entries already shared their tool schemas, while `dynamic` cost the most because every entry carried its own search index. Both of those causes are gone, and the surfaces now agree to within about 20 KiB.
+The three surfaces agree to within about 20 KiB, across registered tool counts that differ by a factor of five hundred. That is the whole point of the figure: what a credential holds is its client and its bookkeeping, and the tools are somewhere else.
 
-**Two at-rest figures appear in this documentation and they measure different things.** The end-to-end test `TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials`, run on every push, reports about 8 KiB per credential; the series above reports 29 to 52 KiB. The test's clients complete their `tools/list` and disconnect, so it measures a credential **with no connection open**: the pool entry alone. The benchmark driver keeps its sockets open across steps, four per credential on `dynamic` and `meta` and two on `individual`, so its figure is the pool entry plus the buffers behind those connections, at roughly 11 KiB apiece. Size against the series figure, since a credential you are sizing for is a connected one.
+**Two at-rest figures appear in this documentation and they measure different things.** The end-to-end test `TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials`, run on every push, reports about 8 KiB per credential; the series above reports 30 to 53 KiB. The test's clients complete their `tools/list` and disconnect, so it measures a credential **with no connection open**: the pool entry alone. The benchmark driver keeps its sockets open across steps, four per credential on `dynamic` and `meta` and two on `individual`, so its figure is the pool entry plus the buffers behind those connections, at roughly 10 KiB apiece. Size against the series figure, since a credential you are sizing for is a connected one.
 
 ### Scaling in HTTP Mode
 
@@ -60,11 +62,11 @@ Two numbers per row, because holding credentials and serving them are different 
 
 | Live credentials  | Tenancy, added to the live heap | Peak resident set with all of them calling | Notes                                                                    |
 | ----------------- | ------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
-| 1                 | Nothing measurable              | 147 to 301 MiB                             | Equivalent to one stdio process                                          |
-| 8                 | Under 0.5 MiB                   | 208 to 647 MiB                             | Measured as a point scenario, all eight calling at once for the peak     |
-| 20                | ~1 MiB                          | 271 to 843 MiB                             | A small team                                                             |
-| 100 (default max) | 3 to 5 MiB                      | 0.5 to 2.0 GiB                             | Default `--max-http-clients`                                             |
-| 1000              | 28 to 51 MiB                    | 1.0 to 4.4 GiB                             | Measured; the series runs every step to this count on all three surfaces |
+| 1                 | Nothing measurable              | 146 to 296 MiB                             | Equivalent to one stdio process                                          |
+| 20                | ~1 MiB                          | 257 to 1073 MiB                            | A small team                                                             |
+| 64                | 2 to 3 MiB                      | 324 to 1422 MiB                            | The point scenarios' ladder, admitted one at a time and then all calling |
+| 100 (default max) | 3 to 5 MiB                      | 0.4 to 1.7 GiB                             | Default `--max-http-clients`                                             |
+| 1000              | 29 to 51 MiB                    | 1.0 to 4.7 GiB                             | Measured; the series runs every step to this count on all three surfaces |
 
 **`--max-http-clients` is not a memory setting.** At 50 KiB per entry its default of 100 bounds five mebibytes of tenancy, so sizing an instance against it is wrong in both directions: it neither reserves that memory nor limits what the callers behind those credentials allocate while their requests are served. Size from how many callers will have requests in flight at the same moment, which is the load column above. `--pool-idle-timeout` (default 1h) reclaims entries nobody has used, so the live count is what matters, not how many tokens have ever connected; an entry rebuilt after reclamation no longer pays for a catalog build unless it is the only credential of its configuration, because the built server is shared. An entry with a live subscription is exempt from that sweep and is preferred over by size pressure, since its watcher polls GitLab directly and its listen is one request the client never repeats, so nothing about it would look busy to the pool.
 
@@ -76,8 +78,8 @@ subscriptions, not pool size:
 | Scenario                                            | CPU Impact                                                                                                                                                                          |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Idle pool entries                                   | Zero — unless a still-connected session holds resource subscriptions (see below)                                                                                                    |
-| Catalog build (first credential of a configuration) | The first `tools/list` took 0.39 s on `dynamic`, 0.41 s on `meta` and 1.27 s on `individual`                                                                                        |
-| Serving one call                                    | About 8 ms of processor time on `dynamic` and `meta`; 105 ms for the average call on `individual`, where every second call is a `tools/list` serialising three megabytes of schemas |
+| Catalog build (first credential of a configuration) | The first `tools/list` took 0.32 s on `dynamic`, 0.32 s on `meta` and 1.28 s on `individual`                                                                                        |
+| Serving one call                                    | About 8 ms of processor time on `dynamic` and `meta`; 120 ms for the average call on `individual`, where every second call is a `tools/list` serialising three megabytes of schemas |
 | Open session (`--stateless=false`)                  | ~2 goroutines (read + write on transport)                                                                                                                                           |
 | Tool execution                                      | 1 goroutine per concurrent tool call                                                                                                                                                |
 | GitLab API calls                                    | Blocked on network I/O, minimal CPU                                                                                                                                                 |
@@ -94,12 +96,12 @@ Under the default stateless transport a session lasts exactly one POST, so there
 | Per concurrent tool call                                                | 1                    |
 | Per watched URI (subscriptions to the same URI share one watcher)       | 1, max 10 per server |
 
-An HTTP process holding eight credentials measured 53 to 69 goroutines, and 76 with telemetry exporting; add one per in-flight call and one per watched URI. The concurrency series makes the shape plain, because it holds four requests in flight per credential: 4,015 goroutines at a thousand credentials on `dynamic` and `meta`, and 2,015 on `individual`, where the driver holds two. Goroutines track the requests in flight, not the pool.
+The point scenarios read the count off a traceback signal with every credential attached; the concurrency series makes the shape plain, because it holds four requests in flight per credential: 4,015 goroutines at a thousand credentials on `dynamic` and `meta`, and 2,015 on `individual`, where the driver holds two. Goroutines track the requests in flight, not the pool.
 
 ### Resource Subscription Watchers
 
 On `GITLAB_MCP_CAPABILITY_SURFACE=full` (the default), a session that subscribes to a
-resource ([subscriptions reference](../reference/capabilities/subscriptions.md))
+resource ([subscriptions reference](capabilities/subscriptions.md))
 starts — or joins — a watcher goroutine that polls GitLab in the background;
 subscriptions to the same URI share one watcher, so goroutines count per
 distinct watched URI — the one
@@ -136,9 +138,9 @@ Understanding the terminology is important for capacity planning:
 
 Memory growth comes from, in the order the benchmark's heap profiles rank them at a thousand credentials:
 
-1. **Requests in flight**: the JSON being decoded and encoded, and the read and write buffer of every open connection. At a thousand credentials with four requests each, those buffers alone were 29.6 MiB of live heap on `dynamic`, the largest single term that grows at all
-2. **Unique tokens in pool**. Each adds credential state only, principally its GitLab client at about 5.6 KiB: 50.9 KiB per credential of settled live heap on `dynamic` including the connections it holds open. Bounded by `--max-http-clients` and reclaimed by `--pool-idle-timeout`, which exempts an entry that is still serving a subscription
-3. **Distinct configurations served**. Each builds one tool catalog and one MCP server, shared by every credential that hashes to it. In a deployment that pins `--tier` and publishes one instance there is exactly one, and it does not grow: `toolutil.cloneSchemaMap` holds 8.50 MiB in the heap profile at one credential and 8.50 MiB at a thousand
+1. **Requests in flight**: the JSON being decoded and encoded, and the read and write buffer of every open connection. At a thousand credentials with four requests each, those buffers alone were 35.6 MiB of live heap on `dynamic`, the largest single term that grows at all
+2. **Unique tokens in pool**. Each adds credential state only, principally its GitLab client at about 5.1 KiB: 50.6 KiB per credential of settled live heap on `dynamic` including the connections it holds open. Bounded by `--max-http-clients` and reclaimed by `--pool-idle-timeout`, which exempts an entry that is still serving a subscription
+3. **Distinct configurations served**. Each builds one tool catalog and one MCP server, shared by every credential that hashes to it. In a deployment that pins `--tier` and publishes one instance there is exactly one, and it does not grow: `toolutil.cloneSchemaMap` holds 10.0 MiB in the heap profile at one credential and 10.0 MiB at a thousand
 4. **Active MCP sessions** — minimal per-session overhead managed by the SDK
 5. **Large API responses** — paginated list results with many items
 
@@ -169,8 +171,8 @@ gitlab-mcp-server --http \
   --http-addr=:8080
 ```
 
-- Memory: 512 MiB is enough on `dynamic` or `meta`, where twenty credentials all calling at once peaked at 316 and 271 MiB; allow 1 GiB on `individual`, which peaked at 843 MiB
-- CPU: Negligible between requests; the first `tools/list` of the first credential of a configuration builds the catalog, at 0.4 s on `dynamic` and `meta` and 1.3 s on `individual`
+- Memory: 512 MiB is enough on `dynamic` or `meta`, where twenty credentials all calling at once peaked at 364 and 257 MiB; allow 1.5 GiB on `individual`, which peaked at 1073 MiB
+- CPU: Negligible between requests; the first `tools/list` of the first credential of a configuration builds the catalog, at 0.3 s on `dynamic` and `meta` and 1.3 s on `individual`
 
 ### Medium Team (20-100 developers)
 
@@ -181,7 +183,7 @@ gitlab-mcp-server --http \
   --http-addr=:8080
 ```
 
-- Memory: 1 GiB on `dynamic` or `meta` and 2.5 GiB on `individual` covers a hundred credentials calling at once, which measured peaks of 659, 481 and 2083 MiB. The pool bound itself costs about 5 MiB, so `--max-http-clients` is not what this figure is for
+- Memory: 1 GiB on `dynamic` or `meta` and 2 GiB on `individual` covers a hundred credentials calling at once, which measured peaks of 608, 406 and 1724 MiB. The pool bound itself costs about 5 MiB, so `--max-http-clients` is not what this figure is for
 - CPU: Minimal between requests; a call costs about 8 ms of processor time on `dynamic` and `meta`, so a sixteen-thread host has headroom well past a hundred credentials
 
 ### Large Deployment (100+ developers)
@@ -195,7 +197,7 @@ gitlab-mcp-server --http \
   --http-addr=:8080
 ```
 
-- Memory: size each instance for the callers it will hold at once, not for its pool. One process reached a thousand credentials on every surface in the series, at 1.0 GiB on `meta`, 3.9 on `dynamic` and 4.4 on `individual` with all thousand calling; what makes several instances the better shape at this size is latency rather than memory, since a saturated host queues
+- Memory: size each instance for the callers it will hold at once, not for its pool. One process reached a thousand credentials on every surface in the series, at 1.0 GiB on `meta`, 1.5 on `dynamic` and 4.7 on `individual` with all thousand calling; what makes several instances the better shape at this size is latency rather than memory, since a saturated host queues
 - CPU: Light between requests, and the ceiling is processor time per call: on a sixteen-thread host the series stopped gaining throughput at about five concurrently calling credentials, and everything past that point is queueing
 
 ---
@@ -203,5 +205,5 @@ gitlab-mcp-server --http \
 ## Further Reading
 
 - [HTTP Server Mode](../guides/http-server-mode.md) — architecture and configuration
-- [Configuration](../reference/configuration.md) — all configuration options
-- [Architecture](architecture.md) — system architecture overview
+- [Configuration](configuration.md) — all configuration options
+- [Architecture](../concepts/architecture.md) — system architecture overview
