@@ -74,7 +74,7 @@ func registerMilestoneProgressPrompt(server registrar, client *gitlabclient.Clie
 			{Name: argMilestone, Title: toolutil.TitleFromName(argMilestone), Description: "Specific milestone title (omit for all active)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMilestoneProgress(ctx, client, req)
+		return handleMilestoneProgress(ctx, client.For(ctx), req)
 	})
 }
 
@@ -153,7 +153,7 @@ func registerLabelDistributionPrompt(server registrar, client *gitlabclient.Clie
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleLabelDistribution(ctx, client, req)
+		return handleLabelDistribution(ctx, client.For(ctx), req)
 	})
 }
 
@@ -233,7 +233,7 @@ func registerGroupMilestoneProgressPrompt(server registrar, client *gitlabclient
 			groupIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleGroupMilestoneProgress(ctx, client, req)
+		return handleGroupMilestoneProgress(ctx, client.For(ctx), req)
 	})
 }
 
@@ -302,7 +302,7 @@ func registerProjectContributorsPrompt(server registrar, client *gitlabclient.Cl
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleProjectContributors(ctx, client, req)
+		return handleProjectContributors(ctx, client.For(ctx), req)
 	})
 }
 

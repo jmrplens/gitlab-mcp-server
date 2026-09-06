@@ -4,7 +4,7 @@ description: "What the server costs to run, measured rather than estimated: resi
 datePublished: "2026-09-04"
 faq:
   - q: "How much memory should I give the container?"
-    a: "In HTTP mode, size for **concurrent credentials, not requests**. The process idles near 35 MiB holding no tool catalog at all, and then builds one catalog per distinct token. With every credential calling, the concurrency series measured about 63 MiB per credential on the meta surface, 90 MiB on individual and 130 MiB on dynamic, which is 6.6 GB, 9.4 GB and 13.2 GB at a hundred credentials. 512 MiB comfortably serves a handful of credentials; a deployment expecting dozens needs gigabytes, or a lower `--max-http-clients`. In stdio mode each client gets its own process of roughly 190 to 310 MiB."
+    a: "In HTTP mode, size for **concurrent credentials, not requests**. The process idles near 35 MiB holding no tool catalog at all, and then builds one catalog per distinct token. With every credential calling, the concurrency series measured about 63 MiB per credential on the meta surface, 90 MiB on individual and 130 MiB on dynamic, which is 6.2 GiB, 8.8 GiB and 12.7 GiB at a hundred credentials. 512 MiB comfortably serves a handful of credentials; a deployment expecting dozens needs gigabytes, or a lower `--max-http-clients`. In stdio mode each client gets its own process of roughly 190 to 310 MiB."
   - q: "Why is the first tool call after a new token so slow?"
     a: "It is paying for registration. The process answers `/health` in about 50 ms while holding no catalog; the first request from a credential builds one, which took 0.6 to 0.7 seconds on the dynamic and meta surfaces and 1.4 to 1.5 seconds on the individual surface on the host measured. Every later call from that credential is served from the built catalog. The wait returns whenever the pool reclaims the entry, which `--pool-idle-timeout` and `--max-http-clients` decide."
   - q: "Does the tool surface change how much memory the server needs?"
@@ -204,8 +204,8 @@ extra credential on `meta`, 49 MiB on `individual` and 77 MiB on `dynamic`,
 with peaks between 591 MiB and 1.15 GiB while all eight were calling at once.
 The concurrency series measures the slope where a shared deployment lives,
 with every credential calling: 63 MiB per credential on `meta`, 90 MiB on
-`individual` and 130 MiB on `dynamic`, which is 6.6 GB, 9.4 GB and 13.2 GB at
-a hundred credentials.
+`individual` and 130 MiB on `dynamic`, which is 6.2 GiB, 8.8 GiB and 12.7 GiB
+at a hundred credentials.
 
 A practical rule for HTTP: **budget the series figure for your surface, 65 to
 130 MiB, per credential you expect to be live at once, on top of 35 MiB for

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2490,4 +2491,112 @@ func jsonString(s string) string {
 		return `""`
 	}
 	return string(encoded)
+}
+
+// capturingRegistrar registers every prompt on a real MCP server and keeps the
+// handler it registered, so a test can invoke one handler with a context of its
+// own. The session API offers no way to do that: the context a client passes to
+// GetPrompt is the caller's, not the one the server builds for the handler.
+type capturingRegistrar struct {
+	inner    *mcp.Server
+	handlers map[string]mcp.PromptHandler
+}
+
+// AddPrompt records the handler under the prompt's name and forwards the
+// registration unchanged.
+func (r *capturingRegistrar) AddPrompt(prompt *mcp.Prompt, handler mcp.PromptHandler) {
+	r.handlers[prompt.Name] = handler
+	r.inner.AddPrompt(prompt, handler)
+}
+
+// TestRegisterAll_ContextBoundClient_RequestReachesBoundInstance verifies the
+// per-request client binding the shared-server arrangement depends on.
+//
+// One MCP server serves every credential whose configuration hashes to the same
+// shape, so prompts are registered once with a client that is not the caller's
+// and each request carries its own through [gitlabclient.WithClient]. The test
+// registers the whole catalog with client A, whose GitLab mock forbids every
+// request, then invokes a handler with a context carrying client B. The GitLab
+// call must land on B's server, and A's [testutil.ForbiddenHandler] cleanup
+// fails the subtest if anything reached it — which is what a handler that still
+// used the client it captured at registration would do.
+//
+// Three prompts registered by three different files are exercised, so the
+// assertion covers the sweep rather than one closure.
+func TestRegisterAll_ContextBoundClient_RequestReachesBoundInstance(t *testing.T) {
+	cases := []struct {
+		name   string
+		prompt string
+		args   map[string]string
+		path   string
+		body   string
+		want   string
+	}{
+		{
+			name:   "summarize_mr_changes",
+			prompt: "summarize_mr_changes",
+			args:   map[string]string{"project_id": "42", "merge_request_iid": "5"},
+			path:   pathMR5Diffs,
+			body:   `[{"old_path":"bound.go","new_path":"bound.go","diff":"@@ -1 +1 @@\n-old\n+new","new_file":false,"renamed_file":false,"deleted_file":false}]`,
+			want:   "bound.go",
+		},
+		{
+			name:   "label_distribution",
+			prompt: "label_distribution",
+			args:   map[string]string{"project_id": "42"},
+			path:   "/api/v4/projects/42/labels",
+			body:   `[{"name":"bound-label","open_issues_count":2,"closed_issues_count":1,"open_merge_requests_count":0}]`,
+			want:   "bound-label",
+		},
+		{
+			name:   "audit_commit_hygiene",
+			prompt: "audit_commit_hygiene",
+			args:   map[string]string{"project_id": "42", "from": "v1.0.0", "to": "v1.1.0"},
+			path:   pathRepoCompare,
+			body:   `{"commits":[{"id":"abcdef1234567890","title":"feat: bound commit","author_name":"alice"}]}`,
+			want:   "bound commit",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var boundHits atomic.Int64
+			bound := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tc.path {
+					t.Errorf("bound client requested %s, want %s", r.URL.Path, tc.path)
+					http.NotFound(w, r)
+					return
+				}
+				boundHits.Add(1)
+				respondJSON(w, http.StatusOK, tc.body)
+			}))
+
+			// ForbiddenHandler counts every request and asserts on the test
+			// goroutine, at cleanup, that none arrived.
+			unbound := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+			reg := &capturingRegistrar{
+				inner:    mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil),
+				handlers: map[string]mcp.PromptHandler{},
+			}
+			registerAll(reg, unbound)
+
+			handler, ok := reg.handlers[tc.prompt]
+			if !ok {
+				t.Fatalf("prompt %q was not registered", tc.prompt)
+			}
+
+			result, err := handler(gitlabclient.WithClient(context.Background(), bound), testPromptRequest(tc.args))
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if got := boundHits.Load(); got != 1 {
+				t.Errorf("bound client served %d request(s), want 1", got)
+			}
+			text := result.Messages[0].Content.(*mcp.TextContent).Text
+			if !strings.Contains(text, tc.want) {
+				t.Errorf("expected output to contain %q, got: %s", tc.want, text)
+			}
+		})
+	}
 }

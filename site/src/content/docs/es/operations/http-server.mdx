@@ -1,6 +1,6 @@
 ---
 title: Modo servidor HTTP
-description: Despliega GitLab MCP Server como servicio HTTP multiusuario con autenticación por token en cada petición, pool aislado, OAuth y rate limiting.
+description: Despliega GitLab MCP Server como servicio HTTP multiusuario con autenticación por token en cada petición, pool de credenciales aisladas, OAuth y rate limiting.
 datePublished: "2026-04-21"
 faq:
   - q: "¿Cuándo debería usar el modo HTTP en lugar de stdio?"
@@ -8,7 +8,7 @@ faq:
   - q: "¿Cómo se autentican los clientes en el modo HTTP?"
     a: "Los clientes envían su Token de Acceso Personal de GitLab en cada petición usando la cabecera `PRIVATE-TOKEN` (recomendada) o una cabecera `Authorization: Bearer`; si ambas están presentes en modo legacy, `PRIVATE-TOKEN` tiene precedencia (el modo OAuth solo lee el token Bearer). Un servidor arrancado con `--allow-any-gitlab-url` y sin instancia toma la instancia destino de la cabecera `GITLAB-URL`, y uno que publica varias exige esa cabecera para elegir entre ellas. Para producción, `--auth-mode=oauth` habilita OAuth 2.1 con PKCE compatible con RFC 9728, de modo que los clientes descubren el servidor de autorización y autorizan en el navegador en lugar de copiar tokens."
   - q: "¿Los clientes del modo HTTP comparten estado o contexto?"
-    a: "No. El modo HTTP usa un **pool LRU limitado** de instancias de servidor MCP indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una instancia, mientras que tokens distintos o URLs distintas obtienen instancias completamente aisladas. Las búsquedas en el pool usan solo los hashes SHA-256, el cliente de GitLab de cada entrada conserva la credencial con la que se autentica mientras la entrada vive, y cuando el pool alcanza `--max-http-clients` se desaloja la entrada menos usada recientemente."
+    a: "No. El modo HTTP usa un **pool LRU limitado** de entradas por credencial indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una entrada, mientras que tokens distintos o URLs distintas obtienen entradas completamente aisladas: el cliente de GitLab, el cubo del rate limit, los vigilantes de recursos y la propiedad de las sesiones son todos por entrada. El servidor MCP en sí lo comparten todas las credenciales cuya configuración coincide, porque lo que guarda lo decide la configuración y no la credencial, y cada petición se ejecuta con el cliente que lleva su propia entrada. Las búsquedas en el pool usan solo los hashes SHA-256, el cliente de GitLab de cada entrada conserva la credencial con la que se autentica mientras la entrada vive, y cuando el pool alcanza `--max-http-clients` se desaloja la entrada menos usada recientemente que no esté atendiendo una suscripción."
   - q: "¿Por qué se caen mis sesiones MCP o se cortan los streams?"
     a: "Dos capas independientes gobiernan la vida útil: el timeout de inactividad de la **sesión MCP** (`--session-timeout`, por defecto `30m`) y el timeout de **conexión HTTP inactiva** (`--http-idle-timeout`, por defecto `0` = desactivado). Como `--http-idle-timeout` vale `0` por defecto, la capa HTTP no cierra conexiones inactivas, así que `--session-timeout` es la vida efectiva de inactividad. Si las sesiones caen pronto, un `--http-idle-timeout` bajo o un timeout de lectura/inactividad del proxy inverso suele cerrar los streams SSE de larga duración; aumenta el timeout del proxy para streams MCP largos."
 ---
@@ -19,8 +19,8 @@ import FAQ from "../../../../components/FAQ.astro";
 :::tip[De un vistazo]
 
 - **El modo HTTP atiende a muchos clientes desde un solo proceso**, mientras que stdio arranca un proceso por cliente.
-- **Cada petición lleva su propio token de GitLab.** Las sesiones se aíslan en un pool LRU acotado, indexado por un hash de token + URL de GitLab, así que los clientes nunca comparten estado.
-- **Dimensiona por credenciales concurrentes, no por peticiones.** El proceso reposa cerca de 40 MiB sin ningún catálogo, y cada par token+URL activo añade el suyo: presupuesta unos 100 MiB por credencial simultánea.
+- **Cada petición lleva su propio token de GitLab.** Cada credencial obtiene su entrada en un pool LRU acotado, indexado por un hash de token + URL de GitLab, y cada petición se ejecuta con el cliente de GitLab que lleva su entrada, así que los clientes nunca comparten estado.
+- **Dimensiona por la carga concurrente, no por el número de tokens.** El proceso reposa cerca de 40 MiB sin ningún catálogo, y construye uno por cada configuración que se le pide atender, compartido por todas las credenciales de esa configuración. Una credencial propia añade un cliente de GitLab y algo de contabilidad; lo que crece con la gente que lo usa a la vez son las peticiones que tienen en vuelo.
 
 :::
 
@@ -87,7 +87,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--trusted-origins`             | _(vacío)_         | Orígenes absolutos (`esquema://host[:puerto]`), separados por comas, autorizados a hacer peticiones cross-origin desde un navegador; `*` acepta cualquier origen y desactiva la protección; vacío no añade ninguno. El origen de `--public-url` es de confianza automáticamente                                                             |
 | `--action-timeout`              | `65m`             | Cancela una acción que siga en marcha tras este tiempo; `0` lo desactiva (límite: 24h). Toma su valor de `GITLAB_MCP_ACTION_TIMEOUT` si no se pasa                                                                                                                                                                                          |
 | `--drain-delay`                 | `0`               | Tras `SIGTERM`, mantiene el listener abierto y responde `/health` con `503 draining` durante este tiempo antes de cerrarlo, para que un balanceador que sondea `/health` retire la instancia antes del cierre (límite: 5m); `0` cierra al instante. Toma su valor de `GITLAB_MCP_DRAIN_DELAY` si no se pasa                                 |
-| `--pool-idle-timeout`           | `1h`              | Recupera una entrada del pool (token + URL de GitLab) tras este tiempo sin usarse; `0` mantiene las entradas hasta que el límite de tamaño del pool las expulse (límite: 24h)                                                                                                                                                               |
+| `--pool-idle-timeout`           | `1h`              | Recupera una entrada de credencial del pool (token + URL de GitLab) tras este tiempo sin usarse; `0` mantiene las entradas hasta que el límite de tamaño del pool las expulse (límite: 24h). Una entrada con una suscripción viva nunca está inactiva según esta medida                                                                     |
 | `--revalidate-interval`         | `15m`             | Intervalo de revalidación del token; `0` detiene la comprobación periódica, pero una entrada cuya credencial tenga más de 1h se reconstruye igualmente (límite: 24h)                                                                                                                                                                        |
 | `--rate-limit-rps`              | `10`              | Límite de tasa por servidor, en req/s, sobre toda llamada que llega a GitLab: `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`, `prompts/get` (`0` lo desactiva); activo por defecto porque un despliegue HTTP es compartido                                                                                   |
 | `--rate-limit-burst`            | `40`              | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                                                                                                                                                                                                                                                |
@@ -115,7 +115,7 @@ Lo que significa `GITLAB-URL` depende de cuántas instancias publique el desplie
 
 ### Opciones de superficie de herramientas y capacidades
 
-`--tool-surface` selecciona el catálogo de herramientas MCP visible para cada entrada del pool del servidor HTTP:
+`--tool-surface` selecciona el catálogo de herramientas MCP visible que se sirve a cada cliente HTTP:
 
 - `dynamic` (predeterminada cuando se omite): la superficie de bajo consumo con dos herramientas, `gitlab_find_action` y `gitlab_execute_action`.
 - `meta`: meta-herramientas por dominio, un catálogo consolidado que enruta por el parámetro `action`.
@@ -262,7 +262,7 @@ El modo sin estado es el **predeterminado** y sigue el diseño sin sesiones intr
 - GET y DELETE sobre el endpoint MCP devuelven `405 Method Not Allowed` (`Allow: POST`), sin necesidad de credencial: no pueden dirigirse a nada, así que exigirla sustituiría la respuesta especificada por un `401`. Con `--stateless=false` sí se autentican y se comprueba su propiedad, igual que un POST, porque ahí un GET abre el stream SSE de una sesión y un DELETE la termina. Los endpoints `/health` y `/.well-known/*` no se ven afectados.
 - Las peticiones síncronas iniciadas por el servidor no están disponibles. Los clientes con protocolo `2026-07-28` conservan la elicitación completa mediante peticiones multi-ronda (MRTR), que viajan dentro del resultado de la herramienta; solo los clientes con protocolo heredado recurren a las alternativas no interactivas (p. ej. el parámetro `confirm` para acciones destructivas).
 - `--session-timeout` no tiene efecto: ninguna sesión sobrevive a su petición.
-- El pool de servidores por token y URL sigue aplicando, así que las peticiones repetidas reutilizan una instancia de servidor cacheada.
+- El pool de credenciales por token y URL sigue aplicando, así que las peticiones repetidas reutilizan una entrada del pool cacheada.
 
 El modo sin estado encaja en despliegues con balanceo de carga donde las peticiones de un cliente pueden aterrizar en réplicas distintas. Combínalo con `--json-response` para clientes o gateways que prefieren cuerpos JSON planos en lugar de SSE:
 
@@ -303,12 +303,12 @@ En la superficie dinámica de herramientas, la propiedad `action` de `gitlab_exe
 ## Gestión de sesiones
 
 :::note
-El ciclo de vida de sesión MCP (el intercambio `Mcp-Session-Id`, la expiración por inactividad con `--session-timeout` y la terminación con DELETE) aplica solo al **modo stateful heredado** (`--stateless=false`). En el modo sin estado por defecto no hay sesiones MCP — el pool de servidores descrito abajo sigue aplicando, porque sus entradas se indexan por token y URL de GitLab, no por sesión.
+El ciclo de vida de sesión MCP (el intercambio `Mcp-Session-Id`, la expiración por inactividad con `--session-timeout` y la terminación con DELETE) aplica solo al **modo stateful heredado** (`--stateless=false`). En el modo sin estado por defecto no hay sesiones MCP — el pool de credenciales descrito abajo sigue aplicando, porque sus entradas se indexan por token y URL de GitLab, no por sesión.
 :::
 
-### Arquitectura del pool de servidores
+### Arquitectura del pool de credenciales
 
-El núcleo del modo HTTP es un **pool LRU limitado** de instancias de servidor MCP, indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente.
+El núcleo del modo HTTP es un **pool LRU limitado** de entradas por credencial, indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente. Una entrada guarda lo que decide la credencial: su cliente de GitLab, su cubo del rate limit, sus vigilantes de recursos y sus sesiones. El servidor MCP y su catálogo de herramientas se construyen una vez por **configuración** y los comparten todas las credenciales cuya configuración coincide, porque nada de lo que guarda un servidor depende de la credencial; la credencial viaja con cada petición.
 
 ```mermaid
 graph TD
@@ -317,11 +317,15 @@ graph TD
         REQ2["Cliente B<br/>Token: glpat-bbb<br/>URL: gitlab.com"] --> HANDLER
         REQ3["Cliente C<br/>Token: glpat-aaa<br/>URL: self-hosted.ejemplo.com"] --> HANDLER
 
-        HANDLER --> POOL[Pool de Servidores]
+        HANDLER --> POOL[Pool de Credenciales]
 
-        POOL --> ENTRY1["hash(glpat-aaa + gitlab.com)<br/>Servidor MCP + Cliente GitLab"]
-        POOL --> ENTRY2["hash(glpat-bbb + gitlab.com)<br/>Servidor MCP + Cliente GitLab"]
-        POOL --> ENTRY3["hash(glpat-aaa + self-hosted)<br/>Servidor MCP + Cliente GitLab"]
+        POOL --> ENTRY1["hash(glpat-aaa + gitlab.com)<br/>Cliente GitLab + estado de credencial"]
+        POOL --> ENTRY2["hash(glpat-bbb + gitlab.com)<br/>Cliente GitLab + estado de credencial"]
+        POOL --> ENTRY3["hash(glpat-aaa + self-hosted)<br/>Cliente GitLab + estado de credencial"]
+
+        ENTRY1 --> SHARED["Servidor MCP<br/>uno por configuración"]
+        ENTRY2 --> SHARED
+        ENTRY3 --> SHARED
     end
 
     ENTRY1 --> GL1["API de GitLab<br/>como usuario A @ gitlab.com"]
@@ -331,17 +335,18 @@ graph TD
 
 **Propiedades clave:**
 
-- Los clientes con el **mismo token y la misma URL de GitLab** comparten la misma instancia del servidor MCP
-- Los clientes con **diferentes tokens** o **diferentes URLs de GitLab** obtienen instancias completamente aisladas
+- Los clientes con el **mismo token y la misma URL de GitLab** comparten la misma entrada del pool
+- Los clientes con **diferentes tokens** o **diferentes URLs de GitLab** obtienen entradas completamente aisladas: ninguna credencial puede observar los datos de otra, su estado de vigilancia ni la existencia de su tráfico
+- El servidor MCP se comparte por configuración, y cada petición se ejecuta con el cliente de GitLab de su propia entrada. Una petición que no se puede atribuir a una credencial se rechaza en lugar de atenderse con un valor por defecto
 - Las búsquedas en el pool usan **solo hashes SHA-256** de token+URL; el cliente de GitLab de cada entrada conserva la credencial con la que se autentica mientras la entrada vive, porque no puede llamar a GitLab sin ella, y nada se escribe en disco
-- Cuando el pool alcanza `--max-http-clients`, la entrada menos usada recientemente es desalojada
+- Cuando el pool alcanza `--max-http-clients`, se desaloja la entrada menos usada recientemente que no esté atendiendo una suscripción, y solo cuando todas las entradas atienden una se va la más antigua de ellas
 
 ### Ciclo de vida de la sesión
 
-1. **Primera solicitud**: El token y la URL de GitLab se extraen, se combinan y hashean, y se crea un nuevo servidor MCP + cliente GitLab
+1. **Primera solicitud**: El token y la URL de GitLab se extraen, se combinan y hashean, y se crea una entrada del pool con su propio cliente de GitLab. También se construye el servidor MCP si esta es la primera credencial de su configuración; cualquier credencial posterior lo encuentra listo
 2. **Solicitudes posteriores**: La entrada existente se encuentra y se promueve en la lista LRU
 3. **Timeout de inactividad**: Después de `--session-timeout` de inactividad, la sesión MCP se cierra (pero la entrada del pool permanece)
-4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada más antigua se elimina completamente
+4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada desalojable más antigua se elimina completamente, y se avisa a su cliente: las suscripciones abiertas se terminan en lugar de quedarse mudas
 
 ### Modelo de timeouts: capa HTTP vs sesión MCP
 
@@ -581,23 +586,23 @@ Usa un token con el alcance mínimo que necesites. Un endpoint alojado ve todas 
 
 ## ¿Cuánta memoria necesita?
 
-Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamaño del binario, y hazlo **por credencial concurrente**. Estas cifras vienen del [consumo de recursos](/gitlab-mcp-server/es/operations/resource-benchmark/), que mide el binario real en ambos transportes e indica la máquina en la que se ejecutó:
+Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamaño del binario, y hazlo **por el trabajo en vuelo**. Estas cifras vienen del [consumo de recursos](/gitlab-mcp-server/es/operations/resource-benchmark/), que mide el binario real en ambos transportes e indica la máquina en la que se ejecutó. La fila por credencial es anterior al servidor compartido y es una cota superior; lo que cuesta una credencial en reposo está tres líneas más abajo:
 
 | Modo                                  | Conjunto residente | Notas                                                              |
 | ------------------------------------- | -----------------: | ------------------------------------------------------------------ |
-| HTTP, en reposo, sin credenciales     |            ~40 MiB | El proceso no tiene ningún catálogo hasta que un token lo pide     |
-| HTTP, por credencial activa adicional |          35–71 MiB | Un catálogo por cada par token+URL distinto, en el pool            |
+| HTTP, en reposo, sin credenciales     |            ~40 MiB | El proceso no tiene ningún catálogo hasta que una petición lo pide |
+| HTTP, por credencial activa adicional |          35–71 MiB | Medido cuando cada credencial construía su propio catálogo         |
 | HTTP, ocho credenciales activas       |        445–719 MiB | Picos de 599 MiB a 1,14 GiB mientras las ocho llamaban             |
 | stdio, un proceso por cliente         |        190–330 MiB | Empieza a construir su catálogo enseguida, así que no tiene reposo |
 | Binario en disco                      |             ~55 MB | Binario estático único, sin dependencias de runtime                |
 
 De aquí se derivan tres cosas.
 
-**La memoria sigue a las credenciales activas, no a las peticiones.** El pool mantiene una instancia del servidor MCP por cada par token+URL distinto, cada una con su propio catálogo, así que el pico de un despliegue sigue a cuánta gente lo usa a la vez. Un presupuesto práctico es de unos 100 MiB por credencial que esperes tener activa a la vez, más 128 MiB para el propio proceso. Con 512 MB vas holgado con unas pocas credenciales, y no es una cifra a la que aspirar con más: ocho credenciales concurrentes la superaron en todas las superficies medidas.
+**La memoria sigue a las configuraciones y al trabajo concurrente, no al número de tokens.** El pool mantiene una entrada por cada par token+URL distinto, pero una entrada es un cliente de GitLab y su contabilidad, no un catálogo: el servidor MCP y su superficie registrada se construyen una vez por configuración y los comparten todas las credenciales cuya configuración coincide. Medido en reposo y sin ninguna conexión abierta, pasar de una credencial a veinte hace crecer el heap vivo en 0,14 MiB en `dynamic`, 0,15 MiB en `meta` y 0,16 MiB en `individual`, frente a 8, 15 y 27 MiB antes de compartir. Eso es lo que cuesta la credencial por sí sola; una credencial que mantiene una conexión cuesta además los búferes que hay detrás, y eso lo mide el [consumo de recursos](/gitlab-mcp-server/es/operations/resource-benchmark/), que publica una pendiente por credencial mayor. Las cifras de la tabla de arriba son anteriores a ese cambio y son una cota superior; los números con los que dimensionar son los del benchmark, más lo que reserven las peticiones concurrentes mientras se atienden.
 
-**`--max-http-clients` es un ajuste de memoria, y `--pool-idle-timeout` también.** El primero vale 100 entradas por defecto, un pool mucho mayor de lo que cabe en una instancia pequeña; el segundo (`1h` por defecto) decide cuánto tiempo conserva su catálogo una entrada sin usar. Esos dos son los que hay que bajar si vas justo de memoria, y subir solo junto con más RAM. `--session-timeout` no entra ahí, aunque lo parezca: acota una sesión MCP inactiva, solo se aplica con `--stateless=false` (con el transporte sin estado por defecto, una sesión termina con la respuesta a su propio POST) y terminar una sesión no libera la entrada del pool que hay detrás.
+**`--max-http-clients` acota las credenciales del pool; `--pool-idle-timeout` las recupera.** El primero vale 100 entradas por defecto y el segundo (`1h` por defecto) decide cuánto tiempo se conserva una entrada sin usar, salvo que esté atendiendo una suscripción, en cuyo caso no se considera inactiva. Ninguno es ya el mando de memoria que era, porque una entrada no lleva un catálogo, pero ambos siguen acotando cuántos clientes de GitLab y vigilantes vivos mantiene el proceso. `--session-timeout` es otra cosa distinta, aunque lo parezca: acota una sesión MCP inactiva, solo se aplica con `--stateless=false` (con el transporte sin estado por defecto, una sesión termina con la respuesta a su propio POST) y terminar una sesión no libera la entrada del pool que hay detrás.
 
-**La superficie de herramientas cambia las respuestas más que la memoria.** Las tres construyen el mismo catálogo canónico de acciones, y por credencial la diferencia es de un factor de dos (`dynamic` es la que más cuesta, porque además construye un índice de búsqueda). Lo que la superficie decide de verdad es el tamaño de un `tools/list`: 12 KB, 584 KB y 3,1 MB para `dynamic`, `meta` e `individual`. Elige la superficie por coste de tokens y tiempo de respuesta, y el tamaño de instancia por concurrencia.
+**La superficie de herramientas cambia las respuestas más que la memoria.** Las tres construyen el mismo catálogo canónico de acciones, y como el servidor se comparte por configuración, la superficie no dice nada sobre lo que cuesta una credencial más en reposo y sin conexión abierta: 7,7 KiB en `dynamic`, 8,3 KiB en `meta` y 8,5 KiB en `individual`, que es la misma cifra tres veces, porque lo que queda por credencial es su cliente de GitLab y su contabilidad, no sus herramientas. Una credencial que mantiene una conexión cuesta más que eso, por los búferes que hay detrás, y eso es lo que mide el [consumo de recursos](/gitlab-mcp-server/es/operations/resource-benchmark/). La vieja regla del «factor de dos, con `dynamic` la que más» describía un servidor por credencial y ya no describe nada. Bajo carga el orden lo encabeza `individual` con diferencia, y eso son las peticiones, no las credenciales. Lo que la superficie decide de verdad es el tamaño de un `tools/list`: 12 KB, 584 KB y 3,1 MB para `dynamic`, `meta` e `individual`. Elige la superficie por coste de tokens y tiempo de respuesta, y el tamaño de instancia por concurrencia.
 
 Las cifras absolutas varían según plataforma y versión del runtime de Go: tómalas como punto de partida y ejecuta `make bench-resources` para medir las tuyas.
 

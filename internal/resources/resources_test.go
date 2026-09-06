@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -2720,6 +2721,127 @@ func TestResourceReadErrors_CarryTheSpecifiedJSONRPCCodes(t *testing.T) {
 			}
 			if rpcErr.Code != tt.wantCode {
 				t.Errorf("code = %d, want %d (%v)", rpcErr.Code, tt.wantCode, err)
+			}
+		})
+	}
+}
+
+// instanceHandler answers the two reads TestRegister_ClientBoundToContext_
+// ReadsFromTheBoundInstance performs, stamping every payload with the name of
+// the instance that produced it and counting the requests that reached it.
+// Naming the instance in the body and counting the requests are two
+// independent witnesses of where a read went, so a handler that answered the
+// wrong instance cannot pass by coincidence.
+func instanceHandler(t *testing.T, instance string, hits *atomic.Int64) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		switch r.URL.Path {
+		case "/api/v4/user":
+			respondJSON(w, http.StatusOK, fmt.Sprintf(
+				`{"id":1,"username":%q,"name":"Test User","email":"test@example.com","state":"active","web_url":"https://gitlab.example.com/u","is_admin":false}`,
+				instance,
+			))
+		case "/api/v4/projects/42":
+			respondJSON(w, http.StatusOK, fmt.Sprintf(
+				`{"id":42,"name":%q,"path_with_namespace":"grp/proj","visibility":"private","web_url":"https://gitlab.example.com/grp/proj","description":"d","default_branch":"main"}`,
+				instance,
+			))
+		default:
+			t.Errorf("instance %s received an unexpected request path %q", instance, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// TestRegister_ClientBoundToContext_ReadsFromTheBoundInstance verifies that a
+// resource handler serves each read with the client bound to that request's
+// context, and only falls back to the one captured at registration when
+// nothing is bound.
+//
+// This is the seam that lets a single mcp.Server be shared by every credential
+// whose configuration hashes to the same shape: registration happens once with
+// a client that is not the caller's, so a handler that used the captured one
+// would answer every caller from the instance that built the shape. The test
+// registers with client A and reads with client B installed on the context,
+// asserting on both witnesses instanceHandler provides: the instance named in
+// the payload, and the request counters, which also prove A was never
+// contacted. Both a static resource and a URI-template one are exercised,
+// since they register through different registrar methods. The unbound case
+// pins the fallback that keeps stdio and every other test unchanged.
+func TestRegister_ClientBoundToContext_ReadsFromTheBoundInstance(t *testing.T) {
+	var hitsA, hitsB atomic.Int64
+
+	clientA := testutil.NewTestClient(t, instanceHandler(t, "instance-a", &hitsA))
+	clientB := testutil.NewTestClient(t, instanceHandler(t, "instance-b", &hitsB))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	index := Register(server, clientA)
+
+	tests := []struct {
+		name        string
+		bound       *gitlabclient.Client
+		uriTemplate string
+		uri         string
+		field       string
+		want        string
+		wantHitsA   int64
+		wantHitsB   int64
+	}{
+		{
+			name:        "static resource without a bound client reads from the registered one",
+			uriTemplate: "gitlab://user/current",
+			uri:         "gitlab://user/current",
+			field:       "username",
+			want:        "instance-a",
+			wantHitsA:   1,
+		},
+		{
+			name:        "static resource with a bound client reads from the bound one",
+			bound:       clientB,
+			uriTemplate: "gitlab://user/current",
+			uri:         "gitlab://user/current",
+			field:       "username",
+			want:        "instance-b",
+			wantHitsB:   1,
+		},
+		{
+			name:        "template resource with a bound client reads from the bound one",
+			bound:       clientB,
+			uriTemplate: "gitlab://project/{project_id}",
+			uri:         "gitlab://project/42",
+			field:       "name",
+			want:        "instance-b",
+			wantHitsB:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hitsA.Store(0)
+			hitsB.Store(0)
+
+			ctx := context.Background()
+			if tt.bound != nil {
+				ctx = gitlabclient.WithClient(ctx, tt.bound)
+			}
+
+			raw, err := index.Read(ctx, tt.uriTemplate, tt.uri)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			var payload map[string]any
+			if err = json.Unmarshal(raw, &payload); err != nil {
+				t.Fatalf(fmtUnmarshal, err)
+			}
+			if got, _ := payload[tt.field].(string); got != tt.want {
+				t.Errorf("%s = %q, want %q: the read reached the wrong instance", tt.field, got, tt.want)
+			}
+			if got := hitsA.Load(); got != tt.wantHitsA {
+				t.Errorf("requests to instance A = %d, want %d", got, tt.wantHitsA)
+			}
+			if got := hitsB.Load(); got != tt.wantHitsB {
+				t.Errorf("requests to instance B = %d, want %d", got, tt.wantHitsB)
 			}
 		})
 	}

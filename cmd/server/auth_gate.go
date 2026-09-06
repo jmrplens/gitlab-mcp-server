@@ -205,11 +205,21 @@ func (f *gateFailure) write(w http.ResponseWriter, r *http.Request) {
 // carry its own status, headers, and machine-readable reason.
 type mcpServerGate struct {
 	pool *serverpool.ServerPool
-	// sessionTags maps each pooled server to the tag prefixing the session
-	// IDs it mints, so a stateful request presenting a session ID can be
-	// checked against the credential that minted it. Nil in tests and in any
-	// mode without a pool, where the check is skipped.
-	sessionTags *sync.Map
+	// sessions records which pooled credential each MCP session belongs to, so
+	// a stateful request presenting a session ID can be checked against the
+	// credential that opened it. Nil in tests and in any mode without a pool,
+	// where the check is skipped.
+	//
+	// It replaces a tag prefixed to every session ID by the server that minted
+	// it. That worked while a server served one credential and stopped meaning
+	// anything when one server started serving a configuration shape: the SDK
+	// asks for a session ID with no request in hand, so a shared server mints
+	// under one tag for everybody.
+	sessions *sessionOwners
+	// credentials maps a resolved pool entry to the state it owns on the server
+	// it shares, which the gate stamps onto the request context for the MCP
+	// middleware to bind. Nil wherever sessions is.
+	credentials *credentialStates
 	// gitlabURLs are the instances this deployment publishes. Empty means
 	// the caller chooses freely (legacy, unfixed); one is the pinned
 	// instance every request reaches; several make the GITLAB-URL header a
@@ -312,16 +322,21 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		server, failure := g.resolve(r)
+		entry, failure := g.resolve(r)
 		if failure != nil {
 			failure.write(w, r)
 			return
 		}
-		if sessionFailure := g.checkSessionOwnership(r, server); sessionFailure != nil {
+		if sessionFailure := g.checkSessionOwnership(r, entry); sessionFailure != nil {
 			sessionFailure.write(w, r)
 			return
 		}
-		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, server)
+		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, entry.Server())
+		// The credential travels on the HTTP request context, which the carrier
+		// registry then makes reachable from inside the MCP handler chain. It
+		// cannot be put on the handler's own context here: that context does not
+		// descend from this request. See [requestCarriers].
+		ctx = withRequestCredential(ctx, g.credentials.get(entry.Owner()))
 		ctx = g.withIdentity(ctx, r)
 		// Every request that reaches the MCP handler is subject to the
 		// readiness gate, and only requests that reach it. A pooled entry
@@ -398,19 +413,19 @@ const mcpSessionIDHeader = "Mcp-Session-Id"
 // 404 is the prescribed answer: it is the terminated-session signal, and a
 // conforming client responds by starting a new session without an ID, so the
 // refusal self-heals rather than stranding the caller.
-func (g *mcpServerGate) checkSessionOwnership(r *http.Request, server *mcp.Server) *gateFailure {
+func (g *mcpServerGate) checkSessionOwnership(r *http.Request, entry *serverpool.Entry) *gateFailure {
 	sessionID := r.Header.Get(mcpSessionIDHeader)
-	if sessionID == "" || g.sessionTags == nil {
+	if sessionID == "" || g.sessions == nil {
 		return nil
 	}
-	presented, ok := sessionTagOf(sessionID)
-	if !ok {
-		// A session ID this deployment never minted. Stateless mode issues
-		// none at all, so anything untagged is either stale or forged.
+	owner := g.sessions.ownerOfID(sessionID)
+	if owner == "" {
+		// A session ID this deployment never opened, or one whose credential
+		// has since been evicted. Stateless mode issues none at all, so
+		// anything presented there is stale or forged either way.
 		return sessionOwnershipFailure()
 	}
-	owned, found := g.sessionTags.Load(server)
-	if !found || owned != presented {
+	if owner != entry.Owner() {
 		refusalLog.log(r.Context(), slog.LevelWarn, "request rejected: session ID does not belong to the presented credential")
 		return sessionOwnershipFailure()
 	}
@@ -427,7 +442,7 @@ func sessionOwnershipFailure() *gateFailure {
 	}
 }
 
-func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
+func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailure) {
 	ip := clientIP(r, g.trustedProxyHeader, g.trustedProxies)
 	source := transportSource(r)
 
@@ -492,7 +507,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	}
 	logIgnoredRequestOptions(token, options)
 
-	server, err := g.pool.GetOrCreateWithScopes(token, options.GitLabURL, verifiedScopes(r)) //nolint:contextcheck // the pool bounds per-token scope detection with its own timeout, deliberately outliving this request
+	entry, err := g.pool.GetOrCreateEntry(token, options.GitLabURL, verifiedScopes(r)) //nolint:contextcheck // the pool bounds per-token scope detection with its own timeout, deliberately outliving this request
 	if errors.Is(err, serverpool.ErrInvalidCredential) {
 		// GitLab itself rejected the token, so this is an authentication
 		// failure in the full sense: 401, and it does count against the
@@ -526,7 +541,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 			message: "Could not initialize a GitLab session for this token. The instance may be unreachable; retry shortly.",
 		}
 	}
-	return server, nil
+	return entry, nil
 }
 
 // blockedByBudget reports whether either budget is exhausted: the caller's

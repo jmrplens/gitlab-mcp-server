@@ -30,12 +30,25 @@ import (
 // comparing one thing and the subscriber reading another.
 type resourceReader struct {
 	// index is published by registration rather than passed in, because the
-	// subscription runtime is built by the shell and the exclusions come from
+	// subscription machinery is built by the shell and the exclusions come from
 	// the catalog, which does not exist yet at that point. Reading it before it
 	// is set cannot happen: the readiness gate holds resources/subscribe until
 	// registration has finished. The nil case is still answered rather than
 	// dereferenced, since a wrong answer here would be a panic in a handler.
-	index atomic.Pointer[resources.HandlerIndex]
+	//
+	// It is per shape, not per credential: the handlers it indexes are the ones
+	// the shared server registered, and they read whichever client the context
+	// carries.
+	index *atomic.Pointer[resources.HandlerIndex]
+	// client is the credential this reader polls with.
+	//
+	// A watcher runs on a goroutine of its own, so its reads carry no request
+	// and nothing would otherwise bind a credential to them. Binding it here is
+	// what keeps the authorization check ADR-0015 relies on at the polling end:
+	// the read that decides whether a subscription is allowed is made with the
+	// subscriber's own token, on a server whose registered handlers belong to
+	// nobody in particular.
+	client *gitlabclient.Client
 }
 
 // setIndex publishes the handler index registration built, narrowed by the same
@@ -51,12 +64,12 @@ func (r *resourceReader) Read(ctx context.Context, uri string) ([]byte, error) {
 	}
 	index := r.index.Load()
 	if index == nil {
-		// Not reachable through newSubscriptionRuntime, which seeds one, but
+		// Not reachable through newSubscriptionShape, which seeds one, but
 		// answered rather than dereferenced: a nil here would be a panic
 		// inside a handler.
 		return nil, subscriptions.TranslateReadError(errCatalogNotReady)
 	}
-	content, err := index.Read(ctx, kind.Template(), uri)
+	content, err := index.Read(gitlabclient.WithClient(ctx, r.client), kind.Template(), uri)
 	if err != nil {
 		return nil, subscriptions.TranslateReadError(err)
 	}
@@ -76,6 +89,16 @@ var errCatalogNotReady = errors.New("the resource catalog is not ready yet; retr
 // is set before the server accepts its first connection.
 type serverNotifier struct {
 	server atomic.Pointer[mcp.Server]
+	// owner names the pool entry whose watcher produced the update.
+	//
+	// A shared server delivers a resource-updated notification to every session
+	// subscribed to that URI, whoever they belong to, because the SDK's
+	// subscription table is keyed by URI and session and knows nothing about
+	// credentials. Stamping the owner is what lets [sessionOwners.sendingMiddleware]
+	// keep each credential's notifications to that credential's own sessions.
+	// Empty on stdio, where one server serves one credential and there is
+	// nobody to be confused with.
+	owner string
 }
 
 func (n *serverNotifier) attach(server *mcp.Server) {
@@ -97,9 +120,22 @@ func (n *serverNotifier) ResourceUpdated(ctx context.Context, update subscriptio
 	}
 	return server.ResourceUpdated(ctx, &mcp.ResourceUpdatedNotificationParams{
 		URI:  update.URI,
-		Meta: watchMeta(update),
+		Meta: n.watchMeta(update),
 	})
 }
+
+// ownerMetaKey carries the pool entry a resource-updated notification belongs
+// to, from this notifier to the sending middleware that filters delivery.
+//
+// It never reaches a client: the middleware removes it from the `_meta` it
+// forwards and puts it back afterwards, for the next session's turn. It is a
+// random per-entry token rather than anything derived from the credential,
+// precisely because a key that does leak one day should leak nothing (see
+// [github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool.Entry.Owner]).
+//
+// The vendor prefix is this project's own, like [watchMetaKey]: MCP reserves
+// io.modelcontextprotocol/ for registered keys and defines nothing for this.
+const ownerMetaKey = "io.github.jmrplens/watch-owner"
 
 // watchMeta describes the watch that produced a notification.
 //
@@ -114,6 +150,14 @@ func (n *serverNotifier) ResourceUpdated(ctx context.Context, update subscriptio
 // deliberately does not do is dress any of this up as a resource change:
 // the notification means what the schema says it means, that the content
 // changed and is worth reading again.
+func (n *serverNotifier) watchMeta(update subscriptions.Update) mcp.Meta {
+	meta := watchMeta(update)
+	if n.owner != "" {
+		meta[ownerMetaKey] = n.owner
+	}
+	return meta
+}
+
 func watchMeta(update subscriptions.Update) mcp.Meta {
 	state := "active"
 	if update.Slow {
@@ -456,6 +500,16 @@ const methodSubscriptionsListen = "subscriptions/listen"
 type listenStream struct {
 	cancel context.CancelFunc
 	live   map[string]struct{}
+	// owner is the pool entry the stream belongs to, so a watch stopping for
+	// one credential cannot close another's stream over the same URI. Empty on
+	// stdio and for the process-wide sentinel, where there is only one owner.
+	owner string
+	// session is the MCP session the listen arrived on, so an eviction can tell
+	// which of a credential's sessions have already been given an ending here.
+	// A session that has one must not also be terminated: the completion result
+	// the SDK writes when this stream's context ends is the graceful ending, and
+	// closing the connection would race it. Nil for the process-wide sentinel.
+	session *mcp.ServerSession
 }
 
 // listenStreams ends a subscription stream when the server stops watching
@@ -492,8 +546,13 @@ func newListenStreams() *listenStreams {
 }
 
 // arm registers a stream and returns the function that unregisters it.
-func (s *listenStreams) arm(uris []string, cancel context.CancelFunc) (stream *listenStream, release func()) {
-	stream = &listenStream{cancel: cancel, live: make(map[string]struct{}, len(uris))}
+func (s *listenStreams) arm(uris []string, owner string, session *mcp.ServerSession, cancel context.CancelFunc) (stream *listenStream, release func()) {
+	stream = &listenStream{
+		cancel:  cancel,
+		live:    make(map[string]struct{}, len(uris)),
+		owner:   owner,
+		session: session,
+	}
 	for _, uri := range uris {
 		stream.live[uri] = struct{}{}
 	}
@@ -518,12 +577,22 @@ func (s *listenStreams) arm(uris []string, cancel context.CancelFunc) (stream *l
 	}
 }
 
-// stopped records that a URI is no longer watched, closing any stream that
-// was waiting only on URIs that have all stopped.
-func (s *listenStreams) stopped(uri string, _ error) {
+// stoppedFor records that a URI is no longer watched for one owner, closing any
+// of that owner's streams that were waiting only on URIs that have all stopped.
+//
+// The owner is what keeps a shared server honest. Watchers are per credential,
+// so "this URI stopped" is a statement about one credential's watch; without
+// the scope, one tenant's watcher retiring on a 404 would close every other
+// tenant's open listen over the same URI, and the specification's graceful
+// completion result would be sent to clients whose subscription is perfectly
+// alive.
+func (s *listenStreams) stoppedFor(owner, uri string, _ error) {
 	s.mu.Lock()
 	var finished []*listenStream
 	for stream := range s.streams {
+		if stream.owner != owner {
+			continue
+		}
 		if _, waiting := stream.live[uri]; !waiting {
 			continue
 		}
@@ -541,6 +610,56 @@ func (s *listenStreams) stopped(uri string, _ error) {
 	for _, stream := range finished {
 		stream.cancel()
 	}
+}
+
+// closeOwner ends every open listen stream one credential holds, whatever it
+// asked to be notified about.
+//
+// It is what the pool's eviction calls, and it is the difference between a
+// client being told and a client going quiet. Stopping the watchers cannot do
+// it: [github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions.Manager.Close]
+// is by contract the one stop path that fires no OnStop, so nothing reaches
+// [listenStreams.stoppedFor] and the stream stays open and silent for the rest
+// of its life. A stream carrying only list-changed subscriptions is ended too:
+// its credential is gone, so the alternative is a stream whose slot in the
+// process-wide ceiling is held by an entry that no longer exists.
+//
+// An empty owner ends nothing. That is stdio and the single-credential server,
+// where every stream carries it and nothing evicts anything.
+//
+// It reports which sessions it ended a stream on, because those are the
+// sessions the client is already being told about: the SDK writes each stream's
+// completion result when its context ends, and that is the graceful ending the
+// specification asks for. A session-era resources/subscribe holds no stream and
+// appears in no answer here, which is what
+// [sessionOwners.endSessionsWithoutStreams] is for.
+func (s *listenStreams) closeOwner(owner string) map[*mcp.ServerSession]struct{} {
+	if s == nil || owner == "" {
+		return nil
+	}
+
+	s.mu.Lock()
+	var owned []*listenStream
+	told := make(map[*mcp.ServerSession]struct{})
+	for stream := range s.streams {
+		if stream.owner != owner {
+			continue
+		}
+		owned = append(owned, stream)
+		if stream.session != nil {
+			told[stream.session] = struct{}{}
+		}
+		delete(s.streams, stream)
+	}
+	s.mu.Unlock()
+
+	// Outside the lock, like every other cancel here: the SDK's handler
+	// unwinds through the unsubscribe path, and writes the completion result
+	// the specification asks for as it goes.
+	for _, stream := range owned {
+		stream.cancel()
+	}
+	return told
 }
 
 // closeAll ends every open listen stream.
@@ -589,7 +708,8 @@ func (s *listenStreams) middleware() mcp.Middleware {
 			}
 			streamCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
-			stream, release := s.arm(uris, cancel)
+			session, _ := req.GetSession().(*mcp.ServerSession)
+			stream, release := s.arm(uris, ownerOfRequest(ctx), session, cancel)
 			defer release()
 
 			// The stream travels in the context for every listen, including
@@ -660,83 +780,185 @@ func closableListenURIs(method string, req mcp.Request) ([]string, bool) {
 	return wanted.ResourceSubscriptions, true
 }
 
-// subscriptionRuntime holds the resource-subscription machinery that has to
-// exist before the server — its handlers travel in mcp.ServerOptions — and
-// be wired to it afterwards.
-type subscriptionRuntime struct {
-	manager  *subscriptions.Manager[*mcp.ServerSession]
-	notifier *serverNotifier
-	streams  *listenStreams
-	// reader holds the handler index registration publishes into. Kept so the
-	// runtime, built before the catalog exists, can be handed the narrowed
-	// index once there is one.
-	reader *resourceReader
-	// stateless records that this server runs on a sessionless HTTP
-	// transport, where the legacy subscribe path cannot be honored — see
-	// [subscriptionRuntime.handlers].
+// subscriptionShape holds the resource-subscription machinery one configuration
+// shape owns: the parts that have to exist before the server, because its
+// handlers travel in mcp.ServerOptions, and that are the same for every
+// credential the shape serves.
+//
+// What is deliberately NOT here is the watchers. A watcher polls GitLab with a
+// credential, and ADR-0015 makes its first read the authorization check for the
+// subscription, so a watcher shared between credentials would poll with
+// whichever token happened to create it and hand the result to everybody else.
+// Watchers therefore live in a [subscriptionRuntime] per pool entry, which this
+// shape mints on demand.
+type subscriptionShape struct {
+	// opts is the cadence and limits template each runtime is built from.
+	opts subscriptions.Options
+	// streams is per shape because a listen request belongs to a session on
+	// this server, not to a watcher. Each stream records its own owner so a
+	// watch stopping only closes that credential's streams.
+	streams *listenStreams
+	// index is the handler index registration publishes, shared by every
+	// runtime because the handlers it names are the shared server's own.
+	index *atomic.Pointer[resources.HandlerIndex]
+	// stateless records that this server runs on a sessionless HTTP transport,
+	// where the legacy subscribe path cannot be honored. See
+	// [subscriptionShape.handlers].
 	stateless bool
 }
 
-// newSubscriptionRuntime builds the machinery behind resources/subscribe,
+// subscriptionRuntime is one credential's watchers on a shared server.
+type subscriptionRuntime struct {
+	manager  *subscriptions.Manager[*mcp.ServerSession]
+	notifier *serverNotifier
+	bridge   *sessionBridge
+	reader   *resourceReader
+}
+
+// close stops every watcher this credential holds, for an entry the pool has
+// evicted. A nil runtime is a surface that offers no subscriptions.
+func (r *subscriptionRuntime) close() {
+	if r == nil {
+		return
+	}
+	r.manager.Close()
+}
+
+// newSubscriptionShape builds the machinery behind resources/subscribe,
 // or nil when subscriptions are not offered.
 //
 // Nil is the case whenever the GitLab resources themselves are not
 // registered: advertising the capability then would let a client subscribe
 // to URIs this server never serves, and every such subscription would be
 // refused.
-func newSubscriptionRuntime(
+func newSubscriptionShape(
 	client *gitlabclient.Client,
 	cfg *config.ServerConfig,
 	opts subscriptions.Options,
-) *subscriptionRuntime {
+) *subscriptionShape {
 	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) != config.CapabilitySurfaceFull {
 		return nil
 	}
-	notifier := &serverNotifier{}
-	streams := newListenStreams()
-	opts.OnStop = streams.stopped
 	// The same redactor rule the MCP spans use, so a poll span and the
 	// subscribe span that caused it describe the resource the same way.
 	if redactor := telemetryResources(); redactor != nil {
 		opts.ResourceAttributes = redactor.ResourceAttributes
 	}
-	// Seeded with the unnarrowed index so the runtime behaves exactly as it did
-	// before registration exists to narrow it. Registration replaces it with the
-	// view that honors --exclude-tools; until then nothing can reach it anyway,
-	// because the readiness gate holds resources/subscribe.
-	reader := &resourceReader{}
-	reader.setIndex(resources.NewHandlerIndex(client))
-	return &subscriptionRuntime{
-		reader: reader,
-		manager: subscriptions.New[*mcp.ServerSession](
-			reader,
-			notifier,
-			opts,
-		),
-		notifier:  notifier,
-		streams:   streams,
+	index := &atomic.Pointer[resources.HandlerIndex]{}
+	// Seeded with the unnarrowed index so the machinery behaves exactly as it
+	// did before registration exists to narrow it. Registration replaces it
+	// with the view that honors --exclude-tools; until then nothing can reach
+	// it anyway, because the readiness gate holds resources/subscribe.
+	seed := resources.NewHandlerIndex(client)
+	index.Store(&seed)
+	return &subscriptionShape{
+		opts:      opts,
+		streams:   newListenStreams(),
+		index:     index,
 		stateless: cfg.Stateless,
 	}
 }
 
-// handlers adapts the runtime to the SDK's handler signatures, or returns a
-// nil pair when there is no runtime.
+// setIndex publishes the handler index registration built, narrowed by the same
+// exclusions the tool surface applied.
+func (s *subscriptionShape) setIndex(index resources.HandlerIndex) {
+	if s == nil {
+		return
+	}
+	s.index.Store(&index)
+}
+
+// newRuntime builds one credential's watchers over this shape.
+//
+// owner is the pool entry's opaque token, stamped into every notification the
+// runtime emits and into every listen stream it holds. It is empty on stdio,
+// where the process serves one credential.
+func (s *subscriptionShape) newRuntime(owner string, client *gitlabclient.Client) *subscriptionRuntime {
+	if s == nil {
+		return nil
+	}
+	notifier := &serverNotifier{owner: owner}
+	reader := &resourceReader{index: s.index, client: client}
+	opts := s.opts
+	opts.OnStop = func(uri string, reason error) { s.streams.stoppedFor(owner, uri, reason) }
+	manager := subscriptions.New[*mcp.ServerSession](reader, notifier, opts)
+	return &subscriptionRuntime{
+		manager:  manager,
+		notifier: notifier,
+		bridge:   newSessionBridge(manager),
+		reader:   reader,
+	}
+}
+
+// handlers adapts the shape to the SDK's handler signatures, or returns a
+// nil pair when there is no subscription machinery at all.
 //
 // They are always produced together because the SDK panics at construction
 // if only one of the two is set — a deliberate guard, since a server that
 // accepts subscriptions but cannot cancel them would leak watchers.
-func (r *subscriptionRuntime) handlers() (
+//
+// Each call is routed to the runtime of the pool entry the request belongs to,
+// resolved from the request context by the caller-supplied function. A request
+// that resolves to nothing is refused rather than served from a default: on a
+// shared server the default watches with the unbound client, so serving it
+// would mean answering a subscription with a watcher that can never read.
+func (s *subscriptionShape) handlers(runtimeFor func(context.Context) *subscriptionRuntime) (
 	subscribe func(context.Context, *mcp.SubscribeRequest) error,
 	unsubscribe func(context.Context, *mcp.UnsubscribeRequest) error,
 ) {
-	if r == nil {
+	if s == nil {
 		return nil, nil
 	}
-	bridge := newSessionBridge(r.manager)
-	if r.stateless {
-		return bridge.subscribeUnlessStateless, bridge.Unsubscribe
+	subscribe = func(ctx context.Context, req *mcp.SubscribeRequest) error {
+		runtime := runtimeFor(ctx)
+		if runtime == nil {
+			return unboundSubscribeError(ctx)
+		}
+		if s.stateless {
+			return runtime.bridge.subscribeUnlessStateless(ctx, req)
+		}
+		return runtime.bridge.Subscribe(ctx, req)
 	}
-	return bridge.Subscribe, bridge.Unsubscribe
+	unsubscribe = func(ctx context.Context, req *mcp.UnsubscribeRequest) error {
+		runtime := runtimeFor(ctx)
+		if runtime == nil {
+			return unboundSubscribeError(ctx)
+		}
+		return runtime.bridge.Unsubscribe(ctx, req)
+	}
+	return subscribe, unsubscribe
+}
+
+// errUnboundSubscribe answers a subscription this server cannot attribute to a
+// credential.
+//
+// It is an internal error rather than an invalid request because nothing is
+// wrong with what the client asked for: the server failed to resolve which
+// pooled credential the request belongs to, which is a wiring defect on this
+// side. Failing here rather than watching with the unbound client is the same
+// fail-closed choice [github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab.NewUnboundClient]
+// makes for tool handlers.
+//
+// It keeps the noun ("subscription", because that is what was asked for) and
+// otherwise says what the tool, resource and prompt surfaces say, clause for
+// clause. The clause that nothing was sent is the one that matters and the one
+// that had gone missing here: an operator meeting this and one of the others
+// should see one fact, not two symptoms of it.
+var errUnboundSubscribe = &jsonrpc.Error{
+	Code: jsonrpc.CodeInternalError,
+	Message: "this subscription could not be attributed to a credential and was not sent to GitLab; " +
+		"retry, and report it if it persists",
+}
+
+// unboundSubscribeError is [errUnboundSubscribe] for a request that is still
+// live, and the reason it ended for one that is not. See
+// [toolutil.UnattributedRequestErrorFor], which decides the same question for
+// the other three surfaces.
+func unboundSubscribeError(ctx context.Context) error {
+	if cause := context.Cause(ctx); cause != nil {
+		return cause
+	}
+	return errUnboundSubscribe
 }
 
 // ErrStatelessSubscribe explains why a legacy subscription cannot be
@@ -801,27 +1023,36 @@ func (b *sessionBridge) subscribeUnlessStateless(ctx context.Context, req *mcp.S
 // and the missing completion results, which is what the tests assert on. The
 // per-server and per-process ceilings on open streams reduce how many can pile
 // up and do not change that outcome for the ones that do.
-func (r *subscriptionRuntime) streamRegistry() *listenStreams {
-	if r == nil {
+func (s *subscriptionShape) streamRegistry() *listenStreams {
+	if s == nil {
 		return newListenStreams()
 	}
-	return r.streams
+	return s.streams
 }
 
-// attach connects the runtime to the server it notifies through, once that
-// server exists, and installs the listen-stream registry every server needs.
+// attach installs the middlewares the subscription machinery needs on the
+// shared server, arranges for shutdown to reach the open listen streams, and
+// returns the registry holding them.
 //
-// The registry half runs even on a nil runtime, which is why this is not the
-// usual early return: see [subscriptionRuntime.streamRegistry].
-func (r *subscriptionRuntime) attach(ctx context.Context, server *mcp.Server) {
-	streams := r.streamRegistry()
+// The registry is returned because eviction needs it as much as shutdown does:
+// a credential the pool drops has to have its own streams ended, and on the
+// minimal capability surface there is no shape to hold that registry, only the
+// standalone one built here.
+//
+// The stream-registry half runs even on a nil shape, which is why this is not
+// the usual early return: see [subscriptionShape.streamRegistry].
+//
+// The server is not stored here any more. A notifier belongs to one credential
+// and is created with its runtime, so [subscriptionShape.attachRuntime] is what
+// points each one at the server it sends through.
+func (s *subscriptionShape) attach(ctx context.Context, server *mcp.Server, runtimeFor func(context.Context) *subscriptionRuntime) *listenStreams {
+	streams := s.streamRegistry()
 	middlewares := make([]mcp.Middleware, 0, 2)
-	if r != nil {
-		r.notifier.attach(server)
+	if s != nil {
 		// Traffic on a session is the only evidence this server gets that
 		// a subscriber is still there, so it is what holds the watchers at
-		// full speed.
-		middlewares = append(middlewares, renewOnActivity(r.manager))
+		// full speed. Which watchers depends on the request's credential.
+		middlewares = append(middlewares, renewOnActivity(runtimeFor))
 	}
 	middlewares = append(middlewares, streams.middleware())
 
@@ -833,6 +1064,7 @@ func (r *subscriptionRuntime) attach(ctx context.Context, server *mcp.Server) {
 		streams.closeAll()
 	}()
 	server.AddReceivingMiddleware(middlewares...)
+	return streams
 }
 
 // renewOnActivity returns middleware that keeps a session's subscriptions
@@ -845,10 +1077,18 @@ func (r *subscriptionRuntime) attach(ctx context.Context, server *mcp.Server) {
 // produces no notification and no re-read, and a URI-scoped renewal would
 // let the watch slow down during precisely the wait its subscriber cares
 // about.
-func renewOnActivity(manager *subscriptions.Manager[*mcp.ServerSession]) mcp.Middleware {
+// The manager is resolved per request rather than captured: on a shared server
+// the watchers belong to the request's own pool entry, and renewing another
+// credential's leases because this one is busy would defeat the lease entirely.
+func renewOnActivity(runtimeFor func(context.Context) *subscriptionRuntime) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			result, err := next(ctx, method, req)
+			runtime := runtimeFor(ctx)
+			if runtime == nil {
+				return result, err
+			}
+			manager := runtime.manager
 			// Renewing after the handler rather than before it is what
 			// keeps the watcher cap workable: a subscribe request is
 			// itself activity, so renewing first would un-demote every
@@ -897,11 +1137,13 @@ type serverOption func(*serverSettings)
 // on: every field falls back to its package's own defaults.
 type serverSettings struct {
 	subscriptions subscriptions.Options
-	// sessionTag prefixes every session ID this server mints, so a stateful
-	// request presenting a session ID can be checked against the credential
-	// that minted it. Empty in stdio mode, where there is no pool and no
-	// session to steal.
-	sessionTag string
+	// credentials is the registry the per-request credential binding reads.
+	// Nil in stdio mode and in every test that builds a server directly, where
+	// the server's own client is the answer and nothing is shared.
+	credentials *credentialStates
+	// sessions records which credential each session belongs to, and filters
+	// notification delivery by it. Nil wherever credentials is nil.
+	sessions *sessionOwners
 	// keepAlive overrides the server-initiated ping interval. Nil leaves the
 	// transport default in place; a pointer to zero disables the ping.
 	keepAlive *time.Duration
@@ -926,16 +1168,25 @@ func withKeepAlive(d time.Duration) serverOption {
 
 // withTransport records how this server is reached, for telemetry.
 //
-// Passed explicitly rather than inferred from sessionTag, which happens to be
-// empty in stdio mode today. Deriving one fact from an unrelated one is how an
-// attribute starts lying after a refactor nobody connected to it.
+// Passed explicitly rather than inferred from some other field that happens to
+// distinguish the transports today. Deriving one fact from an unrelated one is
+// how an attribute starts lying after a refactor nobody connected to it.
 func withTransport(name string) serverOption {
 	return func(s *serverSettings) { s.transport = name }
 }
 
-// withSessionTag makes this server mint session IDs carrying tag as a prefix.
-func withSessionTag(tag string) serverOption {
-	return func(s *serverSettings) { s.sessionTag = tag }
+// withSharedCredentials makes this server one that many credentials are served
+// by, binding each request to the pool entry that authenticated it.
+//
+// It is what turns the server from "one credential's" into "one configuration
+// shape's": every per-credential decision the server used to make by capture
+// (the client, the watchers, the rate-limit bucket, the listen ceiling, the
+// session's owner) is made per request instead.
+func withSharedCredentials(states *credentialStates, sessions *sessionOwners) serverOption {
+	return func(s *serverSettings) {
+		s.credentials = states
+		s.sessions = sessions
+	}
 }
 
 // withDeferredIdentity installs the overlay that puts the stdio caller's
@@ -1004,7 +1255,10 @@ type listenCounter struct {
 // acquire takes a slot, or reports that the ceiling is reached. A
 // non-positive limit means no ceiling.
 func (c *listenCounter) acquire(limit int) bool {
-	if limit <= 0 {
+	// A nil counter is a request nothing could attribute to a credential. It is
+	// let through here and stopped by the process-wide ceiling, which is the
+	// one that actually bounds the process.
+	if limit <= 0 || c == nil {
 		return true
 	}
 	if c.open.Add(1) > int64(limit) {
@@ -1016,18 +1270,32 @@ func (c *listenCounter) acquire(limit int) bool {
 
 // release gives a slot back. Safe to call only for an acquire that succeeded
 // against a positive limit.
-func (c *listenCounter) release() { c.open.Add(-1) }
+func (c *listenCounter) release() {
+	if c == nil {
+		return
+	}
+	c.open.Add(-1)
+}
 
 // count is how many slots are currently held.
-func (c *listenCounter) count() int64 { return c.open.Load() }
+func (c *listenCounter) count() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.open.Load()
+}
 
-// listenLimits bounds concurrent subscriptions/listen streams for one server
-// and for the process it runs in.
+// listenLimits bounds concurrent subscriptions/listen streams for one
+// credential and for the process it runs in.
+//
+// The per-credential counter is not a field: one server now answers for every
+// credential of a configuration shape, so a counter captured here would be one
+// budget shared by every tenant and the first to fill it would refuse the rest.
+// The middleware resolves the counter of the request's own pool entry instead.
 type listenLimits struct {
-	perServer   int
-	perProcess  int
-	serverOpen  *listenCounter
-	processOpen *listenCounter
+	perCredential int
+	perProcess    int
+	processOpen   *listenCounter
 }
 
 // processListenStreams is the ceiling shared by every server this process
@@ -1044,10 +1312,9 @@ var processListenStreams = &listenCounter{}
 // with it.
 func listenLimitsFromEnv() listenLimits {
 	limits := listenLimits{
-		perServer:   maxListenStreamsPerServer,
-		perProcess:  maxListenStreamsPerProcess,
-		serverOpen:  &listenCounter{},
-		processOpen: processListenStreams,
+		perCredential: maxListenStreamsPerServer,
+		perProcess:    maxListenStreamsPerProcess,
+		processOpen:   processListenStreams,
 	}
 	raw := strings.TrimSpace(os.Getenv(maxListenStreamsEnv))
 	if raw == "" {
@@ -1059,7 +1326,7 @@ func listenLimitsFromEnv() listenLimits {
 			"variable", maxListenStreamsEnv, "value", raw, "default", maxListenStreamsPerServer)
 		return limits
 	}
-	limits.perServer = value
+	limits.perCredential = value
 	return limits
 }
 
@@ -1077,16 +1344,17 @@ func listenLimitsFromEnv() listenLimits {
 // Refusing with the busy code rather than closing the stream is deliberate:
 // the request is well formed and a retry later can succeed, which is exactly
 // what -32000 already means everywhere else in this file.
-func (l listenLimits) middleware() mcp.Middleware {
+func (l listenLimits) middleware(counterFor func(context.Context) *listenCounter) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			if method != methodSubscriptionsListen {
 				return next(ctx, method, req)
 			}
-			if !l.serverOpen.acquire(l.perServer) {
-				return nil, l.busy(ctx, "per-credential", l.perServer)
+			credential := counterFor(ctx)
+			if !credential.acquire(l.perCredential) {
+				return nil, l.busy(ctx, "per-credential", l.perCredential)
 			}
-			defer l.releaseServer()
+			defer l.releaseCredential(credential)
 			if !l.processOpen.acquire(l.perProcess) {
 				return nil, l.busy(ctx, "server-wide", l.perProcess)
 			}
@@ -1096,11 +1364,11 @@ func (l listenLimits) middleware() mcp.Middleware {
 	}
 }
 
-// releaseServer and releaseProcess give a slot back only when one was taken:
-// a non-positive ceiling means acquire never counted.
-func (l listenLimits) releaseServer() {
-	if l.perServer > 0 {
-		l.serverOpen.release()
+// releaseCredential and releaseProcess give a slot back only when one was
+// taken: a non-positive ceiling means acquire never counted.
+func (l listenLimits) releaseCredential(counter *listenCounter) {
+	if l.perCredential > 0 {
+		counter.release()
 	}
 }
 

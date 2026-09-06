@@ -3,6 +3,7 @@ package serverpool
 import (
 	"container/list"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -28,13 +29,22 @@ import (
 // registration logic.
 type ServerFactory func(client *gitlabclient.Client, cfg *config.ServerConfig) (*mcp.Server, error)
 
-// poolEntry holds a server instance and its associated GitLab client,
-// along with LRU tracking and session validation metadata.
-type poolEntry struct {
+// Entry is one pooled credential: a GitLab client, the configuration resolved
+// for it, the user it belongs to, and the MCP server that serves it.
+//
+// The server is deliberately not the entry's own. Since one server is built per
+// configuration shape and shared by every credential that hashes to it, the same
+// [*mcp.Server] answers for many entries, and a caller that holds only that
+// pointer can no longer say which credential a request belongs to. Everything
+// that used to be keyed on the server — the tag its sessions carry, the
+// subscription watchers, the rate-limit bucket, the caller identity — is keyed
+// on the entry instead, and [Entry.Owner] is the opaque name it goes by.
+type Entry struct {
 	server        *mcp.Server
 	client        *gitlabclient.Client
 	serverConfig  *config.ServerConfig
 	identity      UserIdentity
+	owner         string
 	element       *list.Element
 	createdAt     time.Time
 	lastValidated time.Time
@@ -44,6 +54,58 @@ type poolEntry struct {
 	// finds the entry in between rebuilds instead of reusing a credential
 	// GitLab has already refused.
 	rejected atomic.Bool
+}
+
+// Server returns the MCP server serving this entry, which may be shared with
+// every other entry of the same configuration shape.
+func (e *Entry) Server() *mcp.Server {
+	if e == nil {
+		return nil
+	}
+	return e.server
+}
+
+// Client returns the GitLab client carrying this entry's credential.
+func (e *Entry) Client() *gitlabclient.Client {
+	if e == nil {
+		return nil
+	}
+	return e.client
+}
+
+// Config returns the configuration resolved for this entry: the process
+// settings, plus the instance, tier and token-scope narrowing discovered when
+// it was built.
+func (e *Entry) Config() *config.ServerConfig {
+	if e == nil {
+		return nil
+	}
+	return e.serverConfig
+}
+
+// Identity returns the GitLab user behind this entry's credential, whose zero
+// value means the lookup did not succeed.
+func (e *Entry) Identity() UserIdentity {
+	if e == nil {
+		return UserIdentity{}
+	}
+	return e.identity
+}
+
+// Owner returns the opaque token naming this entry.
+//
+// It is minted here, from [crypto/rand.Text], and is never derived from the
+// credential, the user or the instance: it travels in the `_meta` of a
+// resource-updated notification so a shared server can tell whose watcher
+// produced it, and anything derived from the credential would be a credential
+// on the wire. It is unique per entry and per process, so a rebuilt entry for
+// the same token is a different owner, which is what makes eviction forget the
+// sessions that belonged to the entry that is gone.
+func (e *Entry) Owner() string {
+	if e == nil {
+		return ""
+	}
+	return e.owner
 }
 
 // UserIdentity is the GitLab user a pooled credential belongs to.
@@ -167,7 +229,7 @@ type Snapshot struct {
 // against the GitLab API; entries with revoked tokens are evicted automatically.
 type ServerPool struct {
 	mu      sync.RWMutex
-	entries map[string]*poolEntry
+	entries map[string]*Entry
 	lru     *list.List
 	maxSize int
 	cfg     *config.Config
@@ -181,8 +243,11 @@ type ServerPool struct {
 	//
 	// It runs while the pool's write lock is held, so it must be cheap and
 	// must not call back into the pool.
-	onInsert           func(*mcp.Server)
-	onEvict            func(*mcp.Server)
+	onInsert func(*Entry)
+	onEvict  func(*Entry)
+	// inUse answers whether an entry is doing work the pool cannot see, for
+	// idle eviction alone. See [WithInUse].
+	inUse              func(*Entry) bool
 	revalidateInterval time.Duration
 	idleTimeout        time.Duration
 	maxCredentialAge   time.Duration
@@ -221,12 +286,42 @@ type ServerPool struct {
 // Option configures pool behavior.
 type Option func(*ServerPool)
 
-// WithOnEvict registers a callback invoked with each server the pool removes.
+// WithOnEvict registers a callback invoked with each entry the pool removes.
+//
+// It takes the entry rather than its server because a server is shared by every
+// entry of one configuration shape: told only "this server is gone" a caller
+// would drop state belonging to credentials that are still pooled.
 //
 // The callback runs under the pool's write lock: it must not block and must not
 // re-enter the pool.
-func WithOnEvict(fn func(*mcp.Server)) Option {
+func WithOnEvict(fn func(*Entry)) Option {
 	return func(p *ServerPool) { p.onEvict = fn }
+}
+
+// WithInUse registers a callback that reports whether an entry is still doing
+// work of its own, which exempts it from idle eviction.
+//
+// The pool measures idleness by when an entry was last handed out, and that is
+// the whole truth only while every piece of work a credential has running also
+// passes through the pool. It does not: an open subscriptions/listen is a
+// watcher polling GitLab directly, so a client that subscribed and then went
+// quiet refreshes nothing here, and after --pool-idle-timeout it was evicted
+// with its subscriptions ended under it while it was being served correctly.
+//
+// Idle eviction skips such an entry outright. Size pressure prefers an entry
+// that is not busy and takes a busy one only when every entry is
+// ([ServerPool.evictLRU]), because otherwise the protection was defeasible by
+// any caller willing to present --max-http-clients credentials of its own: the
+// busy entries are the ones sitting at the LRU tail, precisely because their
+// work does not pass through the pool. A credential GitLab has refused is
+// evicted whatever this says, since there is nothing left to protect, and
+// [WithOnEvict] is what tells the client in every case.
+//
+// Like the other callbacks it runs under the pool's write lock: it must be a
+// cheap read, must not block, and must not re-enter the pool. Size pressure
+// calls it once per entry it passes over, so "cheap" is meant literally.
+func WithInUse(fn func(*Entry) bool) Option {
+	return func(p *ServerPool) { p.inUse = fn }
 }
 
 // WithOnInsert registers a callback invoked with each server the pool has just
@@ -238,7 +333,7 @@ func WithOnEvict(fn func(*mcp.Server)) Option {
 // started it would be racing its own insertion. The callback runs under the
 // pool's write lock, so like [WithOnEvict] it must not block and must not
 // re-enter the pool; starting a goroutine is what it is for.
-func WithOnInsert(fn func(*mcp.Server)) Option {
+func WithOnInsert(fn func(*Entry)) Option {
 	return func(p *ServerPool) { p.onInsert = fn }
 }
 
@@ -313,7 +408,7 @@ func WithMaxCredentialAge(d time.Duration) Option {
 // registered [*mcp.Server] for each new GitLab client.
 func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool {
 	p := &ServerPool{
-		entries:            make(map[string]*poolEntry),
+		entries:            make(map[string]*Entry),
 		lru:                list.New(),
 		maxSize:            defaultMaxSize,
 		cfg:                cfg,
@@ -364,6 +459,21 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 // cannot use. A nil slice means "not resolved"; the pool then detects them
 // itself, exactly as before.
 func (p *ServerPool) GetOrCreateWithScopes(token, gitlabURL string, scopes []string) (*mcp.Server, error) {
+	entry, err := p.GetOrCreateEntry(token, gitlabURL, scopes)
+	if err != nil {
+		return nil, err
+	}
+	return entry.server, nil
+}
+
+// GetOrCreateEntry is [ServerPool.GetOrCreateWithScopes] returning the whole
+// pool entry rather than its server.
+//
+// It is the form every caller that has to act per credential needs, and it
+// became the primary one when servers started being shared between credentials
+// of the same configuration shape: the server no longer identifies the caller,
+// and the entry does.
+func (p *ServerPool) GetOrCreateEntry(token, gitlabURL string, scopes []string) (*Entry, error) {
 	if token == "" {
 		return nil, errors.New("empty token: authentication required")
 	}
@@ -405,7 +515,7 @@ func (p *ServerPool) GetOrCreateWithScopes(token, gitlabURL string, scopes []str
 		cached.lastUsed = time.Now()
 		p.mu.Unlock()
 		p.metrics.Hits.Add(1)
-		return cached.server, nil
+		return cached, nil
 	}
 
 	// Slow path: build WITHOUT holding p.mu. Client creation, tier and scope
@@ -435,18 +545,18 @@ func (p *ServerPool) GetOrCreateWithScopes(token, gitlabURL string, scopes []str
 	if err != nil {
 		return nil, err
 	}
-	server, ok := built.(*mcp.Server)
-	if !ok || server == nil {
+	entry, ok := built.(*Entry)
+	if !ok || entry == nil {
 		return nil, errors.New("creating MCP server for pool: builder returned no server")
 	}
-	return server, nil
+	return entry, nil
 }
 
 // buildEntry creates the GitLab client, resolves the per-entry configuration,
 // and builds the MCP server for a new pool key. It performs network I/O and must
 // be called without holding p.mu. The returned entry has no LRU element or
 // timestamps yet; insertEntry finalizes those under the lock.
-func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (*poolEntry, error) {
+func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (*Entry, error) {
 	if p.factory == nil {
 		return nil, errors.New("creating MCP server for pool: server factory is nil")
 	}
@@ -499,11 +609,14 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 		return nil, errors.New("creating MCP server for pool: factory returned no server")
 	}
 
-	entry := &poolEntry{
+	entry := &Entry{
 		server:       server,
 		client:       client,
 		serverConfig: entryCfg,
 		identity:     resolveIdentity(p.lifetime(), client),
+		// Minted before anything can observe the entry, and never again: see
+		// [Entry.Owner] for why it is random rather than derived.
+		owner: rand.Text(),
 	}
 	// The first data call GitLab refuses is the revocation signal. Without
 	// this, a token revoked while its entry was live kept being served until
@@ -529,7 +642,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 // evictRejectedCredential drops entry, if it is still the one under key: a
 // concurrent request may already have rebuilt the key, and that entry's
 // credential has just been verified.
-func (p *ServerPool) evictRejectedCredential(key string, entry *poolEntry) {
+func (p *ServerPool) evictRejectedCredential(key string, entry *Entry) {
 	// On a goroutine of its own, behind the same recover the sweeps run
 	// behind: dropping the entry calls back into code the pool does not own,
 	// and a panic there must not take the process with it. The lock is
@@ -551,14 +664,14 @@ func (p *ServerPool) evictRejectedCredential(key string, entry *poolEntry) {
 
 // dropRejectedEntry removes entry under the lock, if it is still the one
 // under key, and reports what to log about it.
-func (p *ServerPool) dropRejectedEntry(key string, entry *poolEntry) (gitlabURL string, size int, dropped bool) {
+func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (gitlabURL string, size int, dropped bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	current, ok := p.entries[key]
 	if !ok || current != entry {
 		return "", 0, false
 	}
-	gitlabURL, _ = poolEntryConfigLogValues(entry)
+	gitlabURL, _ = entryConfigLogValues(entry)
 	if entry.element != nil {
 		p.lru.Remove(entry.element)
 	}
@@ -624,15 +737,15 @@ func (p *ServerPool) IdentityFor(token, gitlabURL string) (UserIdentity, bool) {
 
 // insertEntry commits a freshly built entry under the write lock. If another
 // goroutine created an entry for the same key while this one was building, the
-// already-stored server is returned and the freshly built one is discarded — its
+// already-stored entry is returned and the freshly built one is discarded: its
 // server holds no live sessions, mirroring [ServerPool.Close], which lets
 // servers expire naturally rather than terminating them.
-func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Server {
+func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if server, ok := p.existingServerLocked(key); ok {
-		return server
+	if existing, ok := p.existingEntryLocked(key); ok {
+		return existing
 	}
 
 	if p.lru.Len() >= p.maxSize {
@@ -649,7 +762,7 @@ func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Serve
 	// After the entry is reachable by key, so a callback that starts work
 	// which may later have to evict this server can find it.
 	if p.onInsert != nil {
-		p.onInsert(entry.server)
+		p.onInsert(entry)
 	}
 
 	slog.Info(
@@ -663,10 +776,10 @@ func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Serve
 		"token_suffix", tokenSuffix(token),
 	)
 
-	return entry.server
+	return entry
 }
 
-// existingServerLocked returns an existing server for key while p.mu is held.
+// existingEntryLocked returns an existing entry for key while p.mu is held.
 // Every hit refreshes lastUsed, which is what idle eviction reads; the LRU
 // position alone cannot serve that purpose because it only orders entries
 // relative to each other and carries no wall-clock age.
@@ -675,14 +788,14 @@ func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Serve
 // which is reached from the slow path where the miss has already been charged;
 // counting a hit here too would make one call show up as both, and Hits plus
 // Misses would stop being the number of calls.
-func (p *ServerPool) existingServerLocked(key string) (*mcp.Server, bool) {
+func (p *ServerPool) existingEntryLocked(key string) (*Entry, bool) {
 	entry, ok := p.entries[key]
 	if !ok {
 		return nil, false
 	}
 	p.lru.MoveToFront(entry.element)
 	entry.lastUsed = time.Now()
-	return entry.server, true
+	return entry, true
 }
 
 // ErrInvalidCredential reports that GitLab itself rejected the credential.
@@ -927,28 +1040,49 @@ func (p *ServerPool) Close() {
 // only place an entry leaves p.entries, so a new removal path cannot silently
 // skip the notification. Must be called with the write lock held; the caller
 // remains responsible for the LRU list, which differs per path.
-func (p *ServerPool) dropEntry(key string) *poolEntry {
+func (p *ServerPool) dropEntry(key string) *Entry {
 	entry, ok := p.entries[key]
 	if !ok {
 		return nil
 	}
 	delete(p.entries, key)
 	if p.onEvict != nil {
-		p.onEvict(entry.server)
+		p.onEvict(entry)
 	}
 	return entry
 }
 
-// evictLRU removes the least recently used entry. Must be called with
-// write lock held.
+// evictLRU removes the least recently used entry that is not doing work of its
+// own, falling back to the least recently used of all when every entry is.
+// Must be called with write lock held.
+//
+// Skipping the busy ones is what makes [WithInUse] a protection rather than a
+// delay. It used to take the tail unconditionally, which handed size pressure
+// exactly the entries the idle sweep had just decided to keep: a credential
+// whose only activity is an open subscriptions/listen refreshes nothing here,
+// so it sits at the tail, and any caller could evict every quiet subscriber in
+// the pool by presenting --max-http-clients credentials of its own, repeatably.
+// The idle sweep declining to evict those entries an hour in was not much of a
+// protection when a stranger could evict them in a second.
+//
+// The fallback is what keeps the pool bounded. An entry is only skipped in
+// favor of another one, never in favor of growing past --max-http-clients, so
+// a pool in which everything is busy still evicts its oldest, which is the case
+// TestSharedServer_AnEvictedCredentialsListenIsEnded drives with a maximum of
+// one. What a credential is told when that happens is [WithOnEvict]'s job.
+//
+// The scan costs one map lookup and one callback per entry it passes, under the
+// write lock, and only when a full pool takes a new credential. It is short in
+// practice because a kept entry is moved to the front by [ServerPool.evictIdle],
+// so busy entries drift away from the tail rather than accumulating at it.
 func (p *ServerPool) evictLRU() {
-	back := p.lru.Back()
-	if back == nil {
+	victim := p.lruVictimLocked()
+	if victim == nil {
 		return
 	}
-	key, _ := back.Value.(string)
+	key, _ := victim.Value.(string)
 	if entry := p.dropEntry(key); entry != nil {
-		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
+		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.metrics.Evictions.Add(1)
 		slog.Info(
 			"server pool: evicted LRU entry",
@@ -957,7 +1091,26 @@ func (p *ServerPool) evictLRU() {
 			"enterprise", enterprise,
 		)
 	}
-	p.lru.Remove(back)
+	p.lru.Remove(victim)
+}
+
+// lruVictimLocked picks the element size pressure should drop: the least
+// recently used entry the caller does not report as busy, or the tail when
+// every entry is busy. Callers hold p.mu.
+func (p *ServerPool) lruVictimLocked() *list.Element {
+	back := p.lru.Back()
+	if back == nil || p.inUse == nil {
+		return back
+	}
+	for element := back; element != nil; element = element.Prev() {
+		key, _ := element.Value.(string)
+		// An element naming no entry is already stale, so dropping it costs
+		// nobody anything and tidies the list.
+		if entry, ok := p.entries[key]; !ok || !p.inUse(entry) {
+			return element
+		}
+	}
+	return back
 }
 
 // tokenHash returns a hex-encoded SHA-256 hash of the token.
@@ -1026,9 +1179,22 @@ func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 	}()
 }
 
-// evictIdle removes every entry whose last use is older than the idle timeout.
-// Eviction only drops the pool's reference: live sessions already holding the
-// server keep working, mirroring [ServerPool.Close].
+// evictIdle removes every entry whose last use is older than the idle timeout
+// and that the caller does not report as still in use.
+//
+// Eviction ends what the entry owns: [WithOnEvict] is where the caller stops
+// the credential's watchers and closes the streams it holds open, because the
+// server that answered for it is shared and the entry is what said which
+// credential a session belonged to. It is not the reference-drop it used to be
+// when each credential had a server to itself.
+//
+// Which is why "idle" cannot be read off lastUsed alone. That timestamp is
+// refreshed by pool hits, and a credential whose only activity is an open
+// subscriptions/listen never produces one: its watcher polls GitLab directly.
+// After --pool-idle-timeout such a client looked exactly like an abandoned one.
+// [WithInUse] is how the caller answers that. It is consulted by
+// [ServerPool.evictLRU] as well, so size pressure cannot take back what this
+// sweep grants; only a credential GitLab has refused is evicted regardless.
 func (p *ServerPool) evictIdle() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -1041,7 +1207,23 @@ func (p *ServerPool) evictIdle() {
 		if entry.lastUsed.After(cutoff) {
 			continue
 		}
-		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
+		if p.inUse != nil && p.inUse(entry) {
+			// Kept, and its clock restarted: an entry doing work the pool
+			// cannot see is not idle, and rechecking it every sweep would
+			// otherwise cost a callback per sweep for as long as the work runs.
+			//
+			// Moved in the LRU as well, because the pool keeps two clocks and
+			// this decision has to reach both. Restarting lastUsed alone left
+			// the entry where it was, at the tail, since a subscription
+			// refreshes nothing here, so the sweep protected it and size
+			// pressure took it first. [ServerPool.evictLRU] is what enforces
+			// the decision; this is what keeps the ordering honest, and what
+			// keeps that scan short.
+			entry.lastUsed = time.Now()
+			p.lru.MoveToFront(entry.element)
+			continue
+		}
+		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
 		p.dropEntry(key)
 		p.metrics.IdleEvictions.Add(1)
@@ -1105,7 +1287,7 @@ func (p *ServerPool) StartRevalidation(ctx context.Context) {
 // distinction at admission time, and this path now inherits it.
 func (p *ServerPool) revalidateAll(ctx context.Context) {
 	p.mu.RLock()
-	snapshot := make(map[string]*poolEntry, len(p.entries))
+	snapshot := make(map[string]*Entry, len(p.entries))
 	maps.Copy(snapshot, p.entries)
 	p.mu.RUnlock()
 
@@ -1160,7 +1342,7 @@ func (p *ServerPool) evictStaleCredential(key string) {
 		p.mu.Unlock()
 		return
 	}
-	gitlabURL, _ := poolEntryConfigLogValues(entry)
+	gitlabURL, _ := entryConfigLogValues(entry)
 	age := time.Since(entry.lastValidated).Round(time.Second)
 	p.lru.Remove(entry.element)
 	p.dropEntry(key)
@@ -1180,7 +1362,7 @@ func (p *ServerPool) evictByKey(key string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if entry, ok := p.entries[key]; ok {
-		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
+		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
 		p.dropEntry(key)
 		p.metrics.Evictions.Add(1)
@@ -1193,7 +1375,8 @@ func (p *ServerPool) evictByKey(key string) {
 	}
 }
 
-// EvictServer removes the entry holding srv, and reports whether it found one.
+// EvictServer removes every entry served by srv, and reports whether it found
+// any.
 //
 // It exists for a build that fails after the entry is already cached. A server
 // whose catalog registration ran in the background and failed is not usable and
@@ -1201,6 +1384,11 @@ func (p *ServerPool) evictByKey(key string) {
 // otherwise serve the poisoned entry until an idle timeout or a revalidation
 // happened to replace it, which is an hour by default. Dropping it makes the
 // next request rebuild, which is what a synchronous failure already does.
+//
+// Every entry rather than the first: one server now answers for every
+// credential of a configuration shape, and a registration that failed failed
+// for all of them. Stopping at the first match would leave the others holding a
+// server with no tools, which is the exact condition this exists to clear.
 //
 // The scan is linear over the pool, which is bounded by --max-http-clients and
 // only walked when a registration has failed, so it is not on any hot path.
@@ -1210,33 +1398,33 @@ func (p *ServerPool) EvictServer(srv *mcp.Server) bool {
 	}
 	// Held across the search AND the removal. Releasing between the two would
 	// let a replacement entry be built for the same key and then delete that
-	// replacement instead: its session tag would go with it, and its own
-	// stateful requests would start being refused as if they belonged to
-	// somebody else.
+	// replacement instead: its sessions would go with it, and its own stateful
+	// requests would start being refused as if they belonged to somebody else.
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	evicted := false
 	for key, entry := range p.entries {
 		if entry == nil || entry.server != srv {
 			continue
 		}
-		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
+		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
 		p.dropEntry(key)
 		p.metrics.Evictions.Add(1)
+		evicted = true
 		slog.Info(
 			"server pool: evicted entry whose build did not finish",
 			"pool_size", len(p.entries),
 			"gitlab_url", gitlabURL,
 			"enterprise", enterprise,
 		)
-		return true
 	}
-	return false
+	return evicted
 }
 
-// poolEntryConfigLogValues extracts safe configuration values for eviction
+// entryConfigLogValues extracts safe configuration values for eviction
 // logs without requiring callers to nil-check partially initialized entries.
-func poolEntryConfigLogValues(entry *poolEntry) (string, bool) {
+func entryConfigLogValues(entry *Entry) (string, bool) {
 	if entry == nil || entry.serverConfig == nil {
 		return "", false
 	}

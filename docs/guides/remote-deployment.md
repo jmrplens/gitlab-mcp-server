@@ -702,8 +702,9 @@ five things:
   is a normal MCP result carrying an error, so it will not show up in HTTP-level
   monitoring.
 - **Bounds.** `--max-http-clients` caps pooled entries, not sessions or
-  concurrent requests. `--pool-idle-timeout` reclaims unused ones, and
-  `--session-timeout` applies to stateful mode only.
+  concurrent requests. `--pool-idle-timeout` reclaims unused ones, except an
+  entry with a live subscription, which is not idle however long it has been
+  since it made a request. `--session-timeout` applies to stateful mode only.
 - **The token passes through the box.** Every caller's GitLab token reaches this
   process, authenticates one request, and is never persisted. That is a property
   of the software. Whether the people whose tokens they are consider the machine

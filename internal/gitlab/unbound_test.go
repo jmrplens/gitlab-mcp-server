@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // TestNewUnboundClient_AnswersTheInstanceClassAndRefusesRequests verifies
@@ -55,4 +57,59 @@ func TestNewUnboundClient_UnparsableURL_Panics(t *testing.T) {
 		}
 	}()
 	NewUnboundClient("://bad")
+}
+
+// TestClient_IsUnbound_SeparatesTheRefusingClientFromEveryOther covers the
+// question a surface asks before it runs a handler.
+//
+// The resource, prompt and completion surfaces resolve the caller's client
+// through [Client.For] and then ask this, so that a request nothing bound is
+// refused with the reason rather than run against a transport that refuses
+// everything and reported as whatever GitLab error came out. Only the client
+// from [NewUnboundClient] answers yes: a real client is bound, and a nil one is
+// no client at all, which every caller already handles separately.
+func TestClient_IsUnbound_SeparatesTheRefusingClientFromEveryOther(t *testing.T) {
+	t.Parallel()
+
+	bound, err := NewClient(&config.Config{GitLabURL: "https://gitlab.example.com", GitLabToken: "glpat-x"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	cases := map[string]struct {
+		client *Client
+		want   bool
+	}{
+		"the credential-less client": {client: NewUnboundClient("https://gitlab.invalid"), want: true},
+		"a client with a credential": {client: bound},
+		"no client at all":           {},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := tc.client.IsUnbound(); got != tc.want {
+				t.Errorf("IsUnbound() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestClient_For_ResolvesTheBoundClientBeforeUnboundIsAsked pins the order the
+// surfaces rely on: the question is asked of what For returned, so a request
+// carrying a credential is never mistaken for one that carries none.
+func TestClient_For_ResolvesTheBoundClientBeforeUnboundIsAsked(t *testing.T) {
+	t.Parallel()
+
+	unbound := NewUnboundClient("https://gitlab.invalid")
+	bound, err := NewClient(&config.Config{GitLabURL: "https://gitlab.example.com", GitLabToken: "glpat-x"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	if unbound.For(WithClient(context.Background(), bound)).IsUnbound() {
+		t.Error("a request carrying a credential resolved to the unbound client")
+	}
+	if !unbound.For(context.Background()).IsUnbound() {
+		t.Error("a request carrying nothing resolved to something other than the unbound client")
+	}
 }

@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -472,7 +471,8 @@ func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvail
 		Stateless:    true,
 	}
 	mux := http.NewServeMux()
-	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory, cfg.GitLabURL), &sync.Map{}, mux)
+	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory, cfg.GitLabURL),
+		poolBinding{credentials: &credentialStates{}, sessions: newSessionOwners(false)}, mux)
 
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -640,52 +640,73 @@ func TestGate_AllowListIsOnlyNamedWhereItIsAlreadyPublic(t *testing.T) {
 	})
 }
 
+// gateTestEntry resolves one pooled credential, which is what the ownership
+// check compares a session against now that a server is shared by every
+// credential of a configuration shape.
+func gateTestEntry(t *testing.T, pool *serverpool.ServerPool, token, gitlabURL string) *serverpool.Entry {
+	t.Helper()
+	entry, err := pool.GetOrCreateEntry(token, gitlabURL, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(%q): %v", token, err)
+	}
+	return entry
+}
+
 // TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredential
 // covers the check that makes a session ID insufficient on its own.
 //
-// Each pooled entry mints session IDs under its own tag, so a session presented
-// with a different credential belongs to somebody else: waving it through would
-// make the ID alone enough to read another user's server-initiated stream or to
-// end their session. An untagged ID is refused for the same reason — stateless
-// mode issues none at all, so anything untagged is stale or forged — and the
+// A session belongs to the pooled credential whose first request opened it,
+// which [sessionOwners] recorded at that moment; the same ID presented with a
+// different credential is therefore somebody else's session. Waving it through
+// would make the ID alone enough to read another user's server-initiated stream
+// or to end their session. An ID this deployment never recorded is refused for
+// the same reason: stateless mode issues none at all, so anything unrecorded is
+// stale or forged, and so is anything belonging to an evicted credential. The
 // refusal is a 404 rather than a 403, which is what the SDK answers for a
 // session it does not know and therefore says nothing about which IDs exist.
 func TestMcpServerGate_CheckSessionOwnership_RefusesASessionFromAnotherCredential(t *testing.T) {
-	t.Parallel()
+	gitlab := gateStubGitLab(t, false)
+	pool := newGateTestPool(t, okFactory, gitlab)
+	mine := gateTestEntry(t, pool, gateTestToken, gitlab)
+	theirs := gateTestEntry(t, pool, gateTestToken+"-other", gitlab)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	other := mcp.NewServer(&mcp.Implementation{Name: "other", Version: "0"}, nil)
-	tags := &sync.Map{}
-	tags.Store(server, "owner")
-	tags.Store(other, "somebody-else")
+	minted := newIdentifiedSessions(t)
+	sessions := newSessionOwners(false)
+	ownID := minted.recordUnder(t, sessions, mine.Owner())
+	otherID := minted.recordUnder(t, sessions, theirs.Owner())
+
+	// A credential the pool has since evicted: its sessions were forgotten with
+	// it, so the ID is as unknown as one that was never opened.
+	evicted := newSessionOwners(false)
+	evictedID := minted.recordUnder(t, evicted, mine.Owner())
+	evicted.forgetOwner(mine.Owner())
 
 	tests := []struct {
-		name      string
-		sessionID string
-		server    *mcp.Server
-		wantRefus bool
+		name        string
+		owners      *sessionOwners
+		sessionID   string
+		wantRefusal bool
 	}{
-		{name: "no session id is nothing to own", sessionID: ""},
-		{name: "the credential's own session", sessionID: "owner" + sessionTagSeparator + "abc", server: server},
-		{name: "a session minted for another credential", sessionID: "somebody-else" + sessionTagSeparator + "abc", server: server, wantRefus: true},
-		{name: "an id this deployment never minted", sessionID: "not-tagged-at-all", server: server, wantRefus: true},
-		{name: "a server the pool no longer knows", sessionID: "owner" + sessionTagSeparator + "abc", server: mcp.NewServer(&mcp.Implementation{Name: "gone", Version: "0"}, nil), wantRefus: true},
+		{name: "no session id is nothing to own", owners: sessions},
+		{name: "no ownership table at all is no check", owners: nil, sessionID: otherID},
+		{name: "the credential's own session", owners: sessions, sessionID: ownID},
+		{name: "a session opened by another credential", owners: sessions, sessionID: otherID, wantRefusal: true},
+		{name: "an id this deployment never recorded", owners: sessions, sessionID: "never-opened-here", wantRefusal: true},
+		{name: "a session whose credential has been evicted", owners: evicted, sessionID: evictedID, wantRefusal: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			gate := &mcpServerGate{sessionTags: tags, challenge: legacyAuthChallenge}
+			gate := &mcpServerGate{sessions: tt.owners, challenge: legacyAuthChallenge}
 			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
 			if tt.sessionID != "" {
 				r.Header.Set(mcpSessionIDHeader, tt.sessionID)
 			}
 
-			failure := gate.checkSessionOwnership(r, tt.server)
+			failure := gate.checkSessionOwnership(r, mine)
 
-			if (failure != nil) != tt.wantRefus {
-				t.Fatalf("failure = %+v, want refused=%v", failure, tt.wantRefus)
+			if (failure != nil) != tt.wantRefusal {
+				t.Fatalf("failure = %+v, want refused=%v", failure, tt.wantRefusal)
 			}
 			if failure != nil && failure.status != http.StatusNotFound {
 				t.Errorf("status = %d, want %d so the refusal says nothing about which sessions exist", failure.status, http.StatusNotFound)
@@ -1106,32 +1127,106 @@ func TestGateFailure_Write_LogsARefusalTheClientNeverReceived(t *testing.T) {
 // drives the ownership check through the middleware rather than calling it
 // directly, so the refusal is asserted the way a client sees it: a 404 with a
 // JSON-RPC body, and the handler behind the gate never reached.
+//
+// GET and DELETE are covered beside the POST because on a stateful deployment
+// they are the two methods that act on a session someone else created — GET
+// opens its standalone SSE stream, DELETE terminates it — and because they used
+// to be safe structurally rather than by this check: while each credential had a
+// server of its own, a session ID could not name another credential's session on
+// the server the request resolved to. One server per configuration shape removes
+// that guarantee, so the check is the only thing left holding them.
 func TestMcpServerGate_Middleware_RefusesASessionMintedForAnotherCredential(t *testing.T) {
-	gate := newGate(t, okFactory)
-	// A tag map that knows nothing about the server the credential resolves
-	// to: whatever session ID arrives was minted for somebody else.
-	gate.sessionTags = &sync.Map{}
+	methods := map[string]string{
+		http.MethodPost:   `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+		http.MethodGet:    "",
+		http.MethodDelete: "",
+	}
+
+	for method, body := range methods {
+		t.Run(method, func(t *testing.T) {
+			gate := newGate(t, okFactory)
+			// A stateful deployment: GET and DELETE address a live session, so
+			// they are resolved and ownership-checked like a POST.
+			gate.stateless = false
+			// An ownership table that knows nothing about the ID presented, so
+			// whatever arrives was opened by somebody else or never existed.
+			gate.sessions = newSessionOwners(false)
+
+			var reached atomic.Bool
+			handler := gate.middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				reached.Store(true)
+			}))
+
+			var payload io.Reader = http.NoBody
+			if body != "" {
+				payload = strings.NewReader(body)
+			}
+			req := httptest.NewRequestWithContext(t.Context(), method, "/mcp", payload)
+			req.Header.Set("PRIVATE-TOKEN", gateTestToken)
+			req.Header.Set(mcpSessionIDHeader, "opened-by-somebody-else")
+			recorder := httptest.NewRecorder()
+
+			handler.ServeHTTP(recorder, req)
+
+			if recorder.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d for a session that belongs to another credential: %s",
+					recorder.Code, http.StatusNotFound, recorder.Body.String())
+			}
+			if reached.Load() {
+				t.Error("the MCP handler ran on a session the credential does not own")
+			}
+			// Only the POST carries a JSON-RPC id to echo; the other two have no
+			// body at all, and the refusal must omit the member rather than send
+			// a null id, which is not a legal RequestId.
+			decoded := decodeJSONRPCError(t, recorder.Body.String(), jsonRPCIDFor(method)...)
+			if !strings.Contains(decoded.Error.Message, "does not belong") {
+				t.Errorf("message = %q, want it to say the session belongs to somebody else", decoded.Error.Message)
+			}
+		})
+	}
+}
+
+// jsonRPCIDFor is the id a refusal to method must echo: the one the POST body
+// carried, and none for the methods that carry no body.
+func jsonRPCIDFor(method string) []string {
+	if method == http.MethodPost {
+		return []string{"1"}
+	}
+	return nil
+}
+
+// TestMcpServerGate_Middleware_AcceptsASessionTheCredentialOwns is the positive
+// half: an ID recorded under the very entry the request resolves to is not a
+// refusal, so the check refuses foreign sessions rather than sessions.
+func TestMcpServerGate_Middleware_AcceptsASessionTheCredentialOwns(t *testing.T) {
+	gitlab := gateStubGitLab(t, false)
+	gate := newGateAgainst(t, okFactory, gitlab)
+	gate.stateless = false
+	gate.sessions = newSessionOwners(false)
+
+	// The entry the gate will resolve for this credential, so the session is
+	// recorded under the owner the request arrives as.
+	entry := gateTestEntry(t, gate.pool, gateTestToken, gitlab)
+	sessionID := newIdentifiedSessions(t).recordUnder(t, gate.sessions, entry.Owner())
 
 	var reached atomic.Bool
-	handler := gate.middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		reached.Store(true)
+		w.WriteHeader(http.StatusAccepted)
 	}))
 
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/mcp", http.NoBody)
 	req.Header.Set("PRIVATE-TOKEN", gateTestToken)
-	req.Header.Set(mcpSessionIDHeader, "somebody-else"+sessionTagSeparator+"abc")
+	req.Header.Set(mcpSessionIDHeader, sessionID)
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, req)
 
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d for a session that belongs to another credential: %s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	if !reached.Load() {
+		t.Fatalf("the request was refused with %d: %s", recorder.Code, recorder.Body.String())
 	}
-	if reached.Load() {
-		t.Error("the MCP handler ran on a session the credential does not own")
-	}
-	if decoded := decodeJSONRPCError(t, recorder.Body.String(), "1"); !strings.Contains(decoded.Error.Message, "does not belong") {
-		t.Errorf("message = %q, want it to say the session belongs to somebody else", decoded.Error.Message)
+	if recorder.Code != http.StatusAccepted {
+		t.Errorf("status = %d, want %d from the handler behind the gate", recorder.Code, http.StatusAccepted)
 	}
 }
 

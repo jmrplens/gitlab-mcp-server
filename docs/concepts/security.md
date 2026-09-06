@@ -454,12 +454,19 @@ machine, has no co-tenant to protect, and a limiter there only costs latency.
 human-driven session, and still a bound on a retry loop. Setting `0` explicitly
 is the supported opt-out in either mode: the middleware is then not attached and
 there is zero overhead on the hot path. Setting any value `> 0` activates a `golang.org/x/time/rate`
-limiter scoped to **one MCP server instance**:
+limiter scoped to **one credential**:
 
-- **stdio mode** — one process, one bucket → effectively per-user.
-- **HTTP mode** — the server pool maintains one MCP server and server
-  configuration snapshot per token+URL, so each authenticated client gets its
-  own bucket. Multi-tenant deployments do not share quota across users.
+- **stdio mode** — one process, one credential, one bucket → effectively
+  per-user.
+- **HTTP mode** — the bucket belongs to the pool entry, one per token+URL, and
+  the middleware that reads it runs inside the binding that says which entry a
+  request came from. So each authenticated client draws on its own, and
+  multi-tenant deployments do not share quota across users. That used to follow
+  from a server per credential; since [ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)
+  one MCP server serves every credential of a configuration, and the bucket is
+  per entry rather than per server. The conclusion is the same and is asserted
+  on the wire, in `test/e2e/http/shared_server_test.go`, because it now depends
+  on middleware ordering rather than on structure.
 
 ### Recommended values
 

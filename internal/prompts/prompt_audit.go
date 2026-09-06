@@ -399,7 +399,7 @@ func registerAuditProjectWorkflowPrompt(server registrar, client *gitlabclient.C
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleAuditProjectWorkflow(ctx, client, req)
+		return handleAuditProjectWorkflow(ctx, client.For(ctx), req)
 	})
 }
 
@@ -556,7 +556,7 @@ func registerAuditProjectFullPrompt(server registrar, client *gitlabclient.Clien
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleAuditProjectFull(ctx, client, req)
+		return handleAuditProjectFull(ctx, client.For(ctx), req)
 	})
 }
 

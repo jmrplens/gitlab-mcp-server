@@ -34,6 +34,7 @@ func NewUnboundClient(baseURL string) *Client {
 	c := &Client{
 		baseURL:   baseURL,
 		healthURL: strings.TrimRight(baseURL, "/") + versionAPIPath,
+		unbound:   true,
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
 	httpClient := &http.Client{Transport: unboundTransport{}}
@@ -44,6 +45,22 @@ func NewUnboundClient(baseURL string) *Client {
 	}
 	c.inner = inner
 	return c
+}
+
+// IsUnbound reports whether this client is the credential-less one, which
+// refuses every request with [ErrUnboundClient].
+//
+// It exists so a surface can refuse early and say why. A resource read or a
+// completion resolved to this client has not failed at GitLab and never will
+// reach it: the request could not be attributed to a credential, which is a
+// wiring defect on this side. Asked after [Client.For], it is the question "did
+// this request bring a credential", and answering it before the call is what
+// keeps the caller from being told their token lacks access to something.
+//
+// A nil client is not unbound: it is no client at all, which every reader
+// already handles.
+func (c *Client) IsUnbound() bool {
+	return c != nil && c.unbound
 }
 
 // unboundTransport refuses every request.

@@ -31,6 +31,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | [ADR-0017](adr-0017-pull-safe-event-sources-surveyed.md)                         | Pull-safe event sources surveyed and declined                      | Accepted                                                | Current                                         | 2026-08-25 |
 | [ADR-0018](adr-0018-authorization-admits-per-action-gating.md)                   | Authorization admits at the minimum scope; writes gated per action | Accepted                                                | Current                                         | 2026-08-28 |
 | [ADR-0019](adr-0019-audience-binding-unavailable-at-the-authorization-server.md) | Audience binding is unavailable at the authorization server        | Accepted                                                | Current                                         | 2026-08-29 |
+| [ADR-0020](adr-0020-one-server-per-configuration-shape.md)                       | One MCP server per configuration shape, owner-filtered delivery    | Accepted                                                | Current                                         | 2026-09-05 |
 
 ## About Missing ADRs
 

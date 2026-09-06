@@ -74,31 +74,50 @@ func TestCanonicalBinaryName_PlatformVariantsCompareEqual(t *testing.T) {
 func TestCountAlive_CountsOnlyProcessesStillRunning(t *testing.T) {
 	t.Parallel()
 
-	self, err := process.NewProcess(pid32(t, os.Getpid()))
-	if err != nil {
-		t.Fatalf("looking up this process: %v", err)
-	}
+	selfPID := pid32(t, os.Getpid())
 	// A pid that has exited and been reaped: whether the lookup resolves at
 	// all is the operating system's business, and either answer means the same
 	// thing to countAlive.
-	gone := &process.Process{Pid: pid32(t, exitedPID(t))}
+	gonePID := pid32(t, exitedPID(t))
+
+	// gopsutil caches a process's creation time on the Process value the first
+	// time IsRunning asks for it, so parallel subtests must not share one
+	// value: each case builds its own, or the race detector reports the cache
+	// write as a race between subtests.
+	self := func(t *testing.T) *process.Process {
+		t.Helper()
+		p, err := process.NewProcess(selfPID)
+		if err != nil {
+			t.Fatalf("looking up this process: %v", err)
+		}
+		return p
+	}
+	gone := func() *process.Process { return &process.Process{Pid: gonePID} }
 
 	tests := []struct {
-		name  string
-		procs []*process.Process
-		want  int
+		name     string
+		withSelf bool
+		withGone bool
+		want     int
 	}{
-		{name: "nothing to wait for", procs: nil, want: 0},
-		{name: "this process is alive", procs: []*process.Process{self}, want: 1},
-		{name: "an exited process is not counted", procs: []*process.Process{gone}, want: 0},
-		{name: "one of each", procs: []*process.Process{self, gone}, want: 1},
+		{name: "nothing to wait for", want: 0},
+		{name: "this process is alive", withSelf: true, want: 1},
+		{name: "an exited process is not counted", withGone: true, want: 0},
+		{name: "one of each", withSelf: true, withGone: true, want: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := countAlive(tt.procs); got != tt.want {
+			var procs []*process.Process
+			if tt.withSelf {
+				procs = append(procs, self(t))
+			}
+			if tt.withGone {
+				procs = append(procs, gone())
+			}
+			if got := countAlive(procs); got != tt.want {
 				t.Errorf("countAlive = %d, want %d", got, tt.want)
 			}
 		})

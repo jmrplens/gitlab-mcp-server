@@ -10,7 +10,7 @@ faq:
   - q: "How fast do notifications arrive?"
     a: "Latency is the polling cadence: **5 seconds** while the resource is busy (a running pipeline, an open merge request), **15 seconds** by default, **60 seconds** once settled, and **10 minutes** after a watch lease-demotes from 30 minutes of session inactivity. Any request on the session restores full speed. The `_meta` on each notification reports the watch state and its current cadence."
   - q: "What does watching cost against my GitLab rate limit?"
-    a: "Watchers use the subscriber's own token, capped at **10 watchers per server**. Worst case — all ten at the 5-second floor — is 120 requests per minute, 6% of GitLab.com's per-user limit. Ten demoted watches cost one request per minute. One 429 from GitLab pauses every watcher with exponential back-off."
+    a: "Watchers use the subscriber's own token, capped at **10 watchers per credential**. Worst case — all ten at the 5-second floor — is 120 requests per minute, 6% of GitLab.com's per-user limit. Ten demoted watches cost one request per minute. One 429 from GitLab pauses every watcher with exponential back-off."
 ---
 
 import FAQ from "../../../components/FAQ.astro";
@@ -47,7 +47,7 @@ The polling cadence adapts to the resource:
 | No lifecycle field | 15s        | a wiki page, a file, a label                    |
 | Lease-demoted      | 10min      | 30 minutes without any request on the session   |
 
-Watchers use the subscriber's own GitLab token, capped at **10 watchers per server** (one server per token+URL in HTTP mode). The worst case — ten watchers at the 5s floor — is 120 requests/minute; ten demoted watches cost one. A 429 from GitLab pauses every watcher with exponential back-off (30s doubling to 5 minutes).
+Watchers use the subscriber's own GitLab token, capped at **10 watchers per credential** (one pool entry per token+URL in HTTP mode). The worst case — ten watchers at the 5s floor — is 120 requests/minute; ten demoted watches cost one. A 429 from GitLab pauses every watcher with exponential back-off (30s doubling to 5 minutes).
 
 Nothing retires itself for being "finished": GitLab has no terminal state — a retried pipeline reuses its ID and runs again, a closed issue reopens — so a watch only ends when the client unsubscribes, its session disconnects, the resource returns 401/403/404, the 24-hour lifetime cap is reached, or it is evicted to make room at the watcher cap.
 

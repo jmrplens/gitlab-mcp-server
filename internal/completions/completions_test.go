@@ -5,13 +5,23 @@
 package completions
 
 import (
+	"bytes"
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Shared test assertion messages and endpoint paths.
@@ -1420,5 +1430,352 @@ func TestFormatEntries_BareValuesSpec(t *testing.T) {
 				t.Errorf("%s entry = %q, want bare value %q (spec 2025-11-25 §completion/complete)", c.name, c.got, c.want)
 			}
 		})
+	}
+}
+
+// TestComplete_ContextBoundClient_UsesBoundClient verifies that a completion
+// runs against the client bound to the request context rather than the one
+// [NewHandler] was given.
+//
+// This is the seam that lets one MCP server be shared by every credential whose
+// configuration hashes to the same shape: the handler is built once with the
+// unbound client, and the caller's own client is installed per request. The
+// assertion is deliberately two-sided. Values coming from the bound instance
+// prove the binding is read; the handler's own instance receiving no request at
+// all proves the stored client is a fallback and not a second place the
+// completion may reach, which is what keeps one caller's credential from
+// serving another caller's completion.
+//
+// Both branches of [Handler.Complete] are covered, since a prompt reference and
+// a resource reference reach GitLab through different dispatchers.
+func TestComplete_ContextBoundClient_UsesBoundClient(t *testing.T) {
+	cases := []struct {
+		name        string
+		refType     string
+		uri         string
+		argName     string
+		path        string
+		handlerBody string
+		boundBody   string
+		want        string
+	}{
+		{
+			name:        "prompt project_id",
+			refType:     refPrompt,
+			argName:     "project_id",
+			path:        "/api/v4/projects",
+			handlerBody: `[{"id":1,"path_with_namespace":"handler/project"}]`,
+			boundBody:   `[{"id":2,"path_with_namespace":"bound/project"}]`,
+			want:        "bound/project",
+		},
+		{
+			name:        "resource group_id",
+			refType:     refResource,
+			uri:         "gitlab://{group_id}/milestones",
+			argName:     "group_id",
+			path:        "/api/v4/groups",
+			handlerBody: `[{"id":3,"full_path":"handler/group"}]`,
+			boundBody:   `[{"id":4,"full_path":"bound/group"}]`,
+			want:        "bound/group",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Counted rather than asserted inside the handlers: these run on
+			// the server's goroutines, so the verdict belongs on the test's.
+			var handlerHits, boundHits atomic.Int64
+
+			respond := func(hits *atomic.Int64, body string) http.HandlerFunc {
+				return func(w http.ResponseWriter, r *http.Request) {
+					hits.Add(1)
+					if r.URL.Path != c.path {
+						http.NotFound(w, r)
+						return
+					}
+					testutil.RespondJSON(w, http.StatusOK, body)
+				}
+			}
+
+			handlerClient := testutil.NewTestClient(t, respond(&handlerHits, c.handlerBody))
+			boundClient := testutil.NewTestClient(t, respond(&boundHits, c.boundBody))
+
+			h := NewHandler(handlerClient)
+			req := &mcp.CompleteRequest{}
+			req.Params = &mcp.CompleteParams{
+				Ref:      &mcp.CompleteReference{Type: c.refType, Name: "seam", URI: c.uri},
+				Argument: mcp.CompleteParamsArgument{Name: c.argName, Value: "bou"},
+			}
+
+			ctx := gitlabclient.WithClient(context.Background(), boundClient)
+			result, err := h.Complete(ctx, req)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if len(result.Completion.Values) != 1 {
+				t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
+			}
+			if result.Completion.Values[0] != c.want {
+				t.Errorf("completion ran against the wrong instance: got %q, want %q", result.Completion.Values[0], c.want)
+			}
+			if got := boundHits.Load(); got != 1 {
+				t.Errorf("bound instance received %d requests, want 1", got)
+			}
+			if got := handlerHits.Load(); got != 0 {
+				t.Errorf("handler's own instance received %d requests, want 0", got)
+			}
+		})
+	}
+}
+
+// The tests below cover the credential every completion runs under.
+//
+// The handler is built once per configuration shape and stores the
+// credential-less client, so each search resolves the caller's own from the
+// request context. Seventeen searches repeat that by hand, and one that forgot
+// would look exactly like an editor whose suggestions are empty: the contract
+// here is to answer with an empty list rather than an error, which is what makes
+// a silent failure indistinguishable from a quiet GitLab.
+
+// completableArguments is every argument name [Handler.Complete] answers for,
+// with the sibling arguments each one needs resolved before it will search.
+//
+// The names are not the source of truth. The two switches in completions.go
+// are, and [TestComplete_EveryCaseOfBothSwitchesIsDriven] holds this list to
+// them: a case added there and forgotten here is a search that resolves the
+// stored client forever, autocompleting to nothing with nothing on the wire and
+// nothing in the log. The resolved siblings do have to be supplied by hand,
+// since the dispatcher's requirements are not readable off a case label.
+var completableArguments = []struct {
+	name     string
+	ref      string
+	resolved map[string]string
+}{
+	{name: "project_id", ref: refPrompt},
+	{name: "group_id", ref: refPrompt},
+	{name: "username", ref: refPrompt},
+	{name: "merge_request_iid", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "issue_iid", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "from", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "to", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "ref", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "tag", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "pipeline_id", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "sha", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "branch", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "source_branch", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "target_branch", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "label", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "milestone_id", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "milestone", ref: refPrompt, resolved: map[string]string{"project_id": "42"}},
+	{name: "milestone", ref: refPrompt, resolved: map[string]string{"group_id": "42"}},
+	{name: "job_id", ref: refPrompt, resolved: map[string]string{"project_id": "42", "pipeline_id": "7"}},
+	{name: "project_id", ref: refResource},
+	{name: "group_id", ref: refResource},
+	{name: "merge_request_iid", ref: refResource, resolved: map[string]string{"project_id": "42"}},
+	{name: "issue_iid", ref: refResource, resolved: map[string]string{"project_id": "42"}},
+}
+
+// completeRequest builds a completion request for one argument, with the
+// sibling arguments the dispatcher needs already resolved.
+func completeRequest(ref, name string, resolved map[string]string) *mcp.CompleteRequest {
+	req := &mcp.CompleteRequest{}
+	req.Params = &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: ref, Name: "review_mr"},
+		Argument: mcp.CompleteParamsArgument{Name: name, Value: "a"},
+	}
+	if len(resolved) > 0 {
+		req.Params.Context = &mcp.CompleteContext{Arguments: resolved}
+	}
+	return req
+}
+
+// TestComplete_EveryCaseOfBothSwitchesIsDriven holds the hand-kept list of
+// completable arguments to the code that decides them.
+//
+// The credential test below walks that list, and a list is only as good as the
+// last person who remembered it. The resource and prompt surfaces have no such
+// gap: their loops walk what registration produced. Here the source of truth is
+// two switch statements, so this reads their case labels out of the file and
+// requires the list to name every one.
+//
+// What a miss costs is why it is worth parsing Go in a test. A new case that
+// resolves the stored client instead of the request's would autocomplete to
+// nothing for every caller of a shared server, forever, with nothing on the
+// wire and nothing in the log, because the contract here is to answer empty
+// rather than to fail. That is indistinguishable from a correct search of an
+// instance with no matches.
+func TestComplete_EveryCaseOfBothSwitchesIsDriven(t *testing.T) {
+	switches := map[string]string{
+		"completePromptArg":   refPrompt,
+		"completeResourceArg": refResource,
+	}
+
+	listed := map[string]bool{}
+	for _, arg := range completableArguments {
+		listed[arg.ref+"/"+arg.name] = true
+	}
+
+	for method, ref := range switches {
+		t.Run(method, func(t *testing.T) {
+			cases := argumentSwitchCases(t, method)
+			if len(cases) == 0 {
+				t.Fatalf("no case labels were read out of %s; the parse found nothing to check", method)
+			}
+			for _, name := range cases {
+				if !listed[ref+"/"+name] {
+					t.Errorf("%s answers for %q and no test drives it: a search there could resolve the "+
+						"handler's own credential-less client and answer empty forever, which is what a "+
+						"correct search of an empty instance also does", method, name)
+				}
+			}
+		})
+	}
+}
+
+// argumentSwitchCases returns the argument names one of the dispatchers in
+// completions.go answers for, read from its switch over the argument name.
+//
+// It reads the source rather than exporting a table from the package on
+// purpose: a table would be a second thing to keep in step, and the switch
+// would still be what runs.
+func argumentSwitchCases(t *testing.T, method string) []string {
+	t.Helper()
+
+	parsed, err := parser.ParseFile(token.NewFileSet(), "completions.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing completions.go: %v", err)
+	}
+
+	var names []string
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		fn, ok := node.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != method {
+			return true
+		}
+		ast.Inspect(fn.Body, func(inner ast.Node) bool {
+			clause, isClause := inner.(*ast.CaseClause)
+			if !isClause {
+				return true
+			}
+			// A clause with no expressions is `default`, which answers empty
+			// and is the one outcome that needs no credential.
+			for _, expr := range clause.List {
+				literal, isLiteral := expr.(*ast.BasicLit)
+				if !isLiteral || literal.Kind != token.STRING {
+					continue
+				}
+				value, unquoteErr := strconv.Unquote(literal.Value)
+				if unquoteErr != nil {
+					t.Errorf("case label %s in %s is not a string literal this can read", literal.Value, method)
+					continue
+				}
+				names = append(names, value)
+			}
+			return true
+		})
+		return false
+	})
+	return names
+}
+
+// TestComplete_NeverUsesTheClientTheHandlerWasBuiltWith walks every argument the
+// handler answers for and requires each search to go through the request's own
+// credential.
+//
+// A search that used the stored client would reach nobody's GitLab on a shared
+// server and answer with an empty list, which is also what a correct search of
+// an empty instance answers. Counting requests on the two clients is what tells
+// them apart.
+func TestComplete_NeverUsesTheClientTheHandlerWasBuiltWith(t *testing.T) {
+	var captured atomic.Int64
+	stored := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		captured.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	handler := NewHandler(stored)
+
+	for _, tt := range completableArguments {
+		t.Run(tt.ref+"/"+tt.name, func(t *testing.T) {
+			var hits atomic.Int64
+			bound := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hits.Add(1)
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			ctx := gitlabclient.WithClient(t.Context(), bound)
+
+			if _, err := handler.Complete(ctx, completeRequest(tt.ref, tt.name, tt.resolved)); err != nil {
+				t.Fatalf("Complete: %v", err)
+			}
+
+			if hits.Load() == 0 {
+				t.Errorf("completing %s searched no GitLab at all, so it cannot show which client it used", tt.name)
+			}
+			if captured.Load() != 0 {
+				t.Errorf("completing %s searched through the client the handler was built with; on a shared server "+
+					"that client carries no credential", tt.name)
+			}
+		})
+	}
+}
+
+// TestComplete_AnUnattributedRequest_IsAnsweredEmptyAndSaidOutLoud covers the
+// one failure this surface cannot report to the caller.
+//
+// The contract is that autocomplete is never blocked, so the answer stays an
+// empty list. But every other cause of an empty completion is a GitLab hiccup
+// that fixes itself, while this one is a wiring defect that never will, and it
+// used to leave nothing on the wire and nothing in the log at the default level:
+// an editor with no suggestions, forever, and no way to find out why.
+func TestComplete_AnUnattributedRequest_IsAnsweredEmptyAndSaidOutLoud(t *testing.T) {
+	var logged bytes.Buffer
+	restore := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(restore) })
+
+	handler := NewHandler(gitlabclient.NewUnboundClient("https://gitlab.invalid"))
+
+	result, err := handler.Complete(context.Background(), completeRequest(refPrompt, "project_id", nil))
+	if err != nil {
+		t.Fatalf("Complete returned %v; an unanswerable completion must not block the client", err)
+	}
+	if result == nil || len(result.Completion.Values) != 0 {
+		t.Fatalf("Complete returned %v, want an empty completion", result)
+	}
+	if !strings.Contains(logged.String(), toolutil.UnattributedRequestMessage) {
+		t.Errorf("nothing was logged at warn level about a completion that could not be attributed:\n%s", logged.String())
+	}
+}
+
+// TestComplete_AnAbandonedRequest_IsNotBlamedOnTheWiring covers the legitimate
+// cause of the same state.
+//
+// An abandoned POST takes its carrier with it, and the carrier is where the
+// credential is read from, so a client that stopped typing produces exactly the
+// unattributed state a wiring defect produces. Warning about it fills an
+// operator's log with wiring defects that are editors closing a popup, and the
+// warn level is the whole point of the message: it is there to be noticed.
+//
+// The tools path gets this apart for free, because ClassifyError checks
+// cancellation before anything else.
+func TestComplete_AnAbandonedRequest_IsNotBlamedOnTheWiring(t *testing.T) {
+	var logged bytes.Buffer
+	restore := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(restore) })
+
+	handler := NewHandler(gitlabclient.NewUnboundClient("https://gitlab.invalid"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := handler.Complete(ctx, completeRequest(refPrompt, "project_id", nil))
+	if err != nil {
+		t.Fatalf("Complete returned %v; an abandoned completion must not become an error", err)
+	}
+	if result == nil || len(result.Completion.Values) != 0 {
+		t.Fatalf("Complete returned %v, want an empty completion", result)
+	}
+	if strings.Contains(logged.String(), toolutil.UnattributedRequestMessage) {
+		t.Errorf("a client that pressed stop was logged at warn as a wiring defect:\n%s", logged.String())
 	}
 }

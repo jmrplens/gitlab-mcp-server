@@ -10,7 +10,7 @@ faq:
   - q: "¿Con qué rapidez llegan las notificaciones?"
     a: "La latencia es la cadencia de sondeo: **5 segundos** mientras el recurso está activo (un pipeline en ejecución, un merge request abierto), **15 segundos** por defecto, **60 segundos** una vez asentado y **10 minutos** tras degradarse la concesión por 30 minutos de inactividad de la sesión. Cualquier petición en la sesión restaura la velocidad completa. El `_meta` de cada notificación informa del estado del vigilante y su cadencia actual."
   - q: "¿Cuánto cuesta vigilar contra mi límite de peticiones de GitLab?"
-    a: "Los vigilantes usan el token del propio suscriptor, con un tope de **10 vigilantes por servidor**. El peor caso — los diez al suelo de 5 segundos — son 120 peticiones por minuto, el 6% del límite por usuario de GitLab.com. Diez vigilantes degradados cuestan una petición por minuto. Un 429 de GitLab pausa todos los vigilantes con retroceso exponencial."
+    a: "Los vigilantes usan el token del propio suscriptor, con un tope de **10 vigilantes por credencial**. El peor caso — los diez al suelo de 5 segundos — son 120 peticiones por minuto, el 6% del límite por usuario de GitLab.com. Diez vigilantes degradados cuestan una petición por minuto. Un 429 de GitLab pausa todos los vigilantes con retroceso exponencial."
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
@@ -47,7 +47,7 @@ La cadencia de sondeo se adapta al recurso:
 | Sin campo de ciclo  | 15s        | una página wiki, un archivo, un label            |
 | Concesión degradada | 10min      | 30 minutos sin ninguna petición en la sesión     |
 
-Los vigilantes usan el token de GitLab del propio suscriptor, con un tope de **10 vigilantes por servidor** (un servidor por token+URL en modo HTTP). El peor caso — diez vigilantes al suelo de 5s — son 120 peticiones/minuto; diez degradados cuestan una. Un 429 de GitLab pausa todos los vigilantes con retroceso exponencial (30s doblando hasta 5 minutos).
+Los vigilantes usan el token de GitLab del propio suscriptor, con un tope de **10 vigilantes por credencial** (una entrada del pool por token+URL en modo HTTP). El peor caso — diez vigilantes al suelo de 5s — son 120 peticiones/minuto; diez degradados cuestan una. Un 429 de GitLab pausa todos los vigilantes con retroceso exponencial (30s doblando hasta 5 minutos).
 
 Nada se retira por estar «terminado»: GitLab no tiene estado terminal — un pipeline reintentado reutiliza su ID y vuelve a ejecutarse, un issue cerrado se reabre — así que un vigilante solo termina cuando el cliente se desuscribe, su sesión se desconecta, el recurso devuelve 401/403/404, se alcanza el tope de vida de 24 horas, o es desalojado para hacer sitio en el tope de vigilantes.
 

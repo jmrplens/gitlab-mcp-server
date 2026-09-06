@@ -54,7 +54,7 @@ func registerUserActivityReportPrompt(server registrar, client *gitlabclient.Cli
 			daysArg(7),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleUserActivityReport(ctx, client, req)
+		return handleUserActivityReport(ctx, client.For(ctx), req)
 	})
 }
 
@@ -173,7 +173,7 @@ func registerTeamOverviewPrompt(server registrar, client *gitlabclient.Client) {
 			daysArg(7),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleTeamOverview(ctx, client, req)
+		return handleTeamOverview(ctx, client.For(ctx), req)
 	})
 }
 
@@ -298,7 +298,7 @@ func registerGroupMRDashboardPrompt(server registrar, client *gitlabclient.Clien
 			targetBranchArg(false),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleGroupMRDashboard(ctx, client, req)
+		return handleGroupMRDashboard(ctx, client.For(ctx), req)
 	})
 }
 
@@ -377,7 +377,7 @@ func registerReviewerWorkloadPrompt(server registrar, client *gitlabclient.Clien
 			groupIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleReviewerWorkload(ctx, client, req)
+		return handleReviewerWorkload(ctx, client.For(ctx), req)
 	})
 }
 

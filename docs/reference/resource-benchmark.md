@@ -25,7 +25,7 @@ Six axes, chosen because they are the ones that move the numbers:
 
 | Axis                 | Values                                      | Why it matters                                                                                                                                        |
 | -------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Transport            | stdio, HTTP                                 | stdio gives every client its own process; HTTP serves everyone from one and pools a catalog per credential                                            |
+| Transport            | stdio, HTTP                                 | stdio gives every client its own process; HTTP serves everyone from one, pooling credential state per token and one built catalog per configuration   |
 | Tool surface         | `dynamic`, `meta`, `individual`             | the dynamic surface registers two tools and the individual one roughly a thousand                                                                     |
 | Concurrent clients   | 4 processes on stdio, 8 credentials on HTTP | on HTTP the pool holds one entry per token, so this is the axis a shared deployment grows along                                                       |
 | Parallel requests    | 2 to 4 in flight per client                 | separates the cost of having clients from the cost of them all calling at once                                                                        |
@@ -315,10 +315,10 @@ credential. The eight-credential scenarios put the increment at 33 MiB on
 calling at once. The concurrency series is the sizing tool, because it
 measures the slope where a shared deployment lives: with every credential
 calling, the peak resident set grew by about 63 MiB per credential on `meta`,
-90 MiB on `individual` and 130 MiB on `dynamic`, which is 6.6 GB, 9.4 GB and
-13.2 GB at a hundred credentials. Read `--max-http-clients` as a memory
+90 MiB on `individual` and 130 MiB on `dynamic`, which is 6.2 GiB, 8.8 GiB and
+12.7 GiB at a hundred credentials. Read `--max-http-clients` as a memory
 setting rather than a concurrency one: its default of 100 entries describes a
-pool of six to thirteen gigabytes, which no small instance can hold.
+pool of six to thirteen gibibytes, which no small instance can hold.
 
 **stdio has no idle state, and one process per client.** The process starts
 building its catalog on a background goroutine as soon as it is executed, so

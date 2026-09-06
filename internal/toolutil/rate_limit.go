@@ -53,6 +53,12 @@ type RateLimiter struct {
 	windowRefusals int
 	// throttleWindow is how often a refusal is reported. Overridden in tests.
 	throttleWindow time.Duration
+
+	// completionOnce guards the looser bucket completion/complete draws on.
+	// It is derived once and kept, because a bucket rebuilt per request would
+	// arrive full every time and meter nothing.
+	completionOnce sync.Once
+	completion     *RateLimiter
 }
 
 // defaultThrottleWindow is the reporting interval for refusals.
@@ -187,12 +193,30 @@ const completionBurstFactor = 10
 // bypasses the limiter: none of them reaches GitLab. If limiter is nil, this
 // function is a no-op.
 func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
-	if server == nil || limiter == nil {
+	if limiter == nil {
 		return
 	}
-	completions := limiter.scaled(completionBurstFactor)
+	AttachRateLimitFunc(server, func(context.Context) *RateLimiter { return limiter })
+}
+
+// AttachRateLimitFunc is [AttachRateLimit] for a server whose bucket depends on
+// the request.
+//
+// It exists because one server now answers for every credential of a
+// configuration shape, while the limit is per credential: a bucket captured at
+// registration would be one budget shared by every tenant, so the noisiest of
+// them would refuse everybody else's calls. The resolver reads the bucket the
+// request's own pool entry owns, and returning nil means this request is not
+// limited, which is what an unbound request on a shape server and the stdio
+// default both want.
+func AttachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *RateLimiter) {
+	if server == nil || resolve == nil {
+		return
+	}
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			limiter := resolve(ctx)
+			completions := limiter.forCompletions()
 			switch method {
 			case methodToolsCall:
 				if !limiter.allow() {
@@ -213,6 +237,22 @@ func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 			return next(ctx, method, req)
 		}
 	})
+}
+
+// forCompletions returns the looser bucket completion/complete draws on,
+// deriving it once per limiter and keeping it.
+//
+// The derivation used to happen at registration, where there was exactly one
+// limiter per server and nowhere else to put it. With the bucket resolved per
+// request it has to live on the limiter itself: a scaled copy built per call
+// would be a fresh full bucket every time, which is not a looser limit but no
+// limit at all.
+func (r *RateLimiter) forCompletions() *RateLimiter {
+	if r == nil {
+		return nil
+	}
+	r.completionOnce.Do(func() { r.completion = r.scaled(completionBurstFactor) })
+	return r.completion
 }
 
 // scaled returns a limiter with the same rate and burst multiplied by factor,

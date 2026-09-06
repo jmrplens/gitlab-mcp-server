@@ -521,11 +521,14 @@ func (m *Manager[S]) UnsubscribeAll(subscriber S) int {
 // not what bounds a watcher in normal operation: a subscription ends when
 // the session that asked for it disconnects, slows down when its lease runs
 // out unrenewed, and stops for good at [Options.MaxLifetime] or the first
-// read that says the resource is gone. In HTTP mode the server pool never
-// calls this — it lets an evicted entry expire with its sessions rather
-// than terminating one that may still be serving a live connection, and by
-// the time the last session on that server ends there is nothing left to
-// watch.
+// read that says the resource is gone.
+//
+// In HTTP mode the server pool calls it for every entry it evicts, because one
+// server now answers for many credentials and an evicted credential's sessions
+// can no longer be told apart from anybody else's. Nothing is announced from
+// here, which is the contract [Options.OnStop] states and which that caller
+// depends on knowing: it ends the client's open listen streams itself, so that
+// each gets the completion result the specification asks for exactly once.
 func (m *Manager[S]) Close() {
 	m.mu.Lock()
 	if m.closed {

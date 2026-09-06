@@ -2141,6 +2141,14 @@ func coerceNumericStrings(params map[string]any) map[string]any {
 }
 
 // WrapAction wraps a typed handler (input T -> output R) into a generic ActionFunc.
+//
+// The client the handler runs under is the one bound to the request context,
+// falling back to the one this route was built for. That is the seam a server
+// shared by several credentials needs: its routes are bound to the unbound
+// client, which refuses every request, and the per-request binding is what
+// makes a call reach the caller's own instance. On stdio, and everywhere a
+// catalog is built for one real client, no context carries a binding and the
+// captured client is returned unchanged.
 func WrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := UnmarshalParams[T](params)
@@ -2149,7 +2157,7 @@ func WrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Conte
 		}
 		ctx, cancel := withActionDeadline(ctx)
 		defer cancel()
-		return fn(ctx, client, input)
+		return fn(ctx, client.For(ctx), input)
 	}
 }
 
@@ -2160,7 +2168,7 @@ func WrapVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Cont
 		if err != nil {
 			return nil, err
 		}
-		return nil, fn(ctx, client, input)
+		return nil, fn(ctx, client.For(ctx), input)
 	}
 }
 
@@ -2175,7 +2183,7 @@ func WrapActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx co
 		}
 		ctx, cancel := withActionDeadline(ctx)
 		defer cancel()
-		return fn(ctx, RequestFromContext(ctx), client, input)
+		return fn(ctx, RequestFromContext(ctx), client.For(ctx), input)
 	}
 }
 
@@ -2192,7 +2200,7 @@ func WrapVoidActionWithRequest[T any](client *gitlabclient.Client, fn func(ctx c
 		if err != nil {
 			return nil, err
 		}
-		return nil, fn(ctx, RequestFromContext(ctx), client, input)
+		return nil, fn(ctx, RequestFromContext(ctx), client.For(ctx), input)
 	}
 }
 

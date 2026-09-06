@@ -83,7 +83,7 @@ graph TD
         SRV[MCP Server<br/>go-sdk/mcp v1.7.0]
         STDIO[StdioTransport]
         HTTP[StreamableHTTPHandler]
-        POOL[serverpool<br/>Per-token+URL server pool & LRU cache]
+        POOL[serverpool<br/>Per-token+URL credential pool & LRU cache]
     end
 
     MAIN --> CFG
@@ -91,7 +91,7 @@ graph TD
     MAIN --> SRV
     SRV --> STDIO
     HTTP --> POOL
-    POOL -->|one server per token+URL| SRV
+    POOL -->|one server per configuration shape| SRV
     SPECS --> CATALOG
     CATALOG --> IND
     CATALOG --> META
@@ -138,9 +138,9 @@ The `main()` function supports two runtime modes:
 
 1. Parses CLI flags (`--http`, `--gitlab-url`, `--http-addr`, `--max-http-clients`, `--session-timeout`, `--http-idle-timeout`, `--trusted-proxy-header`, `--trusted-proxies`, etc.)
 2. Creates a `serverpool.ServerPool` with a factory function
-3. On each request, extracts the token and GitLab URL from headers, calls `pool.GetOrCreate(token, gitlabURL)` to get or create a per-token+URL MCP server
-4. The pool factory creates a GitLab client + MCP server + registers all tools for that token and GitLab instance
-5. LRU eviction closes the oldest session when `--max-http-clients` is reached
+3. On each request, extracts the token and GitLab URL from headers, calls `pool.GetOrCreateEntry(token, gitlabURL, scopes)` to get or create the entry for that credential
+4. The pool factory creates a GitLab client, verifies it, resolves the entry's configuration, and asks for the MCP server of the resulting configuration shape. That server is built and registered once and shared by every credential of the same shape; the credential itself is bound to each request from the entry
+5. LRU eviction drops the least recently used entry when `--max-http-clients` is reached
 6. Starts `StreamableHTTPHandler` and blocks until SIGINT/SIGTERM
 
 ### Configuration (`internal/config`)
@@ -230,11 +230,13 @@ Infrastructure shared by all tool sub-packages:
 
 ### Server Pool (`internal/serverpool`)
 
-Manages a bounded pool of per-token+URL MCP server instances in HTTP mode. Each unique combination of GitLab Personal Access Token and GitLab instance URL gets its own isolated MCP server, GitLab client, and server configuration snapshot. The snapshot combines global process policy with detected token scopes and CE/EE edition for that specific entry.
+Manages a bounded pool of per-token+URL credentials in HTTP mode. Each unique combination of GitLab Personal Access Token and GitLab instance URL gets its own `Entry`: a GitLab client, a server configuration snapshot, the resolved user, and an opaque owner token. The snapshot combines global process policy with detected token scopes and CE/EE edition for that specific entry.
+
+The MCP server an entry is served by is shared with every other entry of the same configuration shape ([ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)), so `Entry` rather than `*mcp.Server` is what identifies a credential: the insert and evict callbacks, the session-ownership check and the notification filter all key on `Entry.Owner()`.
 
 | File            | Purpose                                                                                                                                                                                                                      |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pool.go`       | `ServerPool` with LRU eviction, `GetOrCreate()`, `GetOrCreateWithScopes()`, `Close()`; narrows an entry to read-only when its token cannot write                                                                             |
+| `pool.go`       | `ServerPool` with LRU eviction, `Entry`, `GetOrCreateEntry()`, `GetOrCreate()`, `GetOrCreateWithScopes()`, `Close()`; narrows an entry to read-only when its token cannot write                                              |
 | `token.go`      | `ExtractToken()` reads the token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers; `ResolveRequestOptionsFor()` resolves `GITLAB-URL` against the published instances and records ignored config-like request headers |
 | `rate_limit.go` | `AuthRateLimiter`: the per-address authentication failure budget                                                                                                                                                             |
 | `doc.go`        | Package documentation                                                                                                                                                                                                        |
@@ -562,30 +564,31 @@ sequenceDiagram
     Main->>HTTP: Start listening on --http-addr
     Note over Main: No token needed at startup
     Client->>HTTP: POST /mcp (PRIVATE-TOKEN: glpat-...)
-    HTTP->>Pool: GetOrCreate(token)
+    HTTP->>Pool: GetOrCreateEntry(token, url, scopes)
     Pool->>GL: NewClient(token, gitlabURL)
     GL-->>Pool: Authenticated client
-    Pool->>MCP: NewServer + register tools
-    MCP-->>Pool: MCP server for this token
-    Pool-->>HTTP: *mcp.Server
+    Pool->>MCP: NewServer + register tools, once per configuration shape
+    MCP-->>Pool: MCP server for this shape
+    Pool-->>HTTP: entry (credential) + its shape server
     HTTP-->>Client: JSON-RPC response (stateless by default: no Mcp-Session-Id)
     Note over Pool: LRU eviction when max-http-clients reached
 ```
 
 ## Key Design Decisions
 
-| Decision                              | Rationale                                                                                                                                                      | ADR                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Go with official MCP SDK              | Type safety, single binary, cross-compilation                                                                                                                  | —                                                                    |
-| Official GitLab client library        | Maintained by GitLab, complete API coverage                                                                                                                    | —                                                                    |
-| Modular tools sub-packages            | Domain isolation, independent testing, clean imports                                                                                                           | [ADR-0004](../development/adr/adr-0004-modular-tools-subpackages.md) |
-| Meta-tool consolidation (32/38/49/50) | Reduce tool count for LLM token efficiency; Premium adds 6 and Ultimate 11 more self-managed meta-tools, and GitLab.com adds the experimental Orbit one on top | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)   |
-| Struct-based I/O                      | Type safety + automatic JSON Schema generation                                                                                                                 | Go SDK convention                                                    |
-| Dual response format                  | JSON for LLM tool-chaining + Markdown for display                                                                                                              | See [Output Format](../reference/output-format.md)                   |
-| Content annotations                   | Audience targeting + priority for display optimization                                                                                                         | See [Output Format](../reference/output-format.md)                   |
-| `next_steps` JSON enrichment          | Hints in structuredContent for JSON-only clients                                                                                                               | See [Output Format](../reference/output-format.md)                   |
-| Tool annotations                      | readOnlyHint, destructiveHint for client safety hints                                                                                                          | MCP spec compliance                                                  |
-| GITLAB_MCP_YOLO_MODE for automation   | Skip confirmations in CI/scripted environments                                                                                                                 | —                                                                    |
+| Decision                                | Rationale                                                                                                                                                      | ADR                                                                           |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Go with official MCP SDK                | Type safety, single binary, cross-compilation                                                                                                                  | —                                                                             |
+| Official GitLab client library          | Maintained by GitLab, complete API coverage                                                                                                                    | —                                                                             |
+| Modular tools sub-packages              | Domain isolation, independent testing, clean imports                                                                                                           | [ADR-0004](../development/adr/adr-0004-modular-tools-subpackages.md)          |
+| Meta-tool consolidation (32/38/49/50)   | Reduce tool count for LLM token efficiency; Premium adds 6 and Ultimate 11 more self-managed meta-tools, and GitLab.com adds the experimental Orbit one on top | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)            |
+| Struct-based I/O                        | Type safety + automatic JSON Schema generation                                                                                                                 | Go SDK convention                                                             |
+| Dual response format                    | JSON for LLM tool-chaining + Markdown for display                                                                                                              | See [Output Format](../reference/output-format.md)                            |
+| Content annotations                     | Audience targeting + priority for display optimization                                                                                                         | See [Output Format](../reference/output-format.md)                            |
+| `next_steps` JSON enrichment            | Hints in structuredContent for JSON-only clients                                                                                                               | See [Output Format](../reference/output-format.md)                            |
+| Tool annotations                        | readOnlyHint, destructiveHint for client safety hints                                                                                                          | MCP spec compliance                                                           |
+| One HTTP server per configuration shape | Memory flat in the number of pooled credentials; the credential is bound per request and notification delivery is filtered by owner                            | [ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md) |
+| GITLAB_MCP_YOLO_MODE for automation     | Skip confirmations in CI/scripted environments                                                                                                                 | —                                                                             |
 
 ## Cross-Cutting Concerns
 

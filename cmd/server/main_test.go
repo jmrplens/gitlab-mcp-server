@@ -1663,9 +1663,15 @@ func TestCreateServer_DynamicSurface_ReportsWhatTheExclusionRemoved(t *testing.T
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
 
 	client := newMockGitLabClient(t)
+	// The catalog is shared per configuration and the exclusion is logged when
+	// the catalog is built, so a second build of this exact key in one test
+	// binary is a cache hit that logs nothing. A pattern no tool matches, unique
+	// to this run, keeps the key fresh without changing what the exclusion
+	// removes.
+	fresh := fmt.Sprintf("zz_never_registered_%d", time.Now().UnixNano())
 	mustCreateServer(t, client, &config.ServerConfig{
 		ToolSurface:  config.ToolSurfaceDynamic,
-		ExcludeTools: []string{"gitlab_issue_delete"},
+		ExcludeTools: []string{"gitlab_issue_delete", fresh},
 	})
 
 	if !strings.Contains(logged.String(), `"msg":"excluded catalog actions by configuration","excluded":1`) {
@@ -2566,34 +2572,6 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 	}
 }
 
-// TestStartPooledRegistration_AFailedBuild_FailsTheGateAndEvicts covers the
-// failure the post-insert hook exists for: a catalog that cannot be built
-// for a pooled credential fails the requests parked on its gate and evicts
-// the entry, so the next request for that credential rebuilds instead of
-// being handed a server with no tools.
-func TestStartPooledRegistration_AFailedBuild_FailsTheGateAndEvicts(t *testing.T) {
-	forced := failDynamicCatalog(t, nil)
-	client := newMockGitLabClient(t)
-	shell, err := newServerShell(t.Context(), client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic})
-	if err != nil {
-		t.Fatalf("newServerShell: %v", err)
-	}
-	var pending sync.Map
-	pending.Store(shell.server, shell)
-	evicted := make(chan struct{})
-
-	startPooledRegistration(t.Context(), &pending, shell.server, func() { close(evicted) })
-
-	select {
-	case <-evicted:
-	case <-time.After(testHTTPLivenessTimeout):
-		t.Fatal("the entry was not evicted after its catalog failed to build")
-	}
-	if cause := shell.gate.failed(); !errors.Is(cause, forced) {
-		t.Errorf("gate failure = %v, want the build's own error", cause)
-	}
-}
-
 // TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted covers the same
 // failure on the wire: the request that triggered the build is answered with
 // the retry-able refusal rather than an empty catalog, and the next request
@@ -3016,31 +2994,6 @@ func TestStartPeriodicCleanup_RunsOnEveryTickUntilTheContextEnds(t *testing.T) {
 		}
 	}
 	t.Error("cleanup kept running after its context ended")
-}
-
-// TestStartPooledRegistration_WithNothingPending_StartsNothing covers the two
-// ways the post-insert hook finds no work: a server nobody recorded a shell
-// for, which is what a second hook call for the same server sees, and a
-// recorded value that is not a shell at all. Neither may start a goroutine
-// or evict anything.
-func TestStartPooledRegistration_WithNothingPending_StartsNothing(t *testing.T) {
-	t.Parallel()
-
-	srv := mcp.NewServer(&mcp.Implementation{Name: "pooled", Version: "0"}, nil)
-	var pending sync.Map
-	var evicted atomic.Int64
-	evict := func() { evicted.Add(1) }
-
-	startPooledRegistration(t.Context(), &pending, srv, evict)
-
-	pending.Store(srv, "not a shell")
-	startPooledRegistration(t.Context(), &pending, srv, evict)
-	if _, still := pending.Load(srv); still {
-		t.Error("an entry that is not a shell was left in the map; the next hook would find it again")
-	}
-	if evicted.Load() != 0 {
-		t.Errorf("evict ran %d time(s) with nothing to register", evicted.Load())
-	}
 }
 
 // TestPrepareStdioCatalog_ResolvesWhatStartupNeedsBeforeOpeningTheGate covers
@@ -7395,7 +7348,7 @@ func TestKeepAliveInterval_HTTPPoolEntriesRunWithoutTheServerPing(t *testing.T) 
 		t.Errorf("keepAliveInterval(stateful, no override) = %v, want 0 — a server-initiated ping is not ours to send at 2026-07-28, and the SDK starts it before the revision is known", got)
 	}
 
-	poolOptions := []serverOption{withSessionTag("tag"), withKeepAlive(0)}
+	poolOptions := []serverOption{withSharedCredentials(&credentialStates{}, newSessionOwners(false)), withKeepAlive(0)}
 	if got := keepAliveInterval(newServerSettings(poolOptions), stateful); got != 0 {
 		t.Errorf("keepAliveInterval(stateful, pool options) = %v, want 0 — a stateful HTTP session must not be closed for not answering a ping", got)
 	}
@@ -8036,45 +7989,6 @@ func TestServerCardMediaType_FollowsThePathTheCardWasFetchedFrom(t *testing.T) {
 
 			if got := serverCardMediaType(tt.path); got != tt.want {
 				t.Errorf("serverCardMediaType(%q) = %q, want %q", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestSessionTagOf_ReadsTheTagAServerMinted covers the parse behind session
-// ownership.
-//
-// A session ID this deployment never minted carries no tag, and saying so is
-// what makes the gate refuse it: under the stateless transport no session IDs
-// are issued at all, so anything untagged is either stale or forged. Reading a
-// missing tag as an empty one would compare equal to an entry that had none and
-// hand someone else's session over.
-func TestSessionTagOf_ReadsTheTagAServerMinted(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		id      string
-		wantTag string
-		wantOK  bool
-	}{
-		{name: "a minted id", id: "tag123" + sessionTagSeparator + "abcdef", wantTag: "tag123", wantOK: true},
-		{name: "no separator at all", id: "abcdef"},
-		{name: "an empty tag", id: sessionTagSeparator + "abcdef"},
-		{name: "nothing", id: ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			tag, ok := sessionTagOf(tt.id)
-
-			if ok != tt.wantOK {
-				t.Errorf("sessionTagOf(%q) ok = %v, want %v", tt.id, ok, tt.wantOK)
-			}
-			if tag != tt.wantTag {
-				t.Errorf("sessionTagOf(%q) tag = %q, want %q", tt.id, tag, tt.wantTag)
 			}
 		})
 	}
