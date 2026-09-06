@@ -1,9 +1,9 @@
 {
-  "schema": 2,
-  "generated_at": "2026-09-05T15:08:26Z",
+  "schema": 3,
+  "generated_at": "2026-09-06T00:43:14Z",
   "server": {
-    "version": "2.7.6-0.20260905150558-afecf6ce9d13",
-    "commit": "afecf6ce9d138b06389a0cf8740093f8d88cba35"
+    "version": "2.7.6-0.20260906004147-2a92f7ec4445",
+    "commit": "2a92f7ec4445a433af9066e0e9de71139e897987"
   },
   "host": {
     "os": "linux",
@@ -30,44 +30,44 @@
       "rounds": 3,
       "list_bytes": 12119,
       "startup": {
-        "process_ready_ms": 0.286,
-        "first_list_ms": 677.054,
-        "warm_list_ms": 0.963
+        "process_ready_ms": 0.129,
+        "first_list_ms": 362.116,
+        "warm_list_ms": 1.095
       },
       "memory": {
         "idle_mib": 0,
-        "one_client_mib": 240.73,
-        "all_clients_mib": 882.531,
-        "peak_mib": 933.805,
-        "per_extra_client_mib": 213.934
+        "one_client_mib": 108.457,
+        "all_clients_mib": 438.441,
+        "peak_mib": 533.801,
+        "per_extra_client_mib": 109.995
       },
       "cpu": {
-        "startup_seconds": 5.78,
-        "load_seconds": 0.65,
-        "load_percent": 865.071,
-        "total_seconds": 6.43
+        "startup_seconds": 2.56,
+        "load_seconds": 1.05,
+        "load_percent": 1149.813,
+        "total_seconds": 3.61
       },
       "goroutines": 34,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 677.054,
-          "rss_mib": 240.73
+          "cold_list_ms": 362.116,
+          "rss_mib": 108.457
         },
         {
           "client": 2,
-          "cold_list_ms": 630.902,
-          "rss_mib": 463.129
+          "cold_list_ms": 306.284,
+          "rss_mib": 221.359
         },
         {
           "client": 3,
-          "cold_list_ms": 649.674,
-          "rss_mib": 667.75
+          "cold_list_ms": 321.228,
+          "rss_mib": 330.926
         },
         {
           "client": 4,
-          "cold_list_ms": 661.129,
-          "rss_mib": 882.531
+          "cold_list_ms": 388.784,
+          "rss_mib": 438.441
         }
       ],
       "latency": [
@@ -75,28 +75,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 48,
-          "p50_ms": 0.55,
-          "p90_ms": 0.717,
-          "p99_ms": 1.036,
-          "max_ms": 1.036
+          "p50_ms": 0.562,
+          "p90_ms": 0.816,
+          "p99_ms": 0.922,
+          "max_ms": 0.922
         },
         {
           "method": "tools/call",
           "detail": "gitlab_find_action",
           "count": 48,
-          "p50_ms": 16.865,
-          "p90_ms": 21.49,
-          "p99_ms": 23.208,
-          "max_ms": 23.208
+          "p50_ms": 20.264,
+          "p90_ms": 39.025,
+          "p99_ms": 41.835,
+          "max_ms": 41.835
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 48,
-          "p50_ms": 0.963,
-          "p90_ms": 1.192,
-          "p99_ms": 1.482,
-          "max_ms": 1.482
+          "p50_ms": 1.095,
+          "p90_ms": 2.028,
+          "p99_ms": 2.136,
+          "max_ms": 2.136
         }
       ]
     },
@@ -110,44 +110,44 @@
       "rounds": 3,
       "list_bytes": 598487,
       "startup": {
-        "process_ready_ms": 0.225,
-        "first_list_ms": 584.4,
-        "warm_list_ms": 21.257
+        "process_ready_ms": 0.196,
+        "first_list_ms": 367.561,
+        "warm_list_ms": 23.286
       },
       "memory": {
         "idle_mib": 0,
-        "one_client_mib": 191.965,
-        "all_clients_mib": 770.008,
-        "peak_mib": 894.422,
-        "per_extra_client_mib": 192.681
+        "one_client_mib": 109.227,
+        "all_clients_mib": 437.535,
+        "peak_mib": 503.227,
+        "per_extra_client_mib": 109.436
       },
       "cpu": {
-        "startup_seconds": 5.48,
-        "load_seconds": 0.87,
-        "load_percent": 1003.814,
-        "total_seconds": 6.35
+        "startup_seconds": 2.76,
+        "load_seconds": 0.88,
+        "load_percent": 1043.81,
+        "total_seconds": 3.64
       },
       "goroutines": 36,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 584.4,
-          "rss_mib": 191.965
+          "cold_list_ms": 367.561,
+          "rss_mib": 109.227
         },
         {
           "client": 2,
-          "cold_list_ms": 621.957,
-          "rss_mib": 380.707
+          "cold_list_ms": 366.794,
+          "rss_mib": 220.766
         },
         {
           "client": 3,
-          "cold_list_ms": 619.333,
-          "rss_mib": 569.559
+          "cold_list_ms": 396.709,
+          "rss_mib": 330.164
         },
         {
           "client": 4,
-          "cold_list_ms": 619.898,
-          "rss_mib": 770.008
+          "cold_list_ms": 393.057,
+          "rss_mib": 437.535
         }
       ],
       "latency": [
@@ -155,28 +155,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 48,
-          "p50_ms": 0.45,
-          "p90_ms": 0.698,
-          "p99_ms": 0.723,
-          "max_ms": 0.723
+          "p50_ms": 0.425,
+          "p90_ms": 0.623,
+          "p99_ms": 0.663,
+          "max_ms": 0.663
         },
         {
           "method": "tools/call",
           "detail": "gitlab_server (status)",
           "count": 48,
-          "p50_ms": 1.188,
-          "p90_ms": 1.724,
-          "p99_ms": 1.78,
-          "max_ms": 1.78
+          "p50_ms": 1.059,
+          "p90_ms": 1.427,
+          "p99_ms": 1.612,
+          "max_ms": 1.612
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 48,
-          "p50_ms": 21.257,
-          "p90_ms": 27.697,
-          "p99_ms": 29.149,
-          "max_ms": 29.149
+          "p50_ms": 23.286,
+          "p90_ms": 28.031,
+          "p99_ms": 29.552,
+          "max_ms": 29.552
         }
       ]
     },
@@ -190,44 +190,44 @@
       "rounds": 3,
       "list_bytes": 3235909,
       "startup": {
-        "process_ready_ms": 0.229,
-        "first_list_ms": 1426.155,
-        "warm_list_ms": 209.049
+        "process_ready_ms": 0.198,
+        "first_list_ms": 1180.15,
+        "warm_list_ms": 190.309
       },
       "memory": {
         "idle_mib": 0,
-        "one_client_mib": 307.742,
-        "all_clients_mib": 1198.766,
-        "peak_mib": 1198.766,
-        "per_extra_client_mib": 297.008
+        "one_client_mib": 253.914,
+        "all_clients_mib": 1062.684,
+        "peak_mib": 1131.738,
+        "per_extra_client_mib": 269.59
       },
       "cpu": {
-        "startup_seconds": 10.16,
-        "load_seconds": 5.98,
-        "load_percent": 874.322,
-        "total_seconds": 16.14
+        "startup_seconds": 8.26,
+        "load_seconds": 5.72,
+        "load_percent": 905.397,
+        "total_seconds": 13.98
       },
       "goroutines": 36,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 1426.155,
-          "rss_mib": 307.742
+          "cold_list_ms": 1180.15,
+          "rss_mib": 253.914
         },
         {
           "client": 2,
-          "cold_list_ms": 1487.642,
-          "rss_mib": 571.684
+          "cold_list_ms": 1223.228,
+          "rss_mib": 524.852
         },
         {
           "client": 3,
-          "cold_list_ms": 1439.367,
-          "rss_mib": 889.16
+          "cold_list_ms": 1298.762,
+          "rss_mib": 801.035
         },
         {
           "client": 4,
-          "cold_list_ms": 1437.953,
-          "rss_mib": 1198.766
+          "cold_list_ms": 1186.223,
+          "rss_mib": 1062.684
         }
       ],
       "latency": [
@@ -235,28 +235,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 24,
-          "p50_ms": 0.361,
-          "p90_ms": 0.736,
-          "p99_ms": 0.832,
-          "max_ms": 0.832
+          "p50_ms": 0.351,
+          "p90_ms": 0.556,
+          "p99_ms": 0.575,
+          "max_ms": 0.575
         },
         {
           "method": "tools/call",
           "detail": "gitlab_server_status",
           "count": 24,
-          "p50_ms": 0.644,
-          "p90_ms": 0.871,
-          "p99_ms": 0.875,
-          "max_ms": 0.875
+          "p50_ms": 0.575,
+          "p90_ms": 0.82,
+          "p99_ms": 0.835,
+          "max_ms": 0.835
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 24,
-          "p50_ms": 209.049,
-          "p90_ms": 238.144,
-          "p99_ms": 242.784,
-          "max_ms": 242.784
+          "p50_ms": 190.309,
+          "p90_ms": 216.056,
+          "p99_ms": 224.51,
+          "max_ms": 224.51
         }
       ]
     },
@@ -270,44 +270,44 @@
       "rounds": 3,
       "list_bytes": 12119,
       "startup": {
-        "process_ready_ms": 0.216,
-        "first_list_ms": 614.022,
-        "warm_list_ms": 0.941
+        "process_ready_ms": 0.191,
+        "first_list_ms": 362.998,
+        "warm_list_ms": 1.088
       },
       "memory": {
         "idle_mib": 0,
-        "one_client_mib": 238.707,
-        "all_clients_mib": 867.793,
-        "peak_mib": 970.809,
-        "per_extra_client_mib": 209.695
+        "one_client_mib": 112.438,
+        "all_clients_mib": 460.465,
+        "peak_mib": 560.738,
+        "per_extra_client_mib": 116.009
       },
       "cpu": {
-        "startup_seconds": 5.49,
-        "load_seconds": 0.66,
-        "load_percent": 1130.131,
-        "total_seconds": 6.15
+        "startup_seconds": 2.5,
+        "load_seconds": 1.22,
+        "load_percent": 1187.755,
+        "total_seconds": 3.72
       },
       "goroutines": 43,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 614.022,
-          "rss_mib": 238.707
+          "cold_list_ms": 362.998,
+          "rss_mib": 112.438
         },
         {
           "client": 2,
-          "cold_list_ms": 634.541,
-          "rss_mib": 450.066
+          "cold_list_ms": 356.079,
+          "rss_mib": 228.613
         },
         {
           "client": 3,
-          "cold_list_ms": 647.406,
-          "rss_mib": 655.133
+          "cold_list_ms": 348.458,
+          "rss_mib": 345.289
         },
         {
           "client": 4,
-          "cold_list_ms": 635.108,
-          "rss_mib": 867.793
+          "cold_list_ms": 346.255,
+          "rss_mib": 460.465
         }
       ],
       "latency": [
@@ -315,28 +315,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 48,
-          "p50_ms": 0.541,
-          "p90_ms": 0.688,
-          "p99_ms": 0.848,
-          "max_ms": 0.848
+          "p50_ms": 0.626,
+          "p90_ms": 0.752,
+          "p99_ms": 0.816,
+          "max_ms": 0.816
         },
         {
           "method": "tools/call",
           "detail": "gitlab_find_action",
           "count": 48,
-          "p50_ms": 13.468,
-          "p90_ms": 19.491,
-          "p99_ms": 21.886,
-          "max_ms": 21.886
+          "p50_ms": 18.464,
+          "p90_ms": 51.449,
+          "p99_ms": 55.372,
+          "max_ms": 55.372
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 48,
-          "p50_ms": 0.941,
-          "p90_ms": 1.2,
-          "p99_ms": 1.316,
-          "max_ms": 1.316
+          "p50_ms": 1.088,
+          "p90_ms": 1.869,
+          "p99_ms": 3.357,
+          "max_ms": 3.357
         }
       ]
     },
@@ -350,64 +350,64 @@
       "rounds": 3,
       "list_bytes": 12142,
       "startup": {
-        "process_ready_ms": 53.584,
-        "first_list_ms": 702.152,
-        "warm_list_ms": 2.952
+        "process_ready_ms": 53.371,
+        "first_list_ms": 389.95,
+        "warm_list_ms": 3
       },
       "memory": {
-        "idle_mib": 34.48,
-        "one_client_mib": 235.559,
-        "all_clients_mib": 774.855,
-        "peak_mib": 873.125,
-        "per_extra_client_mib": 77.042
+        "idle_mib": 39.602,
+        "one_client_mib": 113.535,
+        "all_clients_mib": 113.578,
+        "peak_mib": 219.789,
+        "per_extra_client_mib": 0.006
       },
       "cpu": {
-        "startup_seconds": 8.1,
-        "load_seconds": 1.42,
-        "load_percent": 1119.879,
-        "total_seconds": 9.52
+        "startup_seconds": 0.74,
+        "load_seconds": 1.63,
+        "load_percent": 1102.656,
+        "total_seconds": 2.37
       },
-      "goroutines": 74,
+      "goroutines": 67,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 702.152,
-          "rss_mib": 235.559
+          "cold_list_ms": 389.95,
+          "rss_mib": 113.535
         },
         {
           "client": 2,
-          "cold_list_ms": 403.602,
-          "rss_mib": 293.164
+          "cold_list_ms": 1.471,
+          "rss_mib": 113.574
         },
         {
           "client": 3,
-          "cold_list_ms": 375.086,
-          "rss_mib": 341.738
+          "cold_list_ms": 1.136,
+          "rss_mib": 113.574
         },
         {
           "client": 4,
-          "cold_list_ms": 398.237,
-          "rss_mib": 417.094
+          "cold_list_ms": 0.95,
+          "rss_mib": 113.574
         },
         {
           "client": 5,
-          "cold_list_ms": 396.371,
-          "rss_mib": 498.918
+          "cold_list_ms": 0.949,
+          "rss_mib": 113.574
         },
         {
           "client": 6,
-          "cold_list_ms": 391.663,
-          "rss_mib": 548.844
+          "cold_list_ms": 0.94,
+          "rss_mib": 113.578
         },
         {
           "client": 7,
-          "cold_list_ms": 414.651,
-          "rss_mib": 677.742
+          "cold_list_ms": 0.953,
+          "rss_mib": 113.578
         },
         {
           "client": 8,
-          "cold_list_ms": 391.061,
-          "rss_mib": 774.855
+          "cold_list_ms": 1.181,
+          "rss_mib": 113.578
         }
       ],
       "latency": [
@@ -415,28 +415,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 96,
-          "p50_ms": 1.443,
-          "p90_ms": 2.4,
-          "p99_ms": 2.704,
-          "max_ms": 2.704
+          "p50_ms": 2.724,
+          "p90_ms": 4.368,
+          "p99_ms": 6.842,
+          "max_ms": 6.842
         },
         {
           "method": "tools/call",
           "detail": "gitlab_find_action",
           "count": 96,
-          "p50_ms": 26.893,
-          "p90_ms": 41.856,
-          "p99_ms": 49.89,
-          "max_ms": 49.89
+          "p50_ms": 33.906,
+          "p90_ms": 39.709,
+          "p99_ms": 44.418,
+          "max_ms": 44.418
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 96,
-          "p50_ms": 2.952,
-          "p90_ms": 3.415,
-          "p99_ms": 3.688,
-          "max_ms": 3.688
+          "p50_ms": 3,
+          "p90_ms": 5.374,
+          "p99_ms": 6,
+          "max_ms": 6
         }
       ]
     },
@@ -450,64 +450,64 @@
       "rounds": 3,
       "list_bytes": 598510,
       "startup": {
-        "process_ready_ms": 52.288,
-        "first_list_ms": 642.314,
-        "warm_list_ms": 44.712
+        "process_ready_ms": 52.002,
+        "first_list_ms": 407.58,
+        "warm_list_ms": 47.424
       },
       "memory": {
-        "idle_mib": 36.246,
-        "one_client_mib": 204.465,
-        "all_clients_mib": 435.711,
-        "peak_mib": 591.234,
-        "per_extra_client_mib": 33.035
+        "idle_mib": 35.887,
+        "one_client_mib": 107.453,
+        "all_clients_mib": 113.098,
+        "peak_mib": 207.898,
+        "per_extra_client_mib": 0.806
       },
       "cpu": {
-        "startup_seconds": 7.41,
-        "load_seconds": 1.72,
-        "load_percent": 744.085,
-        "total_seconds": 9.13
+        "startup_seconds": 0.99,
+        "load_seconds": 2.96,
+        "load_percent": 927.425,
+        "total_seconds": 3.95
       },
-      "goroutines": 76,
+      "goroutines": 69,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 642.314,
-          "rss_mib": 204.465
+          "cold_list_ms": 407.58,
+          "rss_mib": 107.453
         },
         {
           "client": 2,
-          "cold_list_ms": 367.073,
-          "rss_mib": 217.328
+          "cold_list_ms": 10.709,
+          "rss_mib": 107.5
         },
         {
           "client": 3,
-          "cold_list_ms": 372.853,
-          "rss_mib": 282.203
+          "cold_list_ms": 14.056,
+          "rss_mib": 111.043
         },
         {
           "client": 4,
-          "cold_list_ms": 382.529,
-          "rss_mib": 295.273
+          "cold_list_ms": 12.147,
+          "rss_mib": 111.047
         },
         {
           "client": 5,
-          "cold_list_ms": 399.455,
-          "rss_mib": 360.883
+          "cold_list_ms": 19.062,
+          "rss_mib": 111.059
         },
         {
           "client": 6,
-          "cold_list_ms": 360.861,
-          "rss_mib": 360.004
+          "cold_list_ms": 19.045,
+          "rss_mib": 111.066
         },
         {
           "client": 7,
-          "cold_list_ms": 381.906,
-          "rss_mib": 416.68
+          "cold_list_ms": 22.37,
+          "rss_mib": 113.094
         },
         {
           "client": 8,
-          "cold_list_ms": 361.327,
-          "rss_mib": 435.711
+          "cold_list_ms": 13.437,
+          "rss_mib": 113.098
         }
       ],
       "latency": [
@@ -515,28 +515,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 96,
-          "p50_ms": 2.36,
-          "p90_ms": 3.784,
-          "p99_ms": 4.1,
-          "max_ms": 4.1
+          "p50_ms": 7.275,
+          "p90_ms": 14.731,
+          "p99_ms": 15.114,
+          "max_ms": 15.114
         },
         {
           "method": "tools/call",
           "detail": "gitlab_server (status)",
           "count": 96,
-          "p50_ms": 3.554,
-          "p90_ms": 12.594,
-          "p99_ms": 45.126,
-          "max_ms": 45.126
+          "p50_ms": 22.639,
+          "p90_ms": 47.164,
+          "p99_ms": 47.877,
+          "max_ms": 47.877
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 96,
-          "p50_ms": 44.712,
-          "p90_ms": 73.433,
-          "p99_ms": 75.209,
-          "max_ms": 75.209
+          "p50_ms": 47.424,
+          "p90_ms": 91.972,
+          "p99_ms": 93.641,
+          "max_ms": 93.641
         }
       ]
     },
@@ -550,64 +550,64 @@
       "rounds": 3,
       "list_bytes": 3235932,
       "startup": {
-        "process_ready_ms": 51.189,
-        "first_list_ms": 1475.133,
-        "warm_list_ms": 358.795
+        "process_ready_ms": 52.469,
+        "first_list_ms": 1268.65,
+        "warm_list_ms": 327.78
       },
       "memory": {
-        "idle_mib": 34.609,
-        "one_client_mib": 283.672,
-        "all_clients_mib": 627.57,
-        "peak_mib": 1177.23,
-        "per_extra_client_mib": 49.128
+        "idle_mib": 39.832,
+        "one_client_mib": 285.617,
+        "all_clients_mib": 266.527,
+        "peak_mib": 647.332,
+        "per_extra_client_mib": -2.727
       },
       "cpu": {
-        "startup_seconds": 14.16,
-        "load_seconds": 14.59,
-        "load_percent": 1233.202,
-        "total_seconds": 28.75
+        "startup_seconds": 3.55,
+        "load_seconds": 13.73,
+        "load_percent": 1325.761,
+        "total_seconds": 17.28
       },
-      "goroutines": 60,
+      "goroutines": 53,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 1475.133,
-          "rss_mib": 283.672
+          "cold_list_ms": 1268.65,
+          "rss_mib": 285.617
         },
         {
           "client": 2,
-          "cold_list_ms": 812.879,
-          "rss_mib": 317.23
+          "cold_list_ms": 133.813,
+          "rss_mib": 285.754
         },
         {
           "client": 3,
-          "cold_list_ms": 786.314,
-          "rss_mib": 351.484
+          "cold_list_ms": 128.032,
+          "rss_mib": 285.82
         },
         {
           "client": 4,
-          "cold_list_ms": 801.566,
-          "rss_mib": 460.48
+          "cold_list_ms": 125.431,
+          "rss_mib": 245.504
         },
         {
           "client": 5,
-          "cold_list_ms": 781.165,
-          "rss_mib": 512.98
+          "cold_list_ms": 126.948,
+          "rss_mib": 252.785
         },
         {
           "client": 6,
-          "cold_list_ms": 769.508,
-          "rss_mib": 550.012
+          "cold_list_ms": 126.587,
+          "rss_mib": 252.816
         },
         {
           "client": 7,
-          "cold_list_ms": 783.726,
-          "rss_mib": 525.422
+          "cold_list_ms": 130.323,
+          "rss_mib": 260.797
         },
         {
           "client": 8,
-          "cold_list_ms": 801.793,
-          "rss_mib": 627.57
+          "cold_list_ms": 133.748,
+          "rss_mib": 266.527
         }
       ],
       "latency": [
@@ -615,28 +615,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 48,
-          "p50_ms": 1.672,
-          "p90_ms": 2.705,
-          "p99_ms": 2.844,
-          "max_ms": 2.844
+          "p50_ms": 0.916,
+          "p90_ms": 1.303,
+          "p99_ms": 1.525,
+          "max_ms": 1.525
         },
         {
           "method": "tools/call",
           "detail": "gitlab_server_status",
           "count": 48,
-          "p50_ms": 4.081,
-          "p90_ms": 5.866,
-          "p99_ms": 6.471,
-          "max_ms": 6.471
+          "p50_ms": 1.539,
+          "p90_ms": 6.186,
+          "p99_ms": 6.823,
+          "max_ms": 6.823
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 48,
-          "p50_ms": 358.795,
-          "p90_ms": 399.006,
-          "p99_ms": 404.542,
-          "max_ms": 404.542
+          "p50_ms": 327.78,
+          "p90_ms": 338.73,
+          "p99_ms": 343.295,
+          "max_ms": 343.295
         }
       ]
     },
@@ -650,64 +650,64 @@
       "rounds": 3,
       "list_bytes": 12142,
       "startup": {
-        "process_ready_ms": 52.741,
-        "first_list_ms": 658.953,
-        "warm_list_ms": 3.89
+        "process_ready_ms": 52.02,
+        "first_list_ms": 316.481,
+        "warm_list_ms": 2.539
       },
       "memory": {
-        "idle_mib": 39.336,
-        "one_client_mib": 248.32,
-        "all_clients_mib": 738.688,
-        "peak_mib": 818.402,
-        "per_extra_client_mib": 70.053
+        "idle_mib": 39.566,
+        "one_client_mib": 115.867,
+        "all_clients_mib": 115.992,
+        "peak_mib": 225.613,
+        "per_extra_client_mib": 0.018
       },
       "cpu": {
-        "startup_seconds": 7.74,
-        "load_seconds": 1.66,
-        "load_percent": 1113.829,
-        "total_seconds": 9.4
+        "startup_seconds": 0.64,
+        "load_seconds": 2,
+        "load_percent": 1199.999,
+        "total_seconds": 2.64
       },
-      "goroutines": 83,
+      "goroutines": 76,
       "ramp": [
         {
           "client": 1,
-          "cold_list_ms": 658.953,
-          "rss_mib": 248.32
+          "cold_list_ms": 316.481,
+          "rss_mib": 115.867
         },
         {
           "client": 2,
-          "cold_list_ms": 397.055,
-          "rss_mib": 275.496
+          "cold_list_ms": 1.27,
+          "rss_mib": 115.879
         },
         {
           "client": 3,
-          "cold_list_ms": 410.407,
-          "rss_mib": 361.316
+          "cold_list_ms": 1.085,
+          "rss_mib": 115.969
         },
         {
           "client": 4,
-          "cold_list_ms": 379.959,
-          "rss_mib": 417.133
+          "cold_list_ms": 1.018,
+          "rss_mib": 115.98
         },
         {
           "client": 5,
-          "cold_list_ms": 390.924,
-          "rss_mib": 502.336
+          "cold_list_ms": 0.925,
+          "rss_mib": 115.98
         },
         {
           "client": 6,
-          "cold_list_ms": 392.302,
-          "rss_mib": 601.957
+          "cold_list_ms": 0.953,
+          "rss_mib": 115.984
         },
         {
           "client": 7,
-          "cold_list_ms": 380.127,
-          "rss_mib": 689.195
+          "cold_list_ms": 1.037,
+          "rss_mib": 115.992
         },
         {
           "client": 8,
-          "cold_list_ms": 387.943,
-          "rss_mib": 738.688
+          "cold_list_ms": 1.021,
+          "rss_mib": 115.992
         }
       ],
       "latency": [
@@ -715,28 +715,28 @@
           "method": "resources/list",
           "detail": "smallest listing",
           "count": 96,
-          "p50_ms": 1.044,
-          "p90_ms": 1.343,
-          "p99_ms": 1.561,
-          "max_ms": 1.561
+          "p50_ms": 4.486,
+          "p90_ms": 11.679,
+          "p99_ms": 12.257,
+          "max_ms": 12.257
         },
         {
           "method": "tools/call",
           "detail": "gitlab_find_action",
           "count": 96,
-          "p50_ms": 27.376,
-          "p90_ms": 48.004,
-          "p99_ms": 59.869,
-          "max_ms": 59.869
+          "p50_ms": 33.659,
+          "p90_ms": 51.363,
+          "p99_ms": 57.843,
+          "max_ms": 57.843
         },
         {
           "method": "tools/list",
           "detail": "whole surface",
           "count": 96,
-          "p50_ms": 3.89,
-          "p90_ms": 9.277,
-          "p99_ms": 10.532,
-          "max_ms": 10.532
+          "p50_ms": 2.539,
+          "p90_ms": 5.575,
+          "p99_ms": 5.68,
+          "max_ms": 5.68
         }
       ]
     }
@@ -760,30 +760,22 @@
         500,
         1000
       ],
-      "budget_mib": 16171.79,
-      "stopped_at": 100,
-      "stop_reason": "stopped at 100 credentials: the next step (200) was estimated at 26345 MiB against a budget of 16172 MiB",
-      "stop": {
-        "kind": "budget",
-        "next_clients": 200,
-        "estimate_mib": 26345.441
-      },
-      "skipped": [
-        200,
-        500,
-        1000
-      ],
+      "budget_mib": 26716.525,
+      "stopped_at": 1000,
+      "stop_reason": "",
       "steps": [
         {
           "clients": 1,
-          "rss_mean_mib": 193.745,
-          "rss_peak_mib": 249.27,
-          "cpu_ms_per_call": 7.459,
-          "calls": 7252,
-          "list_p50_ms": 0.873,
-          "list_p99_ms": 3.802,
-          "call_p50_ms": 9.746,
-          "call_p99_ms": 15.571,
+          "rss_mean_mib": 141.043,
+          "rss_peak_mib": 147.363,
+          "settled_heap_mib": 39.037,
+          "settled_rss_mib": 105.723,
+          "cpu_ms_per_call": 7.522,
+          "calls": 7251,
+          "list_p50_ms": 0.852,
+          "list_p99_ms": 3.083,
+          "call_p50_ms": 10.053,
+          "call_p99_ms": 14.323,
           "goroutines": 18,
           "pool": {
             "entries": 1,
@@ -796,15 +788,17 @@
         },
         {
           "clients": 2,
-          "rss_mean_mib": 311.187,
-          "rss_peak_mib": 329.094,
-          "cpu_ms_per_call": 7.435,
-          "calls": 12150,
-          "list_p50_ms": 0.993,
-          "list_p99_ms": 6.397,
-          "call_p50_ms": 11.655,
-          "call_p99_ms": 17.863,
-          "goroutines": 23,
+          "rss_mean_mib": 168.226,
+          "rss_peak_mib": 182.84,
+          "settled_heap_mib": 39.083,
+          "settled_rss_mib": 106.18,
+          "cpu_ms_per_call": 7.418,
+          "calls": 11964,
+          "list_p50_ms": 1.028,
+          "list_p99_ms": 4.03,
+          "call_p50_ms": 12.118,
+          "call_p99_ms": 16.7,
+          "goroutines": 22,
           "pool": {
             "entries": 2,
             "capacity": 1000
@@ -816,15 +810,17 @@
         },
         {
           "clients": 5,
-          "rss_mean_mib": 786.745,
-          "rss_peak_mib": 847.25,
-          "cpu_ms_per_call": 7.929,
-          "calls": 15749,
-          "list_p50_ms": 3.113,
-          "list_p99_ms": 20.496,
-          "call_p50_ms": 19.205,
-          "call_p99_ms": 42.497,
-          "goroutines": 40,
+          "rss_mean_mib": 214.588,
+          "rss_peak_mib": 247.93,
+          "settled_heap_mib": 39.259,
+          "settled_rss_mib": 107.344,
+          "cpu_ms_per_call": 7.83,
+          "calls": 15772,
+          "list_p50_ms": 3.027,
+          "list_p99_ms": 12.737,
+          "call_p50_ms": 21.069,
+          "call_p99_ms": 33.859,
+          "goroutines": 36,
           "pool": {
             "entries": 5,
             "capacity": 1000
@@ -836,15 +832,17 @@
         },
         {
           "clients": 10,
-          "rss_mean_mib": 1449.947,
-          "rss_peak_mib": 1487.203,
-          "cpu_ms_per_call": 7.922,
-          "calls": 15687,
-          "list_p50_ms": 11.229,
-          "list_p99_ms": 61.446,
-          "call_p50_ms": 31.147,
-          "call_p99_ms": 96.743,
-          "goroutines": 65,
+          "rss_mean_mib": 244.001,
+          "rss_peak_mib": 266.785,
+          "settled_heap_mib": 39.508,
+          "settled_rss_mib": 112.965,
+          "cpu_ms_per_call": 7.872,
+          "calls": 16108,
+          "list_p50_ms": 6.557,
+          "list_p99_ms": 44.258,
+          "call_p50_ms": 36.347,
+          "call_p99_ms": 98.286,
+          "goroutines": 56,
           "pool": {
             "entries": 10,
             "capacity": 1000
@@ -856,15 +854,17 @@
         },
         {
           "clients": 20,
-          "rss_mean_mib": 2710.911,
-          "rss_peak_mib": 2803.691,
-          "cpu_ms_per_call": 7.996,
-          "calls": 16472,
-          "list_p50_ms": 23.758,
-          "list_p99_ms": 176.013,
-          "call_p50_ms": 48.271,
-          "call_p99_ms": 256.821,
-          "goroutines": 115,
+          "rss_mean_mib": 287.868,
+          "rss_peak_mib": 315.707,
+          "settled_heap_mib": 40.022,
+          "settled_rss_mib": 113.273,
+          "cpu_ms_per_call": 7.764,
+          "calls": 16309,
+          "list_p50_ms": 9.042,
+          "list_p99_ms": 125.957,
+          "call_p50_ms": 65.137,
+          "call_p99_ms": 248.201,
+          "goroutines": 96,
           "pool": {
             "entries": 20,
             "capacity": 1000
@@ -876,15 +876,17 @@
         },
         {
           "clients": 50,
-          "rss_mean_mib": 6414.446,
-          "rss_peak_mib": 6808.18,
-          "cpu_ms_per_call": 8.085,
-          "calls": 15771,
-          "list_p50_ms": 54.67,
-          "list_p99_ms": 836.793,
-          "call_p50_ms": 85.343,
-          "call_p99_ms": 969.182,
-          "goroutines": 271,
+          "rss_mean_mib": 401.577,
+          "rss_peak_mib": 473.703,
+          "settled_heap_mib": 41.517,
+          "settled_rss_mib": 123.758,
+          "cpu_ms_per_call": 7.613,
+          "calls": 17330,
+          "list_p50_ms": 11.05,
+          "list_p99_ms": 442.056,
+          "call_p50_ms": 144.299,
+          "call_p99_ms": 737.169,
+          "goroutines": 218,
           "pool": {
             "entries": 50,
             "capacity": 1000
@@ -896,15 +898,17 @@
         },
         {
           "clients": 100,
-          "rss_mean_mib": 12382.201,
-          "rss_peak_mib": 13192.07,
-          "cpu_ms_per_call": 8.112,
-          "calls": 16358,
-          "list_p50_ms": 216.654,
-          "list_p99_ms": 775.471,
-          "call_p50_ms": 239.193,
-          "call_p99_ms": 814.611,
-          "goroutines": 515,
+          "rss_mean_mib": 564.728,
+          "rss_peak_mib": 658.707,
+          "settled_heap_mib": 43.96,
+          "settled_rss_mib": 135.523,
+          "cpu_ms_per_call": 7.607,
+          "calls": 17605,
+          "list_p50_ms": 14.161,
+          "list_p99_ms": 1005.939,
+          "call_p50_ms": 174.891,
+          "call_p99_ms": 1728.813,
+          "goroutines": 416,
           "pool": {
             "entries": 100,
             "capacity": 1000
@@ -912,6 +916,72 @@
           "profiles": {
             "cpu": "http-dynamic-series/100.cpu.pb.gz",
             "heap": "http-dynamic-series/100.heap.pb.gz"
+          }
+        },
+        {
+          "clients": 200,
+          "rss_mean_mib": 945.795,
+          "rss_peak_mib": 1166.75,
+          "settled_heap_mib": 48.922,
+          "settled_rss_mib": 159.973,
+          "cpu_ms_per_call": 7.654,
+          "calls": 17432,
+          "list_p50_ms": 20.464,
+          "list_p99_ms": 1661.57,
+          "call_p50_ms": 301.657,
+          "call_p99_ms": 3928.075,
+          "goroutines": 816,
+          "pool": {
+            "entries": 200,
+            "capacity": 1000
+          },
+          "profiles": {
+            "cpu": "http-dynamic-series/200.cpu.pb.gz",
+            "heap": "http-dynamic-series/200.heap.pb.gz"
+          }
+        },
+        {
+          "clients": 500,
+          "rss_mean_mib": 2048.316,
+          "rss_peak_mib": 3024.383,
+          "settled_heap_mib": 64.03,
+          "settled_rss_mib": 529.438,
+          "cpu_ms_per_call": 7.917,
+          "calls": 18379,
+          "list_p50_ms": 35.705,
+          "list_p99_ms": 3727.835,
+          "call_p50_ms": 826.737,
+          "call_p99_ms": 9556.918,
+          "goroutines": 2015,
+          "pool": {
+            "entries": 500,
+            "capacity": 1000
+          },
+          "profiles": {
+            "cpu": "http-dynamic-series/500.cpu.pb.gz",
+            "heap": "http-dynamic-series/500.heap.pb.gz"
+          }
+        },
+        {
+          "clients": 1000,
+          "rss_mean_mib": 2510.062,
+          "rss_peak_mib": 3964.059,
+          "settled_heap_mib": 88.658,
+          "settled_rss_mib": 312.492,
+          "cpu_ms_per_call": 8.358,
+          "calls": 18970,
+          "list_p50_ms": 238.873,
+          "list_p99_ms": 7404.712,
+          "call_p50_ms": 2165.629,
+          "call_p99_ms": 11212.297,
+          "goroutines": 4015,
+          "pool": {
+            "entries": 1000,
+            "capacity": 1000
+          },
+          "profiles": {
+            "cpu": "http-dynamic-series/1000.cpu.pb.gz",
+            "heap": "http-dynamic-series/1000.heap.pb.gz"
           }
         }
       ]
@@ -934,29 +1004,22 @@
         500,
         1000
       ],
-      "budget_mib": 16171.79,
-      "stopped_at": 200,
-      "stop_reason": "stopped at 200 credentials: the next step (500) was estimated at 32007 MiB against a budget of 16172 MiB",
-      "stop": {
-        "kind": "budget",
-        "next_clients": 500,
-        "estimate_mib": 32006.506
-      },
-      "skipped": [
-        500,
-        1000
-      ],
+      "budget_mib": 26716.525,
+      "stopped_at": 1000,
+      "stop_reason": "",
       "steps": [
         {
           "clients": 1,
-          "rss_mean_mib": 152.957,
-          "rss_peak_mib": 198.758,
-          "cpu_ms_per_call": 8.305,
-          "calls": 6377,
-          "list_p50_ms": 11.14,
-          "list_p99_ms": 15.988,
-          "call_p50_ms": 0.989,
-          "call_p99_ms": 3.849,
+          "rss_mean_mib": 136.028,
+          "rss_peak_mib": 149.242,
+          "settled_heap_mib": 32.616,
+          "settled_rss_mib": 95.336,
+          "cpu_ms_per_call": 8.262,
+          "calls": 6393,
+          "list_p50_ms": 11.114,
+          "list_p99_ms": 16.077,
+          "call_p50_ms": 0.93,
+          "call_p99_ms": 3.726,
           "goroutines": 20,
           "pool": {
             "entries": 1,
@@ -969,15 +1032,17 @@
         },
         {
           "clients": 2,
-          "rss_mean_mib": 239.716,
-          "rss_peak_mib": 283.609,
-          "cpu_ms_per_call": 7.425,
-          "calls": 10745,
-          "list_p50_ms": 13.462,
-          "list_p99_ms": 18.481,
-          "call_p50_ms": 1.034,
-          "call_p99_ms": 5.462,
-          "goroutines": 25,
+          "rss_mean_mib": 162.612,
+          "rss_peak_mib": 189.813,
+          "settled_heap_mib": 32.663,
+          "settled_rss_mib": 95.172,
+          "cpu_ms_per_call": 7.748,
+          "calls": 10246,
+          "list_p50_ms": 13.896,
+          "list_p99_ms": 18.733,
+          "call_p50_ms": 1.273,
+          "call_p99_ms": 4.546,
+          "goroutines": 24,
           "pool": {
             "entries": 2,
             "capacity": 1000
@@ -989,15 +1054,17 @@
         },
         {
           "clients": 5,
-          "rss_mean_mib": 473.558,
-          "rss_peak_mib": 519.914,
-          "cpu_ms_per_call": 8.174,
-          "calls": 11806,
-          "list_p50_ms": 25.378,
-          "list_p99_ms": 52.216,
-          "call_p50_ms": 5.964,
-          "call_p99_ms": 24.889,
-          "goroutines": 40,
+          "rss_mean_mib": 191.787,
+          "rss_peak_mib": 215.551,
+          "settled_heap_mib": 32.836,
+          "settled_rss_mib": 99.129,
+          "cpu_ms_per_call": 8.471,
+          "calls": 12430,
+          "list_p50_ms": 25.863,
+          "list_p99_ms": 41.605,
+          "call_p50_ms": 5.224,
+          "call_p99_ms": 15.743,
+          "goroutines": 36,
           "pool": {
             "entries": 5,
             "capacity": 1000
@@ -1009,15 +1076,17 @@
         },
         {
           "clients": 10,
-          "rss_mean_mib": 833.933,
-          "rss_peak_mib": 1074.719,
-          "cpu_ms_per_call": 8.065,
-          "calls": 14055,
-          "list_p50_ms": 32.998,
-          "list_p99_ms": 76.881,
-          "call_p50_ms": 18.922,
-          "call_p99_ms": 57.514,
-          "goroutines": 65,
+          "rss_mean_mib": 204.075,
+          "rss_peak_mib": 230.918,
+          "settled_heap_mib": 33.072,
+          "settled_rss_mib": 101.34,
+          "cpu_ms_per_call": 8.576,
+          "calls": 12509,
+          "list_p50_ms": 45.961,
+          "list_p99_ms": 102.642,
+          "call_p50_ms": 13.263,
+          "call_p99_ms": 49.945,
+          "goroutines": 56,
           "pool": {
             "entries": 10,
             "capacity": 1000
@@ -1029,15 +1098,17 @@
         },
         {
           "clients": 20,
-          "rss_mean_mib": 1458.533,
-          "rss_peak_mib": 1511.656,
-          "cpu_ms_per_call": 8.064,
-          "calls": 14299,
-          "list_p50_ms": 49.801,
-          "list_p99_ms": 160.63,
-          "call_p50_ms": 47.939,
-          "call_p99_ms": 154.161,
-          "goroutines": 115,
+          "rss_mean_mib": 236.392,
+          "rss_peak_mib": 270.883,
+          "settled_heap_mib": 33.601,
+          "settled_rss_mib": 100.492,
+          "cpu_ms_per_call": 8.15,
+          "calls": 13513,
+          "list_p50_ms": 78.434,
+          "list_p99_ms": 208.051,
+          "call_p50_ms": 27.423,
+          "call_p99_ms": 120.468,
+          "goroutines": 96,
           "pool": {
             "entries": 20,
             "capacity": 1000
@@ -1049,15 +1120,17 @@
         },
         {
           "clients": 50,
-          "rss_mean_mib": 3394.015,
-          "rss_peak_mib": 3473.27,
-          "cpu_ms_per_call": 7.974,
-          "calls": 14549,
-          "list_p50_ms": 101.585,
-          "list_p99_ms": 358.58,
-          "call_p50_ms": 138.607,
-          "call_p99_ms": 431.401,
-          "goroutines": 267,
+          "rss_mean_mib": 311.237,
+          "rss_peak_mib": 391.117,
+          "settled_heap_mib": 35.242,
+          "settled_rss_mib": 108.922,
+          "cpu_ms_per_call": 7.835,
+          "calls": 14103,
+          "list_p50_ms": 151.26,
+          "list_p99_ms": 521.821,
+          "call_p50_ms": 98.186,
+          "call_p99_ms": 386.337,
+          "goroutines": 216,
           "pool": {
             "entries": 50,
             "capacity": 1000
@@ -1069,15 +1142,17 @@
         },
         {
           "clients": 100,
-          "rss_mean_mib": 6539.796,
-          "rss_peak_mib": 6645.031,
-          "cpu_ms_per_call": 7.995,
-          "calls": 14582,
-          "list_p50_ms": 201.167,
-          "list_p99_ms": 933.47,
-          "call_p50_ms": 256.095,
-          "call_p99_ms": 977.047,
-          "goroutines": 515,
+          "rss_mean_mib": 334.796,
+          "rss_peak_mib": 481.082,
+          "settled_heap_mib": 38.05,
+          "settled_rss_mib": 119.766,
+          "cpu_ms_per_call": 8.181,
+          "calls": 13819,
+          "list_p50_ms": 266.486,
+          "list_p99_ms": 735.314,
+          "call_p50_ms": 298.217,
+          "call_p99_ms": 778.298,
+          "goroutines": 416,
           "pool": {
             "entries": 100,
             "capacity": 1000
@@ -1089,15 +1164,17 @@
         },
         {
           "clients": 200,
-          "rss_mean_mib": 12641.963,
-          "rss_peak_mib": 12907.293,
-          "cpu_ms_per_call": 7.893,
-          "calls": 14740,
-          "list_p50_ms": 532.491,
-          "list_p99_ms": 1543.282,
-          "call_p50_ms": 465.433,
-          "call_p99_ms": 1598.779,
-          "goroutines": 1014,
+          "rss_mean_mib": 382.337,
+          "rss_peak_mib": 624.879,
+          "settled_heap_mib": 43.36,
+          "settled_rss_mib": 137.832,
+          "cpu_ms_per_call": 8.457,
+          "calls": 13928,
+          "list_p50_ms": 592.835,
+          "list_p99_ms": 1133.568,
+          "call_p50_ms": 646.818,
+          "call_p99_ms": 1364.372,
+          "goroutines": 816,
           "pool": {
             "entries": 200,
             "capacity": 1000
@@ -1105,6 +1182,50 @@
           "profiles": {
             "cpu": "http-meta-series/200.cpu.pb.gz",
             "heap": "http-meta-series/200.heap.pb.gz"
+          }
+        },
+        {
+          "clients": 500,
+          "rss_mean_mib": 513.695,
+          "rss_peak_mib": 752.629,
+          "settled_heap_mib": 59.311,
+          "settled_rss_mib": 181.066,
+          "cpu_ms_per_call": 8.632,
+          "calls": 14893,
+          "list_p50_ms": 1594.31,
+          "list_p99_ms": 2815.3,
+          "call_p50_ms": 1372.326,
+          "call_p99_ms": 3023.484,
+          "goroutines": 2015,
+          "pool": {
+            "entries": 500,
+            "capacity": 1000
+          },
+          "profiles": {
+            "cpu": "http-meta-series/500.cpu.pb.gz",
+            "heap": "http-meta-series/500.heap.pb.gz"
+          }
+        },
+        {
+          "clients": 1000,
+          "rss_mean_mib": 725.89,
+          "rss_peak_mib": 1037.383,
+          "settled_heap_mib": 83.058,
+          "settled_rss_mib": 240.918,
+          "cpu_ms_per_call": 8.382,
+          "calls": 17407,
+          "list_p50_ms": 2975.527,
+          "list_p99_ms": 5695.197,
+          "call_p50_ms": 1866.522,
+          "call_p99_ms": 6442.46,
+          "goroutines": 4015,
+          "pool": {
+            "entries": 1000,
+            "capacity": 1000
+          },
+          "profiles": {
+            "cpu": "http-meta-series/1000.cpu.pb.gz",
+            "heap": "http-meta-series/1000.heap.pb.gz"
           }
         }
       ]
@@ -1127,30 +1248,22 @@
         500,
         1000
       ],
-      "budget_mib": 16171.79,
-      "stopped_at": 100,
-      "stop_reason": "stopped at 100 credentials: the next step (200) was estimated at 18461 MiB against a budget of 16172 MiB",
-      "stop": {
-        "kind": "budget",
-        "next_clients": 200,
-        "estimate_mib": 18461.146
-      },
-      "skipped": [
-        200,
-        500,
-        1000
-      ],
+      "budget_mib": 26716.525,
+      "stopped_at": 1000,
+      "stop_reason": "",
       "steps": [
         {
           "clients": 1,
-          "rss_mean_mib": 279.915,
-          "rss_peak_mib": 320.594,
-          "cpu_ms_per_call": 106.214,
-          "calls": 280,
-          "list_p50_ms": 141.174,
-          "list_p99_ms": 157.575,
-          "call_p50_ms": 0.935,
-          "call_p99_ms": 4.462,
+          "rss_mean_mib": 274.078,
+          "rss_peak_mib": 301.008,
+          "settled_heap_mib": 88.117,
+          "settled_rss_mib": 185.266,
+          "cpu_ms_per_call": 105.372,
+          "calls": 296,
+          "list_p50_ms": 135.186,
+          "list_p99_ms": 147.222,
+          "call_p50_ms": 0.931,
+          "call_p99_ms": 2.254,
           "goroutines": 18,
           "pool": {
             "entries": 1,
@@ -1163,15 +1276,17 @@
         },
         {
           "clients": 2,
-          "rss_mean_mib": 354.938,
-          "rss_peak_mib": 398.078,
-          "cpu_ms_per_call": 115.51,
-          "calls": 490,
-          "list_p50_ms": 161.96,
-          "list_p99_ms": 184.114,
-          "call_p50_ms": 1.053,
-          "call_p99_ms": 5.269,
-          "goroutines": 21,
+          "rss_mean_mib": 298.766,
+          "rss_peak_mib": 353.203,
+          "settled_heap_mib": 88.254,
+          "settled_rss_mib": 183.297,
+          "cpu_ms_per_call": 114.093,
+          "calls": 496,
+          "list_p50_ms": 161.006,
+          "list_p99_ms": 183.561,
+          "call_p50_ms": 1.015,
+          "call_p99_ms": 6.609,
+          "goroutines": 20,
           "pool": {
             "entries": 2,
             "capacity": 1000
@@ -1183,15 +1298,17 @@
         },
         {
           "clients": 5,
-          "rss_mean_mib": 712.394,
-          "rss_peak_mib": 837.578,
-          "cpu_ms_per_call": 128.333,
-          "calls": 870,
-          "list_p50_ms": 229.144,
-          "list_p99_ms": 266.498,
-          "call_p50_ms": 1.246,
-          "call_p99_ms": 14.46,
-          "goroutines": 30,
+          "rss_mean_mib": 413.453,
+          "rss_peak_mib": 500.398,
+          "settled_heap_mib": 88.372,
+          "settled_rss_mib": 195.219,
+          "cpu_ms_per_call": 128.894,
+          "calls": 832,
+          "list_p50_ms": 236.298,
+          "list_p99_ms": 401.817,
+          "call_p50_ms": 1.332,
+          "call_p99_ms": 11.993,
+          "goroutines": 26,
           "pool": {
             "entries": 5,
             "capacity": 1000
@@ -1203,15 +1320,17 @@
         },
         {
           "clients": 10,
-          "rss_mean_mib": 1217.881,
-          "rss_peak_mib": 1301.48,
-          "cpu_ms_per_call": 142.3,
-          "calls": 948,
-          "list_p50_ms": 394.47,
-          "list_p99_ms": 577.21,
-          "call_p50_ms": 21.794,
-          "call_p99_ms": 79.138,
-          "goroutines": 45,
+          "rss_mean_mib": 523.854,
+          "rss_peak_mib": 730.516,
+          "settled_heap_mib": 88.529,
+          "settled_rss_mib": 195.566,
+          "cpu_ms_per_call": 137.807,
+          "calls": 985,
+          "list_p50_ms": 389.842,
+          "list_p99_ms": 513.355,
+          "call_p50_ms": 14.174,
+          "call_p99_ms": 65.92,
+          "goroutines": 36,
           "pool": {
             "entries": 10,
             "capacity": 1000
@@ -1223,15 +1342,17 @@
         },
         {
           "clients": 20,
-          "rss_mean_mib": 2037.702,
-          "rss_peak_mib": 2154.801,
-          "cpu_ms_per_call": 145.466,
-          "calls": 944,
-          "list_p50_ms": 789.854,
-          "list_p99_ms": 1312.265,
-          "call_p50_ms": 53.338,
-          "call_p99_ms": 279.737,
-          "goroutines": 75,
+          "rss_mean_mib": 666.121,
+          "rss_peak_mib": 843.492,
+          "settled_heap_mib": 88.854,
+          "settled_rss_mib": 196.012,
+          "cpu_ms_per_call": 134.237,
+          "calls": 1022,
+          "list_p50_ms": 741.757,
+          "list_p99_ms": 1205.635,
+          "call_p50_ms": 34.927,
+          "call_p99_ms": 191.427,
+          "goroutines": 56,
           "pool": {
             "entries": 20,
             "capacity": 1000
@@ -1243,15 +1364,17 @@
         },
         {
           "clients": 50,
-          "rss_mean_mib": 4518.474,
-          "rss_peak_mib": 4681.719,
-          "cpu_ms_per_call": 147.885,
-          "calls": 1007,
-          "list_p50_ms": 1805.627,
-          "list_p99_ms": 4073.692,
-          "call_p50_ms": 108.183,
-          "call_p99_ms": 1064.195,
-          "goroutines": 165,
+          "rss_mean_mib": 1030.865,
+          "rss_peak_mib": 1525.828,
+          "settled_heap_mib": 89.715,
+          "settled_rss_mib": 208.531,
+          "cpu_ms_per_call": 128.778,
+          "calls": 1146,
+          "list_p50_ms": 1647.428,
+          "list_p99_ms": 3619.987,
+          "call_p50_ms": 73.954,
+          "call_p99_ms": 820.836,
+          "goroutines": 116,
           "pool": {
             "entries": 50,
             "capacity": 1000
@@ -1263,15 +1386,17 @@
         },
         {
           "clients": 100,
-          "rss_mean_mib": 8512.861,
-          "rss_peak_mib": 9431.754,
-          "cpu_ms_per_call": 152.311,
-          "calls": 1060,
-          "list_p50_ms": 3716.408,
-          "list_p99_ms": 7631.353,
-          "call_p50_ms": 298.944,
-          "call_p99_ms": 2069.457,
-          "goroutines": 314,
+          "rss_mean_mib": 1510.113,
+          "rss_peak_mib": 2083.273,
+          "settled_heap_mib": 91.162,
+          "settled_rss_mib": 224.754,
+          "cpu_ms_per_call": 125.004,
+          "calls": 1269,
+          "list_p50_ms": 3151.394,
+          "list_p99_ms": 8060.459,
+          "call_p50_ms": 99.735,
+          "call_p99_ms": 1681.46,
+          "goroutines": 216,
           "pool": {
             "entries": 100,
             "capacity": 1000
@@ -1279,6 +1404,72 @@
           "profiles": {
             "cpu": "http-individual-series/100.cpu.pb.gz",
             "heap": "http-individual-series/100.heap.pb.gz"
+          }
+        },
+        {
+          "clients": 200,
+          "rss_mean_mib": 1955.847,
+          "rss_peak_mib": 2804.355,
+          "settled_heap_mib": 93.976,
+          "settled_rss_mib": 245.414,
+          "cpu_ms_per_call": 122.597,
+          "calls": 1525,
+          "list_p50_ms": 5229.447,
+          "list_p99_ms": 12003.098,
+          "call_p50_ms": 763.841,
+          "call_p99_ms": 3668.183,
+          "goroutines": 415,
+          "pool": {
+            "entries": 200,
+            "capacity": 1000
+          },
+          "profiles": {
+            "cpu": "http-individual-series/200.cpu.pb.gz",
+            "heap": "http-individual-series/200.heap.pb.gz"
+          }
+        },
+        {
+          "clients": 500,
+          "rss_mean_mib": 2425.697,
+          "rss_peak_mib": 3171.797,
+          "settled_heap_mib": 102.598,
+          "settled_rss_mib": 276.777,
+          "cpu_ms_per_call": 107.447,
+          "calls": 2346,
+          "list_p50_ms": 11591.65,
+          "list_p99_ms": 17314.826,
+          "call_p50_ms": 2279.076,
+          "call_p99_ms": 9605.042,
+          "goroutines": 1015,
+          "pool": {
+            "entries": 500,
+            "capacity": 1000
+          },
+          "profiles": {
+            "cpu": "http-individual-series/500.cpu.pb.gz",
+            "heap": "http-individual-series/500.heap.pb.gz"
+          }
+        },
+        {
+          "clients": 1000,
+          "rss_mean_mib": 2889.708,
+          "rss_peak_mib": 4498.359,
+          "settled_heap_mib": 116.631,
+          "settled_rss_mib": 315.824,
+          "cpu_ms_per_call": 95.645,
+          "calls": 3683,
+          "list_p50_ms": 18197.912,
+          "list_p99_ms": 25090.768,
+          "call_p50_ms": 4936.975,
+          "call_p99_ms": 18983.948,
+          "goroutines": 2015,
+          "pool": {
+            "entries": 1000,
+            "capacity": 1000
+          },
+          "profiles": {
+            "cpu": "http-individual-series/1000.cpu.pb.gz",
+            "heap": "http-individual-series/1000.heap.pb.gz"
           }
         }
       ]
