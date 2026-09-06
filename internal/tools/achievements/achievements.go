@@ -520,7 +520,11 @@ var newGraphQLUpload = gl.NewGraphQLUpload
 // the whole reader before it returns, so the cleanup the caller defers runs
 // well after the bytes have been taken.
 func (a AvatarInput) upload(operation string) (*gl.GraphQLUpload, func(), error) {
-	noCleanup := func() {}
+	noCleanup := func() {
+		// Nothing to release. The caller defers whatever this function returns
+		// without asking which of the two shapes it got, so the shape that
+		// opened no file still has to hand back something to defer.
+	}
 	if a.AvatarFilePath == "" && a.AvatarContentBase64 == "" {
 		return nil, noCleanup, nil
 	}
