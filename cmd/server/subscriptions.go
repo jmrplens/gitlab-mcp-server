@@ -517,11 +517,23 @@ const watchEndMetaKey = "io.github.jmrplens/watch-end"
 // ([watchEndReasons]) and documented in the capability reference, and a new
 // value is a documented addition rather than a free-text string.
 //
-// What none of them says is anything about anybody else. A reason describes
-// what happened to this subscription; how full the pool is, how many
-// credentials the deployment holds and who else is connected are the
-// operator's business and, to a caller probing for the busy fallback, exactly
-// the reconnaissance worth withholding.
+// What none of them carries is a fact about anybody else: no counts, no other
+// credential's URIs, no owner token, and no configuration. A reason names what
+// happened to this subscription and nothing more.
+//
+// One inference is nonetheless available to the client it happens to, and it is
+// recorded here rather than pretended away. [endCredentialEvicted] reaches a
+// client only over an open listen, and holding one is what makes that
+// credential's pool entry busy, so a client receiving it learns that at that
+// instant the pool had nothing quiet to take. Merging the busy and unbusy
+// evictions into one cause, which is what [serverpool.CauseSizePressure]
+// already does, does not close that: the recipient's own busyness supplies the
+// missing bit. Nor is the oracle new, since before this vocabulary existed a
+// bare completion on a list-changed-only listen already meant "evicted or shut
+// down". It is accepted for what it buys, which is a client that can tell an
+// eviction from a revocation and act differently; what stays unpublished is the
+// occupancy itself, to callers who are not the one being evicted, which is why
+// /health still carries no pool state.
 //
 //nolint:gosec // G101 fires on the identifiers containing "Credential"; these are the words a client reads to learn why its subscription ended, and no credential is anywhere near them.
 const (
@@ -820,9 +832,17 @@ func (s *listenStreams) arm(uris []string, owner string, session *mcp.ServerSess
 	if closed {
 		// Outside the lock, like every other ending here: the SDK's handler
 		// unwinds through the unsubscribe path. The reason is shutdown because
-		// that is the only thing that sets the flag, and a listen that arrives
-		// during the drain is owed the same answer as one that was already
-		// open when it began.
+		// that is the only thing that sets the flag.
+		//
+		// The reason reaches the client whenever the SDK still produces a result
+		// for this request, which a listen asking only for list-changed
+		// notifications does: it skips the per-URI subscribe loop, finds its
+		// context already cancelled and returns the completion the stamp goes
+		// on. One naming a resource runs that loop on the cancelled context, and
+		// the SDK returns the first subscribe failure instead of a result, so
+		// its client is answered with an error rather than a reason. Both are
+		// answered rather than left hanging, which is what matters during a
+		// drain.
 		stream.endWith(endOfShutdown)
 	}
 

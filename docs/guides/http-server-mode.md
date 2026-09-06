@@ -1030,6 +1030,8 @@ Liveness is reported both ways on purpose. `started_at` is the stable fact — i
 
 **No pool state, on purpose.** The endpoint publishes no entry count, no eviction counter and no configuration beyond the digest, and that is what lets it need no credential. Pool occupancy is precisely the reconnaissance a caller probing for the busy-entry fallback would want: one sample says how full the pool is, and two say how fast it is churning. The counters go to the logs and to OpenTelemetry instead, both of which the operator controls; see [Server Logs](#server-logs) and the [Telemetry guide](telemetry.md).
 
+What that withholds is occupancy from callers in general, not the fact of a caller's own eviction. A client whose `subscriptions/listen` ends with `credential_evicted` holds an open stream, which is what made its entry busy, so it can infer that the pool had nothing quiet to take at that instant. That inference is accepted: it is about the eviction that just happened to it, and the alternative is to stop telling an evicted client why its subscription ended.
+
 `/health` reports only that the process is up; it performs no GitLab round-trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
 
 ```bash

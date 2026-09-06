@@ -1621,20 +1621,22 @@ func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
 		name string
 		// evict drives one removal path against a freshly filled pool.
 		evict func(t *testing.T, pool *ServerPool, srv *mcp.Server, key string)
-		// want reads the counter the path is supposed to move.
-		want func(Snapshot) int64
-		// others are the counters that must not have moved.
-		others func(Snapshot) []int64
+		// counter names the series this path is supposed to move, as
+		// [evictionCounters] labels it. Every other counter must stay at zero,
+		// which is read from that map rather than listed per case: a counter
+		// added there is then covered by every case at once, where a per-case
+		// list of the others is a list somebody forgets to extend.
+		counter string
+		// busy reports every pooled entry as in use, which is what sends size
+		// pressure down its fallback.
+		busy bool
 	}{
 		{
 			name: "revalidation refusal moves InvalidEvictions",
 			evict: func(_ *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
 				pool.evictByKey(key)
 			},
-			want: func(s Snapshot) int64 { return s.InvalidEvictions },
-			others: func(s Snapshot) []int64 {
-				return []int64{s.SizeEvictions, s.BusyEvictions, s.RebuildEvictions, s.IdleEvictions}
-			},
+			counter: "invalid_credential",
 		},
 		{
 			name: "a failed shape rebuild moves RebuildEvictions",
@@ -1644,10 +1646,7 @@ func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
 					t.Error("EvictServer() found nothing, but the entry was just created")
 				}
 			},
-			want: func(s Snapshot) int64 { return s.RebuildEvictions },
-			others: func(s Snapshot) []int64 {
-				return []int64{s.SizeEvictions, s.BusyEvictions, s.InvalidEvictions, s.IdleEvictions}
-			},
+			counter: "rebuild",
 		},
 		{
 			name: "the idle sweep moves IdleEvictions",
@@ -1657,10 +1656,53 @@ func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
 				pool.mu.Unlock()
 				pool.evictIdle()
 			},
-			want: func(s Snapshot) int64 { return s.IdleEvictions },
-			others: func(s Snapshot) []int64 {
-				return []int64{s.SizeEvictions, s.BusyEvictions, s.InvalidEvictions, s.RebuildEvictions}
+			counter: "idle",
+		},
+		{
+			name: "the credential-recheck ceiling moves StaleCredentialEvictions",
+			evict: func(_ *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				pool.mu.Lock()
+				pool.maxCredentialAge = time.Minute
+				pool.entries[key].lastValidated = time.Now().Add(-time.Hour)
+				pool.mu.Unlock()
+				pool.evictStaleCredential(key)
 			},
+			counter: "stale_credential",
+		},
+		{
+			name: "a 401 on a call moves RejectedCredentialEvictions",
+			evict: func(t *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				t.Helper()
+				pool.mu.RLock()
+				entry := pool.entries[key]
+				pool.mu.RUnlock()
+				if entry == nil {
+					t.Fatal("the entry was gone before the rejection could be driven")
+				}
+				pool.evictRejectedCredential(key, entry)
+			},
+			counter: "rejected_credential",
+		},
+		{
+			name: "size pressure on a quiet pool moves SizeEvictions",
+			evict: func(t *testing.T, pool *ServerPool, _ *mcp.Server, _ string) {
+				t.Helper()
+				if _, err := pool.GetOrCreate("glpat-the-newcomer", stubGitLabBase); err != nil {
+					t.Errorf("GetOrCreate() for the arriving credential: %v", err)
+				}
+			},
+			counter: "size_pressure",
+		},
+		{
+			name: "size pressure on an all-busy pool moves BusyEvictions",
+			evict: func(t *testing.T, pool *ServerPool, _ *mcp.Server, _ string) {
+				t.Helper()
+				if _, err := pool.GetOrCreate("glpat-the-newcomer", stubGitLabBase); err != nil {
+					t.Errorf("GetOrCreate() for the arriving credential: %v", err)
+				}
+			},
+			counter: "size_pressure_busy",
+			busy:    true,
 		},
 	}
 
@@ -1669,7 +1711,14 @@ func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
 			const token = "glpat-one-entry"
 
 			cfg := testConfig(stubGitLabBase)
-			pool := New(cfg, testFactory(), WithMaxSize(4), WithIdleTimeout(time.Minute))
+			// A pool of one, so the two size-pressure cases evict on the
+			// arrival of a second credential and the other five have room to
+			// spare regardless.
+			options := []Option{WithMaxSize(1), WithIdleTimeout(time.Minute)}
+			if tt.busy {
+				options = append(options, WithInUse(func(*Entry) bool { return true }))
+			}
+			pool := New(cfg, testFactory(), options...)
 			srv, err := pool.GetOrCreate(token, stubGitLabBase)
 			if err != nil {
 				t.Fatalf("GetOrCreate() error: %v", err)
@@ -1677,17 +1726,40 @@ func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
 
 			tt.evict(t, pool, srv, sessionKey(token, stubGitLabBase))
 
-			stats := pool.Stats()
-			if got := tt.want(stats); got != 1 {
-				t.Errorf("the path's own counter = %d, want 1; snapshot: %+v", got, stats)
-			}
-			for _, other := range tt.others(stats) {
-				if other != 0 {
-					t.Errorf("another path's counter moved: %+v", stats)
-				}
-			}
+			assertOnlyItsOwnCounterMoved(t, pool.Stats(), tt.counter)
 		})
 	}
+}
+
+// assertOnlyItsOwnCounterMoved checks that the named series moved by exactly one
+// and every other stayed where it was.
+func assertOnlyItsOwnCounterMoved(t *testing.T, stats Snapshot, counter string) {
+	t.Helper()
+
+	for name, read := range evictionCounters {
+		want := int64(0)
+		if name == counter {
+			want = 1
+		}
+		if got := read(stats); got != want {
+			t.Errorf("the %s counter = %d, want %d; snapshot: %+v", name, got, want, stats)
+		}
+	}
+}
+
+// evictionCounters is every counter the eviction metric publishes as a series
+// of its own, keyed by the reason attribute value internal/mcpotel labels it
+// with. The legacy Evictions total is deliberately absent: it overlaps four of
+// these, so a case asserting it stayed at zero would fail on three paths that
+// are behaving correctly.
+var evictionCounters = map[string]func(Snapshot) int64{
+	"size_pressure":       func(s Snapshot) int64 { return s.SizeEvictions },
+	"size_pressure_busy":  func(s Snapshot) int64 { return s.BusyEvictions },
+	"idle":                func(s Snapshot) int64 { return s.IdleEvictions },
+	"stale_credential":    func(s Snapshot) int64 { return s.StaleCredentialEvictions },
+	"rejected_credential": func(s Snapshot) int64 { return s.RejectedCredentialEvictions },
+	"invalid_credential":  func(s Snapshot) int64 { return s.InvalidEvictions },
+	"rebuild":             func(s Snapshot) int64 { return s.RebuildEvictions },
 }
 
 // TestOnEvict_EachRemovalPathNamesItsOwnCause pins the vocabulary the callback

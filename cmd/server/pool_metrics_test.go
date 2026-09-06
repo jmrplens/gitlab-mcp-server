@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 
@@ -98,6 +99,70 @@ func TestObservePoolMetrics_ExportsWhatTheSnapshotHolds(t *testing.T) {
 	}
 }
 
+// TestPoolCounts_CarriesEveryCounterToItsOwnSeries pins the nine mappings that
+// exist in exactly one place.
+//
+// Nothing else can see them. internal/mcpotel's own tests are handed a
+// PoolCounts already built, so they cannot tell which snapshot field it came
+// from, and the collector module proves only that the instrument names are
+// emitted, never their values. A field copied from the one beside it therefore
+// publishes one removal path's number under another path's reason, and a field
+// left out publishes a permanent zero that reads as "this never happens".
+func TestPoolCounts_CarriesEveryCounterToItsOwnSeries(t *testing.T) {
+	// Distinct values, so a field taken from the wrong source is a wrong
+	// number rather than a coincidence. The three that must not be exported
+	// carry values no exported field could plausibly be confused with.
+	stats := serverpool.Snapshot{
+		CurrentSize:                 1,
+		MaxSize:                     2,
+		SizeEvictions:               3,
+		BusyEvictions:               4,
+		IdleEvictions:               5,
+		StaleCredentialEvictions:    6,
+		RejectedCredentialEvictions: 7,
+		InvalidEvictions:            8,
+		RebuildEvictions:            9,
+		Evictions:                   1000,
+		Hits:                        2000,
+		Misses:                      3000,
+	}
+
+	counts := poolCounts(stats)
+	fields := []struct {
+		name string
+		got  int64
+		want int64
+	}{
+		{name: "entries", got: counts.Entries, want: 1},
+		{name: "capacity", got: counts.MaxSize, want: 2},
+		{name: "size_pressure", got: counts.SizeEvictions, want: 3},
+		{name: "size_pressure_busy", got: counts.BusyEvictions, want: 4},
+		{name: "idle", got: counts.IdleEvictions, want: 5},
+		{name: "stale_credential", got: counts.StaleEvictions, want: 6},
+		{name: "rejected_credential", got: counts.RejectedEvictions, want: 7},
+		{name: "invalid_credential", got: counts.InvalidEvictions, want: 8},
+		{name: "rebuild", got: counts.RebuildEvictions, want: 9},
+	}
+	for _, field := range fields {
+		t.Run(field.name, func(t *testing.T) {
+			if field.got != field.want {
+				t.Errorf("%s = %d, want %d; the snapshot counter is reaching the wrong series or none",
+					field.name, field.got, field.want)
+			}
+		})
+	}
+
+	// The legacy total overlaps four of the counters above, so exporting it
+	// beside them would count every size, revalidation and rebuild eviction
+	// twice. Its absence is the assertion.
+	if slices.Contains([]int64{
+		counts.Entries, counts.MaxSize, counts.SizeEvictions, counts.BusyEvictions, counts.IdleEvictions,
+		counts.StaleEvictions, counts.RejectedEvictions, counts.InvalidEvictions, counts.RebuildEvictions,
+	}, stats.Evictions) {
+		t.Errorf("the legacy Evictions total reached an exported series: %+v", counts)
+	}
+}
+
 // refusingMeterProvider hands out a meter that will not create an instrument,
 // standing in for a provider that rejects one.
 type refusingMeterProvider struct {
@@ -154,6 +219,71 @@ func TestObservePoolMetrics_ARefusedRegistration_LeavesTheServerServing(t *testi
 
 	if !strings.Contains(logged.String(), "credential pool telemetry could not be registered") {
 		t.Errorf("the refusal was swallowed; an operator would see a missing instrument and nothing saying why.\nlogged: %s",
+			logged.String())
+	}
+}
+
+// unregisterFailingMeterProvider hands out a meter that creates its instruments
+// but will not take the callback back, standing in for a provider shut down
+// before the pool it reads was closed.
+type unregisterFailingMeterProvider struct {
+	apimetric.MeterProvider
+	err error
+}
+
+func (p unregisterFailingMeterProvider) Meter(string, ...apimetric.MeterOption) apimetric.Meter {
+	return unregisterFailingMeter{Meter: noopmetric.Meter{}, err: p.err}
+}
+
+type unregisterFailingMeter struct {
+	apimetric.Meter
+	err error
+}
+
+func (m unregisterFailingMeter) RegisterCallback(
+	apimetric.Callback, ...apimetric.Observable,
+) (apimetric.Registration, error) {
+	return failingRegistration{err: m.err}, nil
+}
+
+type failingRegistration struct {
+	apimetric.Registration
+	err error
+}
+
+func (r failingRegistration) Unregister() error { return r.err }
+
+// TestObservePoolMetrics_ARefusedUnregistration_IsReportedNotIgnored covers the
+// other half of the same decision.
+//
+// Stopping is not a path that may fail loudly: it runs on the shutdown sequence,
+// after the listener has already gone, and a panic or a propagated error there
+// would turn a telemetry detail into a failed shutdown. It still has to say
+// something, because a callback that stayed registered keeps a dead pool
+// reachable and the leak is otherwise invisible.
+func TestObservePoolMetrics_ARefusedUnregistration_IsReportedNotIgnored(t *testing.T) {
+	refused := errors.New("the provider is already shut down")
+	previous := otel.GetMeterProvider()
+	otel.SetMeterProvider(unregisterFailingMeterProvider{MeterProvider: noopmetric.NewMeterProvider(), err: refused})
+	t.Cleanup(func() { otel.SetMeterProvider(previous) })
+
+	var logged bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	pool := serverpool.New(&config.Config{
+		GitLabURL:    "https://gitlab.example.com",
+		Tier:         edition.Free,
+		TierExplicit: true,
+		IgnoreScopes: true,
+	}, okFactory)
+	t.Cleanup(pool.Close)
+
+	observePoolMetrics(pool)()
+
+	if !strings.Contains(logged.String(), "credential pool telemetry could not be unregistered") {
+		t.Errorf("a refused unregistration left no trace, so a callback holding a closed pool would be invisible.\nlogged: %s",
 			logged.String())
 	}
 }

@@ -173,9 +173,19 @@ watch is still active, the new subscription is refused with an error.
 
 The process ceiling only ever refuses. Making room there would mean stopping
 some other credential's watch to start this one, and nothing about the arriving
-subscription makes it worth more than the one already running; within a
-credential the demoted-watch eviction above still applies, because that is a
-subscriber reclaiming a slot it already holds. Both refusals carry `-32000`: the
+subscription makes it worth more than the one already running.
+
+Within a credential the demoted-watch eviction above still applies while the
+process ceiling has room. When it does not, the subscribe is refused **before**
+anything is stopped, so a refusal never costs the caller a watch it already
+held: a credential at its own cap keeps its demoted watch and is told the
+server-wide ceiling was reached. The alternative order, stopping the demoted
+watch and then finding the process full, would leave that caller holding one
+subscription fewer than it started with and nothing in its place, and a client
+retrying a refusal it was told is transient would lose one more watch per
+attempt.
+
+Both refusals carry `-32000`: the
 process one says `server-wide` in as many words, and the per-credential one
 carries that credential's own count and limit, so a client's error says which
 ceiling it met and an operator reading it knows whether the number to look at is
@@ -184,6 +194,15 @@ per-credential one multiplies by however many credentials a caller holds, and an
 operator who could raise the process one could undo the bound. The lever an
 operator does have is `--max-http-clients`, which decides how many credentials
 the pool serves at once.
+
+What the process ceiling costs is worth knowing before you meet it. 512 slots is
+about 52 credentials at the per-credential cap of ten, and under
+`--stateless=false` a watcher needs no held connection, so whoever holds those
+slots keeps them for one keep-alive per session and one re-subscribe a day while
+everyone else is refused. That is accepted deliberately: the alternative is
+unbounded polling from one process, and a share per credential would be no
+defence at all, since a credential is one API call to mint. A saturated
+deployment says so in its own log, at WARN, once per refusal.
 
 ## Error codes
 
@@ -291,10 +310,12 @@ Three things are worth knowing about the shape:
   apart from one that does not exist, so a 404 here does **not** mean deleted.
 - **The vocabulary is closed and published.** The `subscriptions.end_reasons`
   array of the [server card](../../guides/http-server-mode.md#server-card)
-  lists it, so a
-  client can learn the set without meeting each value in production. Treat an
-  unrecognized value as "ended for a reason this client does not know", never
-  as "any ending".
+  lists it, so a client can learn the set without meeting each value in
+  production. The card is served in HTTP mode only; on stdio there is no
+  endpoint to read it from, and the four reasons reachable there
+  (`resource_gone`, `lifetime_reached`, `watcher_evicted` and `shutdown`) are
+  documented on this page instead. Treat an unrecognized value as "ended for a
+  reason this client does not know", never as "any ending".
 
 **A client-initiated ending carries no reason**, deliberately. If the client
 cancels its own listen or disconnects, it caused the ending, and the result may

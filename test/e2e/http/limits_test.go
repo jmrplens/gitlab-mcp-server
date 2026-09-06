@@ -521,3 +521,24 @@ func awaitLog(t *testing.T, srv *server, want string) string {
 	}
 	return ""
 }
+
+// awaitLogLine returns the one captured line containing want, or "" if none
+// arrives.
+//
+// awaitLog answers "did this happen at all" by returning the whole of the
+// server's output, which is the wrong answer to "what did that line say": every
+// server the harness starts prints two deprecation warnings before it does
+// anything, so a level or a field asserted against the whole output matches a
+// line nobody was asking about and the assertion cannot fail. Scope such an
+// assertion to the line the message is on.
+func awaitLogLine(t *testing.T, srv *server, want string) string {
+	t.Helper()
+
+	logs := awaitLog(t, srv, want)
+	for line := range strings.SplitSeq(logs, "\n") {
+		if strings.Contains(line, want) {
+			return line
+		}
+	}
+	return ""
+}
