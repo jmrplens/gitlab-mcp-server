@@ -117,6 +117,12 @@ jobs:
         run: make check-doc-tool-names
       - name: Check no read-only action reaches a GraphQL mutation
         run: make check-readonly-graphql
+      - name: Check the pinned GraphQL schema parses
+        run: make check-graphql-schema
+      # The test transport judges every document a test sends. This judges the
+      # ones no test reaches, which is why it is a gate of its own.
+      - name: Check every GraphQL document against the pinned schema
+        run: make check-graphql-documents
       - name: Check the one-click install buttons
         run: make check-install-buttons
       # The manifest validator is the registry's publisher, a module whose 77

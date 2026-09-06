@@ -18,11 +18,13 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                            | `make audit-dynamic-aliases`                          |
 | `audit_e2e_gaps`               | Catalog & metadata audits     | Catalog actions the e2e suite never exercises                                                                                                                                                       | `make audit-e2e-gaps`                                 |
 | `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                | `make audit-edition-tier`                             |
+| `audit_graphql_documents`      | Catalog & metadata audits     | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                                                                                                    | `make check-graphql-documents`                         |
 | `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                          | `make check-readonly-graphql`                         |
 | `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`                          |
 | `audit_gateway_chars`          | Surface quality audits        | Served descriptions and titles carry no character an MCP gateway validator rejects                                                                                                                  | `make check-gateway-chars`                            |
 | `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint`             |
 | `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase); `-site-stats` writes the site's stats JSON                                                                                     | `make audit-metrics`, `make gen-site-stats`           |
+| `gen_graphql_schema`           | Generators                    | Pins a GitLab GraphQL schema by introspecting a live instance; `--check` gates the committed one                                                                                                    | `make gen-graphql-schema`, `make check-graphql-schema` |
 | `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                                   |
 | `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                           | `make audit-test-names`, `make check-test-file-names` |
 | `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                      | `make check-test-goroutines`                          |
@@ -415,6 +417,44 @@ The directive has to sit in the package that owns the action and name that actio
 
 - `make check-readonly-graphql`: the CI gate.
 - `make audit-readonly-graphql`: the same gate, with the GraphQL-sending read-only actions listed.
+
+### audit_graphql_documents
+
+Fails when a raw GraphQL document in the source is one the pinned GitLab schema refuses.
+
+Until this existed, no test in the repository could fail for the reason that matters. Every GraphQL test answers the request from an `httptest` handler that returns whatever the test wrote, so a passing test proved that our handler agreed with our own fixture and said nothing about whether GitLab would accept the document. Four registered tools shipped documents no current instance accepts, with every test green.
+
+`internal/testutil.NewTestClient` now validates every document a test sends, which covers most of them and cannot cover all of them: a document no test drives still ships. This audit reads them out of the source instead, so the coverage of the gate stops depending on the coverage of the tests.
+
+It loads the whole program with `go/packages` rather than matching the source with a regular expression, because four of this repository's documents are assembled by concatenating a shared fragment constant and only the type checker knows what the assembled value is. Constants are folded during type checking, so a document written as three pieces is judged as the one string GitLab would receive.
+
+What it cannot check is variables: a document read out of the source has no request behind it, so nothing says which variables a handler will send or what they will hold. That half belongs to the test transport, which sees a real request.
+
+#### Usage
+
+```bash
+# CI gate
+go run ./cmd/audit_graphql_documents/
+
+# Also list every document it accepted
+go run ./cmd/audit_graphql_documents/ -v
+```
+
+#### Flags
+
+| Flag   | Type     | Default | Description                                            |
+| ------ | -------- | ------- | ------------------------------------------------------ |
+| `-dir` | `string` | `.`     | Repository root to audit                               |
+| `-v`   | `bool`   | `false` | List every document checked, not only the refused ones |
+
+#### Output
+
+One block per refused document on stderr, naming the package, the constant it is declared as (or "an inline document"), the file and line, and every validation error underneath. The summary line carries the pin's provenance, so a reader is told which instance and which day the judgement came from. Exits `1` on any refusal, on a source tree that cannot be loaded, and when no documents are found at all, since an audit that finds nothing is looking in the wrong place.
+
+#### Make targets
+
+- `make check-graphql-documents`: the CI gate.
+- `make audit-graphql-documents`: the same gate, listing what it accepted.
 
 ## Surface quality audits
 
@@ -899,6 +939,48 @@ Rewrites the manifest Go file in place, or (with `-check`) verifies it is curren
 - `make gen-action-catalog-manifest`
 - `make check-action-catalog-manifest` — CI gate.
 
+### gen_graphql_schema
+
+Pins a GitLab GraphQL schema into `internal/graphqlschema`, where the test transport and `audit_graphql_documents` both read it.
+
+It introspects a live instance, converts the answer to SDL, and writes `gitlab-schema.graphql.gz` beside `source.json`, which records the instance, the version it reported and the day it answered so a reader can tell how old the pin is without asking git. GitLab answers introspection to anyone, so no token is needed for the schema itself; `GITLAB_TOKEN` is read only so the record can name the version, which GitLab refuses to tell an anonymous caller.
+
+The conversion emits objects with their `implements` clauses, interfaces, unions, enums, input objects, custom scalars, argument and input defaults, and the `schema { query mutation subscription }` block. Built-in scalars and `__`-prefixed types are omitted, because gqlparser's own prelude already defines them and emitting them again fails the load with a duplicate definition. Everything nameable is sorted, so a re-pin produces a diff of what changed rather than a reshuffle. Descriptions and deprecation reasons are dropped: validation never consults them and they would triple the file.
+
+Nothing is written until the converted schema has been loaded back through the same parser that will judge every document, so a renderer that dropped an `implements` clause fails here rather than by refusing a valid document months later.
+
+Generating needs the network, so it is not a gate. `--check` is: it loads the committed files from disk and fails when the schema does not parse or the record does not decode.
+
+#### Usage
+
+```bash
+# Re-pin from gitlab.com
+go run ./cmd/gen_graphql_schema/
+
+# Re-pin from a self-managed instance
+go run ./cmd/gen_graphql_schema/ -url https://gitlab.example.com/api/graphql
+
+# CI gate, no network
+go run ./cmd/gen_graphql_schema/ --check
+```
+
+#### Flags
+
+| Flag     | Type     | Default                          | Description                                                                      |
+| -------- | -------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| `-url`   | `string` | `https://gitlab.com/api/graphql` | GraphQL endpoint to introspect                                                   |
+| `-dir`   | `string` | `internal/graphqlschema`         | Directory holding the pinned schema and its provenance record                    |
+| `-check` | `bool`   | `false`                          | Load the committed schema instead of fetching one, and fail if it does not parse |
+
+#### Output
+
+Writes `gitlab-schema.graphql.gz` and `source.json` into `-dir`, and reports the type count and provenance on stdout. `--check` writes only the summary. Exits `1` on any failure, so a half-written artifact never reaches a branch.
+
+#### Make targets
+
+- `make gen-graphql-schema`
+- `make check-graphql-schema` — CI gate.
+
 ### gen_lhm_manifest
 
 Regenerates the `tools`, `prompts`, and `resources` arrays in `lhm.plugin.json`, the manifest published to the LobeHub Marketplace. LobeHub derives the listing's capability badges from those arrays — its scanner cannot introspect a server distributed as a Go binary or a Docker image — so a manifest without them advertises zero tools no matter what the server registers.
@@ -1305,3 +1387,5 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `brand-check`                            | `gen_brand --check`                | The committed brand assets match the geometry                                                                              | Non-zero on drift                                         |
 | `check-icon-webp`                        | `gen_icon_webp --check`            | The committed WebP icons match `icons.go` (needs `rsvg-convert` and `cwebp`, so not run in CI)                             | Non-zero on drift                                         |
 | `check-readonly-graphql`                 | `audit_readonly_graphql`           | No action classified ReadOnly can reach a GraphQL mutation                                                                 | Non-zero on any finding, or if the audit cannot be run    |
+| `check-graphql-schema`                   | `gen_graphql_schema --check`       | The committed GitLab schema parses and its provenance record decodes                                                       | Non-zero if either file is missing or unusable            |
+| `check-graphql-documents`                | `audit_graphql_documents`          | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                           | Non-zero on any refusal, or if no documents are found     |
