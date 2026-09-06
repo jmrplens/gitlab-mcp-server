@@ -232,6 +232,57 @@ func TestListener_InvalidSocketMode_StopsStartup(t *testing.T) {
 	}
 }
 
+// TestListener_UnixSocket_SharesOneAuthenticationBudget pins the cost of the
+// socket, so a deployment serving many people can weigh it before choosing.
+//
+// The authentication failure budget is keyed on the caller's address, and a
+// unix socket has none: every connection reports the same peer, so the ten
+// failures a minute that block one address block every caller behind the
+// proxy at once. Nor can the proxy hand the real one over, because
+// --trusted-proxy-header is believed only from a peer that parses as an
+// address and is listed in --trusted-proxies, which no socket peer does.
+//
+// It is asserted rather than left implicit because the alternative is
+// concrete: a loopback TCP listener with --trusted-proxies=127.0.0.1 keys the
+// budget on the address the proxy forwards, which is what a shared deployment
+// wants. The socket stays the better answer where the callers are few or
+// trusted, and this is the number that decides which case a deployment is in.
+func TestListener_UnixSocket_SharesOneAuthenticationBudget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the peer of an AF_UNIX connection is reported differently on Windows; the property under test is the POSIX one")
+	}
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	dir, err := os.MkdirTemp("", "sockbudget") //nolint:usetesting // a short path, as the socket-mode test explains
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "m.sock")
+	srv := startServerOnUnixSocket(t, socketPath,
+		"--gitlab-url="+gitlab.url,
+		"--trusted-proxy-header=X-Real-IP",
+		"--trusted-proxies=127.0.0.1,::1",
+	)
+
+	// Each request claims a different client address, which over TCP from a
+	// trusted proxy would give each its own budget.
+	blocked := 0
+	for i := range 15 {
+		got := srv.do(t, mcpPOST(map[string]string{"X-Real-IP": "203.0.113." + strconv.Itoa(i+1)}))
+		if got.status == http.StatusTooManyRequests {
+			blocked = i + 1
+			break
+		}
+		if got.status != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: status = %d, want 401 or 429: %s", i+1, got.status, truncate(got.body))
+		}
+	}
+	if blocked == 0 {
+		t.Fatal("fifteen failures from fifteen claimed addresses were never cut off over a unix socket; " +
+			"the budget is documented as shared there, and a deployment sizing against that would be sizing against nothing")
+	}
+}
+
 // TestListener_TLS_ServesHTTPS verifies that --tls-cert/--tls-key terminate TLS
 // on the listener itself, which is what a deployment whose proxy sits on
 // another machine depends on.
