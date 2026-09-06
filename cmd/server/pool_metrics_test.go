@@ -54,6 +54,7 @@ func TestObservePoolMetrics_ExportsWhatTheSnapshotHolds(t *testing.T) {
 	// Two credentials into a pool of one, every entry reported busy: the
 	// arriving one is admitted and the incumbent goes, which is the only path
 	// that ends a subscription somebody is waiting on.
+	// sequential: the second credential only evicts because the first is already pooled
 	for _, token := range []string{"glpat-the-subscriber", "glpat-the-newcomer"} {
 		if _, err := pool.GetOrCreate(token, gitlab); err != nil {
 			t.Fatalf("GetOrCreate(%s) error: %v", token, err)

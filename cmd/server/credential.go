@@ -85,14 +85,19 @@ type credentialState struct {
 // again. The sessions the eviction has just orphaned are therefore terminated
 // too, minus the ones a stream has already ended gracefully. See
 // [sessionOwners.endSessionsWithoutStreams].
-func (s *credentialState) close(orphaned []*mcp.ServerSession) {
+//
+// end is what the streams are told the ending was, which only the caller knows:
+// the pool names a cause and [watchEndForCause] turns it into the reason the
+// client reads. A nil end still ends everything, and is what an eviction path
+// this server has no reason for produces.
+func (s *credentialState) close(orphaned []*mcp.ServerSession, end *watchEnd) {
 	if s == nil {
 		return
 	}
 	subs, streams, sessions, owner := s.subs, s.streams, s.sessions, s.owner
 	go func() {
 		subs.close()
-		told := streams.closeOwner(owner)
+		told := streams.closeOwner(owner, end)
 		sessions.endSessionsWithoutStreams(orphaned, told)
 	}()
 }
@@ -202,7 +207,11 @@ func (c *credentialStates) inUse(entry *serverpool.Entry) bool {
 // of the ownership record: the record has to stop answering for them under the
 // pool's write lock, while telling their clients must not happen there, so the
 // two halves are split and the list travels between them.
-func (c *credentialStates) remove(owner string, orphaned []*mcp.ServerSession) {
+//
+// end is why, which travels the same way and for the same reason: the pool is
+// the only thing that knows the cause, and the client is told about it well
+// after the lock has been released.
+func (c *credentialStates) remove(owner string, orphaned []*mcp.ServerSession, end *watchEnd) {
 	if owner == "" {
 		return
 	}
@@ -211,7 +220,7 @@ func (c *credentialStates) remove(owner string, orphaned []*mcp.ServerSession) {
 		return
 	}
 	typed, _ := state.(*credentialState)
-	typed.close(orphaned)
+	typed.close(orphaned, end)
 }
 
 // bindCredential runs each MCP request under the credential the POST carrying

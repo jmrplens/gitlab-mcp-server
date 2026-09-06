@@ -170,10 +170,18 @@ type Options struct {
 	// in this server does.
 	MaxWatchers int
 	// OnStop, if set, is called once when a watch ends for a reason the
-	// subscriber did not ask for: [ErrInaccessible], [ErrLifetimeExceeded]
-	// or [ErrEvicted]. It is not called when a client unsubscribes, when
-	// its session ends, or when the manager is closed — in all three the
-	// client either asked for it or is already gone.
+	// subscriber did not ask for. The reason is an error that wraps one of
+	// [ErrInaccessible], [ErrLifetimeExceeded] or [ErrEvicted], so a caller
+	// branches on it with errors.Is rather than by comparison. It is not
+	// called when a client unsubscribes, when its session ends, or when the
+	// manager is closed, since in all three the client either asked for it or
+	// is already gone.
+	//
+	// The wrapping is what carries the detail past this boundary: an
+	// inaccessible resource arrives as the read error [TranslateReadError]
+	// wrapped, so the HTTP status GitLab answered with is still recoverable
+	// from it. The other two are the sentinels alone, because there is nothing
+	// underneath them to keep.
 	//
 	// It exists so the transport layer can tell the client something, and
 	// runs on the watcher's goroutine with no locks held.
@@ -645,7 +653,13 @@ func (m *Manager[S]) retire(w *watcher[S], cause error) {
 
 	switch {
 	case errors.Is(cause, ErrInaccessible):
-		m.announceStop(w.uri, ErrInaccessible)
+		// The cause rather than the bare sentinel, because it is the only
+		// thing carrying what actually happened: [TranslateReadError] wraps
+		// the read error, so a caller can still recover the status GitLab
+		// answered with and tell its client whether the resource is gone or
+		// its access was withdrawn. Announcing the sentinel threw that away
+		// one call before anybody could read it.
+		m.announceStop(w.uri, cause)
 	case errors.Is(cause, context.DeadlineExceeded):
 		m.announceStop(w.uri, ErrLifetimeExceeded)
 	case evicted:

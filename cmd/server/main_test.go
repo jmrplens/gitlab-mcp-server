@@ -10453,3 +10453,56 @@ func TestManifestShareKey_NamesTheSharedCatalogAndItsNarrowing(t *testing.T) {
 		t.Error("two capability surfaces produced one manifest key")
 	}
 }
+
+// TestServerCardSubscriptions_PublishesTheEndingVocabulary pins the list a
+// client branches on.
+//
+// The reasons are only useful if a client can learn them without meeting each
+// one in production, so the card carries the whole closed set and the key it
+// arrives under. The list is built from [watchEndReasons] rather than written
+// out again, and this is what keeps the constants, the card and the capability
+// reference describing one vocabulary: a reason added to the constants without
+// being added to the slice fails here.
+func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
+	t.Parallel()
+
+	block := serverCardSubscriptions(&config.Config{CapabilitySurface: config.CapabilitySurfaceFull})
+	if block == nil {
+		t.Fatal("the full capability surface published no subscription block")
+	}
+
+	if got := block["end_reason_meta_key"]; got != watchEndMetaKey {
+		t.Errorf("end_reason_meta_key = %v, want %q", got, watchEndMetaKey)
+	}
+	reasons, ok := block["end_reasons"].([]string)
+	if !ok {
+		t.Fatalf("end_reasons = %v, want the vocabulary as a list of strings", block["end_reasons"])
+	}
+	want := []string{
+		"credential_evicted",
+		"credential_reset",
+		"credential_revoked",
+		"resource_gone",
+		"lifetime_reached",
+		"watcher_evicted",
+		"shutdown",
+	}
+	if !slices.Equal(reasons, want) {
+		t.Errorf("end_reasons = %v, want %v; the documented vocabulary and the served one have to be one list",
+			reasons, want)
+	}
+
+	// The card is serialized, so a value that does not survive JSON would be
+	// published as something else or not at all.
+	encoded, err := json.Marshal(block)
+	if err != nil {
+		t.Fatalf("marshaling the subscription block: %v", err)
+	}
+	for _, reason := range want {
+		t.Run(reason, func(t *testing.T) {
+			if !strings.Contains(string(encoded), `"`+reason+`"`) {
+				t.Errorf("the serialized card does not name %q:\n%s", reason, encoded)
+			}
+		})
+	}
+}

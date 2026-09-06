@@ -643,14 +643,36 @@ func TestSharedServer_AnEvictedCredentialsListenIsEnded(t *testing.T) {
 	// The SDK writes the listen's result when its handler's context ends, which
 	// is the graceful completion the specification asks for. Its absence would
 	// mean the stream was torn down rather than ended.
-	var completed bool
+	var completion string
 	for _, frame := range seen {
 		if strings.Contains(frame, `"result"`) && strings.Contains(frame, `"id":1`) {
-			completed = true
+			completion = frame
 		}
 	}
-	if !completed {
-		t.Errorf("the stream closed without the listen's completion result; frames: %v", seen)
+	if completion == "" {
+		t.Fatalf("the stream closed without the listen's completion result; frames: %v", seen)
+	}
+
+	// What the client is told, on the wire. A completion result carrying no
+	// reason is the same answer this credential would get if the resource had
+	// gone away or the server were shutting down, and a client cannot act on
+	// an ending it cannot tell apart from three others. The subscription id the
+	// SDK stamps has to survive beside it, since that is what the client
+	// matches the completion to its own request with.
+	endings := []struct {
+		name string
+		want string
+	}{
+		{name: "the reason", want: `"reason":"credential_evicted"`},
+		{name: "the vendor key it arrives under", want: `"io.github.jmrplens/watch-end"`},
+		{name: "the SDK's subscription id", want: `"io.modelcontextprotocol/subscriptionId"`},
+	}
+	for _, ending := range endings {
+		t.Run(ending.name, func(t *testing.T) {
+			if !strings.Contains(completion, ending.want) {
+				t.Errorf("the completion result is missing %s:\n%s", ending.want, completion)
+			}
+		})
 	}
 
 	// The operator's half of the same event. A busy eviction used to be

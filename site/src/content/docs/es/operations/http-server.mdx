@@ -346,7 +346,7 @@ graph TD
 1. **Primera solicitud**: El token y la URL de GitLab se extraen, se combinan y hashean, y se crea una entrada del pool con su propio cliente de GitLab. También se construye el servidor MCP si esta es la primera credencial de su configuración; cualquier credencial posterior lo encuentra listo
 2. **Solicitudes posteriores**: La entrada existente se encuentra y se promueve en la lista LRU
 3. **Timeout de inactividad**: Después de `--session-timeout` de inactividad, la sesión MCP se cierra (pero la entrada del pool permanece)
-4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada desalojable más antigua se elimina completamente, y se avisa a su cliente en lugar de dejarlo mudo: sus vigilantes se detienen, sus peticiones `subscriptions/listen` abiertas se completan con un resultado y, con `--stateless=false`, las sesiones que ningún stream terminó se cierran, de modo que su siguiente petición vuelve a inicializar
+4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada desalojable más antigua se elimina completamente, y se avisa a su cliente en lugar de dejarlo mudo: sus vigilantes se detienen, sus peticiones `subscriptions/listen` abiertas se completan con un resultado que nombra el final (`credential_evicted` por capacidad, `credential_revoked` por un token que GitLab rechazó, y [cinco más](/gitlab-mcp-server/es/capabilities/subscriptions/#por-qué-terminó-una-suscripción)) y, con `--stateless=false`, las sesiones que ningún stream terminó se cierran, de modo que su siguiente petición vuelve a inicializar
 
 #### La palanca y lo que cuesta
 

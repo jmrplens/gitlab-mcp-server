@@ -331,8 +331,13 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 		// under the pool's write lock, so the gate stops accepting the ID at
 		// once; telling the client is the half that must not, so it goes on
 		// remove's goroutine with the list it can no longer look up.
-		serverpool.WithOnEvict(func(entry *serverpool.Entry) {
-			credentials.remove(entry.Owner(), sessions.forgetOwner(entry.Owner()))
+		//
+		// The cause travels with it. This callback is the only place the pool's
+		// reason for dropping an entry is known, and without it every ending
+		// looked the same to the client: a credential GitLab had revoked was
+		// told to reconnect and try the same token again.
+		serverpool.WithOnEvict(func(entry *serverpool.Entry, cause serverpool.EvictionCause) {
+			credentials.remove(entry.Owner(), sessions.forgetOwner(entry.Owner()), watchEndForCause(cause))
 		}),
 		// An entry whose only activity is an open subscription is not idle.
 		// Its watcher polls GitLab directly and its listen stream is one

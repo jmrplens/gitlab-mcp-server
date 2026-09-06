@@ -389,6 +389,30 @@ writing.
   share key is mintable one API call at a time, so the share is the appearance
   of fairness rather than the fact of it. Both are set out in
   [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561).
+
+  **The ending now says which ending it was.** Telling a client its
+  subscription is over says nothing about what to do next, and the seven ways
+  the server can end one call for three different answers: reconnect now,
+  reconnect and expect a rebuilt entry, or re-authenticate before retrying
+  anything. The cause travels from the pool through `WithOnEvict` and reaches
+  the client as `io.github.jmrplens/watch-end` in the completion result of its
+  `subscriptions/listen`, from a closed vocabulary published on the server card
+  and documented in
+  [Resource subscriptions](../../reference/capabilities/subscriptions.md#why-a-subscription-ended).
+  What the reason deliberately does not carry is anything about the deployment:
+  how full the pool is, how many credentials it holds and who else is connected
+  are exactly the reconnaissance a caller probing for the busy fallback would
+  want, and they are withheld here for the same reason `/health` publishes no
+  pool state.
+
+  One client is not reached by any of this, and it is worth stating plainly
+  rather than implying otherwise: a session-era `resources/subscribe` under
+  `--stateless=false` holds no open request, so there is no result to write a
+  reason on. Terminating the session remains the only ending the protocol
+  offers it. The `logging` capability would be the one remaining channel, and
+  this server does not declare it because SEP-2577 deprecated it, which is a
+  trade worth keeping: a deprecated capability declared to carry one advisory
+  string would appear in every handshake this server answers.
 - NEG-004: The shape registry is a second cache beside the pool, with its own
   lifetime. A shape is dropped when its registration fails and otherwise lives
   for the process, which is bounded by the number of distinct configurations a

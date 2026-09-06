@@ -865,7 +865,8 @@ An entry is busy while its credential holds an open `subscriptions/listen` strea
 
 - its watchers stop;
 - its open `subscriptions/listen` requests are completed with a result, so a protocol 2026-07-28 client sees the call finish instead of waiting on it forever;
-- under `--stateless=false`, the sessions that no stream ended are terminated, so the client's next request re-initializes.
+- that result names the ending: `credential_evicted` for size pressure, `credential_reset` for an entry reclaimed for idleness, staleness or a rebuild, `credential_revoked` for a credential GitLab refused. Without it a client cannot tell "the server ran out of room", which it should answer by reconnecting at once, from "your token was revoked", which it should answer by re-authenticating first. The whole vocabulary is in [Why a subscription ended](../reference/capabilities/subscriptions.md#why-a-subscription-ended);
+- under `--stateless=false`, the sessions that no stream ended are terminated, so the client's next request re-initializes. Such a client is told **that** its subscription ended and not why: it held no open request for an answer to be written on, which is one more reason to prefer `subscriptions/listen`.
 
 #### The lever, and what it costs
 
