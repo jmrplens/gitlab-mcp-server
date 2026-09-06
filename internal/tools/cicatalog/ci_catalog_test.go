@@ -150,8 +150,8 @@ func TestList_WithFilters(t *testing.T) {
 			if body.Variables["search"] != "golang" {
 				t.Errorf("search = %v, want golang", body.Variables["search"])
 			}
-			if body.Variables["scope"] != "NAMESPACED" {
-				t.Errorf("scope = %v, want NAMESPACED", body.Variables["scope"])
+			if body.Variables["scope"] != "NAMESPACES" {
+				t.Errorf("scope = %v, want NAMESPACES", body.Variables["scope"])
 			}
 			if body.Variables["sort"] != "STAR_COUNT_DESC" {
 				t.Errorf("sort = %v, want STAR_COUNT_DESC", body.Variables["sort"])
@@ -168,7 +168,7 @@ func TestList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	_, err := List(context.Background(), client, ListInput{
 		Search: "golang",
-		Scope:  "NAMESPACED",
+		Scope:  "NAMESPACES",
 		Sort:   "STAR_COUNT_DESC",
 	})
 	if err != nil {

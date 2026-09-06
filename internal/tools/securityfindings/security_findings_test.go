@@ -15,10 +15,8 @@ import (
 
 const sampleFindingNode = `{
   "uuid": "550e8400-e29b-41d4-a716-446655440001",
-  "name": "Cross-site Scripting (XSS)",
   "title": "Potential XSS in template",
   "severity": "HIGH",
-  "confidence": "MEDIUM",
   "reportType": "SAST",
   "scanner": {
     "name": "Semgrep",
@@ -38,7 +36,10 @@ const sampleFindingNode = `{
     "blobPath": "/src/app.js"
   },
   "state": "DETECTED",
-  "evidence": "element.innerHTML = userInput;",
+  "evidence": {
+    "summary": "element.innerHTML = userInput;",
+    "source": {"name": "Semgrep rule js.xss", "url": "https://semgrep.dev/r/js.xss"}
+  },
   "vulnerability": {
     "id": "gid://gitlab/Vulnerability/12345",
     "state": "DETECTED"
@@ -95,11 +96,11 @@ func TestList_Success(t *testing.T) {
 
 func assertSampleSecurityFinding(t *testing.T, finding FindingItem) {
 	t.Helper()
-	if finding.UUID != "550e8400-e29b-41d4-a716-446655440001" || finding.Name != "Cross-site Scripting (XSS)" {
+	if finding.UUID != "550e8400-e29b-41d4-a716-446655440001" || finding.Title != "Potential XSS in template" {
 		t.Fatalf("finding identity = %+v, want sample XSS finding", finding)
 	}
-	if finding.Severity != "HIGH" || finding.Confidence != "MEDIUM" || finding.ReportType != "SAST" || finding.State != "DETECTED" {
-		t.Errorf("finding classification = %+v, want HIGH/MEDIUM/SAST/DETECTED", finding)
+	if finding.Severity != "HIGH" || finding.ReportType != "SAST" || finding.State != "DETECTED" {
+		t.Errorf("finding classification = %+v, want HIGH/SAST/DETECTED", finding)
 	}
 	if finding.Scanner == nil || finding.Scanner.Name != "Semgrep" || finding.Scanner.ExternalID != "semgrep-sast" {
 		t.Errorf("Scanner = %+v, want Semgrep semgrep-sast", finding.Scanner)
@@ -110,8 +111,11 @@ func assertSampleSecurityFinding(t *testing.T, finding FindingItem) {
 	if len(finding.Identifiers) != 2 || finding.Identifiers[0].Name != "CWE-79" {
 		t.Fatalf("Identifiers = %+v, want CWE-79 first plus second identifier", finding.Identifiers)
 	}
-	if finding.Evidence == nil || finding.Evidence.Data != "element.innerHTML = userInput;" {
-		t.Errorf("Evidence.Data = %v, want evidence data", finding.Evidence)
+	if finding.Evidence == nil || finding.Evidence.Summary != "element.innerHTML = userInput;" {
+		t.Errorf("Evidence.Summary = %v, want the evidence summary", finding.Evidence)
+	}
+	if finding.Evidence == nil || finding.Evidence.Source != "Semgrep rule js.xss" || finding.Evidence.SourceURL != "https://semgrep.dev/r/js.xss" {
+		t.Errorf("Evidence source = %v, want the named Semgrep rule and its URL", finding.Evidence)
 	}
 	if finding.VulnID != "gid://gitlab/Vulnerability/12345" {
 		t.Errorf("VulnID = %q, want gid://gitlab/Vulnerability/12345", finding.VulnID)
@@ -152,8 +156,9 @@ func TestList_EmptyPipelineIID(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies that severity and report_type filters are
-// correctly forwarded to the GraphQL API when listing security findings.
+// TestList_WithFilters verifies that the severity, scanner, report_type,
+// state and sort filters are correctly forwarded to the GraphQL API when
+// listing security findings.
 func TestList_WithFilters(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"securityReportFindings": func(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +172,7 @@ func TestList_WithFilters(t *testing.T) {
 			if vars["pipelineIID"] != "456" {
 				t.Errorf("pipelineIID = %v, want 456", vars["pipelineIID"])
 			}
-			for _, key := range []string{"severity", "confidence", "scanner", "reportType"} {
+			for _, key := range []string{"severity", "scanner", "reportType", "state", "sort"} {
 				t.Run(key, func(t *testing.T) {
 					if _, ok := vars[key]; !ok {
 						t.Errorf("GraphQL variables missing %q", key)
@@ -192,9 +197,10 @@ func TestList_WithFilters(t *testing.T) {
 		ProjectPath: "my-group/my-project",
 		PipelineIID: "456",
 		Severity:    []string{"HIGH", "CRITICAL"},
-		Confidence:  []string{"CONFIRMED"},
 		Scanner:     []string{"semgrep-sast"},
 		ReportType:  []string{"SAST"},
+		State:       []string{"DETECTED"},
+		Sort:        "severity_desc",
 	})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
@@ -440,10 +446,8 @@ func TestList_ServerError(t *testing.T) {
 func TestList_DastLocation(t *testing.T) {
 	dastNode := `{
 		"uuid": "dast-uuid-001",
-		"name": "Server Information Leak",
-		"title": "",
+		"title": "Server Information Leak",
 		"severity": "LOW",
-		"confidence": "LOW",
 		"reportType": "DAST",
 		"scanner": {"name": "OWASP ZAP", "vendor": "owasp", "externalId": "zap-dast"},
 		"description": "Server version exposed in headers.",
@@ -498,10 +502,8 @@ func TestList_DastLocation(t *testing.T) {
 func TestList_ContainerScanningLocation(t *testing.T) {
 	containerNode := `{
 		"uuid": "container-uuid-001",
-		"name": "CVE-2026-9999",
 		"title": "Critical flaw in base image",
 		"severity": "CRITICAL",
-		"confidence": "CONFIRMED",
 		"reportType": "CONTAINER_SCANNING",
 		"scanner": {"name": "Trivy", "vendor": "aquasecurity", "externalId": "trivy"},
 		"description": "",
@@ -560,9 +562,8 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 		Findings: []FindingItem{
 			{
 				UUID:       "uuid-1",
-				Name:       "XSS Vulnerability",
+				Title:      "XSS Vulnerability",
 				Severity:   "HIGH",
-				Confidence: "MEDIUM",
 				ReportType: "SAST",
 				Scanner:    &ScannerItem{Name: "Semgrep"},
 				Location:   &LocationItem{File: "app.js", StartLine: 10},
@@ -575,7 +576,7 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 		t.Error("expected severity badge in output")
 	}
 	if !strings.Contains(md, "XSS Vulnerability") {
-		t.Error("expected finding name in output")
+		t.Error("expected finding title in output")
 	}
 	if !strings.Contains(md, "Semgrep") {
 		t.Error("expected scanner name in output")
@@ -585,24 +586,68 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_TitleOverridesName verifies that when a finding has
-// both Name and Title fields, the Title takes precedence in Markdown output.
-func TestFormatListMarkdown_TitleOverridesName(t *testing.T) {
-	out := ListOutput{
-		Findings: []FindingItem{
-			{
-				UUID:       "uuid-1",
-				Name:       "CWE-79",
-				Title:      "Potential XSS in template",
-				Severity:   "MEDIUM",
-				ReportType: "SAST",
-				State:      "DETECTED",
-			},
+// TestList_EvidenceShapes verifies how the VulnerabilityEvidence object maps
+// onto EvidenceItem: a full object carries summary and source, a null source
+// leaves only the summary, and an object with nothing in it produces no
+// evidence at all rather than an empty one.
+func TestList_EvidenceShapes(t *testing.T) {
+	tests := []struct {
+		name         string
+		evidenceJSON string
+		want         *EvidenceItem
+	}{
+		{
+			name:         "summary and source",
+			evidenceJSON: `{"summary": "GET /admin returned 200", "source": {"name": "ZAP rule 10202", "url": "https://zap.example/10202"}}`,
+			want:         &EvidenceItem{Summary: "GET /admin returned 200", Source: "ZAP rule 10202", SourceURL: "https://zap.example/10202"},
+		},
+		{
+			name:         "summary without source",
+			evidenceJSON: `{"summary": "GET /admin returned 200", "source": null}`,
+			want:         &EvidenceItem{Summary: "GET /admin returned 200"},
+		},
+		{
+			name:         "object with nothing in it",
+			evidenceJSON: `{"summary": "", "source": null}`,
+			want:         nil,
 		},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "Potential XSS in template") {
-		t.Error("expected title to be used instead of name")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			node := `{"uuid": "evidence-uuid", "title": "Finding", "severity": "LOW", "reportType": "DAST", "state": "DETECTED", "evidence": ` + tc.evidenceJSON + `}`
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{
+						"project": {
+							"pipeline": {
+								"securityReportFindings": {
+									"nodes": [`+node+`],
+									"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "", "startCursor": ""}
+								}
+							}
+						}
+					}`)
+				},
+			})
+
+			client := testutil.NewTestClient(t, handler)
+			out, err := List(context.Background(), client, ListInput{ProjectPath: "g/p", PipelineIID: "1"})
+			if err != nil {
+				t.Fatalf("List() error = %v", err)
+			}
+			if len(out.Findings) != 1 {
+				t.Fatalf("expected 1 finding, got %d", len(out.Findings))
+			}
+			got := out.Findings[0].Evidence
+			switch {
+			case tc.want == nil && got != nil:
+				t.Fatalf("Evidence = %+v, want nil", got)
+			case tc.want != nil && got == nil:
+				t.Fatalf("Evidence = nil, want %+v", tc.want)
+			case tc.want != nil && *got != *tc.want:
+				t.Fatalf("Evidence = %+v, want %+v", *got, *tc.want)
+			}
+		})
 	}
 }
 
@@ -693,19 +738,19 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_WithConfidenceAndScanner verifies that confidence and scanner
-// filters are correctly forwarded to the GraphQL API as query variables.
-// This targets the two optional-filter branches that copy non-empty
-// arrays into the variables map.
-func TestList_WithConfidenceAndScanner(t *testing.T) {
+// TestList_WithStateAndScanner verifies that state and scanner filters are
+// correctly forwarded to the GraphQL API as query variables. This targets the
+// two optional-filter branches that copy non-empty arrays into the variables
+// map.
+func TestList_WithStateAndScanner(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"securityReportFindings": func(w http.ResponseWriter, r *http.Request) {
 			vars, err := testutil.ParseGraphQLVariables(r)
 			if err != nil {
 				t.Fatalf("ParseGraphQLVariables error: %v", err)
 			}
-			if got, ok := vars["confidence"].([]any); !ok || len(got) != 1 || got[0] != "HIGH" {
-				t.Errorf("confidence = %v, want [HIGH]", vars["confidence"])
+			if got, ok := vars["state"].([]any); !ok || len(got) != 1 || got[0] != "CONFIRMED" {
+				t.Errorf("state = %v, want [CONFIRMED]", vars["state"])
 			}
 			if got, ok := vars["scanner"].([]any); !ok || len(got) != 1 || got[0] != "semgrep-sast" {
 				t.Errorf("scanner = %v, want [semgrep-sast]", vars["scanner"])
@@ -727,7 +772,7 @@ func TestList_WithConfidenceAndScanner(t *testing.T) {
 	out, err := List(context.Background(), client, ListInput{
 		ProjectPath: "g/p",
 		PipelineIID: "1",
-		Confidence:  []string{"HIGH"},
+		State:       []string{"CONFIRMED"},
 		Scanner:     []string{"semgrep-sast"},
 	})
 	if err != nil {

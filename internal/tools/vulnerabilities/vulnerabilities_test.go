@@ -54,7 +54,7 @@ const sampleVulnGetNode = `{
   "resolvedAt": null,
   "confirmedAt": null,
   "solution": "Use parameterized queries.",
-  "hasSolutions": true,
+  "hasRemediations": true,
   "dismissalReason": null,
   "primaryIdentifier": {
     "name": "CWE-89",
@@ -411,8 +411,8 @@ func TestGet_Success(t *testing.T) {
 	if v.Solution != "Use parameterized queries." {
 		t.Errorf("Solution mismatch")
 	}
-	if !v.HasSolutions {
-		t.Error("expected HasSolutions=true")
+	if !v.HasRemediations {
+		t.Error("expected HasRemediations=true")
 	}
 	if !v.HasIssues {
 		t.Error("expected HasIssues=true (issueLinks present)")
