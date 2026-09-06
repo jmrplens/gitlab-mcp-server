@@ -571,6 +571,15 @@ Since the environment variables are the stdio spelling and the flags are
 documented under HTTP mode, a stdio operator searching their own surface always
 searches the default dynamic surface, which has two tools.
 
+**Resolved in 2.8.0.** `toolSearchSettings` resolves both settings the way
+every other one is resolved, an explicitly passed flag first and then the
+environment, without `config.Load`, which would demand credentials a catalog
+search does not need. The search itself now reads the canonical catalog rather
+than a server's registered tools, so the actions it finds no longer depend on
+the surface at all: the surface decides only whether a row is named by its
+individual tool, its meta group tool plus an action argument, or by the
+canonical ID `gitlab_execute_action` takes.
+
 ### D3: two documented upper bounds are enforced only where the setting is inert
 
 | Side | Location                                                                            |

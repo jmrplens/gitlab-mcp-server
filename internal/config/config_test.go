@@ -1931,6 +1931,53 @@ func TestParseTierFlag_MirrorsTheEnvironmentParser(t *testing.T) {
 	}
 }
 
+// TestTierFromEnv_ResolvesTheTierWithoutTheRestOfAConfiguration verifies the
+// exported environment resolver, which exists for --tool-search: it inspects
+// the catalog offline, so it must reach the tier without [Load] demanding the
+// GitLab URL and token.
+//
+// It answers what Load answers, the deprecated GITLAB_ENTERPRISE fallback
+// included, so the two cannot drift into disagreeing about which catalog a
+// deployment serves.
+func TestTierFromEnv_ResolvesTheTierWithoutTheRestOfAConfiguration(t *testing.T) {
+	cases := []struct {
+		name         string
+		tier         string
+		enterprise   string
+		wantTier     edition.Tier
+		wantExplicit bool
+		wantErr      bool
+	}{
+		{name: "neither set detects free", wantTier: edition.Free},
+		{name: "the tier variable", tier: "ultimate", wantTier: edition.Ultimate, wantExplicit: true},
+		{name: "the deprecated enterprise flag", enterprise: "true", wantTier: edition.Ultimate, wantExplicit: true},
+		{name: "the tier variable wins over it", tier: "premium", enterprise: "true", wantTier: edition.Premium, wantExplicit: true},
+		{name: "an unknown tier is refused", tier: "platinum", wantErr: true},
+		{name: "an unparseable enterprise flag is refused", enterprise: "maybe", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(EnvPrefix+"TIER", tc.tier)
+			t.Setenv("GITLAB_TIER", "")
+			t.Setenv("GITLAB_ENTERPRISE", tc.enterprise)
+
+			tier, explicit, err := TierFromEnv()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("TierFromEnv() = nil error, want the value refused")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("TierFromEnv(): %v", err)
+			}
+			if tier != tc.wantTier || explicit != tc.wantExplicit {
+				t.Errorf("TierFromEnv() = (%v, %v), want (%v, %v)", tier, explicit, tc.wantTier, tc.wantExplicit)
+			}
+		})
+	}
+}
+
 // TestIsLoopbackGitLabURL_NamesOnlyThisMachine verifies the loopback test
 // the cleartext exemptions rest on: the three spellings of this machine are
 // loopback, a public host and an unparseable value are not.
