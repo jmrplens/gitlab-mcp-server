@@ -220,6 +220,21 @@ func TestSessionOwners_SendingMiddleware_DeliversOnlyToTheOwningSession(t *testi
 			tag:       mine,
 			wantWhyNo: "a notification reached a session whose credential this server never recorded",
 		},
+		{
+			// The two absences together, which is the only case that pins the
+			// untagged check as a check. Delete it and the value falls through
+			// to the comparison below, where "" equals the "" an unrecorded
+			// session answers with, and every untagged notification is
+			// delivered to every session this server never recorded. The four
+			// cases above all survive that deletion: each has exactly one of
+			// the two absences, so the comparison still refuses them for the
+			// other one.
+			name:      "an untagged notification to a session with no recorded owner is dropped",
+			session:   unrecorded,
+			tag:       "",
+			wantWhyNo: "an untagged notification was delivered to a session this server never recorded, " +
+				"which is the pair of absences that compare equal",
+		},
 	}
 
 	for _, tt := range tests {
