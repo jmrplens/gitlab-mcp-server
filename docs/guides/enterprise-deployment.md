@@ -774,16 +774,19 @@ carry the last four characters of a token and nothing more.
 
 ### What to monitor
 
-| Signal                                    | Where         | Why it matters                                                                                |
-| ----------------------------------------- | ------------- | --------------------------------------------------------------------------------------------- |
-| `config_digest` equality across instances | `/health`     | The only detector of an instance serving a different catalog                                  |
-| `status` and the HTTP code                | `/health`     | `503 draining` is the balancer's cue, not a failure                                           |
-| `build` per instance                      | `/health`     | Which version each instance is actually running                                               |
-| Peak resident set                         | Host metrics  | The term that sizes the process is calls in flight, not credentials                           |
-| Processor time per call                   | Telemetry     | The ceiling is threads divided by this                                                        |
-| Pool evictions                            | Logs          | Frequent eviction means `--max-http-clients` is below the population                          |
-| `429` rate                                | Balancer logs | Distinguish the per-credential limiter from the authentication budget                         |
-| Authentication failures per address       | Logs          | Ten a minute blocks an address; behind a proxy without `--trusted-proxies` it blocks everyone |
+| Signal                                                          | Where         | Why it matters                                                                                                                                                                                                      |
+| --------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config_digest` equality across instances                       | `/health`     | The only detector of an instance serving a different catalog                                                                                                                                                        |
+| `status` and the HTTP code                                      | `/health`     | `503 draining` is the balancer's cue, not a failure                                                                                                                                                                 |
+| `build` per instance                                            | `/health`     | Which version each instance is actually running                                                                                                                                                                     |
+| Peak resident set                                               | Host metrics  | The term that sizes the process is calls in flight, not credentials                                                                                                                                                 |
+| Processor time per call                                         | Telemetry     | The ceiling is threads divided by this                                                                                                                                                                              |
+| Pool evictions                                                  | Logs          | Frequent eviction means `--max-http-clients` is below the population                                                                                                                                                |
+| `server pool: evicted an entry that was serving a subscription` | Logs          | A `WARN` carrying `in_use=true` and the `max_size` to raise. It is a signal, not an error: it fires only when every pooled entry was busy, so the pool had nothing quiet to take and a subscriber's watch was ended |
+| `gitlab_mcp.credential_pool.entries` against `.capacity`        | Telemetry     | How close the pool runs to its bound, without the flag's value typed into the query                                                                                                                                 |
+| `gitlab_mcp.credential_pool.evictions` by reason                | Telemetry     | `size_pressure_busy` is the one to alert on; the other six reasons say a credential went away rather than that the pool is short of room                                                                            |
+| `429` rate                                                      | Balancer logs | Distinguish the per-credential limiter from the authentication budget                                                                                                                                               |
+| Authentication failures per address                             | Logs          | Ten a minute blocks an address; behind a proxy without `--trusted-proxies` it blocks everyone                                                                                                                       |
 
 That last row is the one that bites hardest at scale. Without
 `--trusted-proxy-header` and `--trusted-proxies`, every caller's failures are

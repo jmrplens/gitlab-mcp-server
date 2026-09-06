@@ -979,9 +979,19 @@ and `config_digest` as well, elided here for width:
 {"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
 {"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
 {"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
-{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"gitlab_url":"https://gitlab.com","enterprise":false}
+{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":false}
+{"level":"WARN","msg":"server pool: evicted an entry that was serving a subscription","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":true}
 {"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
+
+The two eviction lines are separate messages rather than one message at two
+levels, so an operator can filter for exactly one of them. The `WARN` is the
+busy fallback of [Pool Eviction](#4-pool-eviction): the pool held nothing quiet
+to take, so an entry serving a subscription went and that client's watch ended.
+It is a signal rather than an error, and `max_size` on the line is the number to
+raise. The same event is counted as `size_pressure_busy` on
+`gitlab_mcp.credential_pool.evictions` for a deployment running
+[telemetry](telemetry.md).
 
 ### Health Check
 

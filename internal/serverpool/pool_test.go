@@ -1371,6 +1371,325 @@ func TestEvictLRU_AnElementNamingNoEntry_IsDroppedFirst(t *testing.T) {
 	}
 }
 
+// capturedRecords is an [slog.Handler] that keeps every record it is handed, so
+// a test can assert on a log line without parsing a stream.
+//
+// A handler rather than a JSON handler over a bytes.Buffer, because
+// slog.SetDefault is process-wide: another test logging while this one is
+// installed would write into that buffer concurrently, and a bytes.Buffer is
+// not safe for that. The mutex here is.
+type capturedRecords struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (c *capturedRecords) Enabled(context.Context, slog.Level) bool { return true }
+
+func (c *capturedRecords) Handle(_ context.Context, record slog.Record) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.records = append(c.records, record.Clone())
+	return nil
+}
+
+func (c *capturedRecords) WithAttrs([]slog.Attr) slog.Handler { return c }
+
+func (c *capturedRecords) WithGroup(string) slog.Handler { return c }
+
+// find returns the first captured record carrying the given message.
+func (c *capturedRecords) find(message string) (slog.Record, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, record := range c.records {
+		if record.Message == message {
+			return record, true
+		}
+	}
+	return slog.Record{}, false
+}
+
+// captureLogs installs a recording handler as the default logger for the length
+// of the test.
+func captureLogs(t *testing.T) *capturedRecords {
+	t.Helper()
+
+	captured := &capturedRecords{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(captured))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return captured
+}
+
+// logAttr returns the value of one attribute of a captured record.
+func logAttr(record slog.Record, key string) (slog.Value, bool) {
+	var value slog.Value
+	found := false
+	record.Attrs(func(attr slog.Attr) bool {
+		if attr.Key != key {
+			return true
+		}
+		value, found = attr.Value, true
+		return false
+	})
+	return value, found
+}
+
+// TestEvictLRU_CountsTheBusyFallbackApartFromAnOrdinaryEviction pins the split
+// the two counters exist for.
+//
+// Evictions has always conflated size pressure with revalidation refusals and
+// failed rebuilds, so an operator reading it could not tell "the pool is too
+// small" from "somebody's token was revoked", let alone tell either from the
+// one case that ends a subscription under a client that is waiting on it. The
+// four disjoint counters answer that; this pins the two size-pressure halves,
+// in both directions, so a change that stops distinguishing them fails here.
+func TestEvictLRU_CountsTheBusyFallbackApartFromAnOrdinaryEviction(t *testing.T) {
+	tests := []struct {
+		name string
+		busy bool
+		// wantSize and wantBusy are the two counters after one eviction.
+		wantSize int64
+		wantBusy int64
+	}{
+		{name: "an unbusy victim is ordinary size pressure", busy: false, wantSize: 1, wantBusy: 0},
+		{name: "an all-busy pool takes the fallback", busy: true, wantSize: 0, wantBusy: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := testConfig(stubGitLabBase)
+			pool := New(cfg, testFactory(), WithMaxSize(2),
+				WithInUse(func(*Entry) bool { return tt.busy }))
+
+			for _, token := range []string{"older", "newer"} {
+				if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+					t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+				}
+			}
+
+			pool.mu.Lock()
+			pool.evictLRU()
+			pool.mu.Unlock()
+
+			stats := pool.Stats()
+			if stats.SizeEvictions != tt.wantSize {
+				t.Errorf("SizeEvictions = %d, want %d", stats.SizeEvictions, tt.wantSize)
+			}
+			if stats.BusyEvictions != tt.wantBusy {
+				t.Errorf("BusyEvictions = %d, want %d", stats.BusyEvictions, tt.wantBusy)
+			}
+			// The legacy total counts both halves and always has, so it moves
+			// on either path. Nobody may export it beside the two above.
+			if stats.Evictions != 1 {
+				t.Errorf("Evictions = %d, want 1: the legacy total covers both halves", stats.Evictions)
+			}
+			if stats.InvalidEvictions != 0 || stats.RebuildEvictions != 0 || stats.IdleEvictions != 0 {
+				t.Errorf("size pressure moved another path's counter: %+v", stats)
+			}
+		})
+	}
+}
+
+// TestEvictLRU_AnAllBusyPool_EvictsAndAdmitsTheArrivingCredential is the guard
+// against turning the fallback into a refusal.
+//
+// Refusing the newcomer when every pooled entry is serving a subscription looks
+// like the kinder answer and is not: it converts churn into a first-come
+// lockout, and the incumbency is free to hold, because a listen asking only for
+// list-changed notifications makes an entry busy with no watcher and no polling
+// and listen streams carry no lifetime bound. In the accidental case, a
+// deployment whose population of subscribing clients exceeds
+// --max-http-clients, it also punishes the newcomer rather than letting the
+// oldest subscriber re-listen. Recorded on
+// https://github.com/jmrplens/gitlab-mcp-server/issues/561; a change that
+// implements the refusal fails here rather than in review.
+func TestEvictLRU_AnAllBusyPool_EvictsAndAdmitsTheArrivingCredential(t *testing.T) {
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, testFactory(), WithMaxSize(1),
+		WithInUse(func(*Entry) bool { return true }))
+
+	if _, err := pool.GetOrCreate("the-subscriber", stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate(the-subscriber) error: %v", err)
+	}
+
+	if _, err := pool.GetOrCreate("the-newcomer", stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate(the-newcomer) was refused by a pool full of busy entries: %v", err)
+	}
+
+	if _, ok := pool.entries[sessionKey("the-newcomer", stubGitLabBase)]; !ok {
+		t.Error("the arriving credential was not admitted, so the fallback has become a refusal")
+	}
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d, want 1: --max-http-clients is not a bound otherwise", pool.Size())
+	}
+	if got := pool.Stats().BusyEvictions; got != 1 {
+		t.Errorf("BusyEvictions = %d, want 1", got)
+	}
+}
+
+// TestEvictLRU_TheBusyFallbackWarns_AndTheOrdinaryPathDoesNot pins the line an
+// operator greps for.
+//
+// A busy eviction was invisible: one INFO message covered both halves and named
+// neither the state of the victim nor the number to raise. Two distinct messages
+// rather than one message at two levels, because an operator filtering their
+// logs matches on the message.
+func TestEvictLRU_TheBusyFallbackWarns_AndTheOrdinaryPathDoesNot(t *testing.T) {
+	const (
+		busyMessage     = "server pool: evicted an entry that was serving a subscription"
+		ordinaryMessage = "server pool: evicted LRU entry"
+	)
+
+	tests := []struct {
+		name      string
+		busy      bool
+		message   string
+		absent    string
+		wantLevel slog.Level
+		wantInUse bool
+	}{
+		{
+			name: "the fallback warns", busy: true,
+			message: busyMessage, absent: ordinaryMessage,
+			wantLevel: slog.LevelWarn, wantInUse: true,
+		},
+		{
+			name: "ordinary size pressure stays at info", busy: false,
+			message: ordinaryMessage, absent: busyMessage,
+			wantLevel: slog.LevelInfo, wantInUse: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			captured := captureLogs(t)
+			evictOneUnder(t, tt.busy)
+
+			if _, found := captured.find(tt.absent); found {
+				t.Errorf("both eviction messages were logged; %q should not have been", tt.absent)
+			}
+			record, found := captured.find(tt.message)
+			if !found {
+				t.Fatalf("no %q record was logged", tt.message)
+			}
+			if record.Level != tt.wantLevel {
+				t.Errorf("level = %v, want %v", record.Level, tt.wantLevel)
+			}
+			if inUse, ok := logAttr(record, "in_use"); !ok {
+				t.Error("the eviction line carries no in_use field, so nothing says whether a subscription was ended")
+			} else if inUse.Bool() != tt.wantInUse {
+				t.Errorf("in_use = %v, want %v", inUse.Bool(), tt.wantInUse)
+			}
+			// The number the operator has to raise, on the line that tells
+			// them to raise it.
+			if maxSize, ok := logAttr(record, "max_size"); !ok {
+				t.Error("the eviction line carries no max_size field")
+			} else if maxSize.Int64() != 2 {
+				t.Errorf("max_size = %d, want 2", maxSize.Int64())
+			}
+		})
+	}
+}
+
+// evictOneUnder fills a pool of two and drives one size-pressure eviction, with
+// every entry reported busy or not as busy says.
+func evictOneUnder(t *testing.T, busy bool) {
+	t.Helper()
+
+	pool := New(testConfig(stubGitLabBase), testFactory(), WithMaxSize(2),
+		WithInUse(func(*Entry) bool { return busy }))
+	for _, token := range []string{"older", "newer"} {
+		if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+			t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+		}
+	}
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.evictLRU()
+}
+
+// TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn pins the disjointness the
+// exported metric depends on.
+//
+// The reasons are published as one series per value of an attribute, which is
+// only meaningful while each path increments exactly one of them. A path that
+// increments two would double-count, and a path that increments none would
+// vanish from the total.
+func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
+	tests := []struct {
+		name string
+		// evict drives one removal path against a freshly filled pool.
+		evict func(t *testing.T, pool *ServerPool, srv *mcp.Server, key string)
+		// want reads the counter the path is supposed to move.
+		want func(Snapshot) int64
+		// others are the counters that must not have moved.
+		others func(Snapshot) []int64
+	}{
+		{
+			name: "revalidation refusal moves InvalidEvictions",
+			evict: func(_ *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				pool.evictByKey(key)
+			},
+			want: func(s Snapshot) int64 { return s.InvalidEvictions },
+			others: func(s Snapshot) []int64 {
+				return []int64{s.SizeEvictions, s.BusyEvictions, s.RebuildEvictions, s.IdleEvictions}
+			},
+		},
+		{
+			name: "a failed shape rebuild moves RebuildEvictions",
+			evict: func(t *testing.T, pool *ServerPool, srv *mcp.Server, _ string) {
+				t.Helper()
+				if !pool.EvictServer(srv) {
+					t.Error("EvictServer() found nothing, but the entry was just created")
+				}
+			},
+			want: func(s Snapshot) int64 { return s.RebuildEvictions },
+			others: func(s Snapshot) []int64 {
+				return []int64{s.SizeEvictions, s.BusyEvictions, s.InvalidEvictions, s.IdleEvictions}
+			},
+		},
+		{
+			name: "the idle sweep moves IdleEvictions",
+			evict: func(_ *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				pool.mu.Lock()
+				pool.entries[key].lastUsed = time.Now().Add(-time.Hour)
+				pool.mu.Unlock()
+				pool.evictIdle()
+			},
+			want: func(s Snapshot) int64 { return s.IdleEvictions },
+			others: func(s Snapshot) []int64 {
+				return []int64{s.SizeEvictions, s.BusyEvictions, s.InvalidEvictions, s.RebuildEvictions}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const token = "glpat-one-entry"
+
+			cfg := testConfig(stubGitLabBase)
+			pool := New(cfg, testFactory(), WithMaxSize(4), WithIdleTimeout(time.Minute))
+			srv, err := pool.GetOrCreate(token, stubGitLabBase)
+			if err != nil {
+				t.Fatalf("GetOrCreate() error: %v", err)
+			}
+
+			tt.evict(t, pool, srv, sessionKey(token, stubGitLabBase))
+
+			stats := pool.Stats()
+			if got := tt.want(stats); got != 1 {
+				t.Errorf("the path's own counter = %d, want 1; snapshot: %+v", got, stats)
+			}
+			for _, other := range tt.others(stats) {
+				if other != 0 {
+					t.Errorf("another path's counter moved: %+v", stats)
+				}
+			}
+		})
+	}
+}
+
 // TestEvictIdle_AKeptEntryMovesToTheFrontOfTheLRU pins the second half of the
 // same decision.
 //

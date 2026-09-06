@@ -2602,6 +2602,12 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	binding, pool := newShapedServerPool(ctx, cfg)
 	defer pool.Close()
 
+	// Deferred after the pool's own close and therefore run before it, which is
+	// the order that matters: the callback reads the pool on the SDK's
+	// collection goroutine, so it has to stop before the pool it reads does.
+	stopPoolMetrics := observePoolMetrics(pool)
+	defer stopPoolMetrics()
+
 	pool.StartRevalidation(ctx)
 	pool.StartIdleEviction(ctx)
 
