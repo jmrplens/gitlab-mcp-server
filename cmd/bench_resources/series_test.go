@@ -636,8 +636,22 @@ func TestSettle_NotesWhatItCouldNotRead(t *testing.T) {
 		if step.SettledHeapMiB != 0 {
 			t.Errorf("settled heap %v, want nothing from a listener that does not answer", step.SettledHeapMiB)
 		}
-		if len(step.Notes) != 1 || !strings.Contains(step.Notes[0], "settled heap unavailable") {
-			t.Errorf("notes = %v, want one about the heap", step.Notes)
+		// The resident set is read through ps, which a platform without one
+		// notes as unavailable in its own words. That note belongs to the
+		// platform, not to the listener this case takes away, so it may stand
+		// beside the one the case is about and nothing else may.
+		var heapNotes int
+		for _, note := range step.Notes {
+			switch {
+			case strings.Contains(note, "settled heap unavailable"):
+				heapNotes++
+			case strings.Contains(note, "settled resident set unavailable"):
+			default:
+				t.Errorf("note %q, want only the heap's and, without ps, the resident set's", note)
+			}
+		}
+		if heapNotes != 1 {
+			t.Errorf("notes = %v, want exactly one about the heap", step.Notes)
 		}
 	})
 
