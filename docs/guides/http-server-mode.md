@@ -854,10 +854,30 @@ no periodic ping of its own.
 
 When the pool is full (`--max-http-clients` reached) and a new `(token, url)` pair arrives:
 
-1. The **least recently used** pool entry is evicted
-2. The evicted server and GitLab client are removed from the pool
+1. The **least recently used entry that is not serving a subscription** is evicted; only when every pooled entry is busy does the least recently used of all go
+2. The evicted entry and its GitLab client are removed from the pool. The shape server stays, because it is shared by every credential of that configuration
 3. A new entry is created for the new `(token, url)` pair
-4. If the evicted client reconnects, a fresh server is created
+4. If the evicted client reconnects, a fresh entry is created for it
+
+An entry is busy while its credential holds an open `subscriptions/listen` stream or at least one resource watcher. That is work the pool cannot see: a watcher polls GitLab directly and a listen is one request the client never repeats, so neither refreshes the entry, and both would otherwise sit at the LRU tail, which is exactly where size pressure looks. Preferring the quiet entries is what makes the exemption a protection rather than a delay. The fallback is what keeps the pool bounded: an entry is passed over in favor of another one, never in favor of growing past `--max-http-clients`.
+
+**What the evicted client receives.** Eviction is an ending it is told about rather than a stream that goes quiet:
+
+- its watchers stop;
+- its open `subscriptions/listen` requests are completed with a result, so a protocol 2026-07-28 client sees the call finish instead of waiting on it forever;
+- under `--stateless=false`, the sessions that no stream ended are terminated, so the client's next request re-initializes.
+
+#### The lever, and what it costs
+
+`--max-http-clients` is the setting that decides how often any of this happens.
+
+**Set it above the simultaneous client population.** That is the ordinary case and the whole of the advice for most deployments: with room in the pool, an arriving credential evicts nobody. Frequent eviction of any kind means the number is below the population, and the log lines under [Server Logs](#server-logs) are how you see it.
+
+**Above the process-wide stream ceiling, the busy fallback is unreachable at rest.** A busy entry holds at least one open `subscriptions/listen` stream or at least one watcher. On the default stateless transport it must hold a stream, because a session-era `resources/subscribe` is refused there unless it arrived through a listen, so a watcher cannot exist without one; open listen streams are capped at 512 per process, which is deliberately not configurable. A pool of 513 entries or more therefore cannot be made entirely busy, and the fallback that takes a subscriber's entry can never fire. "At rest" is the qualifier: a listen refused by that ceiling still holds its per-credential slot for the length of the refused request, so the busy count can briefly exceed the ceiling by the number of refusals in flight.
+
+**Under `--stateless=false` no pool size makes it unreachable yet.** There a session-era `resources/subscribe` creates a watcher with no held connection, and watchers are capped at ten per credential and by nothing per process, so a caller holding enough credentials can make a pool of any size entirely busy. A process-wide watcher ceiling is tracked in [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561); until it ships, the advice on that transport is the first paragraph alone.
+
+**The cost is tenancy.** At the measured 50 KiB per entry, 513 pooled entries is about 25 MiB of live heap, and the flag's upper bound is 10000. It is not a memory setting for the work those credentials make the process do; size that from requests in flight, per [Resource Consumption](../reference/resource-consumption.md).
 
 ```mermaid
 sequenceDiagram
@@ -874,7 +894,7 @@ sequenceDiagram
     GS->>Pool: GetOrCreate("glpat-abc123", "https://gitlab.example.com")
 
     alt (token, url) not in pool
-        Pool->>Pool: Check maxSize, evict LRU if full
+        Pool->>Pool: Check maxSize, evict the least recently used entry that is not busy
         Pool->>Pool: NewClientWithToken(url, token, skipTLS)
         Pool->>Pool: factory(client) → *mcp.Server
         Pool-->>GS: *mcp.Server (new)
@@ -998,6 +1018,8 @@ Liveness is reported both ways on purpose. `started_at` is the stable fact — i
 **Draining.** On `SIGTERM` the process marks itself draining before anything else: from that moment `/health` answers `503` with `"status": "draining"` and `Cache-Control: no-store`, so a balancer that polls it stops sending new work and does not serve the last `200` from a cache across the flip. By default the listener then closes at once, so only a probe that lands in between sees the `503`; `--drain-delay` (`GITLAB_MCP_DRAIN_DELAY`) keeps the listener open for that long first, and set to at least one probe interval it guarantees the balancer sees the flip before the close. In-flight requests still get the 15-second drain after that. Upper bound 5 minutes; the delay applies to HTTP mode only, since stdio has no listener to hold open.
 
 `config_digest` exists for fleets. Two instances behind one balancer that report different digests serve different catalogs to whichever clients reach them, and nothing else detects that: compare the digests in the same loop that proves the balancer's affinity, and treat a mismatch as a misconfigured node. A build from a different version with the same settings reports the same digest, so a rolling upgrade does not trip the comparison.
+
+**No pool state, on purpose.** The endpoint publishes no entry count, no eviction counter and no configuration beyond the digest, and that is what lets it need no credential. Pool occupancy is precisely the reconnaissance a caller probing for the busy-entry fallback would want: one sample says how full the pool is, and two say how fast it is churning. The counters go to the logs and to OpenTelemetry instead, both of which the operator controls; see [Server Logs](#server-logs) and the [Telemetry guide](telemetry.md).
 
 `/health` reports only that the process is up; it performs no GitLab round-trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
 

@@ -346,7 +346,15 @@ graph TD
 1. **First request**: Token and GitLab URL are extracted, combined and hashed, and a pool entry with its own GitLab client is created. The MCP server is built too if this is the first credential of its configuration; every later one finds it ready
 2. **Subsequent requests**: The existing entry is found and promoted in the LRU list
 3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains)
-4. **Pool eviction**: When capacity is reached, the oldest evictable entry is removed entirely, and its client is told: open subscriptions are ended rather than left silent
+4. **Pool eviction**: When capacity is reached, the oldest evictable entry is removed entirely, and its client is told rather than left silent: its watchers stop, its open `subscriptions/listen` requests are completed with a result, and under `--stateless=false` the sessions that no stream ended are terminated, so its next request re-initializes
+
+#### The lever, and what it costs
+
+`--max-http-clients` decides how often any of that happens. Set it above the simultaneous client population and an arriving credential evicts nobody; frequent eviction means the number is below the population.
+
+An entry is busy while its credential holds an open `subscriptions/listen` stream or at least one watcher. On the default stateless transport it must hold a stream, because a session-era `resources/subscribe` is refused there unless it arrived through a listen, and open streams are capped at 512 per process. A pool of 513 entries or more therefore cannot be made entirely busy, so the fallback that takes a subscriber's entry never fires. That costs about 25 MiB of tenancy at the measured 50 KiB per entry, against an upper bound of 10000 for the flag.
+
+Under `--stateless=false` no pool size makes it unreachable yet: a session-era subscribe creates a watcher with no held connection, and watchers are capped at ten per credential and by nothing per process. A process-wide watcher ceiling is tracked in [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561).
 
 ### Timeout model: HTTP layer vs MCP session
 

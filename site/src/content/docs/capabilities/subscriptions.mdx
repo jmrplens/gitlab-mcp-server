@@ -49,7 +49,7 @@ The polling cadence adapts to the resource:
 
 Watchers use the subscriber's own GitLab token, capped at **10 watchers per credential** (one pool entry per token+URL in HTTP mode). The worst case — ten watchers at the 5s floor — is 120 requests/minute; ten demoted watches cost one. A 429 from GitLab pauses every watcher with exponential back-off (30s doubling to 5 minutes).
 
-Nothing retires itself for being "finished": GitLab has no terminal state — a retried pipeline reuses its ID and runs again, a closed issue reopens — so a watch only ends when the client unsubscribes, its session disconnects, the resource returns 401/403/404, the 24-hour lifetime cap is reached, or it is evicted to make room at the watcher cap.
+Nothing retires itself for being "finished": GitLab has no terminal state — a retried pipeline reuses its ID and runs again, a closed issue reopens — so a watch only ends when the client unsubscribes, its session disconnects, the resource returns 401/403/404, the 24-hour lifetime cap is reached, it is evicted to make room at the watcher cap, or the pool drops the credential's entry under `--max-http-clients` pressure. That last one prefers an entry that is not serving a subscription and takes a busy one only when every pooled entry is busy; when it happens the watchers stop, the open `subscriptions/listen` requests are completed, and reconnecting is enough, because nothing is wrong with the credential.
 
 ## Lifetime and renewal
 

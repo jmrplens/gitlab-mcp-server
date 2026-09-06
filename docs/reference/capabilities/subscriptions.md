@@ -109,15 +109,16 @@ cannot change until a human or a clock acts.
 
 A watch ends, or slows, for these reasons and no others:
 
-| Event                                     | Effect                                | Told to the client?              |
-| ----------------------------------------- | ------------------------------------- | -------------------------------- |
-| `resources/unsubscribe`                   | Stops when the last subscriber leaves | It asked for it                  |
-| The session disconnects                   | Stops                                 | It is gone                       |
-| 30 minutes with no traffic on the session | **Slows to a 10-minute poll**         | `_meta` on the next notification |
-| Any request on the session                | Restores full speed                   | —                                |
-| The resource returns 401, 403 or 404      | Stops                                 | Stream closed (2026-07-28)       |
-| 24 hours, renewals included               | Stops                                 | Stream closed (2026-07-28)       |
-| Evicted to make room at the cap           | Stops                                 | Stream closed (2026-07-28)       |
+| Event                                     | Effect                                | Told to the client?                                                   |
+| ----------------------------------------- | ------------------------------------- | --------------------------------------------------------------------- |
+| `resources/unsubscribe`                   | Stops when the last subscriber leaves | It asked for it                                                       |
+| The session disconnects                   | Stops                                 | It is gone                                                            |
+| 30 minutes with no traffic on the session | **Slows to a 10-minute poll**         | `_meta` on the next notification                                      |
+| Any request on the session                | Restores full speed                   | —                                                                     |
+| The resource returns 401, 403 or 404      | Stops                                 | Stream closed (2026-07-28)                                            |
+| 24 hours, renewals included               | Stops                                 | Stream closed (2026-07-28)                                            |
+| Evicted to make room at the cap           | Stops                                 | Stream closed (2026-07-28)                                            |
+| The pool evicts this credential's entry   | Stops                                 | Stream closed (2026-07-28); session terminated on `--stateless=false` |
 
 **The lease slows a watch down; it does not end it.** MCP defines no lease,
 no TTL and no expiry message, and its one notification means "this changed,
@@ -134,13 +135,25 @@ answer `tools/list`, `prompts/list` or a repeated `resources/read` from its
 own cache, in which case nothing arrives here to renew — which is correct,
 since a client serving itself from cache is not evidence of anything.
 
+**A watch can also end because the pool dropped the credential it belongs
+to.** In HTTP mode the watchers hang off a pool entry, and
+`--max-http-clients` bounds how many entries a process holds. Size pressure
+prefers an entry that is not serving a subscription and takes one that is
+only when every pooled entry is busy, so this is the last thing the pool
+does rather than the first. When it does happen, the credential's watchers
+stop, its open `subscriptions/listen` requests are completed, and under
+`--stateless=false` the sessions that no stream ended are terminated.
+Nothing is wrong with the credential: reconnect and subscribe again. The
+operator's lever, and the pool size above which the fallback is unreachable,
+are in [HTTP Server Mode](../../guides/http-server-mode.md#4-pool-eviction).
+
 ## Limits
 
-| Limit               | Value                      | Why                                                                          |
-| ------------------- | -------------------------- | ---------------------------------------------------------------------------- |
-| Watchers per server | 10                         | A server is one token, so this is the ceiling on one user's polling          |
-| Floor interval      | 5s                         | Ten watchers at 5s would be 120 requests a minute — an entire default budget |
-| Rate-limit pause    | 30s, doubling to 5 minutes | GitLab enforces limits per user, so one 429 pauses every watcher             |
+| Limit                   | Value                      | Why                                                                                                 |
+| ----------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| Watchers per credential | 10                         | A watcher polls with the subscriber's own token, so this is the ceiling on one credential's polling |
+| Floor interval          | 5s                         | Ten watchers at 5s would be 120 requests a minute — an entire default budget                        |
+| Rate-limit pause        | 30s, doubling to 5 minutes | GitLab enforces limits per user, so one 429 pauses every watcher                                    |
 
 At the 15s base, ten watchers cost 40 requests a minute. Once demoted, the
 same ten cost one. A self-managed instance's default is 7,200 authenticated
