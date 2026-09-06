@@ -207,26 +207,26 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 
 Infrastructure shared by all tool sub-packages:
 
-| File               | Purpose                                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `action_spec.go`   | `ActionSpec`, compatibility policy, individual projection metadata, and schema/result policy fields                                 |
-| `meta_tool.go`     | `MetaToolInput`, `ActionRoute`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute`                                 |
-| `annotations.go`   | Tool annotations (`ReadAnnotations`, `DeleteAnnotations`) and content annotations (`ContentList`, `ContentDetail`, `ContentMutate`) |
-| `hints.go`         | Next-step hints: `WriteHints`, `ExtractHints`, `HintPreserveLinks`                                                                  |
-| `surface_tool.go`  | Registers an `ActionSpec` as a standalone visible tool (`SurfaceToolRegisterOptions`)                                               |
-| `markdown.go`      | `ToolResultWithMarkdown`, `FormatPagination`, emoji helpers                                                                         |
-| `errors.go`        | `ToolError`, `DetailedError`, `ErrorResultMarkdown`                                                                                 |
-| `confirm.go`       | `ConfirmDestructiveAction`, `IsYOLOMode`                                                                                            |
-| `output.go`        | `SuccessResult`, `ErrorResult` — standard output helpers                                                                            |
-| `text.go`          | `NormalizeText`, `EscapeMdTableCell`, `WrapGFMBody`                                                                                 |
-| `pagination.go`    | `PaginationInput`, `PaginationOutput` shared types                                                                                  |
-| `logging.go`       | `LogToolCallAll` structured logging helper                                                                                          |
-| `diff.go`          | Diff formatting utilities                                                                                                           |
-| `doc.go`           | Package documentation                                                                                                               |
-| `file_utils.go`    | File operation helpers (upload size validation, SHA-256, directory allow-lists)                                                     |
-| `rate_limit.go`    | Token-bucket limiter shared by `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get`      |
-| `string_or_int.go` | Flexible JSON unmarshalling for string-or-int fields                                                                                |
-| `time_helpers.go`  | Time formatting and parsing utilities                                                                                               |
+| File               | Purpose                                                                                                                                                                                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `action_spec.go`   | `ActionSpec`, compatibility policy, individual projection metadata, and schema/result policy fields                                                                                                                  |
+| `meta_tool.go`     | `MetaToolInput`, `ActionRoute`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute`                                                                                                                  |
+| `annotations.go`   | Tool annotations (`ReadAnnotations`, `DeleteAnnotations`) and content annotations (`ContentList`, `ContentDetail`, `ContentMutate`)                                                                                  |
+| `hints.go`         | Next-step hints: `WriteHints`, `ExtractHints`, `HintPreserveLinks`                                                                                                                                                   |
+| `surface_tool.go`  | Registers an `ActionSpec` as a standalone visible tool (`SurfaceToolRegisterOptions`)                                                                                                                                |
+| `markdown.go`      | `ToolResultWithMarkdown`, `FormatPagination`, emoji helpers                                                                                                                                                          |
+| `errors.go`        | `ToolError`, `DetailedError`, `ErrorResultMarkdown`                                                                                                                                                                  |
+| `confirm.go`       | `ConfirmDestructiveAction`, `IsYOLOMode`                                                                                                                                                                             |
+| `output.go`        | `SuccessResult`, `ErrorResult` — standard output helpers                                                                                                                                                             |
+| `text.go`          | `NormalizeText`, `EscapeMdTableCell`, `WrapGFMBody`                                                                                                                                                                  |
+| `pagination.go`    | `PaginationInput`, `PaginationOutput` shared types                                                                                                                                                                   |
+| `logging.go`       | `LogToolCallAll` structured logging helper                                                                                                                                                                           |
+| `diff.go`          | Diff formatting utilities                                                                                                                                                                                            |
+| `doc.go`           | Package documentation                                                                                                                                                                                                |
+| `file_utils.go`    | File operation helpers (upload size validation, SHA-256, directory allow-lists)                                                                                                                                      |
+| `rate_limit.go`    | Token-bucket limiter shared by `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get`, with a looser bucket for `completion/complete` and a tenth-rate one for `tools/list` |
+| `string_or_int.go` | Flexible JSON unmarshalling for string-or-int fields                                                                                                                                                                 |
+| `time_helpers.go`  | Time formatting and parsing utilities                                                                                                                                                                                |
 
 ### Server Pool (`internal/serverpool`)
 

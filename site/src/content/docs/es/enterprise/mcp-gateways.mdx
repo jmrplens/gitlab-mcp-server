@@ -58,7 +58,10 @@ límite de peticiones por usuario. Una pasarela con una única credencial
 compartida colapsa a toda la población en una sola entrada de pool, un solo cubo
 de límite y una sola identidad de GitLab: cada acción se atribuye a ese usuario
 en el registro de auditoría de GitLab, y `--rate-limit-rps` pasa a ser un límite
-para todo el despliegue en lugar de por cliente.
+para todo el despliegue en lugar de por cliente. La exploración forma parte de
+ese presupuesto, en un bucket propio que se rellena diez veces más despacio y
+conserva el mismo burst, así que dimensiona `--rate-limit-burst` por el número
+de clientes que se reconectan a la vez: cada uno lista una vez al conectar.
 
 Si el despliegue publica varias instancias con `--gitlab-url` repetido, la
 pasarela también debe reenviar `GITLAB-URL`, y una petición sin esa cabecera se
