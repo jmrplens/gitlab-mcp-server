@@ -1274,6 +1274,7 @@ func runStdio(ctx context.Context) error {
 	var startupErr error
 	startupDone := make(chan struct{})
 	go func() {
+		stdioStartupGate(serveCtx)
 		startupErr = prepareStdioCatalog(serveCtx, client, cfg, serverCfg, shell, identity)
 		// Closed BEFORE serving is cancelled, so the main goroutine always
 		// finds the outcome recorded when serveStdio returns because of it.
@@ -1322,6 +1323,14 @@ func runStdio(ctx context.Context) error {
 // build, which is the one piece of startup work no cancellation cuts short;
 // nothing at runtime writes it.
 var stdioStartupDrainTimeout = 5 * time.Second //nolint:gochecknoglobals // test seam
+
+// stdioStartupGate runs first on the stdio startup goroutine and does nothing
+// at runtime. A test replaces it to hold the catalog build until serving has
+// ended: the catalog is shared per process, so the second build in one test
+// binary is a cache hit and finishes before a closed pipe has even been
+// noticed, and a test that relied on the build being slow had nothing left to
+// outlive.
+var stdioStartupGate = func(context.Context) {} //nolint:gochecknoglobals // test seam
 
 // Catalog construction hooks, replaceable in tests.
 //

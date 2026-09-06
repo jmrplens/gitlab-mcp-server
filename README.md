@@ -467,10 +467,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,147 |     232,774 |
-| Unit tests (`_test.go`)  |       653 |     381,769 |
+| Source (`.go`, non-test) |     1,147 |     232,789 |
+| Unit tests (`_test.go`)  |       653 |     381,785 |
 | End-to-end tests         |       235 |      61,898 |
-| **Total**                | **2,035** | **676,441** |
+| **Total**                | **2,035** | **676,472** |
 
 ### Functions
 
@@ -490,7 +490,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.64× more tests than code |
 | Average source file length         |                 ~203 lines |
 | Average test file length           |                 ~585 lines |
-| Comment lines in source            |  36,637 (~15.7% of source) |
+| Comment lines in source            |  36,647 (~15.7% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
@@ -500,7 +500,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | `if err != nil` checks             | 7,313 |
 | `defer` statements                 | 1,258 |
 | `struct` types defined             | 2,925 |
-| `//nolint` suppressions            |   306 |
+| `//nolint` suppressions            |   308 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
@@ -515,8 +515,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,485 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 10,335 lines |
+| Longest source file | `cmd/server/main.go`. 4,494 lines       |
+| Longest test file   | `cmd/server/main_test.go`. 10,345 lines |
 
 ### Because why not
 

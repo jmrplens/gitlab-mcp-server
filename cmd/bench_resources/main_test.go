@@ -793,13 +793,19 @@ func TestPointRounds_SeriesOnlyMatrix_ReportsNone(t *testing.T) {
 }
 
 // TestMemoryBudgetMiB_FlagWinsOverTheHost verifies an explicit budget is
-// taken verbatim and the default is a share of what the host reports.
+// taken verbatim and the default is a share of what the host reports. The
+// host's answer is pinned, because the kernel's figure moves by a few kibibytes
+// between two reads on a busy machine and a test that read it once itself and
+// once through the function under test was comparing two different hosts.
 func TestMemoryBudgetMiB_FlagWinsOverTheHost(t *testing.T) {
+	restore := hostAvailableMemoryMiB
+	hostAvailableMemoryMiB = func() float64 { return 1000 }
+	t.Cleanup(func() { hostAvailableMemoryMiB = restore })
+
 	if got := memoryBudgetMiB(2048); got != 2048 {
 		t.Errorf("memoryBudgetMiB(2048) = %v, want the flag", got)
 	}
-	got := memoryBudgetMiB(0)
-	if want := round(availableMemoryMiB() * defaultBudgetFraction); got != want {
+	if got, want := memoryBudgetMiB(0), round(1000*defaultBudgetFraction); got != want {
 		t.Errorf("memoryBudgetMiB(0) = %v, want %v, eighty percent of what the host reports", got, want)
 	}
 }

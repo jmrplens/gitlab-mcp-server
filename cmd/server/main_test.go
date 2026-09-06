@@ -2525,6 +2525,14 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 	restoreDrain := stdioStartupDrainTimeout
 	stdioStartupDrainTimeout = time.Millisecond
 	t.Cleanup(func() { stdioStartupDrainTimeout = restoreDrain })
+	// Hold the startup work until serving has returned. The catalog is shared
+	// per process, so a second build in this test binary is a cache hit that
+	// finishes before the closed pipe is noticed; without the gate there is
+	// nothing for the drain to find still running.
+	release := make(chan struct{})
+	restoreGate := stdioStartupGate
+	stdioStartupGate = func(context.Context) { <-release }
+	t.Cleanup(func() { stdioStartupGate = restoreGate })
 	logged := captureLogMessages(t)
 
 	// A closed pipe: EOF at once, so serving ends while the build is running.
@@ -2540,7 +2548,9 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 		_ = reader.Close()
 	})
 
-	if runErr := runStdio(context.Background()); runErr != nil {
+	runErr := runStdio(context.Background())
+	close(release)
+	if runErr != nil {
 		t.Fatalf("runStdio() = %v, want a clean stop when the client leaves", runErr)
 	}
 	if !logged("startup work had not finished when serving ended") {
