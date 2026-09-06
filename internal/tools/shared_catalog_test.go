@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,8 +27,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -653,10 +657,22 @@ func TestSharedCatalogs_BuildFailuresAreReportedWithTheirStep(t *testing.T) {
 // packages left the package most able to make the mistake outside it. What
 // toolutil is allowed to do, it is allowed to do by name, in rule.exempt.
 //
+// Test files are walked too, for the two map rules. A test is where the
+// mistake is most invisible: a route from [toolutil.RouteFunc] carries the
+// schema memoized for its input type, which lives for the process and is read
+// by every other test that reflects the same type, so a write into it there
+// reaches them all and nothing reports it. The guard used to skip every
+// _test.go, and one such write was sitting in
+// TestIndividualToolFromActionSpec_RemovesStaleRequired. The Handler rule
+// stays on non-test files: its hazard is a handler dropped when a shared
+// catalog rebinds the route, which a test that builds and calls its own route
+// never reaches, and a test may legitimately install one.
+//
 // A whole-field assignment is not an offense and is not matched: a route is a
 // value, so replacing a field replaces it on a copy. Only a write that reaches
 // through to the map itself is: an indexed write, a delete, a clear, and a
-// bulk copy into it.
+// bulk copy into it. A test that owns the route it writes into is therefore
+// still refused by the text; the ones that do say so in rule.exempt.
 //
 // It is a text guard, so it reads the names a route is usually held under
 // rather than resolving types. That is enough for what it is for: keeping the
@@ -670,27 +686,7 @@ func TestDomainPackages_LeaveSharedRouteStateAlone(t *testing.T) {
 	offenders := make(map[string][]string)
 	// sequential: both trees accumulate into one set of offenders, asserted per rule below.
 	for _, root := range []string{".", "../toolutil"} {
-		tree := os.DirFS(root)
-		err := fs.WalkDir(tree, ".", func(path string, entry fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			source, readErr := fs.ReadFile(tree, path)
-			if readErr != nil {
-				return readErr
-			}
-			named := filepath.ToSlash(filepath.Join(root, path))
-			for _, rule := range rules {
-				if rule.pattern.Match(source) && !slices.Contains(rule.exempt, named) {
-					offenders[rule.what] = append(offenders[rule.what], named)
-				}
-			}
-			return nil
-		})
-		if err != nil {
+		if err := collectSharedRouteStateOffenders(root, rules, offenders); err != nil {
 			t.Fatalf("walking %s: %v", root, err)
 		}
 	}
@@ -702,6 +698,36 @@ func TestDomainPackages_LeaveSharedRouteStateAlone(t *testing.T) {
 			}
 		})
 	}
+}
+
+// collectSharedRouteStateOffenders walks one tree and records, per rule, every
+// Go file that makes the write the rule refuses. A rule that does not cover
+// tests skips the _test.go files; an exempt file is skipped by name.
+func collectSharedRouteStateOffenders(root string, rules []sharedRouteStateRule, offenders map[string][]string) error {
+	tree := os.DirFS(root)
+	return fs.WalkDir(tree, ".", func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		source, readErr := fs.ReadFile(tree, path)
+		if readErr != nil {
+			return readErr
+		}
+		named := filepath.ToSlash(filepath.Join(root, path))
+		isTest := strings.HasSuffix(path, "_test.go")
+		for _, rule := range rules {
+			if (isTest && !rule.coversTests) || slices.Contains(rule.exempt, named) {
+				continue
+			}
+			if rule.pattern.Match(source) {
+				offenders[rule.what] = append(offenders[rule.what], named)
+			}
+		}
+		return nil
+	})
 }
 
 // TestSharedRouteStateGuard_MatchesTheShapesItMustRefuse holds every pattern
@@ -748,15 +774,17 @@ func assertExemptionsStillApply(t *testing.T, rule sharedRouteStateRule) {
 }
 
 // sharedRouteStateRule is one forbidden write: what it is, the pattern that
-// finds it, the remedy the failure names, the files allowed to make it, and
-// the samples that pin the pattern's reach in both directions.
+// finds it, whether test files are walked for it, the remedy the failure
+// names, the files allowed to make it, and the samples that pin the pattern's
+// reach in both directions.
 type sharedRouteStateRule struct {
-	what     string
-	pattern  *regexp.Regexp
-	remedy   string
-	exempt   []string
-	offenses []string
-	allowed  []string
+	what        string
+	pattern     *regexp.Regexp
+	coversTests bool
+	remedy      string
+	exempt      []string
+	offenses    []string
+	allowed     []string
 }
 
 // mutatingMapCalls are the calls that change the map passed as their first
@@ -783,16 +811,24 @@ func sharedRouteStateRules() []sharedRouteStateRule {
 			allowed:  []string{"if route.Handler == nil {", "Handler: wrapped,"},
 		},
 		{
-			what:     "a route's ParameterGuidance is written into",
-			pattern:  regexp.MustCompile(`(?i)\broute\.ParameterGuidance\s*\[[^\]]*\]\s*=[^=]|(?i)` + mutatingMapCalls + `[\w.]*route\.ParameterGuidance\b`),
-			remedy:   "build the guidance the spec is given instead; the route's map is shared with every server in the process",
+			what:        "a route's ParameterGuidance is written into",
+			pattern:     regexp.MustCompile(`(?i)\broute\.ParameterGuidance\s*\[[^\]]*\]\s*=[^=]|(?i)` + mutatingMapCalls + `[\w.]*route\.ParameterGuidance\b`),
+			coversTests: true,
+			remedy:      "build the guidance the spec is given instead; the route's map is shared with every server in the process",
+			// This file spells every offense as a string literal, and the one
+			// test below writes into the guidance of a route it built itself,
+			// from a map literal, which is the point of that test.
+			exempt:   []string{"shared_catalog_test.go", "../toolutil/action_spec_test.go"},
 			offenses: []string{`route.ParameterGuidance["project_id"] = guidance`, `action.Route.ParameterGuidance["ref"]=g`, "delete(spec.Route.ParameterGuidance, key)", "clear(route.ParameterGuidance)", "maps.Copy(route.ParameterGuidance, extra)", "maps.Insert(route.ParameterGuidance, seq)", "maps.DeleteFunc(route.ParameterGuidance, drop)"},
 			allowed:  []string{`options.ParameterGuidance["project_id"] = guidance`, `if g, ok := route.ParameterGuidance["project_id"]; ok {`, "route.ParameterGuidance = merged", "maps.Copy(mine, route.ParameterGuidance)", "maps.Clone(route.ParameterGuidance)"},
 		},
 		{
-			what:     "a route's schema map is written into",
-			pattern:  regexp.MustCompile(`(?i)\broute\.(Input|Output)Schema\s*\[[^\]]*\]\s*=[^=]|(?i)` + mutatingMapCalls + `[\w.]*route\.(Input|Output)Schema\b`),
-			remedy:   "copy it with toolutil.CloneSchemaMap first; the route's schemas are frozen and shared with every server in the process",
+			what:        "a route's schema map is written into",
+			pattern:     regexp.MustCompile(`(?i)\broute\.(Input|Output)Schema\s*\[[^\]]*\]\s*=[^=]|(?i)` + mutatingMapCalls + `[\w.]*route\.(Input|Output)Schema\b`),
+			coversTests: true,
+			remedy:      "copy it with toolutil.CloneSchemaMap first; the route's schemas are frozen and shared with every server in the process",
+			// This file spells every offense as a string literal.
+			exempt:   []string{"shared_catalog_test.go"},
 			offenses: []string{`route.InputSchema["required"] = names`, `entry.Route.OutputSchema["type"]="object"`, "delete(route.InputSchema, \"required\")", "clear(route.InputSchema)", "maps.Copy(route.OutputSchema, extra)", "maps.Insert(route.InputSchema, seq)", "maps.DeleteFunc(route.InputSchema, drop)"},
 			allowed:  []string{`schema["required"] = names`, `if props, ok := route.InputSchema["properties"]; ok {`, "route.OutputSchema = cloned", "maps.Copy(mine, route.InputSchema)", "maps.Clone(route.InputSchema)"},
 		},
@@ -813,4 +849,439 @@ func individualOptionsWithSchemaKey(t *testing.T, server string) IndividualCatal
 // contains reports whether values holds needle.
 func contains(values []string, needle string) bool {
 	return slices.Contains(values, needle)
+}
+
+// sharingTiers are the three instance tiers a catalog is built for. Tier
+// pruning rewrites the schema maps, so a hazard that only exists in a pruned
+// schema is only visible when all three are walked.
+func sharingTiers() []edition.Tier {
+	return []edition.Tier{edition.Free, edition.Premium, edition.Ultimate}
+}
+
+// writableObjectsIn walks value and returns, keyed by address, the path to
+// every object reachable from it that a goroutine could write into: maps,
+// slices, and pointers. Strings and numbers are left out because nothing can
+// write through them, and an empty map or slice is left out because it holds
+// nothing a write could reach without first growing it, which allocates a new
+// one.
+//
+// It is deliberately written against reflect rather than against the three
+// types [toolutil.CloneSchemaMap] copies, so that a container the clone does
+// not know about is found rather than assumed absent.
+func writableObjectsIn(value any) map[uintptr]string {
+	found := make(map[uintptr]string)
+	walkWritable(reflect.ValueOf(value), "", found)
+	return found
+}
+
+// walkWritable is the dispatch half of [writableObjectsIn]: it records the
+// value in front of it when that value is an object a write can reach, and
+// hands the containers to the walkers below.
+func walkWritable(v reflect.Value, path string, found map[uintptr]string) {
+	switch v.Kind() {
+	case reflect.Interface:
+		if !v.IsNil() {
+			walkWritable(v.Elem(), path, found)
+		}
+	case reflect.Pointer:
+		if !v.IsNil() && recordWritable(found, v.Pointer(), path) {
+			walkWritable(v.Elem(), path, found)
+		}
+	case reflect.Map:
+		walkWritableMap(v, path, found)
+	case reflect.Slice:
+		walkWritableSlice(v, path, found)
+	case reflect.Array, reflect.Struct:
+		walkWritableFixed(v, path, found)
+	default:
+	}
+}
+
+func walkWritableMap(v reflect.Value, path string, found map[uintptr]string) {
+	if v.IsNil() || v.Len() == 0 || !recordWritable(found, v.Pointer(), path) {
+		return
+	}
+	for _, key := range v.MapKeys() {
+		walkWritable(v.MapIndex(key), path+"."+writableKeyName(key), found)
+	}
+}
+
+func walkWritableSlice(v reflect.Value, path string, found map[uintptr]string) {
+	if v.IsNil() || v.Len() == 0 || !recordWritable(found, v.Pointer(), path) {
+		return
+	}
+	for i := range v.Len() {
+		walkWritable(v.Index(i), path+"["+strconv.Itoa(i)+"]", found)
+	}
+}
+
+// walkWritableFixed descends an array or a struct. Neither is an object of its
+// own: both live inside whatever holds them, so there is nothing to record and
+// only their elements or fields are walked.
+func walkWritableFixed(v reflect.Value, path string, found map[uintptr]string) {
+	if v.Kind() == reflect.Struct {
+		for i := range v.NumField() {
+			walkWritable(v.Field(i), path+"."+v.Type().Field(i).Name, found)
+		}
+		return
+	}
+	for i := range v.Len() {
+		walkWritable(v.Index(i), path+"["+strconv.Itoa(i)+"]", found)
+	}
+}
+
+// recordWritable records address under path and reports whether it was new,
+// which is what stops the walk from following a cycle or repeating a shared
+// subtree.
+func recordWritable(found map[uintptr]string, address uintptr, path string) bool {
+	if _, seen := found[address]; seen {
+		return false
+	}
+	found[address] = path
+	return true
+}
+
+// writableKeyName renders a map key for a path. Schema maps are keyed by
+// string; anything else is named by its kind rather than by a value that
+// cannot be read out of an unexported field.
+func writableKeyName(key reflect.Value) string {
+	if key.Kind() == reflect.String {
+		return key.String()
+	}
+	return "<" + key.Kind().String() + ">"
+}
+
+// cloneAliasReport returns one line per writable object a deep copy of schema
+// still shares with the original, and how many objects the copy owns, so a
+// caller can tell an empty report from an empty walk.
+//
+// Object identity is the question rather than a list of types, on purpose.
+// [toolutil.CloneSchemaMap] copies map[string]any, []any and []string and
+// returns everything else by reference, so a []map[string]any, a
+// map[string]string or a []int anywhere in a schema would survive the copy
+// shared, and a later write through the "copy" would land in the map every
+// server in the process is reading. Asking what the two trees have in common
+// finds that without having to predict which container someone adds next.
+func cloneAliasReport(schema map[string]any) (aliased []string, copied int) {
+	if len(schema) == 0 {
+		return nil, 0
+	}
+	clone := toolutil.CloneSchemaMap(schema)
+	original := writableObjectsIn(schema)
+	inClone := writableObjectsIn(clone)
+	// Keep both alive until the comparison is over, so no address in either
+	// map can name an object the collector has already reclaimed.
+	defer runtime.KeepAlive(schema)
+	defer runtime.KeepAlive(clone)
+	for address, path := range inClone {
+		if shared, ok := original[address]; ok {
+			aliased = append(aliased, "the copy at "+path+" is the original at "+shared)
+		}
+	}
+	sort.Strings(aliased)
+	return aliased, len(inClone)
+}
+
+// reportCloneAliases fails t for every writable object a deep copy of schema
+// still shares with it, and returns how many objects that copy owns, so a
+// caller can tell an empty report from an empty walk.
+func reportCloneAliases(t *testing.T, name string, schema map[string]any) int {
+	t.Helper()
+	aliased, copied := cloneAliasReport(schema)
+	for _, line := range aliased {
+		t.Errorf("%s: %s", name, line)
+	}
+	return copied
+}
+
+// TestSharedCatalogSchemas_CloneOwnsEverythingItCopies walks every schema the
+// real catalogs carry, at all three tiers, and fails on any value the deep
+// copy would hand back shared with the original.
+//
+// This is the first half of the answer to the concurrent map write seen once
+// on Windows during individual-surface registration: the writing goroutine
+// could have been one that believed it held a private copy. If any schema in
+// the catalog held a container the copy does not descend into, every write
+// through that copy would land in the process-lived original while another
+// goroutine was cloning it, which is exactly the crash.
+func TestSharedCatalogSchemas_CloneOwnsEverythingItCopies(t *testing.T) {
+	t.Parallel()
+
+	for _, tier := range sharingTiers() {
+		t.Run(tier.String(), func(t *testing.T) {
+			t.Parallel()
+			client := testutil.NewTestClient(t, healthyGitLab())
+			catalog, _, err := SharedIndividualCatalog(client, &config.ServerConfig{Tier: tier})
+			if err != nil {
+				t.Fatalf("SharedIndividualCatalog() error = %v", err)
+			}
+			actions := catalog.Actions()
+			if len(actions) == 0 {
+				t.Fatal("the catalog carries no actions, so nothing below is checked")
+			}
+			walked := 0
+			for _, action := range actions {
+				walked += reportCloneAliases(t, string(action.ID)+" input", action.Route.InputSchema)
+				walked += reportCloneAliases(t, string(action.ID)+" output", action.Route.OutputSchema)
+			}
+			// A schema tree is tens of maps deep in properties and $defs, so
+			// a walk that found only a handful of objects walked nothing.
+			if walked < len(actions) {
+				t.Errorf("the walk owned %d objects across %d actions, want at least one each; the comparison above proved nothing", walked, len(actions))
+			}
+		})
+	}
+}
+
+// sharedCatalogReader is one consumer of a shared catalog, named by what it
+// does so a failure says which reader was running. meta selects the catalog it
+// is given: the meta surface needs the catalog its own filter produced, and
+// every other reader takes the individual one. Both carry the same schema
+// maps, which is what these readers are racing over.
+type sharedCatalogReader struct {
+	name string
+	meta bool
+	read func(t *testing.T, catalog *actioncatalog.Catalog, client *gitlabclient.Client, label string)
+}
+
+// sharedCatalogReaders returns every consumer that reads one shared catalog in
+// a running server, in the shapes the server uses them.
+//
+// The list is the point. A shared catalog's schemas are read by the individual
+// projection, the meta projection, the dynamic registry, the gitlab://tools
+// manifest and the two tools/list middlewares, each on its own goroutine in a
+// pool that builds a server per configuration shape. A test that drives one of
+// them proves nothing about a write made by another.
+func sharedCatalogReaders() []sharedCatalogReader {
+	return []sharedCatalogReader{
+		{name: "individual registration and listing", read: readByRegisteringIndividual},
+		{name: "meta registration and listing", meta: true, read: readByRegisteringMeta},
+		{name: "dynamic registry", read: readByDynamicRegistry},
+		{name: "tool manifest snapshot", read: readByToolManifest},
+		{name: "individual tool projection", read: readByProjectingIndividualTools},
+		{name: "meta action schemas", meta: true, read: readByMetaActionSchemas},
+		{name: "deep copies of every route schema", read: readByCloningEverySchema},
+	}
+}
+
+// readByRegisteringIndividual registers the individual surface on a server of
+// its own and lists it through both tools/list middlewares. This is the path
+// the reported crash was on: registration re-derives each route's input schema
+// through NewActionSpec, which deep-copies it.
+func readByRegisteringIndividual(t *testing.T, catalog *actioncatalog.Catalog, _ *gitlabclient.Client, label string) {
+	t.Helper()
+	server := newListingServer()
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
+		IncludeStandaloneUtilities: true,
+		SchemaCacheKey:             "individual|" + label,
+	})
+	listSharedCatalogTools(t, server, label)
+}
+
+// readByRegisteringMeta registers the meta surface and lists it, which builds
+// the per-tool envelopes over the same route schemas.
+func readByRegisteringMeta(t *testing.T, catalog *actioncatalog.Catalog, client *gitlabclient.Client, label string) {
+	t.Helper()
+	server := newListingServer()
+	RegisterMetaCatalog(server, catalog)
+	RegisterMetaStandaloneTools(server, client)
+	listSharedCatalogTools(t, server, label)
+}
+
+// readByDynamicRegistry builds the dynamic registry over the catalog and asks
+// it the two questions that carry schemas back: a find and a describe.
+func readByDynamicRegistry(t *testing.T, catalog *actioncatalog.Catalog, _ *gitlabclient.Client, _ string) {
+	t.Helper()
+	registry := dynamic.NewRegistryFromCatalog(catalog)
+	if _, found, err := registry.Find(context.Background(), nil, dynamic.FindInput{Query: "create merge request"}); err != nil {
+		t.Errorf("dynamic Find() error = %v", err)
+	} else if len(found.Results) == 0 {
+		t.Error("dynamic Find() returned no results, so it carried no schema")
+	}
+	if _, described, err := registry.Describe(context.Background(), nil, dynamic.DescribeInput{Action: "project.get"}); err != nil {
+		t.Errorf("dynamic Describe() error = %v", err)
+	} else if len(described.Actions) == 0 {
+		t.Error("dynamic Describe() described nothing")
+	}
+}
+
+// readByToolManifest builds the gitlab://tools snapshot in both surfaces that
+// project catalog actions into it, each of which reads a route's schema for
+// every entry it publishes. No share key is given, so a cached snapshot never
+// stands in for the projection this is exercising.
+func readByToolManifest(t *testing.T, catalog *actioncatalog.Catalog, _ *gitlabclient.Client, _ string) {
+	t.Helper()
+	routes := catalog.ActionMaps()
+	for _, surface := range []string{"dynamic", "meta"} {
+		resources.RegisterToolSurfaceResources(newListingServer(), resources.ToolSurfaceResourceOptions{
+			Surface:    surface,
+			Catalog:    catalog,
+			MetaRoutes: routes,
+		})
+	}
+}
+
+// readByProjectingIndividualTools runs the projection alone, without a server,
+// so the deep copy inside NewActionSpec runs for every action rather than only
+// for the ones a registration reaches.
+func readByProjectingIndividualTools(t *testing.T, catalog *actioncatalog.Catalog, _ *gitlabclient.Client, _ string) {
+	t.Helper()
+	for _, action := range catalog.Actions() {
+		if strings.TrimSpace(action.IndividualTool.Name) == "" {
+			continue
+		}
+		if _, err := toolutil.IndividualToolFromActionSpec(actionSpecFromCatalogAction(action), toolutil.IndividualToolProjectionOptions{
+			Description: "Projected for the concurrency guard.",
+		}); err != nil {
+			t.Errorf("IndividualToolFromActionSpec(%s) error = %v", action.ID, err)
+		}
+	}
+}
+
+// readByMetaActionSchemas asks for the params schema every meta-tool action
+// serves, which enriches a copy of the route's schema with the destructive
+// property and the parameter guidance.
+func readByMetaActionSchemas(t *testing.T, catalog *actioncatalog.Catalog, _ *gitlabclient.Client, _ string) {
+	t.Helper()
+	routes := catalog.ActionMaps()
+	for tool, actions := range routes {
+		for action := range actions {
+			if _, ok := toolutil.LookupMetaActionSchema(routes, tool, action); !ok {
+				t.Errorf("LookupMetaActionSchema(%s, %s) reported the action missing", tool, action)
+			}
+		}
+	}
+}
+
+// readByCloningEverySchema deep-copies every schema in the catalog, which is
+// the iteration the reported crash died in. It runs unconditionally rather
+// than through a memo, so the window a memoized derivation only opens once per
+// process is open on every round.
+func readByCloningEverySchema(t *testing.T, catalog *actioncatalog.Catalog, _ *gitlabclient.Client, _ string) {
+	t.Helper()
+	for _, action := range catalog.Actions() {
+		if got := toolutil.CloneSchemaMap(action.Route.InputSchema); len(got) != len(action.Route.InputSchema) {
+			t.Errorf("%s: the copy has %d keys, want %d", action.ID, len(got), len(action.Route.InputSchema))
+		}
+		toolutil.CloneSchemaMap(action.Route.OutputSchema)
+	}
+}
+
+// listSharedCatalogTools drives a tools/list, which is what runs the lockdown
+// and pagination middlewares over the schemas the server registered.
+func listSharedCatalogTools(t *testing.T, server *mcp.Server, label string) {
+	t.Helper()
+	tools, err := toolutil.ListRegisteredTools(context.Background(), server, "shared-catalog-race")
+	if err != nil {
+		t.Errorf("%s: ListRegisteredTools() error = %v", label, err)
+		return
+	}
+	if len(tools) == 0 {
+		t.Errorf("%s: the server listed no tools", label)
+	}
+}
+
+// TestSharedCatalog_EveryReaderRunsAtOnceOverOneCatalog runs every consumer of
+// a shared catalog concurrently over the same catalog, at all three tiers, so
+// that a write into a schema any of them reads is a race the detector reports
+// and a concurrent map access the runtime's own check can catch.
+//
+// It exists because of a fatal "concurrent map iteration and map write" seen
+// once on the Windows leg of CI, inside the deep copy that individual-surface
+// registration makes of a route's input schema. The iterating side was in the
+// stack; the writing side was not, because Go's built-in check prints only the
+// running goroutine. No writer has been found: nothing under internal, cmd,
+// the MCP SDK or the JSON Schema library writes into a schema map it did not
+// allocate, and the copy that registration makes shares no writable object
+// with the original, which
+// [TestSharedCatalogSchemas_CloneOwnsEverythingItCopies] checks over the real
+// catalogs. What the crashing job does carry is the known Go runtime crash of
+// issue 467 (golang/go#81238): its first run of this same package died inside
+// the collector, dereferencing a bad type pointer while scanning an object,
+// and the map fatal came from the rerun the crash-aware runner started on that
+// same host. Across the Windows jobs of the last two dozen failed CI runs, the
+// map fatal appears in exactly that one, the one job that also carries the
+// runtime crash.
+//
+// So this stays as a standing guard rather than a reproduction: if a writer
+// does exist, it is a process crash in production, and this is where it is
+// caught. Raise -count for a soak; the readers are the same on every round,
+// and a round costs seconds.
+func TestSharedCatalog_EveryReaderRunsAtOnceOverOneCatalog(t *testing.T) {
+	t.Parallel()
+
+	const workersPerReader = 2
+	for _, tier := range sharingTiers() {
+		t.Run(tier.String(), func(t *testing.T) {
+			t.Parallel()
+			client := testutil.NewTestClient(t, healthyGitLab())
+			cfg := &config.ServerConfig{Tier: tier}
+			individual, _, err := SharedIndividualCatalog(client, cfg)
+			if err != nil {
+				t.Fatalf("SharedIndividualCatalog() error = %v", err)
+			}
+			meta, _, metaErr := SharedMetaCatalog(client, cfg)
+			if metaErr != nil {
+				t.Fatalf("SharedMetaCatalog() error = %v", metaErr)
+			}
+			var readers sync.WaitGroup
+			for _, reader := range sharedCatalogReaders() {
+				catalog := individual
+				if reader.meta {
+					catalog = meta
+				}
+				for worker := range workersPerReader {
+					label := tier.String() + "|" + reader.name + "|" + strconv.Itoa(worker)
+					readers.Go(func() { reader.read(t, catalog, client, label) })
+				}
+			}
+			readers.Wait()
+		})
+	}
+}
+
+// TestCloneAliasReport_FindsTheContainersTheCopyDoesNotDescendInto holds the
+// detector above to the shapes it exists to catch. A report that could not
+// fail would pass [TestSharedCatalogSchemas_CloneOwnsEverythingItCopies] on
+// any catalog, however the copy was written.
+func TestCloneAliasReport_FindsTheContainersTheCopyDoesNotDescendInto(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		schema     map[string]any
+		wantShared bool
+	}{
+		{
+			name:   "the JSON types a schema is made of",
+			schema: map[string]any{"type": "object", "properties": map[string]any{"page": map[string]any{"type": "integer", "minimum": 1}}, "required": []string{"page"}, "anyOf": []any{map[string]any{"required": []any{"page"}}}},
+		},
+		{
+			name:       "a map the copy does not know",
+			schema:     map[string]any{"properties": map[string]any{"ref": map[string]any{"x_tiers": map[string]string{"ref": "premium"}}}},
+			wantShared: true,
+		},
+		{
+			name:       "a slice of maps the copy does not know",
+			schema:     map[string]any{"properties": map[string]any{"ref": map[string]any{"x_examples": []map[string]any{{"value": "main"}}}}},
+			wantShared: true,
+		},
+		{
+			name:       "a slice of a type the copy does not know",
+			schema:     map[string]any{"properties": map[string]any{"ids": map[string]any{"x_defaults": []int{1, 2}}}},
+			wantShared: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			aliased, copied := cloneAliasReport(tc.schema)
+			if copied == 0 {
+				t.Fatal("the walk found nothing to compare")
+			}
+			if shared := len(aliased) > 0; shared != tc.wantShared {
+				t.Errorf("shared = %v (%v), want %v", shared, aliased, tc.wantShared)
+			}
+		})
+	}
 }

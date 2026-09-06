@@ -315,11 +315,19 @@ func TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec(t *testing.T) {
 
 // TestIndividualToolFromActionSpec_RemovesStaleRequired verifies required
 // fields are recalculated from the reflected input type.
+//
+// The stale list is put on a copy rather than on the route's own schema.
+// [RouteFunc] hands out the reflected schema memoized for the input type,
+// which lives for the process and is read by every other test in this package
+// that reflects the same type; writing into it here would be the very thing
+// the shared-route source guard refuses, made invisible by being in a test.
 func TestIndividualToolFromActionSpec_RemovesStaleRequired(t *testing.T) {
 	route := RouteFunc(func(_ context.Context, _ optionalIndividualInput) (testOutput, error) {
 		return testOutput{}, nil
 	})
-	route.InputSchema["required"] = []any{"name"}
+	stale := CloneSchemaMap(route.InputSchema)
+	stale["required"] = []any{"name"}
+	route.InputSchema = stale
 	spec := NewActionSpec("get", route, ActionSpecOptions{
 		ReadOnly:       true,
 		IndividualTool: IndividualToolSpec{Name: "gitlab_project_get", Description: "Get a project."},
