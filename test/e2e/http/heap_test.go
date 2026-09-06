@@ -33,12 +33,13 @@ const heapCredentials = 20
 //
 // It is set from the two figures this test sits between, both measured on this
 // same harness rather than taken from the analysis page. On this branch the
-// growth over 1 to 20 credentials is under 0.2 MiB, on both surfaces and
-// repeatably. On the parent commit, where the server is built per credential,
-// the same run grows 8.1 MiB on the dynamic surface and 27.6 MiB on individual.
-// Two mebibytes is therefore ten times what the shared server costs and four
-// times under the smaller of the two regressions, which is what makes a revert
-// of the change this guards fail here rather than ship green.
+// growth over 1 to 20 credentials is 0.14 MiB on dynamic, 0.15 on meta and 0.16
+// on individual, medians of fifteen runs, none of which reached 0.2. On the
+// parent commit, where the server is built per credential, the same run grows
+// 8.1 MiB on the dynamic surface and 27.6 MiB on individual. Two mebibytes is
+// therefore more than ten times what the shared server costs and four times
+// under the smaller of the two regressions, which is what makes a revert of the
+// change this guards fail here rather than ship green.
 //
 // The earlier budget was 32 MiB, chosen against a per-credential figure quoted
 // from an alternatives table rather than measured, and it passed on the parent
