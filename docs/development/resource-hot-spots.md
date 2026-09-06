@@ -20,8 +20,8 @@ step; this page reads those profiles.
 > surface the peak resident set was 4379 MiB against a live heap of 253 MiB.
 > Where a table below says "per credential" of a resident set, read "per
 > credential that is calling"; the tenancy figures are in
-> [What this branch measured](#what-this-branch-measured-1), and the settled
-> reading is described in the benchmark reference.
+> [What the shared server measured](#what-the-shared-server-measured), and the
+> settled reading is described in the benchmark reference.
 
 Two hosts, and which one matters, because a slope from one cannot be compared
 with a slope from the other. Everything down to and including
@@ -687,9 +687,12 @@ jobs shared it:
 | `individual` |            28.16 MiB per cred |                35.6 KiB per cred |  810x | 87.8 to 88.5 MiB                  | 189 to 200 MiB                |
 
 Three things to read off that table. The load slopes are noisy, because they
-are a peak sampled on a shared host, and the tenancy slopes are not: a live
-heap of a quiesced process barely moves between runs, which is most of why it
-is the better number. The settled resident set is three times the settled heap
+are a peak sampled on a shared host, and the tenancy slopes are not: the same
+ladder run again minutes later moved the load slope by up to a third (6.33 to
+8.46 MiB per credential on `dynamic`, 4.09 to 4.62 on `meta`, 28.16 to 28.19 on
+`individual`) and the tenancy slope by at most four percent (54.1 to 53.6 KiB,
+53.7 to 54.8, 35.6 to 34.3). A live heap read from a quiesced process barely
+moves between runs, and that is most of why it is the better number. The settled resident set is three times the settled heap
 and moves with it only loosely, exactly as the record's own documentation
 warns: freeing a heap does not hand the pages back, and Go's scavenger returns
 them on its own schedule. And the tenancy slope here is several times the
