@@ -4738,6 +4738,41 @@ func TestHostValidationMiddleware_BlockedHost(t *testing.T) {
 	}
 }
 
+// TestHostValidationMiddleware_ARequestNamingNoHostIsServed covers the health
+// check every polling balancer sends.
+//
+// The middleware exists against DNS rebinding, which needs a browser to
+// resolve a name the attacker controls to the loopback address; the browser
+// then puts that name in the Host header, and no browser omits it. A request
+// carrying none is therefore outside what this guards, and refusing it had a
+// cost: HAProxy's `option httpchk` sends no Host unless one is configured, so
+// a listener bound to a specific address answered every check with 403 and was
+// marked permanently DOWN by a balancer doing exactly what it was told.
+func TestHostValidationMiddleware_ARequestNamingNoHostIsServed(t *testing.T) {
+	t.Parallel()
+
+	served := false
+	handler := hostValidationMiddleware(
+		map[string]bool{"localhost": true, "127.0.0.1": true},
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			served = true
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1/health", nil)
+	req.Host = ""
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !served {
+		t.Error("a request with no Host header was refused; a polling balancer's health check carries none")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
 // TestCorsAllowHeaders_FollowTheAuthMode pins what the preflight actually
 // permits, per mode.
 //

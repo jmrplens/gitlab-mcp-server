@@ -3868,6 +3868,20 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
+		// A request naming no host at all is not the attack this guards
+		// against. DNS rebinding works by making a browser resolve a name the
+		// attacker controls to the loopback address, and the browser then puts
+		// that name in the Host header; no browser omits it. What does omit it
+		// is a health check: HAProxy's `option httpchk` sends no Host unless
+		// one is configured, so a listener bound to 127.0.0.1 answered every
+		// check with 403 and was marked permanently DOWN by a balancer that
+		// was working correctly. Refusing it bought nothing, since anything
+		// able to send a header-less request can reach the listener directly
+		// and does not need a browser to do it for it.
+		if r.Host == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if !allowed[host] {
 			slog.WarnContext(r.Context(), "request blocked: invalid Host header", //#nosec G706 -- slog structured args are not interpolated
 				"host", loggedHeaderPrefix(r.Host), "host_len", len(r.Host))
