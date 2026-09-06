@@ -555,6 +555,18 @@ func TestExecute_RefusesWhatItCannotRun(t *testing.T) {
 			t.Errorf("execute = %v, want it to name %s", err, absent)
 		}
 	})
+	// The fairness mode returns before the record is read or any chart is
+	// drawn, which is what keeps a scenario whose rendering has not landed yet
+	// from touching artifacts a byte comparison gates.
+	t.Run("a fairness run with a bound nobody declared", func(t *testing.T) {
+		err := execute(options{
+			rounds: 1, sampleInterval: time.Millisecond, stepDuration: time.Millisecond,
+			fairness: "no-such-bound", fairnessJSON: filepath.Join(t.TempDir(), "fairness.json"),
+		})
+		if err == nil || !strings.Contains(err.Error(), "no bound named") {
+			t.Errorf("execute = %v, want the fairness mode to answer before anything else", err)
+		}
+	})
 }
 
 // writeModuleFile creates one file of the throwaway module below.

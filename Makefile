@@ -15,7 +15,7 @@
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
-	bench-resources bench-resources-render check-bench-resources \
+	bench-resources bench-resources-render check-bench-resources bench-fairness \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -1064,6 +1064,17 @@ bench-resources-render:
 ## makes it a CI gate.
 check-bench-resources:
 	go run ./cmd/bench_resources/ -check
+
+## bench-fairness: measure whether a bound leaves the quiet tenant better off.
+## Two populations of credentials driven differently against one server, twice:
+## with the bound in force and without it. Reports the quiet population's served
+## and refused counts separately, and can answer that the bound helped nobody.
+## Minutes on a modest host. Writes bench/fairness.json, which is not committed,
+## and draws no chart: it touches neither the published record nor the artifacts
+## check-bench-resources compares. BOUND selects which limit is measured.
+BOUND ?= tools-call-rps
+bench-fairness:
+	go run ./cmd/bench_resources/ -fairness $(BOUND)
 
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
 ## Runs unit-test coverage over ./cmd/... and ./internal/..., so it takes minutes.
