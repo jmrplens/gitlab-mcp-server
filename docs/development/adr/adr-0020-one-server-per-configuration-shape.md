@@ -371,9 +371,14 @@ writing.
   entry, since a session-era `resources/subscribe` is refused there unless it
   arrived through a listen and so a watcher cannot exist without a stream; open
   streams are capped at 512 per process, which makes the fallback unreachable at
-  rest on any pool of 513 or more. Under `--stateless=false` it is about two
-  requests and a keep-alive every half hour per entry, because a watcher there
-  needs no held connection and nothing bounds watchers per process yet.
+  rest on any pool of 513 or more. Under `--stateless=false` a watcher needs no
+  held connection, so an entry is held busy for about two requests and a
+  keep-alive every half hour; watchers are now capped at 512 per process as
+  well, which puts the same bound on that transport at a pool of 1025 or more.
+  The watcher ceiling refuses rather than evicting, for the reason the pool does
+  the opposite: the pool must stay bounded and its entries are interchangeable
+  work, while a watcher belongs to one credential and stopping one to admit
+  another would be the cross-tenant trade this whole section rules out.
 
   Two remedies were considered and rejected, and they are recorded here rather
   than only in the tracker so the next reader finds the reasoning where the

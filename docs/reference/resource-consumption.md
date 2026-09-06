@@ -68,7 +68,7 @@ Two numbers per row, because holding credentials and serving them are different 
 | 100 (default max) | 3 to 5 MiB                      | 0.4 to 1.7 GiB                             | Default `--max-http-clients`                                             |
 | 1000              | 29 to 51 MiB                    | 1.0 to 4.7 GiB                             | Measured; the series runs every step to this count on all three surfaces |
 
-**`--max-http-clients` is not a memory setting.** At 50 KiB per entry its default of 100 bounds five mebibytes of tenancy, so sizing an instance against it is wrong in both directions: it neither reserves that memory nor limits what the callers behind those credentials allocate while their requests are served. Size from how many callers will have requests in flight at the same moment, which is the load column above. `--pool-idle-timeout` (default 1h) reclaims entries nobody has used, so the live count is what matters, not how many tokens have ever connected; an entry rebuilt after reclamation no longer pays for a catalog build unless it is the only credential of its configuration, because the built server is shared. An entry with a live subscription is exempt from that sweep and is preferred over by size pressure, since its watcher polls GitLab directly and its listen is one request the client never repeats, so nothing about it would look busy to the pool. That preference is not a guarantee: when every pooled entry is serving a subscription the least recently used of all is evicted anyway, because the pool is bounded before it is polite, and the client it belonged to is told rather than left silent. On the default stateless transport a `--max-http-clients` above the process-wide ceiling of 512 listen streams makes that fallback unreachable at rest, which buys about 25 MiB of tenancy at 50 KiB per entry; see [the lever](../guides/http-server-mode.md#the-lever-and-what-it-costs).
+**`--max-http-clients` is not a memory setting.** At 50 KiB per entry its default of 100 bounds five mebibytes of tenancy, so sizing an instance against it is wrong in both directions: it neither reserves that memory nor limits what the callers behind those credentials allocate while their requests are served. Size from how many callers will have requests in flight at the same moment, which is the load column above. `--pool-idle-timeout` (default 1h) reclaims entries nobody has used, so the live count is what matters, not how many tokens have ever connected; an entry rebuilt after reclamation no longer pays for a catalog build unless it is the only credential of its configuration, because the built server is shared. An entry with a live subscription is exempt from that sweep and is preferred over by size pressure, since its watcher polls GitLab directly and its listen is one request the client never repeats, so nothing about it would look busy to the pool. That preference is not a guarantee: when every pooled entry is serving a subscription the least recently used of all is evicted anyway, because the pool is bounded before it is polite, and the client it belonged to is told rather than left silent. A busy entry holds one of the two process-wide ceilings, 512 listen streams and 512 watchers, so a `--max-http-clients` above their sum of 1024 makes that fallback unreachable at rest on either transport, which buys about 50 MiB of tenancy at 50 KiB per entry; 513 suffices on the default stateless transport, where a watcher cannot exist without a stream. See [the lever](../guides/http-server-mode.md#the-lever-and-what-it-costs).
 
 ### CPU Usage
 
@@ -108,9 +108,12 @@ distinct watched URI — the one
 kind of work this server performs without a request in flight:
 
 - Up to **10 watchers per credential** (per token+URL pool entry in HTTP mode,
-  which is what owns them even where several credentials share one MCP server),
-  each one GitLab read per tick at an adaptive cadence: 5s while the
-  resource is busy, 15s default, 60s settled, 10min once lease-demoted.
+  which is what owns them even where several credentials share one MCP server)
+  and **512 across the process**, each one GitLab read per tick at an adaptive
+  cadence: 5s while the resource is busy, 15s default, 60s settled, 10min once
+  lease-demoted. The process ceiling is what bounds outbound polling on a
+  many-credential deployment: 512 watchers at the 5s floor is about 102
+  requests a second leaving this process, and about 34 at the 15s base.
 - Worst case **120 requests/minute per token** (10 watchers at the 5s
   floor), counted against that token's own GitLab rate limit.
 - Watchers never outlive their subscribers: they stop when the last

@@ -352,9 +352,9 @@ graph TD
 
 `--max-http-clients` decide con qué frecuencia ocurre todo eso. Ponlo por encima de la población simultánea de clientes y una credencial que llega no desaloja a nadie; que haya desalojos frecuentes significa que el número está por debajo de la población.
 
-Una entrada está ocupada mientras su credencial mantiene un stream `subscriptions/listen` abierto o al menos un vigilante. En el transporte sin estado por defecto tiene que mantener un stream, porque un `resources/subscribe` de la era de sesiones se rechaza allí salvo que llegue por un listen, y los streams abiertos están limitados a 512 por proceso. Un pool de 513 entradas o más no puede, por tanto, ponerse entero en estado ocupado, así que el recurso que se lleva la entrada de un suscriptor nunca se dispara. Eso cuesta unos 25 MiB de ocupación con los 50 KiB por entrada medidos, frente a un tope de 10000 para el flag.
+Una entrada está ocupada mientras su credencial mantiene un stream `subscriptions/listen` abierto o al menos un vigilante, y ambas cosas están acotadas en todo el proceso: 512 streams abiertos y 512 vigilantes simultáneos, ninguno configurable. Como mucho puede haber 1024 entradas ocupadas a la vez, así que un pool de 1025 o más no puede ponerse entero en estado ocupado y el recurso que se lleva la entrada de un suscriptor nunca se dispara. Eso cuesta unos 50 MiB de ocupación con los 50 KiB por entrada medidos, frente a un tope de 10000 para el flag.
 
-Con `--stateless=false` todavía no hay tamaño de pool que lo haga inalcanzable: un subscribe de la era de sesiones crea un vigilante sin conexión retenida, y los vigilantes están limitados a diez por credencial y por nada a nivel de proceso. Un tope de vigilantes por proceso se sigue en la [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561).
+El transporte sin estado por defecto necesita menos: allí un `resources/subscribe` de la era de sesiones se rechaza salvo que llegue por un listen, así que un vigilante no puede existir sin un stream y 513 entradas ya hacen inalcanzable ese recurso.
 
 ### Modelo de timeouts: capa HTTP vs sesión MCP
 
