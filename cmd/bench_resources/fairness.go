@@ -193,6 +193,70 @@ func (b boundSpec) onArgs() []string {
 	}
 }
 
+// meteredShare is the fraction of a population's ticks this bound refuses at
+// all, since a population cycles its verbs one per tick and a bound meters
+// some methods and not others.
+//
+// Without it every number derived from an offered rate is wrong by whatever
+// fraction of that rate the bound never looks at: a population alternating a
+// call and a listing against a bound that meters listings offers half what its
+// rate says, and a drain, a headroom and an expected refusal count computed
+// from the whole rate would each be out by the same factor.
+func (b boundSpec) meteredShare(verbIDs []string) float64 {
+	if len(verbIDs) == 0 {
+		return 0
+	}
+	metered := 0
+	for _, id := range verbIDs {
+		if b.meters(verbs[id].Method) {
+			metered++
+		}
+	}
+	return float64(metered) / float64(len(verbIDs))
+}
+
+// meteredOffered is the rate one credential of a population offers the bound,
+// counting only the verbs the bound meters.
+func (b boundSpec) meteredOffered(s populationSpec) float64 {
+	return s.Rate * b.meteredShare(s.Verbs)
+}
+
+// quietRate is the rate a quiet credential takes when the flag names none.
+//
+// Derived from the bound rather than fixed, because a rate that is a tenth of
+// one bound is ten times another: the shipped bucket meters ten requests a
+// second and the listing bucket it derives meters one, so the two-a-second
+// default that leaves the first a tenfold margin sits exactly on the second.
+// A population sitting on the bound is not the quiet tenant this scenario
+// reports on, and the fix cannot be a second constant per bound or the next
+// bound is a copy of this file rather than a literal in it.
+//
+// Capped at the shipped default, since the question is what a bound does for a
+// tenant working at a human rate, and a bound metered high enough to allow
+// more than that does not make the tenant busier.
+func (b boundSpec) quietRate() float64 {
+	if b.Bucket == nil {
+		return defaultQuietRate
+	}
+	share := b.meteredShare(b.QuietVerbs)
+	if share <= 0 {
+		return defaultQuietRate
+	}
+	return min(quietDefaultShare*b.Bucket.meteredRate()/share, defaultQuietRate)
+}
+
+// quietDefaultShare and quietMaxShare are how much of a bound a quiet tenant
+// takes by default and the most it may take at all.
+//
+// Two numbers rather than one so the default sits a factor of two inside the
+// rule: a hand-edited rate a little above the default is still a quiet tenant,
+// and a plan is only refused when the population is close enough to the bound
+// that the bound would refuse it.
+const (
+	quietDefaultShare = 0.25
+	quietMaxShare     = 0.5
+)
+
 // drain is how long the burst takes to empty at an offered rate, and whether
 // that rate exceeds the bound at all.
 //
@@ -245,7 +309,7 @@ var fairnessBounds = []boundSpec{
 		// The shipped HTTP default, which is the configuration whose fairness
 		// claim is worth testing: a deployment that changed it is measuring a
 		// setting it chose, and can say so with the flags below.
-		ArgsOff: []string{"--rate-limit-rps=0"},
+		ArgsOff: []string{limiterOffArg},
 		Bucket:  &bucketSpec{Rate: 10, Burst: 40},
 		Refusals: []refusalSpec{
 			{Status: httpOK, TextPrefix: rateLimitRefusal, Method: methodToolsCall},
@@ -270,7 +334,7 @@ var fairnessBounds = []boundSpec{
 		// not build and cannot read a constant out of; what catches it going
 		// stale is the positive control, which stops a run whose on-arm
 		// refused nothing rather than reporting a bound that helped nobody.
-		ArgsOff: []string{"--rate-limit-rps=0"},
+		ArgsOff: []string{limiterOffArg},
 		Bucket:  &bucketSpec{Rate: 10, Burst: 40, Metered: 1},
 		Refusals: []refusalSpec{
 			{Status: httpOK, Code: rateLimitCode, TextPrefix: rateLimitRefusal, Method: methodToolsList},
@@ -281,8 +345,8 @@ var fairnessBounds = []boundSpec{
 	{
 		ID:      "listen-streams",
 		Label:   "the per-credential subscriptions/listen ceiling",
-		ArgsOff: []string{"--rate-limit-rps=0"},
-		ArgsOn:  []string{"--rate-limit-rps=0"},
+		ArgsOff: []string{limiterOffArg},
+		ArgsOn:  []string{limiterOffArg},
 		EnvOn:   []string{"GITLAB_MCP_MAX_LISTEN_STREAMS=4"},
 		Refusals: []refusalSpec{
 			{
@@ -390,13 +454,19 @@ func fairnessPlanFor(opts options) (fairnessPlan, error) {
 	if err != nil {
 		return fairnessPlan{}, err
 	}
+	// A quiet rate the flag did not name is taken from the bound, since what
+	// counts as quiet is a fact about the bound and not about this command.
+	quietRate := opts.fairnessQuietRate
+	if quietRate <= 0 {
+		quietRate = bound.quietRate()
+	}
 	plan := fairnessPlan{
 		ID:      "fairness-" + opts.fairnessSurface + "-" + bound.ID,
 		Surface: opts.fairnessSurface,
 		Bound:   bound,
 		Quiet: populationSpec{
 			Name: populationQuiet, Credentials: opts.fairnessQuiet,
-			Rate: opts.fairnessQuietRate, Verbs: bound.QuietVerbs,
+			Rate: quietRate, Verbs: bound.QuietVerbs,
 		},
 		Noisy: populationSpec{
 			Name: populationNoisy, Credentials: opts.fairnessNoisy,
@@ -428,18 +498,25 @@ func (p fairnessPlan) validate() error {
 		return fmt.Errorf("the phase and the deadline must be positive and the lead-in must not be negative, got %s, %s and %s",
 			p.Phase, p.LeadIn, p.Deadline)
 	}
-	drain, bites := p.Bound.drain(p.Noisy.Rate)
+	// Both populations are measured against the bound by what they offer it
+	// rather than by their rate, which are the same number only for a
+	// population whose every verb the bound meters.
+	noisyOffered := p.Bound.meteredOffered(p.Noisy)
+	drain, bites := p.Bound.drain(noisyOffered)
 	if !bites {
-		return fmt.Errorf("the noisy population offers %g requests a second per credential against a bound of %g: "+
+		return fmt.Errorf("the noisy population offers %g metered requests a second per credential against a bound of %g: "+
 			"the bound would never refuse it, and the run would spend both arms discovering that",
-			p.Noisy.Rate, p.Bound.Bucket.meteredRate())
+			noisyOffered, p.Bound.Bucket.meteredRate())
+	}
+	if err := p.quietIsQuiet(); err != nil {
+		return err
 	}
 	// A phase that opens on a full bucket measures the burst, and a lead-in
 	// shorter than the drain leaves that burst inside the measured window.
 	if p.LeadIn < drain {
-		return fmt.Errorf("the lead-in of %s is shorter than the %s this bound's burst takes to drain at %g requests "+
+		return fmt.Errorf("the lead-in of %s is shorter than the %s this bound's burst takes to drain at %g metered requests "+
 			"a second: the measured phase would begin with a full bucket and report that the bound does almost nothing",
-			p.LeadIn, drain.Round(time.Millisecond), p.Noisy.Rate)
+			p.LeadIn, drain.Round(time.Millisecond), noisyOffered)
 	}
 	if p.Repeats <= 0 {
 		return fmt.Errorf("-fairness-repeats must be positive, got %d", p.Repeats)
@@ -457,6 +534,53 @@ func (p fairnessPlan) validate() error {
 // phase. Below this the population's pooled distribution is a handful of
 // observations however many credentials hold it.
 const minQuietTicks = 4
+
+// quietIsQuiet refuses a plan whose quiet population the bound would refuse.
+//
+// The mirror of the check above it, and it was missing while that one was
+// there: the plan refused a noisy population the bound would never bite, and
+// accepted a quiet population sitting on top of the bound. Such a run reports
+// on a tenant that was itself being turned away, which is not the tenant this
+// scenario claims to be reporting on, and the numbers it produces are the
+// numbers of a bound protecting nobody.
+//
+// Counted in what the bound actually meters, so a population alternating a
+// metered verb with an unmetered one is judged by the half that reaches the
+// bucket.
+func (p fairnessPlan) quietIsQuiet() error {
+	if p.Bound.Bucket == nil {
+		return nil
+	}
+	offered := p.Bound.meteredOffered(p.Quiet)
+	ceiling := quietMaxShare * p.Bound.Bucket.meteredRate()
+	if offered <= ceiling {
+		return nil
+	}
+	return fmt.Errorf("the quiet population offers %g metered requests a second per credential against a bound of %g, "+
+		"above the %g this comparison allows it: a population the bound refuses is not the quiet tenant the bound "+
+		"exists to protect, and the run would report on a tenant it was turning away. Lower -fairness-quiet-rate, "+
+		"or leave it unset to take %g from the bound itself",
+		offered, p.Bound.Bucket.meteredRate(), ceiling, p.Bound.quietRate())
+}
+
+// refusalsExpected is how many requests this bound must refuse over a phase if
+// it is in force at all: everything a population offers above what the bound
+// meters, for as long as the phase lasts.
+//
+// It exists so the positive control can be a quantity rather than a boolean. A
+// bound that fired once in three thousand requests and a bound absent from the
+// build are the same arm to a control that only asks whether anything was
+// refused, and telling them apart is the whole job of that control.
+func (p fairnessPlan) refusalsExpected(s populationSpec) float64 {
+	if p.Bound.Bucket == nil {
+		return 0
+	}
+	above := p.Bound.meteredOffered(s) - p.Bound.Bucket.meteredRate()
+	if above <= 0 {
+		return 0
+	}
+	return above * float64(s.Credentials) * p.Phase.Seconds()
+}
 
 // validate refuses a population that would not be a tenant.
 func (s populationSpec) validate() error {

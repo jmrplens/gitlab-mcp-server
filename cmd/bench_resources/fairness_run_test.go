@@ -404,6 +404,16 @@ func TestCheckArm_RefusesAnArmThatWasNotWhatItClaimed(t *testing.T) {
 			t.Errorf("checkArm = %v, %v, want a clean arm", notes, err)
 		}
 	})
+	// The plan above offers ninety metered requests a second above the bound
+	// over a forty-millisecond phase, so its own arithmetic expects between
+	// three and four refusals and the control demands half of that.
+	t.Run("the bound was in force and fired once in a thousand", func(t *testing.T) {
+		token := FairnessMethod{Method: methodToolsCall, Intended: 1000, Dispatched: 1000, Served: 999, Refused: 1}
+		_, err := checkArm(plan, withNoisy(armOn, token))
+		if !errors.Is(err, errBoundDidNotFire) {
+			t.Errorf("checkArm = %v, want a single refusal in a thousand refused as a bound that did not fire", err)
+		}
+	})
 	t.Run("the bound was off and something refused anyway", func(t *testing.T) {
 		notes, err := checkArm(plan, withNoisy(armOff, refused))
 		if err != nil || len(notes) != 1 || !strings.Contains(notes[0], "other than the bound under test") {
@@ -422,6 +432,49 @@ func TestCheckArm_RefusesAnArmThatWasNotWhatItClaimed(t *testing.T) {
 		notes, _ := checkArm(plan, withNoisy(armOff, broken))
 		if len(notes) != 1 || !strings.Contains(notes[0], "connection reset") {
 			t.Errorf("notes = %v, want one naming the failure", notes)
+		}
+	})
+}
+
+// TestIssue_FilesATickItWasTooLateToSendAsOneItNeverSent verifies a request
+// the driver reached after its own deadline is counted as the harness failing
+// to run the schedule, not as the tenant giving up on the server.
+//
+// The deadline is anchored at the intended instant, so a driver that far
+// behind enters the call with an expired context: the transport returns a
+// deadline without a byte reaching the server. Filed under the timed-out
+// outcome, as it was, that is a harness failure wearing the name of
+// starvation, and it lands in the very count the check for genuine starvation
+// compares between the arms.
+func TestIssue_FilesATickItWasTooLateToSendAsOneItNeverSent(t *testing.T) {
+	call, err := callFor(surfaceDynamic)
+	if err != nil {
+		t.Fatalf("callFor: %v", err)
+	}
+	var asked atomic.Int64
+	conn := &scriptedConn{answer: func(string, int) error { asked.Add(1); return nil }}
+	tally := newFairTally(call, nil)
+	in := paceInput{
+		conn: &clientConn{rpc: conn, label: "q"}, pop: populationQuiet,
+		deadline: 50 * time.Millisecond, tally: tally, call: call,
+	}
+	tally.offered(in.pop, verbs[verbCall])
+	issue(t.Context(), in, verbs[verbCall], time.Now().Add(-2*time.Second))
+
+	entry := tally.methods[populationQuiet][methodToolsCall]
+	if got := entry.render(verbs[verbCall]); got.Dropped != 1 || got.Dispatched != 0 || got.TimedOut != 0 {
+		t.Errorf("method = %+v, want the tick recorded as one the driver never sent", got)
+	}
+	if got := asked.Load(); got != 0 {
+		t.Errorf("the server was asked %d times for a request whose deadline had already passed", got)
+	}
+	t.Run("and one still inside its deadline is sent", func(t *testing.T) {
+		inTime := newFairTally(call, nil)
+		in.tally = inTime
+		inTime.offered(in.pop, verbs[verbCall])
+		issue(t.Context(), in, verbs[verbCall], time.Now())
+		if got := inTime.methods[populationQuiet][methodToolsCall].render(verbs[verbCall]); got.Served != 1 || got.Dropped != 0 {
+			t.Errorf("method = %+v, want the request sent and served", got)
 		}
 	})
 }
@@ -532,11 +585,62 @@ func TestRunFairness_MeasuresBothArmsAndWritesItsOwnDocument(t *testing.T) {
 	if doc.Server.Version == "" {
 		t.Error("the document does not say which build it measured")
 	}
+	assertMeasuredThePhaseAlone(t, opts, doc)
+}
+
+// assertMeasuredThePhaseAlone verifies each arm's counts are the phase's
+// schedule and nothing else, which is how the lead-in stays out of the
+// measurement.
+//
+// This is the accounting the whole scenario rests on and nothing asserted it:
+// the lead-in exists to drain the bound's burst, so folding it into the phase's
+// tally puts the burst's free requests inside the measured window and
+// understates the refusals against the requests served. The plan's arithmetic
+// is deterministic, so the intended count is exactly what a window of the
+// phase's length offers and a window carrying the lead-in as well cannot match
+// it.
+func assertMeasuredThePhaseAlone(t *testing.T, opts options, doc *FairnessDoc) {
+	t.Helper()
+	plan, err := fairnessPlanFor(opts)
+	if err != nil {
+		t.Fatalf("fairnessPlanFor: %v", err)
+	}
+	specs := map[string]populationSpec{populationQuiet: plan.Quiet, populationNoisy: plan.Noisy}
+	for _, repeat := range doc.Repeats {
+		for _, arm := range repeat.Arms {
+			for _, pop := range arm.Populations {
+				spec := specs[pop.Name]
+				for index, method := range pop.Methods {
+					// Verbs are cycled one per tick, so the first
+					// ticks % len(verbs) of them get one more than the rest,
+					// and the methods are recorded in the population's own
+					// verb order.
+					want := plan.ticks(spec) / len(spec.Verbs)
+					if index < plan.ticks(spec)%len(spec.Verbs) {
+						want++
+					}
+					want *= spec.Credentials
+					if method.Intended != want {
+						t.Errorf("repetition %d, %s arm, %s %s intended %d, want the phase's own %d: "+
+							"a window carrying the lead-in as well would offer more",
+							repeat.Index+1, arm.Arm, pop.Name, method.Method, method.Intended, want)
+					}
+				}
+			}
+		}
+	}
 }
 
 // smallFairnessOptions are the flags of a fairness run sized for a test: a
-// phase of a few hundred milliseconds and a lead-in long enough to drain the
-// bucket the stand-in holds.
+// phase of a second and a lead-in long enough to drain the bucket the stand-in
+// holds.
+//
+// The quiet rate is a fifth of what the bound meters once its two verbs are
+// counted, which is what makes the population quiet. It used to be exactly the
+// metered rate, so the assertion below that the quiet tenant was never refused
+// was carried by the burst covering a three-hundred-millisecond window rather
+// than by the tenant being under the bound at all, and the same run against a
+// longer phase would have refused it.
 func smallFairnessOptions(binary, out string) options {
 	return options{
 		binary:          binary,
@@ -546,10 +650,100 @@ func smallFairnessOptions(binary, out string) options {
 		fairnessJSON:    out,
 		fairnessSurface: surfaceDynamic,
 		fairnessQuiet:   1, fairnessNoisy: 1,
-		fairnessQuietRate: 20, fairnessNoisyRate: 200,
-		fairnessPhase: 300 * time.Millisecond, fairnessLeadIn: 500 * time.Millisecond,
+		fairnessQuietRate: 4, fairnessNoisyRate: 200,
+		fairnessPhase: time.Second, fairnessLeadIn: 300 * time.Millisecond,
 		fairnessDeadline: 2 * time.Second, fairnessRepeats: 1,
 	}
+}
+
+// TestRunFairness_CounterbalancesTheArmsAcrossRepetitions drives two whole
+// repetitions against the stand-in and verifies the counterbalancing is wired
+// to the run rather than only to the function that computes it.
+//
+// The order the arms run in is the only defense against a monotone drift of
+// the host landing on one of them, and it was asserted nowhere: armOrder had
+// its own test, its use had none, and every document handed to the verdict in
+// this package was hand-built by a fixture that called armOrder itself, so the
+// fixtures could not disagree with the production wiring either. Replacing the
+// call with a fixed order left the suite green.
+func TestRunFairness_CounterbalancesTheArmsAcrossRepetitions(t *testing.T) {
+	binary := standinBinary(t)
+	root := t.TempDir()
+	opts := smallFairnessOptions(binary, filepath.Join(root, "two.json"))
+	opts.fairnessRepeats = 2
+
+	if err := runFairness(opts, root); err != nil {
+		t.Fatalf("runFairness: %v", err)
+	}
+	doc, err := readFairness(opts.fairnessJSON)
+	if err != nil {
+		t.Fatalf("readFairness: %v", err)
+	}
+	if len(doc.Repeats) != 2 {
+		t.Fatalf("repeats = %d, want two", len(doc.Repeats))
+	}
+	for index, repeat := range doc.Repeats {
+		t.Run(fmt.Sprintf("repetition %d", index+1), func(t *testing.T) {
+			want := armOrder(index)
+			if repeat.Index != index || len(repeat.Order) != 2 || repeat.Order[0] != want[0] || repeat.Order[1] != want[1] {
+				t.Errorf("repetition %d ran %v, want %v", repeat.Index, repeat.Order, want)
+			}
+			if len(repeat.Arms) != 2 {
+				t.Fatalf("repetition %d holds %d arms, want two", index+1, len(repeat.Arms))
+			}
+			for position, arm := range repeat.Arms {
+				if arm.Arm != repeat.Order[position] {
+					t.Errorf("arm %d is %q, want the %q the order names", position, arm.Arm, repeat.Order[position])
+				}
+			}
+		})
+	}
+	if doc.Repeats[0].Order[0] == doc.Repeats[1].Order[0] {
+		t.Errorf("both repetitions began with the %s arm, so a drift of the host lands on one of them", doc.Repeats[0].Order[0])
+	}
+	assertMeasuredThePhaseAlone(t, opts, doc)
+	// Whatever this host let the stand-in do, the answer has to be one of the
+	// four and it has to carry its reason.
+	if doc.Verdict.Direction == "" || doc.Verdict.Reason == "" {
+		t.Errorf("verdict = %+v, want a direction and the reason for it", doc.Verdict)
+	}
+}
+
+// TestRunFairnessArm_MarksAnArmThatFailedAControlIncomparable verifies the one
+// line that joins the controls to the verdict.
+//
+// checkArm's notes were tested and the verdict's honoring of Comparable was
+// tested, and the assignment between them was not: replacing it with a
+// constant true left the suite green while an arm whose requests failed for a
+// reason that is not the bound would be compared anyway and could publish an
+// improvement.
+func TestRunFairnessArm_MarksAnArmThatFailedAControlIncomparable(t *testing.T) {
+	t.Setenv("STANDIN_FAIL", methodToolsCall)
+	r := standinRunner(t)
+	r.report = progressFunc(false)
+	plan := twoPopulationPlan(t)
+	plan.Phase = 100 * time.Millisecond
+	plan.Quiet.Rate, plan.Noisy.Rate = 20, 200
+
+	arm, err := r.runFairnessArm(t.Context(), plan, armOff)
+	if err != nil {
+		t.Fatalf("runFairnessArm: %v", err)
+	}
+	if arm.Comparable {
+		t.Errorf("arm = %+v, want an arm that failed a control marked incomparable", arm)
+	}
+	if len(arm.Notes) == 0 || !strings.Contains(strings.Join(arm.Notes, "; "), "not this bound") {
+		t.Errorf("notes = %v, want one naming the failures", arm.Notes)
+	}
+	t.Run("and the verdict refuses to compare it", func(t *testing.T) {
+		doc := fairnessDocOf(8, []armFixture{saturated(armOff, 20), saturated(armOn, 10)},
+			[]armFixture{saturated(armOn, 10), saturated(armOff, 20)})
+		doc.Repeats[0].Arms[0] = arm
+		_, verdict := judgeFairness(doc)
+		if verdict.Direction != directionNotComparable {
+			t.Errorf("verdict = %+v, want %q", verdict, directionNotComparable)
+		}
+	})
 }
 
 // TestRunFairness_RefusesToWriteWhereItWouldOverwriteTheRecord verifies the
