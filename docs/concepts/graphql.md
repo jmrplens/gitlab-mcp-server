@@ -279,6 +279,8 @@ GraphQL tools are tested using `httptest` mocking at the `/api/graphql` endpoint
 - `testutil.GraphQLHandler(map[string]http.HandlerFunc)` — routes GraphQL requests by matching query strings
 - `testutil.RespondGraphQL(w, status, dataJSON)` — wraps response in `{"data": ...}` envelope
 
+The mock no longer answers what GitLab would refuse: every document sent through a `testutil.NewTestClient` client is validated against the pinned GitLab schema first. See [The pinned schema](#the-pinned-schema) below.
+
 ```go
 client := testutil.NewTestClient(t, testutil.GraphQLHandler(
     map[string]http.HandlerFunc{
@@ -295,6 +297,35 @@ client := testutil.NewTestClient(t, testutil.GraphQLHandler(
     },
 ))
 ```
+
+## The pinned schema
+
+A mock stands in for GitLab, so it has to refuse what GitLab refuses. Ours did not. Every GraphQL test answers the request from an `httptest` handler that returns whatever the test wrote, so a passing test proved that our handler agreed with our own fixture and said nothing about whether the document was one any instance would accept. Four registered tools shipped documents `https://gitlab.com/api/graphql` rejects outright, with every test green, and the same blindness let eight domains advertise a backward pagination that no operation declared.
+
+GitLab is the only party that refuses a document, and no unit test may reach it, so the schema comes into the repository instead. `internal/graphqlschema` embeds a GitLab schema as compressed SDL, alongside a `source.json` recording the instance it came from, the version that instance reported, and the day it answered. `cmd/gen_graphql_schema` produces both from a live introspection; `make check-graphql-schema` gates that the committed pair still parses.
+
+Two things read it, and they judge different halves of the same question.
+
+### The test transport
+
+`internal/testutil.NewTestClient` wraps the mock every domain test already passes it. For a POST to `/api/graphql` it reads the body and validates both the document and the variables against the pinned schema before the mock answers:
+
+- the **document** half catches a field that does not exist, an argument the field does not accept, a selection set that is missing or forbidden, and a variable used where its declared type does not fit;
+- the **variables** half catches a variable the request sends that the operation never declares, which is invisible to the document half and is exactly the shape of the backward-pagination defect, and a value that does not fit the type it was declared as.
+
+A refusal is reported with `t.Errorf`, naming the operation and every reason, and the request then proceeds so the test's own assertions still run and still report. It never calls `t.Fatal`: this runs on the httptest server's goroutine, where an abort would terminate the wrong goroutine.
+
+Every GraphQL test the repository already had became a document validator at no cost to the tests themselves. `testutil.AllowInvalidGraphQL(t)` exempts a test that sends a malformed document on purpose, and belongs nowhere else: a document the pinned schema refuses is a document GitLab refuses.
+
+### The static audit
+
+A document no test drives still ships, so the transport alone is not enough. `make check-graphql-documents` (`cmd/audit_graphql_documents`) reads every raw document out of the source and validates it against the same schema. It loads the program with `go/packages` rather than matching text, because several documents are assembled by concatenating a shared fragment constant and only the type checker knows what the assembled value is.
+
+It cannot check variables: a document read out of the source has no request behind it.
+
+### What the pin cannot see
+
+The schema is a snapshot, and GitLab narrows fields in place. `securityReportFindings` used to accept a `confidence` argument; `Project.vulnerabilities.severity` used to be typed `[String!]`. Both were valid when they were written. A document these gates accept is one the pinned instance accepted on the day `source.json` records, which is a far stronger statement than the mocks used to make and still not the same as one a live instance accepts today. Re-pin with `make gen-graphql-schema` when GitLab has moved.
 
 ## References
 

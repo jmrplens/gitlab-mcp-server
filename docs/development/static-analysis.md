@@ -93,35 +93,39 @@ gotestsum --version
 
 ### Combined Targets
 
-| Target                | Description                                                                                                                                                                                          |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make analyze`        | Run `golangci-lint config verify`, `golangci-lint fmt --diff`, `golangci-lint run`, `govulncheck`, `markdownlint`, the test-goroutine abort gate, the subtest gate, and the supply-chain policy gate |
-| `make analyze-fix`    | Apply auto-fixes with `golangci-lint fmt`, `golangci-lint run --fix`, and `markdownlint --fix`                                                                                                       |
-| `make analyze-report` | Generate a combined Markdown report at `dist/analysis/report.txt`                                                                                                                                    |
-| `make lint`           | Backward-compatible alias for `make golangci-lint`                                                                                                                                                   |
+| Target                | Description                                                                                                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `make analyze`        | Run `golangci-lint config verify`, `golangci-lint fmt --diff`, `golangci-lint run`, `govulncheck`, `markdownlint`, the test-goroutine abort gate, the subtest gate, the supply-chain policy gate, and the two GraphQL gates (pinned schema, documents) |
+| `make analyze-fix`    | Apply auto-fixes with `golangci-lint fmt`, `golangci-lint run --fix`, and `markdownlint --fix`                                                                                                                                                         |
+| `make analyze-report` | Generate a combined Markdown report at `dist/analysis/report.txt`                                                                                                                                                                                      |
+| `make lint`           | Backward-compatible alias for `make golangci-lint`                                                                                                                                                                                                     |
 
 ### Project Audit Targets
 
 > Full CLI reference (flags, usage, output formats): [cmd-utilities.md](cmd-utilities.md)
 
-| Target                       | Description                                                                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `make audit-surface-quality` | Consolidated MCP surface audit (metadata + output quality)                                                                                                                     |
-| `make audit-tokens`          | Measure exposed tool token overhead (`--compare-schemas` for meta-tool sizing spike)                                                                                           |
-| `make audit-metrics`         | Report MCP tool/resource/prompt counts                                                                                                                                         |
-| `make audit-1to1`            | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata/enum streams + merged backlog), then the SDK parity gate                                                         |
-| `make audit-1to1-sdk`        | Gate every client-go service, raw-GraphQL operation and enum value on a decision; fails on a finding                                                                           |
-| `make audit-1to1-enums`      | The enum value rule alone (R-ENUM): every SDK enum constant an action's field can carry is offered, and nothing is offered the SDK does not declare; fails on a finding        |
-| `make audit-catalog-first`   | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`                                                                                             |
-| `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability                                                                                                                 |
-| `make audit-test-names`      | Audit test function naming convention compliance                                                                                                                               |
-| `make audit-test-goroutines` | Report `testing.T` aborts (`t.Fatal`/`FailNow`) made off the test goroutine, with a JSON work list                                                                             |
-| `make check-test-goroutines` | Fail when any off-goroutine abort site remains (errorf-without-return stays advisory)                                                                                          |
-| `make audit-test-subtests`   | Report case loops in Test functions that assert without a `t.Run` subtest, with a JSON work list                                                                               |
-| `make check-test-subtests`   | Fail when any case loop still asserts without a subtest                                                                                                                        |
-| `make check-supply-chain`    | Fail when a release-configuration invariant breaks (pinned actions, locked release jobs, stated Dependabot cooldowns, current security policy, signature-verifying installers) |
-| `make audit-godocs`          | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings                                                                               |
-| `make audit-godocs-check`    | Run the same Godoc audit and fail if findings remain                                                                                                                           |
+| Target                         | Description                                                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `make audit-surface-quality`   | Consolidated MCP surface audit (metadata + output quality)                                                                                                                     |
+| `make audit-tokens`            | Measure exposed tool token overhead (`--compare-schemas` for meta-tool sizing spike)                                                                                           |
+| `make audit-metrics`           | Report MCP tool/resource/prompt counts                                                                                                                                         |
+| `make audit-1to1`              | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata/enum streams + merged backlog), then the SDK parity gate                                                         |
+| `make audit-1to1-sdk`          | Gate every client-go service, raw-GraphQL operation and enum value on a decision; fails on a finding                                                                           |
+| `make audit-1to1-enums`        | The enum value rule alone (R-ENUM): every SDK enum constant an action's field can carry is offered, and nothing is offered the SDK does not declare; fails on a finding        |
+| `make audit-catalog-first`     | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`                                                                                             |
+| `make audit-dynamic-aliases`   | Audit Dynamic search aliases and canonical action reachability                                                                                                                 |
+| `make audit-test-names`        | Audit test function naming convention compliance                                                                                                                               |
+| `make audit-test-goroutines`   | Report `testing.T` aborts (`t.Fatal`/`FailNow`) made off the test goroutine, with a JSON work list                                                                             |
+| `make check-test-goroutines`   | Fail when any off-goroutine abort site remains (errorf-without-return stays advisory)                                                                                          |
+| `make audit-test-subtests`     | Report case loops in Test functions that assert without a `t.Run` subtest, with a JSON work list                                                                               |
+| `make check-test-subtests`     | Fail when any case loop still asserts without a subtest                                                                                                                        |
+| `make check-graphql-documents` | Fail when a raw GraphQL document in the source is one the pinned GitLab schema refuses                                                                                         |
+| `make audit-graphql-documents` | Same check, listing every document it accepted rather than only the refused ones                                                                                               |
+| `make check-graphql-schema`    | Fail when the committed GitLab schema does not parse or its provenance record does not decode                                                                                  |
+| `make gen-graphql-schema`      | Re-pin the GitLab schema from a live instance; needs the network, so it is not a gate                                                                                          |
+| `make check-supply-chain`      | Fail when a release-configuration invariant breaks (pinned actions, locked release jobs, stated Dependabot cooldowns, current security policy, signature-verifying installers) |
+| `make audit-godocs`            | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings                                                                               |
+| `make audit-godocs-check`      | Run the same Godoc audit and fail if findings remain                                                                                                                           |
 
 ## Tool Details
 

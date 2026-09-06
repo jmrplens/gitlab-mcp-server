@@ -33,6 +33,8 @@ gitlab-mcp-server/
 │   ├── audit_tokens/       # Token overhead; -footprint, --compare-schemas (was audit_meta_schema); cl100k_base tokenizer (tokens.go)
 │   ├── audit_metrics/      # MCP tool/resource/prompt metrics
 │   ├── audit_readonly_graphql/ # No ReadOnly action may reach a GraphQL mutation (make check-readonly-graphql)
+│   ├── audit_graphql_documents/ # Every raw GraphQL document is one the pinned GitLab schema accepts (make check-graphql-documents)
+│   ├── gen_graphql_schema/ # Pins the GitLab GraphQL schema from a live introspection (make gen-graphql-schema; --check gates it)
 │   ├── audit_test_goroutines/ # Off-goroutine testing.T abort audit (--check gate)
 │   ├── audit_test_names/   # Test naming convention (+ -apply/-dry-run; -check-files gates test-file naming)
 │   ├── audit_test_subtests/ # Case loops that assert without a t.Run subtest (-fix rewrites the unambiguous ones)
@@ -60,7 +62,8 @@ gitlab-mcp-server/
 │   ├── telemetry/, mcpotel/ # OpenTelemetry export and MCP instrumentation
 │   ├── clientcompat/, gatewaycompat/, cachehints/, capguard/ # Per-client and gateway compatibility, cache hints, capability guard
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
-│   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON)
+│   ├── graphqlschema/      # Pinned GitLab GraphQL schema (embedded gzipped SDL + provenance) and Validate()
+│   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema
 │   ├── tools/              # Tool orchestration layer + 177 internal/tools packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
