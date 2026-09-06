@@ -2162,12 +2162,19 @@ func WrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Conte
 }
 
 // WrapVoidAction wraps a typed handler that returns only error.
+//
+// It carries the same deadline as [WrapAction], and for a stronger reason: an
+// action that returns nothing is a delete, a cancel or a retry, which is
+// exactly the call an operator wants bounded. The deadline was missing here
+// while the setting's own documentation said every action passed through it.
 func WrapVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := UnmarshalParams[T](params)
 		if err != nil {
 			return nil, err
 		}
+		ctx, cancel := withActionDeadline(ctx)
+		defer cancel()
 		return nil, fn(ctx, client.For(ctx), input)
 	}
 }
@@ -2200,6 +2207,8 @@ func WrapVoidActionWithRequest[T any](client *gitlabclient.Client, fn func(ctx c
 		if err != nil {
 			return nil, err
 		}
+		ctx, cancel := withActionDeadline(ctx)
+		defer cancel()
 		return nil, fn(ctx, RequestFromContext(ctx), client.For(ctx), input)
 	}
 }

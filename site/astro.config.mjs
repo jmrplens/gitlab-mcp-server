@@ -763,6 +763,11 @@ export default defineConfig({
 							translations: { es: "Despliegue remoto" },
 						},
 						{
+							slug: "operations/enterprise-deployment",
+							label: "Enterprise Deployments",
+							translations: { es: "Despliegues empresariales" },
+						},
+						{
 							slug: "operations/resource-benchmark",
 							label: "Resource Benchmark",
 							translations: { es: "Consumo de recursos" },

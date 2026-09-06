@@ -693,6 +693,8 @@ gitlab-mcp-server --http --http-addr=:8443 --tls-cert=/etc/ssl/mcp.crt --tls-key
 
 Both flags or neither: a certificate without its key is a deployment that believes it is encrypting and is not. The pair is loaded at startup, so a wrong path fails there rather than at the first handshake.
 
+**Rotating it needs no restart.** The certificate is served through a callback that checks both files on each handshake and re-reads them when either has changed, so writing a new pair over the same paths is the whole procedure and the next handshake presents it. A half-written pair, or files briefly unreadable, keeps the previous certificate in service and logs the reason once. There is no reload signal and none is needed; `SIGHUP` is not handled and terminates the process. See [Enterprise Deployments](enterprise-deployment.md#certificate-rotation-without-downtime).
+
 **Versions.** TLS 1.2 is the floor, not the ceiling: no maximum is set, so a current client negotiates **TLS 1.3** and 1.2 is only reached by one that cannot go higher. Anything below 1.2 is refused. The floor is 1.2 rather than 1.3 deliberately — this flag exists for a reverse proxy on another machine, and a proxy's `proxy_ssl` stack is not always 1.3-capable. Both properties are pinned by tests that drive the real binary. This implies a private CA and `proxy_ssl_verify on` on the proxy side; where the proxy is local, the socket above is less machinery for the same guarantee.
 
 ## Public Hosted Endpoint
@@ -1007,7 +1009,7 @@ that forwards its prefix rather than stripping it.
 - **Tokens in transit**: Use HTTPS in production or ensure the network is trusted
 - **Tokens at rest**: Only SHA-256 hashes are stored in the pool; raw tokens are never persisted
 - **Token logging**: Only the last 4 characters appear in logs
-- **Pool isolation**: Each token gets a completely independent `*mcp.Server` — no shared state
+- **Pool isolation**: Each token gets its own pool entry with its own GitLab client, configuration, rate-limit bucket, watchers and owner token. The `*mcp.Server` is shared by every credential of one configuration shape, and every request runs under its own entry's client; a request that cannot be attributed to an entry fails rather than borrowing one. See [ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)
 - **Rate limiting**: Each client's GitLab token has its own rate limit bucket on the GitLab side (typically 300 req/min). The server also includes a per-IP authentication failure rate limiter (10 failures/min). When running behind a reverse proxy, configure `--trusted-proxy-header` and `--trusted-proxies` so the rate limiter sees real client IPs instead of the proxy's, and believes the header only from the proxy
 - **No fallback token**: If a request has no token, it is rejected — there is no server-level default
 
@@ -1028,6 +1030,7 @@ that forwards its prefix rather than stripping it.
 ## Further Reading
 
 - [Remote Deployment](remote-deployment.md) — running it as a service, in Docker, behind a proxy, and across several instances
+- [Enterprise Deployments](enterprise-deployment.md) — serving hundreds of people: sizing, balancing at scale, MCP gateways, TLS and certificate rotation, operations
 - [Configuration](../reference/configuration.md) — full configuration reference
 - [Architecture](../concepts/architecture.md) — system architecture with diagrams
 - [Resource Consumption](../concepts/resource-consumption.md) — memory and CPU analysis at scale

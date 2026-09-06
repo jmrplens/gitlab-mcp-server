@@ -232,6 +232,57 @@ func TestListener_InvalidSocketMode_StopsStartup(t *testing.T) {
 	}
 }
 
+// TestListener_UnixSocket_SharesOneAuthenticationBudget pins the cost of the
+// socket, so a deployment serving many people can weigh it before choosing.
+//
+// The authentication failure budget is keyed on the caller's address, and a
+// unix socket has none: every connection reports the same peer, so the ten
+// failures a minute that block one address block every caller behind the
+// proxy at once. Nor can the proxy hand the real one over, because
+// --trusted-proxy-header is believed only from a peer that parses as an
+// address and is listed in --trusted-proxies, which no socket peer does.
+//
+// It is asserted rather than left implicit because the alternative is
+// concrete: a loopback TCP listener with --trusted-proxies=127.0.0.1 keys the
+// budget on the address the proxy forwards, which is what a shared deployment
+// wants. The socket stays the better answer where the callers are few or
+// trusted, and this is the number that decides which case a deployment is in.
+func TestListener_UnixSocket_SharesOneAuthenticationBudget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the peer of an AF_UNIX connection is reported differently on Windows; the property under test is the POSIX one")
+	}
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	dir, err := os.MkdirTemp("", "sockbudget") //nolint:usetesting // a short path, as the socket-mode test explains
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "m.sock")
+	srv := startServerOnUnixSocket(t, socketPath,
+		"--gitlab-url="+gitlab.url,
+		"--trusted-proxy-header=X-Real-IP",
+		"--trusted-proxies=127.0.0.1,::1",
+	)
+
+	// Each request claims a different client address, which over TCP from a
+	// trusted proxy would give each its own budget.
+	blocked := 0
+	for i := range 15 {
+		got := srv.do(t, mcpPOST(map[string]string{"X-Real-IP": "203.0.113." + strconv.Itoa(i+1)}))
+		if got.status == http.StatusTooManyRequests {
+			blocked = i + 1
+			break
+		}
+		if got.status != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: status = %d, want 401 or 429: %s", i+1, got.status, truncate(got.body))
+		}
+	}
+	if blocked == 0 {
+		t.Fatal("fifteen failures from fifteen claimed addresses were never cut off over a unix socket; " +
+			"the budget is documented as shared there, and a deployment sizing against that would be sizing against nothing")
+	}
+}
+
 // TestListener_TLS_ServesHTTPS verifies that --tls-cert/--tls-key terminate TLS
 // on the listener itself, which is what a deployment whose proxy sits on
 // another machine depends on.
@@ -289,6 +340,167 @@ func TestListener_TLS_ServesHTTPS(t *testing.T) {
 	if !strings.Contains(string(body), "HTTPS") {
 		t.Errorf("a cleartext request got %d without explaining that the listener is TLS: %s", resp.StatusCode, truncate(string(body)))
 	}
+}
+
+// TestListener_TLS_RotatesTheCertificateWithoutARestart is the property an
+// enterprise deployment that terminates TLS on the listener depends on twice a
+// year, and it can only be shown against a real process.
+//
+// A certificate loaded once at startup makes renewal a restart, and a restart
+// on this server is not free: every call in flight is cut, every session ends,
+// and the instance comes back with an empty credential pool that has to be
+// refilled request by request. Behind a balancer that is a rolling deploy for
+// something no configuration changed.
+//
+// The assertion is in three parts, because any one of them alone would pass
+// for the wrong reason. The new certificate is what the listener presents,
+// which is the promise. The process did not restart, read off /health's
+// started_at, which is what makes it a reload rather than a supervisor being
+// quick. And the connection is new, because a reload cannot be observed on a
+// connection whose handshake already happened.
+func TestListener_TLS_RotatesTheCertificateWithoutARestart(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	dir := t.TempDir()
+	stamp := time.Now().Add(-time.Hour)
+	certFile, keyFile, firstPool := writeSelfSignedCertInto(t, dir, 11, stamp)
+	port := freePort(t)
+	addr := "127.0.0.1:" + strconv.Itoa(port)
+
+	srv := startServerWithClient(t, tlsClientTrusting(t, firstPool), "https://"+addr,
+		"--http-addr="+addr,
+		"--gitlab-url="+gitlab.url,
+		"--tls-cert="+certFile,
+		"--tls-key="+keyFile,
+	)
+
+	startedAt, serial := healthStartAndServedSerial(t, srv.httpClient(), "https://"+addr+"/health")
+	if serial != 11 {
+		t.Fatalf("the listener presented serial %d before the rotation, want 11", serial)
+	}
+
+	// The rotation: the same two paths, a different certificate. The stamp is
+	// moved forward explicitly so the change is visible whatever the
+	// filesystem's timestamp granularity is.
+	_, _, secondPool := writeSelfSignedCertInto(t, dir, 22, stamp.Add(time.Minute))
+
+	// A client of its own, so nothing can be answered from a connection whose
+	// handshake predates the rotation.
+	rotatedStartedAt, rotatedSerial := healthStartAndServedSerial(t, tlsClientTrusting(t, secondPool), "https://"+addr+"/health")
+	if rotatedSerial != 22 {
+		t.Errorf("the listener presented serial %d after the rotation, want 22: the new pair on disk was not picked up", rotatedSerial)
+	}
+	if rotatedStartedAt != startedAt {
+		t.Errorf("started_at moved from %q to %q: the certificate came back through a restart, not a reload", startedAt, rotatedStartedAt)
+	}
+}
+
+// TestListener_TLS_AHalfWrittenRotationKeepsServing covers the window between
+// the two writes a rotation is made of.
+//
+// Writing a certificate and its key is not atomic, and in between the pair on
+// disk does not match. A listener that refused the handshake there would turn
+// every renewal into an outage as long as one file write. The certificate
+// already loaded is still valid, so it is what keeps being served until the
+// pair is whole.
+func TestListener_TLS_AHalfWrittenRotationKeepsServing(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	dir := t.TempDir()
+	stamp := time.Now().Add(-time.Hour)
+	certFile, keyFile, firstPool := writeSelfSignedCertInto(t, dir, 33, stamp)
+	port := freePort(t)
+	addr := "127.0.0.1:" + strconv.Itoa(port)
+
+	srv := startServerWithClient(t, tlsClientTrusting(t, firstPool), "https://"+addr,
+		"--http-addr="+addr,
+		"--gitlab-url="+gitlab.url,
+		"--tls-cert="+certFile,
+		"--tls-key="+keyFile,
+	)
+	_ = srv
+
+	// Only the certificate half of a new generation lands. Its key is still
+	// the old one, so the pair does not match.
+	orphan, _, _ := writeSelfSignedCertInto(t, t.TempDir(), 44, time.Time{})
+	orphanPEM, err := os.ReadFile(orphan)
+	if err != nil {
+		t.Fatalf("reading the replacement certificate: %v", err)
+	}
+	// Both paths were written by this test into directories it owns; the
+	// taint analysis cannot see that the read path came from t.TempDir.
+	if writeErr := os.WriteFile(certFile, orphanPEM, 0o600); writeErr != nil { //#nosec G703 -- both paths are this test's own temp files
+		t.Fatalf("writing the mismatched certificate: %v", writeErr)
+	}
+	if chErr := os.Chtimes(certFile, stamp.Add(time.Minute), stamp.Add(time.Minute)); chErr != nil {
+		t.Fatalf("stamping the mismatched certificate: %v", chErr)
+	}
+
+	_, serial := healthStartAndServedSerial(t, tlsClientTrusting(t, firstPool), "https://"+addr+"/health")
+	if serial != 33 {
+		t.Errorf("the listener presented serial %d mid-rotation, want the previous 33", serial)
+	}
+}
+
+// tlsClientTrusting builds an HTTP client that trusts exactly the given pool
+// and shares no connection with any other client.
+func tlsClientTrusting(t *testing.T, pool *x509.CertPool) *http.Client {
+	t.Helper()
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{
+			RootCAs:    pool,
+			MinVersion: tls.VersionTLS12,
+		}},
+	}
+	t.Cleanup(client.CloseIdleConnections)
+	return client
+}
+
+// healthStartAndServedSerial reads /health over TLS and returns the process
+// start instant it reports together with the serial number of the certificate
+// the listener presented on that connection.
+//
+// The two travel together because the interesting question is about both at
+// once: which certificate is being served, and whether the process serving it
+// is the one that was running a moment ago.
+func healthStartAndServedSerial(t *testing.T, client *http.Client, url string) (startedAt string, serial int64) {
+	t.Helper()
+
+	var resp *http.Response
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
+		if err != nil {
+			t.Fatalf("building the health request: %v", err)
+		}
+		var doErr error
+		resp, doErr = client.Do(req)
+		if doErr == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the TLS listener never answered %s: %v", url, doErr)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the health body: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("/health = %d over TLS: %s", resp.StatusCode, truncate(string(body)))
+	}
+	if resp.TLS == nil || len(resp.TLS.PeerCertificates) == 0 {
+		t.Fatal("the response carries no peer certificate")
+	}
+	var health struct {
+		StartedAt string `json:"started_at"`
+	}
+	if unmarshalErr := json.Unmarshal(body, &health); unmarshalErr != nil {
+		t.Fatalf("decoding the health body %q: %v", truncate(string(body)), unmarshalErr)
+	}
+	return health.StartedAt, resp.TLS.PeerCertificates[0].SerialNumber.Int64()
 }
 
 // TestListener_HalfConfiguredTLS_StopsStartup verifies that a certificate
@@ -431,13 +643,27 @@ func TestListener_TLS_RefusesObsoleteVersions(t *testing.T) {
 // trusts it.
 func writeSelfSignedCert(t *testing.T) (certFile, keyFile string, pool *x509.CertPool) {
 	t.Helper()
+	return writeSelfSignedCertInto(t, t.TempDir(), 1, time.Time{})
+}
+
+// writeSelfSignedCertInto writes a certificate pair into a directory the
+// caller owns, under the serial number it names.
+//
+// The directory and the serial are parameters so that a rotation can be
+// expressed: the same two paths rewritten with a different certificate is
+// exactly what certbot, a Kubernetes secret projection and Vault's agent do.
+// When stamp is non-zero both files are given that modification time, which
+// keeps a rotation detectable on a filesystem whose timestamps are coarser
+// than the gap between two writes in a test.
+func writeSelfSignedCertInto(t *testing.T, dir string, serial int64, stamp time.Time) (certFile, keyFile string, pool *x509.CertPool) {
+	t.Helper()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("generating a key: %v", err)
 	}
 	template := x509.Certificate{
-		SerialNumber:          big.NewInt(1),
+		SerialNumber:          big.NewInt(serial),
 		Subject:               pkix.Name{CommonName: "gitlab-mcp-server e2e"},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(24 * time.Hour),
@@ -453,7 +679,6 @@ func writeSelfSignedCert(t *testing.T) (certFile, keyFile string, pool *x509.Cer
 		t.Fatalf("creating the certificate: %v", err)
 	}
 
-	dir := t.TempDir()
 	certFile = filepath.Join(dir, "cert.pem")
 	keyFile = filepath.Join(dir, "key.pem")
 
@@ -468,6 +693,13 @@ func writeSelfSignedCert(t *testing.T) (certFile, keyFile string, pool *x509.Cer
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 	if writeErr := os.WriteFile(keyFile, keyPEM, 0o600); writeErr != nil {
 		t.Fatalf("writing the key: %v", writeErr)
+	}
+	if !stamp.IsZero() {
+		for _, path := range []string{certFile, keyFile} {
+			if chErr := os.Chtimes(path, stamp, stamp); chErr != nil {
+				t.Fatalf("stamping %s: %v", path, chErr)
+			}
+		}
 	}
 
 	pool = x509.NewCertPool()

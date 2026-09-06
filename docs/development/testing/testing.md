@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,134 |
-| Unit test functions                                   | 13,545 |
-| E2E test functions                                    |    589 |
-| cmd test functions                                    |  2,472 |
+| Total test functions                                  | 14,155 |
+| Unit test functions                                   | 13,557 |
+| E2E test functions                                    |    598 |
+| cmd test functions                                    |  2,482 |
 | Test files (internal/)                                |    508 |
-| Test files (cmd/)                                     |    149 |
-| Test files (test/e2e/)                                |    231 |
+| Test files (cmd/)                                     |    150 |
+| Test files (test/e2e/)                                |    233 |
 | Tool sub-packages tested                              |    176 |
 | Core packages tested                                  |     21 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |    n/a |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,583 | 82.0% |
+| `TestFunc_Scenario` (2-part)           | 11,601 | 82.0% |
 | `TestFunc` (no underscore)             |    967 |  6.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,584 | 11.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,587 | 11.2% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,289 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,291 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            329 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (176) |          8,455 |        355 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            589 |        231 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,472 |        149 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,134** |    **888** |                                                                                                 |
+| E2E integration         |            598 |        233 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          2,482 |        150 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,155** |    **891** |                                                                                                 |
 
 ### Core Packages
 
@@ -76,8 +76,8 @@
 | subscriptions |        90 |      n/a | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |      n/a | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        37 |      n/a | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       848 |      n/a | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,289** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       850 |      n/a | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,291** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 

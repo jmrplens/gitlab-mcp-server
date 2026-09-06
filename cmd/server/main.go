@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -1036,6 +1035,9 @@ func validateHTTPRuntimeConfig(cfg *config.Config) error {
 	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
 		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", rateErr)
 	}
+	if err := validateHTTPPoolAndRateBounds(cfg); err != nil {
+		return err
+	}
 	// A malformed trusted origin must fail startup, not be silently dropped:
 	// a deployment believing an origin is trusted when it is not is worse
 	// than one that rejects it loudly. AddTrustedOrigin is the same check the
@@ -1053,6 +1055,35 @@ func validateHTTPRuntimeConfig(cfg *config.Config) error {
 		return fmt.Errorf("--max-request-body-bytes must be >= 0, got %d", cfg.MaxRequestBodyBytes)
 	}
 	return validateTrustedProxyConfig(cfg)
+}
+
+// validateHTTPPoolAndRateBounds applies the documented ceilings on the flags
+// that size a deployment.
+//
+// Stdio reaches them through (*config.Config).validate, which HTTP mode does
+// not run: it builds its configuration from flags and validates what it knows
+// about. The bounds were therefore published and unenforced on the transport
+// they were written for, and the two ways that showed were both silent.
+// `--max-http-clients=0` did not fail, it fell back to the pool's own default
+// of 100, so an operator who meant "no limit" got a limit and no message
+// saying so. And a value above the ceiling was taken literally, which is the
+// one direction where the number decides how much memory the process may
+// hold. The environment spelling of the same setting already refused a
+// non-positive value, so this is also what makes the two spellings agree.
+func validateHTTPPoolAndRateBounds(cfg *config.Config) error {
+	if cfg.MaxHTTPClients <= 0 {
+		return fmt.Errorf("--max-http-clients must be positive, got %d", cfg.MaxHTTPClients)
+	}
+	if cfg.MaxHTTPClients > config.MaxHTTPClients {
+		return fmt.Errorf("--max-http-clients %d exceeds maximum of %d", cfg.MaxHTTPClients, config.MaxHTTPClients)
+	}
+	if cfg.RateLimitRPS > config.MaxRateLimitRPS {
+		return fmt.Errorf("--rate-limit-rps %g exceeds maximum of %g", cfg.RateLimitRPS, float64(config.MaxRateLimitRPS))
+	}
+	if cfg.RateLimitBurst > config.MaxRateLimitBurst {
+		return fmt.Errorf("--rate-limit-burst %d exceeds maximum of %d", cfg.RateLimitBurst, config.MaxRateLimitBurst)
+	}
+	return nil
 }
 
 // validateTrustedProxyConfig holds the two proxy flags to each other.
@@ -2697,13 +2728,11 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	rootHandler = securityHeadersMiddleware(inboundLimitsFor(cfg), rootHandler)
 
 	httpServer := newHTTPServer(httpAddr, rootHandler, httpIdleTimeout)
-	if cfg.TLSCertFile != "" {
-		// Stated rather than inherited: the standard library's default
-		// floor has moved before and may move again, and a deployment that
-		// turned TLS on to satisfy an auditor should be able to read the
-		// floor off this line.
-		httpServer.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	tlsConfig, tlsErr := tlsConfigFor(cfg.TLSCertFile, cfg.TLSKeyFile)
+	if tlsErr != nil {
+		return tlsErr
 	}
+	httpServer.TLSConfig = tlsConfig
 
 	serverErr, startErr := startServing(ctx, cfg, httpServer, httpAddr, listener)
 	if startErr != nil {
@@ -2747,13 +2776,15 @@ func startServing(
 
 	serverErr := make(chan error, 1)
 	go func() {
-		// ServeTLS with empty filenames would demand a certificate from
-		// TLSConfig, so the plain path stays plain: TLS is only reached when
-		// the operator supplied a pair, which validateTLSFiles has already
-		// loaded once to prove it parses.
+		// ServeTLS is given no filenames on purpose. The pair is already in
+		// TLSConfig behind a GetCertificate that re-reads it when it changes,
+		// and net/http replaces TLSConfig.Certificates with one load of the
+		// named files whenever either name is non-empty: passing them here
+		// would pin the certificate to what was on disk at startup, which is
+		// the rotation this indirection exists to allow.
 		var err error
 		if cfg.TLSCertFile != "" {
-			err = httpServer.ServeTLS(listener, cfg.TLSCertFile, cfg.TLSKeyFile)
+			err = httpServer.ServeTLS(listener, "", "")
 		} else {
 			err = httpServer.Serve(listener)
 		}
@@ -3836,6 +3867,20 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 		host := r.Host
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
+		}
+		// A request naming no host at all is not the attack this guards
+		// against. DNS rebinding works by making a browser resolve a name the
+		// attacker controls to the loopback address, and the browser then puts
+		// that name in the Host header; no browser omits it. What does omit it
+		// is a health check: HAProxy's `option httpchk` sends no Host unless
+		// one is configured, so a listener bound to 127.0.0.1 answered every
+		// check with 403 and was marked permanently DOWN by a balancer that
+		// was working correctly. Refusing it bought nothing, since anything
+		// able to send a header-less request can reach the listener directly
+		// and does not need a browser to do it for it.
+		if r.Host == "" {
+			next.ServeHTTP(w, r)
+			return
 		}
 		if !allowed[host] {
 			slog.WarnContext(r.Context(), "request blocked: invalid Host header", //#nosec G706 -- slog structured args are not interpolated
