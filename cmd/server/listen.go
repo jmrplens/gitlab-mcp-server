@@ -55,7 +55,11 @@ func listenHTTP(ctx context.Context, addr string, socketMode os.FileMode) (net.L
 	if !isUnixSocketAddr(addr) {
 		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
 		if err != nil {
-			return nil, err
+			// Named, because the address is the whole content of this
+			// failure: bare, the commonest one reads "address already in use"
+			// without saying which address, and the operator has to go back to
+			// the command line to find out what they asked for.
+			return nil, fmt.Errorf("--http-addr %q: binding the TCP listener: %w", addr, err)
 		}
 		// The address that was bound, not the one that was asked for. They
 		// differ whenever the port is 0, which is how a deployment asks the

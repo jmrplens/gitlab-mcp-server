@@ -3571,6 +3571,28 @@ func TestEntryFromBuild_RefusesWhatIsNotAnEntry(t *testing.T) {
 // both stop silently, and the pool would grow to its cap holding credentials
 // nobody has checked since startup. The recover is what keeps the failure to
 // one sweep.
+// syncLog is a log sink several goroutines may write at once.
+//
+// The global logger is process-wide, so a background sweep that has not
+// noticed its context yet writes through whatever a test has just installed.
+// A strings.Builder there is a data race, and one the detector finds.
+type syncLog struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (l *syncLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.Write(p)
+}
+
+func (l *syncLog) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.String()
+}
+
 // awaitSweepTicks waits for two signals from a sweep whose callback panics
 // every time, and says which of the two failures happened.
 //
@@ -3614,7 +3636,14 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 			t.Fatalf("GetOrCreateEntry(): %v", err)
 		}
 
-		pool.StartIdleEviction(t.Context())
+		// The sweep gets a context of its own, cancelled the moment this
+		// subtest is done with it, rather than the test's, which is cancelled
+		// only after every subtest has run. A sweep still ticking during the
+		// next subtest writes a recovery line through the global logger that
+		// subtest has just replaced with one of its own.
+		sweepCtx, stopSweep := context.WithCancel(t.Context())
+		defer stopSweep()
+		pool.StartIdleEviction(sweepCtx)
 
 		awaitSweepTicks(t, panicked,
 			"the idle sweep never ran",
@@ -3626,19 +3655,25 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 	// The recovery both goroutines defer, called directly, so the ordinary
 	// return through it is asserted as well as the panic.
 	t.Run("the shared recovery", func(t *testing.T) {
-		var logged strings.Builder
+		// Synchronized, and named uniquely. The sweep above is asked to stop
+		// before this runs, but a goroutine is asked rather than made to: it
+		// can be inside one last tick, and its recovery writes through
+		// whatever logger is installed then. A plain strings.Builder would be
+		// written by two goroutines at once, and an assertion on emptiness
+		// would be answered by a line this subtest did not produce.
+		logged := &syncLog{}
 		previous := slog.Default()
-		slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+		slog.SetDefault(slog.New(slog.NewTextHandler(logged, nil)))
 		t.Cleanup(func() { slog.SetDefault(previous) })
 
 		func() {
-			defer recoverSweep(context.Background(), "idle eviction")
-			panic("in-use callback blew up")
+			defer recoverSweep(context.Background(), "panicking-sweep")
+			panic("the callback of a panicking sweep blew up")
 		}()
 
 		// Reaching here at all is half the assertion: an unrecovered panic
 		// ends the test binary.
-		for _, want := range []string{"idle eviction", "in-use callback blew up"} {
+		for _, want := range []string{"panicking-sweep", "the callback of a panicking sweep blew up"} {
 			t.Run(want, func(t *testing.T) {
 				if !strings.Contains(logged.String(), want) {
 					t.Errorf("log = %q, want it to mention %q", logged.String(), want)
@@ -3646,9 +3681,8 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 			})
 		}
 
-		logged.Reset()
-		func() { defer recoverSweep(context.Background(), "idle eviction") }()
-		if logged.Len() != 0 {
+		func() { defer recoverSweep(context.Background(), "quiet-sweep") }()
+		if strings.Contains(logged.String(), "quiet-sweep") {
 			t.Errorf("a sweep that returned normally logged %q", logged.String())
 		}
 	})
