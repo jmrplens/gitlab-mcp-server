@@ -132,14 +132,14 @@ func epicNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 func decorateEpicNoteMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_epic_note_list":
-		options.Usage = "List all comments (notes) on an epic, including system notes. Use when the task asks to read an epic's discussion, recent comments, or activity. Notes are served through the Work Items GraphQL API with keyset (cursor) pagination."
+		options.Usage = "List all comments (notes) on an epic, including system notes. Use when the task asks to read an epic's discussion, recent comments, or activity. Notes are served through the Work Items GraphQL API with keyset (cursor) pagination. Pages forward only: this GitLab connection takes first and after, and rejects last and before."
 		options.Aliases = []string{"list epic comments", "show epic notes", "read epic discussion", "get epic comments"}
 		options.RelatedActions = []string{actionEpicNoteGet, actionEpicNoteCreate, actionEpicGet, actionEpicDiscussionGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"full_path": fullPathGuidance(),
 			"epic_iid":  epicIIDGuidance(),
 		}
-		options.IndividualTool.Description = "List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion."
+		options.IndividualTool.Description = "List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion."
 	case "gitlab_epic_note_get":
 		options.Usage = "Get one epic note by params.note_id. Use when the task references a specific comment or note ID on an epic."
 		options.Aliases = []string{"get epic comment", "show epic note", "fetch epic note"}

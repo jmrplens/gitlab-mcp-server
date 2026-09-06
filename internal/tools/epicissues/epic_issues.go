@@ -20,13 +20,13 @@ const hintEpicGIDResolution = "could not resolve epic GID; verify full_path with
 // GraphQL queries and mutations for work item hierarchy operations.
 
 const queryListChildren = `
-query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
+query($fullPath: ID!, $iid: String!, $first: Int, $after: String, $last: Int, $before: String) {
   namespace(fullPath: $fullPath) {
     workItem(iid: $iid) {
       id
       widgets {
         ... on WorkItemWidgetHierarchy {
-          children(first: $first, after: $after) {
+          children(first: $first, after: $after, last: $last, before: $before) {
             pageInfo {
               hasNextPage
               hasPreviousPage
@@ -183,6 +183,7 @@ type gqlChildrenResponse struct {
 	Data struct {
 		Namespace *gqlNamespaceWorkItem `json:"namespace"`
 	} `json:"data"`
+	Errors []toolutil.GraphQLError `json:"errors"`
 }
 
 // gqlMutationChildrenNodes holds a non-paginated list of child nodes.
@@ -260,7 +261,7 @@ func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPa
 type ListInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group or my-group/sub-group),required"`
 	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
-	toolutil.GraphQLPaginationInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // AssignInput defines parameters for assigning an issue to an epic.
@@ -327,12 +328,15 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("epicIssueList", "epic_iid")
 	}
 
-	vars := input.Variables()
+	vars, err := input.Variables(queryListChildren)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("epicIssueList: %w", err)
+	}
 	vars["fullPath"] = input.FullPath
 	vars["iid"] = strconv.FormatInt(input.IID, 10)
 
 	var resp gqlChildrenResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query:     queryListChildren,
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
@@ -341,7 +345,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 			"verify full_path (group path) with gitlab_group_get and iid with gitlab_epic_list; epics require GitLab Premium or Ultimate")
 	}
 
+	// GitLab answers a rejected document with HTTP 200 and a top-level errors
+	// array, which client-go does not turn into an error, so a query the
+	// instance refused would otherwise be reported as a missing epic.
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("epicIssueList", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 		return ListOutput{}, fmt.Errorf("epicIssueList: epic not found in group %q with IID %d", input.FullPath, input.IID)
 	}
 

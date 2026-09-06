@@ -48,6 +48,8 @@ List branch rules for a project. Returns a paginated list of all branch rules wi
 | `first`        | int    |    No    | Number of items per page (default: 20)                |
 | `after`        | string |    No    | Cursor for forward pagination                         |
 
+`Project.branchRules` pages forward only: it rejects `last` and `before`, and reports no previous page, so the response carries `has_next_page` and `end_cursor` alone.
+
 ### Output fields
 
 Each branch rule includes:

@@ -79,9 +79,7 @@ query($projectPath: ID!, $first: Int!, $after: String) {
       }
       pageInfo {
         hasNextPage
-        hasPreviousPage
         endCursor
-        startCursor
       }
     }
   }
@@ -106,9 +104,7 @@ query($projectPath: ID!, $first: Int!, $after: String) {
       }
       pageInfo {
         hasNextPage
-        hasPreviousPage
         endCursor
-        startCursor
       }
     }
   }
@@ -199,10 +195,13 @@ type ListInput struct {
 }
 
 // ListOutput is the output for listing branch rules.
+//
+// Pagination is forward-only because Project.branchRules is: it accepts first
+// and after alone, and reports neither a previous page nor a start cursor.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Rules      []BranchRuleItem                 `json:"rules"`
-	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
+	Rules      []BranchRuleItem                        `json:"rules"`
+	Pagination toolutil.GraphQLForwardPaginationOutput `json:"pagination"`
 }
 
 // List retrieves branch rules for a project via the GitLab GraphQL API.
@@ -214,13 +213,31 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("list_branch_rules: project_path is required")
 	}
 
-	vars := input.Variables()
-	vars["projectPath"] = input.ProjectPath
-
 	query := queryListBranchRulesCE
 	if client.IsEnterprise() {
 		query = queryListBranchRulesEE
 	}
+	return listWith(ctx, client, query, input)
+}
+
+// listWith runs one branch rules document against the variables the input
+// resolves to.
+//
+// The document is a parameter rather than picked here so that a test can hand
+// it one declaring too little and prove the pagination guard refuses it. The
+// alternative, a package-level variable a test reassigns, would put a document
+// under a parallel neighbor's feet, and the race detector would report it as a
+// data race rather than as this guard.
+//
+// Building the variables here rather than in the caller is what keeps the check
+// honest: the pair is checked against the document this call will actually
+// send, not against the one a tier decision happened to pick first.
+func listWith(ctx context.Context, client *gitlabclient.Client, query string, input ListInput) (ListOutput, error) {
+	vars, err := input.Variables(query)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("list_branch_rules: %w", err)
+	}
+	vars["projectPath"] = input.ProjectPath
 
 	return doGraphQLList(ctx, client, query, vars, input.ProjectPath)
 }
@@ -236,17 +253,12 @@ type gqlProjectBranchRules struct {
 	BranchRules gqlBranchRulesConnection `json:"branchRules"`
 }
 
-// gqlErrorEntry represents a single error entry in a GraphQL response.
-type gqlErrorEntry struct {
-	Message string `json:"message"`
-}
-
 // gqlResponse is the generic GraphQL response envelope for branch rules.
 type gqlResponse struct {
 	Data struct {
 		Project *gqlProjectBranchRules `json:"project"`
 	} `json:"data"`
-	Errors []gqlErrorEntry `json:"errors"`
+	Errors []toolutil.GraphQLError `json:"errors"`
 }
 
 // doGraphQLList executes a branch rules GraphQL query and returns the output.
@@ -261,7 +273,13 @@ func doGraphQLList(ctx context.Context, client *gitlabclient.Client, query strin
 		return ListOutput{}, toolutil.WrapErrWithHint("list_branch_rules", err, "verify the project fullPath is correct and your token has read_api scope")
 	}
 
+	// GitLab answers a rejected document with HTTP 200 and a top-level errors
+	// array, which client-go does not turn into an error, so a query the
+	// instance refused would otherwise be reported as a missing project.
 	if resp.Data.Project == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("list_branch_rules", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 		return ListOutput{}, fmt.Errorf("list_branch_rules: project %q not found", projectPath)
 	}
 
@@ -272,6 +290,6 @@ func doGraphQLList(ctx context.Context, client *gitlabclient.Client, query strin
 
 	return ListOutput{
 		Rules:      items,
-		Pagination: toolutil.PageInfoToOutput(resp.Data.Project.BranchRules.PageInfo),
+		Pagination: toolutil.PageInfoToForwardOutput(resp.Data.Project.BranchRules.PageInfo),
 	}, nil
 }

@@ -101,7 +101,7 @@ Permanently delete an epic from a GitLab group via the Work Items GraphQL API.
 
 ### `gitlab_epic_issue_list`
 
-List all issues assigned to a GitLab group epic via the Work Items GraphQL API. Supports pagination.
+List all issues assigned to a GitLab group epic via the Work Items GraphQL API. Pages in both directions: `first` and `after` forward, `last` and `before` backward, one page size at a time.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -133,7 +133,7 @@ Update the relationship of an issue within a GitLab group epic via the Work Item
 
 ### `gitlab_epic_note_list`
 
-List all comments (notes) on a GitLab group epic via the Work Items GraphQL API. Supports ordering and cursor-based pagination.
+List all comments (notes) on a GitLab group epic via the Work Items GraphQL API. Supports ordering and cursor-based pagination. The work item notes widget pages forward only: it rejects `last` and `before`, so the response carries `has_next_page` and `end_cursor` alone.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -172,7 +172,7 @@ Permanently delete a comment from a GitLab group epic via the Work Items GraphQL
 
 ### `gitlab_list_epic_discussions`
 
-List all discussion threads on a GitLab group epic via the Work Items GraphQL API. Supports cursor-based pagination.
+List all discussion threads on a GitLab group epic via the Work Items GraphQL API. Supports cursor-based pagination. The work item notes widget pages forward only: it rejects `last` and `before`, so the response carries `has_next_page` and `end_cursor` alone.
 
 | Annotation | **Read** |
 | ---------- | -------- |

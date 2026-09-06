@@ -57,6 +57,8 @@ List project vulnerabilities with extensive filtering support. Returns a paginat
 | `sort`           | string   |    No    | Sort order: `severity_desc`, `severity_asc`, `detected_desc`, `detected_asc`                                                                                        |
 | `first`          | int      |    No    | Number of items per page (default: 20)                                                                                                                              |
 | `after`          | string   |    No    | Cursor for forward pagination                                                                                                                                       |
+| `last`           | int      |    No    | Number of items per page when paging backward. Cannot be combined with `first`                                                                                      |
+| `before`         | string   |    No    | Cursor for backward pagination, from a previous response's `start_cursor`                                                                                           |
 
 ### `gitlab_get_vulnerability`
 

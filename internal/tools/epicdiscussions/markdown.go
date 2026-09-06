@@ -6,7 +6,7 @@ var markdownRenderer = toolutil.NewDiscussionRenderer("Epic Discussions", "No ep
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	return markdownRenderer.FormatGraphQLList(toolutil.DiscussionMarkdowns(out.Discussions, toMarkdownDiscussion), out.Pagination)
+	return markdownRenderer.FormatGraphQLForwardList(toolutil.DiscussionMarkdowns(out.Discussions, toMarkdownDiscussion), out.Pagination)
 }
 
 // FormatMarkdownString renders a discussion as Markdown.

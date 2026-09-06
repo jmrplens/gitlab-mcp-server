@@ -79,7 +79,7 @@ func FormatListMarkdown(out ListOutput) string {
 		}
 	}
 
-	sb.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Rules)))
+	sb.WriteString(toolutil.FormatGraphQLForwardPagination(out.Pagination, len(out.Rules)))
 	sb.WriteString("\n")
 	return sb.String()
 }

@@ -84,18 +84,24 @@ _, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
 
 Shared GraphQL utilities live in `internal/toolutil/graphql.go`:
 
-| Utility                     | Purpose                                                 |
-| --------------------------- | ------------------------------------------------------- |
-| `GraphQLPaginationInput`    | Cursor-based pagination input (first/after/last/before) |
-| `GraphQLPaginationOutput`   | Pagination metadata for tool responses                  |
-| `GraphQLRawPageInfo`        | Raw camelCase PageInfo from GitLab API                  |
-| `PageInfoToOutput()`        | Converts camelCase PageInfo to snake_case output        |
-| `FormatGraphQLPagination()` | Formats pagination metadata as Markdown summary         |
-| `FormatGID()`               | Builds GitLab Global ID (`gid://gitlab/Type/123`)       |
-| `ParseGID()`                | Extracts type and numeric ID from a GitLab Global ID    |
-| `MergeVariables()`          | Merges multiple variable maps for complex queries       |
-| `GraphQLDefaultFirst`       | Default page size (20)                                  |
-| `GraphQLMaxFirst`           | Maximum page size (100)                                 |
+| Utility                            | Purpose                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| `GraphQLPaginationInput`           | Forward-only pagination input (first/after)                            |
+| `GraphQLCursorPaginationInput`     | Adds last/before, for a field GitLab paginates in both directions      |
+| `GraphQLPaginationOutput`          | Pagination metadata for tool responses                                 |
+| `GraphQLForwardPaginationOutput`   | The same without the previous-page half, for a forward-only connection |
+| `GraphQLRawPageInfo`               | Raw camelCase PageInfo from GitLab API                                 |
+| `PageInfoToOutput()`               | Converts camelCase PageInfo to snake_case output                       |
+| `PageInfoToForwardOutput()`        | Converts it while dropping the previous-page half                      |
+| `FormatGraphQLPagination()`        | Formats pagination metadata as Markdown summary                        |
+| `FormatGraphQLForwardPagination()` | Formats it without naming a previous page                              |
+| `FormatGID()`                      | Builds GitLab Global ID (`gid://gitlab/Type/123`)                      |
+| `ParseGID()`                       | Extracts type and numeric ID from a GitLab Global ID                   |
+| `MergeVariables()`                 | Merges multiple variable maps for complex queries                      |
+| `GraphQLDefaultFirst`              | Default page size (20)                                                 |
+| `GraphQLMaxFirst`                  | Maximum page size (100)                                                |
+
+Which pagination input a domain embeds is the statement of what its connection can do, and it is checked rather than trusted: `Variables()` takes the document it is about to run and refuses one that does not declare, or does not pass on, every variable the input can send. See [GraphQL concepts](../../concepts/graphql.md) for the three ways that check fails.
 
 ### Testing approach
 

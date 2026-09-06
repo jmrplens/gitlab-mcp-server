@@ -204,6 +204,109 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
+// TestList_GraphQLErrorsAreReported verifies that a document GitLab refused is
+// answered with its errors rather than with an empty page of findings.
+//
+// This is the worst place in the server for a swallowed error: when the project
+// resolves over REST, the branch below answers a null project with an empty
+// list, so a query the instance rejected reads as a pipeline that found no
+// security issues.
+func TestList_GraphQLErrorsAreReported(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQLError(w, http.StatusOK, "Field 'securityReportFindings' doesn't accept argument 'confidence'")
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		ProjectPath: "my-group/my-project",
+		PipelineIID: "1",
+	})
+	if err == nil {
+		t.Fatalf("List() = %+v, want the GraphQL errors reported", out)
+	}
+	if !strings.Contains(err.Error(), "doesn't accept argument") {
+		t.Errorf("List() error = %v, want it to carry the GitLab message", err)
+	}
+}
+
+// TestList_BackwardPagination verifies that a caller following start_cursor
+// backwards is sent before and last, and no first.
+//
+// securityReportFindings derives its direction from the cursor and its limit
+// from first or last, so sending both would leave the page size decided by
+// whichever argument the resolver happened to read first. One at a time is what
+// makes the request unambiguous.
+func TestList_BackwardPagination(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
+			}
+			if last, ok := vars["last"].(float64); !ok || int(last) != 5 {
+				t.Errorf("last = %v, want 5", vars["last"])
+			}
+			if vars["before"] != "cursor1" {
+				t.Errorf("before = %v, want cursor1", vars["before"])
+			}
+			if first, ok := vars["first"]; ok {
+				t.Errorf("first = %v, want it unset when the caller paged backwards", first)
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"pipeline": {
+						"securityReportFindings": {
+							"nodes": [],
+							"pageInfo": {"hasNextPage": true, "hasPreviousPage": false, "endCursor": "cursor2", "startCursor": "cursor1"}
+						}
+					}
+				}
+			}`)
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		ProjectPath: "my-group/my-project",
+		PipelineIID: "456",
+		Last:        new(5),
+		Before:      "cursor1",
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Findings) != 0 {
+		t.Errorf("got %d findings, want 0", len(out.Findings))
+	}
+}
+
+// TestList_ContradictoryPageSizes verifies that naming both first and last is
+// refused before a request is made. The findings resolver reads its limit from
+// whichever of the two it sees, so sending both would leave the page size to an
+// implementation detail rather than to the caller.
+func TestList_ContradictoryPageSizes(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("List() reached GitLab with a contradictory page request")
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": {"pipeline": {"securityReportFindings": {"nodes": []}}}}`)
+		},
+	})
+
+	_, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		ProjectPath: "my-group/my-project",
+		PipelineIID: "456",
+		First:       new(10),
+		Last:        new(5),
+	})
+	if err == nil {
+		t.Fatal("List() error = nil, want a refusal naming the conflict")
+	}
+	if !strings.Contains(err.Error(), "first and last cannot be combined") {
+		t.Errorf("List() error = %v, want it to name the conflict", err)
+	}
+}
+
 // TestList_ProjectNilExistingProjectReturnsEmpty verifies unavailable findings are not mistaken for missing projects.
 func TestList_ProjectNilExistingProjectReturnsEmpty(t *testing.T) {
 	mux := http.NewServeMux()

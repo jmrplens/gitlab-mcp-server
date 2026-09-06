@@ -587,6 +587,16 @@ func (r DiscussionRenderer) FormatGraphQLList(discussions []DiscussionMarkdown, 
 	})
 }
 
+// FormatGraphQLForwardList renders GraphQL discussion threads from a
+// connection that only pages forward, so the summary line names no previous
+// page.
+func (r DiscussionRenderer) FormatGraphQLForwardList(discussions []DiscussionMarkdown, pagination GraphQLForwardPaginationOutput) string {
+	return r.FormatGraphQLList(discussions, GraphQLPaginationOutput{
+		HasNextPage: pagination.HasNextPage,
+		EndCursor:   pagination.EndCursor,
+	})
+}
+
 // FormatDiscussion renders a single discussion using the renderer hints.
 func (r DiscussionRenderer) FormatDiscussion(discussion DiscussionMarkdown) string {
 	return FormatDiscussionMarkdown(discussion, r.DiscussionHints...)
