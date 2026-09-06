@@ -11,7 +11,37 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestRemoveNonReadOnlyTools_RemovesMutatingToolsOnly verifies read-only mode
+// on the individual surface: every tool that does not advertise itself as
+// read-only is removed, the read-only ones stay, and a server that cannot
+// be listed removes nothing.
+func TestRemoveNonReadOnlyTools_RemovesMutatingToolsOnly(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	noop := func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{}, nil
+	}
+	server.AddTool(&mcp.Tool{Name: "gitlab_read", Description: "read", InputSchema: map[string]any{"type": "object"}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, noop)
+	server.AddTool(&mcp.Tool{Name: "gitlab_write", Description: "write", InputSchema: map[string]any{"type": "object"}}, noop)
+	server.AddTool(&mcp.Tool{Name: "gitlab_unannotated", Description: "unannotated", InputSchema: map[string]any{"type": "object"}, Annotations: &mcp.ToolAnnotations{}}, noop)
+
+	if removed := RemoveNonReadOnlyTools(context.Background(), server); removed != 2 {
+		t.Fatalf("RemoveNonReadOnlyTools() = %d, want 2", removed)
+	}
+	remaining, err := toolutil.ListRegisteredTools(context.Background(), server, "readonly-check")
+	if err != nil {
+		t.Fatalf("ListRegisteredTools() error = %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].Name != "gitlab_read" {
+		t.Fatalf("remaining tools = %v, want only gitlab_read", remaining)
+	}
+	if removed := RemoveNonReadOnlyTools(context.Background(), nil); removed != 0 {
+		t.Fatalf("RemoveNonReadOnlyTools(nil server) = %d, want 0", removed)
+	}
+}
 
 // TestWrapMutatingToolsForSafeMode_ReadOnlyToolPassesThrough verifies that
 // read-only tools are not wrapped by SafeMode and still call the real handler.

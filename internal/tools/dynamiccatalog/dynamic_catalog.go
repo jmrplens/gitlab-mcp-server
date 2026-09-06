@@ -26,8 +26,38 @@ import (
 // the standalone writes, the interactive creation flows among them, kept their
 // real handlers. Read-only mode never had that gap, because the standalone
 // builder takes it as an option.
+//
+// The catalog is assembled once per distinct configuration and shared (see
+// [gitlabtools.ShareCatalog]); what is returned is that catalog bound to
+// client. The standalone actions are built with the unbound client the shared
+// copy is built with, and bound with everything else.
 func Build(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, gitlabtools.WithheldActions, error) {
-	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
+	dotcom := client.IsGitLabDotCom()
+	key := "dynamic|" + gitlabtools.BaseCatalogKey(cfg.Tier, dotcom, true) + "|" + gitlabtools.CatalogFilterKey(cfg)
+	catalog, withheld, err := gitlabtools.ShareCatalog(key, func() (*actioncatalog.Catalog, gitlabtools.WithheldActions, error) {
+		return build(gitlabtools.UnboundClient(dotcom), dotcom, cfg)
+	})
+	if err != nil {
+		return nil, gitlabtools.WithheldActions{}, err
+	}
+	return catalog.BindTo(client), withheld, nil
+}
+
+// Test seams. None of these can fail from any input the server takes: the
+// specs are compiled in, the filter adds groups the base already validated,
+// and the standalone specs are fixed. The branches reporting their failure
+// exist for the day that changes, and would otherwise never run.
+var (
+	sharedBaseCatalog    = gitlabtools.SharedBaseCatalog                 //nolint:gochecknoglobals // test seam
+	filterActionCatalog  = gitlabtools.FilterActionCatalog               //nolint:gochecknoglobals // test seam
+	addStandaloneCatalog = dynamictools.AddStandaloneCatalog             //nolint:gochecknoglobals // test seam
+	safeModePreviews     = (*actioncatalog.Catalog).WithSafeModePreviews //nolint:gochecknoglobals // test seam
+)
+
+// build assembles the dynamic catalog for cfg from the shared base catalog,
+// with the standalone actions bound to client.
+func build(client *gitlabclient.Client, dotcom bool, cfg *config.ServerConfig) (*actioncatalog.Catalog, gitlabtools.WithheldActions, error) {
+	catalog, err := sharedBaseCatalog(dotcom, gitlabtools.ActionCatalogOptions{
 		Tier:       cfg.Tier,
 		IncludeMCP: true,
 	})
@@ -36,19 +66,32 @@ func Build(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalo
 	}
 	filterCfg := *cfg
 	filterCfg.SafeMode = false
-	filtered, withheld, filterErr := gitlabtools.FilterActionCatalog(catalog, &filterCfg)
+	filtered, withheld, filterErr := filterActionCatalog(catalog, &filterCfg)
 	if filterErr != nil {
 		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
 	}
-	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
+	withStandalone, standaloneErr := addStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
 		ReadOnly:     cfg.ReadOnly,
 		ExcludeTools: cfg.ExcludeTools,
 	})
 	if standaloneErr != nil {
 		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
+	// Validated here and again after the safe-mode rewrite, because
+	// buildActionCatalog validates only what it built: the standalone and
+	// interactive groups join afterwards, and the rewrite replaces the
+	// handler and the binder of every mutating action. Both are the kind of
+	// step that can leave an action bound to the credential-less client the
+	// shared copy is built with, which would refuse every call for every
+	// credential of the configuration.
+	if validateErr := withStandalone.Validate(); validateErr != nil {
+		return nil, gitlabtools.WithheldActions{}, fmt.Errorf("validate dynamic action catalog: %w", validateErr)
+	}
 	if cfg.SafeMode {
-		withStandalone = withStandalone.WithSafeModePreviews()
+		withStandalone = safeModePreviews(withStandalone)
+		if validateErr := withStandalone.Validate(); validateErr != nil {
+			return nil, gitlabtools.WithheldActions{}, fmt.Errorf("validate safe-mode dynamic action catalog: %w", validateErr)
+		}
 	}
 	return withStandalone, withheld, nil
 }

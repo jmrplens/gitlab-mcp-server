@@ -49,16 +49,15 @@ func createRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func pipelineGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, Get)
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return pipelineNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input["pipeline_id"], input["project_id"])}, nil
+	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return pipelineNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input["pipeline_id"], input["project_id"])}, nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 // DeleteOutput deletes a pipeline and returns the legacy success message shape.

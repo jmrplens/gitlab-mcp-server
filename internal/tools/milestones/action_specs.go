@@ -47,17 +47,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // than an error, matching the get-not-found pattern used across the
 // project.
 func milestoneGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, Get)
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			projectID, _ := input["project_id"].(string)
-			return milestoneNotFoundOutput{Identifier: fmt.Sprintf("IID %v in project %s", input[paramMilestoneIID], projectID)}, nil
+	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				projectID, _ := input["project_id"].(string)
+				return milestoneNotFoundOutput{Identifier: fmt.Sprintf("IID %v in project %s", input[paramMilestoneIID], projectID)}, nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 // milestoneReadSpec builds a read-only [toolutil.ActionSpec] for a

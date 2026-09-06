@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -144,6 +145,61 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 		)
 	}
 	return filtered, nil
+}
+
+// catalogRelevantScopes returns the part of a token's scope list that can
+// change what [FilterScopeFilteredCatalog] removes: the sorted, deduplicated
+// intersection of tokenScopes with the union of every scope [MetaToolScopes]
+// requires. A token's other scopes are invisible to the filter, so two tokens
+// differing only in those narrow the catalog identically.
+//
+// This exists for [CatalogFilterKey], which names a shared catalog. Keying
+// that cache on the whole scope list would let a caller mint personal access
+// tokens with arbitrary scope subsets and pin one catalog per subset for the
+// life of the process. Derived from MetaToolScopes rather than written out, so
+// a scope added to a requirement there widens the key with it and cannot be
+// forgotten here.
+//
+// What makes the narrowing safe is an equivalence: two tokens with the same
+// canonical components get the same filtered catalog, so serving both from
+// one cache entry serves neither a catalog it did not earn. That equivalence
+// holds because of exactly how the filter reads a scope list, and these are
+// the changes that would break it silently, each of which needs this
+// derivation changed with it:
+//
+//   - a prefix or wildcard match in [allScopesPresent], which would make a
+//     scope not spelled in MetaToolScopes decide a removal;
+//   - a scope-implication rule (api implies read_api, say), since the
+//     implying scope need not appear anywhere in the union this reads;
+//   - a rule keyed on a scope's absence, or on the length of the list, since
+//     both read the scopes this drops;
+//   - a second requirements map beside MetaToolScopes, which this derivation
+//     does not read at all;
+//   - admin detection from anything other than the scope list, such as an
+//     instance probe, which would make two equal lists filter differently.
+//
+// [TestCatalogRelevantScopes_EqualComponentsFilterIdentically] runs the
+// filter over the equivalence rather than asserting it, so a change of that
+// kind fails there rather than reaching a shared catalog.
+func catalogRelevantScopes(tokenScopes []string) []string {
+	required := make(map[string]struct{}, len(MetaToolScopes))
+	for _, scopes := range MetaToolScopes {
+		for _, scope := range scopes {
+			required[scope] = struct{}{}
+		}
+	}
+	relevant := make(map[string]struct{}, len(required))
+	for _, scope := range tokenScopes {
+		if _, matters := required[scope]; matters {
+			relevant[scope] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(relevant))
+	for scope := range relevant {
+		out = append(out, scope)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // buildScopeSet returns a set of token scope strings for O(1) membership

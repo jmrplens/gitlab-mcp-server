@@ -6,8 +6,22 @@ import (
 	"testing"
 )
 
-// TestNewActionSpec_DeepClonesMetadata verifies NewActionSpec when deep clones metadata.
-func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
+// TestNewActionSpec_ClonesItsOwnMetadataAndSharesRouteGuidance verifies where
+// the line falls between the metadata NewActionSpec copies and the metadata it
+// leaves shared with the route it was given.
+//
+// Copied, so an edit to the caller's slice or map after the call cannot reach
+// the spec: the aliases, tags, related actions, compatibility policy,
+// validation notes, individual-tool overrides, and the spec's own parameter
+// guidance. The input schema is not copied but derived, which has the same
+// effect here: the spec carries the schema with the canonical enums and the
+// overrides applied, not the caller's map.
+//
+// Shared with the route: the route's own parameter guidance map. It is frozen
+// metadata, reachable from a catalog every server in the process is bound to,
+// so nothing may write into it; the source guard in internal/tools refuses an
+// indexed write into a route's guidance or schemas for that reason.
+func TestNewActionSpec_ClonesItsOwnMetadataAndSharesRouteGuidance(t *testing.T) {
 	inputSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -66,8 +80,11 @@ func TestNewActionSpec_DeepClonesMetadata(t *testing.T) {
 	if got := spec.Route.InputSchema["properties"].(map[string]any)["project_id"].(map[string]any)["type"]; got != "string" {
 		t.Fatalf("spec input schema type = %v, want string", got)
 	}
-	if got := spec.Route.ParameterGuidance["project_id"].CommonConfusions[0]; got != "route confusion" {
-		t.Fatalf("route guidance confusion = %q, want original value", got)
+	// The route's guidance is frozen metadata shared with the spec, like the
+	// route's schemas: an edit through the original shows in the spec. The
+	// spec's own guidance is its own copy.
+	if got := spec.Route.ParameterGuidance["project_id"].CommonConfusions[0]; got != "changed route" {
+		t.Fatalf("route guidance confusion = %q, want the route's guidance shared with the spec", got)
 	}
 	if got := spec.ParameterGuidance["project_id"].CommonConfusions[0]; got != "spec confusion" {
 		t.Fatalf("spec guidance confusion = %q, want original value", got)
@@ -592,8 +609,11 @@ func TestActionRouteFluentMetadata_FlowsToActionSpec(t *testing.T) {
 	if len(spec.RelatedActions) != 1 || spec.RelatedActions[0] != "project.get" {
 		t.Fatalf("RelatedActions = %+v, want route related action", spec.RelatedActions)
 	}
-	if got := spec.Route.ParameterGuidance["project_id"].SemanticRole; got != "scope_project" {
-		t.Fatalf("route guidance semantic role = %q, want cloned route guidance", got)
+	// WithParameterGuidance copies the map it is given, so the edit to the
+	// caller's map after the fact does not reach the route; the route's own
+	// map is then shared with the spec, so the edit through the route does.
+	if got := spec.Route.ParameterGuidance["project_id"].SemanticRole; got != "changed" {
+		t.Fatalf("route guidance semantic role = %q, want the route's guidance shared with the spec", got)
 	}
 }
 
@@ -1410,5 +1430,102 @@ func TestDefaultScopeParameterGuidance_UnknownName_ReturnsZero(t *testing.T) {
 	got := defaultScopeParameterGuidance("definitely_not_a_scope_param")
 	if !reflect.DeepEqual(got, ParameterGuidance{}) {
 		t.Errorf("defaultScopeParameterGuidance(unknown) = %+v, want zero value", got)
+	}
+}
+
+// TestInputSchemaOverridesKey_NamesTheOverrides verifies the part of the
+// spec transform name that comes from the overrides: none is empty, a set is
+// its JSON, and a set the encoder refuses has no name at all.
+func TestInputSchemaOverridesKey_NamesTheOverrides(t *testing.T) {
+	t.Parallel()
+
+	if got, nameable := inputSchemaOverridesKey(nil); got != "" || !nameable {
+		t.Errorf("inputSchemaOverridesKey(nil) = %q, %t; want an empty name", got, nameable)
+	}
+	overrides := []InputSchemaOverride{{PropertyPath: "state", Values: map[string]any{"enum": []any{"opened"}}}}
+	if got, nameable := inputSchemaOverridesKey(overrides); got != `[{"PropertyPath":"state","Values":{"enum":["opened"]}}]` || !nameable {
+		t.Errorf("inputSchemaOverridesKey(overrides) = %q, %t", got, nameable)
+	}
+	if got, nameable := inputSchemaOverridesKey(unencodableOverrides()); nameable || got != "" {
+		t.Errorf("inputSchemaOverridesKey(unencodable) = %q, %t; want no name", got, nameable)
+	}
+}
+
+// TestSpecInputSchema_UnencodableOverridesDerivePrivately verifies the one
+// set of overrides that cannot be named: the schema is derived on every call
+// and nothing is written into a memo that outlives the overrides it came
+// from. Naming such a set by the address of its slice, which is what this
+// replaced, would hand the next slice at that address this one's schema.
+func TestSpecInputSchema_UnencodableOverridesDerivePrivately(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"state": map[string]any{"type": "string"}},
+	}
+	ShareSchema(schema)
+
+	overrides := unencodableOverrides()
+	first := specInputSchema(schema, overrides)
+	second := specInputSchema(schema, overrides)
+	if sameMap(first, second) {
+		t.Fatal("unencodable overrides shared one derived schema, want a private one per call")
+	}
+	if SchemaShared(first) {
+		t.Error("a schema derived under no name was registered as shared")
+	}
+	if _, ok := first["properties"].(map[string]any)["state"]; !ok {
+		t.Errorf("derived schema = %#v, want the input's properties", first)
+	}
+}
+
+// unencodableOverrides returns overrides the JSON encoder refuses, which is
+// what makes them unnameable. Unreachable from a real action spec, whose
+// override values are JSON Schema fragments.
+func unencodableOverrides() []InputSchemaOverride {
+	return []InputSchemaOverride{{Values: map[string]any{"fn": func() {}}}}
+}
+
+// TestNewActionSpec_SharedInputSchemaDerivesOnce verifies specs built over a
+// shared schema share one derived schema, that cloning such a spec keeps it,
+// and that the shared input itself is never changed.
+func TestNewActionSpec_SharedInputSchemaDerivesOnce(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"project_id": map[string]any{"type": "string"}, "state": map[string]any{"type": "string"}},
+	}
+	ShareSchema(schema)
+	first := NewReadActionSpec("list", ActionRoute{InputSchema: schema}, ActionSpecOptions{})
+	second := NewReadActionSpec("list", ActionRoute{InputSchema: schema}, ActionSpecOptions{})
+	if !sameMap(first.Route.InputSchema, second.Route.InputSchema) {
+		t.Fatal("two specs over one shared schema derived two schemas, want one")
+	}
+	if sameMap(first.Route.InputSchema, schema) {
+		t.Fatal("the derived schema is the shared input itself, want a derived copy")
+	}
+	if clone := CloneActionSpec(first); !sameMap(clone.Route.InputSchema, first.Route.InputSchema) {
+		t.Fatal("cloning a spec over a shared schema derived again, want the same schema")
+	}
+	if _, enriched := schema["properties"].(map[string]any)["state"].(map[string]any)["enum"]; enriched {
+		t.Fatal("the shared input schema was given the canonical enum in place")
+	}
+	overridden := NewReadActionSpec("list", ActionRoute{InputSchema: schema}, ActionSpecOptions{
+		InputSchemaOverrides: []InputSchemaOverride{{PropertyPath: "state", Values: map[string]any{"description": "overridden"}}},
+	})
+	if sameMap(overridden.Route.InputSchema, first.Route.InputSchema) {
+		t.Fatal("a spec with overrides shared the schema of one without")
+	}
+}
+
+// TestNewAdditiveActionSpec_IsNotIdempotent verifies the additive constructor
+// leaves idempotentHint false whatever the caller passed.
+func TestNewAdditiveActionSpec_IsNotIdempotent(t *testing.T) {
+	t.Parallel()
+
+	spec := NewAdditiveActionSpec("add_spent_time", ActionRoute{InputSchema: testActionSpecSchema("project_id")}, ActionSpecOptions{Idempotent: true})
+	if spec.Idempotent || spec.ReadOnly || spec.Destructive {
+		t.Errorf("NewAdditiveActionSpec() = idempotent %t, read-only %t, destructive %t; want none", spec.Idempotent, spec.ReadOnly, spec.Destructive)
 	}
 }

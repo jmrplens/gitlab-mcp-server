@@ -49,18 +49,17 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // into a structured [labelNotFoundOutput] hint rather than an error,
 // matching the get-not-found pattern used across the project.
 func labelGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, Get)
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			labelID, _ := input[paramLabelID].(string)
-			projectID, _ := input["project_id"].(string)
-			return labelNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s", labelID, projectID)}, nil
+	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				labelID, _ := input[paramLabelID].(string)
+				projectID, _ := input["project_id"].(string)
+				return labelNotFoundOutput{Identifier: fmt.Sprintf("ID %s in project %s", labelID, projectID)}, nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 // labelReadSpec builds a read-only [toolutil.ActionSpec] for a label

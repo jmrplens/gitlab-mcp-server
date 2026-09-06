@@ -3,12 +3,17 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
 
 // TestRemoveScopeFilteredTools_NilScopes verifies that nil token scopes
@@ -150,6 +155,139 @@ func TestFilterScopeFilteredCatalog_NilCatalog(t *testing.T) {
 	if filtered.CountGroups() != 0 || filtered.CountActions() != 0 {
 		t.Fatalf("filtered counts = groups %d actions %d, want empty catalog", filtered.CountGroups(), filtered.CountActions())
 	}
+}
+
+// TestCatalogRelevantScopes_EqualComponentsFilterIdentically runs the filter
+// over the property that makes the narrowed cache key safe: two token scope
+// lists with the same canonical components produce the same filtered catalog
+// and the same withheld sets, so serving both from one shared catalog serves
+// neither a catalog it did not earn.
+//
+// It drives FilterActionCatalog rather than comparing keys, because the key
+// is only correct in terms of what the filter does with a scope list: the
+// ways this equivalence could be broken (a prefix match, a scope-implication
+// rule, a rule keyed on absence or on the length of the list, a second
+// requirements map) all leave [CatalogFilterKey] and [catalogRelevantScopes]
+// looking exactly as they do now. The list of them is beside
+// [catalogRelevantScopes].
+//
+// The last case is what keeps the rest from being vacuous: a list carrying
+// none of the required scopes must filter differently from one carrying them
+// all, or the filter would be removing nothing and every list would agree.
+func TestCatalogRelevantScopes_EqualComponentsFilterIdentically(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
+	required := requiredScopeUniverse(t)
+	// Scopes GitLab issues that MetaToolScopes never asks about, so no list
+	// below changes its canonical components by carrying them.
+	noise := []string{"api", "read_api", "read_user", "read_repository", "write_repository", "read_registry", "write_registry", "create_runner", "manage_runner", "ai_features", "k8s_proxy", "sudo"}
+	noise = slices.DeleteFunc(noise, func(scope string) bool { return slices.Contains(required, scope) })
+	reversed := slices.Clone(required)
+	slices.Reverse(reversed)
+
+	cases := []struct {
+		name  string
+		left  []string
+		right []string
+	}{
+		{
+			name:  "the required scopes, alone and among scopes the filter never reads",
+			left:  required,
+			right: append(slices.Clone(noise), required...),
+		},
+		{
+			name:  "the same scopes reordered, repeated and interleaved",
+			left:  append(slices.Clone(required), required...),
+			right: append(append(slices.Clone(reversed), noise...), reversed...),
+		},
+		{
+			name:  "no required scope at all, alone and among the others",
+			left:  []string{},
+			right: noise,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if left, right := catalogRelevantScopes(tc.left), catalogRelevantScopes(tc.right); !slices.Equal(left, right) {
+				t.Fatalf("the two lists have components %v and %v, so this case is not about the equivalence", left, right)
+			}
+			leftActions, leftWithheld := filterByTokenScopes(t, catalog, tc.left)
+			rightActions, rightWithheld := filterByTokenScopes(t, catalog, tc.right)
+			if !slices.Equal(leftActions, rightActions) {
+				t.Errorf("the two lists kept %d and %d actions (%s), want one filtered catalog for both",
+					len(leftActions), len(rightActions), firstDifference(leftActions, rightActions))
+			}
+			// Compared field by field and reported by count: the withheld
+			// lists carry every alias of every removed action, and a failure
+			// naming them all would be unreadable.
+			if !slices.Equal(leftWithheld.ByTokenScope, rightWithheld.ByTokenScope) {
+				t.Errorf("withheld by token scope = %d and %d keys (%s), want the same narrowing reported to both",
+					len(leftWithheld.ByTokenScope), len(rightWithheld.ByTokenScope), firstDifference(leftWithheld.ByTokenScope, rightWithheld.ByTokenScope))
+			}
+			if !slices.Equal(leftWithheld.ByOperator, rightWithheld.ByOperator) || !slices.Equal(leftWithheld.ExcludedByName, rightWithheld.ExcludedByName) {
+				t.Errorf("withheld by operator = %d and %d keys, excluded by name = %d and %d keys; want the same for both",
+					len(leftWithheld.ByOperator), len(rightWithheld.ByOperator), len(leftWithheld.ExcludedByName), len(rightWithheld.ExcludedByName))
+			}
+		})
+	}
+
+	t.Run("a missing required scope filters differently", func(t *testing.T) {
+		withAll, _ := filterByTokenScopes(t, catalog, required)
+		withNone, withheld := filterByTokenScopes(t, catalog, []string{})
+		if len(withNone) >= len(withAll) {
+			t.Fatalf("a token with none of %v kept %d actions and one with all of them kept %d, want strictly fewer", required, len(withNone), len(withAll))
+		}
+		if len(withheld.ByTokenScope) == 0 {
+			t.Error("nothing was reported withheld by token scope, so the equivalence above compares two catalogs the filter never narrowed")
+		}
+	})
+}
+
+// requiredScopeUniverse returns every scope MetaToolScopes requires, sorted
+// and deduplicated: the whole of what a scope list's canonical components can
+// be drawn from. Read from the map so a new requirement joins the test
+// without an edit.
+func requiredScopeUniverse(t *testing.T) []string {
+	t.Helper()
+	seen := map[string]struct{}{}
+	for _, scopes := range MetaToolScopes {
+		for _, scope := range scopes {
+			seen[scope] = struct{}{}
+		}
+	}
+	universe := slices.Sorted(maps.Keys(seen))
+	if len(universe) == 0 {
+		t.Fatal("MetaToolScopes requires no scope at all, so the equivalence proves nothing")
+	}
+	return universe
+}
+
+// firstDifference names the first position at which two lists disagree, for a
+// failure message that has to stay readable over lists thousands of entries
+// long.
+func firstDifference(left, right []string) string {
+	for i := range min(len(left), len(right)) {
+		if left[i] != right[i] {
+			return fmt.Sprintf("first difference at %d: %q against %q", i, left[i], right[i])
+		}
+	}
+	return fmt.Sprintf("one is a prefix of the other, %d entries longer", max(len(left), len(right))-min(len(left), len(right)))
+}
+
+// filterByTokenScopes narrows a catalog for a token carrying scopes and
+// returns the action IDs it kept, sorted, together with what the narrowing
+// withheld.
+func filterByTokenScopes(t *testing.T, catalog *actioncatalog.Catalog, scopes []string) ([]string, WithheldActions) {
+	t.Helper()
+	filtered, withheld, err := FilterActionCatalog(catalog, &config.ServerConfig{TokenScopes: scopes})
+	if err != nil {
+		t.Fatalf("FilterActionCatalog(%v) error = %v", scopes, err)
+	}
+	kept := make([]string, 0, filtered.CountActions())
+	for _, action := range filtered.Actions() {
+		kept = append(kept, string(action.ID))
+	}
+	slices.Sort(kept)
+	return kept, withheld
 }
 
 // TestAllScopesPresent_Scenarios_CorrectResult tests the allScopesPresent helper.

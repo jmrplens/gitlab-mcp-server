@@ -7,7 +7,55 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestNewCallIdentifier_SharedCatalogReusesOneResolver verifies servers bound
+// to one shared catalog get one resolver per surface, built from the shared
+// origin, while a catalog nobody shared gets a resolver of its own and leaves
+// nothing in the cache.
+func TestNewCallIdentifier_SharedCatalogReusesOneResolver(t *testing.T) {
+	shared, err := BuildActionCatalog(nil, ActionCatalogOptions{IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	origin := shared.SharedOrigin()
+	if origin == nil {
+		t.Fatal("BuildActionCatalog() returned a catalog with no shared origin")
+	}
+	key := identifierKey{origin: origin, surface: config.ToolSurfaceDynamic}
+	first := NewCallIdentifier(shared, config.ToolSurfaceDynamic)
+	cached, ok := sharedIdentifiers.Peek(key)
+	if !ok {
+		t.Fatal("NewCallIdentifier(shared catalog) left nothing in the cache")
+	}
+	second := NewCallIdentifier(shared.SharedOrigin().BindTo(nil), config.ToolSurfaceDynamic)
+	for name, identifier := range map[string]mcpotel.CallIdentifier{"first": first, "second": second, "cached": cached} {
+		t.Run(name, func(t *testing.T) {
+			identity, found := identifier.Identify("gitlab_execute_action", rawArgs(t, map[string]any{"action": "issue.list"}))
+			if !found || identity.ActionID != "issue.list" {
+				t.Errorf("Identify(issue.list) = %+v, %t, want the action resolved", identity, found)
+			}
+		})
+	}
+
+	private := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_issue"})
+	group.SetAction(actioncatalog.Action{Name: "list", Route: toolutil.RouteAction(nil, testListAction)})
+	if addErr := private.AddGroup(group); addErr != nil {
+		t.Fatalf("AddGroup() error = %v", addErr)
+	}
+	if private.SharedOrigin() != nil {
+		t.Fatal("a hand-built catalog reported a shared origin")
+	}
+	resolver := NewCallIdentifier(private, config.ToolSurfaceMeta)
+	if identity, found := resolver.Identify("gitlab_issue", rawArgs(t, map[string]any{"action": "list"})); !found || identity.ActionID != "issue.list" {
+		t.Errorf("private resolver Identify(gitlab_issue list) = %+v, %t, want issue.list", identity, found)
+	}
+	if _, leaked := sharedIdentifiers.Peek(identifierKey{origin: private, surface: config.ToolSurfaceMeta}); leaked {
+		t.Fatal("NewCallIdentifier(private catalog) cached a resolver under a catalog nobody shared")
+	}
+}
 
 // rawArgs encodes tool arguments the way the wire delivers them.
 func rawArgs(t *testing.T, fields map[string]any) json.RawMessage {

@@ -120,16 +120,15 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 }
 
 func projectGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, Get)
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return projectNotFoundOutput{Identifier: fmt.Sprint(input[paramProjectID])}, nil
+	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return projectNotFoundOutput{Identifier: fmt.Sprint(input[paramProjectID])}, nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 // DeleteHookOutput deletes a project webhook and returns the legacy success message shape.

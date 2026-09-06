@@ -22,6 +22,7 @@ the full testing reference live in subfolders here.
 | [Static Analysis](static-analysis.md)                                     | The golangci-lint, govulncheck, and markdownlint gates                     |
 | [Godoc Compliance](godoc.md)                                              | The godoc audit workflow for packages, symbols, and tests                  |
 | [Token Footprint](token-footprint.md)                                     | Token accounting across tiers, surfaces, and schema modes                  |
+| [Resource Hot Spots](resource-hot-spots.md)                               | What a pooled credential costs in memory, what is shared, and what remains |
 | [Orbit Live Test Fixtures](orbit-fixtures.md)                             | Fixtures, setup, and the indexer caveat for GitLab.com live tests          |
 | [Testing](testing/README.md)                                              | Unit, E2E, and AI model-evaluation documentation                           |
 | [Architecture Decision Records](adr/README.md)                            | The recorded architectural decisions (ADRs)                                |

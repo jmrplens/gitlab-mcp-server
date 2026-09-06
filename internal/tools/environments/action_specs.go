@@ -32,16 +32,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func environmentGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, Get)
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return environmentNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input[paramEnvironmentID], input["project_id"])}, nil
+	return toolutil.RouteAction(client, Get).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return environmentNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input[paramEnvironmentID], input["project_id"])}, nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 func environmentReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

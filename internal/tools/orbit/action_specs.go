@@ -62,16 +62,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // This ensures that MCP tools for Orbit endpoints return actionable guidance when
 // the feature is not enabled or the resource is missing, instead of a generic error.
 func orbitReadRoute[T, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error), resource, identifier string) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, fn)
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return orbitNotFoundOutput{Resource: resource, Identifier: identifier}, nil
+	return toolutil.RouteAction(client, fn).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return orbitNotFoundOutput{Resource: resource, Identifier: identifier}, nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 // orbitReadSpec constructs an ActionSpec for a read-only Orbit endpoint.

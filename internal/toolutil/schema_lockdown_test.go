@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -165,29 +166,37 @@ func TestLockdownSchemaNode_NestedObjects(t *testing.T) {
 	}
 }
 
-// TestSchemaMap verifies schema normalization accepts maps and marshalable
-// structs, while malformed schema values are rejected without panicking.
-func TestSchemaMap(t *testing.T) {
+// TestSchemaMapCopy_Inputs_CopiedOrRejected verifies the copy accepts maps
+// and marshalable structs, that a map input yields a map the caller owns
+// rather than the input itself, and that malformed schema values are
+// rejected without panicking.
+func TestSchemaMapCopy_Inputs_CopiedOrRejected(t *testing.T) {
 	t.Parallel()
 
-	if got := schemaMap(nil); got != nil {
-		t.Fatalf("schemaMap(nil) = %#v, want nil", got)
+	if got := schemaMapCopy(nil); got != nil {
+		t.Fatalf("schemaMapCopy(nil) = %#v, want nil", got)
 	}
-	original := map[string]any{"type": "object"}
-	if got := schemaMap(original); got["type"] != "object" {
-		t.Fatalf("schemaMap(map) = %#v", got)
+	original := map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}}}
+	got := schemaMapCopy(original)
+	if got["type"] != "object" {
+		t.Fatalf("schemaMapCopy(map) = %#v", got)
+	}
+	got["type"] = "changed"
+	got["properties"].(map[string]any)["name"].(map[string]any)["type"] = "integer"
+	if original["type"] != "object" || original["properties"].(map[string]any)["name"].(map[string]any)["type"] != "string" {
+		t.Fatalf("schemaMapCopy(map) shares storage with its input: original = %#v", original)
 	}
 	type schemaStruct struct {
 		Type string `json:"type"`
 	}
-	if got := schemaMap(schemaStruct{Type: "object"}); got["type"] != "object" {
-		t.Fatalf("schemaMap(struct) = %#v", got)
+	if fromStruct := schemaMapCopy(schemaStruct{Type: "object"}); fromStruct["type"] != "object" {
+		t.Fatalf("schemaMapCopy(struct) = %#v", fromStruct)
 	}
-	if got := schemaMap(func() {}); got != nil {
-		t.Fatalf("schemaMap(func) = %#v, want nil", got)
+	if fromFunc := schemaMapCopy(func() {}); fromFunc != nil {
+		t.Fatalf("schemaMapCopy(func) = %#v, want nil", fromFunc)
 	}
-	if got := schemaMap([]string{"not", "an", "object"}); got != nil {
-		t.Fatalf("schemaMap(array) = %#v, want nil", got)
+	if fromArray := schemaMapCopy([]string{"not", "an", "object"}); fromArray != nil {
+		t.Fatalf("schemaMapCopy(array) = %#v, want nil", fromArray)
 	}
 }
 
@@ -258,4 +267,38 @@ func mustSchemaMap(t *testing.T, raw any) map[string]any {
 		t.Fatalf("InputSchema is %T, want map[string]any", raw)
 	}
 	return schema
+}
+
+// TestLockedDownSchema_SharesDerivationsAndKeepsWhatItCannotRender verifies
+// the derivation behind the middleware: nil stays nil, a value that cannot
+// be rendered as a JSON object is returned as it is, a shared compiled
+// schema is locked down once and served to every server, and the compiled
+// schema itself is not touched.
+func TestLockedDownSchema_SharesDerivationsAndKeepsWhatItCannotRender(t *testing.T) {
+	t.Parallel()
+
+	if got := lockedDownSchema(nil); got != nil {
+		t.Errorf("lockedDownSchema(nil) = %#v, want nil", got)
+	}
+	unrenderable := func() {}
+	if lockedDownSchema(unrenderable) == nil {
+		t.Error("lockedDownSchema(func) = nil, want the input kept")
+	}
+
+	compiled := &jsonschema.Schema{Type: "object", Properties: map[string]*jsonschema.Schema{"name": {Type: "string"}}}
+	ShareSchema(compiled)
+	first, _ := lockedDownSchema(compiled).(map[string]any)
+	second, _ := lockedDownSchema(compiled).(map[string]any)
+	if first == nil || !sameMap(first, second) {
+		t.Fatalf("lockedDownSchema(shared compiled) = %#v then %#v, want one shared map", first, second)
+	}
+	if first["additionalProperties"] != false {
+		t.Errorf("locked down schema = %#v, want additionalProperties false", first)
+	}
+	if compiled.AdditionalProperties != nil {
+		t.Error("the shared compiled schema was changed in place")
+	}
+	if !SchemaShared(first) {
+		t.Error("the locked down map was not registered as shared")
+	}
 }

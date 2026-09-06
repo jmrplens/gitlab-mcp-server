@@ -3,6 +3,8 @@ package toolutil
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -58,17 +60,14 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 	if name == "" {
 		return nil, errors.New("individual tool name is required")
 	}
-	route := cloneActionRoute(spec.Route)
+	route := CloneActionRoute(spec.Route)
 	if route.InputSchema == nil {
 		return nil, fmt.Errorf("individual tool %q input schema is required", name)
 	}
 	if route.OutputSchema == nil {
 		return nil, fmt.Errorf("individual tool %q output schema is required", name)
 	}
-	applyIndividualRequiredFields(route)
-	route.InputSchema = enrichDestructiveSchema(route.InputSchema, route.Destructive)
-	normalizeSchemaDescriptions(route.InputSchema)
-	lockdownSchemaNode(route.InputSchema)
+	route.InputSchema = individualInputSchema(route)
 	title := strings.TrimSpace(spec.IndividualTool.Title)
 	if title == "" {
 		title = TitleFromName(name)
@@ -92,17 +91,49 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 	}, nil
 }
 
-func applyIndividualRequiredFields(route ActionRoute) {
-	if route.InputType == nil || route.InputSchema == nil {
+// individualInputSchema returns the input schema the individual surface
+// serves for a route: the type's own required list, the destructive
+// confirmation property, normalized descriptions and the additionalProperties
+// lockdown. It is derived from the route's schema rather than applied to it,
+// once per process for a shared route (see [DeriveSchema]). The input type is
+// part of the transform name because the required list comes from it.
+func individualInputSchema(route ActionRoute) map[string]any {
+	transform := "individual|destructive=" + strconv.FormatBool(route.Destructive) + "|type=" + TypeIdentity(route.InputType)
+	derived := DeriveSchema(route.InputSchema, transform, func() any {
+		schema := cloneSchemaMap(route.InputSchema)
+		applyIndividualRequiredFields(schema, route.InputType)
+		schema = enrichDestructiveSchema(schema, route.Destructive)
+		normalizeSchemaDescriptions(schema)
+		lockdownSchemaNode(schema)
+		return schema
+	})
+	schema, _ := derived.(map[string]any)
+	return schema
+}
+
+// TypeIdentity names a reflected type unambiguously, package path included,
+// since two packages may declare input types with the same name. It is the
+// form a transform name embeds when the transform depends on a type.
+func TypeIdentity(rt reflect.Type) string {
+	if rt == nil {
+		return ""
+	}
+	return rt.PkgPath() + "." + rt.String()
+}
+
+// applyIndividualRequiredFields replaces the schema's required list with the
+// one reflected from the input type, in place on a schema the caller owns.
+func applyIndividualRequiredFields(schema map[string]any, inputType reflect.Type) {
+	if inputType == nil || schema == nil {
 		return
 	}
-	schema := schemaForType(route.InputType)
-	required, ok := schema["required"]
+	typeSchema := schemaForType(inputType)
+	required, ok := typeSchema["required"]
 	if !ok {
-		delete(route.InputSchema, "required")
+		delete(schema, "required")
 		return
 	}
-	route.InputSchema["required"] = cloneSchemaValue(required)
+	schema["required"] = cloneSchemaValue(required)
 }
 
 // NarrowingOnly returns the overrides with every claim removed that would make

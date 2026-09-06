@@ -8,11 +8,13 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -370,6 +372,21 @@ func readToolManifest(t *testing.T, session *mcp.ClientSession, uri string) Tool
 		t.Fatalf("unmarshal manifest: %v", uErr)
 	}
 	return manifest
+}
+
+// readResourceText reads a resource and returns its body as served, for a
+// comparison that must not be laundered by decoding: two bodies differing
+// only in key order decode alike and are not the same bytes on the wire.
+func readResourceText(t *testing.T, session *mcp.ClientSession, uri string) string {
+	t.Helper()
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		t.Fatalf("read %s: %v", uri, err)
+	}
+	if len(result.Contents) != 1 {
+		t.Fatalf("read %s returned %d contents, want 1", uri, len(result.Contents))
+	}
+	return result.Contents[0].Text
 }
 
 // readToolDetail reads a per-entry tool manifest detail and decodes it
@@ -901,5 +918,121 @@ func TestToolManifest_AliasEntriesDeclareAliasOf(t *testing.T) {
 	}
 	if !maps.Equal(aliasOf, want) {
 		t.Errorf("alias_of map = %v, want exactly %v", aliasOf, want)
+	}
+}
+
+// TestToolSurfaceSnapshotFor_ShareKeyReusesOneSnapshot verifies the manifest
+// snapshot is built once per share key and served to every server that
+// registers under it, while options without a key get a private snapshot
+// every time.
+func TestToolSurfaceSnapshotFor_ShareKeyReusesOneSnapshot(t *testing.T) {
+	t.Parallel()
+
+	shared := ToolSurfaceResourceOptions{Surface: toolSurfaceDynamic, ShareKey: "snapshot|" + t.Name()}
+	first := toolSurfaceSnapshotFor(shared)
+	if first != toolSurfaceSnapshotFor(shared) {
+		t.Fatal("two registrations under one share key built two snapshots, want one")
+	}
+	if cached, ok := sharedToolSurfaceSnapshots.Peek(shared.ShareKey); !ok || cached != first {
+		t.Fatal("the shared snapshot is not the cached one")
+	}
+	private := ToolSurfaceResourceOptions{Surface: toolSurfaceDynamic}
+	firstPrivate := toolSurfaceSnapshotFor(private)
+	secondPrivate := toolSurfaceSnapshotFor(private)
+	if firstPrivate == secondPrivate {
+		t.Fatal("options without a share key shared a snapshot")
+	}
+}
+
+// TestToolManifest_SharedSnapshotServesTheSameBytesAsAPrivateOne is the wire
+// proof for the manifest resources. Two servers registered under one share key
+// are served the snapshot the first of them built, and a third server with no
+// key builds its own from the same catalog: all three answer gitlab://tools
+// and gitlab://tools/{id} with the same bytes.
+//
+// The third server is what makes the first two mean anything. Two servers
+// sharing a snapshot trivially answer alike, since they are reading one
+// object; only a server that built its own can show that the shared object is
+// what a server would have built.
+func TestToolManifest_SharedSnapshotServesTheSameBytesAsAPrivateOne(t *testing.T) {
+	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	options := func(shareKey string) ToolSurfaceResourceOptions {
+		return ToolSurfaceResourceOptions{
+			Surface:  toolSurfaceDynamic,
+			ShareKey: shareKey,
+			Catalog:  catalog,
+			Tools: []*mcp.Tool{
+				{Name: "gitlab_execute_action", Title: "Execute"},
+				{Name: "gitlab_find_action", Title: "Find"},
+			},
+		}
+	}
+	const detailURI = "gitlab://tools/issue.list"
+	// The server with no share key is the reference: it built its own
+	// snapshot, so what it answers is what a server answers with no cache
+	// behind it at all.
+	private := toolManifestSession(t, options(""))
+	indexWant := readResourceText(t, private, "gitlab://tools")
+	detailWant := readResourceText(t, private, detailURI)
+	if !strings.Contains(indexWant, `"issue.list"`) {
+		t.Fatalf("gitlab://tools does not list issue.list, so the comparison below proves nothing")
+	}
+
+	shareKey := "manifest|" + t.Name()
+	shared := map[string]*mcp.ClientSession{
+		"first under the share key":  toolManifestSession(t, options(shareKey)),
+		"second under the share key": toolManifestSession(t, options(shareKey)),
+	}
+	for name, session := range shared {
+		t.Run(name, func(t *testing.T) {
+			if readResourceText(t, session, "gitlab://tools") != indexWant {
+				t.Errorf("gitlab://tools from the %s server differs from what a server with no share key serves", name)
+			}
+			if readResourceText(t, session, detailURI) != detailWant {
+				t.Errorf("%s from the %s server differs from what a server with no share key serves", detailURI, name)
+			}
+		})
+	}
+}
+
+// TestDynamicActionSchema_SharedRouteDerivesOnce verifies the manifest's
+// per-action schema is derived once for an action of a shared catalog, with
+// the guidance and the destructive markers in it and the route's own schema
+// untouched, and privately for an action nobody shared.
+func TestDynamicActionSchema_SharedRouteDerivesOnce(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{"type": "object", "properties": map[string]any{"project_id": map[string]any{"type": "string"}}}
+	toolutil.ShareSchema(schema)
+	action := actioncatalog.Action{
+		ID:   "project.delete",
+		Name: "delete",
+		Route: toolutil.ActionRoute{
+			InputSchema:       schema,
+			Destructive:       true,
+			ParameterGuidance: map[string]toolutil.ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
+		},
+	}
+	first := dynamicActionSchema(action)
+	second := dynamicActionSchema(action)
+	if reflect.ValueOf(first).UnsafePointer() != reflect.ValueOf(second).UnsafePointer() {
+		t.Fatal("dynamicActionSchema(shared action) built two schemas, want one")
+	}
+	if first["x_destructive"] != true || first["x_parameter_guidance"] == nil {
+		t.Errorf("derived schema = %#v, want the destructive and guidance markers", first)
+	}
+	if _, leaked := schema["x_destructive"]; leaked {
+		t.Fatal("the route's own schema was enriched in place")
+	}
+
+	private := action
+	private.Route.InputSchema = map[string]any{"type": "object"}
+	firstPrivate := dynamicActionSchema(private)
+	secondPrivate := dynamicActionSchema(private)
+	if reflect.ValueOf(firstPrivate).UnsafePointer() == reflect.ValueOf(secondPrivate).UnsafePointer() {
+		t.Fatal("dynamicActionSchema(private action) shared a schema nobody registered")
 	}
 }

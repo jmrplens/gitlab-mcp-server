@@ -256,16 +256,15 @@ func snippetEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 }
 
 func awardEmojiGetRoute[T any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (Output, error), notFound func(map[string]any) awardEmojiNotFoundOutput) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, fn)
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return notFound(input), nil
+	return toolutil.RouteAction(client, fn).WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				return notFound(input), nil
+			}
+			return result, err
 		}
-		return result, err
-	}
-	return route
+	})
 }
 
 func awardEmojiDeleteRoute[T any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) error) toolutil.ActionRoute {

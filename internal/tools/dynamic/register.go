@@ -8,7 +8,9 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -309,8 +311,36 @@ func addFindTool(server *mcp.Server, registry *Registry) {
 		Description:  findToolDescription,
 		Annotations:  copyAnnotations(toolutil.ReadAnnotations),
 		Icons:        toolutil.IconSearch,
+		InputSchema:  findInputSchema(),
 		OutputSchema: nil,
 	}, registry.Find)
+}
+
+// findInputSchema returns the schema of [FindInput], derived once for the
+// process and registered as shared. It is the schema the SDK would derive
+// itself when the field is left nil, built with the same options; setting it
+// here makes it one pointer for every server, so the tools/list middlewares
+// derive their rewrites of it once instead of once per server.
+var findInputSchema = sync.OnceValue(buildFindInputSchema)
+
+// Test seams for the two schema derivations, which cannot fail for the fixed
+// structs they reflect; the fallback branches exist for the day that changes.
+var (
+	findSchemaFor    = jsonschema.For[FindInput]    //nolint:gochecknoglobals // test seam
+	executeSchemaFor = jsonschema.For[ExecuteInput] //nolint:gochecknoglobals // test seam
+)
+
+// buildFindInputSchema derives the find tool's input schema, or nil to leave
+// the SDK to derive its own.
+func buildFindInputSchema() *jsonschema.Schema {
+	schema, err := findSchemaFor(nil)
+	if err != nil {
+		slog.Warn("dynamic: failed to derive find action input schema, falling back to SDK inference",
+			"tool", findToolName, "error", err)
+		return nil
+	}
+	toolutil.ShareSchema(schema)
+	return schema
 }
 
 func addExecuteActionTool(server *mcp.Server, registry *Registry) {
@@ -344,14 +374,24 @@ func addExecuteActionTool(server *mcp.Server, registry *Registry) {
 //
 // It returns nil if schema inference fails, leaving the SDK to derive the
 // unannotated schema at registration time.
-func executeActionInputSchema() *jsonschema.Schema {
-	schema, err := jsonschema.For[ExecuteInput](nil)
+//
+// Built once for the process and registered as shared: the annotation is
+// applied to the one schema every server registers, so the tools/list
+// middlewares derive their rewrites of it once.
+var executeActionInputSchema = sync.OnceValue(buildExecuteActionInputSchema)
+
+// buildExecuteActionInputSchema derives and annotates the execute tool's
+// input schema, or returns nil to leave the SDK to derive its own.
+func buildExecuteActionInputSchema() *jsonschema.Schema {
+	schema, err := executeSchemaFor(nil)
 	if err != nil {
 		slog.Warn("dynamic: failed to derive execute action input schema, falling back to SDK inference",
 			"tool", executeActionToolName, "error", err)
 		return nil
 	}
-	return annotateActionHeader(schema)
+	annotated := annotateActionHeader(schema)
+	toolutil.ShareSchema(annotated)
+	return annotated
 }
 
 // annotateActionHeader adds the x-mcp-header annotation to the schema's action
@@ -403,27 +443,82 @@ func NewRegistryFromCatalog(catalog *actioncatalog.Catalog) *Registry {
 	return newRegistryFromCatalog(catalog, nil)
 }
 
+// newRegistryFromCatalog builds the registry in two halves with different
+// lifetimes. The shape (the entries, their search documents, the alias
+// tables and the search index) depends on the catalog alone, and for a catalog
+// shared per configuration it is built once and reused by every server (see
+// [registryShapeFor]). The handlers dispatch through the catalog's bound
+// routes and are built per registry, which is the whole per-credential cost
+// of the dynamic surface.
 func newRegistryFromCatalog(catalog *actioncatalog.Catalog, aliases []actionAlias) *Registry {
 	if catalog == nil {
 		catalog = actioncatalog.NewCatalog()
 	}
-	compatibilityAliasesByCanonical := aliasesByCanonical(append(catalogActionAliases(catalog), aliases...))
+	shape := registryShapeFor(catalog, aliases)
 	registry := &Registry{
-		byID:             make(map[string]actionEntry),
-		aliases:          make(map[string]string),
-		ambiguousAliases: make(map[string][]string),
+		entries:          shape.entries,
+		byID:             shape.byID,
+		aliases:          shape.aliases,
+		ambiguousAliases: shape.ambiguousAliases,
+		SearchIndex:      shape.searchIndex,
 		handlers:         make(map[string]toolHandler),
 	}
-	aliasTargets := make(map[string][]string)
-
 	for _, group := range catalog.Groups() {
-		actions := group.ActionMap()
 		formatResult := group.FormatResult
 		if formatResult == nil {
 			formatResult = toolutil.MarkdownForResult
 		}
-		registry.handlers[group.ToolName] = toolutil.MakeMetaHandler(group.ToolName, actions, formatResult)
+		registry.handlers[group.ToolName] = toolutil.MakeMetaHandler(group.ToolName, group.ActionMap(), formatResult)
+	}
+	return registry
+}
 
+// registryShape is the client-independent half of a [Registry].
+//
+// The entries carry the routes of the catalog the shape was built from, and
+// for a shared catalog that is the unbound origin: their handlers refuse
+// every call, which is correct, because nothing dispatches through an entry's
+// route. [Registry.Execute] dispatches through the handlers built per
+// registry from the bound catalog.
+type registryShape struct {
+	entries          []actionEntry
+	byID             map[string]actionEntry
+	aliases          map[string]string
+	ambiguousAliases map[string][]string
+	searchIndex      searchIndex
+}
+
+// registryShapes holds one shape per shared catalog. Single-flight, so a
+// startup burst of servers for one configuration indexes the catalog once
+// rather than once each and discards all but one of the results.
+var registryShapes toolutil.OnceMap[*actioncatalog.Catalog, *registryShape]
+
+// registryShapeFor returns the shape of catalog, from the cache when the
+// catalog has a shared origin and no extra aliases were supplied, and built
+// afresh otherwise. The extra aliases are a legacy input of [NewRegistry]
+// that no shared catalog carries, so a call with any bypasses the cache
+// rather than keying on them.
+func registryShapeFor(catalog *actioncatalog.Catalog, aliases []actionAlias) *registryShape {
+	origin := catalog.SharedOrigin()
+	if origin == nil || len(aliases) > 0 {
+		return buildRegistryShape(catalog, aliases)
+	}
+	return registryShapes.Load(origin, func() *registryShape {
+		return buildRegistryShape(origin, nil)
+	})
+}
+
+// buildRegistryShape indexes every action of catalog for search and lookup.
+func buildRegistryShape(catalog *actioncatalog.Catalog, aliases []actionAlias) *registryShape {
+	compatibilityAliasesByCanonical := aliasesByCanonical(append(catalogActionAliases(catalog), aliases...))
+	shape := &registryShape{
+		byID:             make(map[string]actionEntry),
+		aliases:          make(map[string]string),
+		ambiguousAliases: make(map[string][]string),
+	}
+	aliasTargets := make(map[string][]string)
+
+	for _, group := range catalog.Groups() {
 		for _, action := range group.ActionsInOrder() {
 			route := action.Route
 			domain := action.Domain
@@ -452,28 +547,28 @@ func newRegistryFromCatalog(catalog *actioncatalog.Catalog, aliases []actionAlia
 				SearchTokens:   buildSearchTokens(document.FlatText),
 				Route:          route,
 			}
-			registry.entries = append(registry.entries, entry)
-			registry.byID[id] = entry
+			shape.entries = append(shape.entries, entry)
+			shape.byID[id] = entry
 			for _, alias := range canonicalAliases {
 				aliasTargets[alias] = append(aliasTargets[alias], id)
 			}
 		}
 	}
-	registry.indexAliases(aliasTargets)
-	registry.SearchIndex = buildSearchIndex(registry.entries)
+	shape.indexAliases(aliasTargets)
+	shape.searchIndex = buildSearchIndex(shape.entries)
 
-	return registry
+	return shape
 }
 
-func (r *Registry) indexAliases(aliasTargets map[string][]string) {
+func (shape *registryShape) indexAliases(aliasTargets map[string][]string) {
 	for alias, targets := range aliasTargets {
 		targets = dedupeStrings(targets)
 		sort.Strings(targets)
 		if len(targets) == 1 {
-			r.aliases[alias] = targets[0]
+			shape.aliases[alias] = targets[0]
 			continue
 		}
-		r.ambiguousAliases[alias] = targets
+		shape.ambiguousAliases[alias] = targets
 	}
 }
 
@@ -2036,6 +2131,16 @@ func normalizedLimit(limit int) int {
 	return limit
 }
 
+// describeEntry renders one action as a find or describe result.
+//
+// The two schemas are handed out as they are, not copied. Both are frozen:
+// the input schema is the process-shared derivation [dynamicInputSchema]
+// returns, and the output schema belongs to the route of a catalog shared by
+// every server in the process. A shallow copy of either would read as
+// ownership while aliasing every nested node, so a write one level down would
+// still reach every pooled server; the honest form is to share the map and say
+// that nothing may write into it. A caller that needs to mutate one copies it
+// with [toolutil.CloneSchemaMap].
 func describeEntry(entry actionEntry) ActionDescription {
 	inputSchema := dynamicInputSchema(entry)
 	return ActionDescription{
@@ -2050,13 +2155,29 @@ func describeEntry(entry actionEntry) ActionDescription {
 		RelatedActions: relatedActionsForEntry(entry),
 		ParamGuidance:  cloneParameterGuidance(entry.Route.ParameterGuidance),
 		InputSchema:    inputSchema,
-		OutputSchema:   maps.Clone(entry.Route.OutputSchema),
+		OutputSchema:   entry.Route.OutputSchema,
 		Example:        exampleFor(entry, inputSchema),
 	}
 }
 
+// dynamicInputSchema returns the params schema a find or describe result
+// carries for an entry: the meta-action schema with the confirm property
+// moved out to gitlab_execute_action's own argument. For an entry of a shared
+// catalog it is derived once for the process (see [toolutil.DeriveSchema])
+// and served to every caller, which must not mutate it.
 func dynamicInputSchema(entry actionEntry) map[string]any {
-	schema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
+	transform := "dynamic-input|destructive=" + strconv.FormatBool(entry.Destructive) + "|guidance=" + toolutil.ParameterGuidanceIdentity(entry.Route.ParameterGuidance)
+	derived := toolutil.DeriveSchema(entry.Route.InputSchema, transform, func() any {
+		return buildDynamicInputSchema(entry)
+	})
+	schema, _ := derived.(map[string]any)
+	return schema
+}
+
+// buildDynamicInputSchema builds what [dynamicInputSchema] serves, on a copy
+// of the meta-action schema, which may itself be shared.
+func buildDynamicInputSchema(entry actionEntry) map[string]any {
+	schema := toolutil.CloneSchemaMap(toolutil.MetaActionSchema(entry.Route))
 	if entry.Route.InputSchema == nil {
 		schema["description"] = "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise."
 	}
