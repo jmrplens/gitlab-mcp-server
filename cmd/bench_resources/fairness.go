@@ -126,8 +126,34 @@ type refusalSpec struct {
 // rate and the burst, so the on-arm's flags are written from them and the two
 // cannot disagree.
 type bucketSpec struct {
+	// Rate and Burst are what the server is told, and are the switches the
+	// on-arm passes verbatim.
 	Rate  float64
 	Burst int
+	// Metered, when set, is the rate this bound actually refuses above, for a
+	// bucket the server derives from the configured one instead of metering
+	// the configured one itself.
+	//
+	// The two are one number for most bounds and were held as one until the
+	// first real run against a server that meters listings, where they are
+	// not: that bucket refills a tenth as fast as the rate its flag names and
+	// keeps the same burst. Told only the configured rate, the plan demanded a
+	// noisy population above ten listings a second before it would believe the
+	// bound could bite, when one a second is the truth, and it then computed a
+	// lead-in from a drain that was ten times too slow. Which number belongs
+	// where is not a detail: the switches say what to pass, and this says what
+	// a population has to exceed to be refused at all.
+	Metered float64
+}
+
+// meteredRate is the rate a population must exceed before this bound refuses
+// it, which is the configured rate unless the server derives a slower bucket
+// from it.
+func (b bucketSpec) meteredRate() float64 {
+	if b.Metered > 0 {
+		return b.Metered
+	}
+	return b.Rate
 }
 
 // boundSpec is one limit, and how to put it in force and take it out.
@@ -170,6 +196,10 @@ func (b boundSpec) onArgs() []string {
 // drain is how long the burst takes to empty at an offered rate, and whether
 // that rate exceeds the bound at all.
 //
+// Both answers are about the bucket the bound actually meters rather than the
+// one its flags configure, since a population is refused by the first and not
+// by the second.
+//
 // A population offering no more than the bound allows is never refused, so
 // there is no drain and no measurement: the caller refuses the plan rather
 // than spending two arms finding out.
@@ -177,10 +207,11 @@ func (b boundSpec) drain(offered float64) (time.Duration, bool) {
 	if b.Bucket == nil {
 		return 0, true
 	}
-	if offered <= b.Bucket.Rate {
+	metered := b.Bucket.meteredRate()
+	if offered <= metered {
 		return 0, false
 	}
-	return time.Duration(float64(b.Bucket.Burst) / (offered - b.Bucket.Rate) * float64(time.Second)), true
+	return time.Duration(float64(b.Bucket.Burst) / (offered - metered) * float64(time.Second)), true
 }
 
 // The refusal every rate-limit bucket writes, read from the server rather than
@@ -230,8 +261,17 @@ var fairnessBounds = []boundSpec{
 		// listing bound in force. The refusal names tools/list instead, and a
 		// build that does not meter listings is caught by the probe rather
 		// than reported as a bound that helped nobody.
+		//
+		// Derived, and so metered a tenth as fast as the flag says while
+		// holding the same burst: a listing arrives once at connect and again
+		// when the catalog changes, and costs far more to answer than a tool
+		// call, so the server refills its bucket that much more slowly. The
+		// ten is a literal here because this command measures a binary it did
+		// not build and cannot read a constant out of; what catches it going
+		// stale is the positive control, which stops a run whose on-arm
+		// refused nothing rather than reporting a bound that helped nobody.
 		ArgsOff: []string{"--rate-limit-rps=0"},
-		Bucket:  &bucketSpec{Rate: 10, Burst: 40},
+		Bucket:  &bucketSpec{Rate: 10, Burst: 40, Metered: 1},
 		Refusals: []refusalSpec{
 			{Status: httpOK, Code: rateLimitCode, TextPrefix: rateLimitRefusal, Method: methodToolsList},
 		},
@@ -392,7 +432,7 @@ func (p fairnessPlan) validate() error {
 	if !bites {
 		return fmt.Errorf("the noisy population offers %g requests a second per credential against a bound of %g: "+
 			"the bound would never refuse it, and the run would spend both arms discovering that",
-			p.Noisy.Rate, p.Bound.Bucket.Rate)
+			p.Noisy.Rate, p.Bound.Bucket.meteredRate())
 	}
 	// A phase that opens on a full bucket measures the burst, and a lead-in
 	// shorter than the drain leaves that burst inside the measured window.

@@ -273,6 +273,13 @@ func TestFairnessPlan_Validate_RefusesAPlanThatWouldMeasureSomethingElse(t *test
 // spend both arms discovering it.
 func TestBoundSpec_Drain_DerivesTheLeadInFromTheBucketRatherThanAConstant(t *testing.T) {
 	metered := boundSpec{Bucket: &bucketSpec{Rate: 10, Burst: 40}}
+	// A bucket the server derives from the configured one, refilled a tenth as
+	// fast and holding the same burst, which is the shape a metered listing
+	// has. Read from the configured rate instead, the two cases below answer
+	// the opposite of the truth: a population at six a second is refused by
+	// this bound and would be called too quiet to measure, and the burst it
+	// does drain in eight seconds would be believed never to drain at all.
+	derived := boundSpec{Bucket: &bucketSpec{Rate: 10, Burst: 40, Metered: 1}}
 	cases := []struct {
 		name      string
 		bound     boundSpec
@@ -284,6 +291,8 @@ func TestBoundSpec_Drain_DerivesTheLeadInFromTheBucketRatherThanAConstant(t *tes
 		{name: "twenty times it drains in two", bound: metered, offered: 210, want: 200 * time.Millisecond, wantBites: true},
 		{name: "at the bound it never drains", bound: metered, offered: 10, wantBites: false},
 		{name: "under the bound it never drains", bound: metered, offered: 1, wantBites: false},
+		{name: "a derived bucket drains at the rate it meters", bound: derived, offered: 6, want: 8 * time.Second, wantBites: true},
+		{name: "under the derived rate it never drains", bound: derived, offered: 1, wantBites: false},
 		{name: "a bound that holds no bucket needs no lead-in", bound: boundSpec{}, offered: 100, wantBites: true},
 	}
 	for _, tc := range cases {
