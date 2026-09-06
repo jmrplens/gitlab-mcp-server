@@ -187,12 +187,48 @@ func withInstancePolicy(flags []string) []string {
 // would leave the process.
 func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 	t.Helper()
-	return startServerOnPort(t, freePort(t), env, flags...)
+	for attempt := 1; ; attempt++ {
+		srv, err := tryStartServerOnPort(t, freePort(t), env, flags...)
+		switch {
+		case err == nil:
+			return srv
+		case !errors.Is(err, errPortTaken):
+			t.Fatalf("starting the server: %v", err)
+		case attempt == portAttempts:
+			t.Fatalf("the server lost the port to another test %d times running: %v", portAttempts, err)
+		}
+	}
 }
 
+// portAttempts is how many ports startServer will try before giving up.
+//
+// freePort hands back a number rather than a listener, so between the moment
+// it releases the port and the moment the server binds it the port belongs to
+// nobody, and every test in this module runs in parallel. Losing that race
+// three times over is not a race any more.
+const portAttempts = 3
+
+// errPortTaken says the server exited because something else holds its port,
+// which is the one startup failure worth retrying on another one.
+var errPortTaken = errors.New("the port was taken")
+
 // startServerOnPort is startServer with the port chosen by the caller, for
-// tests that must configure something in front of it before it starts.
+// tests that must configure something in front of it before it starts. The
+// port is the caller's decision, so a collision fails rather than moving.
 func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...string) *server {
+	t.Helper()
+
+	srv, err := tryStartServerOnPort(t, port, env, flags...)
+	if err != nil {
+		t.Fatalf("starting the server on port %d: %v", port, err)
+	}
+	return srv
+}
+
+// tryStartServerOnPort starts the binary and reports why it did not come up,
+// rather than ending the test, so a caller that chose the port at random can
+// choose another.
+func tryStartServerOnPort(t *testing.T, port int, env map[string]string, flags ...string) (*server, error) {
 	t.Helper()
 
 	bin := serverBinary(t)
@@ -217,7 +253,7 @@ func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...s
 
 	if err := cmd.Start(); err != nil {
 		cancel()
-		t.Fatalf("starting the server: %v", err)
+		return nil, fmt.Errorf("launching the binary: %w", err)
 	}
 
 	srv := &server{
@@ -229,13 +265,20 @@ func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...s
 		},
 	}
 
+	// The process is waited on once, here, and its outcome published, so that
+	// awaitHealthy can stop the moment the server gives up instead of polling
+	// a port nothing is listening on for the whole deadline.
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
 	t.Cleanup(func() {
 		cancel()
-		_ = cmd.Wait()
+		<-exited
 	})
 
-	waitHealthy(t, srv)
-	return srv
+	if err := awaitHealthy(t, srv, exited); err != nil {
+		return nil, err
+	}
+	return srv, nil
 }
 
 // lockedWriter serializes writes from the process's two pipes into one buffer
@@ -251,27 +294,56 @@ func (w *lockedWriter) Write(p []byte) (int, error) {
 	return w.buf.Write(p)
 }
 
-// waitHealthy polls /health until the server answers or the deadline passes.
+// waitHealthy polls /health until the server answers, for a caller holding a
+// server this harness did not start and so has no process to watch.
+func waitHealthy(t *testing.T, s *server) {
+	t.Helper()
+	if err := awaitHealthy(t, s, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// awaitHealthy polls /health until the server answers or the deadline passes.
 // A failure dumps the process output, because a server that refuses to start
 // has already said why and the test should not make anyone go looking.
-func waitHealthy(t *testing.T, s *server) {
+func awaitHealthy(t *testing.T, s *server, exited <-chan error) error {
 	t.Helper()
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
+		// Checked before the probe, because a server that has already given up
+		// leaves its port free for anything else to answer on, and a health
+		// check answered by somebody else is worse than one that fails: the
+		// test would go on to drive a server configured for another test.
+		select {
+		case <-exited:
+			return startupFailure(s.logs())
+		default:
+		}
+
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, s.baseURL+"/health", http.NoBody)
 		if err != nil {
-			t.Fatalf("building the health request: %v", err)
+			return fmt.Errorf("building the health request: %w", err)
 		}
 		resp, err := s.httpClient().Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				return
+				return nil
 			}
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	t.Fatalf("server never became healthy. Output:\n%s", s.logs())
+	return fmt.Errorf("the server never became healthy. Output:\n%s", s.logs())
+}
+
+// startupFailure names why a server exited before it served, so that a port
+// lost to another test is retried and anything else is reported.
+func startupFailure(logs string) error {
+	if strings.Contains(logs, "address already in use") ||
+		strings.Contains(logs, "Only one usage of each socket address") {
+		return fmt.Errorf("%w. Output:\n%s", errPortTaken, logs)
+	}
+	return fmt.Errorf("the server exited before it served. Output:\n%s", logs)
 }
 
 // request is one HTTP call to the server under test.
