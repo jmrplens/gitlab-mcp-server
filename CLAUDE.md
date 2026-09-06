@@ -64,6 +64,7 @@ gitlab-mcp-server/
 │   ├── audit_gateway_chars/     # Audits served descriptions/titles for characters MCP gateway validators reject (make check-gateway-chars)
 │   ├── audit_install_buttons/  # Decodes every one-click install payload (base64 or percent-encoded JSON) and holds the buttons to one configuration per command (make check-install-buttons)
 │   ├── godoc_tool/              # Consolidated Go doc auditor + fixer (was audit_godocs + add_docs)
+│   ├── audit_md_escaping/       # Fails when a Markdown formatter interpolates a GitLab-authored value into a table cell, heading, list item or link without EscapeMdTableCell/EscapeMdHeading/MdTitleLink; `//gitlab:allow-unescaped <expr>: <reason>` declares a value that needs none (make check-md-escaping)
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_readonly_graphql/  # Fails when an action classified ReadOnly can reach a GraphQL mutation, which `--read-only` and a read_api token's narrowed surface would both keep (make check-readonly-graphql)
 │   ├── audit_supply_chain/      # Audits five release-configuration invariants: SHA-pinned uses:, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current SECURITY.md, signature-verifying installers (make check-supply-chain)
@@ -722,6 +723,8 @@ Markdown formatters use a type-based registry in `internal/toolutil/md_registry.
 - `toolutil.MarkdownForResult(result any)` — looks up and invokes the registered formatter by `reflect.Type`
 - `internal/tools/markdown.go` is a thin delegator (~16 lines) that calls `toolutil.MarkdownForResult`
 - ~578 registrations across 166 sub-packages, validated by `TestAllMarkdownFormattersRegistered`
+
+A formatter escapes what it interpolates: `toolutil.EscapeMdTableCell` on every GitLab-authored string between two pipes of a table row and on every single-line list value, `toolutil.EscapeMdHeading` on the one value that lands in a heading, and `toolutil.MdTitleLink` on both halves of a link rather than hand-writing `[%s](%s)`. `make check-md-escaping` (`cmd/audit_md_escaping`) is the gate; a value that needs none is declared in its own package with `//gitlab:allow-unescaped <expression>: <reason>`, and a declaration that excuses nothing fails too.
 
 ### Dynamic toolset mode
 

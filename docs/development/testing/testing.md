@@ -18,12 +18,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,298 |
-| Unit test functions                                   | 13,696 |
-| E2E test functions                                    |    602 |
-| cmd test functions                                    |  2,507 |
+| Total test functions                                  | 14,362 |
+| Unit test functions                                   | 13,761 |
+| E2E test functions                                    |    601 |
+| cmd test functions                                    |  2,576 |
 | Test files (internal/)                                |    511 |
-| Test files (cmd/)                                     |    151 |
+| Test files (cmd/)                                     |    161 |
 | Test files (test/e2e/)                                |    237 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     21 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,721 | 82.0% |
+| `TestFunc_Scenario` (2-part)           | 11,715 | 81.6% |
 | `TestFunc` (no underscore)             |    976 |  6.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,601 | 11.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,671 | 11.6% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,334 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,330 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,523 |        358 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            602 |        237 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,507 |        151 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,298** |    **899** |                                                                                                 |
+| E2E integration         |            601 |        237 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          2,576 |        161 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,362** |    **909** |                                                                                                 |
 
 ### Core Packages
 
@@ -76,8 +76,8 @@
 | subscriptions |        90 |    98.5% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        37 |    89.6% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       854 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,334** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       850 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,330** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -320,6 +320,7 @@
 | cmd/audit_edition_tier                         |    86.9% |
 | cmd/audit_gateway_chars                        |    88.2% |
 | cmd/audit_install_buttons                      |    84.2% |
+| cmd/audit_md_escaping                          |      n/a |
 | cmd/audit_metrics                              |    97.8% |
 | cmd/audit_readonly_graphql                     |    90.8% |
 | cmd/audit_string_dupes                         |    92.1% |
