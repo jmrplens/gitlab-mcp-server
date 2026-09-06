@@ -268,7 +268,7 @@ func main() {
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or concurrent requests")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval; 0 stops the periodic check, but an entry whose credential is older than "+serverpool.DefaultMaxCredentialAge.String()+" is still rebuilt")
-	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL server entry after this long unused (0 to disable)")
+	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL credential entry after this long unused, except one with a live subscription (0 to disable)")
 	flag.DurationVar(&hcfg.actionTimeout, "action-timeout", config.DefaultActionTimeout, "Cancel an action still running after this long (0 to disable)")
 	flag.DurationVar(&hcfg.drainDelay, "drain-delay", config.DefaultDrainDelay, "After SIGTERM, keep the listener open and answer /health with 503 draining for this long before closing it, so a balancer takes the instance out of rotation first (0 closes at once)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
@@ -536,7 +536,7 @@ FLAGS
 
  Limits and pooling (HTTP mode)
   -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
-  -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
+  -pool-idle-timeout dur    Reclaim a pooled credential entry after this long unused, except one with a live subscription (default %s, 0 to disable)
   -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -drain-delay dur          After SIGTERM, answer /health with 503 draining for this long before closing the
                             listener, so a balancer takes the instance out first (default 0: close at once)

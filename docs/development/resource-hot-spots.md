@@ -10,8 +10,16 @@ left. The numbers come from the concurrency series of the
 process through credential counts and writes a CPU and a heap profile at each
 step; this page reads those profiles.
 
-Every measurement on this page is from one host: an Intel i5-14400 with 16
-threads and 62 GiB, kernel 6.12, Go 1.27.1, each binary built from a clean tree.
+Two hosts, and which one matters, because a slope from one cannot be compared
+with a slope from the other. Everything down to and including
+[What this branch measured](#what-this-branch-measured) is from an Intel i5-14400
+with 16 threads and 62 GiB, kernel 6.12, Go 1.27.1. The shared-server section at
+the end of the page, [What the shared server measured](#what-the-shared-server-measured),
+is from an AMD Ryzen 5 3550H with 8 threads and 60.8 GiB, kernel 6.1, Go 1.27.1,
+which is slower and was shared with other work while the run was in progress.
+Every binary was built from a clean tree. Comparisons within a section are
+sound; comparisons across the two are not, which is what
+[the last section says about its own "before" column](#what-the-shared-server-measured).
 
 Which trees, exactly, because it decides how far the figures can be trusted. The
 before series was run from the commit this work branched from at the time, which
@@ -527,12 +535,15 @@ per-session delivery is released upstream, the tag and the filter go away and
 nothing else changes. The ask is recorded in
 [upstream-bugs.md](upstream-bugs.md).
 
-### What this branch measured
+### What the shared server measured
 
-Same driver and the same machine as the section above (AMD Ryzen 5 3550H, 8
-threads, 60.8 GiB, kernel 6.1, Go 1.27.1), one HTTP process per surface,
-credential counts 1, 2, 5, 10 and 20, ten seconds per step. Before is the branch
-point, which is the shared-catalog work already described; after is this branch.
+Same driver, a **different machine** from every section above: an AMD Ryzen 5
+3550H with 8 threads and 60.8 GiB, kernel 6.1, Go 1.27.1, shared with other work
+while the run was in progress. One HTTP process per surface, credential counts
+1, 2, 5, 10 and 20, ten seconds per step. Before is the branch point, which is
+the shared-catalog work already described; after is this branch. Both columns
+here are from this host, so they can be compared with each other and with
+nothing above.
 
 The first thing the run says is that the resident set under load is the wrong
 instrument for this change, and it is worth stating rather than hiding, because
@@ -566,31 +577,42 @@ as the measurement: it is the one taken on an idle process, which is what a
 credential costs when nobody is calling.
 
 The credential's own cost is what an idle process holds, and that is what this
-change was aimed at. Driving one `tools/list` per credential and reading
-`HeapAlloc` from `/debug/pprof/heap?gc=1&debug=1` after a collection, on the
-same two binaries, twenty credentials each:
+change was aimed at. Both columns below come from the same probe, which is the
+shipped one: `TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials` in
+`test/e2e/http/heap_test.go`. It drives one `tools/list` per credential and
+reads `HeapAlloc` from `/debug/pprof/heap?gc=1&debug=1` after a collection, at
+one credential and at twenty, and the per-credential figure is the difference
+divided by nineteen. The **after** column is the median of fifteen runs at
+`7827d55b`, the **before** column one run of the same test on the parent commit,
+both on the Ryzen host named at the top of this section:
 
-| Surface      | Live heap per credential, before |  after | Ratio |
-| ------------ | -------------------------------: | -----: | ----: |
-| `dynamic`    |                          434 KiB | 17 KiB |   26x |
-| `meta`       |                          815 KiB | 73 KiB |   11x |
-| `individual` |                        1,487 KiB |  8 KiB |  186x |
+| Surface      | Live heap per credential, before |   after | Spread over 15 runs | Ratio |
+| ------------ | -------------------------------: | ------: | ------------------: | ----: |
+| `dynamic`    |                          434 KiB | 7.7 KiB |      7.3 to 8.0 KiB |   56x |
+| `meta`       |                          815 KiB | 8.3 KiB |      8.0 to 8.8 KiB |   98x |
+| `individual` |                        1,487 KiB | 8.5 KiB |      7.9 to 9.0 KiB |  175x |
 
-In absolute terms the twentieth credential adds 0.3 MiB on `dynamic`, 1.4 MiB on
-`meta` and 0.2 MiB on `individual` over the first, against 8, 15 and 27 MiB
-before. That is the target: what a credential costs is now the pool entry (a
-GitLab client, a rate-limit bucket, a listen counter, a watcher set) rather than
-a registered tool surface, and the registered surface is paid once per
-configuration.
+In absolute terms the run from one credential to twenty grows 0.14 MiB on
+`dynamic`, 0.15 MiB on `meta` and 0.16 MiB on `individual`, against 8, 15 and 27
+MiB before. That is the target, and the shape of the after column is the clearer
+statement of it: the three surfaces now cost the same per credential to within
+the run-to-run spread, because what a credential costs is the pool entry (a
+GitLab client, a rate-limit bucket, a listen counter, a watcher set) and none of
+that depends on which tools are registered. The registered surface is paid once
+per configuration.
 
-The e2e test `TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials`
-takes the same measurement on every push, on the `dynamic` and `individual`
-surfaces, and fails when the growth over 1 to 20 credentials exceeds 2 MiB. That
-budget is what makes it an assertion: the growth on this branch is under 0.2 MiB
-on both surfaces, and a revert to a server per credential grows 8.1 MiB on
-`dynamic` and 27.6 on `individual`, both measured by running the same test on
-the parent commit. It carried a 32 MiB budget until this pass, which that same
-revert passed on every surface, so what the test pinned was nothing.
+An earlier pass published 17, 73 and 8 KiB here, taken from a single run whose
+`meta` figure was nine times the median of fifteen. One run of this probe on a
+shared host is not a measurement; the spread column is there so the next reader
+can see how much of one it is.
+
+The same test is the regression guard, run on every push, on all three surfaces.
+It fails when the growth over 1 to 20 credentials exceeds 2 MiB. That budget is
+what makes it an assertion: the growth on this branch is under 0.2 MiB on every
+surface, and a revert to a server per credential grows 8.1 MiB on `dynamic` and
+27.6 on `individual`, both measured by running the same test on the parent
+commit. It carried a 32 MiB budget until this pass, which that same revert
+passed on every surface, so what the test pinned was nothing.
 
 Per-call processor cost is unchanged, which is expected: 20.0 ms before and
 20.2 ms after on `dynamic`, 19.2 and 19.1 on `meta`, 357 and 342 on

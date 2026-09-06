@@ -184,10 +184,10 @@ Authorization: Bearer <gitlab-personal-access-token>
 
 ### Aislamiento de sesiones
 
-El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
+El servidor mantiene un **pool LRU limitado** de entradas por credencial:
 
-- Cada par de token y URL de GitLab obtiene su propia instancia aislada del servidor MCP
-- Las sesiones son independientes — un usuario no puede acceder al contexto de otro
+- Cada par de token y URL de GitLab obtiene su propia entrada aislada: su cliente de GitLab, su cubo del rate limit, sus vigilantes de recursos y sus sesiones. El servidor MCP y su catálogo de herramientas los comparten todas las credenciales de la misma configuración, porque ninguno depende de la credencial, y cada petición se ejecuta con el cliente que lleva su propia entrada
+- Las credenciales son independientes — un usuario no puede acceder al contexto de otro, ni a su estado de vigilancia, ni a la existencia de su tráfico
 - Las sesiones inactivas expiran después de `--session-timeout` (por defecto: 30 minutos) con `--stateless=false`; el transporte sin estado por defecto termina la sesión de cada POST con su respuesta
 - Las entradas del pool están acotadas por `--max-http-clients` (por defecto: 100), que limita entradas token+URL, no sesiones ni peticiones concurrentes
 

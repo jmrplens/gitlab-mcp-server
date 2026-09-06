@@ -10,7 +10,7 @@ faq:
   - q: "How fast do notifications arrive?"
     a: "Latency is the polling cadence: **5 seconds** while the resource is busy (a running pipeline, an open merge request), **15 seconds** by default, **60 seconds** once settled, and **10 minutes** after a watch lease-demotes from 30 minutes of session inactivity. Any request on the session restores full speed. The `_meta` on each notification reports the watch state and its current cadence."
   - q: "What does watching cost against my GitLab rate limit?"
-    a: "Watchers use the subscriber's own token, capped at **10 watchers per server**. Worst case — all ten at the 5-second floor — is 120 requests per minute, 6% of GitLab.com's per-user limit. Ten demoted watches cost one request per minute. One 429 from GitLab pauses every watcher with exponential back-off."
+    a: "Watchers use the subscriber's own token, capped at **10 watchers per credential**. Worst case — all ten at the 5-second floor — is 120 requests per minute, 6% of GitLab.com's per-user limit. Ten demoted watches cost one request per minute. One 429 from GitLab pauses every watcher with exponential back-off."
 ---
 
 import FAQ from "../../../components/FAQ.astro";

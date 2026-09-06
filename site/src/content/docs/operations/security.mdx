@@ -184,10 +184,10 @@ Authorization: Bearer <gitlab-personal-access-token>
 
 ### Session isolation
 
-The server maintains a **bounded LRU pool** of client sessions:
+The server maintains a **bounded LRU pool** of per-credential entries:
 
-- Each token and GitLab URL pair gets its own isolated MCP server instance
-- Sessions are independent — one user cannot access another's context
+- Each token and GitLab URL pair gets its own isolated entry: its GitLab client, its rate-limit bucket, its resource watchers and its sessions. The MCP server and its tool catalog are shared by every credential of the same configuration, since neither depends on the credential, and every request runs under the client its own entry carries
+- Credentials are independent — one user cannot access another's context, watch state, or the existence of their traffic
 - Idle sessions expire after `--session-timeout` (default: 30 minutes) under `--stateless=false`; the default stateless transport ends each POST's session with its response
 - Pooled entries are bounded by `--max-http-clients` (default: 100), which caps token+URL entries rather than sessions or concurrent requests
 

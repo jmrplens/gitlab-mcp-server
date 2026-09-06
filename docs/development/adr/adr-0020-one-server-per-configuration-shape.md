@@ -306,11 +306,17 @@ writing.
 
 - POS-001: What a credential costs the process stops being a registered tool
   surface. Measured as the live heap of an idle process at 1 and at 20
-  credentials, it fell from 434 to 17 KiB per credential on the dynamic surface,
-  815 to 73 on meta, and 1,487 to 8 on individual. The residue is the pool
-  entry's own state: a GitLab client, a rate-limit bucket, a counter, a watcher
-  set, and the sessions the client holds open. What remains of the resident-set
-  slope under load is the requests in flight, not the tenancy.
+  credentials, it fell from 434 KiB per credential to 7.7 on the dynamic
+  surface, 815 to 8.3 on meta, and 1,487 to 8.5 on individual. The three
+  surfaces now agree to within the run-to-run spread, which is the statement
+  itself: the residue is the pool entry's own state — a GitLab client, a
+  rate-limit bucket, a counter, a watcher set, and the sessions the client holds
+  open — and none of that depends on which tools are registered. What remains of
+  the resident-set slope under load is the requests in flight, not the tenancy.
+  The figures are medians of fifteen runs of the shipped probe
+  (`TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials`); the run
+  and its spread are recorded in
+  [Resource hot spots](../resource-hot-spots.md#what-the-shared-server-measured).
 - POS-002: A credential's first request no longer pays for a catalog build
   whenever another credential of the same shape has already paid for it. That
   cost was 1.8 s on the dynamic surface and 3.0 s on individual, and it was

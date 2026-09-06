@@ -4,7 +4,7 @@ description: "Lo que cuesta ejecutar el servidor, medido y no estimado: memoria 
 datePublished: "2026-09-04"
 faq:
   - q: "¿Cuánta memoria le doy al contenedor?"
-    a: "En modo HTTP dimensiona por **credenciales concurrentes, no por peticiones**. El proceso reposa cerca de 35 MiB sin ningún catálogo de herramientas, y a partir de ahí construye un catálogo por cada token distinto. Con todas las credenciales llamando, la serie de concurrencia midió unos 63 MiB por credencial en la superficie meta, 90 MiB en individual y 130 MiB en dynamic, es decir, 6,6 GB, 9,4 GB y 13,2 GB con cien credenciales. Con 512 MiB atiendes holgadamente a unas pocas credenciales; un despliegue que espere decenas necesita gigabytes, o un `--max-http-clients` más bajo. En modo stdio cada cliente tiene su propio proceso, de entre 190 y 310 MiB."
+    a: "En modo HTTP dimensiona por **credenciales concurrentes, no por peticiones**. El proceso reposa cerca de 35 MiB sin ningún catálogo de herramientas, y a partir de ahí construye un catálogo por cada token distinto. Con todas las credenciales llamando, la serie de concurrencia midió unos 63 MiB por credencial en la superficie meta, 90 MiB en individual y 130 MiB en dynamic, es decir, 6,2 GiB, 8,8 GiB y 12,7 GiB con cien credenciales. Con 512 MiB atiendes holgadamente a unas pocas credenciales; un despliegue que espere decenas necesita gigabytes, o un `--max-http-clients` más bajo. En modo stdio cada cliente tiene su propio proceso, de entre 190 y 310 MiB."
   - q: "¿Por qué la primera llamada de un token nuevo tarda tanto?"
     a: "Está pagando el registro. El proceso responde a `/health` en unos 50 ms sin tener ningún catálogo; la primera petición de una credencial construye el suyo, y eso tardó entre 0,6 y 0,7 segundos en las superficies dynamic y meta, y entre 1,4 y 1,5 segundos en la superficie individual en la máquina medida. Cualquier llamada posterior de esa credencial se sirve ya del catálogo construido. La espera vuelve cuando el pool recupera la entrada, lo que deciden `--pool-idle-timeout` y `--max-http-clients`."
   - q: "¿La superficie de herramientas cambia la memoria que necesita el servidor?"
@@ -212,7 +212,7 @@ midieron 33 MiB por credencial adicional en `meta`, 49 MiB en `individual` y
 llamaban a la vez. La serie de concurrencia mide la pendiente donde vive un
 despliegue compartido, con todas las credenciales llamando: 63 MiB por
 credencial en `meta`, 90 MiB en `individual` y 130 MiB en `dynamic`, es decir,
-6,6 GB, 9,4 GB y 13,2 GB con cien credenciales.
+6,2 GiB, 8,8 GiB y 12,7 GiB con cien credenciales.
 
 Una regla práctica para HTTP: **reserva la cifra de la serie para tu
 superficie, entre 65 y 130 MiB, por credencial que esperes tener activa a la

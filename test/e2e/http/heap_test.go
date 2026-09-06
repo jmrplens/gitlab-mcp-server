@@ -55,11 +55,12 @@ const heapGrowthBudget = 2 << 20
 // being removed is the SDK's tool table, the bound catalog descriptors and the
 // closures that dispatch, none of which a unit test allocates.
 //
-// It runs on both ends of the surface range on purpose. The dynamic surface is
-// the default and registers two tools, so it is the weakest signal this test
-// can be given: the parent commit grows 8.1 MiB there against a 2 MiB budget.
-// The individual surface registers a tool per action, which is where a server
-// per credential costs the most and where the same run grows 27.6 MiB. A
+// It runs on every surface, and the two ends of that range are what set the
+// budget. The dynamic surface is the default and registers two tools, so it is
+// the weakest signal this test can be given: the parent commit grows 8.1 MiB
+// there against a 2 MiB budget. The individual surface registers a tool per
+// action, which is where a server per credential costs the most and where the
+// same run grows 27.6 MiB. A
 // regression that somehow stayed inside the budget on dynamic has nowhere to
 // hide on individual.
 //
@@ -67,7 +68,12 @@ const heapGrowthBudget = 2 << 20
 // only, with ?gc=1 so each reading is of the live set rather than of whatever
 // had not been collected yet.
 func TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials(t *testing.T) {
-	surfaces := []string{"dynamic", "individual"}
+	// All three, because all three per-credential figures are published and a
+	// published figure with no test behind it is a claim. meta was left out
+	// while the budget was the only thing this test was for; it is the surface
+	// whose per-credential residue is the largest of the three, so it is also
+	// the one where a regression has the most room to hide under the budget.
+	surfaces := []string{"dynamic", "meta", "individual"}
 
 	for _, surface := range surfaces {
 		t.Run(surface, func(t *testing.T) {

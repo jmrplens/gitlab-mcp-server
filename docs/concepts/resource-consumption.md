@@ -49,10 +49,11 @@ In HTTP mode, a single process serves all clients. Idle, before any credential h
 > listen counter, a watcher set, and the sessions that credential holds open.
 >
 > Measured locally on the development machine, the live heap an idle process
-> holds per additional credential fell from 434 to 17 KiB on `dynamic`, 815 to
-> 73 KiB on `meta` and 1,487 to 8 KiB on `individual`. The before and after runs
-> are written up in
-> [Resource hot spots](../development/resource-hot-spots.md#what-this-branch-measured).
+> holds per additional credential fell from 434 KiB to 7.7 on `dynamic`, 815 to
+> 8.3 on `meta` and 1,487 to 8.5 on `individual`: the three surfaces now cost
+> the same, because what a credential costs no longer depends on which tools are
+> registered. The before and after runs are written up in
+> [Resource hot spots](../development/resource-hot-spots.md#what-the-shared-server-measured).
 > The tables below stay as they were until the reference host they were taken on
 > is re-run.
 
@@ -73,7 +74,7 @@ Memory per credential used to go the other way from what the tool counts suggest
 | 20                | 0.7 to 1.4 GiB    | ~1 to 2 GiB                                       | A small team                                                    |
 | 100 (default max) | 3.5 to 7 GiB      | ~4 to 8 GiB                                       | Default `--max-http-clients`; a pool no small instance can hold |
 
-Those totals are the pre-sharing ones and are now an upper bound rather than an estimate. What a credential adds at rest is small; what still grows with the credential count is the work in flight, since each live client's requests allocate while they are served. Size from concurrent load rather than from the number of tokens, and treat `--max-http-clients` as a bound on pooled credentials rather than as the memory setting it used to be. `--pool-idle-timeout` (default 1h) reclaims entries nobody has used, so the live count is what matters, not how many tokens have ever connected; an entry rebuilt after reclamation no longer pays for a catalog build unless it is the only credential of its configuration, because the built server is shared.
+Those totals are the pre-sharing ones and are now an upper bound rather than an estimate. What a credential adds at rest is small; what still grows with the credential count is the work in flight, since each live client's requests allocate while they are served. Size from concurrent load rather than from the number of tokens, and treat `--max-http-clients` as a bound on pooled credentials rather than as the memory setting it used to be. `--pool-idle-timeout` (default 1h) reclaims entries nobody has used, so the live count is what matters, not how many tokens have ever connected; an entry rebuilt after reclamation no longer pays for a catalog build unless it is the only credential of its configuration, because the built server is shared. An entry with a live subscription is exempt from that sweep and is preferred over by size pressure, since its watcher polls GitLab directly and its listen is one request the client never repeats, so nothing about it would look busy to the pool.
 
 ### CPU Usage
 
@@ -142,8 +143,8 @@ Understanding the terminology is important for capacity planning:
 
 Memory growth comes from:
 
-1. **Distinct configurations served** — each builds one tool catalog and one MCP server, shared by every credential that hashes to it. In a deployment that pins `--tier` and publishes one instance there is exactly one
-2. **Unique tokens in pool** — each adds credential state only, bounded by `--max-http-clients` and reclaimed by `--pool-idle-timeout`
+1. **Distinct configurations served**. Each builds one tool catalog and one MCP server, shared by every credential that hashes to it. In a deployment that pins `--tier` and publishes one instance there is exactly one
+2. **Unique tokens in pool**. Each adds credential state only, bounded by `--max-http-clients` and reclaimed by `--pool-idle-timeout`, which exempts an entry that is still serving a subscription
 3. **Active MCP sessions** — minimal per-session overhead managed by the SDK
 4. **Tool execution** — temporary allocations during GitLab API calls (GC reclaims)
 5. **Large API responses** — paginated list results with many items
