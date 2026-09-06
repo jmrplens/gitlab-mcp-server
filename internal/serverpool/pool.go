@@ -264,6 +264,15 @@ type ServerPool struct {
 	// probeQueueTimeout is how long a build waits for one of those slots,
 	// defaulting to [credentialProbeQueueTimeout].
 	probeQueueTimeout time.Duration
+	// idleSweepInterval overrides the cadence derived from idleTimeout.
+	//
+	// Zero, which is what [New] leaves, means derive it: a quarter of the
+	// idle timeout, floored at [idleSweepMinInterval] so an operator's short
+	// timeout cannot turn the sweep into a busy loop. That floor is also why
+	// this field exists: it puts the first tick a minute away, which is
+	// longer than any test may wait, so the sweep goroutine's own body is
+	// only reachable by shortening the cadence here.
+	idleSweepInterval time.Duration
 	// baseContext supplies the lifetime that bounds the GitLab lookups which
 	// build an entry — the credential probe, tier and scope discovery,
 	// identity resolution.
@@ -545,6 +554,18 @@ func (p *ServerPool) GetOrCreateEntry(token, gitlabURL string, scopes []string) 
 	if err != nil {
 		return nil, err
 	}
+	return entryFromBuild(built)
+}
+
+// entryFromBuild converts what the shared build returned into an entry.
+//
+// [singleflight.Group.Do] hands back an any, so this is the boundary where a
+// build result stops being typed. Everything above it returns an entry or an
+// error, which is why the failure it describes cannot be produced from here;
+// it exists so that a future build path returning nothing is a refused
+// request that names itself rather than a nil dereference in the caller,
+// which would be an HTTP 500 with a stack trace and no cause.
+func entryFromBuild(built any) (*Entry, error) {
 	entry, ok := built.(*Entry)
 	if !ok || entry == nil {
 		return nil, errors.New("creating MCP server for pool: builder returned no server")
@@ -648,11 +669,7 @@ func (p *ServerPool) evictRejectedCredential(key string, entry *Entry) {
 	// and a panic there must not take the process with it. The lock is
 	// released by a defer for the same reason, so the panic cannot leave it
 	// held.
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("server pool: eviction of a rejected credential panicked", "panic", r)
-		}
-	}()
+	defer recoverSweep(context.Background(), "rejected-credential eviction")
 	gitlabURL, size, dropped := p.dropRejectedEntry(key, entry)
 	if !dropped {
 		return
@@ -1144,6 +1161,22 @@ func tokenSuffix(token string) string {
 // is dropped on its timestamp alone, which is the point — the entries it
 // reclaims are exactly the ones revalidation would otherwise keep pinging
 // GitLab about on behalf of a client that is gone.
+// recoverSweep keeps a panic raised inside a background sweep from taking the
+// process down, and names the sweep that raised it.
+//
+// Every sweep calls back into the caller: the idle one asks whether an entry
+// is still in use, and both evictions tell the caller to stop that
+// credential's watchers. A panic in one of those is a bug in this process, but
+// losing the goroutine to it is worse than the bug is: the sweep stops
+// silently, and the pool then grows to its cap holding credentials nothing has
+// re-checked since startup. Deferred by all three goroutines, so they recover
+// the same way and the rule is stated once.
+func recoverSweep(ctx context.Context, sweep string) {
+	if r := recover(); r != nil {
+		slog.ErrorContext(ctx, "server pool: "+sweep+" goroutine panicked", "panic", r)
+	}
+}
+
 func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background() //nolint:contextcheck // defensive: nil-ctx guard for callers that pass uninitialized context
@@ -1153,16 +1186,15 @@ func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 		return
 	}
 
-	interval := max(p.idleTimeout/idleSweepDivisor, idleSweepMinInterval)
+	interval := p.idleSweepInterval
+	if interval <= 0 {
+		interval = max(p.idleTimeout/idleSweepDivisor, idleSweepMinInterval)
+	}
 	slog.InfoContext(ctx, "server pool: starting idle eviction",
 		"idle_timeout", p.idleTimeout, "sweep_interval", interval)
 
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.ErrorContext(ctx, "server pool: idle eviction goroutine panicked", "panic", r)
-			}
-		}()
+		defer recoverSweep(ctx, "idle eviction")
 
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -1253,11 +1285,7 @@ func (p *ServerPool) StartRevalidation(ctx context.Context) {
 	slog.InfoContext(ctx, "server pool: starting token revalidation", "interval", p.revalidateInterval)
 
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.ErrorContext(ctx, "server pool: revalidation goroutine panicked", "panic", r)
-			}
-		}()
+		defer recoverSweep(ctx, "revalidation")
 
 		ticker := time.NewTicker(p.revalidateInterval)
 		defer ticker.Stop()
@@ -1404,7 +1432,11 @@ func (p *ServerPool) EvictServer(srv *mcp.Server) bool {
 	defer p.mu.Unlock()
 	evicted := false
 	for key, entry := range p.entries {
-		if entry == nil || entry.server != srv {
+		// Through the nil-safe accessor rather than the field: the map is
+		// never given a nil entry, so a separate guard here would be a
+		// branch nothing can take, and the accessor keeps the same answer
+		// if one ever were.
+		if entry.Server() != srv {
 			continue
 		}
 		gitlabURL, enterprise := entryConfigLogValues(entry)
