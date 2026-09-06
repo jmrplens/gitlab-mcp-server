@@ -1828,9 +1828,12 @@ func TestUpstreamError_NamesTheStatusWhenGitLabAnswered(t *testing.T) {
 	answered := &UpstreamError{Status: http.StatusTooManyRequests, Err: errors.New("slow down")}
 	message := answered.Error()
 	for _, want := range []string{"429", "slow down"} {
-		if !strings.Contains(message, want) {
-			t.Errorf("Error() = %q, want it to mention %q", message, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+			if !strings.Contains(message, want) {
+				t.Errorf("Error() = %q, want it to mention %q", message, want)
+			}
+		})
 	}
 	if strings.Contains(message, "unreachable") {
 		t.Errorf("Error() = %q, want it not to call an answered request unreachable", message)

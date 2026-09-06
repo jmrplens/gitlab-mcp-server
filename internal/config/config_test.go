@@ -1459,9 +1459,11 @@ func TestParseToolSurfaceValue_UnknownIsRefusedByName(t *testing.T) {
 		t.Fatal("parseToolSurfaceValue(typo) = nil error, want a refusal")
 	}
 	for _, want := range []string{"TOOL_SURFACE", "indivdual"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not mention %q", err, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not mention %q", err, want)
+			}
+		})
 	}
 	if got := LegacyMetaToolsReplacement("indivdual"); got != "" {
 		t.Errorf("LegacyMetaToolsReplacement(typo) = %q, want no replacement", got)

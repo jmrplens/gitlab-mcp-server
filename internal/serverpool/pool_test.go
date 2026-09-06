@@ -3603,9 +3603,11 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 		// Reaching here at all is half the assertion: an unrecovered panic
 		// ends the test binary.
 		for _, want := range []string{"idle eviction", "in-use callback blew up"} {
-			if !strings.Contains(logged.String(), want) {
-				t.Errorf("log = %q, want it to mention %q", logged.String(), want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(logged.String(), want) {
+					t.Errorf("log = %q, want it to mention %q", logged.String(), want)
+				}
+			})
 		}
 
 		logged.Reset()
