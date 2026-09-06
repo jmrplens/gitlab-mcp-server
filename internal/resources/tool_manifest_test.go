@@ -988,10 +988,10 @@ func TestToolManifest_SharedSnapshotServesTheSameBytesAsAPrivateOne(t *testing.T
 	}
 	for name, session := range shared {
 		t.Run(name, func(t *testing.T) {
-			if got := readResourceText(t, session, "gitlab://tools"); got != indexWant {
+			if readResourceText(t, session, "gitlab://tools") != indexWant {
 				t.Errorf("gitlab://tools from the %s server differs from what a server with no share key serves", name)
 			}
-			if got := readResourceText(t, session, detailURI); got != detailWant {
+			if readResourceText(t, session, detailURI) != detailWant {
 				t.Errorf("%s from the %s server differs from what a server with no share key serves", detailURI, name)
 			}
 		})

@@ -241,7 +241,7 @@ func TestParameterGuidanceIdentity_NamesContentNotAddress(t *testing.T) {
 			t.Parallel()
 			edited := guidance()
 			edit(edited)
-			if got := ParameterGuidanceIdentity(edited); got == name {
+			if ParameterGuidanceIdentity(edited) == name {
 				t.Errorf("ParameterGuidanceIdentity() named %s the same as the original", label)
 			}
 		})
