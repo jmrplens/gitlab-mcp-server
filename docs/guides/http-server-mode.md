@@ -128,7 +128,9 @@ introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextpro
 - The server neither reads nor sets the `Mcp-Session-Id` header. Every POST is
   a self-contained JSON-RPC exchange — no `initialize` round-trip is required.
 - GET and DELETE on the MCP endpoint return `405 Method Not Allowed`
-  (`Allow: POST`). `/health` and `/.well-known/*` endpoints are unaffected.
+  (`Allow: POST`) once the request is authenticated; in legacy mode they are
+  answered without a credential, in OAuth mode a request without one is
+  answered `401` first. `/health` and `/.well-known/*` are unaffected.
 - Synchronous server-initiated requests are rejected by the SDK because no
   client channel outlives the request. Clients on protocol `2026-07-28` keep
   full elicitation through multi-round-trip requests (MRTR), which travel in
@@ -410,7 +412,9 @@ Every other outcome — a transport error, a `5xx`, a `404` from an instance tha
 
 Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status.
 
-`GET` and `DELETE` skip the credential check **only under the default `--stateless`**, where they receive `405 Method Not Allowed` whatever they carry — the answer protocol 2026-07-28 prescribes for them, and gating them would replace it with a `401`. Under `--stateless=false` they are not inert: a `GET` opens a session's standalone SSE stream and reads the server-initiated messages meant for its owner, and a `DELETE` terminates the session. There they are authenticated and ownership-checked exactly like a `POST`, so learning a session ID is not enough to read or end someone else's session.
+In legacy mode `GET` and `DELETE` skip the credential check **only under the default `--stateless`**, where they receive `405 Method Not Allowed` whatever they carry — the answer protocol 2026-07-28 prescribes for them, and gating them would replace it with a `401`. Under `--stateless=false` they are not inert: a `GET` opens a session's standalone SSE stream and reads the server-initiated messages meant for its owner, and a `DELETE` terminates the session. There they are authenticated and ownership-checked exactly like a `POST`, so learning a session ID is not enough to read or end someone else's session.
+
+Under `--auth-mode=oauth` there is no such exemption in either transport mode. The Bearer guard is mounted outside that gate and exempts only a CORS preflight, so an unauthenticated `GET` or `DELETE` is answered `401` with the RFC 9728 challenge; the `405` appears once the request carries a credential the instance accepts.
 
 ## Authentication Modes
 
