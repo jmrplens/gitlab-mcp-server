@@ -297,19 +297,49 @@ func (c *stdioRPC) call(ctx context.Context, method string, params map[string]an
 		c.forget(id)
 		return nil, writeErr
 	}
+	return c.await(ctx, method, id, waiter)
+}
 
+// await waits for the response to one sent request, or for whatever ends the
+// wait first: the server's output closing, or the caller's context.
+func (c *stdioRPC) await(ctx context.Context, method string, id int64, waiter chan []byte) ([]byte, error) {
 	select {
 	case payload := <-waiter:
-		if checkErr := checkResponse(payload); checkErr != nil {
-			return nil, fmt.Errorf("%s: %w", method, checkErr)
-		}
-		return payload, nil
+		return c.answer(method, payload)
 	case <-c.done:
+		// The reader delivers a response and then, if the pipe closes right
+		// behind it, closes done: both cases are ready together and select
+		// picks between them at random. A response that has arrived wins.
+		if payload, ok := delivered(waiter); ok {
+			return c.answer(method, payload)
+		}
 		c.forget(id)
 		return nil, fmt.Errorf("%s: the server exited", method)
 	case <-ctx.Done():
+		if payload, ok := delivered(waiter); ok {
+			return c.answer(method, payload)
+		}
 		c.forget(id)
 		return nil, fmt.Errorf("%s: %w", method, ctx.Err())
+	}
+}
+
+// answer turns a delivered response into the call's result.
+func (c *stdioRPC) answer(method string, payload []byte) ([]byte, error) {
+	if checkErr := checkResponse(payload); checkErr != nil {
+		return nil, fmt.Errorf("%s: %w", method, checkErr)
+	}
+	return payload, nil
+}
+
+// delivered reports a response that reached the waiter before whatever ended
+// the wait, without blocking for one that did not.
+func delivered(waiter <-chan []byte) ([]byte, bool) {
+	select {
+	case payload := <-waiter:
+		return payload, true
+	default:
+		return nil, false
 	}
 }
 

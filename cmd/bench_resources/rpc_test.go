@@ -498,3 +498,80 @@ func TestFirstLine_TrimsForAnErrorMessage(t *testing.T) {
 		})
 	}
 }
+
+// TestStdioRPC_Await_AResponseThatArrivedWins pins the ordering the reader
+// cannot promise: it delivers a response and, when the pipe closes right
+// behind it, closes done, so a call's select finds both ready and would pick
+// at random. A response that has arrived must win over the server exiting
+// and over the caller's own cancellation. The channels are prepared by hand
+// because no pipe timing reaches this state on purpose.
+func TestStdioRPC_Await_AResponseThatArrivedWins(t *testing.T) {
+	response := []byte(`{"jsonrpc":"2.0","id":7,"result":{"tools":[]}}`)
+	cases := []struct {
+		name string
+		end  func(c *stdioRPC) context.Context
+	}{
+		{name: "the server exited", end: func(c *stdioRPC) context.Context {
+			close(c.done)
+			return context.Background()
+		}},
+		{name: "the caller cancelled", end: func(*stdioRPC) context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Both cases are ready on every iteration and select picks between
+			// them at random, so one pass proves nothing: the property is that
+			// the response wins every time. Without the fix this fails within
+			// the first few iterations.
+			for attempt := range 64 {
+				c := &stdioRPC{waiting: map[int64]chan []byte{}, done: make(chan struct{})}
+				waiter := make(chan []byte, 1)
+				waiter <- response
+				ctx := tc.end(c)
+
+				got, err := c.await(ctx, "tools/list", 7, waiter)
+				if err != nil {
+					t.Fatalf("attempt %d: await = %v, want the response that had already arrived", attempt, err)
+				}
+				if !bytes.Equal(got, response) {
+					t.Fatalf("attempt %d: await = %s, want the delivered response", attempt, got)
+				}
+			}
+		})
+	}
+}
+
+// TestDelivered_ReportsWhatIsInTheWaiter covers the non-blocking read on its
+// own: a payload that is there is returned, and an empty waiter answers at
+// once rather than waiting for one.
+func TestDelivered_ReportsWhatIsInTheWaiter(t *testing.T) {
+	waiter := make(chan []byte, 1)
+	if _, ok := delivered(waiter); ok {
+		t.Error("delivered reported a payload from an empty waiter")
+	}
+	waiter <- []byte("x")
+	if got, ok := delivered(waiter); !ok || string(got) != "x" {
+		t.Errorf("delivered = %q, %v, want the payload and true", got, ok)
+	}
+}
+
+// TestStdioRPC_Await_NothingArrived_ReportsWhatEndedTheWait is the other
+// half: with no response in the waiter, the wait ends with the reason it
+// ended and the waiter is forgotten.
+func TestStdioRPC_Await_NothingArrived_ReportsWhatEndedTheWait(t *testing.T) {
+	c := &stdioRPC{waiting: map[int64]chan []byte{}, done: make(chan struct{})}
+	waiter := make(chan []byte, 1)
+	c.waiting[7] = waiter
+	close(c.done)
+
+	if _, err := c.await(context.Background(), "tools/list", 7, waiter); err == nil || !strings.Contains(err.Error(), "the server exited") {
+		t.Errorf("await = %v, want the server's exit", err)
+	}
+	if _, still := c.waiting[7]; still {
+		t.Error("await left the waiter registered after the server exited")
+	}
+}
