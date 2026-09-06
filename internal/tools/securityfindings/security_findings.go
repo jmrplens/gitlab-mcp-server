@@ -13,10 +13,8 @@ import (
 // FindingItem represents a single security report finding from a pipeline scan.
 type FindingItem struct {
 	UUID        string           `json:"uuid"`
-	Name        string           `json:"name"`
-	Title       string           `json:"title,omitempty"`
+	Title       string           `json:"title"`
 	Severity    string           `json:"severity"`
-	Confidence  string           `json:"confidence,omitempty"`
 	ReportType  string           `json:"report_type"`
 	Scanner     *ScannerItem     `json:"scanner,omitempty"`
 	Description string           `json:"description,omitempty"`
@@ -52,15 +50,18 @@ type LocationItem struct {
 	BlobPath  string `json:"blob_path,omitempty"`
 }
 
-// EvidenceItem holds supporting evidence for a finding.
+// EvidenceItem holds supporting evidence for a finding. The GraphQL
+// VulnerabilityEvidence type is an object rather than a blob, so the summary
+// and the named source it points at are carried separately.
 type EvidenceItem struct {
-	Source string `json:"source,omitempty"`
-	Data   string `json:"data,omitempty"`
+	Summary   string `json:"summary,omitempty"`
+	Source    string `json:"source,omitempty"`
+	SourceURL string `json:"source_url,omitempty"`
 }
 
 // GraphQL query for pipeline security report findings.
 const queryListFindings = `
-query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [String!], $confidence: [String!], $scanner: [String!], $reportType: [String!]) {
+query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [String!], $scanner: [String!], $reportType: [String!], $state: [VulnerabilityState!], $sort: PipelineSecurityReportFindingSort) {
   project(fullPath: $projectPath) {
     pipeline(iid: $pipelineIID) {
       securityReportFindings(
@@ -69,16 +70,15 @@ query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: 
         last: $last
         before: $before
         severity: $severity
-        confidence: $confidence
         scanner: $scanner
         reportType: $reportType
+        state: $state
+        sort: $sort
       ) {
         nodes {
           uuid
-          name
           title
           severity
-          confidence
           reportType
           scanner {
             name
@@ -118,7 +118,13 @@ query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: 
             }
           }
           state
-          evidence
+          evidence {
+            summary
+            source {
+              name
+              url
+            }
+          }
           vulnerability {
             id
             state
@@ -168,10 +174,8 @@ type gqlVulnerabilityRef struct {
 
 type gqlFindingNode struct {
 	UUID          string               `json:"uuid"`
-	Name          string               `json:"name"`
 	Title         string               `json:"title"`
 	Severity      string               `json:"severity"`
-	Confidence    string               `json:"confidence"`
 	ReportType    string               `json:"reportType"`
 	Scanner       *gqlScanner          `json:"scanner"`
 	Description   string               `json:"description"`
@@ -179,8 +183,20 @@ type gqlFindingNode struct {
 	Identifiers   []gqlIdentifier      `json:"identifiers"`
 	Location      *gqlLocation         `json:"location"`
 	State         string               `json:"state"`
-	Evidence      string               `json:"evidence"`
+	Evidence      *gqlEvidence         `json:"evidence"`
 	Vulnerability *gqlVulnerabilityRef `json:"vulnerability"`
+}
+
+// gqlEvidence holds the supporting evidence object returned for a finding.
+type gqlEvidence struct {
+	Summary string             `json:"summary"`
+	Source  *gqlEvidenceSource `json:"source"`
+}
+
+// gqlEvidenceSource names where a piece of evidence came from.
+type gqlEvidenceSource struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
 }
 
 // gqlFindingsConnection holds the paginated list of security finding nodes.
@@ -204,10 +220,8 @@ type gqlProjectPipeline struct {
 func nodeToItem(n gqlFindingNode) FindingItem {
 	item := FindingItem{
 		UUID:        n.UUID,
-		Name:        n.Name,
 		Title:       n.Title,
 		Severity:    n.Severity,
-		Confidence:  n.Confidence,
 		ReportType:  n.ReportType,
 		Description: n.Description,
 		Solution:    n.Solution,
@@ -238,8 +252,15 @@ func nodeToItem(n gqlFindingNode) FindingItem {
 		}
 		item.Location = loc
 	}
-	if n.Evidence != "" {
-		item.Evidence = &EvidenceItem{Data: n.Evidence}
+	if n.Evidence != nil {
+		evidence := &EvidenceItem{Summary: n.Evidence.Summary}
+		if n.Evidence.Source != nil {
+			evidence.Source = n.Evidence.Source.Name
+			evidence.SourceURL = n.Evidence.Source.URL
+		}
+		if *evidence != (EvidenceItem{}) {
+			item.Evidence = evidence
+		}
 	}
 	if n.Vulnerability != nil {
 		item.VulnID = n.Vulnerability.ID
@@ -253,9 +274,10 @@ type ListInput struct {
 	ProjectPath string   `json:"project_path" jsonschema:"Full path of the project (e.g. my-group/my-project),required"`
 	PipelineIID string   `json:"pipeline_iid" jsonschema:"Pipeline IID within the project,required"`
 	Severity    []string `json:"severity,omitempty" jsonschema:"Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN"`
-	Confidence  []string `json:"confidence,omitempty" jsonschema:"Filter by confidence: CONFIRMED, MEDIUM, LOW"`
 	Scanner     []string `json:"scanner,omitempty" jsonschema:"Filter by scanner external IDs"`
 	ReportType  []string `json:"report_type,omitempty" jsonschema:"Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING"`
+	State       []string `json:"state,omitempty" jsonschema:"Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED"`
+	Sort        string   `json:"sort,omitempty" jsonschema:"Sort order: severity_desc (default) or severity_asc"`
 	toolutil.GraphQLCursorPaginationInput
 }
 
@@ -289,14 +311,17 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if len(input.Severity) > 0 {
 		vars["severity"] = input.Severity
 	}
-	if len(input.Confidence) > 0 {
-		vars["confidence"] = input.Confidence
-	}
 	if len(input.Scanner) > 0 {
 		vars["scanner"] = input.Scanner
 	}
 	if len(input.ReportType) > 0 {
 		vars["reportType"] = input.ReportType
+	}
+	if len(input.State) > 0 {
+		vars["state"] = input.State
+	}
+	if input.Sort != "" {
+		vars["sort"] = input.Sort
 	}
 
 	var resp struct {

@@ -59,7 +59,7 @@ type Item struct {
 	WebURL          string           `json:"web_url,omitempty"`
 	PrimaryID       *IdentifierItem  `json:"primary_identifier,omitempty"`
 	Solution        string           `json:"solution,omitempty"`
-	HasSolutions    bool             `json:"has_solutions,omitempty"`
+	HasRemediations bool             `json:"has_remediations,omitempty"`
 	HasIssues       bool             `json:"has_issues,omitempty"`
 	HasMR           bool             `json:"has_merge_request,omitempty"`
 	DismissalReason string           `json:"dismissal_reason,omitempty"`
@@ -68,7 +68,7 @@ type Item struct {
 // GraphQL queries.
 
 const queryListVulnerabilities = `
-query($projectPath: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [String!], $state: [VulnerabilityState!], $scanner: [String!], $reportType: [VulnerabilityReportType!], $hasIssues: Boolean, $hasResolution: Boolean, $sort: VulnerabilitySort) {
+query($projectPath: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [VulnerabilitySeverity!], $state: [VulnerabilityState!], $scanner: [String!], $reportType: [VulnerabilityReportType!], $hasIssues: Boolean, $hasResolution: Boolean, $sort: VulnerabilitySort) {
   project(fullPath: $projectPath) {
     vulnerabilities(first: $first, after: $after, last: $last, before: $before, severity: $severity, state: $state, scanner: $scanner, reportType: $reportType, hasIssues: $hasIssues, hasResolution: $hasResolution, sort: $sort) {
       nodes {
@@ -141,7 +141,7 @@ query($id: VulnerabilityID!) {
     resolvedAt
     confirmedAt
     solution
-    hasSolutions
+    hasRemediations
     dismissalReason
     primaryIdentifier {
       name
@@ -256,7 +256,7 @@ type gqlVulnerabilityNode struct {
 	ResolvedAt        string                   `json:"resolvedAt"`
 	ConfirmedAt       string                   `json:"confirmedAt"`
 	Solution          string                   `json:"solution"`
-	HasSolutions      bool                     `json:"hasSolutions"`
+	HasRemediations   bool                     `json:"hasRemediations"`
 	DismissalReason   string                   `json:"dismissalReason"`
 	PrimaryIdentifier *gqlIdentifier           `json:"primaryIdentifier"`
 	Identifiers       []gqlIdentifier          `json:"identifiers"`
@@ -293,7 +293,7 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 		ResolvedAt:      n.ResolvedAt,
 		ConfirmedAt:     n.ConfirmedAt,
 		Solution:        n.Solution,
-		HasSolutions:    n.HasSolutions,
+		HasRemediations: n.HasRemediations,
 		DismissalReason: n.DismissalReason,
 	}
 	if n.PrimaryIdentifier != nil {

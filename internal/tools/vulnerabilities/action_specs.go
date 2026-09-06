@@ -111,6 +111,14 @@ type vulnerabilityActionMetaEntry struct {
 // GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#vulnerabilitydismissalreason
 var dismissalReasonValues = []string{"ACCEPTABLE_RISK", "FALSE_POSITIVE", "MITIGATING_CONTROL", "NOT_APPLICABLE", "USED_IN_TESTS"}
 
+// vulnerabilitySortValues is the VulnerabilitySort GraphQL enum. Without it the
+// canonical "sort" enum shared by the REST endpoints (asc, desc) is injected
+// instead, and the server itself then refuses the only four values GitLab
+// accepts here.
+//
+// GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#vulnerabilitysort
+var vulnerabilitySortValues = []string{"severity_desc", "severity_asc", "detected_desc", "detected_asc"}
+
 // vulnerabilityActionMeta maps each individual vulnerability tool to its
 // discovery metadata. Aliases are natural-language phrases beyond the tool
 // name; related actions are canonical {domain}.{action} IDs that cross-link
@@ -122,6 +130,7 @@ var vulnerabilityActionMeta = map[string]vulnerabilityActionMetaEntry{
 		aliases:     []string{"list project vulnerabilities", "show security vulnerabilities", "find open vulnerabilities", "list security findings for project"},
 		related:     []string{actionVulnGet, actionVulnSeverityCount, actionSecurityFindingList},
 		description: "List a project's vulnerabilities with severity, state, scanner, and report-type filters plus keyset pagination. Returns: matching vulnerabilities with title, severity, state, report type, scanner, identifiers, detection time, and web URL. See also: gitlab_get_vulnerability, gitlab_vulnerability_severity_count, gitlab_list_security_findings.",
+		overrides:   []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("sort", vulnerabilitySortValues...)},
 	},
 	"gitlab_get_vulnerability": {
 		usage:       "Fetch one vulnerability by its global ID. Use after a list result or when the prompt names a concrete vulnerability ID to read its full detail, identifiers, location, linked issues, and merge request.",

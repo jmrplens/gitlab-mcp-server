@@ -28,16 +28,22 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				"list SAST and DAST findings",
 				"find security report findings for pipeline",
 			},
-			Usage:          "List the security report findings produced by one pipeline run. Filter by severity, confidence, scanner, or report_type (SAST, DAST, dependency scanning, container scanning, secret detection) and page through results when the prompt asks for a pipeline's scan findings or raw security report output. Use gitlab_pipeline_security_summary first for an aggregate count, then this action for individual findings.",
+			Usage:          "List the security report findings produced by one pipeline run. Filter by severity, scanner, state, or report_type (SAST, DAST, dependency scanning, container scanning, secret detection), sort by severity, and page through results when the prompt asks for a pipeline's scan findings or raw security report output. Use gitlab_pipeline_security_summary first for an aggregate count, then this action for individual findings.",
 			Tags:           []string{"security", "finding"},
 			RelatedActions: []string{actionVulnList, actionVulnPipelineSummary, actionVulnSeverityCount, actionProjectGet},
 			OpenWorld:      true,
 			Edition:        "premium",
 			OwnerPackage:   "securityfindings",
+			// PipelineSecurityReportFindingSort has these two values. Without
+			// the override the canonical REST "sort" enum (asc, desc) is
+			// injected, and the server itself would then refuse both of them.
+			InputSchemaOverrides: []toolutil.InputSchemaOverride{
+				toolutil.SchemaEnumOverride("sort", "severity_desc", "severity_asc"),
+			},
 			IndividualTool: toolutil.IndividualToolSpec{
 				Name:        "gitlab_list_security_findings",
 				Title:       toolutil.TitleFromName("gitlab_list_security_findings"),
-				Description: "List a pipeline's security report findings with severity, confidence, scanner, and report-type filters plus keyset pagination. Returns: matching findings with UUID, name, severity, confidence, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.",
+				Description: "List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.",
 			},
 		}),
 	}

@@ -18,26 +18,21 @@ func FormatListMarkdown(out ListOutput) string {
 		return sb.String()
 	}
 
-	sb.WriteString("| Severity | Confidence | Name | Report Type | Scanner | Location | State |\n")
-	sb.WriteString("|----------|------------|------|-------------|---------|----------|-------|\n")
+	sb.WriteString("| Severity | Title | Report Type | Scanner | Location | State |\n")
+	sb.WriteString("|----------|-------|-------------|---------|----------|-------|\n")
 
 	for _, f := range out.Findings {
 		scanner := ""
 		if f.Scanner != nil {
 			scanner = f.Scanner.Name
 		}
-		name := f.Name
-		if f.Title != "" && f.Title != f.Name {
-			name = f.Title
-		}
 		loc := formatLocation(f.Location)
 
 		fmt.Fprintf(
-			&sb, "| %s | %s | %s | %s | %s | %s | %s |\n",
+			&sb, "| %s | %s | %s | %s | %s | %s |\n",
 			//gitlab:allow-unescaped severityBadge(f.Severity): most answers are constants written here, and the fallback is a severity enum token GitLab spells as one bare word.
 			severityBadge(f.Severity),
-			toolutil.EscapeMdTableCell(f.Confidence),
-			toolutil.EscapeMdTableCell(name),
+			toolutil.EscapeMdTableCell(f.Title),
 			toolutil.EscapeMdTableCell(f.ReportType),
 			toolutil.EscapeMdTableCell(scanner),
 			toolutil.EscapeMdTableCell(loc),

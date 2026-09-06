@@ -1057,7 +1057,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1091 tools, one per operation
 - gitlab_list_resource_group_upcoming_jobs: List the upcoming CI jobs queued for one resource group by key.
 - gitlab_list_resource_groups: List the CI resource groups configured for a project.
 - gitlab_list_secure_files: List project secure files.
-- gitlab_list_security_findings: List a pipeline's security report findings with severity, confidence, scanner, and report-type filters plus keyset pagination.
+- gitlab_list_security_findings: List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination.
 - gitlab_list_service_accounts: List instance-level service accounts.
 - gitlab_list_snippet_discussions: List discussion threads on a project snippet with ordering and keyset pagination.
 - gitlab_list_ssh_keys: List the current user's SSH keys.
