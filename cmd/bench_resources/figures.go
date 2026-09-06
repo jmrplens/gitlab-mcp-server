@@ -634,12 +634,20 @@ func scenarioLabel(s Scenario) string {
 }
 
 // bytesLabel renders a payload size the way an operator reads it.
+//
+// The units are decimal, because the quantity is a response body counted in
+// bytes on the wire rather than memory the kernel hands out in pages: nothing
+// about a JSON document is measured in multiples of 1024. Every memory figure
+// on the same pages is binary and says so, MiB and GiB, and the two conventions
+// are kept apart deliberately. Until 2.8.0 this divided by 1024 while labeling
+// the result MB, so a 3,235,932-byte tools/list was published as "3.1 MB" when
+// 3.1 MiB was what had been computed.
 func bytesLabel(bytes int) string {
 	switch {
-	case bytes >= 1024*1024:
-		return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
-	case bytes >= 1024:
-		return fmt.Sprintf("%.0f KB", float64(bytes)/1024)
+	case bytes >= 1000*1000:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/(1000*1000))
+	case bytes >= 1000:
+		return fmt.Sprintf("%.0f KB", float64(bytes)/1000)
 	default:
 		return fmt.Sprintf("%d B", bytes)
 	}

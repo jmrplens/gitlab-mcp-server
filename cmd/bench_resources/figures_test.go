@@ -190,17 +190,29 @@ func assertNoEmptyFields(t *testing.T, l labels) {
 // TestBytesLabel_ScalesWithSize verifies payload sizes are printed in the unit
 // a reader expects at each magnitude, since the three surfaces span bytes to
 // megabytes.
+//
+// The units are decimal, and the cases below pin that rather than assume it:
+// each threshold is checked on both sides, and the three real tools/list sizes
+// are checked against the figure a division by 1000 gives. Dividing by 1024
+// under an "MB" label is the defect this pins, and it published a `meta`
+// tools/list of 598,510 bytes as 584 KB.
 func TestBytesLabel_ScalesWithSize(t *testing.T) {
 	tests := []struct {
+		name  string
 		bytes int
 		want  string
 	}{
-		{bytes: 512, want: "512 B"},
-		{bytes: 12000, want: "12 KB"},
-		{bytes: 3227321, want: "3.1 MB"},
+		{name: "bytes below the kilobyte threshold", bytes: 512, want: "512 B"},
+		{name: "one byte below a kilobyte", bytes: 999, want: "999 B"},
+		{name: "exactly one kilobyte", bytes: 1000, want: "1 KB"},
+		{name: "a dynamic tools/list", bytes: 12142, want: "12 KB"},
+		{name: "a meta tools/list", bytes: 598510, want: "599 KB"},
+		{name: "one byte below a megabyte rounds within its own unit", bytes: 999999, want: "1000 KB"},
+		{name: "exactly one megabyte", bytes: 1000000, want: "1.0 MB"},
+		{name: "an individual tools/list", bytes: 3235932, want: "3.2 MB"},
 	}
 	for _, tc := range tests {
-		t.Run(tc.want, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			if got := bytesLabel(tc.bytes); got != tc.want {
 				t.Errorf("bytesLabel(%d) = %q, want %q", tc.bytes, got, tc.want)
 			}
