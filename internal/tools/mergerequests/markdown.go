@@ -33,19 +33,26 @@ func FormatMarkdown(mr Output) string {
 	}
 	fmt.Fprintf(&b, "## %s MR !%d: %s\n\n", titlePrefix, mr.IID, toolutil.EscapeMdHeading(mr.Title))
 	if path := mrProjectPath(mr); path != "" {
-		fmt.Fprintf(&b, "- **Project**: %s\n", path)
+		fmt.Fprintf(&b, "- **Project**: %s\n", toolutil.EscapeMdTableCell(path))
 	}
+	//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
 	fmt.Fprintf(&b, "- **State**: %s %s\n", toolutil.MRStateEmoji(mr.State), mr.State)
 	if mr.Draft {
 		fmt.Fprintf(&b, "- %s **Draft** merge request\n", toolutil.EmojiDraft)
 	}
-	fmt.Fprintf(&b, "- **Source**: %s -> **Target**: %s\n", mr.SourceBranch, mr.TargetBranch)
+	// A branch name is not an identifier: git check-ref-format forbids a space
+	// and the control bytes and permits '|', '<' and '>', so a pushable branch
+	// can end this row or open a tag in it.
+	fmt.Fprintf(&b, "- **Source**: %s -> **Target**: %s\n",
+		toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
 	if mr.DetailedMergeStatus != "" {
+		//gitlab:allow-unescaped mr.DetailedMergeStatus: a merge status GitLab computes from a fixed set (mergeable, ci_must_pass, conflict and the rest).
 		fmt.Fprintf(&b, "- **Merge Status**: %s\n", mr.DetailedMergeStatus)
 	}
 	writeMergeRequestPeopleAndLabels(&b, mr)
 	writeMergeRequestPipeline(&b, mr)
 	if mr.ChangesCount != "" {
+		//gitlab:allow-unescaped mr.ChangesCount: a changed-file count GitLab renders as a string, "3" or "1000+".
 		fmt.Fprintf(&b, "- **Changes**: %s files\n", mr.ChangesCount)
 	}
 	if mr.CreatedAt != "" {
@@ -58,7 +65,7 @@ func FormatMarkdown(mr Output) string {
 	if mr.Description != "" {
 		fmt.Fprintf(&b, "\n### Description\n\n%s%s\n", toolutil.WrapGFMBody(mr.Description), toolutil.RichContentHint(toolutil.DetectRichContent(mr.Description), mr.WebURL))
 	}
-	fmt.Fprintf(&b, "\n- **URL**: [%[1]s](%[1]s)\n", mr.WebURL)
+	toolutil.WriteMdURLNewline(&b, mr.WebURL)
 	toolutil.WriteHints(
 		&b,
 		"Use gitlab_mr_review action 'changes_get' to see the diff of this MR",
@@ -122,19 +129,21 @@ func writeMergeRequestPeopleAndLabels(b *strings.Builder, mr Output) {
 		fmt.Fprintf(b, "- %s **Has Conflicts**\n", toolutil.EmojiWarning)
 	}
 	if author := userName(mr.Author); author != "" {
-		fmt.Fprintf(b, toolutil.FmtMdAuthorAt, author)
+		fmt.Fprintf(b, toolutil.FmtMdAuthorAt, toolutil.EscapeMdTableCell(author))
 	}
 	if names := userNames(mr.Assignees); len(names) > 0 {
-		fmt.Fprintf(b, "- **Assignees**: %s\n", strings.Join(prefixAt(names), ", "))
+		fmt.Fprintf(b, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(prefixAt(names), ", ")))
 	}
 	if names := userNames(mr.Reviewers); len(names) > 0 {
-		fmt.Fprintf(b, "- **Reviewers**: %s\n", strings.Join(prefixAt(names), ", "))
+		fmt.Fprintf(b, "- **Reviewers**: %s\n", toolutil.EscapeMdTableCell(strings.Join(prefixAt(names), ", ")))
 	}
 	if mr.Milestone != nil && mr.Milestone.Title != "" {
-		fmt.Fprintf(b, "- **Milestone**: %s\n", mr.Milestone.Title)
+		fmt.Fprintf(b, "- **Milestone**: %s\n", toolutil.EscapeMdTableCell(mr.Milestone.Title))
 	}
 	if len(mr.Labels) > 0 {
-		fmt.Fprintf(b, "- **Labels**: %s\n", strings.Join(mr.Labels, ", "))
+		// A label title is free text: GitLab's only rule on one is that it
+		// carries no comma.
+		fmt.Fprintf(b, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(mr.Labels, ", ")))
 	}
 }
 
@@ -143,7 +152,8 @@ func writeMergeRequestPipeline(b *strings.Builder, mr Output) {
 		return
 	}
 	if mr.Pipeline.WebURL != "" {
-		fmt.Fprintf(b, "- **Pipeline**: [#%d](%s)\n", mr.Pipeline.ID, mr.Pipeline.WebURL)
+		fmt.Fprintf(b, "- **Pipeline**: %s\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", mr.Pipeline.ID), mr.Pipeline.WebURL))
 		return
 	}
 	fmt.Fprintf(b, "- **Pipeline**: #%d\n", mr.Pipeline.ID)
@@ -163,7 +173,7 @@ func writeMergeRequestTerminalActor(b *strings.Builder, mr Output) {
 }
 
 func writeMergeRequestActorLine(b *strings.Builder, label, user, at string) {
-	fmt.Fprintf(b, "- **%s**: @%s", label, user)
+	fmt.Fprintf(b, "- **%s**: @%s", label, toolutil.EscapeMdTableCell(user))
 	if at != "" {
 		fmt.Fprintf(b, " on %s", toolutil.FormatTime(at))
 	}
@@ -195,8 +205,9 @@ func FormatListMarkdown(out ListOutput) string {
 		if mr.Draft {
 			draftTag = " " + toolutil.EmojiDraft
 		}
-		fmt.Fprintf(&b, "| [!%d](%s) | %s%s | %s %s | %s | %s | %s -> %s |\n",
-			mr.IID, mr.WebURL, toolutil.EscapeMdTableCell(mr.Title), draftTag, toolutil.MRStateEmoji(mr.State), mr.State, toolutil.EscapeMdTableCell(userName(mr.Author)), toolutil.EscapeMdTableCell(mrProjectPath(mr)), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
+		//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
+		fmt.Fprintf(&b, "| %s | %s%s | %s %s | %s | %s | %s -> %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL), toolutil.EscapeMdTableCell(mr.Title), draftTag, toolutil.MRStateEmoji(mr.State), mr.State, toolutil.EscapeMdTableCell(userName(mr.Author)), toolutil.EscapeMdTableCell(mrProjectPath(mr)), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -235,7 +246,7 @@ func FormatCommitsMarkdown(out CommitsOutput) string {
 	b.WriteString("| Short ID | Title | Author | Date |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, c := range out.Commits {
-		fmt.Fprintf(&b, "| [%s](%s) | %s | %s | %s |\n", c.ShortID, c.WebURL, toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName), toolutil.FormatTime(c.CommittedDate))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", toolutil.MdTitleLink(c.ShortID, c.WebURL), toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName), toolutil.FormatTime(c.CommittedDate))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -258,8 +269,9 @@ func FormatPipelinesMarkdown(out PipelinesOutput) string {
 	b.WriteString("| ID | Status | Source | Ref |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, p := range out.Pipelines {
-		fmt.Fprintf(&b, "| [#%d](%s) | %s %s | %s | %s |\n",
-			p.ID, p.WebURL, toolutil.PipelineStatusEmoji(p.Status), p.Status, toolutil.EscapeMdTableCell(p.Source), toolutil.EscapeMdTableCell(p.Ref))
+		//gitlab:allow-unescaped p.Status: a pipeline status, one of GitLab's fixed set (created, running, success, failed and the rest).
+		fmt.Fprintf(&b, "| %s | %s %s | %s | %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", p.ID), p.WebURL), toolutil.PipelineStatusEmoji(p.Status), p.Status, toolutil.EscapeMdTableCell(p.Source), toolutil.EscapeMdTableCell(p.Ref))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -297,8 +309,9 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 	b.WriteString("| ID | Username | Name | State |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, p := range out.Participants {
-		fmt.Fprintf(&b, "| %d | [@%s](%s) | %s | %s |\n",
-			p.ID, toolutil.EscapeMdTableCell(p.Username), p.WebURL, toolutil.EscapeMdTableCell(p.Name), p.State)
+		//gitlab:allow-unescaped p.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
+		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
+			p.ID, toolutil.MdTitleLink("@"+p.Username, p.WebURL), toolutil.EscapeMdTableCell(p.Name), p.State)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -320,8 +333,9 @@ func FormatReviewersMarkdown(out ReviewersOutput) string {
 	b.WriteString("| ID | Username | Name | Review State | Assigned At |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, r := range out.Reviewers {
-		fmt.Fprintf(&b, "| %d | [@%s](%s) | %s | %s | %s |\n",
-			r.ID, toolutil.EscapeMdTableCell(r.Username), r.WebURL, toolutil.EscapeMdTableCell(r.Name), r.Review, toolutil.FormatTime(r.CreatedAt))
+		//gitlab:allow-unescaped r.Review: a review state, one of GitLab's fixed set (unreviewed, reviewed, requested_changes, approved).
+		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
+			r.ID, toolutil.MdTitleLink("@"+r.Username, r.WebURL), toolutil.EscapeMdTableCell(r.Name), r.Review, toolutil.FormatTime(r.CreatedAt))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -343,8 +357,9 @@ func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
 	b.WriteString("| IID | Title | State | Author | Labels |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, issue := range out.Issues {
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s | %s |\n",
-			issue.IID, issue.WebURL, toolutil.EscapeMdTableCell(issue.Title), issue.State, toolutil.EscapeMdTableCell(issues.AuthorName(issue)), strings.Join(issue.Labels, ", "))
+		//gitlab:allow-unescaped issue.State: an issue state, one of GitLab's fixed set (opened, closed).
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL), toolutil.EscapeMdTableCell(issue.Title), issue.State, toolutil.EscapeMdTableCell(issues.AuthorName(issue)), toolutil.EscapeMdTableCell(strings.Join(issue.Labels, ", ")))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -360,18 +375,21 @@ func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
 func FormatCreatePipelineMarkdown(p pipelines.Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s Pipeline #%d Created\n\n", toolutil.PipelineStatusEmoji(p.Status), p.ID)
+	//gitlab:allow-unescaped p.Status: a pipeline status, one of GitLab's fixed set (created, running, success, failed and the rest).
 	fmt.Fprintf(&b, "- **Status**: %s %s\n", toolutil.PipelineStatusEmoji(p.Status), p.Status)
 	if p.Source != "" {
+		//gitlab:allow-unescaped p.Source: a pipeline source, one of GitLab's fixed set (push, web, schedule, trigger and the rest).
 		fmt.Fprintf(&b, "- **Source**: %s\n", p.Source)
 	}
 	if p.Ref != "" {
-		fmt.Fprintf(&b, "- **Ref**: %s\n", p.Ref)
+		fmt.Fprintf(&b, "- **Ref**: %s\n", toolutil.EscapeMdTableCell(p.Ref))
 	}
 	if p.SHA != "" {
+		//gitlab:allow-unescaped p.SHA: a commit SHA, hexadecimal digits only.
 		fmt.Fprintf(&b, "- **SHA**: %s\n", p.SHA)
 	}
 	if p.WebURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, p.WebURL)
+		toolutil.WriteMdURL(&b, p.WebURL)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -386,11 +404,13 @@ func FormatTimeStatsMarkdown(ts TimeStatsOutput) string {
 	var b strings.Builder
 	b.WriteString("## Time Tracking Stats\n\n")
 	if ts.HumanTimeEstimate != "" {
+		//gitlab:allow-unescaped ts.HumanTimeEstimate: a duration GitLab renders from a count of seconds, "3d 4h 30m".
 		fmt.Fprintf(&b, "- **Estimate**: %s (%d seconds)\n", ts.HumanTimeEstimate, ts.TimeEstimate)
 	} else {
 		b.WriteString("- **Estimate**: not set\n")
 	}
 	if ts.HumanTotalTimeSpent != "" {
+		//gitlab:allow-unescaped ts.HumanTotalTimeSpent: a duration GitLab renders from a count of seconds, "3d 4h 30m".
 		fmt.Fprintf(&b, "- **Spent**: %s (%d seconds)\n", ts.HumanTotalTimeSpent, ts.TotalTimeSpent)
 	} else {
 		b.WriteString("- **Spent**: none\n")
@@ -413,13 +433,13 @@ func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
 	b.WriteString("| IID | Title | State | Author | Labels |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, iss := range out.Issues {
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s | %s |\n",
-			iss.IID,
-			iss.WebURL,
+		//gitlab:allow-unescaped iss.State: an issue state, one of GitLab's fixed set (opened, closed).
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", iss.IID), iss.WebURL),
 			toolutil.EscapeMdTableCell(iss.Title),
 			iss.State,
-			issues.AuthorName(iss),
-			strings.Join(iss.Labels, ", "))
+			toolutil.EscapeMdTableCell(issues.AuthorName(iss)),
+			toolutil.EscapeMdTableCell(strings.Join(iss.Labels, ", ")))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -435,14 +455,17 @@ func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
 func FormatCreateTodoMarkdown(t CreateTodoOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Todo Created (#%d)\n\n", t.ID)
+	//gitlab:allow-unescaped t.ActionName: a to-do action, a gl.TodoAction GitLab picks from a fixed set.
 	fmt.Fprintf(&b, "- **Action**: %s\n", t.ActionName)
+	//gitlab:allow-unescaped t.TargetType: a to-do target type, a gl.TodoTargetType GitLab picks from a fixed set.
 	fmt.Fprintf(&b, "- **Type**: %s\n", t.TargetType)
 	if t.TargetTitle != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdTarget, t.TargetTitle)
+		fmt.Fprintf(&b, toolutil.FmtMdTarget, toolutil.EscapeMdTableCell(t.TargetTitle))
 	}
 	if t.TargetURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, t.TargetURL)
+		toolutil.WriteMdURL(&b, t.TargetURL)
 	}
+	//gitlab:allow-unescaped t.State: a to-do state GitLab picks from a fixed set (pending, done).
 	fmt.Fprintf(&b, toolutil.FmtMdState, t.State)
 	toolutil.WriteHints(
 		&b,
@@ -458,9 +481,11 @@ func FormatDependencyMarkdown(d DependencyOutput) string {
 	fmt.Fprintf(&b, "## MR Dependency (#%d)\n\n", d.ID)
 	if bmr := d.BlockingMergeRequest; bmr != nil {
 		fmt.Fprintf(&b, "- **Blocking MR**: !%d (ID: %d)\n", bmr.IID, bmr.ID)
-		fmt.Fprintf(&b, toolutil.FmtMdTitle, bmr.Title)
+		fmt.Fprintf(&b, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(bmr.Title))
+		//gitlab:allow-unescaped bmr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
 		fmt.Fprintf(&b, toolutil.FmtMdState, bmr.State)
-		fmt.Fprintf(&b, "- **Source**: %s -> **Target**: %s\n", bmr.SourceBranch, bmr.TargetBranch)
+		fmt.Fprintf(&b, "- **Source**: %s -> **Target**: %s\n",
+			toolutil.EscapeMdTableCell(bmr.SourceBranch), toolutil.EscapeMdTableCell(bmr.TargetBranch))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -485,6 +510,7 @@ func FormatDependenciesMarkdown(out DependenciesOutput) string {
 		if bmr := d.BlockingMergeRequest; bmr != nil {
 			iid, title, state = bmr.IID, bmr.Title, bmr.State
 		}
+		//gitlab:allow-unescaped state: the blocking merge request's state, read out of bmr.State a few lines above.
 		fmt.Fprintf(&b, "| %d | !%d | %s | %s |\n",
 			d.ID,
 			iid,

@@ -16,23 +16,29 @@ func FormatOutputMarkdown(o Output) string {
 	fmt.Fprintf(&b, "## Attestation #%d (IID %d)\n\n", o.ID, o.IID)
 	fmt.Fprintf(&b, "- **Project ID**: %d\n", o.ProjectID)
 	fmt.Fprintf(&b, "- **Build ID**: %d\n", o.BuildID)
+	//gitlab:allow-unescaped o.Status: an attestation status GitLab picks from a fixed set (pending, success, failed).
 	fmt.Fprintf(&b, "- **Status**: %s\n", o.Status)
 	if o.PredicateKind != "" {
-		fmt.Fprintf(&b, "- **Predicate Kind**: %s\n", o.PredicateKind)
+		fmt.Fprintf(&b, "- **Predicate Kind**: %s\n", toolutil.EscapeMdTableCell(o.PredicateKind))
 	}
 	if o.PredicateType != "" {
-		fmt.Fprintf(&b, "- **Predicate Type**: %s\n", o.PredicateType)
+		// The predicate type is a URI the attestation's producer chose, such as
+		// https://slsa.dev/provenance/v1, not a set GitLab constrains.
+		fmt.Fprintf(&b, "- **Predicate Type**: %s\n", toolutil.EscapeMdTableCell(o.PredicateType))
 	}
 	if o.SubjectDigest != "" {
+		//gitlab:allow-unescaped o.SubjectDigest: a subject digest, hexadecimal digits after an algorithm name.
 		fmt.Fprintf(&b, "- **Subject Digest**: `%s`\n", o.SubjectDigest)
 	}
 	if o.DownloadURL != "" {
-		fmt.Fprintf(&b, "- **Download URL**: %s\n", o.DownloadURL)
+		fmt.Fprintf(&b, "- **Download URL**: %s\n", toolutil.EscapeMdTableCell(o.DownloadURL))
 	}
 	if o.CreatedAt != "" {
+		//gitlab:allow-unescaped o.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, o.CreatedAt)
 	}
 	if o.ExpireAt != "" {
+		//gitlab:allow-unescaped o.ExpireAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
 		fmt.Fprintf(&b, "- **Expires**: %s\n", o.ExpireAt)
 	}
 	toolutil.WriteHints(

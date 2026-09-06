@@ -1972,8 +1972,10 @@ func TestFormatListMarkdown_WithJobs(t *testing.T) {
 		"## Jobs (2)",
 		"| ID |",
 		"| --- |",
-		"[#100]",
-		"[#101]",
+		// These jobs carry no web URL, and MdTitleLink renders a bare label
+		// rather than the empty link the hand-written "[%d](%s)" produced.
+		"#100",
+		"#101",
 		"build",
 		"test",
 		"success",

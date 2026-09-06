@@ -11,7 +11,8 @@ import (
 // FormatGetMarkdown renders one saved view, filters included.
 func FormatGetMarkdown(out GetOutput) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Saved View: %s\n\n", out.SavedView.Name)
+	// A saved view's name is free text whoever saved it typed.
+	fmt.Fprintf(&sb, "## Saved View: %s\n\n", toolutil.EscapeMdHeading(out.SavedView.Name))
 	writeViewDetails(&sb, out.SavedView)
 	if out.SavedView.Filters != nil {
 		fmt.Fprintf(&sb, "\n### Filters\n\n```json\n%s\n```\n", prettyJSON(out.SavedView.Filters))
@@ -27,7 +28,7 @@ func FormatGetMarkdown(out GetOutput) string {
 func FormatListMarkdown(out ListOutput) string {
 	var sb strings.Builder
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	fmt.Fprintf(&sb, "## Saved Views: %s\n\n", out.NamespacePath)
+	fmt.Fprintf(&sb, "## Saved Views: %s\n\n", toolutil.EscapeMdHeading(out.NamespacePath))
 
 	if len(out.SavedViews) == 0 {
 		sb.WriteString("No saved views found.\n")
@@ -67,14 +68,16 @@ func FormatMutateMarkdown(out MutateOutput) string {
 func writeViewDetails(sb *strings.Builder, view Item) {
 	fmt.Fprintf(sb, "- **ID**: %d\n", view.ID)
 	if view.GID != "" {
+		//gitlab:allow-unescaped view.GID: a GraphQL global id GitLab mints, gid://gitlab/ and a type name and a number.
 		fmt.Fprintf(sb, "- **Global ID**: `%s`\n", view.GID)
 	}
 	if view.Description != "" {
-		fmt.Fprintf(sb, "- **Description**: %s\n", view.Description)
+		fmt.Fprintf(sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(view.Description))
 	}
 	fmt.Fprintf(sb, "- **Private**: %v\n", view.IsPrivate)
 	fmt.Fprintf(sb, "- **Subscribed**: %v\n", view.Subscribed)
 	if view.Sort != "" {
+		//gitlab:allow-unescaped view.Sort: a work item sort key GitLab picks from its own enum (CREATED_DESC, TITLE_ASC and the rest).
 		fmt.Fprintf(sb, "- **Sort**: %s\n", view.Sort)
 	}
 }

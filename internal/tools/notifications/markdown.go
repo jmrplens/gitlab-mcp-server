@@ -18,9 +18,10 @@ func FormatMarkdown(out Output) *mcp.CallToolResult {
 func FormatMarkdownString(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Notification Settings\n\n")
+	//gitlab:allow-unescaped out.Level: a notification level GitLab picks from a fixed set (disabled, participating, watch, global, mention, custom).
 	fmt.Fprintf(&b, "- **Level**: %s\n", out.Level)
 	if out.NotificationEmail != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdEmail, out.NotificationEmail)
+		fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(out.NotificationEmail))
 	}
 	if out.Events != nil {
 		b.WriteString("\n### Custom Events\n\n")

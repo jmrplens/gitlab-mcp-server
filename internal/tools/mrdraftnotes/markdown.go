@@ -14,12 +14,16 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&b, "- **Author ID**: %d\n", out.AuthorID)
 	fmt.Fprintf(&b, "- **MR ID**: %d\n", out.MergeRequestID)
 	if out.CommitID != "" {
+		//gitlab:allow-unescaped out.CommitID: a commit SHA, hexadecimal by construction.
 		fmt.Fprintf(&b, "- **Commit**: `%s`\n", out.CommitID)
 	}
 	if out.LineCode != "" {
-		fmt.Fprintf(&b, "- **Line Code**: `%s`\n", out.LineCode)
+		// GitLab builds a line code out of a file-path digest and two line
+		// numbers, but the digest is not verified here, so it is escaped.
+		fmt.Fprintf(&b, "- **Line Code**: `%s`\n", toolutil.EscapeMdTableCell(out.LineCode))
 	}
 	if out.DiscussionID != "" {
+		//gitlab:allow-unescaped out.DiscussionID: a discussion thread id, hexadecimal digits from GitLab's own digest.
 		fmt.Fprintf(&b, "- **Discussion**: %s\n", out.DiscussionID)
 	}
 	fmt.Fprintf(&b, "- **Resolve Discussion**: %v\n", out.ResolveDiscussion)
@@ -32,7 +36,7 @@ func FormatOutputMarkdown(out Output) string {
 		if line == 0 {
 			line = p.OldLine
 		}
-		fmt.Fprintf(&b, "- **Position**: `%s` line %d\n", path, line)
+		fmt.Fprintf(&b, "- **Position**: `%s` line %d\n", toolutil.EscapeMdTableCell(path), line)
 	}
 	fmt.Fprintf(&b, "\n### Body\n\n%s\n", toolutil.WrapGFMBody(out.Note))
 	toolutil.WriteHints(
@@ -64,6 +68,7 @@ func FormatListMarkdown(out ListOutput) string {
 		if len(commit) > 8 {
 			commit = commit[:8]
 		}
+		//gitlab:allow-unescaped commit: a commit SHA, hexadecimal by construction, truncated here.
 		fmt.Fprintf(&b, "| %d | %d | %s | %s |\n", d.ID, d.AuthorID, commit, toolutil.EscapeMdTableCell(note))
 	}
 	toolutil.WritePagination(&b, out.Pagination)

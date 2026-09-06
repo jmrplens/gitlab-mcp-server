@@ -26,8 +26,10 @@ func FormatListMarkdown(out ListOutput) string {
 // FormatStateMarkdown formats a single Terraform state as markdown.
 func FormatStateMarkdown(s StateItem) string {
 	var b strings.Builder
+	// The state's name is chosen by whoever ran terraform against it, and the
+	// download path is built around that name.
 	fmt.Fprintf(&b, "## Terraform State: %s\n\n- **Latest Serial**: %d\n- **Download Path**: %s\n",
-		s.Name, s.LatestSerial, s.DownloadPath)
+		toolutil.EscapeMdHeading(s.Name), s.LatestSerial, toolutil.EscapeMdTableCell(s.DownloadPath))
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_lock_terraform_state` to lock this state",
@@ -39,7 +41,8 @@ func FormatStateMarkdown(s StateItem) string {
 // FormatLockMarkdown formats a lock/unlock result as markdown.
 func FormatLockMarkdown(out LockOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Terraform State Lock\n\n- **Success**: %v\n- **Message**: %s\n", out.Success, out.Message)
+	fmt.Fprintf(&b, "## Terraform State Lock\n\n- **Success**: %v\n- **Message**: %s\n",
+		out.Success, toolutil.EscapeMdTableCell(out.Message))
 	toolutil.WriteHints(&b, "Use `gitlab_get_terraform_state` to verify lock status")
 	return b.String()
 }

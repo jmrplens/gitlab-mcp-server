@@ -113,6 +113,15 @@ func TestClassifyExpr_Fixture_AnswersEachShape(t *testing.T) {
 			expression: "pair.Right", want: unescaped, reason: "a field of a value filled from a GitLab response",
 		},
 		{
+			// The helper reads it.Title, and it is bound to the argument
+			// FormatDelegated passed, so the answer names FormatDelegated
+			// rather than every caller of the helper. Following the binding is
+			// what keeps a helper called once from reading as a value the
+			// audit cannot resolve.
+			name: "a field of a value the caller bound to the helper", pkg: "mdcase",
+			expression: "delegated(item)", want: unescaped, reason: "handed to FormatDelegated",
+		},
+		{
 			name: "a call of a function value", pkg: "mdcase",
 			expression: "render(item)", want: unresolved, reason: "function value",
 		},

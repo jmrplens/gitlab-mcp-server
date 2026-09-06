@@ -32,7 +32,9 @@ func writeAccessLevels(b *strings.Builder, heading string, levels []AccessLevelO
 	fmt.Fprintf(b, "\n### %s\n\n", heading)
 	b.WriteString("| ID | Level | Description |\n| --- | --- | --- |\n")
 	for _, l := range levels {
-		fmt.Fprintf(b, "| %d | %d | %s |\n", l.ID, l.AccessLevel, l.AccessLevelDescription)
+		// GitLab's access-level description is a role name for a plain rule but
+		// a user's display name or a group's name for a granular one.
+		fmt.Fprintf(b, "| %d | %d | %s |\n", l.ID, l.AccessLevel, toolutil.EscapeMdTableCell(l.AccessLevelDescription))
 	}
 }
 

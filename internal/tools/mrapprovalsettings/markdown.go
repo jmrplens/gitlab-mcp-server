@@ -7,12 +7,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// formatSetting renders one setting as the three cells of its row.
+//
+// The pipes in the result are the column separators this row is made of, so
+// the escaping goes on the one value that is not this package's own: the name
+// of the group a setting was inherited from.
 func formatSetting(s SettingOutput) string {
 	val := toolutil.BoolEmoji(s.Value)
 	locked := toolutil.BoolEmoji(s.Locked)
-	inherited := s.InheritedFrom
-	if inherited == "" {
-		inherited = "-"
+	inherited := "-"
+	if s.InheritedFrom != "" {
+		inherited = toolutil.EscapeMdTableCell(s.InheritedFrom)
 	}
 	return fmt.Sprintf("%s | %s | %s", val, locked, inherited)
 }

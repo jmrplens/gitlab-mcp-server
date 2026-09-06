@@ -13,7 +13,8 @@ func FormatOutputMarkdown(pe Output) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Protected Environment: %s\n\n", pe.Name)
+	// An environment name is written in .gitlab-ci.yml or typed in the UI.
+	fmt.Fprintf(&b, "## Protected Environment: %s\n\n", toolutil.EscapeMdHeading(pe.Name))
 	fmt.Fprintf(&b, "- **Required Approvals**: %d\n\n", pe.RequiredApprovalCount)
 
 	if len(pe.DeployAccessLevels) > 0 {

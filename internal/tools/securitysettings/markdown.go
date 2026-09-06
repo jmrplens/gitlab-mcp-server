@@ -41,7 +41,8 @@ func FormatGroupMarkdown(o GroupOutput) string {
 	if len(o.Errors) > 0 {
 		b.WriteString("\n**Errors**:\n")
 		for _, e := range o.Errors {
-			fmt.Fprintf(&b, "- %s\n", e)
+			// GitLab's own message about what it refused.
+			fmt.Fprintf(&b, "- %s\n", toolutil.EscapeMdTableCell(e))
 		}
 	}
 	toolutil.WriteHints(

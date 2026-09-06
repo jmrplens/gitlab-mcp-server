@@ -301,7 +301,9 @@ func ImportFromBitbucketServer(ctx context.Context, client *gitlabclient.Client,
 // FormatGitHubImport formats a GitHub import result as markdown.
 func FormatGitHubImport(out *GitHubImportOutput) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## GitHub Import: %s\n\n", out.Name)
+	// The imported project's name is whatever the source repository was called,
+	// which is why the row below escapes the same value.
+	fmt.Fprintf(&sb, "## GitHub Import: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	sb.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&sb, fmtIDRow, out.ID)
 	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
@@ -321,7 +323,7 @@ func FormatGitHubImport(out *GitHubImportOutput) string {
 // FormatCancelledImport formats a canceled import result as markdown.
 func FormatCancelledImport(out *CancelledImportOutput) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Canceled Import: %s\n\n", out.Name)
+	fmt.Fprintf(&sb, "## Canceled Import: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	sb.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&sb, fmtIDRow, out.ID)
 	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
@@ -333,7 +335,7 @@ func FormatCancelledImport(out *CancelledImportOutput) string {
 // FormatBitbucketCloudImport formats a Bitbucket Cloud import result as markdown.
 func FormatBitbucketCloudImport(out *BitbucketCloudImportOutput) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Bitbucket Cloud Import: %s\n\n", out.Name)
+	fmt.Fprintf(&sb, "## Bitbucket Cloud Import: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	sb.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&sb, fmtIDRow, out.ID)
 	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
@@ -347,7 +349,7 @@ func FormatBitbucketCloudImport(out *BitbucketCloudImportOutput) string {
 // FormatBitbucketServerImport formats a Bitbucket Server import result as markdown.
 func FormatBitbucketServerImport(out *BitbucketServerImportOutput) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Bitbucket Server Import: %s\n\n", out.Name)
+	fmt.Fprintf(&sb, "## Bitbucket Server Import: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	sb.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&sb, fmtIDRow, out.ID)
 	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))

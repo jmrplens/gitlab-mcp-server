@@ -67,6 +67,7 @@ func FormatStateMarkdown(s StateOutput) string {
 	for _, r := range s.Rules {
 		approved := toolutil.BoolEmoji(r.Approved)
 		approvedBy := strings.Join(userNames(r.ApprovedBy), ", ")
+		//gitlab:allow-unescaped r.RuleType: an approval rule type GitLab picks from a fixed set (regular, any_approver, code_owner, report_approver).
 		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, approved, toolutil.EscapeMdTableCell(approvedBy))
 	}
 	toolutil.WriteHints(
@@ -106,6 +107,7 @@ func FormatConfigMarkdown(c ConfigOutput) string {
 	fmt.Fprintf(&b, "## MR Approval Configuration\n\n")
 	fmt.Fprintf(&b, "| Field | Value |\n| ----- | ----- |\n")
 	fmt.Fprintf(&b, "| MR | !%d |\n", c.IID)
+	//gitlab:allow-unescaped c.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
 	fmt.Fprintf(&b, "| State | %s |\n", c.State)
 	fmt.Fprintf(&b, "| Approved | %v |\n", c.Approved)
 	fmt.Fprintf(&b, "| Approvals Required | %d |\n", c.ApprovalsRequired)
@@ -131,7 +133,8 @@ func FormatConfigMarkdown(c ConfigOutput) string {
 func FormatRuleMarkdown(r RuleOutput) string {
 	var b strings.Builder
 	approved := toolutil.BoolEmoji(r.Approved)
-	fmt.Fprintf(&b, "## Approval Rule: %s\n\n", r.Name)
+	// An approval rule's name is free text a maintainer types.
+	fmt.Fprintf(&b, "## Approval Rule: %s\n\n", toolutil.EscapeMdHeading(r.Name))
 	fmt.Fprintf(&b, "| Field | Value |\n| ----- | ----- |\n")
 	fmt.Fprintf(&b, "| ID | %d |\n", r.ID)
 	fmt.Fprintf(&b, "| Type | %s |\n", r.RuleType)

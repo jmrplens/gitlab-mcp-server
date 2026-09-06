@@ -33,7 +33,10 @@ func FormatListMarkdownString(out ListOutput) string {
 	fmt.Fprintf(&b, "## Award Emoji (%d)\n\n", len(out.AwardEmoji))
 	toolutil.WriteListSummary(&b, len(out.AwardEmoji), out.Pagination)
 	for _, e := range out.AwardEmoji {
-		fmt.Fprintf(&b, "- :%s: by %s (ID: %d) - %s\n", e.Name, awardEmojiUserMarkdown(e), e.ID, toolutil.FormatTime(e.CreatedAt))
+		// An emoji name is not held to GitLab's own list: an instance may carry
+		// custom emoji whose name a person chose.
+		fmt.Fprintf(&b, "- :%s: by %s (ID: %d) - %s\n", toolutil.EscapeMdTableCell(e.Name),
+			toolutil.EscapeMdTableCell(awardEmojiUserMarkdown(e)), e.ID, toolutil.FormatTime(e.CreatedAt))
 	}
 	b.WriteString(toolutil.FormatPagination(out.Pagination))
 	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use the selected tool surface's matching award emoji actions for this resource; delete actions require explicit confirm=true plus the same resource identifiers and award_id")
@@ -59,10 +62,10 @@ func FormatMarkdown(out Output) *mcp.CallToolResult {
 func FormatMarkdownString(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Award Emoji\n\n")
-	fmt.Fprintf(&b, "- **Name**: :%s:\n", out.Name)
+	fmt.Fprintf(&b, "- **Name**: :%s:\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
 	if out.User != nil {
-		fmt.Fprintf(&b, "- **User**: %s (ID: %d)\n", out.User.Username, out.User.ID)
+		fmt.Fprintf(&b, "- **User**: %s (ID: %d)\n", toolutil.EscapeMdTableCell(out.User.Username), out.User.ID)
 	}
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))

@@ -18,9 +18,12 @@ func FormatOutputMarkdown(o Output) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## SSH Certificate #%d\n\n", o.ID)
-	fmt.Fprintf(&b, "- **Title**: %s\n", o.Title)
-	fmt.Fprintf(&b, "- **Key**: `%s`\n", key)
+	// The title is the name whoever added the certificate gave it, and the key
+	// is truncated here rather than constrained.
+	fmt.Fprintf(&b, "- **Title**: %s\n", toolutil.EscapeMdTableCell(o.Title))
+	fmt.Fprintf(&b, "- **Key**: `%s`\n", toolutil.EscapeMdTableCell(key))
 	if o.CreatedAt != "" {
+		//gitlab:allow-unescaped o.CreatedAt: a timestamp this package formatted itself from the time client-go parsed.
 		fmt.Fprintf(&b, "- **Created**: %s\n", o.CreatedAt)
 	}
 	toolutil.WriteHints(

@@ -14,6 +14,7 @@ func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Runner Controller #%d\n\n", out.ID)
 	toolutil.WriteDescription(&b, out.Description)
+	//gitlab:allow-unescaped out.State: a runner controller state, a typed enum client-go renders from GitLab's own fixed set.
 	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
@@ -30,6 +31,7 @@ func FormatDetailsMarkdown(out DetailsOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Runner Controller #%d: Details\n\n", out.ID)
 	toolutil.WriteDescription(&b, out.Description)
+	//gitlab:allow-unescaped out.State: a runner controller state, a typed enum client-go renders from GitLab's own fixed set.
 	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
 	fmt.Fprintf(&b, "- **Connected**: %t\n", out.Connected)
 	if out.CreatedAt != "" {
@@ -54,6 +56,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| --- | --- | --- | --- |\n")
 	for _, rc := range out.Controllers {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
+			//gitlab:allow-unescaped rc.State: a runner controller state, a typed enum client-go renders from GitLab's own fixed set.
+			//gitlab:allow-unescaped rc.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
 			rc.ID, toolutil.EscapeMdTableCell(rc.Description), rc.State, rc.CreatedAt)
 	}
 	toolutil.WritePagination(&b, out.Pagination)

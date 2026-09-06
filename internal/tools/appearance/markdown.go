@@ -15,19 +15,21 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	var sb strings.Builder
 	sb.WriteString("# Application Appearance\n\n")
 	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
-	fmt.Fprintf(&sb, "| Title | %s |\n", a.Title)
-	fmt.Fprintf(&sb, "| Description | %s |\n", a.Description)
+	// Every field here is free text an administrator typed into the appearance
+	// settings, and the two messages are rendered as Markdown by GitLab itself.
+	fmt.Fprintf(&sb, "| Title | %s |\n", toolutil.EscapeMdTableCell(a.Title))
+	fmt.Fprintf(&sb, "| Description | %s |\n", toolutil.EscapeMdTableCell(a.Description))
 	if a.PWAName != "" {
-		fmt.Fprintf(&sb, "| PWA Name | %s |\n", a.PWAName)
+		fmt.Fprintf(&sb, "| PWA Name | %s |\n", toolutil.EscapeMdTableCell(a.PWAName))
 	}
 	if a.PWAShortName != "" {
-		fmt.Fprintf(&sb, "| PWA Short Name | %s |\n", a.PWAShortName)
+		fmt.Fprintf(&sb, "| PWA Short Name | %s |\n", toolutil.EscapeMdTableCell(a.PWAShortName))
 	}
 	if a.HeaderMessage != "" {
-		fmt.Fprintf(&sb, "| Header Message | %s |\n", a.HeaderMessage)
+		fmt.Fprintf(&sb, "| Header Message | %s |\n", toolutil.EscapeMdTableCell(a.HeaderMessage))
 	}
 	if a.FooterMessage != "" {
-		fmt.Fprintf(&sb, "| Footer Message | %s |\n", a.FooterMessage)
+		fmt.Fprintf(&sb, "| Footer Message | %s |\n", toolutil.EscapeMdTableCell(a.FooterMessage))
 	}
 	fmt.Fprintf(&sb, "| Email Header/Footer | %v |\n", a.EmailHeaderAndFooterEnabled)
 	toolutil.WriteHints(&sb, "Use `gitlab_update_appearance` to modify appearance settings")

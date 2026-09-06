@@ -52,45 +52,61 @@ type Summary struct {
 // audit classifies every value that lands in one of the selected Markdown
 // constructs and returns the work list.
 func audit(prog *program, sel selection, root string) Report {
-	c := newClassifier(prog)
-	directives := collectDirectives(prog, root)
-	used := make(map[directiveKey]bool, len(directives))
-	report := Report{Summary: Summary{Contexts: sel.label}}
-	for _, s := range collectSinks(prog) {
-		report.Summary.Sinks++
-		auditSink(prog, c, s, sel, root, directives, used, &report)
+	run := auditPass{
+		prog:       prog,
+		classifier: newClassifier(prog),
+		sel:        sel,
+		root:       root,
+		directives: collectDirectives(prog, root),
+		report:     Report{Summary: Summary{Contexts: sel.label}},
 	}
-	report.StaleDirectives = staleDirectives(directives, used)
-	finish(&report)
-	return report
+	run.used = make(map[directiveKey]bool, len(run.directives))
+	for _, s := range collectSinks(prog) {
+		run.report.Summary.Sinks++
+		run.auditSink(s)
+	}
+	run.report.StaleDirectives = staleDirectives(run.directives, run.used)
+	finish(&run.report)
+	return run.report
+}
+
+// auditPass is one pass over the program: everything the classification of a
+// hole consults, and the report it accumulates into. It exists so the per-sink
+// step reads as one step rather than as a signature.
+type auditPass struct {
+	prog       *program
+	classifier *classifier
+	sel        selection
+	root       string
+	directives map[directiveKey]Directive
+	used       map[directiveKey]bool
+	report     Report
 }
 
 // auditSink classifies every hole of one sink.
-func auditSink(prog *program, c *classifier, s sink, sel selection, root string,
-	directives map[directiveKey]Directive, used map[directiveKey]bool, report *Report,
-) {
+func (r *auditPass) auditSink(s sink) {
 	for _, h := range s.holes {
-		if !sel.judges(h.ctx) {
+		if !r.sel.judges(h.ctx) {
 			continue
 		}
-		report.Summary.Holes++
-		got, why := c.classifyExpr(s.pkg, h.expr, nil, 0)
+		r.report.Summary.Holes++
+		got, why := r.classifier.classifyExpr(s.pkg, h.expr, nil, 0)
 		if got == safe {
-			report.Summary.Safe++
+			r.report.Summary.Safe++
 			continue
 		}
-		finding := newFinding(prog, s, h, why, root)
+		finding := newFinding(r.prog, s, h, why, r.root)
 		key := directiveKey{pkg: finding.Package, expression: finding.Expression}
-		if _, excused := directives[key]; excused {
-			used[key] = true
-			report.Excused = append(report.Excused, finding)
+		if _, excused := r.directives[key]; excused {
+			r.used[key] = true
+			r.report.Excused = append(r.report.Excused, finding)
 			continue
 		}
 		if got == unescaped {
-			report.Findings = append(report.Findings, finding)
+			r.report.Findings = append(r.report.Findings, finding)
 			continue
 		}
-		report.Unresolved = append(report.Unresolved, finding)
+		r.report.Unresolved = append(r.report.Unresolved, finding)
 	}
 }
 

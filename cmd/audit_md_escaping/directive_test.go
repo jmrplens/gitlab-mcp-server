@@ -77,8 +77,18 @@ func TestCollectDirectives_Fixture_KeysOnPackageAndExpression(t *testing.T) {
 	if _, wrongPackage := directives[directiveKey{pkg: fixtureDir + "/mdcase", expression: "result.ID"}]; wrongPackage {
 		t.Error("an exemption was read as belonging to a package that did not declare it")
 	}
-	if len(directives) != 2 {
-		t.Errorf("read %d exemptions, want the two well-formed ones", len(directives))
+	// Counted over the fixture alone. collectDirectives reads every package
+	// the load pulled in, and the fixture type-checks against the real
+	// toolutil, which declares exemptions of its own; counting those here
+	// would make this assertion fail whenever a real package gains one.
+	var inFixture int
+	for key := range directives {
+		if strings.HasPrefix(key.pkg, fixtureDir) {
+			inFixture++
+		}
+	}
+	if inFixture != 2 {
+		t.Errorf("read %d exemptions in the fixture, want the two well-formed ones", inFixture)
 	}
 }
 

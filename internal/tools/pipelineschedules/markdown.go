@@ -82,9 +82,10 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatVariableMarkdown(v VariableOutput) string {
 	var b strings.Builder
 	b.WriteString("## Pipeline Schedule Variable\n\n")
-	fmt.Fprintf(&b, "- **Key**: %s\n", v.Key)
-	fmt.Fprintf(&b, "- **Value**: %s\n", v.Value)
+	fmt.Fprintf(&b, "- **Key**: %s\n", toolutil.EscapeMdTableCell(v.Key))
+	fmt.Fprintf(&b, "- **Value**: %s\n", toolutil.EscapeMdTableCell(v.Value))
 	if v.VariableType != "" {
+		//gitlab:allow-unescaped v.VariableType: a CI variable type GitLab picks from a fixed set (env_var, file).
 		fmt.Fprintf(&b, "- **Type**: %s\n", v.VariableType)
 	}
 	toolutil.WriteHints(
@@ -107,6 +108,8 @@ func FormatTriggeredPipelinesMarkdown(out TriggeredPipelinesListOutput) string {
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
 	for _, p := range out.Pipelines {
 		fmt.Fprintf(&b, "| %s | %d | %s | %s | %s |\n",
+			//gitlab:allow-unescaped p.Status: a pipeline status, one of GitLab's fixed set (created, running, success, failed and the rest).
+			//gitlab:allow-unescaped p.Source: a pipeline source, one of GitLab's fixed set (push, web, schedule, trigger and the rest).
 			toolutil.MdTitleLink(fmt.Sprintf("#%d", p.ID), p.WebURL), p.IID, toolutil.EscapeMdTableCell(p.Ref), p.Status, p.Source)
 	}
 	toolutil.WritePagination(&b, out.Pagination)

@@ -12,7 +12,8 @@ func FormatOutputMarkdown(l Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Release Link: %s\n\n", toolutil.EscapeMdHeading(l.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, l.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdURL, l.URL)
+	toolutil.WriteMdURL(&b, l.URL)
+	//gitlab:allow-unescaped l.LinkType: a release link type GitLab picks from a fixed set (other, runbook, image, package).
 	fmt.Fprintf(&b, "- **Type**: %s\n", l.LinkType)
 	fmt.Fprintf(&b, "- **External**: %v\n", l.External)
 	toolutil.WriteHints(
@@ -37,7 +38,8 @@ func FormatBatchMarkdown(out CreateBatchOutput) string {
 	if len(out.Failed) > 0 {
 		fmt.Fprintf(&b, "\n### Failures (%d)\n\n", len(out.Failed))
 		for _, f := range out.Failed {
-			fmt.Fprintf(&b, "- %s\n", f)
+			// Each failure carries the link's own name and GitLab's message.
+			fmt.Fprintf(&b, "- %s\n", toolutil.EscapeMdTableCell(f))
 		}
 	}
 	toolutil.WriteHints(

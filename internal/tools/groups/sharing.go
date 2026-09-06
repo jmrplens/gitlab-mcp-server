@@ -261,6 +261,7 @@ func FormatShareGroupMarkdown(out ShareGroupOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n", toolutil.EmojiSuccess, out.Message)
 	if out.AccessRole != "" {
+		//gitlab:allow-unescaped out.AccessRole: accessLevelName returns one of this package's own role names, or "Level" and the requested number.
 		fmt.Fprintf(&b, "- **Access**: %s (%d)\n", out.AccessRole, out.GroupAccess)
 	}
 	toolutil.WriteHints(
@@ -293,6 +294,7 @@ func FormatSharedProjectsListMarkdown(out SharedProjectsListOutput) string {
 		}
 		fmt.Fprintf(
 			&b, "| %d | %s | %s | %s | %s |\n",
+			//gitlab:allow-unescaped p.Visibility: a gl.VisibilityValue, which GitLab fills with private, internal or public.
 			p.ID, name, toolutil.EscapeMdTableCell(p.PathWithNamespace), p.Visibility, archived,
 		)
 	}

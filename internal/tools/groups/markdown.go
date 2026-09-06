@@ -28,15 +28,18 @@ func FormatOutputMarkdown(g Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Group: %s\n\n", toolutil.EscapeMdHeading(g.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, g.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdPath, g.FullPath)
+	fmt.Fprintf(&b, toolutil.FmtMdPath, toolutil.EscapeMdTableCell(g.FullPath))
 	if g.FullName != "" {
-		fmt.Fprintf(&b, "- **Full Name**: %s\n", g.FullName)
+		// A full name is the group names of the ancestry joined, and a group
+		// name is free text a person types.
+		fmt.Fprintf(&b, "- **Full Name**: %s\n", toolutil.EscapeMdTableCell(g.FullName))
 	}
+	//gitlab:allow-unescaped g.Visibility: a gl.VisibilityValue, which GitLab fills with private, internal or public.
 	fmt.Fprintf(&b, toolutil.FmtMdVisibility, g.Visibility)
 	if g.Description != "" {
 		toolutil.WriteDescription(&b, g.Description)
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdURL, g.WebURL)
+	toolutil.WriteMdURL(&b, g.WebURL)
 	if g.ParentID != 0 {
 		fmt.Fprintf(&b, "- **Parent ID**: %d\n", g.ParentID)
 	}
@@ -44,6 +47,7 @@ func FormatOutputMarkdown(g Output) string {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(g.CreatedAt))
 	}
 	if g.MarkedForDeletion != "" {
+		//gitlab:allow-unescaped g.MarkedForDeletion: a date ToOutput rendered from a gl.ISOTime as YYYY-MM-DD.
 		fmt.Fprintf(&b, "- %s **Marked for deletion**: %s\n", toolutil.EmojiWarning, g.MarkedForDeletion)
 	}
 	toolutil.WriteHints(
@@ -90,6 +94,7 @@ func FormatMemberListMarkdown(out MemberListOutput) string {
 	b.WriteString("| Username | Name | Access Level | State |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, m := range out.Members {
+		//gitlab:allow-unescaped m.State: a membership state GitLab picks from a fixed set (active, awaiting and the rest).
 		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(m.Username), toolutil.EscapeMdTableCell(m.Name), toolutil.EscapeMdTableCell(toolutil.AccessLevelDescription(gl.AccessLevelValue(m.AccessLevel))), m.State)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -120,6 +125,7 @@ func FormatListProjectsMarkdown(out ListProjectsOutput) string {
 			p.ID,
 			toolutil.EscapeMdTableCell(p.Name),
 			toolutil.EscapeMdTableCell(p.PathWithNamespace),
+			//gitlab:allow-unescaped p.Visibility: a gl.VisibilityValue, which GitLab fills with private, internal or public.
 			p.Visibility,
 			archived,
 		)
@@ -142,9 +148,9 @@ func FormatHookMarkdown(h HookOutput) string {
 	}
 	fmt.Fprintf(&b, "## Group Hook: %s\n\n", toolutil.EscapeMdHeading(title))
 	fmt.Fprintf(&b, toolutil.FmtMdID, h.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdURL, h.URL)
+	toolutil.WriteMdURL(&b, h.URL)
 	if h.Name != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdName, h.Name)
+		fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(h.Name))
 	}
 	if h.Description != "" {
 		toolutil.WriteDescription(&b, h.Description)
@@ -155,6 +161,7 @@ func FormatHookMarkdown(h HookOutput) string {
 	fmt.Fprintf(&b, "- **Signing Token Present**: %v\n", h.SigningTokenPresent)
 	fmt.Fprintf(&b, "- **Events**: %s\n", enabledEvents(h))
 	if h.AlertStatus != "" {
+		//gitlab:allow-unescaped h.AlertStatus: a hook alert status GitLab picks from a fixed set (executable, disabled, temporarily_disabled).
 		fmt.Fprintf(&b, "- **Alert Status**: %s\n", h.AlertStatus)
 	}
 	if h.DisabledUntil != "" {
@@ -222,7 +229,7 @@ func FormatTransferLocationsListMarkdown(out TransferLocationsListOutput) string
 	for _, l := range out.Locations {
 		name := toolutil.EscapeMdTableCell(l.Name)
 		if l.WebURL != "" {
-			name = fmt.Sprintf("[%s](%s)", name, l.WebURL)
+			name = toolutil.MdTitleLink(l.Name, l.WebURL)
 		}
 		fmt.Fprintf(&b, "| %d | %s | %s |\n", l.ID, name, toolutil.EscapeMdTableCell(l.FullPath))
 	}
@@ -258,6 +265,7 @@ func FormatProvisionedUsersListMarkdown(out ProvisionedUsersListOutput) string {
 			u.ID,
 			username,
 			toolutil.EscapeMdTableCell(u.Name),
+			//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
 			u.State,
 			toolutil.EscapeMdTableCell(u.Email),
 		)

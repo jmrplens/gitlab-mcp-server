@@ -186,13 +186,13 @@ func FormatServiceAccountMarkdownString(out ServiceAccountOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Service Account\n\n")
 	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Username**: %s\n", out.Username)
-	fmt.Fprintf(&sb, "- **Name**: %s\n", out.Name)
+	fmt.Fprintf(&sb, "- **Username**: %s\n", toolutil.EscapeMdTableCell(out.Username))
+	fmt.Fprintf(&sb, "- **Name**: %s\n", toolutil.EscapeMdTableCell(out.Name))
 	if out.Email != "" {
-		fmt.Fprintf(&sb, "- **Email**: %s\n", out.Email)
+		fmt.Fprintf(&sb, "- **Email**: %s\n", toolutil.EscapeMdTableCell(out.Email))
 	}
 	if out.UnconfirmedEmail != "" {
-		fmt.Fprintf(&sb, "- **Unconfirmed Email**: %s\n", out.UnconfirmedEmail)
+		fmt.Fprintf(&sb, "- **Unconfirmed Email**: %s\n", toolutil.EscapeMdTableCell(out.UnconfirmedEmail))
 	}
 	return sb.String()
 }
@@ -217,16 +217,19 @@ func FormatCurrentUserPATMarkdownString(out CurrentUserPATOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Personal Access Token\n\n")
 	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Name**: %s\n", out.Name)
+	fmt.Fprintf(&sb, "- **Name**: %s\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&sb, "- **Active**: %v\n", out.Active)
+	//gitlab:allow-unescaped strings.Join(out.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
 	fmt.Fprintf(&sb, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
 	if out.Description != "" {
-		fmt.Fprintf(&sb, "- **Description**: %s\n", out.Description)
+		fmt.Fprintf(&sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(out.Description))
 	}
 	if out.ExpiresAt != "" {
+		//gitlab:allow-unescaped out.ExpiresAt: a date toolutil.NewPersonalTokenOutput formatted itself, on the ISO date layout.
 		fmt.Fprintf(&sb, "- **Expires At**: %s\n", out.ExpiresAt)
 	}
 	if out.Token != "" {
+		//gitlab:allow-unescaped out.Token: the secret GitLab minted, which the reader has to copy back verbatim.
 		fmt.Fprintf(&sb, "- **Token**: `%s`\n", out.Token)
 	}
 	return sb.String()

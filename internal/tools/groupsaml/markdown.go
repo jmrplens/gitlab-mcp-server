@@ -11,13 +11,15 @@ import (
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## SAML Link: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdName, out.Name)
+	// The SAML group name and the provider label are typed by the
+	// administrator who configured the link.
+	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&b, "- **Access Level**: %d\n", out.AccessLevel)
 	if out.MemberRoleID != 0 {
 		fmt.Fprintf(&b, "- **Member Role ID**: %d\n", out.MemberRoleID)
 	}
 	if out.Provider != "" {
-		fmt.Fprintf(&b, "- **Provider**: %s\n", out.Provider)
+		fmt.Fprintf(&b, "- **Provider**: %s\n", toolutil.EscapeMdTableCell(out.Provider))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -61,10 +63,8 @@ func FormatSAMLUsersListMarkdown(out SAMLUsersListOutput) string {
 	}
 	b.WriteString("| ID | Username | Name | State |\n| --- | --- | --- | --- |\n")
 	for _, u := range out.Users {
-		username := toolutil.EscapeMdTableCell(u.Username)
-		if u.WebURL != "" {
-			username = fmt.Sprintf("[%s](%s)", username, u.WebURL)
-		}
+		username := toolutil.MdTitleLink(u.Username, u.WebURL)
+		//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
 		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
 			u.ID, username, toolutil.EscapeMdTableCell(u.Name), u.State)
 	}
