@@ -793,7 +793,7 @@ func TestUserList_Success(t *testing.T) {
 		Username:      "  jsmith  ",
 		IncludeHidden: &includeHidden,
 		After:         "cursor000",
-		First:         new(int64(50)),
+		First:         new(50),
 	}
 	out, err := UserList(t.Context(), client, input)
 	if err != nil {
@@ -914,7 +914,7 @@ func TestRecipients_Success(t *testing.T) {
 		FullPath:      "my-group",
 		AchievementID: 1,
 		Before:        "cursor000",
-		Last:          new(int64(5)),
+		Last:          new(5),
 	}
 	out, err := Recipients(t.Context(), client, input)
 	if err != nil {
@@ -1082,47 +1082,163 @@ func TestAvatarInput_Upload(t *testing.T) {
 	})
 }
 
-// TestCursorInput_Resolve verifies that exactly one of first and last is ever
-// produced, which is what a GraphQL connection accepts.
-func TestCursorInput_Resolve(t *testing.T) {
+// TestCursorOptions verifies that the direction the shared helper resolved
+// survives the trip into the SDK's option shape, which counts in int64 where
+// the helper counts in int.
+//
+// The bare-before case is the one this domain used to get wrong: its own
+// resolver took the default arm for a request naming only a start cursor and
+// sent first beside before, which the keyset connections answer with the head
+// of the list, so a caller walking start_cursor back looped on page one. The
+// contradictory pair is the other: it used to pick first and run, where the
+// shared helper refuses, because GitLab refuses it too.
+func TestCursorOptions(t *testing.T) {
 	cases := []struct {
-		name      string
-		input     CursorInput
-		wantFirst *int64
-		wantLast  *int64
+		name       string
+		input      toolutil.GraphQLCursorPaginationInput
+		wantFirst  *int64
+		wantLast   *int64
+		wantAfter  string
+		wantBefore string
+		wantErr    bool
 	}{
-		{name: "no page size defaults forward", input: CursorInput{}, wantFirst: new(int64(toolutil.GraphQLDefaultFirst))},
-		{name: "first is honored", input: CursorInput{First: new(int64(7))}, wantFirst: new(int64(7))},
-		{name: "last is honored", input: CursorInput{Last: new(int64(9))}, wantLast: new(int64(9))},
-		{name: "first wins over last", input: CursorInput{First: new(int64(3)), Last: new(int64(9))}, wantFirst: new(int64(3))},
-		{name: "first is clamped up", input: CursorInput{First: new(int64(0))}, wantFirst: new(int64(1))},
-		{name: "first is clamped down", input: CursorInput{First: new(int64(5000))}, wantFirst: new(int64(toolutil.GraphQLMaxFirst))},
-		{name: "last is clamped down", input: CursorInput{Last: new(int64(5000))}, wantLast: new(int64(toolutil.GraphQLMaxFirst))},
+		{name: "no page size defaults forward", wantFirst: new(int64(toolutil.GraphQLDefaultFirst))},
+		{name: "first is honored", input: toolutil.GraphQLCursorPaginationInput{First: new(7)}, wantFirst: new(int64(7))},
+		{name: "last is honored", input: toolutil.GraphQLCursorPaginationInput{Last: new(9)}, wantLast: new(int64(9))},
+		{
+			name:       "before alone pages backward at the default size",
+			input:      toolutil.GraphQLCursorPaginationInput{Before: "b"},
+			wantLast:   new(int64(toolutil.GraphQLDefaultFirst)),
+			wantBefore: "b",
+		},
+		{
+			name:       "before with first sizes the backward page",
+			input:      toolutil.GraphQLCursorPaginationInput{First: new(7), Before: "b"},
+			wantLast:   new(int64(7)),
+			wantBefore: "b",
+		},
+		{name: "both counts are refused", input: toolutil.GraphQLCursorPaginationInput{First: new(3), Last: new(9)}, wantErr: true},
+		{name: "first is clamped up", input: toolutil.GraphQLCursorPaginationInput{First: new(0)}, wantFirst: new(int64(1))},
+		{
+			name:      "first is clamped down",
+			input:     toolutil.GraphQLCursorPaginationInput{First: new(5000)},
+			wantFirst: new(int64(toolutil.GraphQLMaxFirst)),
+		},
+		{
+			name:     "last is clamped down",
+			input:    toolutil.GraphQLCursorPaginationInput{Last: new(5000)},
+			wantLast: new(int64(toolutil.GraphQLMaxFirst)),
+		},
+		{
+			name:      "after is passed through",
+			input:     toolutil.GraphQLCursorPaginationInput{After: "a"},
+			wantFirst: new(int64(toolutil.GraphQLDefaultFirst)),
+			wantAfter: "a",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, first, last := tc.input.resolve()
+			cursor, err := tc.input.Resolve()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Resolve() error = nil, want the contradiction refused")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Resolve() error = %v, want nil", err)
+			}
+			after, before, first, last := cursorOptions(cursor)
 			if !equalInt64Ptr(first, tc.wantFirst) {
 				t.Errorf("first = %v, want %v", derefInt64(first), derefInt64(tc.wantFirst))
 			}
 			if !equalInt64Ptr(last, tc.wantLast) {
 				t.Errorf("last = %v, want %v", derefInt64(last), derefInt64(tc.wantLast))
 			}
+			if !equalStringPtr(after, tc.wantAfter) {
+				t.Errorf("after = %v, want %q", derefString(after), tc.wantAfter)
+			}
+			if !equalStringPtr(before, tc.wantBefore) {
+				t.Errorf("before = %v, want %q", derefString(before), tc.wantBefore)
+			}
 		})
 	}
+}
 
-	t.Run("cursors are passed through", func(t *testing.T) {
-		after, before, _, _ := CursorInput{After: "a", Before: "b"}.resolve()
-		if after == nil || *after != "a" || before == nil || *before != "b" {
-			t.Errorf("cursors = (%v, %v), want a and b", after, before)
-		}
-	})
-	t.Run("absent cursors stay nil", func(t *testing.T) {
-		after, before, _, _ := CursorInput{}.resolve()
-		if after != nil || before != nil {
-			t.Errorf("cursors = (%v, %v), want both nil", after, before)
-		}
-	})
+// TestListActions_ContradictoryPageSizes verifies that every list action
+// refuses first and last together before a request is made.
+//
+// GitLab answers the pair with "Can only provide either first or last, not
+// both", so guessing which one the caller meant would only move the failure.
+// This domain used to guess, silently picking first.
+func TestListActions_ContradictoryPageSizes(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	both := toolutil.GraphQLCursorPaginationInput{First: new(3), Last: new(9)}
+	cases := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "user_list",
+			call: func() error {
+				_, err := UserList(t.Context(), client, UserListInput{Username: "jsmith", GraphQLCursorPaginationInput: both})
+				return err
+			},
+		},
+		{
+			name: "list",
+			call: func() error {
+				_, err := List(t.Context(), client, ListInput{FullPath: "my-group", GraphQLCursorPaginationInput: both})
+				return err
+			},
+		},
+		{
+			name: "recipients",
+			call: func() error {
+				_, err := Recipients(t.Context(), client, RecipientsInput{
+					FullPath: "my-group", AchievementID: 1, GraphQLCursorPaginationInput: both,
+				})
+				return err
+			},
+		},
+		{
+			name: "unique_users",
+			call: func() error {
+				_, err := UniqueUsers(t.Context(), client, UniqueUsersInput{
+					FullPath: "my-group", AchievementID: 1, GraphQLCursorPaginationInput: both,
+				})
+				return err
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil {
+				t.Fatal("error = nil, want the contradiction refused")
+			}
+			if !strings.Contains(err.Error(), "first and last cannot be combined") {
+				t.Errorf("error = %v, want it to name the contradiction", err)
+			}
+		})
+	}
+}
+
+// equalStringPtr compares an optional cursor with the value it should carry,
+// where the empty string means the pointer should be nil: an empty cursor sent
+// to GitLab is not the same request as no cursor at all.
+func equalStringPtr(got *string, want string) bool {
+	if got == nil {
+		return want == ""
+	}
+	return *got == want
+}
+
+func derefString(p *string) any {
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
 func equalInt64Ptr(got, want *int64) bool {

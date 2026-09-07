@@ -400,7 +400,7 @@ Get a single work item by IID. Returns hierarchy child work items (namespace pat
 
 ### `gitlab_list_work_items`
 
-List work items for a project or group. Supports filtering by state, type, labels, author, search. Each item includes its assignees, labels, linked items and hierarchy child work items (namespace path and IID), and the response carries the connection's cursors so `after` can page through the results. Experimental: the Work Items API may introduce breaking changes between minor versions.
+List work items for a project or group. Supports filtering by state, type, labels, author, search. Each item includes its assignees, labels, linked items and hierarchy child work items (namespace path and IID), with cursor pagination (`first`/`after` forward, `last`/`before` backward). The cursor picks the direction: `before` on its own pages backward at the default size, and naming both `first` and `last` is refused, because GitLab refuses it too. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -430,7 +430,7 @@ Permanently delete a work item by IID. This action cannot be undone. Experimenta
 
 ### `gitlab_list_work_item_types`
 
-List available work item types (system-defined and custom) for a project or group namespace. Returns type ID, name, and enabled flag. Supports filtering by name and `only_available`, with cursor-based pagination. Experimental: the Work Items API may introduce breaking changes between minor versions.
+List available work item types (system-defined and custom) for a project or group namespace. Returns type ID, name, and enabled flag. Supports filtering by name and `only_available`, with cursor pagination (`first`/`after` forward, `last`/`before` backward). The cursor picks the direction: `before` on its own pages backward at the default size, and naming both `first` and `last` is refused, because GitLab refuses it too. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -454,7 +454,7 @@ Get a single saved view by namespace path and numeric ID. This is the only actio
 
 ### `gitlab_work_item_saved_view_list`
 
-List the saved views under a group or project namespace, with cursor pagination (`first`/`after` forward, `last`/`before` backward). `filters` is omitted from every entry. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
+List the saved views under a group or project namespace, with cursor pagination (`first`/`after` forward, `last`/`before` backward). The cursor picks the direction: `before` on its own pages backward at the default size, and naming both `first` and `last` is refused, because GitLab refuses it too. `filters` is omitted from every entry. Experimental: the Work Item Saved Views API may introduce breaking changes between minor versions.
 
 | Annotation | **Read** |
 | ---------- | -------- |

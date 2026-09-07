@@ -86,7 +86,7 @@ type GetOutput struct {
 // ListInput selects a page of the saved views under a namespace.
 type ListInput struct {
 	NamespacePath string `json:"namespace_path" jsonschema:"Full path of the group or project whose saved views to list,required"`
-	toolutil.GraphQLPaginationInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // ListOutput carries a page of saved views plus its cursor metadata.
@@ -179,23 +179,26 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 
+	// The direction is resolved by the shared helper rather than here, so that
+	// this domain and the ones querying GraphQL directly answer a backward
+	// request the same way. The SDK ignores Last whenever First is set, so a
+	// request that named both would silently page forward.
+	cursor, err := input.Resolve()
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("list_work_item_saved_views: %w", err)
+	}
 	opts := &gl.ListWorkItemSavedViewsOptions{}
-	if input.After != "" {
-		opts.After = new(input.After)
+	if cursor.After != "" {
+		opts.After = new(cursor.After)
 	}
-	if input.Before != "" {
-		opts.Before = new(input.Before)
+	if cursor.Before != "" {
+		opts.Before = new(cursor.Before)
 	}
-	// The SDK ignores Last whenever First is set, so only one of the two is ever
-	// sent. Setting First unconditionally from EffectiveFirst would therefore
-	// make backward pagination unreachable.
-	switch {
-	case input.First != nil:
-		opts.First = new(int64(input.EffectiveFirst()))
-	case input.Last != nil:
-		opts.Last = new(int64(clampPageSize(*input.Last)))
-	default:
-		opts.First = new(int64(toolutil.GraphQLDefaultFirst))
+	if cursor.First != nil {
+		opts.First = new(int64(*cursor.First))
+	}
+	if cursor.Last != nil {
+		opts.Last = new(int64(*cursor.Last))
 	}
 
 	views, resp, err := client.GL().WorkItemSavedViews.ListWorkItemSavedViews(namespacePath, opts, gl.WithContext(ctx))
@@ -374,18 +377,6 @@ func encodeDisplaySettings(settings map[string]any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("display_settings must be a JSON object: %w", err)
 	}
 	return encoded, nil
-}
-
-// clampPageSize bounds a backward page size the way
-// [toolutil.GraphQLPaginationInput.EffectiveFirst] bounds a forward one.
-func clampPageSize(n int) int {
-	if n < 1 {
-		return 1
-	}
-	if n > toolutil.GraphQLMaxFirst {
-		return toolutil.GraphQLMaxFirst
-	}
-	return n
 }
 
 // wrapLookupErr turns the SDK's not-found sentinel into an actionable message.

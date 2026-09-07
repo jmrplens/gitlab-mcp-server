@@ -45,11 +45,13 @@ List all custom emoji for a GitLab group. Returns a paginated list with ID, name
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter    | Type   | Required | Description                            |
-| ------------ | ------ | :------: | -------------------------------------- |
-| `group_path` | string |   Yes    | Group full path (e.g. `my-group`)      |
-| `first`      | int    |    No    | Number of items per page (default: 20) |
-| `after`      | string |    No    | Cursor for forward pagination          |
+| Parameter    | Type   | Required | Description                                                                    |
+| ------------ | ------ | :------: | ------------------------------------------------------------------------------ |
+| `group_path` | string |   Yes    | Group full path (e.g. `my-group`)                                              |
+| `first`      | int    |    No    | Number of items per page (default: 20)                                         |
+| `after`      | string |    No    | Cursor for forward pagination                                                  |
+| `last`       | int    |    No    | Number of items per page when paging backward. Cannot be combined with `first` |
+| `before`     | string |    No    | Cursor for backward pagination, from a previous response's `start_cursor`      |
 
 ### `gitlab_create_custom_emoji`
 

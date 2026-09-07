@@ -536,6 +536,17 @@ func TestDiscussionMarkdownHelpers(t *testing.T) {
 		})
 	}
 
+	forwardList := renderer.FormatGraphQLForwardList(
+		[]DiscussionMarkdown{restDiscussion.MarkdownDiscussion()},
+		GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "after"},
+	)
+	if !strings.Contains(forwardList, "next page cursor: `after`") {
+		t.Errorf("forward-only list markdown missing the next page cursor:\n%s", forwardList)
+	}
+	if strings.Contains(forwardList, "prev page cursor") {
+		t.Errorf("forward-only list markdown names a previous page:\n%s", forwardList)
+	}
+
 	discussion := restDiscussion.MarkdownDiscussion()
 	if got := renderer.FormatDiscussion(discussion); !strings.Contains(got, "Reply to discussion") {
 		t.Errorf("discussion markdown missing renderer hint:\n%s", got)

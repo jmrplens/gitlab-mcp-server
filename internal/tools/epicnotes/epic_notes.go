@@ -25,9 +25,7 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
           discussions(first: $first, after: $after) {
             pageInfo {
               hasNextPage
-              hasPreviousPage
               endCursor
-              startCursor
             }
             nodes {
               notes {
@@ -150,6 +148,18 @@ type gqlNotesResponse struct {
 	Data struct {
 		Namespace *gqlNamespaceNotesWorkItem `json:"namespace"`
 	} `json:"data"`
+	Errors []toolutil.GraphQLError `json:"errors"`
+}
+
+// topLevelError reports what GitLab refused, or nil when it refused nothing.
+//
+// GitLab answers a rejected document with HTTP 200 and a top-level errors
+// array, which client-go does not turn into an error, so a query the instance
+// refused reaches a handler looking exactly like an epic that is not there.
+// Both handlers that run this document need the same answer, which is why it
+// lives on the envelope rather than at one call site.
+func (r gqlNotesResponse) topLevelError(operation string) error {
+	return toolutil.GraphQLTopLevelError(operation, r.Errors)
 }
 
 // nodeToOutput converts a GraphQL note node to the MCP output format. Per the
@@ -229,10 +239,16 @@ type Output struct {
 }
 
 // ListOutput holds a paginated list of epic notes.
+//
+// Pagination is forward-only because the work item notes widget is: its
+// discussions field accepts first and after alone. Being keyset-paginated it
+// does report a previous page and a start cursor from its second page on, and
+// that half is dropped here rather than passed on, since no argument on this
+// tool could spend the cursor.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Notes      []Output                         `json:"notes"`
-	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
+	Notes      []Output                                `json:"notes"`
+	Pagination toolutil.GraphQLForwardPaginationOutput `json:"pagination"`
 }
 
 // List retrieves notes on an epic via the Work Items GraphQL API.
@@ -247,14 +263,27 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.IID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("epicNoteList", "epic_iid")
 	}
+	return listWith(ctx, client, queryListWorkItemNotes, input)
+}
 
-	vars := input.Variables()
+// listWith runs one notes document against the variables the input resolves to.
+//
+// The document is a parameter rather than read from the package constant so
+// that a test can hand it one declaring too little and prove the pagination
+// guard refuses it. The alternative, a package-level variable a test reassigns,
+// would put a document under a parallel neighbor's feet, and the race detector
+// would report it as a data race rather than as this guard.
+func listWith(ctx context.Context, client *gitlabclient.Client, query string, input ListInput) (ListOutput, error) {
+	vars, err := input.Variables(query)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("epicNoteList: %w", err)
+	}
 	vars["fullPath"] = input.FullPath
 	vars["iid"] = strconv.FormatInt(input.IID, 10)
 
 	var resp gqlNotesResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     queryListWorkItemNotes,
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     query,
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
@@ -263,6 +292,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
+		if graphQLErr := resp.topLevelError("epicNoteList"); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 		return ListOutput{}, fmt.Errorf("epicNoteList: epic not found in group %q with IID %d", input.FullPath, input.IID)
 	}
 
@@ -282,7 +314,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	return ListOutput{
 		Notes:      notes,
-		Pagination: toolutil.PageInfoToOutput(pageInfo),
+		Pagination: toolutil.PageInfoToForwardOutput(pageInfo),
 	}, nil
 }
 
@@ -319,6 +351,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
+		if graphQLErr := resp.topLevelError("epicNoteGet"); graphQLErr != nil {
+			return Output{}, graphQLErr
+		}
 		return Output{}, fmt.Errorf("epicNoteGet: epic not found in group %q with IID %d", input.FullPath, input.IID)
 	}
 

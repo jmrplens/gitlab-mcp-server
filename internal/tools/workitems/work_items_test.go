@@ -175,7 +175,7 @@ func TestList_Empty(t *testing.T) {
 // TestList_Filters verifies List forwards supported filters to the minimal GraphQL query.
 func TestList_Filters(t *testing.T) {
 	confidential := true
-	first := int64(5)
+	first := 5
 	includeAncestors := true
 	includeDescendants := false
 
@@ -1055,7 +1055,7 @@ func TestList_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	boolTrue := true
-	first := int64(10)
+	first := 10
 
 	_, err := List(t.Context(), client, ListInput{
 		FullPath:           testFullPath,
@@ -1089,6 +1089,95 @@ func TestList_MinimalFilters(t *testing.T) {
 	}
 	if len(out.WorkItems) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(out.WorkItems))
+	}
+}
+
+// TestList_BackwardPagination verifies that a request naming a start cursor
+// reaches GitLab as before and last, with no first.
+//
+// This tool published start_cursor and has_previous_page while offering no
+// parameter that could spend either, so a model following the cursor back had
+// nothing to send it in. The SDK's own document declares all four variables,
+// so the repair was to add the pair rather than to withdraw the output half.
+func TestList_BackwardPagination(t *testing.T) {
+	var body string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"data":{"namespace":{"workItems":{"nodes":[],"pageInfo":{"hasNextPage":false,"hasPreviousPage":true,"endCursor":"","startCursor":"cursor-start"}}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := List(t.Context(), client, ListInput{
+		FullPath: testFullPath,
+		Last:     new(5),
+		Before:   "cursor-xyz",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !strings.Contains(body, "cursor-xyz") {
+		t.Errorf("request body missing the before cursor: %s", body)
+	}
+	if !strings.Contains(body, `"last":5`) && !strings.Contains(body, `"last": 5`) {
+		t.Errorf("request body missing the last variable: %s", body)
+	}
+	// This SDK method assembles its document from the options it was given, so
+	// an unset count is absent from both the signature and the variables
+	// rather than sent as a null. Either way the direction is left to before
+	// and last, which is what the assertion is about.
+	if strings.Contains(body, `"first":`) {
+		t.Errorf("request body carries a page size for first on a backward request: %s", body)
+	}
+	if !out.Pagination.HasPreviousPage || out.Pagination.StartCursor != "cursor-start" {
+		t.Errorf("Pagination = %+v, want the backward half the caller can now spend", out.Pagination)
+	}
+}
+
+// TestList_BeforeAloneStillPagesBackward verifies that a caller who names only
+// a start cursor is sent last and no first, at the default page size.
+func TestList_BeforeAloneStillPagesBackward(t *testing.T) {
+	var body string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"data":{"namespace":{"workItems":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"end"}}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := List(t.Context(), client, ListInput{
+		FullPath: testFullPath,
+		Before:   "cursor-xyz",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !strings.Contains(body, `"last":20`) && !strings.Contains(body, `"last": 20`) {
+		t.Errorf("request body missing the default backward page size: %s", body)
+	}
+	if strings.Contains(body, `"first":`) {
+		t.Errorf("request body carries a page size for first on a backward request: %s", body)
+	}
+}
+
+// TestList_ContradictoryPageSizes verifies that naming both first and last is
+// refused before a request is made. GitLab answers the pair with "Can only
+// provide either first or last, not both", so guessing which one the caller
+// meant would only move the failure.
+func TestList_ContradictoryPageSizes(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := List(t.Context(), client, ListInput{
+		FullPath: testFullPath,
+		First:    new(10),
+		Last:     new(5),
+	})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "first and last cannot be combined") {
+		t.Errorf("error = %v, want it to name the contradiction", err)
 	}
 }
 
@@ -2080,7 +2169,7 @@ func TestListWorkItemTypes_WithOptions(t *testing.T) {
 		FullPath:      testFullPath,
 		Name:          "Issue",
 		OnlyAvailable: true,
-		First:         10,
+		First:         new(10),
 		After:         "cursor-abc",
 	})
 	if err != nil {
@@ -2119,7 +2208,7 @@ func TestListWorkItemTypes_BackwardPagination(t *testing.T) {
 
 	out, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{
 		FullPath: testFullPath,
-		Last:     5,
+		Last:     new(5),
 		Before:   "cursor-xyz",
 	})
 	if err != nil {
@@ -2136,6 +2225,68 @@ func TestListWorkItemTypes_BackwardPagination(t *testing.T) {
 	}
 	if !out.Pagination.HasPreviousPage {
 		t.Errorf("expected HasPreviousPage = true")
+	}
+}
+
+// TestListWorkItemTypes_BeforeAloneStillPagesBackward verifies that a caller
+// who names only a start cursor is sent last and no first.
+//
+// The SDK forwards whichever of the two counts is set, and this input used to
+// set neither when only before was named. graphql-ruby then fills first from
+// its own default page size, which takes the head of the list rather than the
+// page before the cursor, so following start_cursor back looped on page one.
+func TestListWorkItemTypes_BeforeAloneStillPagesBackward(t *testing.T) {
+	var body string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"data": {
+				"namespace": {
+					"workItemTypes": {
+						"nodes": [{"id":"gid://gitlab/WorkItems::Type/1","name":"Issue","enabled":true}],
+						"pageInfo": {"hasNextPage":true,"hasPreviousPage":false,"endCursor":"end","startCursor":""}
+					}
+				}
+			}
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{
+		FullPath: testFullPath,
+		Before:   "cursor-xyz",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !strings.Contains(body, `"last":20`) && !strings.Contains(body, `"last": 20`) {
+		t.Errorf("request body missing the default backward page size: %s", body)
+	}
+	// The SDK sends every variable its document declares, so first is present
+	// as an explicit null. GraphQL reads that as "not provided", which is what
+	// leaves the direction to before and last.
+	if !strings.Contains(body, `"first":null`) {
+		t.Errorf("request body carries a page size for first on a backward request: %s", body)
+	}
+}
+
+// TestListWorkItemTypes_ContradictoryPageSizes verifies that naming both first
+// and last is refused before a request is made. GitLab answers the pair with
+// "Can only provide either first or last, not both", so guessing which one the
+// caller meant would only move the failure.
+func TestListWorkItemTypes_ContradictoryPageSizes(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{
+		FullPath: testFullPath,
+		First:    new(10),
+		Last:     new(5),
+	})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "first and last cannot be combined") {
+		t.Errorf("error = %v, want it to name the contradiction", err)
 	}
 }
 

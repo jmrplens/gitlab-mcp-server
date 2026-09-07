@@ -52,6 +52,8 @@ List security report findings for a specific pipeline run. Supports filtering by
 | `report_type`  | string[] |    No    | Filter by report type: `SAST`, `DAST`, `DEPENDENCY_SCANNING`, `CONTAINER_SCANNING`, `SECRET_DETECTION`, `COVERAGE_FUZZING`, `API_FUZZING`, `CLUSTER_IMAGE_SCANNING` |
 | `first`        | int      |    No    | Number of items per page (default: 20)                                                                                                                              |
 | `after`        | string   |    No    | Cursor for forward pagination                                                                                                                                       |
+| `last`         | int      |    No    | Number of items per page when paging backward. Cannot be combined with `first`                                                                                      |
+| `before`       | string   |    No    | Cursor for backward pagination, from a previous response's `start_cursor`                                                                                           |
 
 ### Output fields
 

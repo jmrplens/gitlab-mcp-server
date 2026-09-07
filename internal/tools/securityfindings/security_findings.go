@@ -60,12 +60,14 @@ type EvidenceItem struct {
 
 // GraphQL query for pipeline security report findings.
 const queryListFindings = `
-query($projectPath: ID!, $pipelineIID: ID!, $first: Int!, $after: String, $severity: [String!], $confidence: [String!], $scanner: [String!], $reportType: [String!]) {
+query($projectPath: ID!, $pipelineIID: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [String!], $confidence: [String!], $scanner: [String!], $reportType: [String!]) {
   project(fullPath: $projectPath) {
     pipeline(iid: $pipelineIID) {
       securityReportFindings(
         first: $first
         after: $after
+        last: $last
+        before: $before
         severity: $severity
         confidence: $confidence
         scanner: $scanner
@@ -254,7 +256,7 @@ type ListInput struct {
 	Confidence  []string `json:"confidence,omitempty" jsonschema:"Filter by confidence: CONFIRMED, MEDIUM, LOW"`
 	Scanner     []string `json:"scanner,omitempty" jsonschema:"Filter by scanner external IDs"`
 	ReportType  []string `json:"report_type,omitempty" jsonschema:"Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING"`
-	toolutil.GraphQLPaginationInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // ListOutput is the output for listing pipeline security report findings.
@@ -273,8 +275,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredString("list_security_findings", "pipeline_iid")
 	}
 
+	pageVars, err := input.Variables(queryListFindings)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("list_security_findings: %w", err)
+	}
 	vars := toolutil.MergeVariables(
-		input.Variables(),
+		pageVars,
 		map[string]any{
 			"projectPath": input.ProjectPath,
 			"pipelineIID": input.PipelineIID,
@@ -297,9 +303,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Data struct {
 			Project *gqlProjectPipeline `json:"project"`
 		} `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
 	}
 
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query:     queryListFindings,
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
@@ -307,7 +314,15 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithHint("list_security_findings", err, "verify the project fullPath and pipeline_iid are correct. Requires Ultimate license")
 	}
 
+	// GitLab answers a rejected document with HTTP 200 and a top-level errors
+	// array, which client-go does not turn into an error. Reporting it here
+	// matters more than elsewhere: the branch below answers a project that
+	// resolves over REST with an empty page, so a refused query would be read
+	// as a pipeline with no findings.
 	if resp.Data.Project == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("list_security_findings", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 		if _, _, projectErr := client.GL().Projects.GetProject(input.ProjectPath, nil, gl.WithContext(ctx)); projectErr == nil {
 			return ListOutput{Findings: []FindingItem{}}, nil
 		}
