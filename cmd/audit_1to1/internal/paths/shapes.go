@@ -1,0 +1,304 @@
+package paths
+
+import (
+	"sort"
+	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/requestinventory"
+)
+
+// ShapeCheck is what GitLab's own OpenAPI document says about the endpoints we
+// were recorded calling.
+//
+// It answers a question no other rule in this repository can. The five original
+// dimensions compare our types against client-go's, which models what the SDK
+// carries rather than what GitLab serves; the endpoint comparison asks only
+// whether a path exists. This asks what the answer at that path contains, from
+// the document GitLab generates out of the code that renders it.
+//
+// It is a report and not a gate, for one reason that is worth stating rather
+// than fixing: the join is lossy in a way that can only produce a missing
+// finding, never a false one. See [ShapeCheck.Join].
+type ShapeCheck struct {
+	// Ran is false when the record could not be read, which is the only way
+	// this check is skipped. Every other outcome is a finding or a pass.
+	Ran bool `json:"ran"`
+	// Record names the artifact that answered, so a reader of a finding knows
+	// which GitLab it speaks for.
+	Record string `json:"record,omitempty"`
+	// Join says how many recorded endpoints could be looked up at all. It is
+	// written even when every count is zero: a reader of a finding needs to
+	// know how much of the inventory the comparison could see, and an absent
+	// join reads as one that was not attempted.
+	Join JoinQuality `json:"join"`
+	// Untemplated are the literal path segments the inventory carries where
+	// GitLab's document has a placeholder, most frequent first. Each is a
+	// fixture value our own templating did not recognize as an identifier, so
+	// this is a measure of the inventory's quality rather than a defect in the
+	// server.
+	Untemplated []UntemplatedSegment `json:"untemplated,omitempty"`
+	// Unpublished are the output fields a package publishes that no endpoint it
+	// was recorded calling declares in its response.
+	Unpublished []UnpublishedField `json:"unpublished,omitempty"`
+}
+
+// JoinQuality is how much of the inventory could be compared at all.
+type JoinQuality struct {
+	// RESTRows is how many REST rows the inventory holds.
+	RESTRows int `json:"rest_rows"`
+	// Exact matched an operation with the placeholders spelled the same way.
+	Exact int `json:"exact"`
+	// Loose matched only after a literal segment of ours was accepted where
+	// GitLab's document has a placeholder.
+	Loose int `json:"loose"`
+	// Unmatched found no operation at all. GitLab's document covers 1847
+	// operations and not every endpoint this server calls, so an unmatched row
+	// is not by itself a finding.
+	Unmatched int `json:"unmatched"`
+}
+
+// UntemplatedSegment is one literal path segment and how often it stood where
+// an identifier belongs.
+type UntemplatedSegment struct {
+	Segment string `json:"segment"`
+	Count   int    `json:"count"`
+	Example string `json:"example"`
+}
+
+// UnpublishedField is one output field this server publishes that GitLab does
+// not say it sends.
+type UnpublishedField struct {
+	// Package owns the type.
+	Package string `json:"package"`
+	// Type is the Go type publishing the field.
+	Type string `json:"type"`
+	// Field is the json tag.
+	Field string `json:"field"`
+	// Endpoints are the operations this package was recorded calling, whose
+	// responses were searched. A field absent from every one of them is a field
+	// a model is told to expect and will not receive.
+	Endpoints int `json:"endpoints_searched"`
+}
+
+// shapeCheck compares the recorded inventory with GitLab's OpenAPI record.
+//
+// The record is read from the repository rather than fetched, so this needs no
+// network and runs wherever the rest of the scope runs.
+func shapeCheck(root string, requests []requestinventory.Row, published []publishedType) ShapeCheck {
+	record, err := apishapes.Read(recordDir(root))
+	if err != nil {
+		return ShapeCheck{Ran: false}
+	}
+
+	index := newOperationIndex(record)
+	check := ShapeCheck{Ran: true, Record: apishapes.FileName}
+
+	segments := map[string]*UntemplatedSegment{}
+	byPackage := map[string]map[string]bool{}
+	endpointsPerPackage := map[string]int{}
+
+	for _, request := range requests {
+		if !strings.EqualFold(request.Kind, "rest") {
+			continue
+		}
+		check.Join.RESTRows++
+
+		operation, quality, literal := index.lookup(request.Method, request.Path)
+		switch quality {
+		case matchExact:
+			check.Join.Exact++
+		case matchLoose:
+			check.Join.Loose++
+			record := segments[literal]
+			if record == nil {
+				record = &UntemplatedSegment{Segment: literal, Example: request.Path}
+				segments[literal] = record
+			}
+			record.Count++
+		default:
+			check.Join.Unmatched++
+			continue
+		}
+
+		endpointsPerPackage[request.Package]++
+		fields := byPackage[request.Package]
+		if fields == nil {
+			fields = map[string]bool{}
+			byPackage[request.Package] = fields
+		}
+		for _, name := range operation.Response {
+			fields[name] = true
+		}
+	}
+
+	check.Untemplated = sortedSegments(segments)
+	check.Unpublished = unpublishedFields(published, byPackage, endpointsPerPackage)
+	return check
+}
+
+// sortedSegments orders the untemplated segments by how often each stood in for
+// an identifier, so the one worth teaching the recorder about is first.
+func sortedSegments(segments map[string]*UntemplatedSegment) []UntemplatedSegment {
+	out := make([]UntemplatedSegment, 0, len(segments))
+	for _, segment := range segments {
+		out = append(out, *segment)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Segment < out[j].Segment
+	})
+	return out
+}
+
+// unpublishedFields reports every published field no endpoint of its package
+// declares.
+//
+// The union over a package's endpoints is deliberately generous: a package
+// calling twenty endpoints has twenty responses' worth of names, so a field
+// only one of them sends still passes. That makes the check a lower bound,
+// exact for a package with one endpoint and weaker as the package grows, and it
+// is the honest shape available while the inventory records a package rather
+// than an action. It cannot report a field GitLab does send, which is the
+// property worth keeping.
+func unpublishedFields(published []publishedType, byPackage map[string]map[string]bool, endpoints map[string]int) []UnpublishedField {
+	var out []UnpublishedField
+	for _, publishedType := range published {
+		known := byPackage[publishedType.Package]
+		if len(known) == 0 {
+			continue
+		}
+		for _, field := range publishedType.Fields {
+			if known[field] {
+				continue
+			}
+			out = append(out, UnpublishedField{
+				Package:   publishedType.Package,
+				Type:      publishedType.Name,
+				Field:     field,
+				Endpoints: endpoints[publishedType.Package],
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Package != out[j].Package {
+			return out[i].Package < out[j].Package
+		}
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].Field < out[j].Field
+	})
+	return out
+}
+
+// matchQuality says how an endpoint was looked up.
+type matchQuality int
+
+const (
+	matchNone matchQuality = iota
+	matchExact
+	matchLoose
+)
+
+// operationIndex looks an endpoint up by method and path.
+type operationIndex struct {
+	// byPath is keyed on the path with placeholder names kept, which is the
+	// exact match.
+	byPath map[string]apishapes.Operation
+	// byShape is keyed on the path with every placeholder collapsed to one
+	// token, which is what lets our `:project_id` meet GitLab's `{id}`. Two
+	// operations can share a shape, so the value is the union of their
+	// responses: taking one arbitrarily would report the other's fields as
+	// unpublished.
+	byShape map[string]apishapes.Operation
+}
+
+// placeholder is the token every identifier segment collapses to when a path is
+// reduced to its shape.
+const placeholder = ":"
+
+func newOperationIndex(record apishapes.Document) *operationIndex {
+	index := &operationIndex{
+		byPath:  make(map[string]apishapes.Operation, len(record.Operations)),
+		byShape: make(map[string]apishapes.Operation, len(record.Operations)),
+	}
+	for key, operation := range record.Operations {
+		method, path, found := strings.Cut(key, " ")
+		if !found {
+			continue
+		}
+		normalized := apishapes.NormalizePath(path)
+		index.byPath[method+" "+normalized] = operation
+		shapeKey := method + " " + pathShape(normalized)
+		merged := index.byShape[shapeKey]
+		merged.Response = union(merged.Response, operation.Response)
+		merged.Params = union(merged.Params, operation.Params)
+		merged.Body = union(merged.Body, operation.Body)
+		index.byShape[shapeKey] = merged
+	}
+	return index
+}
+
+// lookup finds the operation a recorded request names, and says how. When the
+// match needed a literal segment of ours to stand where GitLab has a
+// placeholder, that segment is returned: it is a fixture value the recorder
+// failed to recognize as an identifier.
+func (index *operationIndex) lookup(method, path string) (apishapes.Operation, matchQuality, string) {
+	if operation, ok := index.byPath[method+" "+path]; ok {
+		return operation, matchExact, ""
+	}
+	if operation, ok := index.byShape[method+" "+pathShape(path)]; ok {
+		return operation, matchExact, ""
+	}
+
+	// One literal segment at a time, because two would stop being evidence
+	// about a specific segment and start being a search for any operation of
+	// the right length.
+	segments := strings.Split(path, "/")
+	for i, segment := range segments {
+		if segment == "" || strings.HasPrefix(segment, ":") {
+			continue
+		}
+		trial := make([]string, len(segments))
+		copy(trial, segments)
+		trial[i] = placeholder
+		if operation, ok := index.byShape[method+" "+pathShape(strings.Join(trial, "/"))]; ok {
+			return operation, matchLoose, segment
+		}
+	}
+	return apishapes.Operation{}, matchNone, ""
+}
+
+// pathShape reduces a path to its segments with every placeholder collapsed, so
+// two spellings of the same endpoint meet.
+func pathShape(path string) string {
+	segments := strings.Split(path, "/")
+	for i, segment := range segments {
+		if strings.HasPrefix(segment, ":") {
+			segments[i] = placeholder
+		}
+	}
+	return strings.Join(segments, "/")
+}
+
+// union merges two sorted name lists without duplicates.
+func union(a, b []string) []string {
+	if len(a) == 0 {
+		return b
+	}
+	seen := make(map[string]bool, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, list := range [][]string{a, b} {
+		for _, name := range list {
+			if !seen[name] {
+				seen[name] = true
+				out = append(out, name)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
