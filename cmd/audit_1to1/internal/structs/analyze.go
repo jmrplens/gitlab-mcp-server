@@ -12,6 +12,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
 )
 
 const (
@@ -300,15 +301,20 @@ const (
 		"with_labels_details is a parameter of the list endpoint, which fills epics.Output.label_details"
 )
 
+// docAPIShapesRecord names the pinned OpenAPI record the citations below read
+// from, spelled once and from the package that writes it, so a move of the
+// record cannot leave a citation pointing at a path that no longer exists.
+const docAPIShapesRecord = apishapes.DefaultDir + "/" + apishapes.FileName + " "
+
 // docEpicsGET cites the three oracles that agree the two fields are not sent,
 // since gl.Epic declaring them is the only reason to think they are.
-const docEpicsGET = "docs/development/gitlab-api-shapes.json " +
+const docEpicsGET = docAPIShapesRecord +
 	"(GET /api/v4/groups/{id}/-/epics and the four sibling epic GETs declare neither user_notes_count nor url); " +
 	"doc/api/epics.md prints neither in any example body, and a live gitlab.com response carries neither"
 
 // docMRApprovalsGET cites the record that separates the two endpoints sharing
 // the approvals path, since GitLab's own prose page does not.
-const docMRApprovalsGET = "docs/development/gitlab-api-shapes.json " +
+const docMRApprovalsGET = docAPIShapesRecord +
 	"(GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals declares approved, approved_by, " +
 	"user_can_approve and user_has_approved; every other field of the SDK type appears only under the POST at " +
 	"the same path, deprecated in GitLab 16.0)"
@@ -316,7 +322,7 @@ const docMRApprovalsGET = "docs/development/gitlab-api-shapes.json " +
 // docRunnerDetailsGET cites the record for the same reason docMRApprovalsGET
 // does: runners.md prints one example body for the whole page, so the prose
 // cannot tell the registration response from the details one.
-const docRunnerDetailsGET = "docs/development/gitlab-api-shapes.json " +
+const docRunnerDetailsGET = docAPIShapesRecord +
 	"(GET /api/v4/runners/{id} and PUT /api/v4/runners/{id} declare no token; POST /api/v4/runners, the " +
 	"registration endpoint, answers with id, token and token_expires_at, which runners.Output carries)"
 

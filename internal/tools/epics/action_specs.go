@@ -12,6 +12,11 @@ const (
 	actionEpicList   = "epic.list"
 	actionEpicGet    = "epic.get"
 	actionEpicUpdate = "epic.update"
+
+	// formatDateTime is the JSON Schema format of the four timestamp filters
+	// and of created_at: GitLab reads them as ISO 8601 date-times, and the
+	// canonical list in toolutil does not know these names.
+	formatDateTime = "date-time"
 )
 
 // ActionSpecs returns canonical specs for group epic actions.
@@ -106,10 +111,10 @@ func epicListEnumOverrides() []toolutil.InputSchemaOverride {
 		toolutil.SchemaPropertyOverride("in", map[string]any{
 			"items": map[string]any{"type": "string", "enum": []any{"TITLE", "DESCRIPTION"}},
 		}),
-		toolutil.SchemaFormatOverride("closed_after", "date-time"),
-		toolutil.SchemaFormatOverride("closed_before", "date-time"),
-		toolutil.SchemaFormatOverride("due_after", "date-time"),
-		toolutil.SchemaFormatOverride("due_before", "date-time"),
+		toolutil.SchemaFormatOverride("closed_after", formatDateTime),
+		toolutil.SchemaFormatOverride("closed_before", formatDateTime),
+		toolutil.SchemaFormatOverride("due_after", formatDateTime),
+		toolutil.SchemaFormatOverride("due_before", formatDateTime),
 	}
 }
 
@@ -131,7 +136,7 @@ func epicCreateEnumOverrides() []toolutil.InputSchemaOverride {
 		toolutil.SchemaPropertyOverride("linked_items.link_type", map[string]any{
 			"enum": []any{"BLOCKED_BY", "BLOCKS", "RELATED"},
 		}),
-		toolutil.SchemaFormatOverride("created_at", "date-time"),
+		toolutil.SchemaFormatOverride("created_at", formatDateTime),
 	}
 }
 
