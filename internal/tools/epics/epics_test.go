@@ -48,7 +48,7 @@ var testFullWorkItem = func() gl.WorkItem {
 		Confidential: true,
 		Author:       &gl.BasicUser{ID: 1, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "https://gitlab.example.com/alice", CreatedAt: &created},
 		Assignees:    []*gl.BasicUser{{Username: "bob"}, nil, {Username: "carol"}},
-		Labels:       []gl.LabelDetails{{Name: "planning"}, {Name: "priority"}},
+		Labels:       []gl.LabelDetails{{ID: 1, Name: "planning", Color: "#428BCA", TextColor: "#FFFFFF"}, {ID: 2, Name: "priority"}},
 		LinkedItems:  []gl.LinkedWorkItem{{IID: 5, NamespacePath: "g/sub", LinkType: "blocks"}},
 		Color:        &color,
 		HealthStatus: &health,
@@ -81,15 +81,14 @@ const (
 		"webUrl":"https://gitlab.example.com/groups/my-group/-/epics/1",
 		"confidential":false,
 		"author":{"username":"alice"},
-		"widgets":[
-			{"type":"ASSIGNEES","assignees":{"nodes":[{"username":"bob"}]}},
-			{"type":"LABELS","labels":{"nodes":[{"name":"planning","id":"gid://gitlab/Label/1","color":"#428BCA","description":""}]}},
-			{"type":"START_AND_DUE_DATE","startDate":"2026-01-01","dueDate":"2026-03-31"},
-			{"type":"COLOR","color":"#FF0000"},
-			{"type":"HEALTH_STATUS","healthStatus":"onTrack"},
-			{"type":"WEIGHT","weight":5},
-			{"type":"STATUS","status":"IN_PROGRESS"}
-		],
+		"features":{
+			"assignees":{"assignees":{"nodes":[{"username":"bob"}]}},
+			"labels":{"labels":{"nodes":[{"id":"gid://gitlab/Label/1","title":"planning","color":"#428BCA","textColor":"#FFFFFF","description":null,"descriptionHtml":null}]}},
+			"startAndDueDate":{"startDate":"2026-01-01","dueDate":"2026-03-31"},
+			"color":{"color":"#FF0000","textColor":"#FFFFFF"},
+			"healthStatus":{"healthStatus":"onTrack"},
+			"weight":{"weight":5}
+		},
 		"createdAt":"2026-01-01T00:00:00Z",
 		"updatedAt":"2026-01-02T00:00:00Z"
 	}`
@@ -278,6 +277,14 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.Type != "Epic" {
 		t.Errorf("Type = %q, want Epic", out.Type)
+	}
+	// The labels widget carries each label whole on the wire, so both the
+	// names and the detail come off one response.
+	if len(out.Labels) != 1 || out.Labels[0] != "planning" {
+		t.Errorf("Labels = %v, want [planning]", out.Labels)
+	}
+	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Color != "#428BCA" || out.LabelDetails[0].TextColor != "#FFFFFF" {
+		t.Errorf("LabelDetails = %+v, want the planning label with its colors", out.LabelDetails)
 	}
 }
 
@@ -581,31 +588,6 @@ func TestToOutput_Minimal(t *testing.T) {
 	}
 }
 
-// TestMapStatusToID uses table-driven subtests to verify mapStatusToID returns
-// a non-empty status ID for every supported status (TODO, IN_PROGRESS, DONE,
-// WONT_DO, DUPLICATE) and falls back to CUSTOM for unknown values.
-func TestMapStatusToID(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-	}{
-		{"TODO", "TODO"},
-		{"IN_PROGRESS", "IN_PROGRESS"},
-		{"DONE", "DONE"},
-		{"WONT_DO", "WONT_DO"},
-		{"DUPLICATE", "DUPLICATE"},
-		{"unknown", "CUSTOM"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := mapStatusToID(tc.in)
-			if result == "" {
-				t.Errorf("mapStatusToID(%q) returned empty", tc.in)
-			}
-		})
-	}
-}
-
 // --- Markdown tests ---
 
 // TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
@@ -665,8 +647,10 @@ func assertEpicOutputCoreFields(t *testing.T, out Output) {
 	if out.ID != 101 {
 		t.Errorf("ID = %d, want 101", out.ID)
 	}
-	if out.Status != "IN_PROGRESS" {
-		t.Errorf("Status = %q, want IN_PROGRESS", out.Status)
+	// The work item's own id under both keys: the REST path fills work_item_id
+	// from a field of its own, and this path has only the one identifier.
+	if out.WorkItemID != 101 {
+		t.Errorf("WorkItemID = %d, want 101", out.WorkItemID)
 	}
 	if authorName(out.Author) != "alice" {
 		t.Errorf("Author = %q, want alice", authorName(out.Author))
@@ -676,6 +660,11 @@ func assertEpicOutputCoreFields(t *testing.T, out Output) {
 	}
 	if len(out.Labels) != 2 || out.Labels[0] != "planning" {
 		t.Errorf("Labels = %v, want [planning priority]", out.Labels)
+	}
+	// The work item query fetches each label whole, so the detail is the same
+	// arrival as the name rather than a second request.
+	if len(out.LabelDetails) != 2 || out.LabelDetails[0].Name != "planning" || out.LabelDetails[0].Color != "#428BCA" {
+		t.Errorf("LabelDetails = %+v, want the two labels with their colors", out.LabelDetails)
 	}
 	if !out.Confidential {
 		t.Error("Confidential should be true")
@@ -729,7 +718,8 @@ func assertEpicOutputTimelineFields(t *testing.T, out Output) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestToLinkItem_NilAuthorAndCreatedAt(t *testing.T) {
-	e := &gl.Epic{ID: 10, IID: 3, Title: "Bare", State: "opened"}
+	bare := gl.Epic{ID: 10, IID: 3, Title: "Bare", State: "opened"}
+	e := &epicAPI{Epic: bare}
 	item := toLinkItem(e)
 	if item.Author != nil {
 		t.Errorf("Author = %+v, want nil", item.Author)
@@ -739,52 +729,75 @@ func TestToLinkItem_NilAuthorAndCreatedAt(t *testing.T) {
 	}
 }
 
-// TestEpicToOutput_FullRESTEpic verifies the EpicToOutput_FullRESTEpic handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestEpicToOutput_FullRESTEpic(t *testing.T) {
-	start := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	due := gl.ISOTime(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC))
+// isoDay is a YYYY-MM-DD fixture date, spelled once so the REST converter
+// fixtures below read as the dates they are.
+func isoDay(month, day int) *gl.ISOTime {
+	d := gl.ISOTime(time.Date(2026, time.Month(month), day, 0, 0, 0, 0, time.UTC))
+	return &d
+}
+
+// fullRESTEpic is a REST epic with every field GitLab sends populated: the ones
+// gl.Epic declares and the fourteen the [epicAPI] superset adds.
+func fullRESTEpic() *epicAPI {
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	updated := time.Date(2026, 1, 3, 3, 4, 5, 0, time.UTC)
 	closed := time.Date(2026, 1, 4, 3, 4, 5, 0, time.UTC)
-
-	startFixed := gl.ISOTime(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
-	startFromMs := gl.ISOTime(time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC))
-	dueFixed := gl.ISOTime(time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC))
-	dueFromMs := gl.ISOTime(time.Date(2026, 2, 6, 0, 0, 0, 0, time.UTC))
-
-	out := epicToOutput(&gl.Epic{
+	subscribed := true
+	declared := gl.Epic{
 		ID:                      44,
 		IID:                     7,
 		GroupID:                 9,
+		ParentID:                3,
 		Title:                   "REST Epic",
 		Description:             "REST body",
 		State:                   "opened",
+		Confidential:            true,
 		WebURL:                  "https://gitlab.example.com/groups/g/-/epics/7",
-		URL:                     "https://gitlab.example.com/api/v4/groups/9/epics/7",
-		Author:                  &gl.EpicAuthor{ID: 2, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "https://gitlab.example.com/alice"},
-		Labels:                  []string{"x"},
-		StartDate:               &start,
+		StartDate:               isoDay(1, 1),
 		StartDateIsFixed:        true,
-		StartDateFixed:          &startFixed,
-		StartDateFromMilestones: &startFromMs,
-		DueDate:                 &due,
+		StartDateFixed:          isoDay(1, 5),
+		StartDateFromMilestones: isoDay(1, 6),
+		DueDate:                 isoDay(2, 1),
 		DueDateIsFixed:          true,
-		DueDateFixed:            &dueFixed,
-		DueDateFromMilestones:   &dueFromMs,
+		DueDateFixed:            isoDay(2, 5),
+		DueDateFromMilestones:   isoDay(2, 6),
 		Upvotes:                 3,
 		Downvotes:               1,
-		UserNotesCount:          4,
 		CreatedAt:               &created,
 		UpdatedAt:               &updated,
 		ClosedAt:                &closed,
-		Confidential:            true,
-		ParentID:                3,
-	})
+	}
+	declaredAuthor := gl.EpicAuthor{ID: 2, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "https://gitlab.example.com/alice"}
+	author := epicAuthorAPI{EpicAuthor: declaredAuthor, Locked: true, PublicEmail: "alice@example.com"}
+	return &epicAPI{
+		Epic:                         declared,
+		Author:                       &author,
+		Labels:                       epicLabels{Names: []string{"x"}},
+		ParentIID:                    2,
+		Color:                        "#1068bf",
+		TextColor:                    "#FFFFFF",
+		WebEditURL:                   "/groups/g/-/epics/7",
+		WorkItemID:                   1032,
+		Subscribed:                   &subscribed,
+		Reference:                    "&7",
+		References:                   &toolutil.ReferencesOutput{Short: "&7", Relative: "g&7", Full: "g&7"},
+		Imported:                     true,
+		ImportedFrom:                 "github",
+		Links:                        &ResourceLinksOutput{Self: "https://gitlab.example.com/api/v4/groups/9/epics/7", EpicIssues: "https://gitlab.example.com/api/v4/groups/9/epics/7/issues", Group: "https://gitlab.example.com/api/v4/groups/9"},
+		EndDate:                      isoDay(2, 1),
+		StartDateFromInheritedSource: isoDay(1, 7),
+		DueDateFromInheritedSource:   isoDay(2, 7),
+	}
+}
+
+// TestEpicToOutput_FullRESTEpic verifies that epicToOutput maps every field of
+// a REST epic onto Output, the fourteen the superset adds included.
+func TestEpicToOutput_FullRESTEpic(t *testing.T) {
+	out := epicToOutput(fullRESTEpic())
 	assertRESTEpicIdentity(t, out)
 	assertRESTEpicDates(t, out)
 	assertRESTEpicMetrics(t, out)
+	assertRESTEpicSupersetFields(t, out)
 }
 
 func assertRESTEpicIdentity(t *testing.T, out Output) {
@@ -792,14 +805,19 @@ func assertRESTEpicIdentity(t *testing.T, out Output) {
 	if out.ID != 44 || out.IID != 7 || out.GroupID != 9 || out.ParentID != 3 {
 		t.Fatalf("unexpected epic output identity fields: %+v", out)
 	}
-	// gl.Epic declares no parent_iid, and the global ID in ParentID is not
-	// one, so the REST path leaves parent_iid empty rather than filling it
-	// with a number that would resolve to the wrong epic.
-	if out.ParentIID != 0 {
-		t.Errorf("ParentIID = %d on the REST path, want 0", out.ParentIID)
+	// parent_id and parent_iid are two different numbers on GitLab's own
+	// response, and only the raw fetch sees the second: filling it from the
+	// first published a parent a caller would look up and miss.
+	if out.ParentIID != 2 {
+		t.Errorf("ParentIID = %d, want 2", out.ParentIID)
 	}
 	if authorName(out.Author) != "alice" || out.Author.ID != 2 || out.Author.Name != "Alice" || out.Author.State != "active" || out.Author.WebURL == "" {
 		t.Fatalf("expected full author object, got %+v", out.Author)
+	}
+	// Two keys of GitLab's user entity that neither gl.EpicAuthor nor the work
+	// item author fragment carries.
+	if !out.Author.Locked || out.Author.PublicEmail != "alice@example.com" {
+		t.Errorf("author = %+v, want the locked flag and the public email", out.Author)
 	}
 }
 
@@ -811,6 +829,9 @@ func assertRESTEpicDates(t *testing.T, out Output) {
 	if out.DueDate != "2026-02-01" || out.DueDateFixed != "2026-02-05" || out.DueDateFromMilestones != "2026-02-06" || !out.DueDateIsFixed {
 		t.Fatalf("unexpected due date fields: %+v", out)
 	}
+	if out.StartDateFromInheritedSource != "2026-01-07" || out.DueDateFromInheritedSource != "2026-02-07" || out.EndDate != "2026-02-01" {
+		t.Fatalf("unexpected inherited-source or end date fields: %+v", out)
+	}
 	if out.CreatedAt == "" || out.UpdatedAt == "" || out.ClosedAt == "" {
 		t.Fatalf("expected timestamp fields to be populated: %+v", out)
 	}
@@ -818,70 +839,76 @@ func assertRESTEpicDates(t *testing.T, out Output) {
 
 func assertRESTEpicMetrics(t *testing.T, out Output) {
 	t.Helper()
-	if out.URL == "" || out.Upvotes != 3 || out.Downvotes != 1 || out.UserNotesCount != 4 {
-		t.Fatalf("unexpected vote/url fields: %+v", out)
+	if out.Upvotes != 3 || out.Downvotes != 1 {
+		t.Fatalf("unexpected vote fields: %+v", out)
 	}
 }
 
-// TestToLinkItem_FullRESTEpic verifies that toLinkItem maps every gl.Epic field
-// (group_id, parent_id, description, url, fixed/from-milestone dates, votes,
-// user notes count, full author, timestamps) onto the LinksItem output.
-func TestToLinkItem_FullRESTEpic(t *testing.T) {
-	start := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	startFixed := gl.ISOTime(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
-	startFromMs := gl.ISOTime(time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC))
-	due := gl.ISOTime(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC))
-	dueFixed := gl.ISOTime(time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC))
-	dueFromMs := gl.ISOTime(time.Date(2026, 2, 6, 0, 0, 0, 0, time.UTC))
-	created := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-	updated := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
-	closed := time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)
+func assertRESTEpicSupersetFields(t *testing.T, out Output) {
+	t.Helper()
+	if out.Color != "#1068bf" || out.TextColor != "#FFFFFF" || out.WebEditURL != "/groups/g/-/epics/7" || out.WorkItemID != 1032 {
+		t.Fatalf("unexpected presentation fields: %+v", out)
+	}
+	if out.Subscribed == nil || !*out.Subscribed {
+		t.Errorf("Subscribed = %v, want a set true", out.Subscribed)
+	}
+	if out.Reference != "&7" || out.References == nil || out.References.Full != "g&7" {
+		t.Fatalf("unexpected references: %q / %+v", out.Reference, out.References)
+	}
+	if !out.Imported || out.ImportedFrom != "github" {
+		t.Errorf("import fields = %t / %q, want true / github", out.Imported, out.ImportedFrom)
+	}
+	if out.Links == nil || out.Links.Self == "" || out.Links.EpicIssues == "" || out.Links.Group == "" {
+		t.Fatalf("unexpected _links: %+v", out.Links)
+	}
+}
 
-	item := toLinkItem(&gl.Epic{
-		ID:                      201,
-		IID:                     2,
-		GroupID:                 9,
-		ParentID:                7,
-		Title:                   "Sub-Epic",
-		Description:             "child body",
-		State:                   "opened",
-		WebURL:                  "https://gitlab.example.com/groups/g/-/epics/2",
-		URL:                     "https://gitlab.example.com/api/v4/groups/9/epics/2",
-		Author:                  &gl.EpicAuthor{ID: 3, Username: "carol", Name: "Carol", State: "active"},
-		Labels:                  []string{"sub"},
-		Confidential:            true,
-		StartDate:               &start,
-		StartDateIsFixed:        true,
-		StartDateFixed:          &startFixed,
-		StartDateFromMilestones: &startFromMs,
-		DueDate:                 &due,
-		DueDateIsFixed:          true,
-		DueDateFixed:            &dueFixed,
-		DueDateFromMilestones:   &dueFromMs,
-		Upvotes:                 2,
-		Downvotes:               1,
-		UserNotesCount:          5,
-		CreatedAt:               &created,
-		UpdatedAt:               &updated,
-		ClosedAt:                &closed,
-	})
-	if item.GroupID != 9 || item.ParentID != 7 || item.Description != "child body" || item.URL == "" {
+// TestToLinkItem_FullRESTEpic verifies that toLinkItem maps every field of a
+// REST epic (identity, presentation, dates, votes, references, links, full
+// author, timestamps) onto the LinksItem output.
+func TestToLinkItem_FullRESTEpic(t *testing.T) {
+	item := toLinkItem(fullRESTEpic())
+	assertLinkItemIdentity(t, item)
+	assertLinkItemDates(t, item)
+	assertLinkItemSupersetFields(t, item)
+}
+
+func assertLinkItemIdentity(t *testing.T, item LinksItem) {
+	t.Helper()
+	if item.GroupID != 9 || item.ParentID != 3 || item.ParentIID != 2 || item.Description != "REST body" || item.WorkItemID != 1032 {
 		t.Fatalf("unexpected core fields: %+v", item)
 	}
-	if authorName(item.Author) != "carol" || item.Author.ID != 3 || item.Author.Name != "Carol" {
+	if authorName(item.Author) != "alice" || item.Author.ID != 2 || item.Author.Name != "Alice" {
 		t.Fatalf("unexpected author: %+v", item.Author)
 	}
+	if item.Upvotes != 3 || item.Downvotes != 1 {
+		t.Fatalf("unexpected vote fields: %+v", item)
+	}
+}
+
+func assertLinkItemDates(t *testing.T, item LinksItem) {
+	t.Helper()
 	if item.StartDateFixed != "2026-01-05" || item.StartDateFromMilestones != "2026-01-06" || !item.StartDateIsFixed {
 		t.Fatalf("unexpected start date fields: %+v", item)
 	}
 	if item.DueDateFixed != "2026-02-05" || item.DueDateFromMilestones != "2026-02-06" || !item.DueDateIsFixed {
 		t.Fatalf("unexpected due date fields: %+v", item)
 	}
-	if item.Upvotes != 2 || item.Downvotes != 1 || item.UserNotesCount != 5 {
-		t.Fatalf("unexpected vote fields: %+v", item)
+	if item.StartDateFromInheritedSource != "2026-01-07" || item.DueDateFromInheritedSource != "2026-02-07" || item.EndDate != "2026-02-01" {
+		t.Fatalf("unexpected inherited-source or end date fields: %+v", item)
 	}
 	if item.UpdatedAt == "" || item.ClosedAt == "" {
 		t.Fatalf("expected updated/closed timestamps: %+v", item)
+	}
+}
+
+func assertLinkItemSupersetFields(t *testing.T, item LinksItem) {
+	t.Helper()
+	if item.Color != "#1068bf" || item.TextColor != "#FFFFFF" || item.WebEditURL == "" || item.Reference != "&7" {
+		t.Fatalf("unexpected presentation fields: %+v", item)
+	}
+	if item.Subscribed == nil || item.References == nil || item.Links == nil || !item.Imported || item.ImportedFrom != "github" {
+		t.Fatalf("unexpected superset fields: %+v", item)
 	}
 }
 
@@ -1047,9 +1074,11 @@ func TestList_OrderingOutsideTheVocabulary_IsRefused(t *testing.T) {
 }
 
 // TestList_WorkItems_RequestsEEFields verifies the work-items list path opts
-// into the EE work-item fields the epic output maps. As of client-go v2.49.0
-// ListWorkItems returns only CE fields unless ReturnedFields is set; without
-// the opt-in, epic weight/status/color/health_status would silently be empty.
+// into the EE work-item fields the epic output maps, and into no others. As of
+// client-go v2.49.0 ListWorkItems returns only CE fields unless ReturnedFields
+// is set, so without the opt-in epic weight/color/health_status would silently
+// be empty; status and iteration are the other direction, widgets an Epic does
+// not carry and the query has no reason to select.
 func TestList_WorkItems_RequestsEEFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -1059,10 +1088,17 @@ func TestList_WorkItems_RequestsEEFields(t *testing.T) {
 			return
 		}
 		query := string(body)
-		for _, field := range []string{"weight", "healthStatus", "color", "status", "iteration"} {
+		for _, field := range []string{"weight", "healthStatus", "color"} {
 			t.Run(field, func(t *testing.T) {
 				if !strings.Contains(query, field) {
 					t.Errorf("GraphQL query missing EE field %q; ReturnedFields opt-in not applied\nquery: %s", field, query)
+				}
+			})
+		}
+		for _, widget := range []string{"status {", "iteration {"} {
+			t.Run("no "+widget, func(t *testing.T) {
+				if strings.Contains(query, widget) {
+					t.Errorf("GraphQL query selects %q, a widget an Epic does not carry\nquery: %s", widget, query)
 				}
 			})
 		}
@@ -1225,7 +1261,7 @@ func assertUpdateWidgets(t *testing.T, input map[string]any) {
 	for _, key := range []string{
 		"title", "stateEvent", "descriptionWidget", "colorWidget",
 		"startAndDueDateWidget", "labelsWidget", "assigneesWidget",
-		"weightWidget", "healthStatusWidget", "statusWidget", "milestoneWidget",
+		"weightWidget", "healthStatusWidget", "milestoneWidget",
 	} {
 		t.Run(key, func(t *testing.T) {
 			if _, exists := input[key]; !exists {
@@ -1233,6 +1269,13 @@ func assertUpdateWidgets(t *testing.T, input map[string]any) {
 			}
 		})
 	}
+	// An Epic carries no STATUS widget, so the mutation refuses the field
+	// however it is spelled.
+	t.Run("no status widget", func(t *testing.T) {
+		if _, exists := input["statusWidget"]; exists {
+			t.Errorf("GraphQL input carries statusWidget: %v", input["statusWidget"])
+		}
+	})
 	t.Run("milestone id is a global id", func(t *testing.T) {
 		widget, isObject := input["milestoneWidget"].(map[string]any)
 		if !isObject {
@@ -1247,7 +1290,7 @@ func assertUpdateWidgets(t *testing.T, input map[string]any) {
 
 // TestUpdate_WithAllOptions verifies that Update handles all optional fields
 // (title, description, state event, parent, color, dates, labels, assignees,
-// weight, health, status) without errors.
+// weight, health) without errors.
 func TestUpdate_WithAllOptions(t *testing.T) {
 	call := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1291,7 +1334,6 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 		AssigneeIDs:    []int64{1, 2, 3},
 		Weight:         &weight,
 		HealthStatus:   "needsAttention",
-		Status:         "IN_PROGRESS",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1367,17 +1409,20 @@ func TestDelete_CancelledContext(t *testing.T) {
 // --- Markdown full coverage ---
 
 // TestFormatOutputMarkdown_FullFields verifies that FormatOutputMarkdown
-// renders all optional fields (status, assignees, confidential, labels,
-// health, weight, dates, color, parent, closedAt, webURL, linked items,
-// description) into the Markdown output.
+// renders all optional fields (assignees, confidential, labels, health,
+// weight, milestone, subscription, dates, color, parent, closedAt, webURL,
+// linked items, description) into the Markdown output.
 func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 	w := int64(5)
+	milestone := int64(9)
+	subscribed := true
 	out := Output{
 		IID:          1,
 		Title:        "Full Epic",
 		Type:         "Epic",
 		State:        "CLOSED",
-		Status:       "IN_PROGRESS",
+		MilestoneID:  &milestone,
+		Subscribed:   &subscribed,
 		Author:       &BasicUserOutput{Username: "alice"},
 		Assignees:    []*BasicUserOutput{{Username: "bob"}, {Username: "carol"}},
 		Confidential: true,
@@ -1399,8 +1444,9 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 	}
 	result := FormatOutputMarkdown(out)
 	for _, want := range []string{
-		"IN_PROGRESS", "bob, carol", "Confidential", "planning", "onTrack",
-		"Weight", "2026-01-01", "2026-03-31", "#FF0000", "Parent", "&10",
+		"bob, carol", "Confidential", "planning", "onTrack",
+		"Weight", "Milestone ID", "Subscribed", "true",
+		"2026-01-01", "2026-03-31", "#FF0000", "Parent", "&10",
 		"Closed", "gitlab.example.com", "Linked Items", "blocks", "g/sub",
 		"Epic description body",
 	} {
@@ -1673,19 +1719,18 @@ const workItemEpicFeaturesJSON = `{
 				{"iid":"12","namespace":{"fullPath":"my-group/other"}}
 			]}
 		},
-		"milestone":{"milestone":{"id":"gid://gitlab/Milestone/77"}},
-		"iteration":{"iteration":{"id":"gid://gitlab/Iteration/88"}}
+		"milestone":{"milestone":{"id":"gid://gitlab/Milestone/77"}}
 	}
 }`
 
 // TestGet_HierarchyAndWidgetIDs_RoundTrip verifies that the children the
 // hierarchy widget already carried reach the output, together with the
-// milestone and iteration ids.
+// milestone id.
 //
 // The hierarchy widget was fetched on every call and read only for the parent,
-// so a sub-epic tree cost one extra epic_get_links round trip to see. The two
-// ids resolve to null on a type without the widget, which is why surfacing
-// them cannot be wrong in either direction.
+// so a sub-epic tree cost one extra epic_get_links round trip to see. There is
+// no iteration id beside the milestone one: an Epic carries no ITERATION
+// widget, so that key was null on every response.
 func TestGet_HierarchyAndWidgetIDs_RoundTrip(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItem":`+workItemEpicFeaturesJSON+`}}}`)
@@ -1710,11 +1755,6 @@ func TestGet_HierarchyAndWidgetIDs_RoundTrip(t *testing.T) {
 			t.Errorf("MilestoneID = %v, want 77", out.MilestoneID)
 		}
 	})
-	t.Run("iteration id", func(t *testing.T) {
-		if out.IterationID == nil || *out.IterationID != 88 {
-			t.Errorf("IterationID = %v, want 88", out.IterationID)
-		}
-	})
 	t.Run("parent still read from the same widget", func(t *testing.T) {
 		if out.ParentIID != 10 || out.ParentPath != testFullPath {
 			t.Errorf("parent = &%d (%s), want &10 (%s)", out.ParentIID, out.ParentPath, testFullPath)
@@ -1723,17 +1763,15 @@ func TestGet_HierarchyAndWidgetIDs_RoundTrip(t *testing.T) {
 }
 
 // TestFormatOutputMarkdown_HierarchyAndWidgetIDs verifies the detail view
-// renders the child table and the two widget ids.
+// renders the child table and the milestone id.
 func TestFormatOutputMarkdown_HierarchyAndWidgetIDs(t *testing.T) {
 	milestoneID := int64(77)
-	iterationID := int64(88)
 	result := FormatOutputMarkdown(Output{
 		IID: 1, Title: "Q1", State: "opened",
 		MilestoneID: &milestoneID,
-		IterationID: &iterationID,
 		Children:    []ChildItem{{IID: 11, Path: "my-group/sub"}},
 	})
-	for _, want := range []string{"Milestone ID**: 77", "Iteration ID**: 88", "### Child Epics", "| &11 | my-group/sub |"} {
+	for _, want := range []string{"Milestone ID**: 77", "### Child Epics", "| &11 | my-group/sub |"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(result, want) {
 				t.Errorf("expected %q in output; got:\n%s", want, result)
@@ -1811,5 +1849,217 @@ func TestBuildCreateOptions_EmptyLinkedItems(t *testing.T) {
 	opts := buildCreateOptions(CreateInput{Title: "X", LinkedItems: &CreateLinkedItems{LinkType: "BLOCKS"}})
 	if opts.LinkedItems != nil {
 		t.Errorf("LinkedItems = %+v, want nil for an empty work_item_ids", opts.LinkedItems)
+	}
+}
+
+// --- REST superset coverage ---
+
+// restEpicJSON is one epic as GitLab really answers, taken from
+// GET /api/v4/groups/gitlab-org/epics on 2026-09-07 and reshaped to the
+// example bodies of doc/api/epics.md, which add the fields an anonymous
+// request does not see (subscribed, reference) and the parent that a
+// top-level epic has none of.
+const restEpicJSON = `{
+	"id": 29,
+	"work_item_id": 1032,
+	"iid": 4,
+	"group_id": 7,
+	"parent_id": 23,
+	"parent_iid": 3,
+	"imported": false,
+	"imported_from": "none",
+	"title": "Accusamus iste",
+	"description": "Molestias dolorem eos vitae",
+	"state": "opened",
+	"confidential": false,
+	"color": "#1068bf",
+	"text_color": "#FFFFFF",
+	"web_url": "http://gitlab.example.com/groups/test/-/epics/4",
+	"web_edit_url": "/groups/test/-/epics/4",
+	"reference": "&4",
+	"references": {"short": "&4", "relative": "&4", "full": "test&4"},
+	"author": {"id": 10, "name": "Lu Mayer", "username": "kam", "state": "active", "locked": false, "public_email": "kam@example.com", "web_url": "http://gitlab.example.com/kam"},
+	"start_date": "2026-01-01",
+	"start_date_is_fixed": true,
+	"start_date_fixed": "2026-01-05",
+	"start_date_from_milestones": "2026-01-06",
+	"start_date_from_inherited_source": "2026-01-07",
+	"end_date": "2026-07-31",
+	"due_date": "2026-07-31",
+	"due_date_is_fixed": false,
+	"due_date_fixed": null,
+	"due_date_from_milestones": "2026-07-31",
+	"due_date_from_inherited_source": "2026-07-31",
+	"created_at": "2026-07-17T13:36:22.770Z",
+	"updated_at": "2026-07-18T12:22:05.239Z",
+	"closed_at": null,
+	"labels": ["planning"],
+	"upvotes": 4,
+	"downvotes": 0,
+	"subscribed": true,
+	"_links": {
+		"self": "http://gitlab.example.com/api/v4/groups/7/epics/4",
+		"epic_issues": "http://gitlab.example.com/api/v4/groups/7/epics/4/issues",
+		"group": "http://gitlab.example.com/api/v4/groups/7",
+		"parent": "http://gitlab.example.com/api/v4/groups/7/epics/3"
+	}
+}`
+
+// assertRESTSupersetOnTheWire checks the fields gl.Epic does not declare
+// arrived from a real response body rather than from a struct literal.
+func assertRESTSupersetOnTheWire(t *testing.T, out Output) {
+	t.Helper()
+	cases := []struct {
+		name      string
+		got, want any
+	}{
+		{"work_item_id", out.WorkItemID, int64(1032)},
+		{"parent_iid", out.ParentIID, int64(3)},
+		{"color", out.Color, "#1068bf"},
+		{"text_color", out.TextColor, "#FFFFFF"},
+		{"web_edit_url", out.WebEditURL, "/groups/test/-/epics/4"},
+		{"reference", out.Reference, "&4"},
+		{"imported", out.Imported, false},
+		{"imported_from", out.ImportedFrom, "none"},
+		{"end_date", out.EndDate, "2026-07-31"},
+		{"start_date_from_inherited_source", out.StartDateFromInheritedSource, "2026-01-07"},
+		{"due_date_from_inherited_source", out.DueDateFromInheritedSource, "2026-07-31"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("%s = %v, want %v", tc.name, tc.got, tc.want)
+			}
+		})
+	}
+	t.Run("subscribed", func(t *testing.T) {
+		if out.Subscribed == nil || !*out.Subscribed {
+			t.Errorf("Subscribed = %v, want a set true", out.Subscribed)
+		}
+	})
+	t.Run("references", func(t *testing.T) {
+		if out.References == nil || out.References.Full != "test&4" {
+			t.Errorf("References = %+v, want full test&4", out.References)
+		}
+	})
+	t.Run("_links", func(t *testing.T) {
+		if out.Links == nil || out.Links.Parent == "" || out.Links.EpicIssues == "" {
+			t.Errorf("Links = %+v, want the four documented URLs", out.Links)
+		}
+	})
+	t.Run("author public_email", func(t *testing.T) {
+		if out.Author == nil || out.Author.PublicEmail != "kam@example.com" {
+			t.Errorf("author = %+v, want the public email GitLab sends", out.Author)
+		}
+	})
+}
+
+// TestList_RESTPath_SurfacesTheFieldsTheSDKDrops verifies that the fourteen
+// fields GitLab sends and gl.Epic does not declare reach the output, and that
+// the raw fetch asks for the same path client-go asks for.
+func TestList_RESTPath_SurfacesTheFieldsTheSDKDrops(t *testing.T) {
+	var gotPath string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testutil.RespondJSON(w, http.StatusOK, `[`+restEpicJSON+`]`)
+	}))
+	out, err := List(t.Context(), client, ListInput{FullPath: "test/sub"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := "/api/v4/groups/test/sub/epics"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if len(out.Epics) != 1 {
+		t.Fatalf("len(Epics) = %d, want 1", len(out.Epics))
+	}
+	assertRESTSupersetOnTheWire(t, out.Epics[0])
+}
+
+// TestGetLinks_RESTPath_SurfacesTheFieldsTheSDKDrops verifies the child-epic
+// path decodes the same superset, on the path client-go's own route builds.
+func TestGetLinks_RESTPath_SurfacesTheFieldsTheSDKDrops(t *testing.T) {
+	var gotPath string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testutil.RespondJSON(w, http.StatusOK, `[`+restEpicJSON+`]`)
+	}))
+	out, err := GetLinks(t.Context(), client, GetLinksInput{FullPath: "test/sub", IID: 9})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := "/api/v4/groups/test/sub/epics/9/epics"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if len(out.ChildEpics) != 1 {
+		t.Fatalf("len(ChildEpics) = %d, want 1", len(out.ChildEpics))
+	}
+	item := out.ChildEpics[0]
+	if item.WorkItemID != 1032 || item.ParentIID != 3 || item.TextColor != "#FFFFFF" || item.Reference != "&4" {
+		t.Errorf("superset fields missing from the child epic: %+v", item)
+	}
+	if item.Subscribed == nil || item.References == nil || item.Links == nil {
+		t.Errorf("nested superset objects missing from the child epic: %+v", item)
+	}
+}
+
+// TestList_WithLabelsDetails_DecodesTheObjectShape verifies the labels array
+// GitLab sends when with_labels_details is asked for is decoded rather than
+// refused. gl.Epic types the key []string alone, so the parameter this action
+// publishes made the whole response undecodable and every matching epic was
+// answered with a JSON error instead.
+func TestList_WithLabelsDetails_DecodesTheObjectShape(t *testing.T) {
+	const detailed = `[{"id": 1, "name": "planning", "color": "#428BCA", "text_color": "#FFFFFF",
+		"description": "quarter work", "description_html": "<p>quarter work</p>"}]`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("with_labels_details"); got != "true" {
+			t.Errorf("with_labels_details = %q, want true", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+strings.Replace(restEpicJSON, `["planning"]`, detailed, 1)+`]`)
+	}))
+	details := true
+	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath, WithLabelsDetails: &details})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Epics) != 1 {
+		t.Fatalf("len(Epics) = %d, want 1", len(out.Epics))
+	}
+	epic := out.Epics[0]
+	t.Run("names still fill labels", func(t *testing.T) {
+		if len(epic.Labels) != 1 || epic.Labels[0] != "planning" {
+			t.Errorf("Labels = %v, want [planning]", epic.Labels)
+		}
+	})
+	t.Run("the detail fills label_details", func(t *testing.T) {
+		if len(epic.LabelDetails) != 1 || epic.LabelDetails[0].Color != "#428BCA" ||
+			epic.LabelDetails[0].DescriptionHTML != "<p>quarter work</p>" {
+			t.Errorf("LabelDetails = %+v, want the planning label whole", epic.LabelDetails)
+		}
+	})
+}
+
+// TestEpicLabels_UnmarshalJSON_RefusesAThirdShape verifies a labels array that
+// is neither names nor objects is reported rather than decoded to nothing.
+func TestEpicLabels_UnmarshalJSON_RefusesAThirdShape(t *testing.T) {
+	var labels epicLabels
+	if err := labels.UnmarshalJSON([]byte(`[1, 2]`)); err == nil {
+		t.Fatalf("UnmarshalJSON accepted a numeric labels array, giving %+v", labels)
+	}
+}
+
+// TestRawListEpics_UnescapablePath_FailsBeforeTheRequest verifies the raw
+// helper refuses a path the client cannot unescape and never reaches the
+// server with it. Both public handlers escape the group path before building
+// one, so the branch is reached by calling the helper directly, the way the
+// jobs package reaches its own.
+func TestRawListEpics_UnescapablePath_FailsBeforeTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("handler called, want the request to fail while it is built")
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	epics, resp, err := rawListEpics(t.Context(), client, "groups/%zz/epics", nil)
+	if err == nil || epics != nil || resp != nil {
+		t.Fatalf("rawListEpics = %v/%v/%v, want only an error", epics, resp, err)
 	}
 }

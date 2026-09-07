@@ -32,9 +32,23 @@ const (
 	docCommitSignature  = "commits.md#get-the-signature-of-a-commit"
 	docPipelineTriggers = "pipeline_triggers.md"
 	docMRApprovals      = "merge_request_approvals.md"
-	tagKeyJSON          = "json"
-	typNameString       = "string"
-	typNameInt64        = "int64"
+	docEpics            = "epics.md#list-epics-for-a-group"
+	// The dual-shape labels array cannot be two types under one key in a typed
+	// schema, so the object half is published beside the names the way issues
+	// and merge requests publish theirs.
+	docEpicsLabelDetails = docEpics + " (with_labels_details returns each label whole in the labels array)"
+	// The OpenAPI record lists the properties of the epic and not those of the
+	// user object inside it, so the author's own field set is read off the
+	// response GitLab sends.
+	docEpicsAuthor = docEpics + " (a live GET /api/v4/groups/gitlab-org/epics on 2026-09-07 answered with " +
+		"eight author keys; gl.EpicAuthor and gl.BasicUser declare six, omitting locked and public_email)"
+	// epicPhantomWidget is the reason every widget-backed work item option an
+	// Epic does not carry is absent from the epic inputs.
+	epicPhantomWidget = "an Epic carries no STATUS, ITERATION or CRM_CONTACTS widget, so GitLab refuses the field; " +
+		"exposed on internal/tools/workitems, where the type is the caller's to choose"
+	tagKeyJSON    = "json"
+	typNameString = "string"
+	typNameInt64  = "int64"
 )
 
 // acceptedOutputRenames suppresses specific MCP output json tags from
@@ -232,7 +246,30 @@ var docOmittedFields = map[string]string{
 	// project-level approvers array carries the user alone, and has been
 	// documented as always empty since GitLab 12.3.
 	"projects.ApproverUserOutput.approved_at": docProjectApprovals,
+	// epics: gl.Epic declares user_notes_count and url, and no epic endpoint
+	// sends either. Both were the zero value on every response the two
+	// REST-backed epic actions ever returned. The epic converters now take the
+	// epicAPI superset rather than gl.Epic, so these keys record the decision
+	// for whoever pairs the two types again rather than suppressing a finding
+	// the auditor currently reaches.
+	"epics.Output.user_notes_count":    docEpicsGET,
+	"epics.Output.url":                 docEpicsGET,
+	"epics.LinksItem.user_notes_count": docEpicsGET,
+	"epics.LinksItem.url":              docEpicsGET,
+	// epics: gl.WorkItem is the struct of every work item type, and an Epic
+	// carries neither the STATUS nor the ITERATION widget, so both keys were
+	// null on every epic response. parent is exposed flattened, as the
+	// parent_iid and parent_path pair the widget carries.
+	"epics.Output.status":       epicPhantomWidget,
+	"epics.Output.iteration_id": epicPhantomWidget,
+	"epics.Output.parent":       "exposed flattened as parent_iid + parent_path (the two fields of gl.WorkItemIID)",
 }
+
+// docEpicsGET cites the three oracles that agree the two fields are not sent,
+// since gl.Epic declaring them is the only reason to think they are.
+const docEpicsGET = "docs/development/gitlab-api-shapes.json " +
+	"(GET /api/v4/groups/{id}/-/epics and the four sibling epic GETs declare neither user_notes_count nor url); " +
+	"doc/api/epics.md prints neither in any example body, and a live gitlab.com response carries neither"
 
 // docMRApprovalsGET cites the record that separates the two endpoints sharing
 // the approvals path, since GitLab's own prose page does not.
@@ -339,6 +376,31 @@ var docAddedFields = map[string]string{
 	"commits.GPGSignatureOutput.key":              docCommitSignature,
 	"commits.GPGSignatureOutput.x509_certificate": docCommitSignature,
 
+	// epics — fourteen fields the epic response documents and gl.Epic does not
+	// declare, plus the object half of the dual-shape labels array that
+	// with_labels_details asks for; fetched via raw REST (rawListEpics into the
+	// epicAPI superset) on the list and child-epic paths. Like the omissions
+	// above, these keys record which fields are doc-justified rather than
+	// invented; the converters take the superset, so the gl.Epic diff that
+	// would consult them is not currently run.
+	"epics.LinksItem.parent_iid":                       docEpics,
+	"epics.LinksItem.work_item_id":                     docEpics,
+	"epics.LinksItem.color":                            docEpics,
+	"epics.LinksItem.text_color":                       docEpics,
+	"epics.LinksItem.web_edit_url":                     docEpics,
+	"epics.LinksItem.subscribed":                       docEpics,
+	"epics.LinksItem.reference":                        docEpics,
+	"epics.LinksItem.references":                       docEpics,
+	"epics.LinksItem.imported":                         docEpics,
+	"epics.LinksItem.imported_from":                    docEpics,
+	"epics.LinksItem._links":                           docEpics,
+	"epics.LinksItem.end_date":                         docEpics,
+	"epics.LinksItem.start_date_from_inherited_source": docEpics,
+	"epics.LinksItem.due_date_from_inherited_source":   docEpics,
+	"epics.LinksItem.label_details":                    docEpicsLabelDetails,
+	"epics.BasicUserOutput.locked":                     docEpicsAuthor,
+	"epics.BasicUserOutput.public_email":               docEpicsAuthor,
+
 	// projectimportexport — the import-status response documents `created_at`, but the
 	// SDK gl.ImportStatus tags its timestamp `create_at` (upstream typo); we surface the
 	// documented `created_at` via a raw-decode superset (importStatusAPI).
@@ -429,6 +491,35 @@ var acceptedMissingInputs = map[string]string{
 	"epics.ListInput.labels":                         "exposed as label_name []string (wired to opts.Labels)",
 	"workitems.ListWorkItemTypesInput.onlyAvailable": "exposed as only_available (snake_case of the SDK camelCase tag)",
 	"groupmilestones.ListInput.include_descendents":  "exposed as the doc-correct include_descendants (the SDK url tag has the include_descendents typo); wired to opts.IncludeDescendents",
+
+	// Phantom widget inputs: gl.*WorkItemOptions is the options struct of every
+	// work item type, and an Epic carries neither the STATUS, ITERATION nor
+	// CRM_CONTACTS widget, so GitLab refuses each of these on an epic. The
+	// widget list gitlab.com answered on 2026-09-07 for
+	// namespace(fullPath: "gitlab-org") { workItemTypes { nodes { name widgetDefinitions { type } } } }
+	// gives Epic AI_SESSION, ASSIGNEES, AWARD_EMOJI, COLOR, CURRENT_USER_TODOS,
+	// CUSTOM_FIELDS, DESCRIPTION, HEALTH_STATUS, HIERARCHY, LABELS,
+	// LINKED_ITEMS, MILESTONE, NOTES, NOTIFICATIONS, PARTICIPANTS,
+	// START_AND_DUE_DATE, TIME_TRACKING, VERIFICATION_STATUS and WEIGHT, while
+	// Issue and Task carry the other three. internal/tools/workitems exposes
+	// them, because there the type is the caller's to choose.
+	"epics.CreateInput.status":                epicPhantomWidget,
+	"epics.CreateInput.iteration_id":          epicPhantomWidget,
+	"epics.CreateInput.crm_contact_ids":       epicPhantomWidget,
+	"epics.UpdateInput.status":                epicPhantomWidget,
+	"epics.UpdateInput.iteration_id":          epicPhantomWidget,
+	"epics.UpdateInput.crm_contact_ids":       epicPhantomWidget,
+	"epics.ListInput.iteration_id":            epicPhantomWidget,
+	"epics.ListInput.iteration_cadence_id":    epicPhantomWidget,
+	"epics.ListInput.iteration_wildcard_id":   epicPhantomWidget,
+	"epics.ListInput.crm_contact_id":          epicPhantomWidget,
+	"epics.ListInput.crm_organization_id":     epicPhantomWidget,
+	"epics.ListInput.release_tag":             epicPhantomWidget,
+	"epics.ListInput.release_tag_wildcard_id": epicPhantomWidget,
+
+	// Work item options this action pins rather than publishes.
+	"epics.ListInput.types":           "pinned to EPIC: this action lists epics, and the type is what makes it that action rather than workitems.list",
+	"epics.ListInput.returned_fields": "pinned to the fragment the epic output maps; a caller choosing it could select status or iteration, widgets an Epic does not carry",
 
 	// Deprecated params the current endpoint replaced.
 	"grouplabels.DeleteInput.name": "deprecated DELETE /groups/:id/labels name param; current endpoint uses label_id in path",

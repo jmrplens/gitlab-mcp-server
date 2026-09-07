@@ -36,11 +36,6 @@ func FormatOutputMarkdown(e Output) string {
 	fmt.Fprintf(&b, "## Epic &%d: %s\n\n", e.IID, toolutil.EscapeMdTableCell(e.Title))
 	//gitlab:allow-unescaped e.State: an epic state GitLab writes, opened or closed on the REST epic and OPEN or CLOSED on the work item.
 	fmt.Fprintf(&b, toolutil.FmtMdState, e.State)
-	if e.Status != "" {
-		// The status widget carries the display name of a status in the
-		// namespace's lifecycle, which a group owner can create and rename.
-		fmt.Fprintf(&b, "- **Status**: %s\n", toolutil.EscapeMdTableCell(e.Status))
-	}
 	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(userName(e.Author)))
 	if len(e.Assignees) > 0 {
 		fmt.Fprintf(&b, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(userNames(e.Assignees), ", ")))
@@ -63,8 +58,10 @@ func FormatOutputMarkdown(e Output) string {
 	if e.MilestoneID != nil {
 		fmt.Fprintf(&b, "- **Milestone ID**: %d\n", *e.MilestoneID)
 	}
-	if e.IterationID != nil {
-		fmt.Fprintf(&b, "- **Iteration ID**: %d\n", *e.IterationID)
+	// Only the REST path reports it, and only for the authenticated caller, so
+	// an absent value means "not asked" rather than "not subscribed".
+	if e.Subscribed != nil {
+		fmt.Fprintf(&b, "- **Subscribed**: %t\n", *e.Subscribed)
 	}
 	if e.StartDate != "" {
 		//gitlab:allow-unescaped e.StartDate: a date this package wrote itself, with time.Format on the DateOnly layout.

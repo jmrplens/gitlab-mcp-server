@@ -135,10 +135,13 @@ func epicCreateEnumOverrides() []toolutil.InputSchemaOverride {
 	}
 }
 
-// epicUpdateEnumOverrides constrains state_event, health_status, and status on
-// the epic update action. state_event values come from WorkItemStateEvent SDK
-// constants (CLOSE/REOPEN). health_status from the GraphQL HealthStatus enum.
-// status from the mapStatusToID lookup table (WorkItemStatusID GIDs).
+// epicUpdateEnumOverrides constrains state_event and health_status on the epic
+// update action. state_event values come from WorkItemStateEvent SDK constants
+// (CLOSE/REOPEN). health_status from the GraphQL HealthStatus enum.
+//
+// There is no status override because there is no status input: an Epic work
+// item carries no STATUS widget and the mutation refuses the field. See
+// [UpdateInput] for the widget list that says so.
 func epicUpdateEnumOverrides() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("state_event", map[string]any{
@@ -146,9 +149,6 @@ func epicUpdateEnumOverrides() []toolutil.InputSchemaOverride {
 		}),
 		toolutil.SchemaPropertyOverride("health_status", map[string]any{
 			"enum": []any{"onTrack", "needsAttention", "atRisk"},
-		}),
-		toolutil.SchemaPropertyOverride("status", map[string]any{
-			"enum": []any{"TODO", "IN_PROGRESS", "DONE", "WONT_DO", "DUPLICATE"},
 		}),
 	}
 }
@@ -193,7 +193,7 @@ func decorateEpicMeta(opts *toolutil.ActionSpecOptions, individualTool string) {
 		opts.RelatedActions = []string{actionEpicGet, actionEpicList, actionEpicUpdate}
 		opts.IndividualTool.Description = "Create a new epic in a group, optionally under a parent epic and already linked to others. Returns: the created epic with IID, state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update."
 	case "gitlab_epic_update":
-		opts.Usage = "Update an existing epic by full_path plus epic_iid. Supports close/reopen via state_event, reparenting via parent_id, milestone assignment, label add/remove, dates, weight, health status, and status."
+		opts.Usage = "Update an existing epic by full_path plus epic_iid. Supports close/reopen via state_event, reparenting via parent_id, milestone assignment, label add/remove, dates, weight and health status."
 		opts.Aliases = []string{individualTool, "update epic", "edit epic", "close epic", "reopen epic"}
 		opts.RelatedActions = []string{actionEpicGet, actionEpicList, "epic.delete"}
 		opts.IndividualTool.Description = "Update an existing epic. Supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete."

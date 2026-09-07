@@ -2,6 +2,7 @@ package epics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -45,14 +46,21 @@ type CreateLinkedItems struct {
 // Per the 1:1 audit policy (full nested objects, C-IMPORTS) the SDK
 // sub-object is replicated here rather than imported from a sibling package
 // to preserve the zero-import-cycle constraint.
+// locked and public_email are on the REST author and on neither SDK type: a
+// live GET /api/v4/groups/gitlab-org/epics on 2026-09-07 answered with all
+// eight keys of GitLab's user entity, and gl.EpicAuthor declares six. They stay
+// empty on the Work Items path, whose author fragment selects id, username,
+// name, state, createdAt, avatarUrl and webUrl.
 type BasicUserOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name,omitempty"`
-	State     string `json:"state,omitempty"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
+	ID          int64  `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name,omitempty"`
+	State       string `json:"state,omitempty"`
+	Locked      bool   `json:"locked,omitempty"`
+	PublicEmail string `json:"public_email,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	WebURL      string `json:"web_url,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
 }
 
 // basicUserFromUser converts a gl.BasicUser (Work Items API author/assignee)
@@ -86,17 +94,129 @@ func basicUsersFromUsers(users []*gl.BasicUser) []*BasicUserOutput {
 	return out
 }
 
-// basicUserFromEpicAuthor converts a gl.EpicAuthor (REST Epics API author) to
-// its output shape, returning nil when the SDK value is nil. gl.EpicAuthor has
-// no created_at field, so CreatedAt is left empty.
-func basicUserFromEpicAuthor(a *gl.EpicAuthor) *BasicUserOutput {
+// epicAuthorAPI decodes the REST epic author in full: gl.EpicAuthor plus the
+// two keys GitLab sends that it does not declare. The epic response carries no
+// created_at for its author, so that field stays empty on this path.
+type epicAuthorAPI struct {
+	gl.EpicAuthor
+	Locked      bool   `json:"locked"`
+	PublicEmail string `json:"public_email"`
+}
+
+// basicUserFromEpicAuthor converts a raw-fetched REST epic author to its output
+// shape, returning nil when the response carried none.
+func basicUserFromEpicAuthor(a *epicAuthorAPI) *BasicUserOutput {
 	if a == nil {
 		return nil
 	}
 	return &BasicUserOutput{
 		ID: a.ID, Username: a.Username, Name: a.Name, State: a.State,
+		Locked: a.Locked, PublicEmail: a.PublicEmail,
 		AvatarURL: a.AvatarURL, WebURL: a.WebURL,
 	}
+}
+
+// ResourceLinksOutput mirrors the `_links` object GitLab renders on a REST
+// epic: the API URLs of the epic itself, its issues, its group and its parent.
+// gl.Epic declares none of it.
+type ResourceLinksOutput struct {
+	Self       string `json:"self,omitempty"`
+	EpicIssues string `json:"epic_issues,omitempty"`
+	Group      string `json:"group,omitempty"`
+	Parent     string `json:"parent,omitempty"`
+}
+
+// epicLabels decodes GitLab's dual-shape `labels` array on an epic: label names
+// by default, and full label objects when with_labels_details is asked for.
+//
+// gl.Epic types the key []string alone, so with_labels_details=true made the
+// whole response undecodable and the action answered a JSON error rather than
+// the epics that matched. Both shapes fill Names, so a caller that never asked
+// for the detail sees the same output it always did.
+type epicLabels struct {
+	Names   []string
+	Details []*toolutil.LabelDetailsOutput
+}
+
+// UnmarshalJSON implements [json.Unmarshaler] for the dual-shape labels array.
+func (l *epicLabels) UnmarshalJSON(data []byte) error {
+	var names []string
+	if err := json.Unmarshal(data, &names); err == nil {
+		l.Names = names
+		return nil
+	}
+	var details []*toolutil.LabelDetailsOutput
+	if err := json.Unmarshal(data, &details); err != nil {
+		return fmt.Errorf("epic labels: %w", err)
+	}
+	l.Details = details
+	for _, d := range details {
+		if d != nil {
+			l.Names = append(l.Names, d.Name)
+		}
+	}
+	return nil
+}
+
+// epicAPI decodes a REST epic in full: gl.Epic plus the fourteen fields GitLab
+// sends that it does not declare, and the dual-shape labels array it cannot
+// decode.
+//
+// The fields are GitLab's own, not ours to infer: its generated OpenAPI record
+// lists every one of them on each epic GET
+// (docs/development/gitlab-api-shapes.json, GET /api/v4/groups/{id}/-/epics),
+// doc/api/epics.md prints them in its example bodies, and a live gitlab.com
+// response carries them. Reading them costs no extra round trip, since they
+// arrive on the response client-go already asks for and discards.
+//
+// Author and Labels shadow the embedded gl.Epic fields of the same name: the
+// shallower field is the one encoding/json fills, so the embedded ones stay
+// empty and every read goes through these.
+type epicAPI struct {
+	gl.Epic
+	Author                       *epicAuthorAPI             `json:"author"`
+	Labels                       epicLabels                 `json:"labels"`
+	ParentIID                    int64                      `json:"parent_iid"`
+	Color                        string                     `json:"color"`
+	TextColor                    string                     `json:"text_color"`
+	WebEditURL                   string                     `json:"web_edit_url"`
+	WorkItemID                   int64                      `json:"work_item_id"`
+	Subscribed                   *bool                      `json:"subscribed"`
+	Reference                    string                     `json:"reference"`
+	References                   *toolutil.ReferencesOutput `json:"references"`
+	Imported                     bool                       `json:"imported"`
+	ImportedFrom                 string                     `json:"imported_from"`
+	Links                        *ResourceLinksOutput       `json:"_links"`
+	EndDate                      *gl.ISOTime                `json:"end_date"`
+	StartDateFromInheritedSource *gl.ISOTime                `json:"start_date_from_inherited_source"`
+	DueDateFromInheritedSource   *gl.ISOTime                `json:"due_date_from_inherited_source"`
+}
+
+// epicsListPath and epicChildrenPath are the two REST paths this package
+// fetches raw, spelled the way client-go's own routes spell them.
+func epicsListPath(fullPath string) string {
+	return fmt.Sprintf("groups/%s/epics", gl.PathEscape(fullPath))
+}
+
+func epicChildrenPath(fullPath string, iid int64) string {
+	return fmt.Sprintf("groups/%s/epics/%d/epics", gl.PathEscape(fullPath), iid)
+}
+
+// rawListEpics issues a raw REST GET against an epics list path, decoding the
+// full documented response into the [epicAPI] superset instead of gl.Epic. The
+// supplied opts encode the filters and pagination via their url struct tags,
+// and the returned gl.Response preserves the pagination headers
+// [toolutil.PaginationFromResponse] reads.
+func rawListEpics(
+	ctx context.Context, client *gitlabclient.Client, path string, opts *gl.ListGroupEpicsOptions,
+) ([]*epicAPI, *gl.Response, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var epics []*epicAPI
+	resp, err := client.GL().Do(req, &epics)
+	return epics, resp, err
 }
 
 // ListInput defines parameters for listing group epics.
@@ -279,6 +399,17 @@ type CreateInput struct {
 }
 
 // UpdateInput defines parameters for updating an existing epic.
+//
+// There is no status here. An Epic work item carries no STATUS widget, so the
+// mutation refuses the field: the widget list gitlab.com answered on
+// 2026-09-07 for
+// namespace(fullPath: "gitlab-org") { workItemTypes { nodes { name widgetDefinitions { type } } } }
+// gives Epic AI_SESSION, ASSIGNEES, AWARD_EMOJI, COLOR, CURRENT_USER_TODOS,
+// CUSTOM_FIELDS, DESCRIPTION, HEALTH_STATUS, HIERARCHY, LABELS, LINKED_ITEMS,
+// MILESTONE, NOTES, NOTIFICATIONS, PARTICIPANTS, START_AND_DUE_DATE,
+// TIME_TRACKING, VERIFICATION_STATUS and WEIGHT, and neither STATUS nor
+// ITERATION nor CRM_CONTACTS. Issue and Task carry all three, which is where
+// the field was copied from.
 type UpdateInput struct {
 	FullPath       string  `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
 	IID            int64   `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
@@ -295,7 +426,6 @@ type UpdateInput struct {
 	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone to assign to the epic"`
 	Weight         *int64  `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the epic"`
 	HealthStatus   string  `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
-	Status         string  `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 }
 
 // DeleteInput defines parameters for deleting an epic.
@@ -305,51 +435,69 @@ type DeleteInput struct {
 }
 
 // Output represents a single epic (backed by a Work Item of type Epic, or by
-// the REST gl.Epic for the child-epic links endpoint). Per the 1:1 audit
-// policy it carries the union of fields exposed by gl.WorkItem and gl.Epic;
-// fields absent on a given source stay at their zero value.
+// the REST epic for the list and child-epic links endpoints). Per the 1:1 audit
+// policy it carries the union of what each source exposes; fields absent on a
+// given source stay at their zero value.
+//
+// There is no status and no iteration_id. Both were always null: an Epic work
+// item carries neither the STATUS nor the ITERATION widget, per the widget list
+// gitlab.com answered on 2026-09-07 for
+// namespace(fullPath: "gitlab-org") { workItemTypes { nodes { name widgetDefinitions { type } } } },
+// and neither is a field of the REST epic. There is no user_notes_count and no
+// url either: gl.Epic declares both, and GitLab's OpenAPI record, its
+// doc/api/epics.md example bodies and a live gitlab.com response agree that no
+// epic endpoint sends either one.
 type Output struct {
 	toolutil.HintableOutput
-	ID           int64              `json:"id"`
-	IID          int64              `json:"iid"`
-	Type         string             `json:"type"`
-	State        string             `json:"state"`
-	Status       string             `json:"status,omitempty"`
-	Title        string             `json:"title"`
-	Description  string             `json:"description,omitempty"`
-	WebURL       string             `json:"web_url,omitempty"`
-	URL          string             `json:"url,omitempty"`
-	GroupID      int64              `json:"group_id,omitempty"`
-	ParentID     int64              `json:"parent_id,omitempty"`
-	Author       *BasicUserOutput   `json:"author,omitempty"`
-	Assignees    []*BasicUserOutput `json:"assignees,omitempty"`
-	Labels       []string           `json:"labels,omitempty"`
-	LinkedItems  []LinkedItem       `json:"linked_items,omitempty" tier:"ultimate"`
-	Children     []ChildItem        `json:"children,omitempty"`
-	Confidential bool               `json:"confidential,omitempty"`
-	Color        string             `json:"color,omitempty"`
+	ID           int64                          `json:"id"`
+	IID          int64                          `json:"iid"`
+	Type         string                         `json:"type"`
+	State        string                         `json:"state"`
+	Title        string                         `json:"title"`
+	Description  string                         `json:"description,omitempty"`
+	WebURL       string                         `json:"web_url,omitempty"`
+	WebEditURL   string                         `json:"web_edit_url,omitempty"`
+	GroupID      int64                          `json:"group_id,omitempty"`
+	ParentID     int64                          `json:"parent_id,omitempty"`
+	WorkItemID   int64                          `json:"work_item_id,omitempty"`
+	Author       *BasicUserOutput               `json:"author,omitempty"`
+	Assignees    []*BasicUserOutput             `json:"assignees,omitempty"`
+	Labels       []string                       `json:"labels,omitempty"`
+	LabelDetails []*toolutil.LabelDetailsOutput `json:"label_details,omitempty"`
+	LinkedItems  []LinkedItem                   `json:"linked_items,omitempty" tier:"ultimate"`
+	Children     []ChildItem                    `json:"children,omitempty"`
+	Confidential bool                           `json:"confidential,omitempty"`
+	Color        string                         `json:"color,omitempty"`
+	TextColor    string                         `json:"text_color,omitempty"`
 
-	StartDate               string `json:"start_date,omitempty"`
-	StartDateIsFixed        bool   `json:"start_date_is_fixed,omitempty"`
-	StartDateFixed          string `json:"start_date_fixed,omitempty"`
-	StartDateFromMilestones string `json:"start_date_from_milestones,omitempty"`
-	DueDate                 string `json:"due_date,omitempty"`
-	DueDateIsFixed          bool   `json:"due_date_is_fixed,omitempty"`
-	DueDateFixed            string `json:"due_date_fixed,omitempty"`
-	DueDateFromMilestones   string `json:"due_date_from_milestones,omitempty"`
+	StartDate                    string `json:"start_date,omitempty"`
+	StartDateIsFixed             bool   `json:"start_date_is_fixed,omitempty"`
+	StartDateFixed               string `json:"start_date_fixed,omitempty"`
+	StartDateFromMilestones      string `json:"start_date_from_milestones,omitempty"`
+	StartDateFromInheritedSource string `json:"start_date_from_inherited_source,omitempty"`
+	DueDate                      string `json:"due_date,omitempty"`
+	DueDateIsFixed               bool   `json:"due_date_is_fixed,omitempty"`
+	DueDateFixed                 string `json:"due_date_fixed,omitempty"`
+	DueDateFromMilestones        string `json:"due_date_from_milestones,omitempty"`
+	DueDateFromInheritedSource   string `json:"due_date_from_inherited_source,omitempty"`
+	EndDate                      string `json:"end_date,omitempty"`
 
-	HealthStatus   string `json:"health_status,omitempty" tier:"ultimate"`
-	Weight         *int64 `json:"weight,omitempty" tier:"premium"`
-	MilestoneID    *int64 `json:"milestone_id,omitempty"`
-	IterationID    *int64 `json:"iteration_id,omitempty" tier:"premium"`
-	Upvotes        int64  `json:"upvotes,omitempty"`
-	Downvotes      int64  `json:"downvotes,omitempty"`
-	UserNotesCount int64  `json:"user_notes_count,omitempty"`
-	ParentIID      int64  `json:"parent_iid,omitempty"`
-	ParentPath     string `json:"parent_path,omitempty"`
-	CreatedAt      string `json:"created_at,omitempty"`
-	UpdatedAt      string `json:"updated_at,omitempty"`
-	ClosedAt       string `json:"closed_at,omitempty"`
+	HealthStatus string                     `json:"health_status,omitempty" tier:"ultimate"`
+	Weight       *int64                     `json:"weight,omitempty" tier:"premium"`
+	MilestoneID  *int64                     `json:"milestone_id,omitempty"`
+	Upvotes      int64                      `json:"upvotes,omitempty"`
+	Downvotes    int64                      `json:"downvotes,omitempty"`
+	Subscribed   *bool                      `json:"subscribed,omitempty"`
+	Reference    string                     `json:"reference,omitempty"`
+	References   *toolutil.ReferencesOutput `json:"references,omitempty"`
+	Imported     bool                       `json:"imported,omitempty"`
+	ImportedFrom string                     `json:"imported_from,omitempty"`
+	Links        *ResourceLinksOutput       `json:"_links,omitempty"`
+	ParentIID    int64                      `json:"parent_iid,omitempty"`
+	ParentPath   string                     `json:"parent_path,omitempty"`
+	CreatedAt    string                     `json:"created_at,omitempty"`
+	UpdatedAt    string                     `json:"updated_at,omitempty"`
+	ClosedAt     string                     `json:"closed_at,omitempty"`
 }
 
 // ListOutput holds a page of epics plus the pagination block of whichever API
@@ -374,45 +522,67 @@ type LinksOutput struct {
 	ChildEpics []LinksItem `json:"child_epics"`
 }
 
-// LinksItem is the child-epic output for the GetLinks REST endpoint, mirroring
-// gl.Epic. Per the 1:1 audit policy it surfaces every gl.Epic field; the author
-// is a full nested object.
+// LinksItem is the child-epic output for the GetLinks REST endpoint. Per the
+// 1:1 audit policy it surfaces the whole REST epic: every field of gl.Epic
+// GitLab sends, plus the fourteen it sends that gl.Epic does not declare
+// (see [epicAPI]). The author is a full nested object.
+//
+// user_notes_count and url are absent for the reason [Output] records: gl.Epic
+// declares them and no epic endpoint sends them.
 type LinksItem struct {
-	ID           int64            `json:"id"`
-	IID          int64            `json:"iid"`
-	GroupID      int64            `json:"group_id,omitempty"`
-	ParentID     int64            `json:"parent_id,omitempty"`
-	Title        string           `json:"title"`
-	Description  string           `json:"description,omitempty"`
-	State        string           `json:"state"`
-	WebURL       string           `json:"web_url,omitempty"`
-	URL          string           `json:"url,omitempty"`
-	Author       *BasicUserOutput `json:"author,omitempty"`
-	Labels       []string         `json:"labels,omitempty"`
-	Confidential bool             `json:"confidential,omitempty"`
+	ID           int64                          `json:"id"`
+	IID          int64                          `json:"iid"`
+	GroupID      int64                          `json:"group_id,omitempty"`
+	ParentID     int64                          `json:"parent_id,omitempty"`
+	ParentIID    int64                          `json:"parent_iid,omitempty"`
+	WorkItemID   int64                          `json:"work_item_id,omitempty"`
+	Title        string                         `json:"title"`
+	Description  string                         `json:"description,omitempty"`
+	State        string                         `json:"state"`
+	WebURL       string                         `json:"web_url,omitempty"`
+	WebEditURL   string                         `json:"web_edit_url,omitempty"`
+	Author       *BasicUserOutput               `json:"author,omitempty"`
+	Labels       []string                       `json:"labels,omitempty"`
+	LabelDetails []*toolutil.LabelDetailsOutput `json:"label_details,omitempty"`
+	Confidential bool                           `json:"confidential,omitempty"`
+	Color        string                         `json:"color,omitempty"`
+	TextColor    string                         `json:"text_color,omitempty"`
 
-	StartDate               string `json:"start_date,omitempty"`
-	StartDateIsFixed        bool   `json:"start_date_is_fixed,omitempty"`
-	StartDateFixed          string `json:"start_date_fixed,omitempty"`
-	StartDateFromMilestones string `json:"start_date_from_milestones,omitempty"`
-	DueDate                 string `json:"due_date,omitempty"`
-	DueDateIsFixed          bool   `json:"due_date_is_fixed,omitempty"`
-	DueDateFixed            string `json:"due_date_fixed,omitempty"`
-	DueDateFromMilestones   string `json:"due_date_from_milestones,omitempty"`
+	StartDate                    string `json:"start_date,omitempty"`
+	StartDateIsFixed             bool   `json:"start_date_is_fixed,omitempty"`
+	StartDateFixed               string `json:"start_date_fixed,omitempty"`
+	StartDateFromMilestones      string `json:"start_date_from_milestones,omitempty"`
+	StartDateFromInheritedSource string `json:"start_date_from_inherited_source,omitempty"`
+	DueDate                      string `json:"due_date,omitempty"`
+	DueDateIsFixed               bool   `json:"due_date_is_fixed,omitempty"`
+	DueDateFixed                 string `json:"due_date_fixed,omitempty"`
+	DueDateFromMilestones        string `json:"due_date_from_milestones,omitempty"`
+	DueDateFromInheritedSource   string `json:"due_date_from_inherited_source,omitempty"`
+	EndDate                      string `json:"end_date,omitempty"`
 
-	Upvotes        int64  `json:"upvotes,omitempty"`
-	Downvotes      int64  `json:"downvotes,omitempty"`
-	UserNotesCount int64  `json:"user_notes_count,omitempty"`
-	CreatedAt      string `json:"created_at,omitempty"`
-	UpdatedAt      string `json:"updated_at,omitempty"`
-	ClosedAt       string `json:"closed_at,omitempty"`
+	Upvotes      int64                      `json:"upvotes,omitempty"`
+	Downvotes    int64                      `json:"downvotes,omitempty"`
+	Subscribed   *bool                      `json:"subscribed,omitempty"`
+	Reference    string                     `json:"reference,omitempty"`
+	References   *toolutil.ReferencesOutput `json:"references,omitempty"`
+	Imported     bool                       `json:"imported,omitempty"`
+	ImportedFrom string                     `json:"imported_from,omitempty"`
+	Links        *ResourceLinksOutput       `json:"_links,omitempty"`
+	CreatedAt    string                     `json:"created_at,omitempty"`
+	UpdatedAt    string                     `json:"updated_at,omitempty"`
+	ClosedAt     string                     `json:"closed_at,omitempty"`
 }
 
 // toOutput converts a GitLab Work Item to the epic Output format.
+//
+// work_item_id repeats the id here on purpose: on this path the identifier
+// GitLab hands back is the work item's, so the key the REST path fills from a
+// field of its own carries the same value rather than nothing.
 func toOutput(wi *gl.WorkItem) Output {
 	out := Output{
 		ID:           wi.ID,
 		IID:          wi.IID,
+		WorkItemID:   wi.ID,
 		Type:         wi.Type,
 		State:        wi.State,
 		Title:        wi.Title,
@@ -421,15 +591,17 @@ func toOutput(wi *gl.WorkItem) Output {
 		Confidential: wi.Confidential,
 		Weight:       wi.Weight,
 		MilestoneID:  wi.MilestoneID,
-		IterationID:  wi.IterationID,
-	}
-	if wi.Status != nil {
-		out.Status = *wi.Status
 	}
 	out.Author = basicUserFromUser(wi.Author)
 	out.Assignees = basicUsersFromUsers(wi.Assignees)
+	// The work item query fetches each label whole, so label_details costs
+	// nothing here: the names alone were the discarded half of what arrived.
 	for _, l := range wi.Labels {
 		out.Labels = append(out.Labels, l.Name)
+		out.LabelDetails = append(out.LabelDetails, &toolutil.LabelDetailsOutput{
+			ID: l.ID, Name: l.Name, Color: l.Color,
+			Description: l.Description, DescriptionHTML: l.DescriptionHTML, TextColor: l.TextColor,
+		})
 	}
 	for _, li := range wi.LinkedItems {
 		out.LinkedItems = append(out.LinkedItems, LinkedItem{
@@ -477,93 +649,115 @@ func formatISODate(t *gl.ISOTime) string {
 	return time.Time(*t).Format(time.DateOnly)
 }
 
-// toLinkItem converts a GitLab REST Epic to the LinksItem format.
-func toLinkItem(e *gl.Epic) LinksItem {
-	return LinksItem{
-		ID:                      e.ID,
-		IID:                     e.IID,
-		GroupID:                 e.GroupID,
-		ParentID:                e.ParentID,
-		Title:                   e.Title,
-		Description:             e.Description,
-		State:                   e.State,
-		WebURL:                  e.WebURL,
-		URL:                     e.URL,
-		Author:                  basicUserFromEpicAuthor(e.Author),
-		Labels:                  e.Labels,
-		Confidential:            e.Confidential,
-		StartDate:               formatISODate(e.StartDate),
-		StartDateIsFixed:        e.StartDateIsFixed,
-		StartDateFixed:          formatISODate(e.StartDateFixed),
-		StartDateFromMilestones: formatISODate(e.StartDateFromMilestones),
-		DueDate:                 formatISODate(e.DueDate),
-		DueDateIsFixed:          e.DueDateIsFixed,
-		DueDateFixed:            formatISODate(e.DueDateFixed),
-		DueDateFromMilestones:   formatISODate(e.DueDateFromMilestones),
-		Upvotes:                 e.Upvotes,
-		Downvotes:               e.Downvotes,
-		UserNotesCount:          e.UserNotesCount,
-		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
-		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
-		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
+// toLinkItem converts a raw-fetched REST epic to the LinksItem format.
+func toLinkItem(e *epicAPI) LinksItem {
+	item := LinksItem{
+		ID:           e.ID,
+		IID:          e.IID,
+		GroupID:      e.GroupID,
+		ParentID:     e.ParentID,
+		ParentIID:    e.ParentIID,
+		WorkItemID:   e.WorkItemID,
+		Title:        e.Title,
+		Description:  e.Description,
+		State:        e.State,
+		WebURL:       e.WebURL,
+		WebEditURL:   e.WebEditURL,
+		Author:       basicUserFromEpicAuthor(e.Author),
+		Labels:       e.Labels.Names,
+		LabelDetails: e.Labels.Details,
+		Confidential: e.Confidential,
+		Color:        e.Color,
+		TextColor:    e.TextColor,
+		Subscribed:   e.Subscribed,
+		Reference:    e.Reference,
+		References:   e.References,
+		Imported:     e.Imported,
+		ImportedFrom: e.ImportedFrom,
+		Links:        e.Links,
+		Upvotes:      e.Upvotes,
+		Downvotes:    e.Downvotes,
+		CreatedAt:    toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:    toolutil.FormatTimePtr(e.UpdatedAt),
+		ClosedAt:     toolutil.FormatTimePtr(e.ClosedAt),
 	}
+	applyLinkItemDates(&item, e)
+	return item
 }
 
-// epicToOutput converts a REST gl.Epic to the epic Output format.
+// applyLinkItemDates copies the ten date fields of a REST epic, keeping
+// [toLinkItem] to one screen.
+func applyLinkItemDates(item *LinksItem, e *epicAPI) {
+	item.StartDate = formatISODate(e.StartDate)
+	item.StartDateIsFixed = e.StartDateIsFixed
+	item.StartDateFixed = formatISODate(e.StartDateFixed)
+	item.StartDateFromMilestones = formatISODate(e.StartDateFromMilestones)
+	item.StartDateFromInheritedSource = formatISODate(e.StartDateFromInheritedSource)
+	item.DueDate = formatISODate(e.DueDate)
+	item.DueDateIsFixed = e.DueDateIsFixed
+	item.DueDateFixed = formatISODate(e.DueDateFixed)
+	item.DueDateFromMilestones = formatISODate(e.DueDateFromMilestones)
+	item.DueDateFromInheritedSource = formatISODate(e.DueDateFromInheritedSource)
+	item.EndDate = formatISODate(e.EndDate)
+}
+
+// epicToOutput converts a raw-fetched REST epic to the epic Output format.
 //
-// parent_iid stays empty here. GitLab's own epic response carries parent_id
-// and parent_iid as two different numbers and gl.Epic declares only the first,
-// so filling parent_iid from ParentID published a global ID under the name of
-// an internal one, and a caller feeding it back to epic_get looked up an epic
-// that was not the parent. parent_id already carries that value.
-func epicToOutput(e *gl.Epic) Output {
-	return Output{
-		ID:                      e.ID,
-		IID:                     e.IID,
-		Type:                    "Epic",
-		State:                   e.State,
-		Title:                   e.Title,
-		Description:             e.Description,
-		WebURL:                  e.WebURL,
-		URL:                     e.URL,
-		GroupID:                 e.GroupID,
-		ParentID:                e.ParentID,
-		Author:                  basicUserFromEpicAuthor(e.Author),
-		Labels:                  e.Labels,
-		Confidential:            e.Confidential,
-		StartDate:               formatISODate(e.StartDate),
-		StartDateIsFixed:        e.StartDateIsFixed,
-		StartDateFixed:          formatISODate(e.StartDateFixed),
-		StartDateFromMilestones: formatISODate(e.StartDateFromMilestones),
-		DueDate:                 formatISODate(e.DueDate),
-		DueDateIsFixed:          e.DueDateIsFixed,
-		DueDateFixed:            formatISODate(e.DueDateFixed),
-		DueDateFromMilestones:   formatISODate(e.DueDateFromMilestones),
-		Upvotes:                 e.Upvotes,
-		Downvotes:               e.Downvotes,
-		UserNotesCount:          e.UserNotesCount,
-		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
-		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
-		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
+// parent_iid comes from GitLab's own field, never from ParentID: the response
+// carries the two as different numbers, and filling the internal ID from the
+// global one published a parent a caller could feed back to epic_get and reach
+// the wrong epic. gl.Epic declares only ParentID, which is why the raw fetch
+// exists.
+func epicToOutput(e *epicAPI) Output {
+	out := Output{
+		ID:           e.ID,
+		IID:          e.IID,
+		Type:         "Epic",
+		State:        e.State,
+		Title:        e.Title,
+		Description:  e.Description,
+		WebURL:       e.WebURL,
+		WebEditURL:   e.WebEditURL,
+		GroupID:      e.GroupID,
+		ParentID:     e.ParentID,
+		ParentIID:    e.ParentIID,
+		WorkItemID:   e.WorkItemID,
+		Author:       basicUserFromEpicAuthor(e.Author),
+		Labels:       e.Labels.Names,
+		LabelDetails: e.Labels.Details,
+		Confidential: e.Confidential,
+		Color:        e.Color,
+		TextColor:    e.TextColor,
+		Subscribed:   e.Subscribed,
+		Reference:    e.Reference,
+		References:   e.References,
+		Imported:     e.Imported,
+		ImportedFrom: e.ImportedFrom,
+		Links:        e.Links,
+		Upvotes:      e.Upvotes,
+		Downvotes:    e.Downvotes,
+		CreatedAt:    toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:    toolutil.FormatTimePtr(e.UpdatedAt),
+		ClosedAt:     toolutil.FormatTimePtr(e.ClosedAt),
 	}
+	applyOutputDates(&out, e)
+	return out
 }
 
-// mapStatusToID maps a human-readable status string to the GitLab WorkItemStatusID.
-func mapStatusToID(s string) gl.WorkItemStatusID {
-	switch s {
-	case "TODO":
-		return gl.WorkItemStatusToDo
-	case "IN_PROGRESS":
-		return gl.WorkItemStatusInProgress
-	case "DONE":
-		return gl.WorkItemStatusDone
-	case "WONT_DO":
-		return gl.WorkItemStatusWontDo
-	case "DUPLICATE":
-		return gl.WorkItemStatusDuplicate
-	default:
-		return gl.WorkItemStatusID(s)
-	}
+// applyOutputDates copies the eleven date fields of a REST epic, keeping
+// [epicToOutput] to one screen.
+func applyOutputDates(out *Output, e *epicAPI) {
+	out.StartDate = formatISODate(e.StartDate)
+	out.StartDateIsFixed = e.StartDateIsFixed
+	out.StartDateFixed = formatISODate(e.StartDateFixed)
+	out.StartDateFromMilestones = formatISODate(e.StartDateFromMilestones)
+	out.StartDateFromInheritedSource = formatISODate(e.StartDateFromInheritedSource)
+	out.DueDate = formatISODate(e.DueDate)
+	out.DueDateIsFixed = e.DueDateIsFixed
+	out.DueDateFixed = formatISODate(e.DueDateFixed)
+	out.DueDateFromMilestones = formatISODate(e.DueDateFromMilestones)
+	out.DueDateFromInheritedSource = formatISODate(e.DueDateFromInheritedSource)
+	out.EndDate = formatISODate(e.EndDate)
 }
 
 // buildEpicListOptions maps a ListInput onto the REST ListGroupEpicsOptions,
@@ -638,7 +832,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := buildEpicListOptions(input)
-	items, resp, err := client.GL().Epics.ListGroupEpics(input.FullPath, opts, gl.WithContext(ctx))
+	items, resp, err := rawListEpics(ctx, client, epicsListPath(input.FullPath), opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("epicList", err, http.StatusNotFound,
 			errHintEpicListPath)
@@ -692,10 +886,13 @@ func buildWorkItemsListOptions(input ListInput, cursor toolutil.GraphQLCursor) *
 		// As of client-go v2.49.0, ListWorkItems returns only CE fields by
 		// default; EE fields are omitted unless requested via ReturnedFields.
 		// Epics are Premium/Ultimate and the output maps EE fields (weight,
-		// status, color, health_status, iteration), so opt into them
-		// explicitly or they silently come back empty.
+		// color, health_status), so opt into them explicitly or they silently
+		// come back empty. status and iteration are deliberately not asked
+		// for: an Epic carries neither widget, per the widget list gitlab.com
+		// answered on 2026-09-07 for namespace(fullPath: "gitlab-org")
+		// { workItemTypes { nodes { name widgetDefinitions { type } } } }.
 		ReturnedFields: append(append([]string(nil), gl.WorkItemDefaultListFields()...),
-			"color", "healthStatus", "iteration", "status", "weight"),
+			"color", "healthStatus", "weight"),
 	}
 	applyWorkItemsCursor(opts, cursor)
 	applyWorkItemsTextFilters(opts, input)
@@ -845,7 +1042,7 @@ func GetLinks(ctx context.Context, client *gitlabclient.Client, input GetLinksIn
 	if input.IID <= 0 {
 		return LinksOutput{}, toolutil.ErrRequiredInt64("epicGetLinks", "epic_iid")
 	}
-	epics, _, err := client.GL().Epics.GetEpicLinks(input.FullPath, input.IID, gl.WithContext(ctx))
+	epics, _, err := rawListEpics(ctx, client, epicChildrenPath(input.FullPath, input.IID), nil)
 	if err != nil {
 		return LinksOutput{}, toolutil.WrapErrWithStatusHint("epicGetLinks", err, http.StatusNotFound,
 			"verify iid with gitlab_epic_list; child epics are returned only when the parent epic exists in the given group")
@@ -1010,10 +1207,6 @@ func applyUpdateWidgets(opts *gl.UpdateWorkItemOptions, input UpdateInput) {
 	if d, err := time.Parse(time.DateOnly, input.DueDate); err == nil {
 		isoDate := gl.ISOTime(d)
 		opts.DueDate = &isoDate
-	}
-	if input.Status != "" {
-		status := mapStatusToID(input.Status)
-		opts.Status = &status
 	}
 }
 

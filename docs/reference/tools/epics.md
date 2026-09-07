@@ -49,6 +49,8 @@ Epics require GitLab Premium or Ultimate and are always scoped to a group.
 
 ## Epics
 
+> **What the two REST-backed epic actions return.** `gitlab_epic_list` on its REST path and `gitlab_epic_get_links` decode GitLab's epic response whole rather than the subset the SDK struct declares, so they also carry `parent_iid`, `work_item_id`, `color`, `text_color`, `web_edit_url`, `subscribed`, `reference`, `references`, `imported`, `imported_from`, `_links`, `end_date`, `start_date_from_inherited_source` and `due_date_from_inherited_source`. `with_labels_details` fills `label_details` beside the `labels` names instead of failing the call, and the `author` object carries `locked` and `public_email` beside the six keys the SDK type declares. `user_notes_count` and `url` are gone: GitLab sends neither on any epic endpoint, and both were always zero.
+
 ### `gitlab_epic_list`
 
 List epics for a GitLab group. Filters by state, search text (with `in` choosing title, description or both), author, assignees, labels, milestone, weight, health status, subscription, explicit IIDs or global IDs, parent epic, and the created, updated, closed and due date ranges. Pages in both directions: `first` and `after` forward, `last` and `before` backward.
@@ -56,14 +58,16 @@ List epics for a GitLab group. Filters by state, search text (with `in` choosing
 | Annotation | **Read** |
 | ---------- | -------- |
 
-> **Two APIs answer this action.** A request naming only what the REST epics endpoint accepts is served by it and reports `offset_pagination` (page numbers). Any filter only the Work Items GraphQL query can express routes the whole request through that query instead, and it reports `pagination` (cursors). Exactly one block comes back, which is how a caller knows which answered. `order_by` and `sort` apply on either path: the Work Items query takes the pair as one value and the server assembles it. `author_id` and `with_labels_details` are REST-only and are dropped when another filter takes the Work Items path; use `author_username` there.
+> **Two APIs answer this action, and the pagination block says which.** A request naming only what the REST epics endpoint accepts is served by it and answers with `offset_pagination`: `page`, `per_page`, `total_items`, `total_pages`, `next_page` and `has_more`, paged with `page`/`per_page` or the keyset pair. Any filter only the Work Items GraphQL query can express routes the whole request through that query instead, and it answers with `pagination`: `has_next_page`, `has_previous_page`, `end_cursor` and `start_cursor`, paged with `first`/`after` forward and `last`/`before` backward. Exactly one of the two blocks is ever present, and it is omitted when empty, so the one that came back is what tells a caller which page request to send next. Publishing one shape for both would mean answering a full REST page with `has_next_page` false, which is how a caller stops one page short of the rest of the list. `order_by` and `sort` apply on either path: the Work Items query takes the pair as one value and the server assembles it. `author_id` and `with_labels_details` are REST-only and are dropped when another filter takes the Work Items path; use `author_username` there.
 
 ### `gitlab_epic_get`
 
-Get a single group epic by its IID via the Work Items GraphQL API. Returns title, description, state, labels, dates, author, assignees, linked items, and health status.
+Get a single group epic by its IID via the Work Items GraphQL API. Returns title, description, state, labels (names and full label details), dates, author, assignees, children, linked items, and health status.
 
 | Annotation | **Read** |
 | ---------- | -------- |
+
+> **No `status` and no `iteration_id`.** An Epic work item carries neither the STATUS nor the ITERATION widget, so both keys were null on every response and they are no longer published. Issues and tasks do carry them: reach those through the `work_item.get` action (`gitlab_get_work_item` with `GITLAB_MCP_TOOL_SURFACE=individual`).
 
 ### `gitlab_epic_get_links`
 
@@ -83,10 +87,12 @@ Create a new epic in a GitLab group via the Work Items GraphQL API. Supports tit
 
 ### `gitlab_epic_update`
 
-Update an existing group epic via the Work Items GraphQL API. Can modify title, description, labels (replace, add, or remove), assignees, dates, weight, health status, milestone, parent epic, and state (close/reopen).
+Update an existing group epic via the Work Items GraphQL API. Can modify title, description, labels (add or remove), assignees, dates, weight, health status, milestone, parent epic, and state (close/reopen).
 
 | Annotation | **Update** |
 | ---------- | ---------- |
+
+> **No `status`, `iteration_id` or `crm_contact_ids`.** The work item mutation accepts all three for the types that carry the STATUS, ITERATION and CRM_CONTACTS widgets, and an Epic carries none of them, so GitLab refuses each on an epic. They stay available on the `work_item.*` actions, where the caller chooses the type.
 
 ### `gitlab_epic_delete`
 

@@ -93,6 +93,7 @@ readable without opening the tracker:
 | 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | No | No | No | No | Yes |
 | 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | No | No | No | No | Yes |
 | 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | No | No | No | No | None possible |
+| 28 | client-go | [The epics wrapper is missing two filters and fourteen response fields](#the-epics-wrapper-is-missing-two-filters-and-fourteen-response-fields) | No | No | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -472,6 +473,63 @@ The gap was measured against the pinned GitLab schema in
 struct). Larger for the user objects, because widening them changes the shape of
 a published struct: the ids would stay and a `*BasicUser` would join them, which
 is the same accretion the SDK already makes elsewhere.
+### The epics wrapper is missing two filters and fourteen response fields
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: was yes. `with_labels_details` is a parameter this server
+  publishes, and through the wrapper it could not be answered at all.
+- **Workaround**: yes, two of them. The two filters are sent through the Work
+  Items GraphQL query instead, which is why naming either one routes an epic
+  list away from the REST endpoint (`usesWorkItemsPath` in
+  `internal/tools/epics/epics.go`). The response fields come from a raw REST
+  fetch into the `epicAPI` superset in the same file, the shape this repository
+  already uses for `jobs`, `boards` and `groupepicboards`. Both retire when the
+  wrapper carries them.
+
+**What**: five gaps, four of them in `epics.go`, all of them fields GitLab
+really sends or really accepts.
+
+- `ListGroupEpicsOptions` declares no `AuthorUsername` and no `Confidential`.
+  Both are listed as parameters of `GET /groups/:id/epics` in
+  [doc/api/epics.md](https://docs.gitlab.com/api/epics/#list-epics-for-a-group)
+  and in the OpenAPI document GitLab generates from its own Grape definitions
+  (`docs/development/gitlab-api-shapes.json`, `GET /api/v4/groups/{id}/-/epics`).
+  There is no way to send either one through the wrapper.
+- `Epic` declares fourteen fewer fields than the endpoint returns: `parent_iid`,
+  `color`, `text_color`, `web_edit_url`, `work_item_id`, `subscribed`,
+  `reference`, `references`, `imported`, `imported_from`, `_links`, `end_date`,
+  `start_date_from_inherited_source` and `due_date_from_inherited_source`. The
+  same OpenAPI record lists every one of them on all five epic GETs, the
+  documentation page prints them in its example bodies, and a live gitlab.com
+  response carries them.
+- `Epic.Labels` is typed `[]string`, and the documented `with_labels_details`
+  parameter makes GitLab answer with an array of label objects instead. A caller
+  who sends it gets a JSON decode failure rather than epics, so the parameter
+  cannot be used through the wrapper at all.
+- `EpicAuthor` declares six of the eight keys GitLab's user entity sends on an
+  epic: `locked` and `public_email` are on the live response and on neither
+  `EpicAuthor` nor `BasicUser`.
+- On the Work Items side of the same domain, `workitems.go` selects
+  `color { color textColor }` and `workItemWidgetColorGQL.unwrap` returns the
+  colour alone, so `WorkItem` has no field for a value the query already paid
+  for. That is why `text_color` reaches an epic only on the REST path here.
+
+**Also**: `Epic` declares `UserNotesCount` and `URL`, and no epic endpoint sends
+either. They are absent from the OpenAPI record, from every example body on the
+documentation page, and from a live response. Anything reading them off a
+decoded `Epic` reads a zero.
+
+**How we found it**: the 1:1 output reconciliation for the epics domain, which
+compares what we publish against what GitLab's generated OpenAPI record says
+each endpoint returns. The `with_labels_details` failure was found by sending
+the parameter to gitlab.com and reading the array back.
+
+**Effort**: small for the filters and the fields (struct members with `url` and
+`json` tags). The labels type is the one breaking change: a dual-shape field
+needs either its own type with an `UnmarshalJSON`, as this repository carries,
+or a second `LabelDetails` field beside the names.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
