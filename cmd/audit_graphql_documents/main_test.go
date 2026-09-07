@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"go/token"
 	"net/http"
 	"net/http/httptest"
@@ -65,10 +64,11 @@ func fixtureModule(t *testing.T, packages map[string]string) string {
 func runFixture(t *testing.T, packages map[string]string, verbose bool) (int, string, string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	status := run(graphqldocs.Options{
-		Dir:      fixtureModule(t, packages),
-		Patterns: []string{"./..."},
-	}, verbose, &out, &errOut)
+	status := run(auditRun{
+		dir:      fixtureModule(t, packages),
+		patterns: []string{"./..."},
+		verbose:  verbose,
+	}, &out, &errOut)
 	return status, out.String(), errOut.String()
 }
 
@@ -87,11 +87,11 @@ func TestRun_AgainstASchemaTheCallerSupplies_JudgesByThatSchema(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	status := run(graphqldocs.Options{
-		Dir:        fixtureModule(t, map[string]string{"sound": soundFixture}),
-		Patterns:   []string{"./..."},
-		SchemaPath: narrowed,
-	}, false, &out, &errOut)
+	status := run(auditRun{
+		dir:        fixtureModule(t, map[string]string{"sound": soundFixture}),
+		patterns:   []string{"./..."},
+		schemaPath: narrowed,
+	}, &out, &errOut)
 
 	if status != 1 {
 		t.Fatalf("exit status %d, want 1: the supplied schema has no vulnerability field.\nstdout:\n%s", status, out.String())
@@ -103,10 +103,7 @@ func TestRun_AgainstASchemaTheCallerSupplies_JudgesByThatSchema(t *testing.T) {
 
 // okFixture holds one document the smallest possible instance accepts, so a run
 // against a fetched schema can be judged by that schema rather than by the pin.
-const okFixture = `package ok
-
-const queryOk = @@query { ok }@@
-`
+const okFixture = "package ok\n\nconst queryOk = `query { ok }`\n"
 
 // TestRun_AgainstAnInstanceItIntrospects_JudgesByWhatThatInstanceServes
 // verifies the mode the scheduled job runs.
@@ -120,9 +117,8 @@ func TestRun_AgainstAnInstanceItIntrospects_JudgesByWhatThatInstanceServes(t *te
 	var out, errOut bytes.Buffer
 
 	status := run(auditRun{
-		dir:      repoRoot(t),
-		patterns: []string{fixturePattern},
-		overlay:  fixtureOverlay(t, map[string]string{"ok": okFixture}),
+		dir:      fixtureModule(t, map[string]string{"ok": okFixture}),
+		patterns: []string{"./..."},
 		live:     answeringInstance(t, introspectionAnswer(queryOnly)),
 		now:      afterThePin,
 	}, &out, &errOut)
@@ -153,9 +149,8 @@ func TestRun_AnInstanceThatCannotBeReached_FailsWithoutFallingBackToThePin(t *te
 
 	var out, errOut bytes.Buffer
 	status := run(auditRun{
-		dir:      repoRoot(t),
-		patterns: []string{fixturePattern},
-		overlay:  fixtureOverlay(t, map[string]string{"ok": okFixture}),
+		dir:      fixtureModule(t, map[string]string{"ok": okFixture}),
+		patterns: []string{"./..."},
 		live:     unreachable.URL,
 	}, &out, &errOut)
 
@@ -178,9 +173,8 @@ func TestRun_BothSchemaSourcesAtOnce_IsRefused(t *testing.T) {
 	var out, errOut bytes.Buffer
 
 	status := run(auditRun{
-		dir:        repoRoot(t),
-		patterns:   []string{fixturePattern},
-		overlay:    fixtureOverlay(t, map[string]string{"ok": okFixture}),
+		dir:        fixtureModule(t, map[string]string{"ok": okFixture}),
+		patterns:   []string{"./..."},
 		live:       "https://gitlab.example.com/api/graphql",
 		schemaPath: filepath.Join(t.TempDir(), "unused.graphql"),
 	}, &out, &errOut)
@@ -214,11 +208,11 @@ func TestRun_ASuppliedSchemaThatCannotBeUsed_Fails(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			var out, errOut bytes.Buffer
 
-			status := run(graphqldocs.Options{
-				Dir:        fixtureModule(t, map[string]string{"sound": soundFixture}),
-				Patterns:   []string{"./..."},
-				SchemaPath: testCase.path,
-			}, false, &out, &errOut)
+			status := run(auditRun{
+				dir:        fixtureModule(t, map[string]string{"sound": soundFixture}),
+				patterns:   []string{"./..."},
+				schemaPath: testCase.path,
+			}, &out, &errOut)
 
 			if status != 1 {
 				t.Fatalf("exit status %d, want 1", status)
@@ -314,7 +308,7 @@ func TestRun_NothingToCheck_IsAFailure(t *testing.T) {
 func TestRun_SourceThatCannotBeLoaded_Fails(t *testing.T) {
 	var out, errOut bytes.Buffer
 
-	status := run(graphqldocs.Options{Dir: t.TempDir(), Patterns: []string{"./..."}}, false, &out, &errOut)
+	status := run(auditRun{dir: t.TempDir(), patterns: []string{"./..."}}, &out, &errOut)
 
 	if status != 1 {
 		t.Fatalf("exit status %d, want 1", status)

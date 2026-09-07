@@ -107,11 +107,11 @@ func Audit(opts Options) (Result, error) {
 // judge returns the check each document is put through and the one line that
 // says what judged it, so a reader of a failure knows whose opinion refused
 // their document.
-func judge(schemaPath string, schema *ast.Schema, provenanceOf string) (validate func(string) error, provenance string, err error) {
-	if schema != nil {
+func judge(schemaPath string, probed *ast.Schema, probedProvenance string) (validate func(string) error, provenance string, err error) {
+	if probed != nil {
 		return func(document string) error {
-			return graphqlschema.ValidateDocumentAgainst(schema, document)
-		}, provenanceOf, nil
+			return graphqlschema.ValidateDocumentAgainst(probed, document)
+		}, probedProvenance, nil
 	}
 	if schemaPath == "" {
 		// The provenance record is embedded and its own gate
