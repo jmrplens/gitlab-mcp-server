@@ -25,6 +25,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint`                           |
 | `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase); `-site-stats` writes the site's stats JSON                                                                                     | `make audit-metrics`, `make gen-site-stats`                         |
 | `gen_graphql_schema`           | Generators                    | Pins a GitLab GraphQL schema by introspecting a live instance; `--check` gates the committed one                                                                                                    | `make gen-graphql-schema`, `make check-graphql-schema`              |
+| `gen_api_shapes`               | Generators                    | Pins what GitLab's own generated OpenAPI document says each REST operation accepts and returns; `--check` gates the committed record                                                                | `make gen-api-shapes`, `make check-api-shapes`                      |
 | `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                                                 |
 | `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                           | `make audit-test-names`, `make check-test-file-names`               |
 | `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                      | `make check-test-goroutines`                                        |
@@ -135,9 +136,11 @@ This rule reads the request instead, out of `docs/development/request-inventory.
 - **Does the document validate.** Every raw GraphQL document in the source, against the pinned schema. The reading and the judging are `cmd/internal/graphqldocs`', shared with the standalone gate [audit_graphql_documents](#audit_graphql_documents), so there is one answer to whether a document is one GitLab would refuse. This judges the document and never the values sent with it, which is the other half of the same defect family: of the nine tools that could not work, four sent a document the schema refuses and five sent an accepted document carrying a value GitLab does not have. The second half is caught by the validating transport in `internal/testutil`, which checks the variables with the document on every request a test drives, and neither check substitutes for the other.
 - **Does the endpoint exist.** `-check-endpoints` compares every recorded REST endpoint with GitLab's own API documentation, and **fails on an endpoint no declaration accounts for**. The declarations are what make that safe, because the oracle is prose: 57 documentation lines omit the leading slash, `emoji_reactions.md` gives the note reactions one plaintext block for issues and leaves the merge request and snippet variants to a sentence, `usage_data.md` documents `/usage_data/track_events` only in prose and a curl example, `attestations.md` writes its endpoint lines without the `projects` scope its own curl example shows, the generic package registry and Terraform state are documented outside `doc/api` entirely, and the `/services/` alias for the integrations endpoints, which client-go still uses, is not documented at all. Each of those shapes is written down in `declaredUndocumentedEndpoints` (`cmd/audit_1to1/internal/paths/endpoint_declarations.go`) with a category and a reason, and a declaration that stops matching anything is a finding of its own, so the excuse cannot outlive the thing it excuses. The listing of pages comes from the repository tree rather than `api_resources.md`, because 101 of the 253 pages under `doc/api` are not linked from that index or from `rest/_index.md`, and following every link out of the pages they do list still leaves 77 unreached. Against the full 247 readable pages the comparison finds 82 undocumented endpoints out of 1378 recorded, all of them declared; against the index alone it would report roughly five times as many, nearly all about where the index stops. A hole in the corpus produces candidates that are only about the hole, so the report counts the pages it could not read.
 
-The first two checks need no network and no suite run: the inventory is committed, the schema is pinned, and the catalog is compiled in. That is what makes them a CI gate. The third needs 250 pages over the network, so it runs only when asked for, and nothing schedules it today: a declaration going stale is noticed the next time somebody runs `make audit-1to1-paths-endpoints`.
+- **Does GitLab say it sends what we publish.** The fourth check joins the inventory to `docs/development/gitlab-api-shapes.json`, the record [gen_api_shapes](#gen_api_shapes) pins from the OpenAPI document GitLab generates out of its own Grape entities, and reports every `*Output` field under `internal/tools` that no endpoint its package was recorded calling declares in a response. It is the first rule here whose oracle is GitLab rather than client-go or a documentation page: the other five compare us against what the SDK models, which is a second model of the API and not the API. It reports and never gates, for a reason worth stating rather than fixing. The inventory names a package, so the fields of every endpoint a package calls are unioned before the comparison, which makes the check exact for a package with one endpoint and weaker as the package grows; an operation the document gives no response schema for (553 of the 1847) contributes nothing and silences its package rather than condemning it; and a nested output type is left out entirely, since GitLab's document lists the properties of the object an endpoint returns and not of the objects inside it, which on the first run turned the fields of every embedded user and group into a finding. Every one of those choices loses findings and none of them invents one, which is the property that makes the list worth reading: 629 fields across 131 packages today, among them the 18 `mrapprovals` fields recorded independently as phantom output in [issue 580](https://github.com/jmrplens/gitlab-mcp-server/issues/580). The join itself is reported (`shapes.join`) because a package whose rows all miss would otherwise have every field of its output condemned by a lookup failure, and the literal path segments our own fixtures left untemplated are reported beside it (`shapes.untemplated`), which measures the recorder rather than the server: 894 of 1479 REST rows match exactly, 504 more only once a fixture value such as `mygroup` or `myproject` is accepted where GitLab has a placeholder, and 81 match nothing.
 
-Report keys: `schema_version`, `inventory`, a `summary` block (14 counters, `actions_observed_grain` among them), `graphql_refusals[]`, `silent_owners[]`, `stale_declarations[]`, and an `endpoints` block that says whether the documentation comparison ran, how many pages it read, which it could not, the endpoints no page spells out with the declaration that accounts for each, and the declarations that accounted for none. With `-gaps-only` `silent_owners[]` holds the undeclared and the unmapped ones and `endpoints.undocumented[]` holds the undeclared ones.
+The first two checks need no network and no suite run: the inventory is committed, the schema is pinned, and the catalog is compiled in. That is what makes them a CI gate. The fourth needs no network either, since the API record is committed like the inventory, and it runs with them; it contributes no gate outcome. The third needs 250 pages over the network, so it runs only when asked for, and nothing schedules it today: a declaration going stale is noticed the next time somebody runs `make audit-1to1-paths-endpoints`.
+
+Report keys: `schema_version`, `inventory`, a `summary` block (16 counters, `actions_observed_grain` among them), `graphql_refusals[]`, `silent_owners[]`, `stale_declarations[]`, an `endpoints` block that says whether the documentation comparison ran, how many pages it read, which it could not, the endpoints no page spells out with the declaration that accounts for each, and the declarations that accounted for none, and a `shapes` block carrying the join quality, the untemplated segments most frequent first, and the unpublished fields. With `-gaps-only` `silent_owners[]` holds the undeclared and the unmapped ones and `endpoints.undocumented[]` holds the undeclared ones; `shapes` is unaffected, because every entry in it is already a finding.
 
 #### Make targets
 
@@ -1028,6 +1031,48 @@ Writes `gitlab-schema.graphql` and `source.json` into `-dir`, and reports the ty
 
 - `make gen-graphql-schema`
 - `make check-graphql-schema` — CI gate.
+
+### gen_api_shapes
+
+Pins what GitLab says its own REST API accepts and returns, into `docs/development/gitlab-api-shapes.json`, beside the request inventory it is compared with.
+
+GitLab generates an OpenAPI 3 document from the Grape entities that render its REST responses, and commits it to its own repository at `doc/api/openapi/openapi_v3.yaml`. This command fetches that document unauthenticated, extracts one entry per operation keyed `METHOD /path` with the property names of the success response, the path and query parameters and the request body, and writes the result with the ref, the retrieval date and the SHA-256 of the bytes it read.
+
+It matters because it is the only oracle in this repository that speaks for **GitLab**. `-scope=structs` and its siblings compare our types against client-go's, which is a second model of the API rather than the API; `-check-endpoints` reads documentation pages, which are prose written for people. This is the code path GitLab renders responses through, exported by GitLab, and it needs no instance, no licence and no image. It covers Premium and Ultimate for free, because `gitlab-org/gitlab` is the Enterprise codebase.
+
+Paths are kept exactly as GitLab spells them, `/api/v4` prefix and `{braces}` included: the record says what GitLab said, and `apishapes.NormalizePath` converts at the moment of comparison rather than baking one reader's dialect into the artifact. An operation that names no response schema, which is 553 of them, carries an empty list, and a reader must treat that as "GitLab does not say" and not as "GitLab sends nothing".
+
+Generating needs the network, so it is not a gate. `--check` is, and it needs none: it refuses a schema version this build cannot read, an extraction of fewer than 1500 operations (a truncated download, or a document that is not this one), a record that does not say which ref it came from or what it hashed, a retrieval date nothing can parse or that has not happened yet, and a record over 180 days old. The generator refuses a short extraction too, before writing, so a truncated read cannot replace a whole record and report success. The age window is the one the pinned GraphQL schema uses and for the same reason: GitLab narrows fields in place, so a record this old can no longer report a field that changed since.
+
+#### Usage
+
+```bash
+# Re-pin from master
+go run ./cmd/gen_api_shapes/
+
+# Pin a specific ref into a scratch directory
+go run ./cmd/gen_api_shapes/ -ref v18.4.0-ee -dir /tmp/probe
+
+# CI gate, no network
+go run ./cmd/gen_api_shapes/ --check
+```
+
+#### Flags
+
+| Flag     | Type     | Default            | Description                                                                   |
+| -------- | -------- | ------------------ | ----------------------------------------------------------------------------- |
+| `-ref`   | `string` | `master`           | `gitlab-org/gitlab` ref to read the OpenAPI document from                     |
+| `-dir`   | `string` | `docs/development` | Directory holding the committed record                                        |
+| `-check` | `bool`   | `false`            | Read the committed record instead of fetching, and fail when it is not usable |
+
+#### Output
+
+Writes `gitlab-api-shapes.json` into `-dir` and reports the operation count, how many carry a response schema and how many carry a request body. `--check` reports the provenance line only. Exits `1` on any failure.
+
+#### Make targets
+
+- `make gen-api-shapes`
+- `make check-api-shapes` — CI gate.
 
 ### gen_lhm_manifest
 

@@ -25,8 +25,9 @@ const (
 	// document's own digest are what make a regeneration comparable instead.
 	defaultRef = "master"
 	// defaultDir is where the committed record lives, beside the request
-	// inventory it is compared with.
-	defaultDir = "docs/development"
+	// inventory it is compared with. It is the package's own constant so the
+	// generator and every reader join on one directory.
+	defaultDir = apishapes.DefaultDir
 	// maxAge is how long a record may stand before --check refuses it. GitLab
 	// ships monthly and narrows fields in place, so half a year is roughly six
 	// releases of drift, the same window the pinned GraphQL schema stands for

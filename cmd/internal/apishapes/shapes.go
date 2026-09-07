@@ -15,6 +15,10 @@ const (
 	// FileName is the committed extraction, beside the request inventory it is
 	// compared with.
 	FileName = "gitlab-api-shapes.json"
+	// DefaultDir is where the record lives, repository relative. It is exported
+	// so a reader joins on the same directory the generator writes to rather
+	// than spelling it again.
+	DefaultDir = "docs/development"
 	// SchemaVersion is the artifact's shape. A reader that does not recognize
 	// it must refuse rather than guess, since every field here is a list of
 	// names a comparison acts on.

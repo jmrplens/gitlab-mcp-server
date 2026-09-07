@@ -28,6 +28,10 @@ type Report struct {
 	// Endpoints is the documentation comparison, which is a candidate list and
 	// never a gate.
 	Endpoints EndpointCheck `json:"endpoints"`
+	// Shapes is what GitLab's own OpenAPI document says the endpoints we call
+	// return, compared with what we publish. A report and not a gate, for the
+	// reason [ShapeCheck] records.
+	Shapes ShapeCheck `json:"shapes"`
 }
 
 // Summary is the count of everything the report holds.
@@ -55,6 +59,14 @@ type Summary struct {
 	// UndeclaredEndpoints counts the undocumented ones no declaration in
 	// endpoint_declarations.go accounts for, which is the half that gates.
 	UndeclaredEndpoints int `json:"undeclared_endpoints"`
+	// UntemplatedSegments counts the distinct literal path segments the
+	// inventory carries where GitLab's document has a placeholder. It measures
+	// this repository's own recording rather than the server: every one is a
+	// fixture value the templating did not recognize as an identifier.
+	UntemplatedSegments int `json:"untemplated_segments"`
+	// UnpublishedFields counts the output fields no endpoint of their package
+	// declares. A lower bound, for the reason unpublishedFields records.
+	UnpublishedFields int `json:"unpublished_fields"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -149,6 +161,8 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 	stale = append(stale, endpoints.staleDeclarations()...)
 	sort.Strings(stale)
 
+	shapes := shapeCheck(root, inventory.Requests, publishedTypes(root))
+
 	report := Report{
 		SchemaVersion:     shared.SchemaVersion,
 		Inventory:         requestinventory.Path,
@@ -156,6 +170,7 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 		SilentOwners:      owners,
 		StaleDeclarations: stale,
 		Endpoints:         endpoints,
+		Shapes:            shapes,
 		Summary: Summary{
 			InventoryRows:         len(inventory.Requests),
 			GraphQLDocuments:      len(documents.Documents),
@@ -171,6 +186,8 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 			StaleDeclarations:     len(stale),
 			UndocumentedEndpoints: len(endpoints.Undocumented),
 			UndeclaredEndpoints:   endpoints.undeclared(),
+			UntemplatedSegments:   len(shapes.Untemplated),
+			UnpublishedFields:     len(shapes.Unpublished),
 		},
 	}
 	if gapsOnly {
