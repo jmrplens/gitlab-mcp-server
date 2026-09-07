@@ -62,11 +62,21 @@ func main() {
 	check := flag.Bool("check", false, "load the committed schema instead of fetching one, and fail when it does not parse")
 	flag.Parse()
 
+	// -url takes an arbitrary endpoint, so the credential is resolved against
+	// the instance GITLAB_URL names rather than followed wherever the flag
+	// points. Pinning gitlab.com with a version recorded therefore asks for
+	// GITLAB_URL=https://gitlab.com beside the token, which is the honest
+	// requirement: the version comes from a credential, and a credential is
+	// for one instance.
+	credential, withheld := graphqlintrospect.CredentialFor(*endpoint, os.Getenv("GITLAB_URL"), os.Getenv("GITLAB_TOKEN"))
+	if withheld != "" {
+		fmt.Fprintln(os.Stderr, prefix+" note:", withheld)
+	}
 	os.Exit(run(genRun{
 		endpoint: *endpoint,
 		dir:      *dir,
 		check:    *check,
-		token:    os.Getenv("GITLAB_TOKEN"),
+		token:    credential,
 		client:   &http.Client{Timeout: graphqlintrospect.FetchTimeout},
 		now:      time.Now,
 	}, os.Stdout, os.Stderr))
@@ -191,6 +201,21 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)
 		return 1
+	}
+
+	// An answer too short to be a GitLab schema does not replace one that was
+	// whole. The floor alone cannot tell a truncation from a narrower edition,
+	// which is why a probe of such an instance is still allowed to write into
+	// an empty directory for `-schema` to read; what it must not do is
+	// overwrite a pin that already cleared the floor and exit reporting
+	// success. `--check` would refuse the result, but only after the good pin
+	// was already gone from the working tree.
+	if graphqlintrospect.TruncatedAnswer(len(schema.Types)) {
+		if _, existing, readErr := readArtifacts(cfg.dir); readErr == nil && !graphqlintrospect.TruncatedAnswer(existing.Types) {
+			fmt.Fprintf(errOut, prefix+" %s answered with %d types and the pin in %s carries %d: refusing to replace a whole schema with a truncated answer\n",
+				cfg.endpoint, len(schema.Types), cfg.dir, existing.Types)
+			return 1
+		}
 	}
 
 	version, revision := graphqlintrospect.InstanceVersion(ctx, cfg.target())

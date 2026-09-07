@@ -46,8 +46,15 @@ type auditRun struct {
 	schemaPath string
 	// token is sent to the instance named by live. GitLab answers introspection
 	// to anyone, so this only decides whether the report can name the version
-	// that answered, which GitLab refuses to tell an anonymous caller.
+	// that answered, which GitLab refuses to tell an anonymous caller. It is
+	// resolved by [graphqlintrospect.CredentialFor], so it is empty unless the
+	// endpoint is the instance GITLAB_URL names.
 	token string
+	// tokenWithheld says why a token that exists was not sent, so a report
+	// naming an unknown version says which of the two reasons it is: an
+	// instance that would not answer, or a credential this run declined to
+	// hand it.
+	tokenWithheld string
 	// overlay supplies source that is not on disk, which is how a test hands
 	// the audit a fixture package instead of the repository.
 	overlay map[string][]byte
@@ -72,13 +79,15 @@ func main() {
 	live := flag.String("live", "", "GraphQL endpoint to introspect now and judge the documents against, instead of the pinned schema")
 	flag.Parse()
 
+	credential, withheld := graphqlintrospect.CredentialFor(*live, os.Getenv("GITLAB_URL"), os.Getenv("GITLAB_TOKEN"))
 	os.Exit(run(auditRun{
-		dir:        *dir,
-		verbose:    *verbose,
-		patterns:   auditPatterns,
-		live:       *live,
-		schemaPath: *schemaPath,
-		token:      os.Getenv("GITLAB_TOKEN"),
+		dir:           *dir,
+		verbose:       *verbose,
+		patterns:      auditPatterns,
+		live:          *live,
+		schemaPath:    *schemaPath,
+		token:         credential,
+		tokenWithheld: withheld,
 	}, os.Stdout, os.Stderr))
 }
 
@@ -183,7 +192,7 @@ func judgeLive(cfg auditRun) (judgement, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), graphqlintrospect.FetchTimeout)
 	defer cancel()
 
-	schema, provenance, err := liveSchema(ctx, cfg.live, cfg.token)
+	schema, provenance, err := liveSchema(ctx, cfg.live, cfg.token, cfg.tokenWithheld)
 	if err != nil {
 		return judgement{}, err
 	}
