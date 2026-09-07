@@ -63,13 +63,19 @@ env:
   # Freshness gates compare a committed, generated artifact (README stats,
   # llms*.txt, the tool snapshots, the token footprint, the testing reference,
   # the request inventory, the manifests) with what the tree would generate
-  # now. On a stacked pull request, one whose base is another feature branch,
-  # every layer below the top would fail on drift the top overwrites, and
-  # refreshing each layer costs a suite run per layer for artifacts nobody
-  # keeps. So they are deferred there and run where the artifacts land: on a
-  # pull request to main and on every push to main. The unit suite reads the
-  # same answer through GITLAB_MCP_TEST_SNAPSHOT_PARITY.
-  FRESHNESS: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' && 'deferred' || 'checked' }}
+  # now. In a stack every layer below the top would fail on drift the top
+  # overwrites, and refreshing each layer costs a suite run per layer for
+  # artifacts nobody keeps. So they are deferred there and run where the
+  # artifacts land: at the top of a stack, on a pull request to main that is
+  # not in a stack, and on every push to main. The unit suite reads the same
+  # answer through GITLAB_MCP_TEST_SNAPSHOT_PARITY.
+  #
+  # A pull request in a GitHub stack is tested as the whole stack up to it
+  # merged into the stack's base, and github.base_ref is that base (main) for
+  # every layer, so the layer is told from its position in the stack rather
+  # than from its own base branch, which stays in the event payload. A pull
+  # request outside a stack whose base is another branch is deferred as before.
+  FRESHNESS: ${{ github.event_name == 'pull_request' && ((github.event.pull_request.stack != null && github.event.pull_request.stack.position != github.event.pull_request.stack.size) || (github.event.pull_request.stack == null && github.event.pull_request.base.ref != 'main')) && 'deferred' || 'checked' }}
 
 jobs:
   # The unit suite with coverage, and nothing else: it is the longest single

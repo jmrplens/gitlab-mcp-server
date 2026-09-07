@@ -3021,11 +3021,13 @@ func buildSnapshots(t *testing.T, tools []*mcp.Tool) []toolSnapshot {
 }
 
 // snapshotParityEnv is the harness setting that defers the golden comparison.
-// CI sets it to "deferred" on a stacked pull request, one whose base is another
-// feature branch, because the generated artifacts are refreshed once at the top
-// of a stack and every layer below would fail on drift the top overwrites; on
-// a pull request to main and on a push to main the comparison runs. Test-only,
-// like GITLAB_MCP_TEST_INVENTORY_DIR, and read by nothing in the server.
+// CI sets it to "deferred" on every layer of a stack below its top, and on a
+// pull request outside a stack whose base is another feature branch, because
+// the generated artifacts are refreshed once at the top of a stack and every
+// layer below would fail on drift the top overwrites; at the top of a stack,
+// on a pull request to main and on a push to main the comparison runs.
+// Test-only, like GITLAB_MCP_TEST_INVENTORY_DIR, and read by nothing in the
+// server.
 const snapshotParityEnv = "GITLAB_MCP_TEST_SNAPSHOT_PARITY"
 
 // skipDeferredSnapshotParity skips the calling test when the harness defers
@@ -3034,7 +3036,7 @@ const snapshotParityEnv = "GITLAB_MCP_TEST_SNAPSHOT_PARITY"
 func skipDeferredSnapshotParity(t *testing.T) {
 	t.Helper()
 	if os.Getenv(snapshotParityEnv) == "deferred" {
-		t.Skip("snapshot parity is deferred on a stacked pull request: the generated artifacts are refreshed once at the top of the stack and compared on the pull request to main")
+		t.Skip("snapshot parity is deferred below the top of a stack: the generated artifacts are refreshed once at the top and compared there, and on main")
 	}
 }
 
