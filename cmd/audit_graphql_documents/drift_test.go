@@ -7,6 +7,7 @@ import (
 
 	"github.com/vektah/gqlparser/v2/ast"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
@@ -100,10 +101,10 @@ func loadSchemaFixture(t *testing.T, sdl string) *ast.Schema {
 }
 
 // documentsOf wraps raw document text the way the collector hands it over.
-func documentsOf(texts ...string) []document {
-	found := make([]document, 0, len(texts))
+func documentsOf(texts ...string) []graphqldocs.Document {
+	found := make([]graphqldocs.Document, 0, len(texts))
 	for _, text := range texts {
-		found = append(found, document{pkg: "fixture", name: "queryFixture", text: text})
+		found = append(found, graphqldocs.Document{Package: "fixture", Name: "queryFixture", Text: text})
 	}
 	return found
 }

@@ -8,11 +8,12 @@
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-validate-docs audit-edition-tier \
+	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live \
+	gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness \
@@ -49,6 +50,13 @@ export GOTOOLCHAIN := $(GO_TOOLCHAIN)
 
 # E2E test report directory (inside dist/, gitignored)
 E2E_REPORT_DIR=dist/e2e-reports
+
+# Where the unit suite records the requests it issues, one shard per test
+# process. A shard is a byproduct of one run and only the merged inventory is
+# committed, so this lives in the gitignored build directory. The path handed
+# to the recorder is absolute because a test binary runs in its own package
+# directory.
+REQUEST_INVENTORY_SHARDS=dist/request-inventory
 
 # GitLab.com Orbit live-test fixtures. All overridable on the command line
 # or via .env. Defaults are designed for the canonical plens1 namespace.
@@ -591,17 +599,18 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/11] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/11] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/11] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/11] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/11] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/11] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/11] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[8/11] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[9/11] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
-	run_check "[10/11] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[11/11] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[1/12] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/12] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/12] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/12] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/12] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/12] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/12] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[8/12] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[9/12] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
+	run_check "[10/12] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[11/12] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[12/12] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1143,6 +1152,7 @@ audit-1to1:
 	go run ./cmd/audit_1to1/ -gaps-only -output plan/1to1-backlog.json
 	@echo "1:1 audit backlog written to plan/1to1-backlog.json"
 	$(MAKE) audit-1to1-sdk
+	$(MAKE) audit-1to1-paths
 
 ## audit-1to1-sdk: gate every client-go service, every raw-GraphQL operation and every
 ## enum value on a decision (R-SERVICE/R-GRAPHQL/R-ENUM). Unlike the three candidate
@@ -1152,6 +1162,31 @@ audit-1to1:
 ## does not declare), or a declaration or exemption that has gone stale.
 audit-1to1-sdk:
 	go run ./cmd/audit_1to1/ -scope=sdk -gaps-only
+
+## audit-1to1-paths: gate the request an action actually issues (R-PATH). The other
+## five rules describe the surface and none of them looks at the request a handler
+## builds, which is how nine registered tools shipped unable to work. This FAILS on a
+## GraphQL document the pinned schema refuses, on an action whose owner names no
+## package under internal/tools, on a package the catalog owns actions in that neither
+## the committed inventory shows issuing a request nor declares a reason, and on a
+## declaration that no longer describes the tree. A silent package means one of two
+## things and the finding cannot tell them apart: no test drives that package, or the
+## inventory is stale (`make gen-request-inventory`). It reads the committed inventory,
+## so it needs no network and no suite run.
+audit-1to1-paths:
+	go run ./cmd/audit_1to1/ -scope=paths -gaps-only
+
+## audit-1to1-paths-endpoints: the same, plus every recorded REST endpoint compared with
+## GitLab's own API documentation. Needs the network and reads ~250 pages (cached for a
+## week afterwards). It FAILS on an endpoint no declaration in
+## cmd/audit_1to1/internal/paths/endpoint_declarations.go accounts for, and on a
+## declaration that accounts for nothing any more. The declarations are what make the
+## comparison safe to gate on: the oracle is prose, so a deprecated-but-working alias,
+## an endpoint documented under doc/user, and one whose only mention is a sentence all
+## look exactly like a defect, and each of those is written down with its reason.
+audit-1to1-paths-endpoints:
+	go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -output plan/1to1-paths.json
+	@echo "R-PATH report written to plan/1to1-paths.json"
 
 ## audit-1to1-enums: the enum value rule on its own (R-ENUM), in its native shape.
 ## Fails on a value the SDK declares that no schema enum or description offers, on a
@@ -1314,6 +1349,39 @@ audit-graphql-documents:
 GRAPHQL_LIVE_URL ?= https://gitlab.com/api/graphql
 check-graphql-documents-live:
 	go run ./cmd/audit_graphql_documents/ -live "$(GRAPHQL_LIVE_URL)"
+
+## gen-request-inventory: record every request the unit suite issues and
+## rewrite docs/development/request-inventory.json. The suite run is where the
+## minutes go; the merge is instant. Recording is off unless
+## GITLAB_MCP_TEST_INVENTORY_DIR names an absolute directory, so an ordinary
+## `make test` pays nothing for it.
+##
+## The merge only runs if the suite passed, since shards from a run that died
+## halfway are a partial answer. The R-PATH gate's own unit test therefore
+## skips while that variable is set (see TestRun_TheRealTree_PassesItsOwnGate):
+## without that, a new domain package could not be recorded, because the gate
+## failed on the package the recording was about to add and make stopped before
+## merging.
+gen-request-inventory:
+	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
+	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))
+	GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS)
+	go run ./cmd/gen_request_inventory/
+
+## check-request-inventory: fail when the committed request inventory is not
+## what the suite records now. CI does not run this target: it sets the same
+## variable on the coverage job's suite run and merges those shards, so the
+## gate costs one `go run` rather than a second suite.
+check-request-inventory:
+	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
+	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))
+	GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS)
+	go run ./cmd/gen_request_inventory/ -check
+
+## audit-request-inventory: merge the shards of the last recorded run and name
+## every package the catalog owns actions in that issued no request at all.
+audit-request-inventory:
+	go run ./cmd/gen_request_inventory/ -v -check
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

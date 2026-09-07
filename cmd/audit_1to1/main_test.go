@@ -17,6 +17,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
+// runScope runs one scope the way the command runs it with -gaps-only and no
+// documentation comparison, which is what every case below asks for.
+func runScope(scope, outputPath string) error {
+	return run(context.Background(), options{scope: scope, gapsOnly: true, outputPath: outputPath})
+}
+
 // captureFatal replaces fatalf with a recorder and returns the messages it
 // received, so a fatal path can be asserted on instead of exiting the test
 // binary.
@@ -178,11 +184,23 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 			},
 			wantErr: "SDK parity findings",
 		},
+		{
+			name: "paths_gate_reports_findings", scope: scopePaths,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := pathsRun
+				t.Cleanup(func() { pathsRun = original })
+				pathsRun = func(context.Context, string, bool, *apidocs.Fetcher) ([]byte, bool, error) {
+					return []byte("{}\n"), false, nil
+				}
+			},
+			wantErr: "request-path findings",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.arrange(t)
-			err := run(tc.scope, true, filepath.Join(t.TempDir(), "out.json"))
+			err := runScope(tc.scope, filepath.Join(t.TempDir(), "out.json"))
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("run(%q) error = %v, want it to contain %q", tc.scope, err, tc.wantErr)
 			}
@@ -202,7 +220,7 @@ func TestRunSingle_EnumScope_ReturnsTheGateVerdict(t *testing.T) {
 		}
 		return []byte("{}\n"), false, nil
 	}
-	content, clean, err := runSingle("enums", true)
+	content, clean, err := runSingle(t.Context(), "enums", options{gapsOnly: true})
 	if err != nil || clean || string(content) != "{}\n" {
 		t.Fatalf("runSingle(enums) = %q/%v/%v, want the seam's report and verdict", content, clean, err)
 	}
@@ -261,11 +279,56 @@ func TestParseScope(t *testing.T) {
 	}
 }
 
+// TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough verifies the wiring
+// of the dimension that reads the recorded requests: the flag decides whether
+// the documentation comparison gets a fetcher at all, and the scope's own
+// verdict is what the run reports.
+//
+// Nil is the interesting half. The comparison needs the network and 250 pages
+// of it, and it gates nothing, so a run that did not ask for it must be handed
+// nothing to fetch with rather than a fetcher it might use.
+func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
+	original := pathsRun
+	t.Cleanup(func() { pathsRun = original })
+	var got *apidocs.Fetcher
+	var sawGapsOnly bool
+	pathsRun = func(_ context.Context, _ string, gapsOnly bool, fetcher *apidocs.Fetcher) ([]byte, bool, error) {
+		got, sawGapsOnly = fetcher, gapsOnly
+		return []byte("{}\n"), true, nil
+	}
+
+	cases := []struct {
+		name      string
+		endpoints bool
+		wantNil   bool
+	}{
+		{name: "without -check-endpoints", endpoints: false, wantNil: true},
+		{name: "with -check-endpoints", endpoints: true, wantNil: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got = nil
+
+			content, clean, err := runSingle(t.Context(), scopePaths, options{gapsOnly: true, endpoints: testCase.endpoints})
+
+			if err != nil || !clean || string(content) != "{}\n" {
+				t.Fatalf("runSingle(paths) = %q/%v/%v, want the seam's report and verdict", content, clean, err)
+			}
+			if !sawGapsOnly {
+				t.Error("runSingle(paths) did not pass -gaps-only through")
+			}
+			if (got == nil) != testCase.wantNil {
+				t.Errorf("runSingle(paths) fetcher = %v, want nil == %v", got, testCase.wantNil)
+			}
+		})
+	}
+}
+
 // TestRunSingle_UnknownScope verifies the single-scope dispatcher refuses a
 // scope name it does not know instead of running nothing silently, and that a
 // refusal reports the gate as failed rather than clean.
 func TestRunSingle_UnknownScope(t *testing.T) {
-	_, clean, err := runSingle("bogus", false)
+	_, clean, err := runSingle(t.Context(), "bogus", options{})
 	if err == nil {
 		t.Fatal("expected error for unknown scope")
 	}
@@ -406,7 +469,7 @@ func TestRun_ScopeSelection_RejectsUnsupportedScopes(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := run(tc.scope, true, filepath.Join(t.TempDir(), "out.json"))
+			err := runScope(tc.scope, filepath.Join(t.TempDir(), "out.json"))
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("run(%q) error = %v, want it to contain %q", tc.scope, err, tc.wantErr)
 			}
@@ -439,7 +502,7 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(dir, tc.scope+".json")
-			if err := run(tc.scope, true, path); err != nil {
+			if err := runScope(tc.scope, path); err != nil {
 				t.Fatalf("run(%q): %v", tc.scope, err)
 			}
 			doc := readJSONFile(t, path)
@@ -470,7 +533,7 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 	})
 
 	t.Run("write_failure", func(t *testing.T) {
-		err := run("metadata", true, dir)
+		err := runScope("metadata", dir)
 		if err == nil || !strings.HasPrefix(err.Error(), "write output: ") {
 			t.Fatalf("run to a directory path = %v, want a write output error", err)
 		}

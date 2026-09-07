@@ -1,38 +1,19 @@
 // Command audit_graphql_documents fails when a raw GraphQL document in this
 // repository is one the pinned GitLab schema refuses.
 //
-// The validating test transport catches a document the moment a test sends it,
-// which covers most of them and cannot cover all of them: a document reachable
-// by no test still ships, and a document reached only on an error branch is
-// exercised by nobody. This audit reads them out of the source instead, so the
-// coverage of the gate stops depending on the coverage of the tests.
+// The reading and the judging both live in cmd/internal/graphqldocs, which
+// documents what the check can and cannot see. This command is the standalone
+// gate over it: it renders the result as text, names the file and line of every
+// refused document, and exits non-zero when there is one. The same result is
+// one third of the R-PATH dimension of cmd/audit_1to1, where a document GitLab
+// refuses is one of the three ways a registered action cannot reach the
+// endpoint it names.
 //
-// It loads the whole program with go/packages rather than matching the source
-// with a regular expression, because four of this repository's documents are
-// assembled by concatenating a shared fragment constant and only the type
-// checker knows what the assembled value is. Constants are folded during type
-// checking, so a document written as three pieces is indexed as the one string
-// GitLab would receive.
-//
-// A document that lives in a .graphql file rather than a Go constant is read
-// straight off disk, because an embedded variable is not a constant and folds to
-// nothing, so moving a long document into its own file would otherwise drop it
-// out of the inventory without a word.
-//
-// What it cannot do is check variables: a document read out of the source has
-// no request behind it, so nothing says which variables a handler will send or
-// what they will hold. That half belongs to the test transport, which sees a
-// real request.
-//
-// # What it reads, and what it does not
-//
-// It reads ./internal/..., which holds every document this repository writes.
-// It does not read client-go, which builds another 42 of its own for the
-// achievements, work item, security attribute and terraform state services
-// among others. Those reach GitLab through this server too, and the only thing
-// judging them is the test transport, on whichever ones a test happens to
-// drive. The summary line counts this repository's documents, not the server's
-// whole GraphQL surface.
+// Two commands rather than one because this gate answers a question a reader
+// asks on its own ("does every document I ship still parse against the pin"),
+// runs in a second, and predates the dimension that absorbed it. Keeping the
+// name working keeps `make check-graphql-documents` and the CI step that calls
+// it pointing at the same thing.
 //
 // # The live re-probe
 //

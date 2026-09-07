@@ -565,6 +565,48 @@ func TestGet_MissingIDAndPath(t *testing.T) {
 	}
 }
 
+// TestGet_BothIDAndPath_IsRefusedHere verifies that a call naming both is
+// refused before it is sent.
+//
+// ciCatalogResource declares both arguments as nullable, so the document is
+// valid and the schema gate cannot see this: "exactly one of them" is a
+// resolver rule, and GitLab answers a query carrying both with an error and no
+// data. Sending it and reading the empty answer told the caller the resource
+// did not exist.
+func TestGet_BothIDAndPath_IsRefusedHere(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := Get(context.Background(), client, GetInput{ID: "gid://gitlab/Ci::CatalogResource/1", FullPath: "my-group/my-components"})
+
+	if err == nil {
+		t.Fatal("expected error when both id and full_path are given")
+	}
+	if !strings.Contains(err.Error(), "exactly one") {
+		t.Errorf("error = %q, want it to say exactly one of the two", err.Error())
+	}
+}
+
+// TestGet_RefusedQuery_ReportsGitLabsReason verifies that a refusal GitLab
+// answers with errors and no data reaches the caller as those errors.
+//
+// Without this the nil resource became "catalog resource not found", with a
+// suggestion that it was an unpublished draft: a plausible sentence in the
+// reassuring direction, which is the worst shape this kind of bug can take.
+func TestGet_RefusedQuery_ReportsGitLabsReason(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"ciCatalogResource":null},"errors":[{"message":"Exactly one of 'id' or 'full_path' arguments is required."}]}`)
+	}))
+
+	_, err := Get(context.Background(), client, GetInput{FullPath: "my-group/my-components"})
+
+	if err == nil {
+		t.Fatal("expected the refusal to be reported")
+	}
+	if !strings.Contains(err.Error(), "Exactly one of") {
+		t.Errorf("error = %q, want GitLab's own sentence", err.Error())
+	}
+}
+
 // TestGet_NotFound verifies that Get_NotFound returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

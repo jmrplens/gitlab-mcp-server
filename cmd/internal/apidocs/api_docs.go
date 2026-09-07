@@ -69,6 +69,7 @@ func CacheDir(repoRoot string) string {
 type Fetcher struct {
 	cacheDir string
 	baseURL  string
+	areasURL string
 	maxAge   time.Duration
 	refresh  bool
 	offline  bool
@@ -92,6 +93,9 @@ type Options struct {
 	MaxAge time.Duration
 	// BaseURL overrides the doc root (used by tests); empty uses DefaultBaseURL.
 	BaseURL string
+	// AreasURL overrides the endpoint [Fetcher.Areas] lists doc/api from (used
+	// by tests); empty uses DefaultAreasURL.
+	AreasURL string
 	// CacheDir overrides the on-disk cache location; empty uses the shared
 	// CacheDir(repoRoot). Useful for tests and callers that want an isolated cache.
 	CacheDir string
@@ -108,6 +112,7 @@ func New(repoRoot string, opts Options) *Fetcher {
 	f := &Fetcher{
 		cacheDir: cacheDir,
 		baseURL:  opts.BaseURL,
+		areasURL: opts.AreasURL,
 		maxAge:   opts.MaxAge,
 		refresh:  opts.Refresh,
 		offline:  opts.Offline,
@@ -116,6 +121,9 @@ func New(repoRoot string, opts Options) *Fetcher {
 	}
 	if f.baseURL == "" {
 		f.baseURL = DefaultBaseURL
+	}
+	if f.areasURL == "" {
+		f.areasURL = DefaultAreasURL
 	}
 	if f.maxAge <= 0 {
 		f.maxAge = DefaultMaxAge
@@ -187,12 +195,17 @@ func (f *Fetcher) cachedIfUsable(cachePath string) (string, bool) {
 	return string(data), readErr == nil
 }
 
-// download fetches one area with retry, honoring Retry-After and falling back to
-// jittered exponential backoff. A cancelled context aborts the wait between
-// attempts and returns promptly.
+// download fetches one area's markdown with retry.
 func (f *Fetcher) download(ctx context.Context, area string) ([]byte, error) {
-	url := f.baseURL + area + ".md"
-	cmdutil.Progressf("apidocs: fetching %s", area)
+	return f.request(ctx, area, f.baseURL+area+".md")
+}
+
+// request performs one GET with retry, honoring Retry-After and falling back to
+// jittered exponential backoff. A cancelled context aborts the wait between
+// attempts and returns promptly. The label names what is being fetched in the
+// progress and failure lines, since a URL is not what a reader is looking for.
+func (f *Fetcher) request(ctx context.Context, label, url string) ([]byte, error) {
+	cmdutil.Progressf("apidocs: fetching %s", label)
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		body, status, retryAfter, err := fetchOnce(ctx, f.client, url)
@@ -213,12 +226,12 @@ func (f *Fetcher) download(ctx context.Context, area string) ([]byte, error) {
 			break
 		}
 		wait := backoffDelay(attempt, retryAfter)
-		cmdutil.Progressf("apidocs: %s: %v; retry %d/%d in %s", area, lastErr, attempt+1, maxAttempts, wait.Round(time.Millisecond))
+		cmdutil.Progressf("apidocs: %s: %v; retry %d/%d in %s", label, lastErr, attempt+1, maxAttempts, wait.Round(time.Millisecond))
 		if sleepErr := sleepCtx(ctx, wait); sleepErr != nil {
-			return nil, fmt.Errorf("apidocs: %s retry aborted: %w", area, errors.Join(lastErr, sleepErr))
+			return nil, fmt.Errorf("apidocs: %s retry aborted: %w", label, errors.Join(lastErr, sleepErr))
 		}
 	}
-	return nil, fmt.Errorf("apidocs: giving up on %s after %d attempts: %w", area, maxAttempts, lastErr)
+	return nil, fmt.Errorf("apidocs: giving up on %s after %d attempts: %w", label, maxAttempts, lastErr)
 }
 
 // backoffDelay computes the wait before the next attempt. A server Retry-After

@@ -8,6 +8,7 @@ import (
 
 	"github.com/vektah/gqlparser/v2/ast"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
@@ -50,7 +51,7 @@ func (c coordinate) String() string {
 // reported as a refusal, and there is nothing to walk: a document is walked
 // through the schema that validated it, and one that validated nowhere has no
 // fields anybody can resolve.
-func driftReport(pinned, probed *ast.Schema, documents []document, pin graphqlschema.Source, now time.Time) string {
+func driftReport(pinned, probed *ast.Schema, documents []graphqldocs.Document, pin graphqlschema.Source, now time.Time) string {
 	coordinates := touchedCoordinates(probed, pinned, documents)
 
 	var differences []string
@@ -94,10 +95,10 @@ func pinAge(pin graphqlschema.Source, now time.Time) string {
 // a document the pin accepts and the live schema refuses is walked through the
 // pin, so the drift report can name the field that stopped existing rather than
 // falling silent about the document whose refusal prompted the question.
-func touchedCoordinates(preferred, fallback *ast.Schema, documents []document) []coordinate {
+func touchedCoordinates(preferred, fallback *ast.Schema, documents []graphqldocs.Document) []coordinate {
 	found := map[coordinate]bool{}
 	for _, doc := range documents {
-		schema, parsed := parseUnderEither(preferred, fallback, doc.text)
+		schema, parsed := parseUnderEither(preferred, fallback, doc.Text)
 		if parsed == nil {
 			continue
 		}

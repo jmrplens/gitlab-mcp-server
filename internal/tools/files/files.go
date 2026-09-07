@@ -156,6 +156,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.ProjectID == "" {
 		return FileInfoOutput{}, errors.New("fileCreate: project_id is required")
 	}
+	// The file path is the last segment of the endpoint, so an empty one sends
+	// GitLab a POST to /projects/:id/repository/files/ and asks it to create a
+	// file with no name, which it refuses.
+	if input.FilePath == "" {
+		return FileInfoOutput{}, errors.New("fileCreate: file_path is required")
+	}
 	if input.Branch == "" {
 		return FileInfoOutput{}, errors.New("fileCreate: branch is required")
 	}
