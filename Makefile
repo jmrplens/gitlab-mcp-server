@@ -1325,6 +1325,23 @@ gen-graphql-schema:
 check-graphql-schema:
 	go run ./cmd/gen_graphql_schema/ --check
 
+## gen-api-shapes: re-read what GitLab says its own REST API accepts and
+## returns, from the OpenAPI document GitLab generates and commits to its own
+## repository, and rewrite docs/development/gitlab-api-shapes.json. Needs the
+## network and no credential: the document is served unauthenticated, and
+## because gitlab-org/gitlab is the Enterprise codebase it covers the Premium
+## and Ultimate surface a Community Edition instance would never reveal.
+gen-api-shapes:
+	go run ./cmd/gen_api_shapes/
+
+## check-api-shapes: fail when the committed record is not one this build can
+## read, is too short to be GitLab's whole API, or is older than the 180-day
+## window. No network, so it is a gate. It cannot say whether the record still
+## matches GitLab, which only a regeneration answers, and which is what the
+## window is for.
+check-api-shapes:
+	go run ./cmd/gen_api_shapes/ --check
+
 ## check-graphql-documents: fail when a raw GraphQL document in the source is
 ## one GitLab would refuse. The test transport catches the documents a test
 ## sends; this catches the ones no test reaches.
