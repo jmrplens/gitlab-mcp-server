@@ -7700,7 +7700,7 @@
   },
   {
     "name": "gitlab_ci_catalog",
-    "description": "Use {\"action\":\"list\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_ci_catalog.\u003caction\u003e.\nAction guidance:\n- get: Fetch one CI/CD Catalog resource by its GID or by the full_path of the hosting project. Use after browsing the catalog when the prompt names a specific component project and you need its components, input parameters, README, and released versions to wire an include into a pipeline.\n- list: Browse the CI/CD Catalog of published component projects. Use search to match by name or description, scope to limit to your namespace (NAMESPACED) or the whole instance (ALL), and sort by name, latest release, or star count when the prompt asks for reusable pipeline components or templates to include.\n\nDiscover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only. GraphQL endpoint. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403). The tool itself is always registered and is not gated by GITLAB_MCP_TIER.\nWhen to use: browse the Catalog to find reusable components, inspect a component's versions before pinning it in `include:component`, or audit which Catalog resources a publisher group exposes.\nNOT for: running pipelines or pipeline definitions (use gitlab_pipeline), built-in GitLab templates such as gitignore/Dockerfile/license (use gitlab_template), CI YAML linting (use gitlab_template action=lint).\n\nReturns:\n- list: {nodes: [{id, full_path, name, description, latest_version, star_count}], page_info: {end_cursor, has_next_page}}.\n- get: {id, full_path, name, description, latest_version, star_count, versions: [{version, released_at, tag_name}]}.\nErrors: 404 not found (hint: check full_path or id), 403 forbidden (hint: requires Premium/Ultimate or Catalog read access), 400 invalid params (hint: provide id OR full_path).\n\nParam conventions: * = required. id format = GID (gid://gitlab/Ci::Catalog::Resource/123). full_path = namespace/project (e.g. mygroup/components/docker-build).\n\n- list: search, scope (ALL/NAMESPACED), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC), first (max 100), after (cursor)\n- get: exactly one of id* or full_path* (mutually exclusive)\n\nSee also: gitlab_template (built-in templates and CI lint), gitlab_pipeline (run pipelines using catalog components), gitlab_project (publisher project metadata).",
+    "description": "Use {\"action\":\"list\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_ci_catalog.\u003caction\u003e.\nAction guidance:\n- get: Fetch one CI/CD Catalog resource by its GID or by the full_path of the hosting project. Use after browsing the catalog when the prompt names a specific component project and you need its components, input parameters, README, and released versions to wire an include into a pipeline.\n- list: Browse the CI/CD Catalog of published component projects. Use search to match by name or description, scope to limit to your namespaces (NAMESPACES) or the whole instance (ALL), and sort by name, latest release, or star count when the prompt asks for reusable pipeline components or templates to include.\n\nDiscover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only. GraphQL endpoint. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403). The tool itself is always registered and is not gated by GITLAB_MCP_TIER.\nWhen to use: browse the Catalog to find reusable components, inspect a component's versions before pinning it in `include:component`, or audit which Catalog resources a publisher group exposes.\nNOT for: running pipelines or pipeline definitions (use gitlab_pipeline), built-in GitLab templates such as gitignore/Dockerfile/license (use gitlab_template), CI YAML linting (use gitlab_template action=lint).\n\nReturns:\n- list: {nodes: [{id, full_path, name, description, latest_version, star_count}], page_info: {end_cursor, has_next_page}}.\n- get: {id, full_path, name, description, latest_version, star_count, versions: [{version, released_at, tag_name}]}.\nErrors: 404 not found (hint: check full_path or id), 403 forbidden (hint: requires Premium/Ultimate or Catalog read access), 400 invalid params (hint: provide id OR full_path).\n\nParam conventions: * = required. id format = GID (gid://gitlab/Ci::Catalog::Resource/123). full_path = namespace/project (e.g. mygroup/components/docker-build).\n\n- list: search, scope (ALL/NAMESPACES), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC/CREATED_ASC/CREATED_DESC/USAGE_COUNT_ASC/USAGE_COUNT_DESC), first (max 100), after (cursor)\n- get: exactly one of id* or full_path* (mutually exclusive)\n\nSee also: gitlab_template (built-in templates and CI lint), gitlab_pipeline (run pipelines using catalog components), gitlab_project (publisher project metadata).",
     "inputSchema": {
       "additionalProperties": false,
       "oneOf": [
@@ -7762,7 +7762,11 @@
                   ]
                 },
                 "scope": {
-                  "description": "Filter scope: ALL (default) or NAMESPACED",
+                  "description": "Filter scope: ALL (default) or NAMESPACES",
+                  "enum": [
+                    "ALL",
+                    "NAMESPACES"
+                  ],
                   "type": "string"
                 },
                 "search": {
@@ -7770,10 +7774,18 @@
                   "type": "string"
                 },
                 "sort": {
-                  "description": "Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC",
+                  "description": "Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC, CREATED_ASC, CREATED_DESC, USAGE_COUNT_ASC, USAGE_COUNT_DESC",
                   "enum": [
-                    "asc",
-                    "desc"
+                    "NAME_ASC",
+                    "NAME_DESC",
+                    "LATEST_RELEASED_AT_ASC",
+                    "LATEST_RELEASED_AT_DESC",
+                    "STAR_COUNT_ASC",
+                    "STAR_COUNT_DESC",
+                    "CREATED_ASC",
+                    "CREATED_DESC",
+                    "USAGE_COUNT_ASC",
+                    "USAGE_COUNT_DESC"
                   ],
                   "type": "string"
                 }
@@ -15606,8 +15618,16 @@
                 "sort": {
                   "description": "Sort order (e.g. name_asc, name_desc, last_activity_on_asc, last_activity_on_desc)",
                   "enum": [
-                    "asc",
-                    "desc"
+                    "access_level_asc",
+                    "access_level_desc",
+                    "last_joined",
+                    "oldest_joined",
+                    "name_asc",
+                    "name_desc",
+                    "oldest_sign_in",
+                    "recent_sign_in",
+                    "last_activity_on_asc",
+                    "last_activity_on_desc"
                   ],
                   "type": "string"
                 }
@@ -29711,10 +29731,41 @@
                   "type": "string"
                 },
                 "sort": {
-                  "description": "Sort order",
+                  "description": "Sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC",
                   "enum": [
-                    "asc",
-                    "desc"
+                    "BLOCKING_ISSUES_ASC",
+                    "BLOCKING_ISSUES_DESC",
+                    "CLOSED_AT_ASC",
+                    "CLOSED_AT_DESC",
+                    "CREATED_ASC",
+                    "CREATED_DESC",
+                    "DUE_DATE_ASC",
+                    "DUE_DATE_DESC",
+                    "ESCALATION_STATUS_ASC",
+                    "ESCALATION_STATUS_DESC",
+                    "HEALTH_STATUS_ASC",
+                    "HEALTH_STATUS_DESC",
+                    "LABEL_PRIORITY_ASC",
+                    "LABEL_PRIORITY_DESC",
+                    "MILESTONE_DUE_ASC",
+                    "MILESTONE_DUE_DESC",
+                    "POPULARITY_ASC",
+                    "POPULARITY_DESC",
+                    "PRIORITY_ASC",
+                    "PRIORITY_DESC",
+                    "RELATIVE_POSITION_ASC",
+                    "SEVERITY_ASC",
+                    "SEVERITY_DESC",
+                    "START_DATE_ASC",
+                    "START_DATE_DESC",
+                    "STATUS_ASC",
+                    "STATUS_DESC",
+                    "TITLE_ASC",
+                    "TITLE_DESC",
+                    "UPDATED_ASC",
+                    "UPDATED_DESC",
+                    "WEIGHT_ASC",
+                    "WEIGHT_DESC"
                   ],
                   "type": "string"
                 },
@@ -29728,8 +29779,19 @@
                   "type": "string"
                 },
                 "types": {
-                  "description": "Filter by work item types",
+                  "description": "Filter by work item types, IssueType enum values such as ISSUE or TASK",
                   "items": {
+                    "enum": [
+                      "EPIC",
+                      "INCIDENT",
+                      "ISSUE",
+                      "KEY_RESULT",
+                      "OBJECTIVE",
+                      "REQUIREMENT",
+                      "TASK",
+                      "TEST_CASE",
+                      "TICKET"
+                    ],
                     "type": "string"
                   },
                   "type": [
@@ -31329,7 +31391,18 @@
                   ]
                 },
                 "name": {
-                  "description": "Filter by work item type name",
+                  "description": "Filter by work item type name, an IssueType enum value such as ISSUE or TASK",
+                  "enum": [
+                    "EPIC",
+                    "INCIDENT",
+                    "ISSUE",
+                    "KEY_RESULT",
+                    "OBJECTIVE",
+                    "REQUIREMENT",
+                    "TASK",
+                    "TEST_CASE",
+                    "TICKET"
+                  ],
                   "type": "string"
                 },
                 "only_available": {
@@ -57326,7 +57399,7 @@
   },
   {
     "name": "gitlab_security_finding",
-    "description": "Use {\"action\":\"list\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_security_finding.\u003caction\u003e.\nAction guidance:\n- list: List the security report findings produced by one pipeline run. Filter by severity, confidence, scanner, or report_type (SAST, DAST, dependency scanning, container scanning, secret detection) and page through results when the prompt asks for a pipeline's scan findings or raw security report output. Use gitlab_pipeline_security_summary first for an aggregate count, then this action for individual findings.\n\nList pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.\nReturns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Errors: 404 not found, 403 forbidden, each with actionable hints.\n\n- list: project_path*, pipeline_iid*, severity, confidence, scanner, report_type (arrays), first, after\n\nSee also: gitlab_vulnerability, gitlab_pipeline",
+    "description": "Use {\"action\":\"list\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_security_finding.\u003caction\u003e.\nAction guidance:\n- list: List the security report findings produced by one pipeline run. Filter by severity, scanner, state, or report_type (SAST, DAST, dependency scanning, container scanning, secret detection), sort by severity, and page through results when the prompt asks for a pipeline's scan findings or raw security report output. Use gitlab_pipeline_security_summary first for an aggregate count, then this action for individual findings.\n\nList pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.\nReturns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Errors: 404 not found, 403 forbidden, each with actionable hints.\n\n- list: project_path*, pipeline_iid*, severity, scanner, report_type, state (arrays), sort (severity_desc/severity_asc), first, after\n\nSee also: gitlab_vulnerability, gitlab_pipeline",
     "inputSchema": {
       "additionalProperties": false,
       "oneOf": [
@@ -57346,16 +57419,6 @@
                 "before": {
                   "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
                   "type": "string"
-                },
-                "confidence": {
-                  "description": "Filter by confidence: CONFIRMED, MEDIUM, LOW",
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": [
-                    "null",
-                    "array"
-                  ]
                 },
                 "first": {
                   "description": "Number of items to return (default 20, max 100)",
@@ -57401,6 +57464,24 @@
                 },
                 "severity": {
                   "description": "Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
+                },
+                "sort": {
+                  "description": "Sort order: severity_desc (default) or severity_asc",
+                  "enum": [
+                    "severity_desc",
+                    "severity_asc"
+                  ],
+                  "type": "string"
+                },
+                "state": {
+                  "description": "Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED",
                   "items": {
                     "type": "string"
                   },
@@ -65225,8 +65306,10 @@
                 "sort": {
                   "description": "Sort order: severity_desc, severity_asc, detected_desc, detected_asc",
                   "enum": [
-                    "asc",
-                    "desc"
+                    "severity_desc",
+                    "severity_asc",
+                    "detected_desc",
+                    "detected_asc"
                   ],
                   "type": "string"
                 },

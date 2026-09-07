@@ -467,20 +467,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,168 |     241,399 |
-| Unit tests (`_test.go`)  |       673 |     398,474 |
+| Source (`.go`, non-test) |     1,181 |     243,537 |
+| Unit tests (`_test.go`)  |       683 |     401,264 |
 | End-to-end tests         |       243 |      64,335 |
-| **Total**                | **2,084** | **704,208** |
+| **Total**                | **2,107** | **709,136** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  8,988 |
-| . Exported (public)             |  2,895 |
-| . Unexported (private)          |  6,093 |
-| Unit test functions (`TestXxx`) | 13,809 |
-| Subtests (`t.Run(...)`)         |  5,401 |
+| Source functions                |  9,057 |
+| . Exported (public)             |  2,905 |
+| . Unexported (private)          |  6,152 |
+| Unit test functions (`TestXxx`) | 13,883 |
+| Subtests (`t.Run(...)`)         |  5,442 |
 | End-to-end test functions       |    602 |
 
 ### Ratios worth noting
@@ -488,18 +488,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.65× more tests than code |
-| Average source file length         |                 ~207 lines |
-| Average test file length           |                 ~592 lines |
-| Comment lines in source            |  40,336 (~16.7% of source) |
+| Average source file length         |                 ~206 lines |
+| Average test file length           |                 ~588 lines |
+| Comment lines in source            |  41,010 (~16.8% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 7,501 |
-| `defer` statements                 | 1,313 |
-| `struct` types defined             | 2,990 |
+| `if err != nil` checks             | 7,549 |
+| `defer` statements                 | 1,316 |
+| `struct` types defined             | 3,008 |
 | `//nolint` suppressions            |   316 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -507,9 +507,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   255 |
-| Direct dependencies (`go.mod`) |    31 |
-| Indirect dependencies          |    38 |
+| Go packages                    |   258 |
+| Direct dependencies (`go.mod`) |    32 |
+| Indirect dependencies          |    39 |
 
 ### Hall of fame
 
@@ -522,8 +522,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,389 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 14,298 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,427 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 14,397 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

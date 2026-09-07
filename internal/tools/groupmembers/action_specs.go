@@ -33,7 +33,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupMemberDeleteSpec("group_member_remove", toolutil.DestructiveAction(client, removeMemberOutput), "gitlab_group_member_remove"),
 		groupMemberCreateSpec("group_member_share", toolutil.RouteAction(client, ShareGroup), "gitlab_group_share"),
 		groupMemberDeleteSpec("group_member_unshare", toolutil.DestructiveAction(client, unshareGroupOutput), "gitlab_group_unshare"),
-		billableMemberReadSpec(actionBillableMembers, toolutil.RouteAction(client, ListBillableMembers), toolBillableMembers),
+		billableMembersListSpec(client),
 		billableMemberReadSpec(actionBillableMemberMemberships, toolutil.RouteAction(client, ListBillableMemberMemberships), toolBillableMemberMemberships),
 		billableMemberDeleteSpec(actionBillableMemberRemove, toolutil.DestructiveAction(client, removeBillableMemberOutput), toolBillableMemberRemove),
 	}
@@ -43,6 +43,31 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // spec for a billable-member action.
 func billableMemberReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, billableMemberOptions(individualTool))
+}
+
+// billableMembersListSpec is billableMemberReadSpec plus the sort enum this one
+// action needs.
+//
+// The billable members endpoint takes a combined field_direction token, and
+// without the override toolutil.canonicalParamEnums injects the REST-wide
+// [asc, desc] pair, which this endpoint accepts none of: the server would then
+// refuse every value GitLab documents while advertising two it rejects. The
+// sibling memberships action is left alone because its sort really is the
+// plain direction pair.
+//
+// GitLab API docs: https://docs.gitlab.com/api/members/#list-all-billable-members-of-a-group
+func billableMembersListSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := billableMemberOptions(toolBillableMembers)
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": []any{
+			"access_level_asc", "access_level_desc",
+			"last_joined", "oldest_joined",
+			"name_asc", "name_desc",
+			"oldest_sign_in", "recent_sign_in",
+			"last_activity_on_asc", "last_activity_on_desc",
+		}}),
+	}
+	return toolutil.NewReadActionSpec(actionBillableMembers, toolutil.RouteAction(client, ListBillableMembers), options)
 }
 
 // billableMemberDeleteSpec builds a destructive, Premium/Ultimate-gated

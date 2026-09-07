@@ -12450,7 +12450,7 @@
             "has_merge_request": {
               "type": "boolean"
             },
-            "has_solutions": {
+            "has_remediations": {
               "type": "boolean"
             },
             "id": {
@@ -24191,7 +24191,7 @@
             "has_merge_request": {
               "type": "boolean"
             },
-            "has_solutions": {
+            "has_remediations": {
               "type": "boolean"
             },
             "id": {
@@ -42935,7 +42935,7 @@
             "has_merge_request": {
               "type": "boolean"
             },
-            "has_solutions": {
+            "has_remediations": {
               "type": "boolean"
             },
             "id": {
@@ -95329,8 +95329,16 @@
         "sort": {
           "description": "Sort order (e.g. name_asc, name_desc, last_activity_on_asc, last_activity_on_desc)",
           "enum": [
-            "asc",
-            "desc"
+            "access_level_asc",
+            "access_level_desc",
+            "last_joined",
+            "oldest_joined",
+            "name_asc",
+            "name_desc",
+            "oldest_sign_in",
+            "recent_sign_in",
+            "last_activity_on_asc",
+            "last_activity_on_desc"
           ],
           "type": "string"
         }
@@ -96563,7 +96571,11 @@
           ]
         },
         "scope": {
-          "description": "Filter scope: ALL (default) or NAMESPACED",
+          "description": "Filter scope: ALL (default) or NAMESPACES",
+          "enum": [
+            "ALL",
+            "NAMESPACES"
+          ],
           "type": "string"
         },
         "search": {
@@ -96571,10 +96583,18 @@
           "type": "string"
         },
         "sort": {
-          "description": "Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC",
+          "description": "Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC, CREATED_ASC, CREATED_DESC, USAGE_COUNT_ASC, USAGE_COUNT_DESC",
           "enum": [
-            "asc",
-            "desc"
+            "NAME_ASC",
+            "NAME_DESC",
+            "LATEST_RELEASED_AT_ASC",
+            "LATEST_RELEASED_AT_DESC",
+            "STAR_COUNT_ASC",
+            "STAR_COUNT_DESC",
+            "CREATED_ASC",
+            "CREATED_DESC",
+            "USAGE_COUNT_ASC",
+            "USAGE_COUNT_DESC"
           ],
           "type": "string"
         }
@@ -108050,7 +108070,7 @@
   },
   {
     "name": "gitlab_list_security_findings",
-    "description": "List a pipeline's security report findings with severity, confidence, scanner, and report-type filters plus keyset pagination. Returns: matching findings with UUID, name, severity, confidence, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.",
+    "description": "List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -108061,16 +108081,6 @@
         "before": {
           "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
-        },
-        "confidence": {
-          "description": "Filter by confidence: CONFIRMED, MEDIUM, LOW",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
         },
         "first": {
           "description": "Number of items to return (default 20, max 100)",
@@ -108123,6 +108133,24 @@
             "null",
             "array"
           ]
+        },
+        "sort": {
+          "description": "Sort order: severity_desc (default) or severity_asc",
+          "enum": [
+            "severity_desc",
+            "severity_asc"
+          ],
+          "type": "string"
+        },
+        "state": {
+          "description": "Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
@@ -108138,19 +108166,19 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "confidence": {
-                "type": "string"
-              },
               "description": {
                 "type": "string"
               },
               "evidence": {
                 "additionalProperties": false,
                 "properties": {
-                  "data": {
+                  "source": {
                     "type": "string"
                   },
-                  "source": {
+                  "source_url": {
+                    "type": "string"
+                  },
+                  "summary": {
                     "type": "string"
                   }
                 },
@@ -108207,9 +108235,6 @@
                   "object"
                 ]
               },
-              "name": {
-                "type": "string"
-              },
               "report_type": {
                 "type": "string"
               },
@@ -108258,7 +108283,7 @@
             },
             "required": [
               "uuid",
-              "name",
+              "title",
               "severity",
               "report_type",
               "state"
@@ -110986,8 +111011,10 @@
         "sort": {
           "description": "Sort order: severity_desc, severity_asc, detected_desc, detected_asc",
           "enum": [
-            "asc",
-            "desc"
+            "severity_desc",
+            "severity_asc",
+            "detected_desc",
+            "detected_asc"
           ],
           "type": "string"
         },
@@ -111066,7 +111093,7 @@
               "has_merge_request": {
                 "type": "boolean"
               },
-              "has_solutions": {
+              "has_remediations": {
                 "type": "boolean"
               },
               "id": {
@@ -111270,7 +111297,18 @@
           ]
         },
         "name": {
-          "description": "Filter by work item type name",
+          "description": "Filter by work item type name, an IssueType enum value such as ISSUE or TASK",
+          "enum": [
+            "EPIC",
+            "INCIDENT",
+            "ISSUE",
+            "KEY_RESULT",
+            "OBJECTIVE",
+            "REQUIREMENT",
+            "TASK",
+            "TEST_CASE",
+            "TICKET"
+          ],
           "type": "string"
         },
         "only_available": {
@@ -111429,10 +111467,41 @@
           "type": "string"
         },
         "sort": {
-          "description": "Sort order",
+          "description": "Sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC",
           "enum": [
-            "asc",
-            "desc"
+            "BLOCKING_ISSUES_ASC",
+            "BLOCKING_ISSUES_DESC",
+            "CLOSED_AT_ASC",
+            "CLOSED_AT_DESC",
+            "CREATED_ASC",
+            "CREATED_DESC",
+            "DUE_DATE_ASC",
+            "DUE_DATE_DESC",
+            "ESCALATION_STATUS_ASC",
+            "ESCALATION_STATUS_DESC",
+            "HEALTH_STATUS_ASC",
+            "HEALTH_STATUS_DESC",
+            "LABEL_PRIORITY_ASC",
+            "LABEL_PRIORITY_DESC",
+            "MILESTONE_DUE_ASC",
+            "MILESTONE_DUE_DESC",
+            "POPULARITY_ASC",
+            "POPULARITY_DESC",
+            "PRIORITY_ASC",
+            "PRIORITY_DESC",
+            "RELATIVE_POSITION_ASC",
+            "SEVERITY_ASC",
+            "SEVERITY_DESC",
+            "START_DATE_ASC",
+            "START_DATE_DESC",
+            "STATUS_ASC",
+            "STATUS_DESC",
+            "TITLE_ASC",
+            "TITLE_DESC",
+            "UPDATED_ASC",
+            "UPDATED_DESC",
+            "WEIGHT_ASC",
+            "WEIGHT_DESC"
           ],
           "type": "string"
         },
@@ -111446,8 +111515,19 @@
           "type": "string"
         },
         "types": {
-          "description": "Filter by work item types",
+          "description": "Filter by work item types, IssueType enum values such as ISSUE or TASK",
           "items": {
+            "enum": [
+              "EPIC",
+              "INCIDENT",
+              "ISSUE",
+              "KEY_RESULT",
+              "OBJECTIVE",
+              "REQUIREMENT",
+              "TASK",
+              "TEST_CASE",
+              "TICKET"
+            ],
             "type": "string"
           },
           "type": [
@@ -185924,7 +186004,7 @@
             "has_merge_request": {
               "type": "boolean"
             },
-            "has_solutions": {
+            "has_remediations": {
               "type": "boolean"
             },
             "id": {
@@ -187314,7 +187394,7 @@
             "has_merge_request": {
               "type": "boolean"
             },
-            "has_solutions": {
+            "has_remediations": {
               "type": "boolean"
             },
             "id": {

@@ -346,8 +346,8 @@ func convertComponents(gqlComps []gqlComponent) []ComponentItem {
 // ListInput is the input for listing CI/CD Catalog resources.
 type ListInput struct {
 	Search string `json:"search,omitempty" jsonschema:"Search resources by name or description"`
-	Scope  string `json:"scope,omitempty" jsonschema:"Filter scope: ALL (default) or NAMESPACED"`
-	Sort   string `json:"sort,omitempty" jsonschema:"Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC"`
+	Scope  string `json:"scope,omitempty" jsonschema:"Filter scope: ALL (default) or NAMESPACES"`
+	Sort   string `json:"sort,omitempty" jsonschema:"Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC, CREATED_ASC, CREATED_DESC, USAGE_COUNT_ASC, USAGE_COUNT_DESC"`
 	toolutil.GraphQLCursorPaginationInput
 }
 
@@ -387,7 +387,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("list_catalog_resources", err,
-			"the CI/CD Catalog requires GitLab 16.7+; scope must be one of {ALL, NAMESPACED}; sort one of {NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC}")
+			"the CI/CD Catalog requires GitLab 16.7+; scope must be one of {ALL, NAMESPACES}; sort one of {NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC, CREATED_ASC, CREATED_DESC, USAGE_COUNT_ASC, USAGE_COUNT_DESC}")
 	}
 
 	// GitLab answers a rejected document with HTTP 200 and a top-level errors

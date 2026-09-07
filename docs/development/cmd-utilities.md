@@ -8,41 +8,43 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 
 ## Quick reference
 
-| Utility                        | Category                      | Purpose                                                                                                                                                                                             | Make target                                           |
-| ------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `audit_1to1`                   | SDK/API parity audits         | Consolidated SDK↔API parity audit (struct/action/metadata gap streams, plus the `sdk` service and raw-GraphQL gate)                                                                                 | `make audit-1to1`                                     |
-| `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                       | `make audit-catalog-first`                            |
-| `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                          | `make audit-discovery`                                |
-| `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                   | `make audit-doc-coverage`                             |
-| `audit_doc_tool_names`         | Catalog & metadata audits     | Every `gitlab_*` tool name the documentation mentions is one some surface registers                                                                                                                 | `make check-doc-tool-names`                           |
-| `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                            | `make audit-dynamic-aliases`                          |
-| `audit_e2e_gaps`               | Catalog & metadata audits     | Catalog actions the e2e suite never exercises                                                                                                                                                       | `make audit-e2e-gaps`                                 |
-| `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                | `make audit-edition-tier`                             |
-| `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                          | `make check-readonly-graphql`                         |
-| `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`                          |
-| `audit_gateway_chars`          | Surface quality audits        | Served descriptions and titles carry no character an MCP gateway validator rejects                                                                                                                  | `make check-gateway-chars`                            |
-| `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint`             |
-| `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase); `-site-stats` writes the site's stats JSON                                                                                     | `make audit-metrics`, `make gen-site-stats`           |
-| `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                                   |
-| `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                           | `make audit-test-names`, `make check-test-file-names` |
-| `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                      | `make check-test-goroutines`                          |
-| `audit_test_subtests`          | Source quality audits         | Case loops that assert without a `t.Run` subtest; `-fix` rewrites the unambiguous ones                                                                                                              | `make check-test-subtests`                            |
-| `audit_md_escaping`            | Source quality audits         | Values a Markdown formatter interpolates into a table cell, heading, list item or link without an escaping helper                                                                                   | `make check-md-escaping`                              |
-| `audit_string_dupes`           | Source quality audits         | Finds duplicated string literals missing `const`/`var` declarations                                                                                                                                 | —                                                     |
-| `audit_supply_chain`           | Release & supply-chain audits | Five release-configuration invariants: pinned actions, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current security policy, signature-verifying installers | `make check-supply-chain`                             |
-| `audit_install_buttons`        | Release & supply-chain audits | Decodes every one-click install button and holds the buttons to one configuration per command                                                                                                       | `make check-install-buttons`                          |
-| `gen_action_catalog_manifest`  | Generators                    | Generates the ActionSpec group-builder manifest                                                                                                                                                     | `make gen-action-catalog-manifest`                    |
-| `gen_lhm_manifest`             | Generators                    | Generates the tools/prompts/resources arrays in `lhm.plugin.json` (LobeHub Marketplace)                                                                                                             | `make gen-lhm-manifest`                               |
-| `gen_llms`                     | Generators                    | Generates `llms.txt` and `llms-full.txt`                                                                                                                                                            | `make gen-llms`                                       |
-| `gen_stats`                    | Generators                    | Regenerates the managed repository statistics section in `README.md`                                                                                                                                | `make gen-stats`                                      |
-| `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                         | `make gen-testing-docs`                               |
-| `gen_docker_tools`             | Generators                    | Generates a Docker MCP Registry-compatible `tools.json`                                                                                                                                             | —                                                     |
-| `gen_brand`                    | Generators                    | Emits every vector brand asset from one parametric geometry                                                                                                                                         | `make brand`, `make brand-check`                      |
-| `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                           | `make gen-icon-webp`                                  |
-| `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                | part of `make audit-docs`                             |
-| `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential) and draws the published charts                                                                                         | `make bench-resources`                                |
-| `eval_mcp_surfaces`            | Evaluation                    | Evaluates model behavior across MCP tool surfaces                                                                                                                                                   | `make eval-surfaces-docker*`                          |
-| `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                       | `make build`, `make run`                              |
+| Utility                        | Category                      | Purpose                                                                                                                                                                                             | Make target                                            |
+| ------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `audit_1to1`                   | SDK/API parity audits         | Consolidated SDK↔API parity audit (struct/action/metadata gap streams, plus the `sdk` service and raw-GraphQL gate)                                                                                 | `make audit-1to1`                                      |
+| `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                       | `make audit-catalog-first`                             |
+| `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                          | `make audit-discovery`                                 |
+| `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                   | `make audit-doc-coverage`                              |
+| `audit_doc_tool_names`         | Catalog & metadata audits     | Every `gitlab_*` tool name the documentation mentions is one some surface registers                                                                                                                 | `make check-doc-tool-names`                            |
+| `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                            | `make audit-dynamic-aliases`                           |
+| `audit_e2e_gaps`               | Catalog & metadata audits     | Catalog actions the e2e suite never exercises                                                                                                                                                       | `make audit-e2e-gaps`                                  |
+| `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                | `make audit-edition-tier`                              |
+| `audit_graphql_documents`      | Catalog & metadata audits     | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                                                                                                    | `make check-graphql-documents`                         |
+| `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                          | `make check-readonly-graphql`                          |
+| `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`                           |
+| `audit_gateway_chars`          | Surface quality audits        | Served descriptions and titles carry no character an MCP gateway validator rejects                                                                                                                  | `make check-gateway-chars`                             |
+| `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint`              |
+| `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase); `-site-stats` writes the site's stats JSON                                                                                     | `make audit-metrics`, `make gen-site-stats`            |
+| `gen_graphql_schema`           | Generators                    | Pins a GitLab GraphQL schema by introspecting a live instance; `--check` gates the committed one                                                                                                    | `make gen-graphql-schema`, `make check-graphql-schema` |
+| `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                                    |
+| `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                           | `make audit-test-names`, `make check-test-file-names`  |
+| `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                      | `make check-test-goroutines`                           |
+| `audit_test_subtests`          | Source quality audits         | Case loops that assert without a `t.Run` subtest; `-fix` rewrites the unambiguous ones                                                                                                              | `make check-test-subtests`                             |
+| `audit_md_escaping`            | Source quality audits         | Values a Markdown formatter interpolates into a table cell, heading, list item or link without an escaping helper                                                                                   | `make check-md-escaping`                               |
+| `audit_string_dupes`           | Source quality audits         | Finds duplicated string literals missing `const`/`var` declarations                                                                                                                                 | —                                                      |
+| `audit_supply_chain`           | Release & supply-chain audits | Five release-configuration invariants: pinned actions, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current security policy, signature-verifying installers | `make check-supply-chain`                              |
+| `audit_install_buttons`        | Release & supply-chain audits | Decodes every one-click install button and holds the buttons to one configuration per command                                                                                                       | `make check-install-buttons`                           |
+| `gen_action_catalog_manifest`  | Generators                    | Generates the ActionSpec group-builder manifest                                                                                                                                                     | `make gen-action-catalog-manifest`                     |
+| `gen_lhm_manifest`             | Generators                    | Generates the tools/prompts/resources arrays in `lhm.plugin.json` (LobeHub Marketplace)                                                                                                             | `make gen-lhm-manifest`                                |
+| `gen_llms`                     | Generators                    | Generates `llms.txt` and `llms-full.txt`                                                                                                                                                            | `make gen-llms`                                        |
+| `gen_stats`                    | Generators                    | Regenerates the managed repository statistics section in `README.md`                                                                                                                                | `make gen-stats`                                       |
+| `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                         | `make gen-testing-docs`                                |
+| `gen_docker_tools`             | Generators                    | Generates a Docker MCP Registry-compatible `tools.json`                                                                                                                                             | —                                                      |
+| `gen_brand`                    | Generators                    | Emits every vector brand asset from one parametric geometry                                                                                                                                         | `make brand`, `make brand-check`                       |
+| `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                           | `make gen-icon-webp`                                   |
+| `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                | part of `make audit-docs`                              |
+| `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential) and draws the published charts                                                                                         | `make bench-resources`                                 |
+| `eval_mcp_surfaces`            | Evaluation                    | Evaluates model behavior across MCP tool surfaces                                                                                                                                                   | `make eval-surfaces-docker*`                           |
+| `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                       | `make build`, `make run`                               |
 
 ## SDK/API parity audits
 
@@ -415,6 +417,53 @@ The directive has to sit in the package that owns the action and name that actio
 
 - `make check-readonly-graphql`: the CI gate.
 - `make audit-readonly-graphql`: the same gate, with the GraphQL-sending read-only actions listed.
+
+### audit_graphql_documents
+
+Fails when a raw GraphQL document in the source is one the pinned GitLab schema refuses.
+
+Until this existed, no test in the repository could fail for the reason that matters. Every GraphQL test answers the request from an `httptest` handler that returns whatever the test wrote, so a passing test proved that our handler agreed with our own fixture and said nothing about whether GitLab would accept the document. Four registered tools shipped documents no current instance accepts, with every test green.
+
+`internal/testutil.NewTestClient` now validates every document a test sends, which covers most of them and cannot cover all of them: a document no test drives still ships. This audit reads them out of the source instead, so the coverage of the gate stops depending on the coverage of the tests.
+
+It loads the whole program with `go/packages` rather than matching the source with a regular expression, because four of this repository's documents are assembled by concatenating a shared fragment constant and only the type checker knows what the assembled value is. Constants are folded during type checking, so a document written as three pieces is judged as the one string GitLab would receive. Documents held in `.graphql` files are read straight off disk as well, since a `go:embed` variable is not a constant and folds to nothing: without that, moving a long document into its own file would drop it out of the inventory and the audit would report one fewer document and still exit `0`.
+
+What it cannot check is variables: a document read out of the source has no request behind it, so nothing says which variables a handler will send or what they will hold. That half belongs to the test transport, which sees a real request.
+
+What it does not read is client-go, which builds another 42 documents of its own for the achievements, work item, security attribute and terraform state services among others. Those reach GitLab through this server too, and only the test transport judges them, on whichever ones a test happens to drive. The summary counts this repository's documents, not the server's whole GraphQL surface.
+
+`-schema` judges the documents against an SDL file the caller supplies instead of the pin. That is what `make check-graphql-documents-live` uses: `gen_graphql_schema` writes today's gitlab.com schema into a temporary directory and this reads it, which is the only check that reports a field GitLab has narrowed since the pin was taken.
+
+#### Usage
+
+```bash
+# CI gate
+go run ./cmd/audit_graphql_documents/
+
+# Also list every document it accepted
+go run ./cmd/audit_graphql_documents/ -v
+
+# Judge against a schema fetched now rather than the pin
+go run ./cmd/audit_graphql_documents/ -schema /tmp/live/gitlab-schema.graphql
+```
+
+#### Flags
+
+| Flag      | Type     | Default   | Description                                                           |
+| --------- | -------- | --------- | --------------------------------------------------------------------- |
+| `-dir`    | `string` | `.`       | Repository root to audit                                              |
+| `-v`      | `bool`   | `false`   | List every document checked, not only the refused ones                |
+| `-schema` | `string` | _(empty)_ | SDL file to judge the documents against, instead of the pinned schema |
+
+#### Output
+
+One block per refused document on stderr, naming the package, the constant it is declared as (or the `.graphql` file, or "an inline document"), the file and line, and every validation error underneath. The summary line says which schema judged them: the pin's provenance, or the path handed to `-schema`. Exits `1` on any refusal, on a source tree that cannot be loaded, on a `-schema` file that cannot be read or parsed, and when no documents are found at all, since an audit that finds nothing is looking in the wrong place.
+
+#### Make targets
+
+- `make check-graphql-documents`: the CI gate.
+- `make audit-graphql-documents`: the same gate, listing what it accepted.
+- `make check-graphql-documents-live`: the same documents against a schema fetched from gitlab.com now. Needs the network, so it runs under `make test-e2e-gitlab-com` rather than in CI.
 
 ## Surface quality audits
 
@@ -899,6 +948,52 @@ Rewrites the manifest Go file in place, or (with `-check`) verifies it is curren
 - `make gen-action-catalog-manifest`
 - `make check-action-catalog-manifest` — CI gate.
 
+### gen_graphql_schema
+
+Pins a GitLab GraphQL schema into `internal/graphqlschema`, where the test transport and `audit_graphql_documents` both read it.
+
+It introspects a live instance, converts the answer to SDL, and writes `gitlab-schema.graphql` beside `source.json`, which records the instance, the version it reported and the day it answered so a reader can tell how old the pin is without asking git. GitLab answers introspection to anyone, so no token is needed for the schema itself; `GITLAB_TOKEN` is read so the record can name the version, which GitLab refuses to tell an anonymous caller, and `--check` refuses a pin that records none.
+
+The SDL is committed as text, not gzipped. A re-pin is the one moment somebody needs to read what GitLab changed, and git stores two revisions of the text in about half the pack it needs for two gzip streams, which it can neither delta nor diff. The schema never reaches a released binary, so nothing weighs the other way.
+
+The conversion emits objects with their `implements` clauses, interfaces, unions, enums, input objects, custom scalars, argument and input defaults, and the `schema { query mutation subscription }` block. Built-in scalars and `__`-prefixed types are omitted, because gqlparser's own prelude already defines them and emitting them again fails the load with a duplicate definition. Everything nameable is sorted, so a re-pin produces a diff of what changed rather than a reshuffle. Descriptions and deprecation reasons are dropped: validation never consults them and they would triple the file.
+
+Nothing is written until the converted schema has been loaded back through the same parser that will judge every document, so a renderer that dropped an `implements` clause fails here rather than by refusing a valid document months later.
+
+Generating needs the network, so it is not a gate. `--check` is, and it asks more than whether the bytes parse: it refuses a record naming an instance other than `https://gitlab.com/api/graphql`, one carrying fewer than 4000 types, one whose GitLab version is `unknown`, and one retrieved more than 180 days ago. A `-url` pin is therefore a diagnostic, not a commit: it narrows the gate's promise to that instance, and a Community Edition instance narrows it below the surface this server registers, so `--check` names it rather than accepting it in silence. A generation that would produce such a pin warns on stderr as it writes, so the person who ran it learns from the command rather than from CI an hour later.
+
+The 180-day window is a deliberate tradeoff. GitLab narrows fields in place, so an old pin is a gate that has quietly stopped asking, and the only honest way to say so is to fail; six releases is long enough that it rarely interrupts unrelated work. To catch a narrowing on the day it happens rather than at the next re-pin, use `make check-graphql-documents-live`.
+
+#### Usage
+
+```bash
+# Re-pin from gitlab.com (GITLAB_TOKEN set, so the version is recorded)
+go run ./cmd/gen_graphql_schema/
+
+# Probe a self-managed instance; a pin written this way will not pass --check
+go run ./cmd/gen_graphql_schema/ -url https://gitlab.example.com/api/graphql -dir /tmp/probe
+
+# CI gate, no network
+go run ./cmd/gen_graphql_schema/ --check
+```
+
+#### Flags
+
+| Flag     | Type     | Default                          | Description                                                                                                              |
+| -------- | -------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `-url`   | `string` | `https://gitlab.com/api/graphql` | GraphQL endpoint to introspect                                                                                           |
+| `-dir`   | `string` | `internal/graphqlschema`         | Directory holding the pinned schema and its provenance record                                                            |
+| `-check` | `bool`   | `false`                          | Load the committed schema instead of fetching one, and fail when it does not parse or is not a current pin of gitlab.com |
+
+#### Output
+
+Writes `gitlab-schema.graphql` and `source.json` into `-dir`, and reports the type count and provenance on stdout. `--check` writes only the summary. Exits `1` on any failure, so a half-written artifact never reaches a branch.
+
+#### Make targets
+
+- `make gen-graphql-schema`
+- `make check-graphql-schema` — CI gate.
+
 ### gen_lhm_manifest
 
 Regenerates the `tools`, `prompts`, and `resources` arrays in `lhm.plugin.json`, the manifest published to the LobeHub Marketplace. LobeHub derives the listing's capability badges from those arrays — its scanner cannot introspect a server distributed as a Go binary or a Docker image — so a manifest without them advertises zero tools no matter what the server registers.
@@ -1305,3 +1400,5 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `brand-check`                            | `gen_brand --check`                | The committed brand assets match the geometry                                                                              | Non-zero on drift                                         |
 | `check-icon-webp`                        | `gen_icon_webp --check`            | The committed WebP icons match `icons.go` (needs `rsvg-convert` and `cwebp`, so not run in CI)                             | Non-zero on drift                                         |
 | `check-readonly-graphql`                 | `audit_readonly_graphql`           | No action classified ReadOnly can reach a GraphQL mutation                                                                 | Non-zero on any finding, or if the audit cannot be run    |
+| `check-graphql-schema`                   | `gen_graphql_schema --check`       | The committed GitLab schema parses and its provenance record decodes                                                       | Non-zero if either file is missing or unusable            |
+| `check-graphql-documents`                | `audit_graphql_documents`          | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                           | Non-zero on any refusal, or if no documents are found     |

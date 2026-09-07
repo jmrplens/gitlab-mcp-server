@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -151,11 +152,11 @@ type ListInput struct {
 	FullPath           string   `json:"full_path" jsonschema:"Full path of the project or group,required"`
 	State              string   `json:"state,omitempty" jsonschema:"Filter by state (opened/closed/all)"`
 	Search             string   `json:"search,omitempty" jsonschema:"Search in title and description"`
-	Types              []string `json:"types,omitempty" jsonschema:"Filter by work item types"`
+	Types              []string `json:"types,omitempty" jsonschema:"Filter by work item types, IssueType enum values such as ISSUE or TASK"`
 	AuthorUsername     string   `json:"author_username,omitempty" jsonschema:"Filter by author username"`
 	LabelName          []string `json:"label_name,omitempty" jsonschema:"Filter by label names"`
 	Confidential       *bool    `json:"confidential,omitempty" jsonschema:"Filter by confidentiality"`
-	Sort               string   `json:"sort,omitempty" jsonschema:"Sort order"`
+	Sort               string   `json:"sort,omitempty" jsonschema:"Sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC"`
 	IncludeAncestors   *bool    `json:"include_ancestors,omitempty" jsonschema:"Include ancestor work items"`
 	IncludeDescendants *bool    `json:"include_descendants,omitempty" jsonschema:"Include descendant work items"`
 	toolutil.GraphQLCursorPaginationInput
@@ -201,7 +202,7 @@ func buildListOptions(input ListInput, cursor toolutil.GraphQLCursor) *gl.ListWo
 		opts.Search = &input.Search
 	}
 	if len(input.Types) > 0 {
-		opts.Types = input.Types
+		opts.Types = upperEach(input.Types)
 	}
 	if input.AuthorUsername != "" {
 		opts.AuthorUsername = &input.AuthorUsername
@@ -222,6 +223,22 @@ func buildListOptions(input ListInput, cursor toolutil.GraphQLCursor) *gl.ListWo
 		opts.IncludeDescendants = input.IncludeDescendants
 	}
 	return opts
+}
+
+// upperEach uppercases every entry of an enum-valued filter.
+//
+// The values reach GitLab as a GraphQL IssueType, which is case sensitive:
+// "Issue" is answered with "Expected \"Issue\" to be one of: ISSUE, INCIDENT,
+// ..." and nothing is executed. That is what this server sent until the pinned
+// schema started judging the variables, and no test could see it because the
+// mock answered whatever it was asked. Normalising rather than only publishing
+// the enum keeps a caller who learned the old spelling working.
+func upperEach(values []string) []string {
+	upper := make([]string, len(values))
+	for i, value := range values {
+		upper[i] = strings.ToUpper(value)
+	}
+	return upper
 }
 
 // List retrieves work items for a project or group.
@@ -512,7 +529,7 @@ type WorkItemTypeListOutput struct {
 // way every other cursor-paginated list here does.
 type ListWorkItemTypesInput struct {
 	FullPath      string `json:"full_path"            jsonschema:"Project or group full path (namespace path),required"`
-	Name          string `json:"name,omitempty"       jsonschema:"Filter by work item type name"`
+	Name          string `json:"name,omitempty"       jsonschema:"Filter by work item type name, an IssueType enum value such as ISSUE or TASK"`
 	OnlyAvailable bool   `json:"only_available,omitempty" jsonschema:"Return only available work item types"`
 	toolutil.GraphQLCursorPaginationInput
 }
@@ -533,7 +550,8 @@ func ListWorkItemTypes(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	opts := &gl.ListWorkItemTypesOptions{}
 	if input.Name != "" {
-		opts.Name = new(input.Name)
+		name := strings.ToUpper(input.Name)
+		opts.Name = &name
 	}
 	if input.OnlyAvailable {
 		opts.OnlyAvailable = new(true)

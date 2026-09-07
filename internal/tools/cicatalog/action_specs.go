@@ -64,6 +64,9 @@ func decorateCatalogMeta(options *toolutil.ActionSpecOptions, individualTool str
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
+	if len(meta.overrides) > 0 {
+		options.InputSchemaOverrides = append([]toolutil.InputSchemaOverride(nil), meta.overrides...)
+	}
 }
 
 // catalogActionMetaEntry is the discovery metadata for one CI/CD Catalog action.
@@ -72,7 +75,26 @@ type catalogActionMetaEntry struct {
 	aliases     []string
 	related     []string
 	description string
+	overrides   []toolutil.InputSchemaOverride
 }
+
+// catalogScopeValues and catalogSortValues are the CiCatalogResourceScope and
+// CiCatalogResourceSort GraphQL enums, which the catalog query requires
+// verbatim. Both are declared here because the canonical "sort" enum shared by
+// the REST endpoints (asc, desc) would otherwise be injected instead, and the
+// server would refuse every value GitLab actually accepts.
+//
+// GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#cicatalogresourcesort
+var (
+	catalogScopeValues = []string{"ALL", "NAMESPACES"}
+	catalogSortValues  = []string{
+		"NAME_ASC", "NAME_DESC",
+		"LATEST_RELEASED_AT_ASC", "LATEST_RELEASED_AT_DESC",
+		"STAR_COUNT_ASC", "STAR_COUNT_DESC",
+		"CREATED_ASC", "CREATED_DESC",
+		"USAGE_COUNT_ASC", "USAGE_COUNT_DESC",
+	}
+)
 
 // catalogActionMeta maps each individual CI/CD Catalog tool to its
 // non-generic discovery metadata (1:1 audit R-META). Aliases use CI/CD
@@ -80,12 +102,16 @@ type catalogActionMetaEntry struct {
 // domains so dynamic find resolves catalog intents unambiguously.
 var catalogActionMeta = map[string]catalogActionMetaEntry{
 	"gitlab_list_catalog_resources": {
-		usage:   "Browse the CI/CD Catalog of published component projects. Use search to match by name or description, scope to limit to your namespace (NAMESPACED) or the whole instance (ALL), and sort by name, latest release, or star count when the prompt asks for reusable pipeline components or templates to include.",
+		usage:   "Browse the CI/CD Catalog of published component projects. Use search to match by name or description, scope to limit to your namespaces (NAMESPACES) or the whole instance (ALL), and sort by name, latest release, or star count when the prompt asks for reusable pipeline components or templates to include.",
 		aliases: []string{"browse ci/cd catalog", "list cicd components", "search component catalog", "find reusable pipeline components", "list catalog resources"},
 		related: []string{actionCatalogGet, actionTemplateLint, "pipeline.create"},
 		description: "List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. " +
 			"Returns: catalog resources with name, full path, description, latest version, star and fork counts, open issue and MR counts, web URL, and keyset pagination metadata. " +
 			"See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_pipeline_create.",
+		overrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("scope", catalogScopeValues...),
+			toolutil.SchemaEnumOverride("sort", catalogSortValues...),
+		},
 	},
 	"gitlab_get_catalog_resource": {
 		usage:   "Fetch one CI/CD Catalog resource by its GID or by the full_path of the hosting project. Use after browsing the catalog when the prompt names a specific component project and you need its components, input parameters, README, and released versions to wire an include into a pipeline.",

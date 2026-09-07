@@ -62,6 +62,7 @@ gitlab-mcp-server/
 │   ├── audit_e2e_gaps/          # Reports catalog actions not exercised by the e2e suite (make audit-e2e-gaps)
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
 │   ├── audit_gateway_chars/     # Audits served descriptions/titles for characters MCP gateway validators reject (make check-gateway-chars)
+│   ├── audit_graphql_documents/ # Fails when a raw GraphQL document in the source is one the pinned GitLab schema refuses; loads the program with go/packages so a document assembled from a shared fragment is judged as the string GitLab receives, and reads `.graphql` files too since a go:embed var folds to nothing (make check-graphql-documents). `-schema` judges against a schema fetched now instead of the pin, which is the live re-probe (make check-graphql-documents-live). It reads `./internal/...` only: the ~42 documents client-go builds are judged by the test transport alone
 │   ├── audit_install_buttons/  # Decodes every one-click install payload (base64 or percent-encoded JSON) and holds the buttons to one configuration per command (make check-install-buttons)
 │   ├── godoc_tool/              # Consolidated Go doc auditor + fixer (was audit_godocs + add_docs)
 │   ├── audit_md_escaping/       # Fails when a Markdown formatter interpolates a GitLab-authored value into a table cell, heading, list item or link without EscapeMdTableCell/EscapeMdHeading/MdTitleLink; `//gitlab:allow-unescaped <expr>: <reason>` declares a value that needs none (make check-md-escaping)
@@ -80,6 +81,7 @@ gitlab-mcp-server/
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_brand/               # Emits every vector brand asset from one parametric geometry (mark, favicon, banner/OG/social cards, in-binary svgBrand)
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata
+│   ├── gen_graphql_schema/      # Pins a GitLab GraphQL schema by introspecting a live instance, writing internal/graphqlschema/gitlab-schema.graphql (SDL as text, so a re-pin is a readable diff) and source.json (make gen-graphql-schema); --check gates the committed pair without network, refusing a pin of another instance, a truncated answer, an unrecorded version or one over 180 days old (make check-graphql-schema)
 │   ├── gen_icon_webp/           # Regenerates light/dark WebP icon fallbacks from icons.go (maintainer-only, requires rsvg-convert + cwebp)
 │   ├── gen_lhm_manifest/        # Generates the capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
@@ -96,6 +98,7 @@ gitlab-mcp-server/
 │   ├── edition/                 # Licensing tier model (Free/Premium/Ultimate) used to gate tools
 │   ├── gatewaycompat/           # Description/title rewriting for strict MCP gateway validators
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
+│   ├── graphqlschema/           # The pinned GitLab GraphQL schema (embedded SDL as text + source.json provenance) and Validate(); loaded once per process behind a sync.Once. Validate walks the variables itself for enum case, since gqlparser compares enum values with EqualFold and GitLab does not
 │   ├── mcpotel/                 # OpenTelemetry instrumentation of MCP request handling (API only, no SDK)
 │   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
 │   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)
@@ -276,6 +279,7 @@ All tests use `httptest` to mock GitLab API responses. Shared helpers in `intern
 - `testutil.NewTestClient()` — creates a mock GitLab client pointing to httptest server
 - `testutil.RespondJSON()` — responds with JSON body
 - `testutil.RespondJSONWithPagination()` — responds with pagination headers
+- **The mock refuses what GitLab refuses.** `NewTestClient` wraps the handler it is given, and every POST to `/api/graphql` has its document and its variables validated against the pinned GitLab schema in `internal/graphqlschema` before the mock answers. Until this existed no GraphQL test could fail for the reason that matters: the handler returned whatever the test wrote, so a green test proved our code agreed with our own fixture and nothing about GitLab, and four registered tools shipped documents no current instance accepts. The document half catches an unknown field, an argument the field does not take and a variable typed as something the argument is not; the variables half catches a variable sent that the operation never declared, which is what let eight domains advertise a backward pagination no operation asked for. A refusal is reported with `t.Errorf` and the request still proceeds, so the test's own assertions report too, and never with `t.Fatal`, which would abort the httptest server's goroutine. `testutil.AllowInvalidGraphQL(t)` exempts a test that deliberately sends a malformed document and belongs nowhere else. A document no test drives is covered by `make check-graphql-documents` instead. See [GraphQL Integration](docs/concepts/graphql.md)
 - **Never `t.Fatal`/`FailNow` off the test goroutine** (httptest handlers, `go` statements, MCP handlers): follow the six-rule contract in `.github/instructions/test-goroutines.instructions.md` — `t.Errorf` + deterministic response + `return`, or record with atomics and assert afterwards. `make check-test-goroutines` detects violations; `make audit-test-goroutines` writes the work list
 - **Every case table runs under `t.Run`**: a range over a slice or map literal that asserts must open one subtest per case, named by a `name` field, the string element, or the map key. `go run ./cmd/audit_test_subtests/ -fix` rewrites the unambiguous shapes; `// sequential: <reason>` on the line above a loop declares dependent steps rather than cases; `make check-test-subtests` gates it in CI
 - Test naming: `TestToolName_Scenario_ExpectedResult`
