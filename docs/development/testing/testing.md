@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,742 |
-| Unit test functions                                   | 14,139 |
+| Total test functions                                  | 14,769 |
+| Unit test functions                                   | 14,166 |
 | E2E test functions                                    |    603 |
-| cmd test functions                                    |  2,821 |
+| cmd test functions                                    |  2,846 |
 | Test files (internal/)                                |    518 |
-| Test files (cmd/)                                     |    191 |
+| Test files (cmd/)                                     |    194 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     22 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
-| Overall coverage (`go test ./internal/...`)           |  98.5% |
+| Overall coverage (`go test ./internal/...`)           |  98.6% |
 | Average package coverage                              |  98.7% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,837 | 80.3% |
-| `TestFunc` (no underscore)             |    981 |  6.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,924 | 13.1% |
+| `TestFunc_Scenario` (2-part)           | 11,837 | 80.1% |
+| `TestFunc` (no underscore)             |    981 |  6.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,951 | 13.2% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,426 |        144 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,560 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,562 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,821 |        191 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,742** |    **949** |                                                                                                 |
+| cmd packages            |          2,846 |        194 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,769** |    **952** |                                                                                                 |
 
 ### Core Packages
 
@@ -84,7 +84,7 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   392 |   100.0% |    57 |
+| projects          |   391 |   100.0% |    57 |
 | groups            |   249 |   100.0% |    37 |
 | mergerequests     |   245 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
@@ -206,7 +206,7 @@
 | importservice           |        31 |          1 |   100.0% |         5 |
 | instancevariables       |        41 |          2 |   100.0% |         5 |
 | integrations            |        87 |          4 |    99.6% |        12 |
-| invites                 |        40 |          1 |   100.0% |         4 |
+| invites                 |        43 |          1 |   100.0% |         4 |
 | issuediscussions        |        44 |          2 |   100.0% |         6 |
 | issuelinks              |        68 |          3 |   100.0% |         4 |
 | issuenotes              |        48 |          2 |   100.0% |         5 |
@@ -249,7 +249,7 @@
 | projectimportexport     |        40 |          1 |    99.6% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        63 |          2 |   100.0% |         7 |
-| projects                |       392 |          6 |   100.0% |        57 |
+| projects                |       391 |          6 |   100.0% |        57 |
 | projectserviceaccounts  |        11 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        19 |          2 |   100.0% |         6 |
@@ -294,7 +294,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       102 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        51 |          4 |   100.0% |         7 |
-| **Total**               | **8,560** |    **359** |          | **1,187** |
+| **Total**               | **8,562** |    **359** |          | **1,187** |
 
 </details>
 
@@ -312,7 +312,7 @@
 | cmd/audit_1to1/internal/paths                  |   100.0% |
 | cmd/audit_1to1/internal/sdk                    |   100.0% |
 | cmd/audit_1to1/internal/shared                 |   100.0% |
-| cmd/audit_1to1/internal/structs                |    99.8% |
+| cmd/audit_1to1/internal/structs                |   100.0% |
 | cmd/audit_catalog_first                        |    93.3% |
 | cmd/audit_discovery_completeness               |    92.7% |
 | cmd/audit_doc_coverage                         |    91.7% |
