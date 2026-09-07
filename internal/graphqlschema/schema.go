@@ -217,8 +217,15 @@ func (w *enumWalker) walk(typ *ast.Type, value any, path string) {
 		return
 	}
 	if typ.Elem != nil {
+		// A value that is not a list, sent where a list is declared, is not an
+		// error: the specification's input coercion wraps it into a one-element
+		// list and gqlparser does the same, so `"critical"` reaches GitLab as
+		// `["critical"]` for a [VulnerabilitySeverity!]. Returning here instead
+		// would let exactly that spelling past the one gate that reads case,
+		// which is the shape of the defect this walk exists for.
 		elements, ok := value.([]any)
 		if !ok {
+			w.walk(typ.Elem, value, path)
 			return
 		}
 		for i, element := range elements {

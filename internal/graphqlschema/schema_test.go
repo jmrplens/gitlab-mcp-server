@@ -386,9 +386,25 @@ func TestValidate_MiscasedEnumValue_IsRefusedInEveryPosition(t *testing.T) {
 			want: `$input.dismissalReason is "used_in_tests", and VulnerabilityDismissalReason is case sensitive`,
 		},
 		{
+			// The specification coerces a bare value sent where a list is
+			// declared into a one-element list, and gqlparser does the same, so
+			// this reaches GitLab as ["critical"] and is refused there. A walk
+			// that gave up on anything that is not a []any would let the one
+			// spelling this gate exists to catch straight through.
+			name:      "a bare value where a list is declared",
+			document:  listQuery,
+			variables: map[string]any{"severity": "critical"},
+			want:      `$severity is "critical", and VulnerabilitySeverity is case sensitive`,
+		},
+		{
 			name:      "the right case passes",
 			document:  listQuery,
 			variables: map[string]any{"severity": []any{"CRITICAL"}},
+		},
+		{
+			name:      "the right case passes as a bare value too",
+			document:  listQuery,
+			variables: map[string]any{"severity": "CRITICAL"},
 		},
 		{
 			name:      "a value no spelling would fix is left to the coercer",

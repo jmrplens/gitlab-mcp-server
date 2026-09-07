@@ -108145,6 +108145,12 @@
         "state": {
           "description": "Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED",
           "items": {
+            "enum": [
+              "DETECTED",
+              "CONFIRMED",
+              "DISMISSED",
+              "RESOLVED"
+            ],
             "type": "string"
           },
           "type": [
