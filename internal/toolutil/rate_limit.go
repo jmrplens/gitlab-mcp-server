@@ -101,6 +101,21 @@ const methodToolsList = "tools/list"
 // does, so a client sees one number for "come back later" on both layers.
 const rateLimitedErrorCode = -42900
 
+// RateLimitRefusalPrefix and rateLimitRetrySuffix are how every refusal this
+// limiter writes begins and ends, whichever of the two wire shapes carries it.
+//
+// The prefix is exported because a refused tools/call arrives as a successful
+// JSON-RPC result whose only distinguishing mark is this text: there is no
+// code and no _meta on that shape, so anything that has to tell a refusal from
+// a handler failure matches the wording. cmd/bench_resources' fairness
+// scenario does exactly that, and reading the constant rather than a copy of
+// the sentence makes a change of wording a compile-visible edit here instead
+// of a silent reclassification of every refusal as a failure there.
+const (
+	RateLimitRefusalPrefix = "rate limit exceeded for "
+	rateLimitRetrySuffix   = "; retry after a short backoff"
+)
+
 // NewRateLimiter builds a RateLimiter with the given rate (requests per
 // second) and burst (maximum concurrent tokens in the bucket). Returns nil
 // if rps <= 0, which the middleware treats as "disabled". Burst is clamped
@@ -416,7 +431,7 @@ func (r *RateLimiter) scaled(factor int) *RateLimiter {
 func rateLimitedError(method string) error {
 	return &jsonrpc.Error{
 		Code:    rateLimitedErrorCode,
-		Message: fmt.Sprintf("rate limit exceeded for %s; retry after a short backoff", method),
+		Message: RateLimitRefusalPrefix + method + rateLimitRetrySuffix,
 	}
 }
 
@@ -425,9 +440,9 @@ func rateLimitedError(method string) error {
 // tool when extractable so logs and agent traces stay informative.
 func rateLimitedResult(req mcp.Request) *mcp.CallToolResult {
 	name := extractToolName(req)
-	msg := "rate limit exceeded for tools/call; retry after a short backoff"
+	msg := RateLimitRefusalPrefix + methodToolsCall + rateLimitRetrySuffix
 	if name != "" {
-		msg = fmt.Sprintf("rate limit exceeded for %s; retry after a short backoff", name)
+		msg = RateLimitRefusalPrefix + name + rateLimitRetrySuffix
 	}
 	return &mcp.CallToolResult{
 		IsError: true,

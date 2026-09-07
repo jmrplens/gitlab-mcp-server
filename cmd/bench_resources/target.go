@@ -198,6 +198,23 @@ func withoutConfig(environ []string) []string {
 	return kept
 }
 
+// limiterOffArgs turn the rate limiter off, which is what every scenario but
+// the fairness one measures with.
+//
+// HTTP mode defaults to ten requests per second, which a benchmark firing
+// parallel requests would spend its time being refused by, so a capacity
+// figure measured with the limiter on would be the cost of saying no. The
+// fairness scenario measures exactly that saying-no, and it substitutes this
+// list rather than adding to it, so a reader of ps sees one setting for the
+// bound and not two.
+var limiterOffArgs = []string{limiterOffArg}
+
+// limiterOffArg turns the per-credential limiter off. It is a constant rather
+// than a shared slice because each fairness plan owns its own argument list,
+// and a plan that appended to a slice it shared with another would change that
+// other plan's arm.
+const limiterOffArg = "--rate-limit-rps=0"
+
 // httpTarget is one server process serving many credentials.
 type httpTarget struct {
 	binary  string
@@ -210,8 +227,18 @@ type httpTarget struct {
 	// that no credential of a series is evicted between its steps.
 	pprofAddr  string
 	maxClients int
+	// boundArgs and boundEnv are how a bound is put in force, or taken out of
+	// it, for one arm of the fairness scenario. A nil boundArgs is the
+	// limiter-off list above, so every other scenario passes the arguments it
+	// always passed; boundEnv is appended to the child environment, for a bound
+	// whose switch is a variable rather than a flag.
+	boundArgs []string
+	boundEnv  []string
 
-	addr   string
+	addr string
+	// mu guards cmd alone, which the sampler reads from a goroutine of its own
+	// while start is still assigning it.
+	mu     sync.Mutex
 	cmd    *exec.Cmd
 	output *lockedBuffer
 	cancel context.CancelFunc
@@ -221,10 +248,9 @@ type httpTarget struct {
 
 // start launches the process and waits for /health.
 //
-// The rate limiter is disabled for the run: HTTP mode defaults to ten
-// requests per second, which a benchmark firing parallel requests would spend
-// its time being refused by. Refusals are a different measurement and one the
-// httpe2e module already makes.
+// The rate limiter is disabled unless the caller named a bound: refusals are a
+// different measurement, made by the fairness scenario and by the httpe2e
+// module, and one that would otherwise contaminate every capacity figure here.
 func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
 	port, err := freePort(ctx)
 	if err != nil {
@@ -237,7 +263,11 @@ func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
 		"--http-addr=" + t.addr,
 		"--gitlab-url=" + t.stubURL,
 		"--tool-surface=" + t.plan.Surface,
-		"--rate-limit-rps=0",
+	}
+	if len(t.boundArgs) > 0 {
+		args = append(args, t.boundArgs...)
+	} else {
+		args = append(args, limiterOffArgs...)
 	}
 	if t.plan.Telemetry {
 		args = append(args, "--telemetry")
@@ -252,16 +282,22 @@ func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
 	runCtx, cancel := context.WithCancel(ctx)
 	t.cancel = cancel
 	t.output = &lockedBuffer{}
-	t.cmd = exec.CommandContext(runCtx, t.binary, args...) // #nosec G204 -- the binary is this command's own build of cmd/server
-	t.cmd.Env = childEnv(t.plan, t.stubURL, t.otlpURL, false)
-	t.cmd.Stdout = t.output
-	t.cmd.Stderr = t.output
+	cmd := exec.CommandContext(runCtx, t.binary, args...) // #nosec G204 -- the binary is this command's own build of cmd/server
+	cmd.Env = append(childEnv(t.plan, t.stubURL, t.otlpURL, false), t.boundEnv...)
+	cmd.Stdout = t.output
+	cmd.Stderr = t.output
 
 	started := time.Now()
-	if startErr := t.cmd.Start(); startErr != nil {
+	if startErr := cmd.Start(); startErr != nil {
 		cancel()
 		return 0, fmt.Errorf("start server: %w", startErr)
 	}
+	// Published only once the process exists, and behind the mutex, because the
+	// sampler is already polling processes() on a goroutine of its own: every
+	// caller starts it before the target so that the idle reading is taken from
+	// the first moment there is a process to read. Assigning the command before
+	// Start filled in its Process was a read of two fields being written.
+	t.setCommand(cmd)
 	info, waitErr := t.waitHealthy(runCtx)
 	if waitErr != nil {
 		t.close()
@@ -301,20 +337,38 @@ func (t *httpTarget) addClient(_ context.Context, index int) (*clientConn, time.
 	return &clientConn{rpc: client, label: "client " + strconv.Itoa(index)}, 0, nil
 }
 
+// setCommand publishes the started process to whoever is watching it.
+func (t *httpTarget) setCommand(cmd *exec.Cmd) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.cmd = cmd
+}
+
+// command is the started process, or nil before there is one. The lock is
+// released before the caller does anything with it, since two of the three
+// callers then block on the process for as long as it takes to die.
+func (t *httpTarget) command() *exec.Cmd {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.cmd
+}
+
 // processes reports the single server process.
 func (t *httpTarget) processes() []*os.Process {
-	if t.cmd == nil || t.cmd.Process == nil {
+	cmd := t.command()
+	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
-	return []*os.Process{t.cmd.Process}
+	return []*os.Process{cmd.Process}
 }
 
 // goroutines dumps and counts the server's goroutines, ending its life.
 func (t *httpTarget) goroutines() (int, error) {
-	if t.cmd == nil || t.cmd.Process == nil {
+	cmd := t.command()
+	if cmd == nil || cmd.Process == nil {
 		return 0, errors.New("no server process")
 	}
-	return dumpGoroutines(t.cmd.Process, func() { t.reap.wait(t.cmd) }, t.output.String)
+	return dumpGoroutines(cmd.Process, func() { t.reap.wait(cmd) }, t.output.String)
 }
 
 // serverInfo returns the build /health reported.
@@ -325,8 +379,8 @@ func (t *httpTarget) close() {
 	if t.cancel != nil {
 		t.cancel()
 	}
-	if t.cmd != nil {
-		t.reap.wait(t.cmd)
+	if cmd := t.command(); cmd != nil {
+		t.reap.wait(cmd)
 	}
 }
 
