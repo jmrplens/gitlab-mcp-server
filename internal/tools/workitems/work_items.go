@@ -30,36 +30,54 @@ type ChildItem struct {
 // WorkItemItem is a summary of a work item.
 //
 // The widget-backed fields below (color, dates, health status, iteration,
-// milestone, parent, weight) arrive on every get, create and update, because
-// the static fragment client-go uses for those three selects them
+// milestone, parent, status, weight) arrive on every get, create and update,
+// because the static fragment client-go uses for those three selects them
 // unconditionally. On the list path they arrive only when the query asked for
 // them: see [listReturnedFields].
+//
+// Author, assignees and labels carry the whole object client-go carries rather
+// than a name, because the fragment already pays for the whole object: the
+// UserCoreBasic fragment fetches id, username, name, state, avatarUrl, webUrl
+// and createdAt, and the labels fragment fetches id, title, color, description,
+// descriptionHtml and textColor. Publishing the name alone threw away every
+// other field the request had already spent. The Markdown formatter still
+// prints names, which is what a reader of the rendered text wants.
+//
+// Status and color are tagged Premium for the reason the list path already
+// gated them: client-go groups both with health status, iteration and weight as
+// fields that exist only in the Enterprise schema, and GitLab documents work
+// item status at "Tier: Premium, Ultimate"
+// (https://docs.gitlab.com/user/work_items/status/) and the epic the color
+// widget belongs to at the same pair
+// (https://docs.gitlab.com/user/group/epics/manage_epics/), both read on
+// 2026-09-07. Until now the two were advertised to every tier while being asked
+// for only on Enterprise instances.
 type WorkItemItem struct {
-	ID           int64        `json:"id"`
-	IID          int64        `json:"iid"`
-	Type         string       `json:"type"`
-	State        string       `json:"state"`
-	Status       string       `json:"status,omitempty"`
-	Title        string       `json:"title"`
-	Description  string       `json:"description,omitempty"`
-	WebURL       string       `json:"web_url,omitempty"`
-	Author       string       `json:"author,omitempty"`
-	Assignees    []string     `json:"assignees,omitempty"`
-	Labels       []string     `json:"labels,omitempty"`
-	LinkedItems  []LinkedItem `json:"linked_items,omitempty"`
-	Parent       *ChildItem   `json:"parent,omitempty" jsonschema:"Parent work item in the hierarchy (namespace path and IID)"`
-	Children     []ChildItem  `json:"children,omitempty" jsonschema:"Child work items in the hierarchy (each with namespace path and IID)"`
-	Color        string       `json:"color,omitempty" jsonschema:"Color of the work item as a hex code (e.g. #fefefe)"`
-	MilestoneID  int64        `json:"milestone_id,omitempty" jsonschema:"Numeric ID of the milestone the work item belongs to"`
-	IterationID  int64        `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Numeric ID of the iteration the work item belongs to"`
-	Weight       *int64       `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
-	HealthStatus string       `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
-	StartDate    string       `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
-	DueDate      string       `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
-	Confidential bool         `json:"confidential,omitempty"`
-	CreatedAt    string       `json:"created_at,omitempty"`
-	UpdatedAt    string       `json:"updated_at,omitempty"`
-	ClosedAt     string       `json:"closed_at,omitempty"`
+	ID           int64                          `json:"id"`
+	IID          int64                          `json:"iid"`
+	Type         string                         `json:"type"`
+	State        string                         `json:"state"`
+	Status       string                         `json:"status,omitempty" tier:"premium" jsonschema:"Name of the work item status in the namespace's lifecycle"`
+	Title        string                         `json:"title"`
+	Description  string                         `json:"description,omitempty"`
+	WebURL       string                         `json:"web_url,omitempty"`
+	Author       *toolutil.BasicUserOutput      `json:"author,omitempty" jsonschema:"User who created the work item"`
+	Assignees    []*toolutil.BasicUserOutput    `json:"assignees,omitempty" jsonschema:"Users assigned to the work item"`
+	Labels       []*toolutil.LabelDetailsOutput `json:"labels,omitempty" jsonschema:"Labels applied to the work item, each with its id, name, color, description and text color"`
+	LinkedItems  []LinkedItem                   `json:"linked_items,omitempty"`
+	Parent       *ChildItem                     `json:"parent,omitempty" jsonschema:"Parent work item in the hierarchy (namespace path and IID)"`
+	Children     []ChildItem                    `json:"children,omitempty" jsonschema:"Child work items in the hierarchy (each with namespace path and IID)"`
+	Color        string                         `json:"color,omitempty" tier:"premium" jsonschema:"Color of the work item as a hex code (e.g. #fefefe)"`
+	MilestoneID  int64                          `json:"milestone_id,omitempty" jsonschema:"Numeric ID of the milestone the work item belongs to"`
+	IterationID  int64                          `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Numeric ID of the iteration the work item belongs to"`
+	Weight       *int64                         `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
+	HealthStatus string                         `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
+	StartDate    string                         `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
+	DueDate      string                         `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
+	Confidential bool                           `json:"confidential,omitempty"`
+	CreatedAt    string                         `json:"created_at,omitempty"`
+	UpdatedAt    string                         `json:"updated_at,omitempty"`
+	ClosedAt     string                         `json:"closed_at,omitempty"`
 }
 
 // mapStatusToID maps a human-readable status string to the GitLab WorkItemStatusID GID.
@@ -95,15 +113,9 @@ func workItemToItem(wi *gl.WorkItem) WorkItemItem {
 	if wi.Status != nil {
 		item.Status = *wi.Status
 	}
-	if wi.Author != nil {
-		item.Author = wi.Author.Username
-	}
-	for _, a := range wi.Assignees {
-		item.Assignees = append(item.Assignees, a.Username)
-	}
-	for _, l := range wi.Labels {
-		item.Labels = append(item.Labels, l.Name)
-	}
+	item.Author = toolutil.NewBasicUserOutput(wi.Author)
+	item.Assignees = toolutil.NewBasicUserOutputs(wi.Assignees)
+	item.Labels = labelOutputs(wi.Labels)
 	for _, li := range wi.LinkedItems {
 		item.LinkedItems = append(item.LinkedItems, LinkedItem{
 			IID:      li.IID,
@@ -125,6 +137,29 @@ func workItemToItem(wi *gl.WorkItem) WorkItemItem {
 	item.UpdatedAt = toolutil.FormatTimePtr(wi.UpdatedAt)
 	item.ClosedAt = toolutil.FormatTimePtr(wi.ClosedAt)
 	return item
+}
+
+// labelOutputs converts the labels widget into the shared label object.
+//
+// toolutil.NewLabelDetailsOutputs cannot be used: client-go returns a value
+// slice here and a pointer slice on every REST domain, so the shared converter
+// takes the shape this one does not have.
+func labelOutputs(labels []gl.LabelDetails) []*toolutil.LabelDetailsOutput {
+	if len(labels) == 0 {
+		return nil
+	}
+	out := make([]*toolutil.LabelDetailsOutput, 0, len(labels))
+	for _, l := range labels {
+		out = append(out, &toolutil.LabelDetailsOutput{
+			ID:              l.ID,
+			Name:            l.Name,
+			Color:           l.Color,
+			Description:     l.Description,
+			DescriptionHTML: l.DescriptionHTML,
+			TextColor:       l.TextColor,
+		})
+	}
+	return out
 }
 
 // applyWidgetFields copies the widget-backed values of wi onto item.
@@ -240,6 +275,12 @@ type ListInput struct {
 	Sort               string `json:"sort,omitempty" jsonschema:"Sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC"`
 	IncludeAncestors   *bool  `json:"include_ancestors,omitempty" jsonschema:"Include ancestor work items"`
 	IncludeDescendants *bool  `json:"include_descendants,omitempty" jsonschema:"Include descendant work items"`
+
+	// ReturnedFields selects the GraphQL fragment, not the result set: it
+	// decides which fields of each matching work item come back, and no work
+	// item is included or excluded by it. Naming a subset makes a listing
+	// smaller and cheaper; naming none asks for the per-tier default set.
+	ReturnedFields []string `json:"returned_fields,omitempty" jsonschema:"Fields of each work item the query asks for. Selects what comes back, not which work items match: an unselected field is absent from every item rather than empty. Omit for the default set, which is every Community Edition field plus the five Enterprise ones on a Premium or Ultimate instance. Naming color, healthStatus, iteration, status or weight against a Community Edition instance fails the whole query, since its schema does not define those widgets"`
 	toolutil.GraphQLCursorPaginationInput
 }
 
@@ -464,6 +505,12 @@ var workItemEEListFields = []string{"color", "healthStatus", "iteration", "statu
 // listReturnedFields picks the field set client-go renders into the WorkItem
 // fragment of a list query.
 //
+// An explicit returned_fields wins, because a caller who named a subset asked
+// for a smaller answer than the default and the default would undo that. The
+// names are passed through verbatim: client-go refuses one it does not know
+// before the request is built, and GitLab refuses an Enterprise one against a
+// Community Edition schema, so neither failure needs a second opinion here.
+//
 // Until this existed, list asked for the CE default alone, and the five names
 // above were requested by nothing: every listed work item came back with no
 // status, whatever the instance held, and the Markdown list printed a Status
@@ -474,7 +521,10 @@ var workItemEEListFields = []string{"color", "healthStatus", "iteration", "statu
 // The choice is made per call from the resolved tier rather than once, because
 // in HTTP mode one process serves many instances and the tier is a property of
 // the credential's pool entry, not of the build.
-func listReturnedFields(client *gitlabclient.Client) []string {
+func listReturnedFields(client *gitlabclient.Client, input ListInput) []string {
+	if len(input.ReturnedFields) > 0 {
+		return input.ReturnedFields
+	}
 	fields := gl.WorkItemDefaultListFields()
 	if client.IsEnterprise() {
 		fields = append(fields, workItemEEListFields...)
@@ -520,7 +570,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list_work_items: %w", err)
 	}
-	opts.ReturnedFields = listReturnedFields(client)
+	opts.ReturnedFields = listReturnedFields(client, input)
 
 	items, resp, err := client.GL().WorkItems.ListWorkItems(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -566,8 +616,8 @@ type CreateInput struct {
 	IterationID    *int64             `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration"`
 	Weight         *int64             `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
 	HealthStatus   string             `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
-	Color          string             `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
-	Status         string             `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
+	Color          string             `json:"color,omitempty" tier:"premium" jsonschema:"Color hex code (e.g. #fefefe)"`
+	Status         string             `json:"status,omitempty" tier:"premium" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 	DueDate        string             `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
 	StartDate      string             `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
 	CreatedAt      string             `json:"created_at,omitempty" jsonschema:"Creation timestamp to record instead of now. ISO 8601 date-time such as 2025-01-01T00:00:00Z. GitLab accepts it from instance administrators and project owners only"`
@@ -606,7 +656,9 @@ func buildCreateOptions(input CreateInput) (*gl.CreateWorkItemOptions, error) {
 		Title: input.Title,
 	}
 	applyCreateCore(opts, input)
-	applyCreateWidgets(opts, input)
+	if err := applyCreateWidgets(opts, input); err != nil {
+		return nil, err
+	}
 	if input.CreatedAt != "" {
 		createdAt, err := parseWorkItemTime("created_at", input.CreatedAt)
 		if err != nil {
@@ -651,7 +703,7 @@ func applyCreateCore(opts *gl.CreateWorkItemOptions, input CreateInput) {
 
 // applyCreateWidgets sets the fields that reach GitLab through a widget of
 // their own, each of which a work item type may or may not have.
-func applyCreateWidgets(opts *gl.CreateWorkItemOptions, input CreateInput) {
+func applyCreateWidgets(opts *gl.CreateWorkItemOptions, input CreateInput) error {
 	if input.MilestoneID != nil {
 		opts.MilestoneID = input.MilestoneID
 	}
@@ -670,20 +722,47 @@ func applyCreateWidgets(opts *gl.CreateWorkItemOptions, input CreateInput) {
 	if input.Color != "" {
 		opts.Color = new(input.Color)
 	}
-	if input.DueDate != "" {
-		d, err := time.Parse(toolutil.DateFormatISO, input.DueDate)
-		if err == nil {
-			isoDate := gl.ISOTime(d)
-			opts.DueDate = &isoDate
-		}
+	return applyWorkItemDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate)
+}
+
+// applyWorkItemDates parses the start and due dates create and update share,
+// refusing the call on the first one it cannot read.
+//
+// Both used to drop a malformed date and report success, so a work item asked
+// for with a due date came back without one and nothing in the answer said the
+// date had been discarded. That is the same failure the eight list filters
+// refuse and the same one created_at refuses; these two now match.
+func applyWorkItemDates(startDate, dueDate string, start, due **gl.ISOTime) error {
+	dates := []struct {
+		name  string
+		value string
+		dest  **gl.ISOTime
+	}{
+		{"start_date", startDate, start},
+		{"due_date", dueDate, due},
 	}
-	if input.StartDate != "" {
-		d, err := time.Parse(toolutil.DateFormatISO, input.StartDate)
-		if err == nil {
-			isoDate := gl.ISOTime(d)
-			opts.StartDate = &isoDate
+	for _, date := range dates {
+		if date.value == "" {
+			continue
 		}
+		parsed, err := parseWorkItemDate(date.name, date.value)
+		if err != nil {
+			return err
+		}
+		*date.dest = parsed
 	}
+	return nil
+}
+
+// parseWorkItemDate reads one calendar date, naming the field it came from so
+// the caller learns which of the two was malformed.
+func parseWorkItemDate(field, value string) (*gl.ISOTime, error) {
+	parsed, err := time.Parse(toolutil.DateFormatISO, value)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be a date in YYYY-MM-DD form (e.g. 2025-01-31), got %q", field, value)
+	}
+	isoDate := gl.ISOTime(parsed)
+	return &isoDate, nil
 }
 
 // Update.
@@ -706,8 +785,8 @@ type UpdateInput struct {
 	Weight         *int64  `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
 	HealthStatus   string  `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
 	IterationID    *int64  `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration"`
-	Color          string  `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
-	Status         string  `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
+	Color          string  `json:"color,omitempty" tier:"premium" jsonschema:"Color hex code (e.g. #fefefe)"`
+	Status         string  `json:"status,omitempty" tier:"premium" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 	// Confirm is declared so the input schema advertises the reserved confirm
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the handler reads
@@ -720,10 +799,16 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.IID <= 0 {
 		return GetOutput{}, toolutil.ErrRequiredInt64("update_work_item", "work_item_iid")
 	}
+	// The options are built before the clearing guard so a malformed date is
+	// refused without first spending a round trip to read the current
+	// assignees, which would have been read only to reject the call anyway.
+	opts, buildErr := buildUpdateOptions(input)
+	if buildErr != nil {
+		return GetOutput{}, fmt.Errorf("update_work_item: %w", buildErr)
+	}
 	if err := confirmListClearing(ctx, client, input); err != nil {
 		return GetOutput{}, err
 	}
-	opts := buildUpdateOptions(input)
 	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("update_work_item", err, http.StatusBadRequest,
@@ -732,7 +817,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
 }
 
-func buildUpdateOptions(input UpdateInput) *gl.UpdateWorkItemOptions {
+func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, error) {
 	opts := &gl.UpdateWorkItemOptions{}
 	if input.Title != "" {
 		opts.Title = &input.Title
@@ -762,19 +847,8 @@ func buildUpdateOptions(input UpdateInput) *gl.UpdateWorkItemOptions {
 	if len(input.RemoveLabelIDs) > 0 {
 		opts.RemoveLabelIDs = input.RemoveLabelIDs
 	}
-	if input.StartDate != "" {
-		d, err := time.Parse(toolutil.DateFormatISO, input.StartDate)
-		if err == nil {
-			isoDate := gl.ISOTime(d)
-			opts.StartDate = &isoDate
-		}
-	}
-	if input.DueDate != "" {
-		d, err := time.Parse(toolutil.DateFormatISO, input.DueDate)
-		if err == nil {
-			isoDate := gl.ISOTime(d)
-			opts.DueDate = &isoDate
-		}
+	if err := applyWorkItemDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate); err != nil {
+		return nil, err
 	}
 	if input.Weight != nil {
 		opts.Weight = input.Weight
@@ -792,7 +866,7 @@ func buildUpdateOptions(input UpdateInput) *gl.UpdateWorkItemOptions {
 		status := mapStatusToID(input.Status)
 		opts.Status = &status
 	}
-	return opts
+	return opts, nil
 }
 
 // Delete.

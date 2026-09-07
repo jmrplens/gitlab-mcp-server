@@ -24,16 +24,16 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 		// namespace's lifecycle, which an administrator can create and rename.
 		fmt.Fprintf(&sb, "- **Status**: %s\n", toolutil.EscapeMdTableCell(wi.Status))
 	}
-	if wi.Author != "" {
-		fmt.Fprintf(&sb, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(wi.Author))
+	if name := authorName(wi.Author); name != "" {
+		fmt.Fprintf(&sb, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(name))
 	}
 	if len(wi.Assignees) > 0 {
-		fmt.Fprintf(&sb, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(wi.Assignees, ", ")))
+		fmt.Fprintf(&sb, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(assigneeNames(wi.Assignees), ", ")))
 	}
 	if len(wi.Labels) > 0 {
 		// A label title is free text: GitLab's only rule on one is that it
 		// carries no comma.
-		fmt.Fprintf(&sb, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(wi.Labels, ", ")))
+		fmt.Fprintf(&sb, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(labelNames(wi.Labels), ", ")))
 	}
 	writeWidgetLines(&sb, wi)
 	if wi.WebURL != "" {
@@ -61,6 +61,39 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_update_work_item` to modify this work item")
 	return toolutil.ToolResultWithMarkdown(sb.String())
+}
+
+// authorName is the handle the rendered text names an author by, and the empty
+// string for a work item whose author the query did not ask for.
+func authorName(author *toolutil.BasicUserOutput) string {
+	if author == nil {
+		return ""
+	}
+	return author.Username
+}
+
+// assigneeNames flattens the assignee objects to the usernames the Markdown
+// prints.
+//
+// The JSON keeps the whole objects, which is what the 1:1 norm asks for; a
+// reader of the rendered text wants the handles, and seven fields per assignee
+// on one bullet line would bury the item they belong to.
+func assigneeNames(assignees []*toolutil.BasicUserOutput) []string {
+	names := make([]string, 0, len(assignees))
+	for _, assignee := range assignees {
+		names = append(names, assignee.Username)
+	}
+	return names
+}
+
+// labelNames flattens the label objects to the titles the Markdown prints, for
+// the same reason [assigneeNames] does.
+func labelNames(labels []*toolutil.LabelDetailsOutput) []string {
+	names := make([]string, 0, len(labels))
+	for _, label := range labels {
+		names = append(names, label.Name)
+	}
+	return names
 }
 
 // writeWidgetLines renders the widget-backed values of a work item, each of
@@ -120,7 +153,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	for _, wi := range out.WorkItems {
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %s | %s |\n",
 			wi.IID, toolutil.EscapeMdTableCell(wi.Type), wi.State, toolutil.EscapeMdTableCell(wi.Status),
-			toolutil.EscapeMdTableCell(wi.Title), toolutil.EscapeMdTableCell(wi.Author))
+			toolutil.EscapeMdTableCell(wi.Title), toolutil.EscapeMdTableCell(authorName(wi.Author)))
 	}
 	if out.Pagination.HasNextPage {
 		fmt.Fprintf(&sb, "\n> Next page cursor: `%s`\n", out.Pagination.EndCursor)

@@ -393,14 +393,14 @@ List weight events for an issue (Premium) — every weight value set, with the w
 
 ### `gitlab_get_work_item`
 
-Get a single work item by IID. Returns the hierarchy parent and child work items (namespace path and IID) alongside linked items, plus the widget values a work item type carries: `milestone_id`, `iteration_id`, `weight`, `health_status`, `color`, `start_date` and `due_date`. Experimental: the Work Items API may introduce breaking changes between minor versions.
+Get a single work item by IID. Returns the hierarchy parent and child work items (namespace path and IID) alongside linked items, plus the widget values a work item type carries: `milestone_id`, `iteration_id`, `weight`, `health_status`, `color`, `start_date` and `due_date`. `author` and each entry of `assignees` are whole user objects (`id`, `username`, `name`, `state`, `avatar_url`, `web_url`, `created_at`) and each entry of `labels` is a whole label object (`id`, `name`, `color`, `description`, `description_html`, `text_color`), because the GraphQL fragment fetches all of those on every call. The Markdown rendering still prints names. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_list_work_items`
 
-List work items for a project or group. Each item includes its assignees, labels, linked items and hierarchy parent and child work items (namespace path and IID), with cursor pagination (`first`/`after` forward, `last`/`before` backward). The cursor picks the direction: `before` on its own pages backward at the default size, and naming both `first` and `last` is refused, because GitLab refuses it too. `sort` is a GraphQL `WorkItemSort` value such as `CREATED_DESC` (the default), `TITLE_ASC` or `PRIORITY_DESC`, not the `asc`/`desc` pair the REST endpoints take. On Premium and Ultimate instances each listed item also carries `status`, `weight`, `health_status`, `iteration_id` and `color`, which are asked for only there: a Community Edition schema does not define those widgets and one unknown field fails the whole query. Experimental: the Work Items API may introduce breaking changes between minor versions.
+List work items for a project or group. Each item includes its author, assignees and labels as whole objects, its linked items and its hierarchy parent and child work items (namespace path and IID), with cursor pagination (`first`/`after` forward, `last`/`before` backward). The cursor picks the direction: `before` on its own pages backward at the default size, and naming both `first` and `last` is refused, because GitLab refuses it too. `sort` is a GraphQL `WorkItemSort` value such as `CREATED_DESC` (the default), `TITLE_ASC` or `PRIORITY_DESC`, not the `asc`/`desc` pair the REST endpoints take. On Premium and Ultimate instances each listed item also carries `status`, `weight`, `health_status`, `iteration_id` and `color`, which are asked for only there: a Community Edition schema does not define those widgets and one unknown field fails the whole query. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 The full filter set:
 
@@ -439,25 +439,28 @@ The full filter set:
 | `confidential`                             | boolean    | Only confidential or only non-confidential work items                                                               |
 | `include_ancestors`, `include_descendants` | boolean    | Widen the search up or down the namespace hierarchy                                                                 |
 | `sort`                                     | string     | A `WorkItemSort` value                                                                                              |
+| `returned_fields`                          | array      | Which fields of each item to ask for, not which items match. See below                                              |
 | `first`, `after`, `last`, `before`         | int/string | Cursor pagination                                                                                                   |
 
 A timestamp none of the three spellings can read stops the call and names the filter it came from, rather than being dropped: a list narrowed by a date the server ignored answers with more work items than were asked for, and nothing in the answer would say so.
+
+`returned_fields` selects the GraphQL fragment rather than the result set: it decides which fields of each matching work item come back, and no work item is included or excluded by it. Omitting it asks for the default set, which is every Community Edition field plus the five Enterprise ones on a Premium or Ultimate instance; naming a subset such as `["iid", "title"]` makes a large page much smaller. The accepted names are `assignees`, `author`, `closedAt`, `color`, `confidential`, `createdAt`, `description`, `healthStatus`, `hierarchy`, `id`, `iid`, `iteration`, `labels`, `linkedItems`, `milestone`, `startAndDueDate`, `state`, `status`, `title`, `type`, `updatedAt`, `webUrl` and `weight`. A name outside that set stops the call before anything is sent. The five Enterprise names (`color`, `healthStatus`, `iteration`, `status`, `weight`) fail the whole query against a Community Edition instance, whose schema does not define those widgets.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_create_work_item`
 
-Create a new work item. Requires full_path, work_item_type_id, and title. Supports status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE) and linked_items to link other work items on creation.
+Create a new work item. Requires full_path, work_item_type_id, and title. Supports status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE, Premium) and linked_items to link other work items on creation. `status` and `color` are Premium: client-go groups both with weight, iteration and health status as fields the Community Edition schema does not define, and GitLab documents work item status and epics alike at Premium and Ultimate.
 
-Five further parameters: `parent_id` (numeric ID of the parent work item, which creates the item already under its parent instead of a create followed by an update), `iteration_id` (numeric ID of the iteration, Premium), `crm_contact_ids` (CRM contact IDs to attach), `created_at` (an ISO 8601 date-time recorded instead of now, which GitLab accepts from instance administrators and project owners only, and which is refused here by name when it cannot be read) and `create_source` (a free-text name of whatever triggered the creation, recorded for tracking and changing nothing about the work item). Experimental: the Work Items API may introduce breaking changes between minor versions.
+Five further parameters: `parent_id` (numeric ID of the parent work item, which creates the item already under its parent instead of a create followed by an update), `iteration_id` (numeric ID of the iteration, Premium), `crm_contact_ids` (CRM contact IDs to attach), `created_at` (an ISO 8601 date-time recorded instead of now, which GitLab accepts from instance administrators and project owners only, and which is refused here by name when it cannot be read) and `create_source` (a free-text name of whatever triggered the creation, recorded for tracking and changing nothing about the work item). `start_date` and `due_date` are calendar dates in `YYYY-MM-DD` form, and one that cannot be read stops the call and names the field rather than being dropped, so a work item is never created without a date that was asked for. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_update_work_item`
 
-Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color, and status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE). `assignee_ids` and `crm_contact_ids` replace the whole list: an empty array removes every entry, and omitting the field leaves it untouched; removing entries that exist requires `confirm=true` or an approved confirmation prompt. Experimental: the Work Items API may introduce breaking changes between minor versions.
+Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color, and status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE). `color` and `status` are Premium, as they are on create. `assignee_ids` and `crm_contact_ids` replace the whole list: an empty array removes every entry, and omitting the field leaves it untouched; removing entries that exist requires `confirm=true` or an approved confirmation prompt. `start_date` and `due_date` are calendar dates in `YYYY-MM-DD` form, and one that cannot be read stops the call by name before anything is sent. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
@@ -487,6 +490,8 @@ A saved view stores a named, reusable work item filter under a group or project 
 `sort` is a `WorkItemSort` enum value (`CREATED_ASC`, `CREATED_DESC`, `TITLE_ASC`, `TITLE_DESC`, `UPDATED_ASC`, `UPDATED_DESC`, `PRIORITY_ASC`, `WEIGHT_DESC` and the rest of the enum). `display_settings` is an opaque JSON object GitLab validates against its own schema, so its keys are camelCase: `viewMode` (`list`, `board` or `table`), `hiddenMetadataKeys`, `collapsedGroups`, `visibleGroups`, `groupOrder`.
 
 `filters` mirrors GitLab's `WorkItemSavedViewFilterInput` one for one, including the nested `not`, `or`, `hierarchy_filters`, `status` and `custom_field` sub-objects. The eight time filters (`created_after`, `created_before`, `closed_after`, `closed_before`, `due_after`, `due_before`, `updated_after`, `updated_before`) take ISO 8601 timestamps.
+
+A saved view is available on every tier, but some of the conditions inside one are not, and each is advertised at the same tier `gitlab_list_work_items` advertises the filter of the same name: `iteration_id`, `iteration_cadence_id`, `iteration_wildcard_id`, `weight`, `weight_wildcard_id`, `status` and `custom_field` are Premium, and `health_status_filter` is Ultimate. The same applies to their counterparts inside `not` and `or`.
 
 ### `gitlab_work_item_saved_view_get`
 

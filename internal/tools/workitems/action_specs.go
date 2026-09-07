@@ -3,6 +3,9 @@ package workitems
 import (
 	"context"
 	"fmt"
+	"slices"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -53,10 +56,10 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 		opts.RelatedActions = []string{actionWorkItemList, "work_item.update", "work_item.delete"}
 		opts.IndividualTool.Description = "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item."
 	case "gitlab_list_work_items":
-		opts.Usage = "List work items in one project or group namespace. Use filters such as state, search, types, author_username, assignee_usernames, label_name, milestone_title, iteration_id, weight, health_status_filter, the closed/created/due/updated date ranges, confidential, sort, include_ancestors/descendants, and cursor pagination when the prompt asks for matching work items in a known namespace. The ids, parent_ids, iteration_id and iteration_cadence_id filters take full global IDs (gid://gitlab/WorkItem/123), while iids takes the plain numbers shown in the UI and crm_contact_id and crm_organization_id take plain numeric ids as strings, never the gid:// form. Pages in both directions: first with after walks forward, last with before walks back from a start cursor."
+		opts.Usage = "List work items in one project or group namespace. Use filters such as state, search, types, author_username, assignee_usernames, label_name, milestone_title, iteration_id, weight, health_status_filter, the closed/created/due/updated date ranges, confidential, sort, include_ancestors/descendants, and cursor pagination when the prompt asks for matching work items in a known namespace. The ids, parent_ids, iteration_id and iteration_cadence_id filters take full global IDs (gid://gitlab/WorkItem/123), while iids takes the plain numbers shown in the UI and crm_contact_id and crm_organization_id take plain numeric ids as strings, never the gid:// form. returned_fields is not a filter: it names the fields of each matching work item the query asks for, so a listing that only needs iid and title can say so and pay for nothing else. Pages in both directions: first with after walks forward, last with before walks back from a start cursor."
 		opts.Aliases = []string{"list work items", "find work items in namespace", "show open work items", individualTool}
 		opts.RelatedActions = []string{actionWorkItemGet, "work_item.create", "work_item.type_list"}
-		opts.IndividualTool.Description = "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, parent and child work items, milestone, start and due dates, timestamps, and the cursors for the next and previous pages. On Premium and Ultimate instances the status, weight, health status, iteration and color of each item come back too. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types."
+		opts.IndividualTool.Description = "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, parent and child work items, milestone, start and due dates, timestamps, and the cursors for the next and previous pages. On Premium and Ultimate instances the status, weight, health status, iteration and color of each item come back too. returned_fields narrows that set to the fields named, which shrinks a large page without changing which work items match. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types."
 		opts.InputSchemaOverrides = workItemListEnumOverrides()
 	case "gitlab_list_work_item_types":
 		opts.Usage = "List available work item types (system-defined and custom) for a project or group namespace. Supports filtering by name and availability, with cursor-based pagination. Returns: type definitions with id, name, and enabled status. Experimental: the Work Items API may introduce breaking changes between minor versions."
@@ -154,8 +157,32 @@ func workItemListEnumOverrides() []toolutil.InputSchemaOverride {
 		toolutil.SchemaEnumOverride("release_tag_wildcard_id", "ANY", "NONE"),
 		toolutil.SchemaEnumOverride("subscribed", "EXPLICITLY_SUBSCRIBED", "EXPLICITLY_UNSUBSCRIBED"),
 		toolutil.SchemaEnumOverride("weight_wildcard_id", "ANY", "NONE"),
+		toolutil.SchemaPropertyOverride("returned_fields", map[string]any{
+			"items": map[string]any{"type": "string", "enum": workItemReturnedFieldValues()},
+		}),
 	}
 	return append(overrides, workItemTimeFilterFormatOverrides()...)
+}
+
+// workItemReturnedFieldValues is the closed set of field names
+// [gl.ListWorkItemsOptions.ReturnedFields] accepts.
+//
+// It is read out of client-go rather than written down here so the published
+// enum tracks the SDK: client-go refuses a name outside its own registry
+// before the request is built, and a hand-copied list would drift into
+// advertising a name that refusal rejects. The five Enterprise names are
+// published alongside the Community Edition ones because the tier this process
+// resolved is not the tier of every instance an HTTP deployment serves, and a
+// name a Community Edition schema cannot answer is refused by GitLab with its
+// own message rather than hidden here.
+func workItemReturnedFieldValues() []any {
+	names := append(gl.WorkItemDefaultListFields(), workItemEEListFields...)
+	slices.Sort(names)
+	values := make([]any, len(names))
+	for i, name := range names {
+		values[i] = name
+	}
+	return values
 }
 
 // workItemTimeFilterFormatOverrides publishes the date-time format on the four

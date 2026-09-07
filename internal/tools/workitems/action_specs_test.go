@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -253,6 +254,50 @@ func TestActionSpecs_ListFilters_PublishTheirEnums(t *testing.T) {
 			t.Errorf("in items enum = %#v, want %#v", got, want)
 		}
 	})
+}
+
+// TestActionSpecs_ReturnedFields_PublishTheSDKRegistry holds the served enum to
+// exactly the names client-go accepts, Enterprise ones included.
+//
+// The set is read out of the SDK rather than written down twice, so this test
+// asserts the two agree: client-go refuses an unknown name before the request
+// is built, and a hand-copied list would drift into advertising a name that
+// refusal rejects.
+func TestActionSpecs_ReturnedFields_PublishTheSDKRegistry(t *testing.T) {
+	props := workItemToolProperties(t, "gitlab_list_work_items")
+	items, ok := schemaProperty(t, props, "returned_fields")["items"].(map[string]any)
+	if !ok {
+		t.Fatal("returned_fields has no items schema")
+	}
+	got, ok := items["enum"].([]any)
+	if !ok {
+		t.Fatalf("returned_fields items enum = %#v, want a list", items["enum"])
+	}
+	want := make([]string, 0, len(got))
+	want = append(want, gl.WorkItemDefaultListFields()...)
+	want = append(want, workItemEEListFields...)
+	slices.Sort(want)
+	names := make([]string, 0, len(got))
+	for _, value := range got {
+		name, isString := value.(string)
+		if !isString {
+			t.Fatalf("returned_fields enum entry %#v is not a string", value)
+		}
+		names = append(names, name)
+	}
+	if !slices.Equal(names, want) {
+		t.Errorf("returned_fields enum = %v, want %v", names, want)
+	}
+	// The five Enterprise names must be offered even though the process may
+	// have resolved a Free tier: in HTTP mode one process serves instances of
+	// several tiers, and hiding them would refuse a valid call before it left.
+	for _, name := range workItemEEListFields {
+		t.Run("offers "+name, func(t *testing.T) {
+			if !slices.Contains(names, name) {
+				t.Errorf("returned_fields enum omits %q", name)
+			}
+		})
+	}
 }
 
 // TestActionSpecs_TimeFilters_PublishOneFormat holds the eight date-range
