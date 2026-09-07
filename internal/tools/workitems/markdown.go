@@ -35,6 +35,7 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 		// carries no comma.
 		fmt.Fprintf(&sb, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(wi.Labels, ", ")))
 	}
+	writeWidgetLines(&sb, wi)
 	if wi.WebURL != "" {
 		toolutil.WriteMdURL(&sb, wi.WebURL)
 	}
@@ -60,6 +61,44 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_update_work_item` to modify this work item")
 	return toolutil.ToolResultWithMarkdown(sb.String())
+}
+
+// writeWidgetLines renders the widget-backed values of a work item, each of
+// which is absent from a type that has no such widget and from a list answer
+// that did not ask for it.
+//
+// The parent goes here rather than beside the Children table because it is one
+// value, not a list, and a one-row table would read worse than a bullet.
+func writeWidgetLines(sb *strings.Builder, wi WorkItemItem) {
+	if wi.Parent != nil {
+		fmt.Fprintf(sb, "- **Parent**: #%d in %s\n", wi.Parent.IID, toolutil.EscapeMdTableCell(wi.Parent.Path))
+	}
+	if wi.MilestoneID != 0 {
+		fmt.Fprintf(sb, "- **Milestone ID**: %d\n", wi.MilestoneID)
+	}
+	if wi.IterationID != 0 {
+		fmt.Fprintf(sb, "- **Iteration ID**: %d\n", wi.IterationID)
+	}
+	if wi.Weight != nil {
+		fmt.Fprintf(sb, "- **Weight**: %d\n", *wi.Weight)
+	}
+	if wi.HealthStatus != "" {
+		//gitlab:allow-unescaped wi.HealthStatus: a value of the GraphQL HealthStatus enum (onTrack, needsAttention, atRisk), never text anybody types.
+		fmt.Fprintf(sb, "- **Health Status**: %s\n", wi.HealthStatus)
+	}
+	if wi.StartDate != "" {
+		//gitlab:allow-unescaped wi.StartDate: a date this package formatted itself from a gl.ISOTime, so it is YYYY-MM-DD or nothing.
+		fmt.Fprintf(sb, "- **Start Date**: %s\n", wi.StartDate)
+	}
+	if wi.DueDate != "" {
+		//gitlab:allow-unescaped wi.DueDate: a date this package formatted itself from a gl.ISOTime, so it is YYYY-MM-DD or nothing.
+		fmt.Fprintf(sb, "- **Due Date**: %s\n", wi.DueDate)
+	}
+	if wi.Color != "" {
+		// GitLab accepts a named CSS color as well as a hex code, so this is
+		// not the closed set the hex-only jsonschema example suggests.
+		fmt.Fprintf(sb, "- **Color**: %s\n", toolutil.EscapeMdTableCell(wi.Color))
+	}
 }
 
 // FormatListMarkdown formats a list of work items as markdown.
