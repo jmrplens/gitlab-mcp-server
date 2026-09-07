@@ -53,9 +53,9 @@ All measurements are against the current source tree. The catalog is built in-me
 | `meta` / `minimal` (opaque)  | Ultimate |            51 |             1,089 | `opaque`                       |            160,107 |           170 |      160,277 |
 | `meta` / `full` (compact)    | Ultimate |            51 |             1,089 | `compact`                      |            244,569 |         8,835 |      253,404 |
 | `meta` / `minimal` (compact) | Ultimate |            51 |             1,089 | `compact`                      |            244,569 |           170 |      244,739 |
-| `meta` / `full` (full)       | Ultimate |            51 |             1,089 | `full`                         |            358,201 |         8,835 |      367,036 |
-| `meta` / `minimal` (full)    | Ultimate |            51 |             1,089 | `full`                         |            358,201 |           170 |      358,371 |
-| `individual` / `full`        | Ultimate |         1,085 |             1,085 | n/a                            |            637,519 |         8,835 |      646,354 |
+| `meta` / `full` (full)       | Ultimate |            51 |             1,089 | `full`                         |            358,219 |         8,835 |      367,054 |
+| `meta` / `minimal` (full)    | Ultimate |            51 |             1,089 | `full`                         |            358,219 |           170 |      358,389 |
+| `individual` / `full`        | Ultimate |         1,085 |             1,085 | n/a                            |            637,537 |         8,835 |      646,372 |
 
 ## Interpretation guide
 

@@ -39,6 +39,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			// injected, and the server itself would then refuse both of them.
 			InputSchemaOverrides: []toolutil.InputSchemaOverride{
 				toolutil.SchemaEnumOverride("sort", "severity_desc", "severity_asc"),
+				// The document sends state as [VulnerabilityState!], so a value
+				// outside the enum is refused by GitLab; the schema says so
+				// first rather than describing the values in prose and
+				// accepting any string.
+				toolutil.SchemaPropertyOverride("state", map[string]any{
+					"items": map[string]any{
+						"type": "string",
+						"enum": []any{"DETECTED", "CONFIRMED", "DISMISSED", "RESOLVED"},
+					},
+				}),
 			},
 			IndividualTool: toolutil.IndividualToolSpec{
 				Name:        "gitlab_list_security_findings",
