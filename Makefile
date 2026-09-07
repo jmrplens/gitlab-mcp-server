@@ -12,7 +12,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
-	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents \
+	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources \
@@ -322,7 +322,7 @@ test-e2e-docker-enterprise: ensure-gotestsum
 ##   make test-e2e-gitlab-com                                # default plens1
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_MIRROR=true     # also mirror
-test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests
+test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests check-graphql-documents-live
 	@echo ""
 	@echo "=== test-e2e-gitlab-com complete ==="
 	@echo "Reports and timings printed above. To re-run later without"
@@ -1265,13 +1265,17 @@ audit-readonly-graphql:
 
 ## gen-graphql-schema: re-pin the GitLab GraphQL schema from a live instance.
 ## Needs the network, so it is not a gate: run it when GitLab has changed and
-## commit the result. GITLAB_TOKEN is optional and only names the version in
-## the provenance record, since GitLab answers introspection to anyone.
+## commit the result. Set GITLAB_TOKEN to a gitlab.com credential: GitLab
+## answers introspection to anyone but tells only an authenticated caller which
+## version it runs, and check-graphql-schema refuses a pin that records none.
 gen-graphql-schema:
 	go run ./cmd/gen_graphql_schema/
 
-## check-graphql-schema: fail when the committed schema does not parse or its
-## provenance record does not decode. No network, so this one is a gate.
+## check-graphql-schema: fail when the committed schema does not parse, its
+## provenance record does not decode, or the pin is not of what this project
+## claims to be pinned to: another instance, a truncated or narrower answer, no
+## recorded version, or older than the 180-day window. No network, so it is a
+## gate.
 check-graphql-schema:
 	go run ./cmd/gen_graphql_schema/ --check
 
@@ -1285,6 +1289,17 @@ check-graphql-documents:
 ## than only the refused ones.
 audit-graphql-documents:
 	go run ./cmd/audit_graphql_documents/ -v
+
+## check-graphql-documents-live: judge every document against a schema fetched
+## from gitlab.com right now rather than the pinned one. Needs the network, so
+## it is not a CI gate; it is the only thing that reports a field GitLab has
+## narrowed since the pin, which is how every defect the pin was built for
+## arose. Run it beside the other live suites (make test-e2e-gitlab-com).
+check-graphql-documents-live:
+	@tmp=$$(mktemp -d) && \
+		go run ./cmd/gen_graphql_schema/ -dir "$$tmp" && \
+		go run ./cmd/audit_graphql_documents/ -schema "$$tmp/gitlab-schema.graphql"; \
+		status=$$?; rm -rf "$$tmp"; exit $$status
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

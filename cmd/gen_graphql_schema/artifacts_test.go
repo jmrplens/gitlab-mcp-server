@@ -28,7 +28,7 @@ const minimalSDL = "type Query {\n  ok: Boolean\n}\n\nschema {\n  query: Query\n
 func TestWriteArtifacts_ThenRead_RoundTripsBothFiles(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "pinned")
 
-	if err := writeArtifacts(dir, compress(minimalSDL), sampleSource); err != nil {
+	if err := writeArtifacts(dir, minimalSDL, sampleSource); err != nil {
 		t.Fatalf("writeArtifacts() error = %v, want nil", err)
 	}
 
@@ -73,7 +73,7 @@ func TestWriteArtifacts_UnusableDirectory_ReportsWhichPath(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			err := writeArtifacts(testCase.dir, compress(minimalSDL), sampleSource)
+			err := writeArtifacts(testCase.dir, minimalSDL, sampleSource)
 
 			if err == nil {
 				t.Fatalf("writeArtifacts() error = nil, want one naming %q", testCase.want)
@@ -111,21 +111,21 @@ func TestReadArtifacts_MissingOrCorrupt_NamesTheFile(t *testing.T) {
 			want:  graphqlschema.SDLFileName,
 		},
 		{
-			name: "a schema that is not gzip",
+			name: "a schema that is not SDL",
 			build: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				write(t, dir, graphqlschema.SDLFileName, []byte("not gzip"))
+				write(t, dir, graphqlschema.SDLFileName, []byte("this is prose, not a schema"))
 				return dir
 			},
-			want: "open the compressed schema",
+			want: "parse the schema",
 		},
 		{
 			name: "a schema with no record beside it",
 			build: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				write(t, dir, graphqlschema.SDLFileName, compress(minimalSDL))
+				write(t, dir, graphqlschema.SDLFileName, []byte(minimalSDL))
 				return dir
 			},
 			want: graphqlschema.SourceFileName,
@@ -135,7 +135,7 @@ func TestReadArtifacts_MissingOrCorrupt_NamesTheFile(t *testing.T) {
 			build: func(t *testing.T) string {
 				t.Helper()
 				dir := t.TempDir()
-				write(t, dir, graphqlschema.SDLFileName, compress(minimalSDL))
+				write(t, dir, graphqlschema.SDLFileName, []byte(minimalSDL))
 				write(t, dir, graphqlschema.SourceFileName, []byte("{nope"))
 				return dir
 			},
@@ -167,17 +167,22 @@ func write(t *testing.T, dir, name string, content []byte) {
 	}
 }
 
-// TestCompress_TheSameSDLTwice_ProducesTheSameBytes verifies determinism. The
-// artifact is committed, so a regeneration that changed nothing must produce
-// no diff, or every re-pin looks like a schema change.
-func TestCompress_TheSameSDLTwice_ProducesTheSameBytes(t *testing.T) {
-	first := compress(minimalSDL)
-	second := compress(minimalSDL)
+// TestWriteArtifacts_WritesTheSDLVerbatim verifies that what lands on disk is
+// the SDL itself, byte for byte. It is the whole point of committing the pin as
+// text: a reviewer reads a re-pin as a diff of what GitLab changed, and anyone
+// verifying a repair greps the file rather than decompressing it.
+func TestWriteArtifacts_WritesTheSDLVerbatim(t *testing.T) {
+	dir := t.TempDir()
 
-	if string(first) != string(second) {
-		t.Error("compress() is not deterministic, so a re-pin would always show a diff")
+	if err := writeArtifacts(dir, minimalSDL, sampleSource); err != nil {
+		t.Fatalf("writeArtifacts() error = %v, want nil", err)
 	}
-	if len(first) == 0 {
-		t.Error("compress() produced nothing")
+
+	written, err := os.ReadFile(filepath.Join(dir, graphqlschema.SDLFileName))
+	if err != nil {
+		t.Fatalf("read the schema back: %v", err)
+	}
+	if string(written) != minimalSDL {
+		t.Errorf("writeArtifacts() wrote %q, want the SDL verbatim %q", written, minimalSDL)
 	}
 }

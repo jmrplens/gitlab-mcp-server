@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -61,6 +63,72 @@ func runFixture(t *testing.T, sources map[string]string, verbose bool) (int, str
 	return status, out.String(), errOut.String()
 }
 
+// TestRun_AgainstASchemaTheCallerSupplies_JudgesByThatSchema verifies the entry
+// the live re-probe uses.
+//
+// The pin can only report a document that was already broken when it was taken,
+// never one GitLab has narrowed since, which is how every defect this gate was
+// built for arose. Handing the audit a schema fetched today closes that, so the
+// case that matters is a document the pin accepts and the supplied schema does
+// not, and a summary that says which of the two judged it.
+func TestRun_AgainstASchemaTheCallerSupplies_JudgesByThatSchema(t *testing.T) {
+	narrowed := filepath.Join(t.TempDir(), "narrow.graphql")
+	if err := os.WriteFile(narrowed, []byte("type Query {\n  ok: Boolean\n}\n"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	status := run(auditRun{
+		dir:        repoRoot(t),
+		patterns:   []string{fixturePattern},
+		overlay:    fixtureOverlay(t, map[string]string{"sound": soundFixture}),
+		schemaPath: narrowed,
+	}, &out, &errOut)
+
+	if status != 1 {
+		t.Fatalf("exit status %d, want 1: the supplied schema has no vulnerability field.\nstdout:\n%s", status, out.String())
+	}
+	if !strings.Contains(errOut.String(), "not the pinned schema") {
+		t.Errorf("the summary does not say which schema judged the documents:\n%s", errOut.String())
+	}
+}
+
+// TestRun_ASuppliedSchemaThatCannotBeUsed_Fails verifies that a live re-probe
+// whose schema never arrived stops rather than falling back to the pin, which
+// would report a pass for a question nobody asked.
+func TestRun_ASuppliedSchemaThatCannotBeUsed_Fails(t *testing.T) {
+	unparseable := filepath.Join(t.TempDir(), "prose.graphql")
+	if err := os.WriteFile(unparseable, []byte("this is prose, not a schema"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "no such file", path: filepath.Join(t.TempDir(), "absent.graphql"), want: "read the schema to judge against"},
+		{name: "not a schema", path: unparseable, want: "parse the schema"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var out, errOut bytes.Buffer
+
+			status := run(auditRun{
+				dir: repoRoot(t), patterns: []string{fixturePattern},
+				overlay: fixtureOverlay(t, map[string]string{"sound": soundFixture}), schemaPath: testCase.path,
+			}, &out, &errOut)
+
+			if status != 1 {
+				t.Fatalf("exit status %d, want 1", status)
+			}
+			if !strings.Contains(errOut.String(), testCase.want) {
+				t.Errorf("stderr does not explain the failure %q:\n%s", testCase.want, errOut.String())
+			}
+		})
+	}
+}
+
 // TestRun_DocumentsThePinnedSchemaAccepts_Succeeds verifies the passing path,
 // including that the summary names the pin so a reader is told how old the
 // judgement is.
@@ -70,7 +138,7 @@ func TestRun_DocumentsThePinnedSchemaAccepts_Succeeds(t *testing.T) {
 	if status != 0 {
 		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
 	}
-	for _, want := range []string{"accepted by the pinned schema", "gitlab.com", "retrieved"} {
+	for _, want := range []string{"document(s) accepted", "gitlab.com", "retrieved"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(out, want) {
 				t.Errorf("stdout does not contain %q:\n%s", want, out)

@@ -38,6 +38,17 @@ func TestLooksLikeDocument_TellsGraphQLFromEverythingElse(t *testing.T) {
 		{name: "an identifier that merely starts with a keyword", value: "queryBuilder{}", want: false},
 		{name: "a keyword with nothing after it", value: "query", want: false},
 		{name: "a Go format verb", value: "%s{%d}", want: false},
+
+		// A "#" comment is legal at the top of a document and gqlparser accepts
+		// one, so a maintainer who writes an ordinary explanatory line above an
+		// operation must not thereby drop it out of the inventory: the audit
+		// would report one fewer document and still exit 0.
+		{name: "a comment above a mutation", value: "# createCustomEmoji is group-scoped.\nmutation($p: ID!) {\n  create(p: $p) { id }\n}", want: true},
+		{name: "several comments above a query", value: "# one\n#   two\n\nquery { currentUser { id } }", want: true},
+		{name: "a comment above a bare selection set", value: "# anonymous\n{ currentUser { id } }", want: true},
+		{name: "a comment above a JSON object is still not a document", value: "# not graphql\n{\"id\": 1}", want: false},
+		{name: "nothing but a comment", value: "# just a note", want: false},
+		{name: "comments and nothing else", value: "# one\n# two\n", want: false},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

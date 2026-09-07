@@ -13,6 +13,9 @@ import (
 )
 
 const (
+	// prefix names this command on every line it writes, so a failure in a
+	// composite make target says which of them produced it.
+	prefix = "gen_graphql_schema:"
 	// defaultEndpoint is gitlab.com, which answers introspection to anyone.
 	defaultEndpoint = "https://gitlab.com/api/graphql"
 	// defaultDir is where the package that embeds the schema lives.
@@ -23,6 +26,17 @@ const (
 	// fetchTimeout bounds the whole generation. The introspection payload is
 	// tens of megabytes of JSON and gitlab.com takes seconds to produce it.
 	fetchTimeout = 3 * time.Minute
+	// minimumTypes is the floor a pin of gitlab.com has to clear. It answered
+	// with 4331 types on the day of the pin and grows release over release, so
+	// a figure well under that catches a truncated introspection and a pin from
+	// a Community Edition instance, which carries none of the Ultimate types
+	// the vulnerability and security finding documents select.
+	minimumTypes = 4000
+	// maxPinAge is how long a pin may stand before --check refuses it. GitLab
+	// ships monthly and narrows fields in place, so half a year is roughly six
+	// releases of drift: long enough not to ambush an unrelated change often,
+	// short enough that a narrowing is noticed within a release cycle or two.
+	maxPinAge = 180 * 24 * time.Hour
 )
 
 // genRun is one configured run: which instance to ask, where to write, and
@@ -36,6 +50,15 @@ type genRun struct {
 	// now supplies the day recorded in the provenance file, as a parameter so
 	// a test can assert on the record it produced.
 	now func() time.Time
+}
+
+// clock is now with a default, so a run that only checks the committed pair
+// does not have to supply one to ask how old it is.
+func (c genRun) clock() time.Time {
+	if c.now == nil {
+		return time.Now()
+	}
+	return c.now()
 }
 
 func main() {
@@ -64,16 +87,75 @@ func run(cfg genRun, out, errOut io.Writer) int {
 	return generate(cfg, out, errOut)
 }
 
-// checkArtifacts is the CI half: it proves the committed files parse. It needs
-// no network, which is what lets it be a gate at all.
+// checkArtifacts is the CI half: it proves the committed files parse and that
+// they are a pin of what this project claims to be pinned to. It needs no
+// network, which is what lets it be a gate at all.
 func checkArtifacts(cfg genRun, out, errOut io.Writer) int {
 	types, source, err := readArtifacts(cfg.dir)
 	if err != nil {
-		fmt.Fprintln(errOut, "gen_graphql_schema:", err)
+		fmt.Fprintln(errOut, prefix, err)
 		return 1
 	}
-	fmt.Fprintf(out, "gen_graphql_schema: the pinned schema parses, %d types; %s\n", types, source)
+
+	problems := pinProblems(source, cfg.clock())
+	if len(problems) > 0 {
+		for _, problem := range problems {
+			fmt.Fprintln(errOut, prefix, problem)
+		}
+		fmt.Fprintf(errOut, prefix+" re-pin with `make gen-graphql-schema` (GITLAB_TOKEN set, so the version is recorded)\n")
+		return 1
+	}
+
+	fmt.Fprintf(out, prefix+" the pinned schema parses, %d types; %s\n", types, source)
 	return 0
+}
+
+// pinProblems reports every way the committed provenance record fails to be the
+// pin this project's guarantee rests on.
+//
+// A schema that parses says nothing about what it is a schema of, and until
+// this existed nothing asked: a run against a self-managed instance, or one
+// without a token, wrote a narrower or anonymous pin that every gate accepted
+// in silence. Each check below stands for a way the guarantee quietly shrinks.
+// Age is here for the opposite reason: the pin can only report a document that
+// was already broken when it was taken, so an old pin is a gate that has
+// stopped asking, and the only honest way to say so is to fail.
+func pinProblems(source graphqlschema.Source, now time.Time) []string {
+	var problems []string
+	if source.Instance != defaultEndpoint {
+		problems = append(problems, fmt.Sprintf(
+			"the pin was taken from %s, not %s: the gate would then promise what that instance accepts, which is not what this server targets",
+			source.Instance, defaultEndpoint,
+		))
+	}
+	if source.Types < minimumTypes {
+		problems = append(problems, fmt.Sprintf(
+			"the pin carries %d types and gitlab.com answers with more than %d: the introspection was truncated or the instance was a narrower edition",
+			source.Types, minimumTypes,
+		))
+	}
+	if source.GitLabVersion == unknownVersion {
+		problems = append(problems,
+			"the pin records no GitLab version, which is what an introspection without GITLAB_TOKEN produces: nothing can then say which release the gate speaks for")
+	}
+	if age, ok := pinAge(source, now); ok && age > maxPinAge {
+		problems = append(problems, fmt.Sprintf(
+			"the pin is %d days old and the window is %d: GitLab narrows fields in place, so a pin this old can no longer report a document that broke since",
+			int(age.Hours()/24), int(maxPinAge.Hours()/24),
+		))
+	}
+	return problems
+}
+
+// pinAge reports how long ago the pin was taken. An unparseable date is left to
+// the record's own decoding, which has already accepted it, rather than turned
+// into a second complaint about the same field.
+func pinAge(source graphqlschema.Source, now time.Time) (time.Duration, bool) {
+	retrieved, err := time.Parse(time.DateOnly, source.RetrievedAt)
+	if err != nil {
+		return 0, false
+	}
+	return now.UTC().Sub(retrieved), true
 }
 
 // generate is the network half: introspect, convert, and write.
@@ -81,24 +163,24 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 	defer cancel()
 
-	fmt.Fprintf(out, "gen_graphql_schema: introspecting %s\n", cfg.endpoint)
+	fmt.Fprintf(out, prefix+" introspecting %s\n", cfg.endpoint)
 	schema, err := introspect(ctx, cfg)
 	if err != nil {
-		fmt.Fprintln(errOut, "gen_graphql_schema:", err)
+		fmt.Fprintln(errOut, prefix, err)
 		return 1
 	}
 
 	version, revision := instanceVersion(ctx, cfg)
-	compressed := compress(renderSDL(schema))
+	sdl := renderSDL(schema)
 
 	// Loading what is about to be committed is the only check that the
 	// conversion produced SDL at all. A renderer that dropped an implements
 	// clause or mangled a default value writes a file that looks fine and
 	// refuses every document later, so the artifact is parsed before it lands
 	// rather than after somebody's test fails.
-	loaded, err := graphqlschema.Load(compressed)
+	loaded, err := graphqlschema.Load([]byte(sdl))
 	if err != nil {
-		fmt.Fprintln(errOut, "gen_graphql_schema: the converted schema does not parse:", err)
+		fmt.Fprintln(errOut, prefix+" the converted schema does not parse:", err)
 		return 1
 	}
 
@@ -109,12 +191,19 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 		RetrievedAt:    cfg.now().UTC().Format(time.DateOnly),
 		Types:          len(schema.Types),
 	}
-	if err = writeArtifacts(cfg.dir, compressed, source); err != nil {
-		fmt.Fprintln(errOut, "gen_graphql_schema:", err)
+	if err = writeArtifacts(cfg.dir, sdl, source); err != nil {
+		fmt.Fprintln(errOut, prefix, err)
 		return 1
 	}
 
-	fmt.Fprintf(out, "gen_graphql_schema: wrote %s (%d KiB compressed) and %s; %s, %d loaded\n",
-		graphqlschema.SDLFileName, len(compressed)/1024, graphqlschema.SourceFileName, source, len(loaded.Types))
+	fmt.Fprintf(out, prefix+" wrote %s (%d KiB) and %s; %s, %d loaded\n",
+		graphqlschema.SDLFileName, len(sdl)/1024, graphqlschema.SourceFileName, source, len(loaded.Types))
+	// A pin taken from anywhere but gitlab.com narrows what the gate promises,
+	// and the person who ran this is the only one in a position to notice.
+	// Saying so here rather than only in CI is the difference between a
+	// sentence and a red pipeline an hour later.
+	for _, problem := range pinProblems(source, cfg.clock()) {
+		fmt.Fprintln(errOut, prefix+" warning:", problem)
+	}
 	return 0
 }

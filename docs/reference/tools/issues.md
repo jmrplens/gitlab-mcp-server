@@ -400,7 +400,7 @@ Get a single work item by IID. Returns hierarchy child work items (namespace pat
 
 ### `gitlab_list_work_items`
 
-List work items for a project or group. Supports filtering by state, type, labels, author, search. Each item includes its assignees, labels, linked items and hierarchy child work items (namespace path and IID), with cursor pagination (`first`/`after` forward, `last`/`before` backward). The cursor picks the direction: `before` on its own pages backward at the default size, and naming both `first` and `last` is refused, because GitLab refuses it too. Experimental: the Work Items API may introduce breaking changes between minor versions.
+List work items for a project or group. Supports filtering by state, type, labels, author, search. Each item includes its assignees, labels, linked items and hierarchy child work items (namespace path and IID), with cursor pagination (`first`/`after` forward, `last`/`before` backward). The cursor picks the direction: `before` on its own pages backward at the default size, and naming both `first` and `last` is refused, because GitLab refuses it too. `sort` is a GraphQL `WorkItemSort` value such as `CREATED_DESC` (the default), `TITLE_ASC` or `PRIORITY_DESC`, not the `asc`/`desc` pair the REST endpoints take. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Read** |
 | ---------- | -------- |

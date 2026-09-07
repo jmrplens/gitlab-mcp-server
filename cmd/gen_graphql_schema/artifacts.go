@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,37 +10,26 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
-// compress gzips the SDL at the best ratio. The SDL is close to a megabyte and
-// compresses to a sixth of that, which is the difference between an artifact a
-// reviewer can live with in a diff and one nobody wants in the repository.
+// writeArtifacts writes the schema and its provenance record into dir,
+// creating it when it does not exist.
 //
-// Nothing here can fail: the level is a constant, and a bytes.Buffer accepts
-// every write, which is why the writes go through cmdutil.MustDo rather than
-// growing a return path no caller could act on.
-func compress(sdl string) []byte {
-	var buffer bytes.Buffer
-	writer := cmdutil.Must(gzip.NewWriterLevel(&buffer, gzip.BestCompression))
-	cmdutil.MustDo(writeAll(writer, sdl))
-	cmdutil.MustDo(writer.Close())
-	return buffer.Bytes()
-}
-
-// writeAll writes the SDL and discards the byte count, which a bytes.Buffer
-// always reports in full.
-func writeAll(writer *gzip.Writer, sdl string) error {
-	_, err := writer.Write([]byte(sdl))
-	return err
-}
-
-// writeArtifacts writes the compressed schema and its provenance record into
-// dir, creating it when it does not exist.
-func writeArtifacts(dir string, compressed []byte, source graphqlschema.Source) error {
+// The SDL is committed as text rather than compressed. It is close to a
+// megabyte, which is the whole argument for gzipping it, and gzipping loses
+// more than it saves: git zlib-compresses and deltas a text blob and can do
+// neither to a gzip stream, so two revisions of the compressed form cost about
+// twice the history of two revisions of the text. It also costs the review. A
+// re-pin is the one moment somebody needs to see what GitLab changed, and a
+// binary blob renders as "Bin 0 -> 155364 bytes", cannot be merged, and cannot
+// be grepped by anybody verifying a repair. Nothing weighs against that: the
+// schema never reaches a released binary, since cmd/server does not depend on
+// internal/graphqlschema at all.
+func writeArtifacts(dir, sdl string, source graphqlschema.Source) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create %s: %w", dir, err)
 	}
 
 	schemaPath := filepath.Join(dir, graphqlschema.SDLFileName)
-	if err := os.WriteFile(schemaPath, compressed, 0o600); err != nil {
+	if err := os.WriteFile(schemaPath, []byte(sdl), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", schemaPath, err)
 	}
 
@@ -64,11 +51,11 @@ func writeArtifacts(dir string, compressed []byte, source graphqlschema.Source) 
 // an interrupted write.
 func readArtifacts(dir string) (int, graphqlschema.Source, error) {
 	schemaPath := filepath.Join(dir, graphqlschema.SDLFileName)
-	compressed, err := os.ReadFile(schemaPath)
+	sdl, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return 0, graphqlschema.Source{}, fmt.Errorf("read %s: %w", schemaPath, err)
 	}
-	schema, err := graphqlschema.Load(compressed)
+	schema, err := graphqlschema.Load(sdl)
 	if err != nil {
 		return 0, graphqlschema.Source{}, fmt.Errorf("%s: %w", schemaPath, err)
 	}

@@ -95329,8 +95329,16 @@
         "sort": {
           "description": "Sort order (e.g. name_asc, name_desc, last_activity_on_asc, last_activity_on_desc)",
           "enum": [
-            "asc",
-            "desc"
+            "access_level_asc",
+            "access_level_desc",
+            "last_joined",
+            "oldest_joined",
+            "name_asc",
+            "name_desc",
+            "oldest_sign_in",
+            "recent_sign_in",
+            "last_activity_on_asc",
+            "last_activity_on_desc"
           ],
           "type": "string"
         }
@@ -111289,7 +111297,18 @@
           ]
         },
         "name": {
-          "description": "Filter by work item type name",
+          "description": "Filter by work item type name, an IssueType enum value such as ISSUE or TASK",
+          "enum": [
+            "EPIC",
+            "INCIDENT",
+            "ISSUE",
+            "KEY_RESULT",
+            "OBJECTIVE",
+            "REQUIREMENT",
+            "TASK",
+            "TEST_CASE",
+            "TICKET"
+          ],
           "type": "string"
         },
         "only_available": {
@@ -111448,10 +111467,41 @@
           "type": "string"
         },
         "sort": {
-          "description": "Sort order",
+          "description": "Sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC",
           "enum": [
-            "asc",
-            "desc"
+            "BLOCKING_ISSUES_ASC",
+            "BLOCKING_ISSUES_DESC",
+            "CLOSED_AT_ASC",
+            "CLOSED_AT_DESC",
+            "CREATED_ASC",
+            "CREATED_DESC",
+            "DUE_DATE_ASC",
+            "DUE_DATE_DESC",
+            "ESCALATION_STATUS_ASC",
+            "ESCALATION_STATUS_DESC",
+            "HEALTH_STATUS_ASC",
+            "HEALTH_STATUS_DESC",
+            "LABEL_PRIORITY_ASC",
+            "LABEL_PRIORITY_DESC",
+            "MILESTONE_DUE_ASC",
+            "MILESTONE_DUE_DESC",
+            "POPULARITY_ASC",
+            "POPULARITY_DESC",
+            "PRIORITY_ASC",
+            "PRIORITY_DESC",
+            "RELATIVE_POSITION_ASC",
+            "SEVERITY_ASC",
+            "SEVERITY_DESC",
+            "START_DATE_ASC",
+            "START_DATE_DESC",
+            "STATUS_ASC",
+            "STATUS_DESC",
+            "TITLE_ASC",
+            "TITLE_DESC",
+            "UPDATED_ASC",
+            "UPDATED_DESC",
+            "WEIGHT_ASC",
+            "WEIGHT_DESC"
           ],
           "type": "string"
         },
@@ -111465,8 +111515,19 @@
           "type": "string"
         },
         "types": {
-          "description": "Filter by work item types",
+          "description": "Filter by work item types, IssueType enum values such as ISSUE or TASK",
           "items": {
+            "enum": [
+              "EPIC",
+              "INCIDENT",
+              "ISSUE",
+              "KEY_RESULT",
+              "OBJECTIVE",
+              "REQUIREMENT",
+              "TASK",
+              "TEST_CASE",
+              "TICKET"
+            ],
             "type": "string"
           },
           "type": [

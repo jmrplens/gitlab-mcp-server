@@ -156,12 +156,12 @@ List the achievements a group or project namespace defines, with cursor paginati
 
 **Parameters:**
 
-- `after` (string): Cursor for forward pagination, taken from a previous response pagination.end_cursor
-- `before` (string): Cursor for backward pagination, taken from a previous response pagination.start_cursor
-- `first` (integer): Number of items to return from the start of the page (default 20, max 100)
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
+- `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group or project namespace such as my-group or my-group/my-project
 - `ids` (array of integers): Numeric achievement IDs to restrict the result to. Omit to list every achievement in the namespace
-- `last` (integer): Number of items to return from the end of the page, for backward pagination
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -172,11 +172,11 @@ List every award of one achievement, revoked awards and repeat awards included, 
 **Parameters:**
 
 - `achievement_id` (integer) (required): Numeric ID of the achievement whose awards to list
-- `after` (string): Cursor for forward pagination, taken from a previous response pagination.end_cursor
-- `before` (string): Cursor for backward pagination, taken from a previous response pagination.start_cursor
-- `first` (integer): Number of items to return from the start of the page (default 20, max 100)
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
+- `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group or project namespace that owns the achievement
-- `last` (integer): Number of items to return from the end of the page, for backward pagination
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -198,11 +198,11 @@ List the distinct users who hold one achievement, deduplicated across repeat awa
 **Parameters:**
 
 - `achievement_id` (integer) (required): Numeric ID of the achievement whose recipients to count
-- `after` (string): Cursor for forward pagination, taken from a previous response pagination.end_cursor
-- `before` (string): Cursor for backward pagination, taken from a previous response pagination.start_cursor
-- `first` (integer): Number of items to return from the start of the page (default 20, max 100)
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
+- `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group or project namespace that owns the achievement
-- `last` (integer): Number of items to return from the end of the page, for backward pagination
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -260,11 +260,11 @@ List the awards one user holds, by username, with cursor pagination. Returns: ea
 
 **Parameters:**
 
-- `after` (string): Cursor for forward pagination, taken from a previous response pagination.end_cursor
-- `before` (string): Cursor for backward pagination, taken from a previous response pagination.start_cursor
-- `first` (integer): Number of items to return from the start of the page (default 20, max 100)
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
+- `first` (integer): Number of items to return (default 20, max 100)
 - `include_hidden` (boolean): Include awards the user hid from their profile. Only the user themself and namespace or instance maintainers and owners see these
-- `last` (integer): Number of items to return from the end of the page, for backward pagination
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `username` (string) (required): Account name of the user whose awards to list, without a leading at sign
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -3031,11 +3031,11 @@ List the issues linked to a group epic via the Work Items hierarchy. Returns: ch
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
 - `epic_iid` (integer) (required): Epic IID within the group
 - `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group)
-- `last` (integer): Number of items from the end (backward pagination)
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -3138,16 +3138,14 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_list
 
-List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion.
+List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion.
 
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
 - `epic_iid` (integer) (required): Epic IID within the group
 - `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group)
-- `last` (integer): Number of items from the end (backward pagination)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -7648,14 +7646,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_branch_rules
 
-List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.
+List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.
 
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
 - `first` (integer): Number of items to return (default 20, max 100)
-- `last` (integer): Number of items from the end (backward pagination)
 - `project_path` (string) (required): required,Project full path (e.g. my-group/my-project)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -7726,9 +7722,9 @@ List published CI/CD Catalog resources (component projects) with optional search
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
 - `first` (integer): Number of items to return (default 20, max 100)
-- `last` (integer): Number of items from the end (backward pagination)
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `scope` (string): Filter scope: ALL (default) or NAMESPACES
 - `search` (string): Search resources by name or description
 - `sort` (string): Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC, CREATED_ASC, CREATED_DESC, USAGE_COUNT_ASC, USAGE_COUNT_DESC
@@ -7818,10 +7814,10 @@ List custom emoji for a GitLab group via GraphQL API. Returns: paginated list wi
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
 - `first` (integer): Number of items to return (default 20, max 100)
 - `group_path` (string) (required): required,Group full path (e.g. my-group)
-- `last` (integer): Number of items from the end (backward pagination)
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -7934,16 +7930,14 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_epic_discussions
 
-List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list.
+List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list.
 
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
 - `epic_iid` (integer) (required): Epic IID within the group
 - `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group)
-- `last` (integer): Number of items from the end (backward pagination)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -8636,9 +8630,9 @@ List a pipeline's security report findings with severity, scanner, report-type a
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
 - `first` (integer): Number of items to return (default 20, max 100)
-- `last` (integer): Number of items from the end (backward pagination)
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `pipeline_iid` (string) (required): Pipeline IID within the project
 - `project_path` (string) (required): Full path of the project (e.g. my-group/my-project)
 - `report_type` (array of strings): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING
@@ -8823,11 +8817,11 @@ List a project's vulnerabilities with severity, state, scanner, and report-type 
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
 - `first` (integer): Number of items to return (default 20, max 100)
 - `has_issues` (boolean): Filter by whether a linked issue exists
 - `has_resolution` (boolean): Filter by whether a resolution exists
-- `last` (integer): Number of items from the end (backward pagination)
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `project_path` (string) (required): Full path of the project (e.g. my-group/my-project)
 - `report_type` (array of strings): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING
 - `scanner` (array of strings): Filter by scanner external IDs
@@ -8843,34 +8837,36 @@ List work item types for a namespace. Returns: id, name, and enabled flag for ea
 
 **Parameters:**
 
-- `after` (string): Cursor for forward pagination
-- `before` (string): Cursor for backward pagination
-- `first` (integer): Number of types to return from the beginning (cursor pagination)
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
+- `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Project or group full path (namespace path)
-- `last` (integer): Number of types to return from the end (backward cursor pagination)
-- `name` (string): Filter by work item type name
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
+- `name` (string): Filter by work item type name, an IssueType enum value such as ISSUE or TASK
 - `only_available` (boolean): Return only available work item types
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_work_items
 
-List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the next-page cursor. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.
+List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the cursors for the next and previous pages. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.
 
 **Parameters:**
 
-- `after` (string): Cursor for forward pagination
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
 - `author_username` (string): Filter by author username
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
 - `confidential` (boolean): Filter by confidentiality
-- `first` (integer): Number of items to return (cursor-based pagination)
+- `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the project or group
 - `include_ancestors` (boolean): Include ancestor work items
 - `include_descendants` (boolean): Include descendant work items
 - `label_name` (array of strings): Filter by label names
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `search` (string): Search in title and description
-- `sort` (string): Sort order
+- `sort` (string): Sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC
 - `state` (string): Filter by state (opened/closed/all)
-- `types` (array of strings): Filter by work item types
+- `types` (array of strings): Filter by work item types, IssueType enum values such as ISSUE or TASK
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15865,9 +15861,9 @@ List work item saved views for a group or project namespace with cursor paginati
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
-- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
 - `first` (integer): Number of items to return (default 20, max 100)
-- `last` (integer): Number of items from the end (backward pagination)
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `namespace_path` (string) (required): Full path of the group or project whose saved views to list
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true

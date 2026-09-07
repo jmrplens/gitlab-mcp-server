@@ -1,29 +1,12 @@
 package graphqlschema
 
 import (
-	"bytes"
-	"compress/gzip"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/vektah/gqlparser/v2/ast"
 )
-
-// gzipped compresses text so a test can hand [Load] something other than the
-// embedded schema.
-func gzipped(t *testing.T, text string) []byte {
-	t.Helper()
-	var buffer bytes.Buffer
-	writer := gzip.NewWriter(&buffer)
-	if _, err := writer.Write([]byte(text)); err != nil {
-		t.Fatalf("write the fixture: %v", err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("close the fixture writer: %v", err)
-	}
-	return buffer.Bytes()
-}
 
 // stubSchemaLoad replaces the loader [Validate] and [ValidateDocument] go
 // through, restoring it when the test ends. It is what makes the
@@ -74,24 +57,23 @@ func TestSchema_CalledTwice_ReturnsTheSameSchema(t *testing.T) {
 	}
 }
 
-// TestLoad_MalformedInput_ReportsWhichStageFailed verifies each of the three
-// ways a pinned artifact can be unusable, and that the message says which one
-// happened: a reader who has to fix a corrupt artifact needs to know whether
-// the bytes, the compression or the SDL is at fault.
+// TestLoad_MalformedInput_ReportsWhichStageFailed verifies that an artifact
+// which is not SDL is reported as such rather than yielding a schema that
+// accepts everything, and that the message names the stage: a reader fixing a
+// corrupt pin needs to know it is the SDL and not the file.
 func TestLoad_MalformedInput_ReportsWhichStageFailed(t *testing.T) {
-	valid := gzipped(t, "type Query {\n  ok: Boolean\n}\n")
 	cases := []struct {
-		name       string
-		compressed []byte
-		want       string
+		name string
+		sdl  []byte
+		want string
 	}{
-		{name: "not gzip at all", compressed: []byte("plain text"), want: "open the compressed schema"},
-		{name: "truncated stream", compressed: valid[:len(valid)-4], want: "decompress the schema"},
-		{name: "gzip of something that is not SDL", compressed: gzipped(t, "this is prose, not a schema"), want: "parse the schema"},
+		{name: "prose rather than a schema", sdl: []byte("this is prose, not a schema"), want: "parse the schema"},
+		{name: "a truncated type", sdl: []byte("type Query {\n  ok: Boo"), want: "parse the schema"},
+		{name: "still compressed", sdl: []byte{0x1f, 0x8b, 0x08, 0x00}, want: "parse the schema"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			schema, err := Load(testCase.compressed)
+			schema, err := Load(testCase.sdl)
 			if err == nil {
 				t.Fatalf("Load() error = nil, want one naming %q", testCase.want)
 			}
@@ -108,12 +90,37 @@ func TestLoad_MalformedInput_ReportsWhichStageFailed(t *testing.T) {
 // TestLoad_ValidSDL_ParsesIt verifies the success path of the exported loader,
 // which is what cmd/gen_graphql_schema calls to check an artifact on disk.
 func TestLoad_ValidSDL_ParsesIt(t *testing.T) {
-	schema, err := Load(gzipped(t, "type Query {\n  ok: Boolean\n}\n"))
+	schema, err := Load([]byte("type Query {\n  ok: Boolean\n}\n"))
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
 	if schema.Types["Query"] == nil {
 		t.Error("Load() lost the Query type")
+	}
+}
+
+// TestValidateDocumentAgainst_ASchemaTheCallerLoaded_JudgesByThatSchema
+// verifies the entry the live re-probe uses. The point of it is that the
+// verdict follows the schema handed in and not the pin, so the case that
+// matters is a document the pin accepts and a narrower schema does not.
+func TestValidateDocumentAgainst_ASchemaTheCallerLoaded_JudgesByThatSchema(t *testing.T) {
+	narrowed, err := Load([]byte("type Query {\n  ok: Boolean\n}\n"))
+	if err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	const document = `query($id: VulnerabilityID!) { vulnerability(id: $id) { id } }`
+
+	if pinnedErr := ValidateDocument(document); pinnedErr != nil {
+		t.Fatalf("the pinned schema refuses the fixture, so the comparison says nothing: %v", pinnedErr)
+	}
+
+	err = ValidateDocumentAgainst(narrowed, document)
+
+	if err == nil {
+		t.Fatal("ValidateDocumentAgainst() error = nil, want the narrower schema's refusal")
+	}
+	if !strings.Contains(err.Error(), "vulnerability") {
+		t.Errorf("ValidateDocumentAgainst() error = %q, want it to name the field the schema lacks", err)
 	}
 }
 
@@ -326,5 +333,177 @@ func TestErrorsAs_ValidationError_IsRecoverable(t *testing.T) {
 	}
 	if len(refusal.Reasons) == 0 {
 		t.Error("the refusal carries no reasons")
+	}
+}
+
+// TestValidate_MiscasedEnumValue_IsRefusedInEveryPosition verifies the check
+// gqlparser does not perform.
+//
+// Its coercer compares an enum value with strings.EqualFold, so "critical"
+// passes for VulnerabilitySeverity while gitlab.com answers "Expected
+// \"critical\" to be one of: INFO, UNKNOWN, LOW, MEDIUM, HIGH, CRITICAL" and
+// executes nothing. Every enum this server sends is uppercased somewhere by a
+// strings.ToUpper that a refactor can turn into strings.ToLower, so without
+// this the gate would miss the defect class it is most likely to meet. The
+// three positions are the three shapes our documents use: a list element, a
+// bare variable, and a field inside an input object.
+func TestValidate_MiscasedEnumValue_IsRefusedInEveryPosition(t *testing.T) {
+	const listQuery = `query($severity: [VulnerabilitySeverity!]) {
+  project(fullPath: "a/b") { vulnerabilities(severity: $severity) { nodes { id } } }
+}`
+	const reorder = `mutation($id: WorkItemID!, $childrenIds: [WorkItemID!]!, $adjacentWorkItemId: WorkItemID!, $relativePosition: RelativePositionType!) {
+  workItemUpdate(input: {id: $id, hierarchyWidget: {childrenIds: $childrenIds, adjacentWorkItemId: $adjacentWorkItemId, relativePosition: $relativePosition}}) { errors }
+}`
+	const dismiss = `mutation($input: VulnerabilityDismissInput!) { vulnerabilityDismiss(input: $input) { errors } }`
+
+	cases := []struct {
+		name      string
+		document  string
+		variables map[string]any
+		want      string
+	}{
+		{
+			name:      "inside a list",
+			document:  listQuery,
+			variables: map[string]any{"severity": []any{"critical", "HIGH"}},
+			want:      `$severity[0] is "critical", and VulnerabilitySeverity is case sensitive`,
+		},
+		{
+			name:     "as a bare variable",
+			document: reorder,
+			variables: map[string]any{
+				"id": "gid://gitlab/WorkItem/1", "childrenIds": []any{"gid://gitlab/WorkItem/2"},
+				"adjacentWorkItemId": "gid://gitlab/WorkItem/3", "relativePosition": "before",
+			},
+			want: `$relativePosition is "before", and RelativePositionType is case sensitive`,
+		},
+		{
+			name:     "inside an input object",
+			document: dismiss,
+			variables: map[string]any{"input": map[string]any{
+				"id": "gid://gitlab/Vulnerability/1", "dismissalReason": "used_in_tests",
+			}},
+			want: `$input.dismissalReason is "used_in_tests", and VulnerabilityDismissalReason is case sensitive`,
+		},
+		{
+			name:      "the right case passes",
+			document:  listQuery,
+			variables: map[string]any{"severity": []any{"CRITICAL"}},
+		},
+		{
+			name:      "a value no spelling would fix is left to the coercer",
+			document:  listQuery,
+			variables: map[string]any{"severity": []any{"NOT_A_SEVERITY"}},
+			want:      "is not a valid VulnerabilitySeverity",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := Validate(testCase.document, testCase.variables)
+
+			if testCase.want == "" {
+				if err != nil {
+					t.Fatalf("Validate() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Validate() error = nil, want one naming %q", testCase.want)
+			}
+			if !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("Validate() error = %q, want it to name %q", err, testCase.want)
+			}
+		})
+	}
+}
+
+// TestValidate_ShapesTheEnumWalkCannotJudge_AreLeftToTheCoercer verifies that
+// the walk stays out of the way wherever it has nothing to add.
+//
+// It descends the declared type rather than the value, so anything that does
+// not match its type is somebody else's finding: gqlparser has already reported
+// it, and a second message about one mistake helps nobody. These are the shapes
+// that reach the walk and must pass through it untouched.
+func TestValidate_ShapesTheEnumWalkCannotJudge_AreLeftToTheCoercer(t *testing.T) {
+	const listQuery = `query($severity: [VulnerabilitySeverity!]) {
+  project(fullPath: "a/b") { vulnerabilities(severity: $severity) { nodes { id } } }
+}`
+	const scalars = `query($path: ID!, $first: Int) {
+  project(fullPath: $path) { branchRules(first: $first) { nodes { name } } }
+}`
+	const dismiss = `mutation($input: VulnerabilityDismissInput!) { vulnerabilityDismiss(input: $input) { errors } }`
+
+	cases := []struct {
+		name      string
+		document  string
+		variables map[string]any
+		wantOK    bool
+	}{
+		{name: "a null where an enum was declared", document: listQuery, variables: map[string]any{"severity": nil}, wantOK: true},
+		{name: "an unset variable", document: listQuery, variables: map[string]any{}, wantOK: true},
+		{name: "plain scalars, which hold no enum", document: scalars, variables: map[string]any{"path": "a/b", "first": 20}, wantOK: true},
+		{
+			name:      "an enum sent as a number",
+			document:  listQuery,
+			variables: map[string]any{"severity": []any{7}},
+		},
+		{
+			name:      "a list sent as one value",
+			document:  listQuery,
+			variables: map[string]any{"severity": "CRITICAL"},
+			wantOK:    true,
+		},
+		{
+			name:      "an input object sent as a string",
+			document:  dismiss,
+			variables: map[string]any{"input": "not an object"},
+		},
+		{
+			name:     "an input object with a member the type does not have",
+			document: dismiss,
+			variables: map[string]any{"input": map[string]any{
+				"id": "gid://gitlab/Vulnerability/1", "nosuchfield": "x",
+			}},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := Validate(testCase.document, testCase.variables)
+
+			if testCase.wantOK && err != nil {
+				t.Fatalf("Validate() error = %v, want nil", err)
+			}
+			if testCase.wantOK {
+				return
+			}
+			if err == nil {
+				t.Fatal("Validate() error = nil, want the coercer's own refusal")
+			}
+			if strings.Contains(err.Error(), "case sensitive") {
+				t.Errorf("Validate() error = %q, want the coercer's message and not a case complaint", err)
+			}
+		})
+	}
+}
+
+// TestEnumWalker_AnUnknownTypeName_IsLeftAlone verifies the walk's guard for a
+// type the schema does not define.
+//
+// Nothing reaches it through [Validate], because the document half refuses an
+// operation declaring an unknown type before the variables are ever walked. It
+// is exercised directly because the alternative to the guard is a nil
+// dereference, and a walk that panics would take down every test in the
+// repository the first time an invariant slipped.
+func TestEnumWalker_AnUnknownTypeName_IsLeftAlone(t *testing.T) {
+	schema, err := Schema()
+	if err != nil {
+		t.Fatalf("Schema() error = %v", err)
+	}
+	walker := enumWalker{schema: schema}
+
+	walker.walk(&ast.Type{NamedType: "NoSuchTypeExistsHere"}, "critical", "$probe")
+
+	if len(walker.reasons) != 0 {
+		t.Errorf("walk() reported %v for a type the schema does not define, want nothing", walker.reasons)
 	}
 }

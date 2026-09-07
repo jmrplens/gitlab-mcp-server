@@ -1,11 +1,8 @@
 package graphqlschema
 
 import (
-	"bytes"
-	"compress/gzip"
-	_ "embed"
+	_ "embed" // registers the go:embed directive that carries the pinned schema
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"sync"
@@ -15,17 +12,17 @@ import (
 	"github.com/vektah/gqlparser/v2/validator"
 )
 
-// SDLFileName is the compressed schema's name on disk. The generator writes
-// it and the package embeds it, so both sides name it once here.
+// SDLFileName is the pinned schema's name on disk. The generator writes it and
+// the package embeds it, so both sides name it once here.
 //
 // The words are separated by a hyphen rather than an underscore because
 // cmd/audit_doc_tool_names reads every gitlab_-prefixed identifier in the
 // documentation as a tool name the server must register, and any page naming
 // this file would otherwise fail that gate.
-const SDLFileName = "gitlab-schema.graphql.gz"
+const SDLFileName = "gitlab-schema.graphql"
 
-//go:embed gitlab-schema.graphql.gz
-var compressedSDL []byte
+//go:embed gitlab-schema.graphql
+var pinnedSDL []byte
 
 // schemaOnce guards the one parse this process pays for. Parsing costs around
 // 200 ms, which is affordable once and not affordable per validated document.
@@ -46,7 +43,7 @@ var (
 // and callers must not either, because every goroutine in the process shares
 // this one value.
 func Schema() (*ast.Schema, error) {
-	schemaOnce.Do(func() { pinned.schema, pinned.err = Load(compressedSDL) })
+	schemaOnce.Do(func() { pinned.schema, pinned.err = Load(pinnedSDL) })
 	return pinned.schema, pinned.err
 }
 
@@ -55,21 +52,10 @@ func Schema() (*ast.Schema, error) {
 // embedded schema cannot be made to fail from outside the package.
 var schemaFor = Schema
 
-// Load decompresses and parses a gzip-compressed SDL document. It is exported
-// so cmd/gen_graphql_schema can check a file it just wrote, or a committed one
-// it did not, without going through the embedded copy.
-func Load(compressed []byte) (*ast.Schema, error) {
-	reader, err := gzip.NewReader(bytes.NewReader(compressed))
-	if err != nil {
-		return nil, fmt.Errorf("open the compressed schema: %w", err)
-	}
-	defer func() { _ = reader.Close() }()
-
-	sdl, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("decompress the schema: %w", err)
-	}
-
+// Load parses an SDL document. It is exported so cmd/gen_graphql_schema can
+// check a file it just wrote, or a committed one it did not, without going
+// through the embedded copy.
+func Load(sdl []byte) (*ast.Schema, error) {
 	schema, gqlErr := gqlparser.LoadSchema(&ast.Source{Name: SDLFileName, Input: string(sdl)})
 	if gqlErr != nil {
 		return nil, fmt.Errorf("parse the schema: %w", gqlErr)
@@ -103,6 +89,20 @@ func ValidateDocument(document string) error {
 		return err
 	}
 	_, err = parseDocument(schema, document)
+	return err
+}
+
+// ValidateDocumentAgainst is [ValidateDocument] against a schema the caller
+// loaded rather than the pinned one.
+//
+// It exists for the live re-probe. The pin can only say a document was already
+// broken on the day it was taken, never that GitLab has narrowed something
+// since, which is how every defect this gate was built for arose:
+// securityReportFindings accepted confidence once, and
+// Project.vulnerabilities.severity was [String!] once. Handing the same check a
+// schema fetched today turns that into a failure on the day it happens.
+func ValidateDocumentAgainst(schema *ast.Schema, document string) error {
+	_, err := parseDocument(schema, document)
 	return err
 }
 
@@ -162,10 +162,116 @@ func validateVariables(schema *ast.Schema, parsed *ast.QueryDocument, variables 
 	if _, coerceErr := validator.VariableValues(schema, operation, variables); coerceErr != nil {
 		reasons = append(reasons, coerceErr.Error())
 	}
+	reasons = append(reasons, miscasedEnums(schema, operation, variables)...)
 	if len(reasons) > 0 {
 		return &ValidationError{Reasons: reasons}
 	}
 	return nil
+}
+
+// miscasedEnums reports every enum value the request sends in the wrong case.
+//
+// gqlparser compares an enum value with strings.EqualFold (validator/vars.go),
+// so it accepts "critical" for VulnerabilitySeverity. GitLab does not: it
+// answers "Expected \"critical\" to be one of: INFO, UNKNOWN, LOW, MEDIUM,
+// HIGH, CRITICAL" and executes nothing. Without this walk the gate misses a
+// whole defect class it is meant to catch, and it is the class our own code is
+// most likely to produce, since every enum this server sends is normalised by
+// a strings.ToUpper somewhere that a refactor can turn into strings.ToLower.
+//
+// Only variable values need this. An enum written as a literal in the document
+// is matched exactly by gqlparser's ValuesOfCorrectType rule, so the document
+// half already refuses a miscased literal.
+func miscasedEnums(schema *ast.Schema, operation *ast.OperationDefinition, variables map[string]any) []string {
+	walker := enumWalker{schema: schema}
+	for _, definition := range operation.VariableDefinitions {
+		value, sent := variables[definition.Variable]
+		if !sent {
+			continue
+		}
+		walker.walk(definition.Type, value, "$"+definition.Variable)
+	}
+	sort.Strings(walker.reasons)
+	return walker.reasons
+}
+
+// enumWalker collects the miscased enum values found under one operation's
+// variables. It carries the schema and the findings so the recursion can stay a
+// method with a path argument rather than a function threading three values.
+type enumWalker struct {
+	schema  *ast.Schema
+	reasons []string
+}
+
+// walk descends one value against the type it was declared as, reporting every
+// enum position whose value differs from a schema value only in case.
+//
+// It mirrors the descent gqlparser performs, through list elements and input
+// object fields, because an enum reaches GitLab inside an input object as
+// readily as it does at the top level: the security attribute and vulnerability
+// mutations pass every enum that way. Anything the walk cannot resolve, an
+// unknown type name or a value shaped unlike its type, is left alone, since
+// gqlparser's own coercion has already reported it.
+func (w *enumWalker) walk(typ *ast.Type, value any, path string) {
+	if value == nil || typ == nil {
+		return
+	}
+	if typ.Elem != nil {
+		elements, ok := value.([]any)
+		if !ok {
+			return
+		}
+		for i, element := range elements {
+			w.walk(typ.Elem, element, fmt.Sprintf("%s[%d]", path, i))
+		}
+		return
+	}
+
+	definition := w.schema.Types[typ.NamedType]
+	if definition == nil {
+		return
+	}
+	switch definition.Kind {
+	case ast.Enum:
+		w.checkEnum(definition, value, path)
+	case ast.InputObject:
+		fields, ok := value.(map[string]any)
+		if !ok {
+			return
+		}
+		for name, field := range fields {
+			fieldDef := definition.Fields.ForName(name)
+			if fieldDef == nil {
+				continue
+			}
+			w.walk(fieldDef.Type, field, path+"."+name)
+		}
+	default:
+	}
+}
+
+// checkEnum reports value when the enum holds it in a different case only. A
+// value the enum does not hold at all in any case is left to gqlparser, which
+// reports it with its own message rather than having two for one mistake.
+func (w *enumWalker) checkEnum(definition *ast.Definition, value any, path string) {
+	text, ok := value.(string)
+	if !ok {
+		return
+	}
+	for _, enumValue := range definition.EnumValues {
+		if text == enumValue.Name {
+			return
+		}
+	}
+	for _, enumValue := range definition.EnumValues {
+		if strings.EqualFold(text, enumValue.Name) {
+			w.reasons = append(w.reasons, fmt.Sprintf(
+				"%s is %q, and %s is case sensitive: GitLab accepts %q and refuses every other spelling",
+				path, text, definition.Name, enumValue.Name,
+			))
+			return
+		}
+	}
 }
 
 // undeclaredVariables reports every variable the request sends that the

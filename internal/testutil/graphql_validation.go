@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -89,9 +90,33 @@ func validateGraphQLRequest(reporter graphQLReporter, r *http.Request) {
 	}
 
 	if err = graphqlschema.Validate(request.Query, request.Variables); err != nil {
-		reporter.Errorf("GitLab would refuse this GraphQL request\n  operation: %s\n%s",
-			documentLabel(request.Query), reasonLines(err))
+		reporter.Errorf("GitLab would refuse this GraphQL request\n  operation: %s\n%s\n%s",
+			documentLabel(request.Query), reasonLines(err), verdictProvenance())
 	}
+}
+
+// sourceInfo reads the pin's provenance. It is a variable so the
+// nothing-to-report path stays reachable from a test, since the record is
+// embedded and has a gate of its own that refuses a build where it does not
+// decode.
+var sourceInfo = graphqlschema.SourceInfo
+
+// verdictProvenance names the schema that refused the document.
+//
+// The verdict is a snapshot's, and the message has to say so, because the
+// reader has two possible culprits and no way to tell them apart otherwise:
+// their document may be wrong, or the pin may have aged past a field GitLab
+// has since added. Without this line somebody whose document is right and
+// whose pin is stale has nothing to pull on.
+func verdictProvenance() string {
+	source, err := sourceInfo()
+	if err != nil {
+		return "  judged by the pinned GitLab schema"
+	}
+	return fmt.Sprintf(
+		"  judged by the pinned GitLab schema (%s); if GitLab has moved since, re-pin with `make gen-graphql-schema`",
+		source,
+	)
 }
 
 // reasonLines renders a validation failure one reason per line, indented under
@@ -109,20 +134,32 @@ func reasonLines(err error) string {
 	return strings.Join(lines, "\n")
 }
 
-// documentLabel names a document by its first line, which for every document
-// in this repository is the operation signature and identifies it uniquely.
+// documentLabel names a document by its first two non-empty lines.
+//
+// The first line alone is the operation signature, and it is not unique: of
+// the 38 documents in this repository only 30 have a distinct one, and
+// "mutation($id: VulnerabilityID!) {" alone labels three of them. The second
+// line is the root field, which tells those apart, so a re-pin that refuses
+// several documents at once can be triaged from the output.
 func documentLabel(document string) string {
+	lines := make([]string, 0, 2)
 	for line := range strings.SplitSeq(document, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
 		if len(trimmed) > labelLimit {
-			return trimmed[:labelLimit] + "..."
+			trimmed = trimmed[:labelLimit] + "..."
 		}
-		return trimmed
+		lines = append(lines, trimmed)
+		if len(lines) == 2 {
+			break
+		}
 	}
-	return "(empty document)"
+	if len(lines) == 0 {
+		return "(empty document)"
+	}
+	return strings.Join(lines, " ")
 }
 
 // allowedInvalid holds the tests that have declared they send a document the
@@ -140,6 +177,13 @@ var (
 // is a document GitLab refuses, so silencing the gate anywhere else silences a
 // real defect. Say in a comment at the call site which malformed document the
 // test is sending and why it has to.
+//
+// Declare it on the test that calls [NewTestClient], not on a subtest under
+// one. The exemption is looked up under the name of the test the validation
+// reports against, and that is the test the client belongs to: with a client
+// built in the parent and driven from subtests, which is the common shape
+// here, a subtest's exemption is never consulted and the refusal is reported
+// against the parent while every subtest passes.
 //
 // The exemption lasts for tb's lifetime and is released on cleanup.
 func AllowInvalidGraphQL(tb testing.TB) {

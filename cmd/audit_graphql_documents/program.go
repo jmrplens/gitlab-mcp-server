@@ -1,14 +1,21 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/constant"
 	"go/token"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
 // loadMode is everything this audit needs: syntax to walk, and types so a
@@ -59,6 +66,14 @@ type collector struct {
 // the folding of a document assembled from a fragment is exercised for real
 // rather than mocked. Production passes nil.
 func collect(dir string, patterns []string, overlay map[string][]byte) ([]document, error) {
+	// The standalone files are read first because it costs milliseconds and
+	// type-checking the tree costs seconds: a run that cannot read one of its
+	// own documents should say so before paying for the rest.
+	standalone, err := collectFiles(dir, patterns)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &packages.Config{Mode: loadMode, Dir: dir, Tests: false, Overlay: overlay}
 	loaded, err := packages.Load(cfg, patterns...)
 	if err != nil {
@@ -76,14 +91,109 @@ func collect(dir string, patterns []string, overlay map[string][]byte) ([]docume
 		gatherer.walk(pkg)
 	}
 
-	sort.Slice(gatherer.documents, func(i, j int) bool {
-		left, right := gatherer.documents[i], gatherer.documents[j]
+	gatherer.documents = append(gatherer.documents, standalone...)
+	sortDocuments(gatherer.documents)
+	return gatherer.documents, nil
+}
+
+// sortDocuments puts the findings in the order a reader walks a repository:
+// by package, then by file, then by position within it. The file is part of the
+// key because a package holds documents from several files and, for a
+// standalone .graphql document, offset alone says nothing about which file it
+// came from.
+func sortDocuments(documents []document) {
+	sort.Slice(documents, func(i, j int) bool {
+		left, right := documents[i], documents[j]
 		if left.pkg != right.pkg {
 			return left.pkg < right.pkg
 		}
+		if left.position.Filename != right.position.Filename {
+			return left.position.Filename < right.position.Filename
+		}
 		return left.position.Offset < right.position.Offset
 	})
-	return gatherer.documents, nil
+}
+
+// collectFiles gathers the documents that live in .graphql files rather than in
+// Go constants.
+//
+// A constant is the only shape this repository uses today, and it is not the
+// only shape it may use tomorrow: moving a long document into its own file and
+// pulling it in with an embed directive is the obvious next step for
+// readability, and an embedded variable is not a constant, so the type checker
+// folds nothing and the document would leave the inventory without a word.
+// Reading the files directly closes that door before anybody walks through it.
+//
+// Every failure below the root is propagated rather than skipped. A directory
+// this cannot read is a directory whose documents go unjudged, which is the
+// silence the whole command exists to remove; a root that is not there at all
+// is a question about the patterns, and the package loader answers that one.
+//
+// The walk goes through [os.Root], as cmd/format_md_tables does, so a read is
+// scoped to the tree being audited rather than to whatever a symlink in it
+// points at.
+func collectFiles(dir string, patterns []string) ([]document, error) {
+	var found []document
+	for _, base := range walkRoots(dir, patterns) {
+		root, err := os.OpenRoot(base)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("open %s: %w", base, err)
+		}
+		collected, walkErr := documentsUnder(root, base)
+		_ = root.Close()
+		if walkErr != nil {
+			return nil, walkErr
+		}
+		found = append(found, collected...)
+	}
+	return found, nil
+}
+
+// documentsUnder reads every standalone document in one already-opened tree.
+func documentsUnder(root *os.Root, base string) ([]document, error) {
+	var found []document
+	err := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || path.Ext(name) != graphQLExt || isPinnedSchema(name) {
+			return err
+		}
+		local := filepath.FromSlash(name)
+		text, readErr := root.ReadFile(local)
+		if readErr != nil {
+			return fmt.Errorf("read %s: %w", filepath.Join(base, local), readErr)
+		}
+		full := filepath.Join(base, local)
+		found = append(found, document{
+			pkg:      filepath.ToSlash(filepath.Dir(full)),
+			name:     path.Base(name),
+			position: token.Position{Filename: full, Line: 1},
+			text:     string(text),
+		})
+		return nil
+	})
+	return found, err
+}
+
+// graphQLExt is the extension a standalone document carries.
+const graphQLExt = ".graphql"
+
+// isPinnedSchema reports whether path is the pinned schema itself, which is an
+// SDL and not a document anybody sends.
+func isPinnedSchema(name string) bool {
+	return path.Base(name) == graphqlschema.SDLFileName
+}
+
+// walkRoots turns the load patterns into the directories to search for
+// standalone documents, so the two halves of the inventory cover the same tree.
+func walkRoots(dir string, patterns []string) []string {
+	roots := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		trimmed := strings.TrimSuffix(strings.TrimSuffix(pattern, "..."), "/")
+		roots = append(roots, filepath.Join(dir, filepath.FromSlash(trimmed)))
+	}
+	return roots
 }
 
 // packageLoadError turns a package's load errors into one reportable error. A
