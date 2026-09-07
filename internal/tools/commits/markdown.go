@@ -27,11 +27,15 @@ func userDisplay(u *BasicUserOutput) string {
 // FormatOutputMarkdown renders a single commit as a Markdown summary.
 func FormatOutputMarkdown(c Output) string {
 	var b strings.Builder
+	//gitlab:allow-unescaped c.ShortID: an abbreviated git object id, which is hexadecimal.
 	fmt.Fprintf(&b, "## Commit %s\n\n", c.ShortID)
-	fmt.Fprintf(&b, toolutil.FmtMdTitle, c.Title)
-	fmt.Fprintf(&b, "- **Author**: %s <%s>\n", c.AuthorName, c.AuthorEmail)
+	// A commit's title and ident are what whoever made the commit typed, and
+	// this server's own commit.create passes an author name and email through.
+	fmt.Fprintf(&b, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(c.Title))
+	fmt.Fprintf(&b, "- **Author**: %s <%s>\n",
+		toolutil.EscapeMdTableCell(c.AuthorName), toolutil.EscapeMdTableCell(c.AuthorEmail))
 	fmt.Fprintf(&b, "- **Date**: %s\n", toolutil.FormatTime(c.CommittedDate))
-	fmt.Fprintf(&b, toolutil.FmtMdURL, c.WebURL)
+	toolutil.WriteMdURL(&b, c.WebURL)
 	toolutil.WriteHints(
 		&b,
 		"Use action 'commit_get' with this SHA to see full commit details and stats",
@@ -53,7 +57,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| Short ID | Title | Author | Date |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, c := range out.Commits {
-		fmt.Fprintf(&b, "| [%s](%s) | %s | %s | %s |\n", c.ShortID, c.WebURL, toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName), toolutil.FormatTime(c.CommittedDate))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", toolutil.MdTitleLink(c.ShortID, c.WebURL), toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName), toolutil.FormatTime(c.CommittedDate))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -68,11 +72,16 @@ func FormatListMarkdown(out ListOutput) string {
 // FormatDetailMarkdown renders a single commit detail as a Markdown summary.
 func FormatDetailMarkdown(c DetailOutput) string {
 	var b strings.Builder
+	//gitlab:allow-unescaped c.ShortID: an abbreviated git object id, which is hexadecimal.
 	fmt.Fprintf(&b, "## Commit %s\n\n", c.ShortID)
-	fmt.Fprintf(&b, toolutil.FmtMdTitle, c.Title)
-	fmt.Fprintf(&b, "- **Author**: %s <%s>\n", c.AuthorName, c.AuthorEmail)
+	// A commit's title and ident are what whoever made the commit typed, and
+	// this server's own commit.create passes an author name and email through.
+	fmt.Fprintf(&b, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(c.Title))
+	fmt.Fprintf(&b, "- **Author**: %s <%s>\n",
+		toolutil.EscapeMdTableCell(c.AuthorName), toolutil.EscapeMdTableCell(c.AuthorEmail))
 	fmt.Fprintf(&b, "- **Date**: %s\n", toolutil.FormatTime(c.CommittedDate))
 	if len(c.ParentIDs) > 0 {
+		//gitlab:allow-unescaped strings.Join(c.ParentIDs, ", "): full git object ids, which are hexadecimal.
 		fmt.Fprintf(&b, "- **Parents**: %s\n", strings.Join(c.ParentIDs, ", "))
 	}
 	if c.Stats != nil {
@@ -81,7 +90,7 @@ func FormatDetailMarkdown(c DetailOutput) string {
 	if c.Message != "" && c.Message != c.Title {
 		fmt.Fprintf(&b, "\n### Message\n\n%s\n", toolutil.WrapGFMBody(c.Message))
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdURLNewline, c.WebURL)
+	toolutil.WriteMdURLNewline(&b, c.WebURL)
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_commit_diff` to view file changes",
@@ -132,6 +141,7 @@ func FormatRefsMarkdown(out RefsOutput) string {
 	b.WriteString("| Type | Name |\n")
 	b.WriteString(toolutil.TblSep2Col)
 	for _, r := range out.Refs {
+		//gitlab:allow-unescaped r.Type: the ref kind GitLab answers with, either branch or tag.
 		fmt.Fprintf(&b, "| %s | %s |\n", r.Type, toolutil.EscapeMdTableCell(r.Name))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -177,10 +187,10 @@ func FormatCommentsMarkdown(out CommentsOutput) string {
 func FormatCommentMarkdown(c CommentOutput) string {
 	var b strings.Builder
 	b.WriteString("## Commit Comment\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, userDisplay(c.Author))
+	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(userDisplay(c.Author)))
 	fmt.Fprintf(&b, "- **Note**: %s\n", toolutil.EscapeMdTableCell(c.Note))
 	if c.Path != "" {
-		fmt.Fprintf(&b, "- **Path**: %s (line %d)\n", c.Path, c.Line)
+		fmt.Fprintf(&b, "- **Path**: %s (line %d)\n", toolutil.EscapeMdTableCell(c.Path), c.Line)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -201,6 +211,7 @@ func FormatStatusesMarkdown(out StatusesOutput) string {
 	b.WriteString("| ID | Status | Name | Ref | Description |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, s := range out.Statuses {
+		//gitlab:allow-unescaped s.Status: a build state GitLab rejects with a 400 unless it is one of the six its own schema enumerates.
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n", s.ID, s.Status, toolutil.EscapeMdTableCell(s.Name), toolutil.EscapeMdTableCell(s.Ref), toolutil.EscapeMdTableCell(s.Description))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -217,13 +228,15 @@ func FormatStatusMarkdown(s StatusOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Commit Status #%d\n\n", s.ID)
 	fmt.Fprintf(&b, toolutil.FmtMdStatus, s.Status)
-	fmt.Fprintf(&b, toolutil.FmtMdName, s.Name)
-	fmt.Fprintf(&b, "- **Ref**: %s\n", s.Ref)
+	// The name and the ref of a commit status are both supplied by whatever CI
+	// system posted it, and this server's own commit_status_set writes them.
+	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(s.Name))
+	fmt.Fprintf(&b, "- **Ref**: %s\n", toolutil.EscapeMdTableCell(s.Ref))
 	if s.Description != "" {
 		toolutil.WriteDescription(&b, s.Description)
 	}
 	if s.TargetURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, s.TargetURL)
+		toolutil.WriteMdURL(&b, s.TargetURL)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -245,6 +258,7 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, mr := range out.MergeRequests {
 		fmt.Fprintf(&b, "| !%d | %s | %s | %s -> %s | %s |\n",
+			//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
 			mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State,
 			toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch),
 			toolutil.EscapeMdTableCell(mr.Author))
@@ -262,28 +276,37 @@ func FormatGPGSignatureMarkdown(sig GPGSignatureOutput) string {
 	var b strings.Builder
 	b.WriteString("## Commit Signature\n\n")
 	if sig.SignatureType != "" {
+		//gitlab:allow-unescaped sig.SignatureType: the signing scheme GitLab names, one of PGP, SSH or X509.
 		fmt.Fprintf(&b, "- **Type**: %s\n", sig.SignatureType)
 	}
+	//gitlab:allow-unescaped sig.VerificationStatus: a verification verdict GitLab computes, not text it stored.
 	fmt.Fprintf(&b, "- **Verification**: %s\n", sig.VerificationStatus)
 	switch {
 	case sig.X509Certificate != nil:
 		fmt.Fprintf(&b, "- **X.509 Subject**: %s\n", toolutil.EscapeMdTableCell(sig.X509Certificate.Subject))
 		if sig.X509Certificate.Email != "" {
-			fmt.Fprintf(&b, "- **X.509 Email**: %s\n", sig.X509Certificate.Email)
+			// Read out of the signer's own certificate, like the subject above.
+			fmt.Fprintf(&b, "- **X.509 Email**: %s\n", toolutil.EscapeMdTableCell(sig.X509Certificate.Email))
 		}
 	case sig.Key != nil:
 		if sig.Key.Title != "" {
 			fmt.Fprintf(&b, "- **SSH Key**: %s\n", toolutil.EscapeMdTableCell(sig.Key.Title))
 		}
 		if sig.Key.UsageType != "" {
+			//gitlab:allow-unescaped sig.Key.UsageType: the key usage GitLab records, one of auth, signing or auth_and_signing.
 			fmt.Fprintf(&b, "- **Usage**: %s\n", sig.Key.UsageType)
 		}
 	default:
-		fmt.Fprintf(&b, "- **Key User**: %s <%s>\n", sig.KeyUserName, sig.KeyUserEmail)
+		// Both come out of the GPG key's user ID packet, which is whatever the
+		// key's owner typed when they generated it.
+		fmt.Fprintf(&b, "- **Key User**: %s <%s>\n",
+			toolutil.EscapeMdTableCell(sig.KeyUserName), toolutil.EscapeMdTableCell(sig.KeyUserEmail))
 		fmt.Fprintf(&b, "- **Key ID**: %d\n", sig.KeyID)
+		//gitlab:allow-unescaped sig.KeyPrimaryKeyID: a GPG key id, which is hexadecimal.
 		fmt.Fprintf(&b, "- **Primary Key ID**: %s\n", sig.KeyPrimaryKeyID)
 	}
 	if sig.CommitSource != "" {
+		//gitlab:allow-unescaped sig.CommitSource: where GitLab read the commit from, either gitaly or rugged.
 		fmt.Fprintf(&b, "- **Commit Source**: %s\n", sig.CommitSource)
 	}
 	toolutil.WriteHints(

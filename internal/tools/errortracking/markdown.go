@@ -14,10 +14,11 @@ func FormatSettingsMarkdown(out SettingsOutput) string {
 	fmt.Fprintf(&sb, "- **Active**: %v\n", out.Active)
 	fmt.Fprintf(&sb, "- **Integrated**: %v\n", out.Integrated)
 	if out.ProjectName != "" {
-		fmt.Fprintf(&sb, "- **Project Name**: %s\n", out.ProjectName)
+		fmt.Fprintf(&sb, "- **Project Name**: %s\n", toolutil.EscapeMdTableCell(out.ProjectName))
 	}
 	if out.SentryExternalURL != "" {
-		fmt.Fprintf(&sb, "- **Sentry URL**: %s\n", out.SentryExternalURL)
+		// Both come from the Sentry integration a maintainer configured.
+		fmt.Fprintf(&sb, "- **Sentry URL**: %s\n", toolutil.EscapeMdTableCell(out.SentryExternalURL))
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_list_error_tracking_client_keys` to view client keys")
 	return sb.String()
@@ -44,6 +45,8 @@ func FormatListKeysMarkdown(out ListClientKeysOutput) string {
 func FormatKeyMarkdown(k ClientKeyItem) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Error Tracking Client Key\n\n- **ID**: %d\n- **Active**: %v\n- **Public Key**: %s\n- **Sentry DSN**: %s\n",
+		//gitlab:allow-unescaped k.PublicKey: the client key GitLab generated, hexadecimal digits.
+		//gitlab:allow-unescaped k.SentryDsn: the DSN GitLab composed from the instance URL, that generated key and a numeric project id.
 		k.ID, k.Active, k.PublicKey, k.SentryDsn)
 	toolutil.WriteHints(&b, "Use `gitlab_delete_error_tracking_client_key` to revoke this key")
 	return b.String()

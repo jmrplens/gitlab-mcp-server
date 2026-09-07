@@ -23,7 +23,7 @@ func FormatListPendingMarkdownString(out ListPendingInvitationsOutput) string {
 	fmt.Fprintf(&b, "## Pending Invitations (%d)\n\n", len(out.Invitations))
 	toolutil.WriteListSummary(&b, len(out.Invitations), out.Pagination)
 	for _, inv := range out.Invitations {
-		fmt.Fprintf(&b, "- **%s** (ID: %d), Access Level: %d", inv.InviteEmail, inv.ID, inv.AccessLevel)
+		fmt.Fprintf(&b, "- **%s** (ID: %d), Access Level: %d", toolutil.EscapeMdTableCell(inv.InviteEmail), inv.ID, inv.AccessLevel)
 		if inv.UserName != "" {
 			fmt.Fprintf(&b, ", User: %s", inv.UserName)
 		}
@@ -48,8 +48,10 @@ func FormatInviteResultMarkdownString(out InviteResultOutput) string {
 	fmt.Fprintf(&b, "## Invitation Result\n\n**Status**: %s\n", out.Status)
 	if len(out.Message) > 0 {
 		b.WriteString("\n**Messages**:\n")
+		// GitLab keys these messages by the address that was invited and
+		// answers with its own text about it.
 		for k, v := range out.Message {
-			fmt.Fprintf(&b, "- %s: %s\n", k, v)
+			fmt.Fprintf(&b, "- %s: %s\n", toolutil.EscapeMdTableCell(k), toolutil.EscapeMdTableCell(v))
 		}
 	}
 	toolutil.WriteHints(&b, "Check invitation status or resend if the invite was not received")

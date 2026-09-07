@@ -11,13 +11,14 @@ import (
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Access Token #%d\n\n", out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, out.Name)
+	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.Name))
 	if out.Description != "" {
 		toolutil.WriteDescription(&b, out.Description)
 	}
 	fmt.Fprintf(&b, "- **Active**: %t\n", out.Active)
 	fmt.Fprintf(&b, "- **Revoked**: %t\n", out.Revoked)
 	if len(out.Scopes) > 0 {
+		//gitlab:allow-unescaped strings.Join(out.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
 		fmt.Fprintf(&b, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
 	}
 	if out.AccessLevel > 0 {
@@ -30,6 +31,7 @@ func FormatOutputMarkdown(out Output) string {
 		fmt.Fprintf(&b, "- **Expires**: %s\n", toolutil.FormatTime(out.ExpiresAt))
 	}
 	if out.Token != "" {
+		//gitlab:allow-unescaped out.Token: the secret GitLab generated, which the reader has to copy back verbatim.
 		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
 	}
 	toolutil.WriteHints(

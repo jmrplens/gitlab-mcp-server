@@ -12,13 +12,14 @@ func FormatMarkdown(out ResolveOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Resolved GitLab Project\n\n")
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, out.Name)
-	fmt.Fprintf(&b, toolutil.FmtMdPath, out.PathWithNamespace)
-	fmt.Fprintf(&b, toolutil.FmtMdURL, out.WebURL)
-	fmt.Fprintf(&b, "- **Default Branch**: %s\n", out.DefaultBranch)
+	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.Name))
+	fmt.Fprintf(&b, toolutil.FmtMdPath, toolutil.EscapeMdTableCell(out.PathWithNamespace))
+	toolutil.WriteMdURL(&b, out.WebURL)
+	fmt.Fprintf(&b, "- **Default Branch**: %s\n", toolutil.EscapeMdTableCell(out.DefaultBranch))
 	if out.Description != "" {
 		toolutil.WriteDescription(&b, out.Description)
 	}
+	//gitlab:allow-unescaped out.Visibility: a project visibility, a gl.VisibilityValue GitLab fills with private, internal or public.
 	fmt.Fprintf(&b, toolutil.FmtMdVisibility, out.Visibility)
 	fmt.Fprintf(&b, "\nUse `project_id: %d` or `project_id: \"%s\"` for subsequent operations.\n", out.ID, out.PathWithNamespace)
 	toolutil.WriteHints(

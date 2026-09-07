@@ -7,6 +7,29 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// The cells that hold text somebody typed are escaped where they are written:
+// a migration's source URL, an entity's source and destination paths, and a
+// failure's exception message. The values below are declared instead, because
+// none of them can carry a pipe, a newline or a '<'.
+//
+// Two kinds are represented. The statuses and the two type fields are enums the
+// destination instance writes. The four failure fields are derived from the
+// importer's own Ruby code rather than from anything the source instance sent:
+// the pipeline and exception class names are constant paths, the step is the
+// pipeline stage that raised, and the relation is the pipeline class name with
+// its namespace and suffix removed.
+//
+//gitlab:allow-unescaped out.Status: a migration status GitLab writes, one of created, started, finished, timeout, failed or canceled.
+//gitlab:allow-unescaped out.SourceType: a migration source type GitLab writes, which is "gitlab".
+//gitlab:allow-unescaped m.Status: a migration status GitLab writes, one of created, started, finished, timeout, failed or canceled.
+//gitlab:allow-unescaped m.SourceType: a migration source type GitLab writes, which is "gitlab".
+//gitlab:allow-unescaped e.Status: an entity status GitLab writes, the same set a migration's status comes from.
+//gitlab:allow-unescaped e.EntityType: an entity type GitLab writes, either "group" or "project".
+//gitlab:allow-unescaped f.Relation: the importer relation the failure belongs to, derived from the pipeline class name.
+//gitlab:allow-unescaped f.Step: the importer step that raised, one of extractor, transformer or loader.
+//gitlab:allow-unescaped f.PipelineClass: the importer pipeline's Ruby class name, a constant path.
+//gitlab:allow-unescaped f.ExceptionClass: the raised exception's Ruby class name, a constant path.
+
 // FormatStartMigrationMarkdown formats a start migration result as markdown.
 func FormatStartMigrationMarkdown(out MigrationOutput) string {
 	var sb strings.Builder

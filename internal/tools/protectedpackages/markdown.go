@@ -14,12 +14,16 @@ func FormatOutputMarkdown(r Output) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Package Protection Rule #%d\n\n", r.ID)
-	fmt.Fprintf(&b, "- **Pattern**: `%s`\n", r.PackageNamePattern)
+	// The pattern is free text this server's own create action passes through.
+	fmt.Fprintf(&b, "- **Pattern**: `%s`\n", toolutil.EscapeMdTableCell(r.PackageNamePattern))
+	//gitlab:allow-unescaped r.PackageType: the registry format GitLab stores the rule for, one of its own enum values (npm, pypi, maven and the rest).
 	fmt.Fprintf(&b, "- **Package Type**: %s\n", r.PackageType)
 	if r.MinimumAccessLevelForPush != "" {
+		//gitlab:allow-unescaped r.MinimumAccessLevelForPush: a protection rule access level GitLab picks from a fixed set (maintainer, owner, admin).
 		fmt.Fprintf(&b, "- **Min Push Level**: %s\n", r.MinimumAccessLevelForPush)
 	}
 	if r.MinimumAccessLevelForDelete != "" {
+		//gitlab:allow-unescaped r.MinimumAccessLevelForDelete: a protection rule access level GitLab picks from a fixed set (maintainer, owner, admin).
 		fmt.Fprintf(&b, "- **Min Delete Level**: %s\n", r.MinimumAccessLevelForDelete)
 	}
 	toolutil.WriteHints(

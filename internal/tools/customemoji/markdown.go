@@ -51,6 +51,7 @@ func FormatCreateMarkdown(out CreateOutput) string {
 	sb.WriteString(toolutil.EmojiSuccess + " Custom emoji created.\n\n")
 	sb.WriteString("| Field | Value |\n")
 	sb.WriteString("|-------|-------|\n")
+	//gitlab:allow-unescaped out.Emoji.ID: a GraphQL global id GitLab mints, gid://gitlab/CustomEmoji/ and a number.
 	fmt.Fprintf(&sb, "| ID | `%s` |\n", out.Emoji.ID)
 	fmt.Fprintf(&sb, "| Name | :%s: |\n", toolutil.EscapeMdTableCell(out.Emoji.Name))
 	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.MdTitleLink(out.Emoji.Name, out.Emoji.URL))

@@ -14,14 +14,15 @@ func FormatPagesMarkdown(out Output) string {
 	var sb strings.Builder
 	sb.WriteString("## Pages Settings\n\n")
 	sb.WriteString("| Property | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| URL | %s |\n", out.URL)
+	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.EscapeMdTableCell(out.URL))
 	fmt.Fprintf(&sb, "| Unique Domain | %v |\n", out.IsUniqueDomainEnabled)
 	fmt.Fprintf(&sb, "| Force HTTPS | %v |\n", out.ForceHTTPS)
-	fmt.Fprintf(&sb, "| Primary Domain | %s |\n", out.PrimaryDomain)
+	fmt.Fprintf(&sb, "| Primary Domain | %s |\n", toolutil.EscapeMdTableCell(out.PrimaryDomain))
 	if len(out.Deployments) > 0 {
 		sb.WriteString("\n### Deployments\n\n| URL | Created | Path Prefix | Root Dir |\n|---|---|---|---|\n")
 		for _, d := range out.Deployments {
-			fmt.Fprintf(&sb, "| %s | %s | %s | %s |\n", toolutil.MdTitleLink(d.URL, d.URL), toolutil.FormatTime(d.CreatedAt), d.PathPrefix, d.RootDirectory)
+			fmt.Fprintf(&sb, "| %s | %s | %s | %s |\n", toolutil.MdTitleLink(d.URL, d.URL), toolutil.FormatTime(d.CreatedAt),
+				toolutil.EscapeMdTableCell(d.PathPrefix), toolutil.EscapeMdTableCell(d.RootDirectory))
 		}
 	}
 	toolutil.WriteHints(
@@ -35,17 +36,20 @@ func FormatPagesMarkdown(out Output) string {
 // FormatDomainMarkdown formats a single Pages domain for display.
 func FormatDomainMarkdown(out DomainOutput) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Pages Domain: %s\n\n", out.Domain)
+	fmt.Fprintf(&sb, "## Pages Domain: %s\n\n", toolutil.EscapeMdHeading(out.Domain))
 	sb.WriteString("| Property | Value |\n|---|---|\n")
 	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.MdTitleLink(out.URL, out.URL))
 	fmt.Fprintf(&sb, "| Project | %s |\n", projectDisplay(out.ProjectID))
 	fmt.Fprintf(&sb, "| Verified | %v |\n", out.Verified)
 	fmt.Fprintf(&sb, "| Auto SSL | %v |\n", out.AutoSslEnabled)
 	if out.EnabledUntil != "" {
+		//gitlab:allow-unescaped out.EnabledUntil: a timestamp toDomainOutput formatted itself from a time.Time.
 		fmt.Fprintf(&sb, "| Enabled Until | %s |\n", out.EnabledUntil)
 	}
 	if out.Certificate.Subject != "" {
-		fmt.Fprintf(&sb, "| Cert Subject | %s |\n", out.Certificate.Subject)
+		// The subject is read out of a certificate whoever configured the
+		// domain supplied, so its common name is whatever they put in it.
+		fmt.Fprintf(&sb, "| Cert Subject | %s |\n", toolutil.EscapeMdTableCell(out.Certificate.Subject))
 		fmt.Fprintf(&sb, "| Cert Expired | %v |\n", out.Certificate.Expired)
 	}
 	toolutil.WriteHints(
@@ -64,7 +68,7 @@ func FormatDomainListMarkdown(out ListDomainsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Pages Domains\n\n| Domain | URL | Verified | Auto SSL | Project |\n|---|---|---|---|---|\n")
 	for _, d := range out.Domains {
-		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", d.Domain, toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectID))
+		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", toolutil.EscapeMdTableCell(d.Domain), toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectID))
 	}
 	toolutil.WriteHints(
 		&sb,
@@ -82,7 +86,7 @@ func FormatAllDomainsMarkdown(out ListAllDomainsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## All Pages Domains\n\n| Domain | URL | Verified | Auto SSL | Project |\n|---|---|---|---|---|\n")
 	for _, d := range out.Domains {
-		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", d.Domain, toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectID))
+		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", toolutil.EscapeMdTableCell(d.Domain), toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectID))
 	}
 	toolutil.WriteHints(
 		&sb,

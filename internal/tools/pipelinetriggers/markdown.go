@@ -71,8 +71,10 @@ func FormatRunOutputMarkdown(out RunOutput) string {
 	b.WriteString("## Pipeline Triggered\n\n")
 	b.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&b, "| Pipeline ID | %d |\n", out.ID)
+	//gitlab:allow-unescaped out.SHA: a commit SHA, hexadecimal by construction.
 	fmt.Fprintf(&b, "| SHA | %s |\n", out.SHA)
 	fmt.Fprintf(&b, "| Ref | %s |\n", toolutil.EscapeMdTableCell(out.Ref))
+	//gitlab:allow-unescaped out.Status: a pipeline status, one of GitLab's fixed set (created, running, success, failed and the rest).
 	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
 	if out.WebURL != "" {
 		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("Pipeline #%d", out.ID), out.WebURL))

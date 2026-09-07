@@ -69,10 +69,24 @@ function inlineLinks(line) {
 	const targets = [];
 	const pattern = /!?\[[^\]]*\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
 	let match;
-	while ((match = pattern.exec(line)) !== null) {
+	const prose = withoutCodeSpans(line);
+	while ((match = pattern.exec(prose)) !== null) {
 		targets.push(match[1]);
 	}
 	return targets;
+}
+
+// withoutCodeSpans blanks the contents of every backtick span, keeping the line
+// the same length so a reported column still points at the right place.
+//
+// Text inside a code span is quoted, not linked: prose about a formatter that
+// must not hand-write `[%s](%s)` was read as a link to a file named `%s` and
+// failed this check, which is the checker being wrong about Markdown rather
+// than the sentence being wrong about the code.
+function withoutCodeSpans(line) {
+	return line.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, (span, fence, body) =>
+		fence + " ".repeat(body.length) + fence,
+	);
 }
 
 function checkTarget(file, line, rawTarget) {

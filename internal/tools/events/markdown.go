@@ -19,12 +19,12 @@ func formatTarget(targetType string, targetIID int64, targetTitle, targetURL str
 	if targetType == "" {
 		return ""
 	}
-	label := fmt.Sprintf("%s #%d", targetType, targetIID)
-	if targetURL != "" {
-		label = fmt.Sprintf("[%s](%s)", label, targetURL)
-	}
+	// The target type is a class name GitLab writes and the IID an integer, so
+	// the label is safe; the URL and the title are not, and MdTitleLink is what
+	// escapes both halves of the link they end up in.
+	label := toolutil.MdTitleLink(fmt.Sprintf("%s #%d", targetType, targetIID), targetURL)
 	if targetTitle != "" {
-		label += fmt.Sprintf(" %q", targetTitle)
+		label += fmt.Sprintf(" %q", toolutil.EscapeMdTableCell(targetTitle))
 	}
 	return " " + label
 }
@@ -69,7 +69,8 @@ func formatEventListMarkdown(title, emptyText string, events []markdownEvent, pa
 	for _, e := range events {
 		target := formatTarget(e.TargetType, e.TargetIID, e.TargetTitle, e.TargetURL)
 		author := formatAuthor(e.AuthorUsername)
-		fmt.Fprintf(&b, "- **%s**%s by %s, %s\n", e.ActionName, target, author, toolutil.FormatTime(e.CreatedAt))
+		//gitlab:allow-unescaped e.ActionName: a contribution-event action GitLab writes from its own vocabulary (opened, closed, pushed to and the rest).
+		fmt.Fprintf(&b, "- **%s**%s by %s, %s\n", e.ActionName, target, toolutil.EscapeMdTableCell(author), toolutil.FormatTime(e.CreatedAt))
 	}
 	b.WriteString(toolutil.FormatPagination(pagination))
 	toolutil.WriteHints(

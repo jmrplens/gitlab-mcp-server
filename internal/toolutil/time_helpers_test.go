@@ -43,13 +43,31 @@ func TestFormatTime_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatTime_InvalidFormat verifies that FormatTime returns the original
-// string verbatim when it cannot be parsed as RFC 3339.
+// TestFormatTime_InvalidFormat verifies that FormatTime returns the string it
+// was given when it cannot be parsed as a timestamp, unchanged for a value
+// that renders as itself.
 func TestFormatTime_InvalidFormat(t *testing.T) {
 	input := "not-a-date"
 	got := FormatTime(input)
 	if got != input {
 		t.Errorf("FormatTime(%q) = %q, want original input", input, got)
+	}
+}
+
+// TestFormatTime_InvalidFormat_ContainsTheValue verifies that a value reaching
+// the fallback cannot change the shape of the Markdown it is written into.
+//
+// Only a value that is not a timestamp gets this far, so the fallback is the
+// one branch of this function that can be handed text somebody wrote. Every
+// caller writes the result into a table cell or a list item, and the pipe, the
+// newline and the '<' each end or reshape one.
+func TestFormatTime_InvalidFormat_ContainsTheValue(t *testing.T) {
+	got := FormatTime("a | b\nc <img src=x>")
+	if strings.ContainsAny(got, "|\n<") {
+		t.Errorf("FormatTime() = %q, which still carries a pipe, a newline or a '<'", got)
+	}
+	if !strings.Contains(got, "&#124;") || !strings.Contains(got, "&lt;") {
+		t.Errorf("FormatTime() = %q, want the pipe and the angle bracket as entities", got)
 	}
 }
 

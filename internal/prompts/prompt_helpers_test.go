@@ -1046,8 +1046,13 @@ func TestWriteFullPushRulesSection(t *testing.T) {
 		if !strings.Contains(out, "Prevent secrets") {
 			t.Errorf("expected push rule rows, got: %s", out)
 		}
-		if !strings.Contains(out, "^(feat|fix):") {
+		// The rule reaches the reader with its alternation pipe encoded, since
+		// a raw one would end the cell it is written into.
+		if !strings.Contains(out, "^(feat&#124;fix):") {
 			t.Errorf("expected commit regex, got: %s", out)
+		}
+		if strings.Contains(out, "^(feat|fix):") {
+			t.Errorf("commit regex reached the row with a raw pipe, got: %s", out)
 		}
 	})
 }

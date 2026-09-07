@@ -35,7 +35,9 @@ func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string 
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s: %s\n\n", opts.DetailTitle, EscapeMdHeading(label.Name))
 	fmt.Fprintf(&b, FmtMdID, label.ID)
-	fmt.Fprintf(&b, "- **Color**: %s\n", label.Color)
+	// Escaped rather than declared, because this file's own list table escapes
+	// the same field, and one value should not carry two answers.
+	fmt.Fprintf(&b, "- **Color**: %s\n", EscapeMdTableCell(label.Color))
 	if label.Description != "" {
 		if opts.EscapeDescription {
 			fmt.Fprintf(&b, FmtMdDescription, EscapeMdTableCell(label.Description))
@@ -59,6 +61,7 @@ func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string 
 // FormatLabelListMarkdown renders project or group labels as a paginated table.
 func FormatLabelListMarkdown(labels []LabelMarkdown, pagination PaginationOutput, opts LabelMarkdownOptions) string {
 	var b strings.Builder
+	//gitlab:allow-unescaped opts.ListTitle: the section heading the labels and grouplabels packages supply as a constant, never a value read from GitLab.
 	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.ListTitle, pagination.TotalItems)
 	WriteListSummary(&b, len(labels), pagination)
 	if len(labels) == 0 {

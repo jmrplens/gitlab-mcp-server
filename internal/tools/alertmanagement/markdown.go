@@ -32,9 +32,10 @@ func FormatListMarkdown(out ListMetricImagesOutput) string {
 // FormatImageMarkdown formats a single metric image as markdown.
 func FormatImageMarkdown(img MetricImageItem) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Metric Image\n\n- **ID**: %d\n- **Filename**: %s\n", img.ID, img.Filename)
-	fmt.Fprintf(&b, toolutil.FmtMdURL, img.URL)
-	fmt.Fprintf(&b, "- **URL Text**: %s\n", img.URLText)
+	// Both are chosen by whoever uploaded the image.
+	fmt.Fprintf(&b, "## Metric Image\n\n- **ID**: %d\n- **Filename**: %s\n", img.ID, toolutil.EscapeMdTableCell(img.Filename))
+	toolutil.WriteMdURL(&b, img.URL)
+	fmt.Fprintf(&b, "- **URL Text**: %s\n", toolutil.EscapeMdTableCell(img.URLText))
 	toolutil.WriteHints(
 		&b,
 		toolutil.HintPreserveLinks,

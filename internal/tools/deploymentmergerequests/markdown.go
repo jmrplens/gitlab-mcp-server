@@ -27,10 +27,11 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 		fmt.Fprintf(&sb, "| !%d | %s | %s | %s | %s -> %s |\n",
 			mr.IID,
 			toolutil.MdTitleLink(mr.Title, mr.WebURL),
+			//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
 			mr.State,
-			author,
-			mr.SourceBranch,
-			mr.TargetBranch)
+			toolutil.EscapeMdTableCell(author),
+			toolutil.EscapeMdTableCell(mr.SourceBranch),
+			toolutil.EscapeMdTableCell(mr.TargetBranch))
 	}
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks, "Use `gitlab_mr_get` to view full MR details")
 	return toolutil.ToolResultWithMarkdown(sb.String())

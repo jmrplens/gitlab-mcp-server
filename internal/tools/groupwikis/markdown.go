@@ -11,10 +11,11 @@ import (
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Wiki: %s\n\n", toolutil.EscapeMdHeading(out.Title))
-	fmt.Fprintf(&b, "- **Slug**: %s\n", out.Slug)
+	fmt.Fprintf(&b, "- **Slug**: %s\n", toolutil.EscapeMdTableCell(out.Slug))
+	//gitlab:allow-unescaped out.Format: a wiki format, a gl.WikiFormatValue GitLab picks from a fixed set (markdown, rdoc, asciidoc, org).
 	fmt.Fprintf(&b, "- **Format**: %s\n", out.Format)
 	if out.Encoding != "" {
-		fmt.Fprintf(&b, "- **Encoding**: %s\n", out.Encoding)
+		fmt.Fprintf(&b, "- **Encoding**: %s\n", toolutil.EscapeMdTableCell(out.Encoding))
 	}
 	if out.Content != "" {
 		fmt.Fprintf(&b, "\n### Content\n\n%s\n", out.Content)
@@ -41,6 +42,7 @@ func FormatListMarkdown(out ListOutput) string {
 			&b, "| %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(w.Title),
 			toolutil.EscapeMdTableCell(w.Slug),
+			//gitlab:allow-unescaped w.Format: a wiki format, a gl.WikiFormatValue GitLab picks from a fixed set (markdown, rdoc, asciidoc, org).
 			w.Format,
 		)
 	}

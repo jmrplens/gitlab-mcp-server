@@ -20,6 +20,7 @@ import (
 // at INFO level instead of ERROR.
 func NotFoundResult(resource, identifier string, hints ...string) *mcp.CallToolResult {
 	var b strings.Builder
+	//gitlab:allow-unescaped resource: the resource label the calling formatter passes as a constant, "User" or "Project Badge" rather than anything read from GitLab.
 	fmt.Fprintf(&b, "## %s %s Not Found\n\n", EmojiQuestion, resource)
 	fmt.Fprintf(&b, "The %s **%s** does not exist or is not accessible with your current permissions.\n\n", strings.ToLower(resource), identifier)
 	WriteHints(&b, hints...)

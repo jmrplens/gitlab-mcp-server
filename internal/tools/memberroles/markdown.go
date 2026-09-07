@@ -14,9 +14,11 @@ func FormatOutputMarkdown(o Output) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Member Role #%d: %s\n\n", o.ID, o.Name)
+	// A custom member role's name and description are typed by the group owner
+	// who created it.
+	fmt.Fprintf(&b, "## Member Role #%d: %s\n\n", o.ID, toolutil.EscapeMdHeading(o.Name))
 	if o.Description != "" {
-		fmt.Fprintf(&b, "- **Description**: %s\n", o.Description)
+		fmt.Fprintf(&b, "- **Description**: %s\n", toolutil.EscapeMdTableCell(o.Description))
 	}
 	if o.GroupID != 0 {
 		fmt.Fprintf(&b, "- **Group ID**: %d\n", o.GroupID)

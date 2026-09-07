@@ -166,7 +166,7 @@ func handleSummarizeMRChanges(ctx context.Context, client *gitlabclient.Client, 
 
 	var summary []string
 	for _, c := range changes {
-		line := fmt.Sprintf("- %s -> %s (%s)", c.OldPath, c.NewPath, changeType(c))
+		line := fmt.Sprintf("- %s -> %s (%s)", mdInline(c.OldPath), mdInline(c.NewPath), changeType(c))
 		summary = append(summary, line)
 	}
 	msg := "Changed files:\n" + strings.Join(summary, "\n")
@@ -337,7 +337,8 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 
 	var failed, passed, other []string
 	for _, j := range jobs {
-		line := fmt.Sprintf("- **%s** (%s): %s", j.Name, j.Stage, j.Status)
+		//gitlab:allow-unescaped j.Status: a job status GitLab picks from a fixed set (created, running, success, failed and the rest).
+		line := fmt.Sprintf("- **%s** (%s): %s", mdInline(j.Name), mdInline(j.Stage), j.Status)
 		if j.FailureReason != "" {
 			line += ", reason: " + j.FailureReason
 		}
@@ -411,7 +412,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 
 	fmt.Fprintf(&b, "## Changed Files (%d)\n", len(diffs))
 	for _, d := range diffs {
-		fmt.Fprintf(&b, fmtListItem, d.NewPath, changeType(d))
+		fmt.Fprintf(&b, fmtListItem, mdInline(d.NewPath), changeType(d))
 	}
 
 	authorName := ""
@@ -419,6 +420,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 		authorName = mr.Author.Username
 	}
 
+	//gitlab:allow-unescaped authorName: mr.Author.Username, a GitLab namespace path, which the instance holds to letters, digits, underscore, dash and dot.
 	fmt.Fprintf(&b, "\n## Project Members (excluding author: %s)\n", authorName)
 	for _, m := range members {
 		if m.Username == authorName || m.State != "active" {
@@ -480,6 +482,7 @@ func handleGenerateReleaseNotes(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "## Commits (%d)\n\n", len(comparison.Commits))
 	for _, c := range comparison.Commits {
 		title, _, _ := strings.Cut(c.Title, "\n")
+		//gitlab:allow-unescaped shortSHA(c.ID): the first characters of a commit SHA, which is hexadecimal.
 		fmt.Fprintf(&b, "- %s: %s (%s)\n", shortSHA(c.ID), mdInline(title), mdInline(c.AuthorName))
 	}
 
@@ -633,6 +636,7 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 		age := time.Since(*mr.CreatedAt).Hours() / 24
 		fmt.Fprintf(&b, "## !%d: %s\n", mr.IID, mdHeading(mr.Title))
 		fmt.Fprintf(&b, "- **Author**: %s | **Branch**: %s -> %s\n", mdInline(author), mdInline(mr.SourceBranch), mdInline(mr.TargetBranch))
+		//gitlab:allow-unescaped mr.DetailedMergeStatus: a merge status GitLab computes from a fixed set (mergeable, ci_must_pass, conflict and the rest).
 		fmt.Fprintf(&b, "- **Age**: %.0f days | **Status**: %s\n", age, mr.DetailedMergeStatus)
 		if mr.Description != "" {
 			desc := mr.Description
@@ -697,8 +701,9 @@ func writePipelineSection(ctx context.Context, b *strings.Builder, client *gitla
 		return
 	}
 	fmt.Fprintf(b, "## Latest Pipeline: %s\n", mdHeading(strings.ToUpper(pipeline.Status)))
-	fmt.Fprintf(b, "- **Ref**: %s | **SHA**: %s\n", pipeline.Ref, shortSHA(pipeline.SHA))
-	fmt.Fprintf(b, "- **URL**: %s\n\n", pipeline.WebURL)
+	//gitlab:allow-unescaped shortSHA(pipeline.SHA): the first characters of a commit SHA, which is hexadecimal.
+	fmt.Fprintf(b, "- **Ref**: %s | **SHA**: %s\n", mdInline(pipeline.Ref), shortSHA(pipeline.SHA))
+	fmt.Fprintf(b, "- **URL**: %s\n\n", mdInline(pipeline.WebURL))
 }
 
 // writeOpenMRsSection appends a list of open merge requests to the builder.
@@ -793,6 +798,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	fmt.Fprintf(&b, "## Commits (%d)\n\n", len(comparison.Commits))
 	for _, c := range comparison.Commits {
 		title, _, _ := strings.Cut(c.Title, "\n")
+		//gitlab:allow-unescaped shortSHA(c.ID): the first characters of a commit SHA, which is hexadecimal.
 		fmt.Fprintf(&b, "- %s: %s (%s)\n", shortSHA(c.ID), mdInline(title), mdInline(c.AuthorName))
 	}
 
@@ -807,7 +813,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 		case d.RenamedFile:
 			ct = "renamed"
 		}
-		fmt.Fprintf(&b, fmtListItem, d.NewPath, ct)
+		fmt.Fprintf(&b, fmtListItem, mdInline(d.NewPath), ct)
 	}
 
 	b.WriteString("\nPlease summarize the key differences between these branches.")
@@ -897,7 +903,9 @@ func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *m
 		b.WriteString("No events found in the last 24 hours.\n")
 	}
 	for _, e := range events {
-		fmt.Fprintf(&b, "- %s %s: %s\n", e.ActionName, e.TargetType, e.TargetTitle)
+		//gitlab:allow-unescaped e.ActionName: a contribution-event action GitLab writes from its own vocabulary (opened, closed, pushed to and the rest).
+		//gitlab:allow-unescaped e.TargetType: the Rails class name of the event's target, which GitLab fills with Issue, MergeRequest, Note and the rest.
+		fmt.Fprintf(&b, "- %s %s: %s\n", e.ActionName, e.TargetType, mdInline(e.TargetTitle))
 	}
 
 	// Authored MRs section
@@ -1282,6 +1290,7 @@ func writeDailyActivity(b *strings.Builder, username string, dailyActivity []day
 	b.WriteString("| Date | Events |\n")
 	b.WriteString("|------|--------|\n")
 	for _, da := range dailyActivity {
+		//gitlab:allow-unescaped da.date: a day this package formats itself, as CreatedAt.Format("2006-01-02") in groupEventsByDay.
 		fmt.Fprintf(b, fmtTableCountRow, da.date, da.count)
 	}
 
@@ -1386,7 +1395,7 @@ func handleMRRiskAssessment(ctx context.Context, client *gitlabclient.Client, re
 
 	fmt.Fprintf(&b, "\n## Changed Files\n")
 	for _, d := range diffs {
-		fmt.Fprintf(&b, fmtListItem, d.NewPath, changeType(d))
+		fmt.Fprintf(&b, fmtListItem, mdInline(d.NewPath), changeType(d))
 	}
 
 	b.WriteString("\nBased on the above metrics, provide a risk assessment (LOW / MEDIUM / HIGH / CRITICAL) with justification and recommendations.")

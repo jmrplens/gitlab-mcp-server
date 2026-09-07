@@ -26,7 +26,9 @@ func FormatOutputMarkdown(out Output) string {
 		case c.DeletedFile:
 			status = "deleted"
 		case c.RenamedFile:
-			status = "renamed from " + c.OldPath
+			// The old path is a repository path a committer chose, and git
+			// allows every byte but NUL and the separator inside a component.
+			status = "renamed from " + toolutil.EscapeMdTableCell(c.OldPath)
 		}
 		if c.Diff == "" && !c.DeletedFile {
 			truncated = append(truncated, c.NewPath)
@@ -67,6 +69,10 @@ func FormatDiffVersionsListMarkdown(out DiffVersionsListOutput) string {
 			baseSHA = baseSHA[:8]
 		}
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
+			//gitlab:allow-unescaped v.State: a merge request diff state GitLab records, one of its own fixed set.
+			//gitlab:allow-unescaped short: the head commit SHA, hexadecimal digits git computed, truncated here.
+			//gitlab:allow-unescaped baseSHA: the base commit SHA, hexadecimal digits git computed, truncated here.
+			//gitlab:allow-unescaped v.CreatedAt: a timestamp this package formatted with time.Time.Format as RFC 3339.
 			v.ID, v.State, short, baseSHA, v.CreatedAt)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -78,14 +84,19 @@ func FormatDiffVersionsListMarkdown(out DiffVersionsListOutput) string {
 func FormatDiffVersionGetMarkdown(out DiffVersionOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Diff Version %d\n\n", out.ID)
+	//gitlab:allow-unescaped out.State: a merge request diff state GitLab records, one of its own fixed set.
 	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
+	//gitlab:allow-unescaped out.HeadCommitSHA: a commit SHA, hexadecimal digits git computed.
 	fmt.Fprintf(&b, "- **Head SHA**: %s\n", out.HeadCommitSHA)
+	//gitlab:allow-unescaped out.BaseCommitSHA: a commit SHA, hexadecimal digits git computed.
 	fmt.Fprintf(&b, "- **Base SHA**: %s\n", out.BaseCommitSHA)
+	//gitlab:allow-unescaped out.StartCommitSHA: a commit SHA, hexadecimal digits git computed.
 	fmt.Fprintf(&b, "- **Start SHA**: %s\n", out.StartCommitSHA)
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
 	}
 	if out.RealSize != "" {
+		//gitlab:allow-unescaped out.RealSize: GitLab's own count of the files in the diff, decimal digits with a trailing plus when the diff overflowed.
 		fmt.Fprintf(&b, "- **Real Size**: %s\n", out.RealSize)
 	}
 
@@ -98,6 +109,7 @@ func FormatDiffVersionGetMarkdown(out DiffVersionOutput) string {
 			if short == "" && len(c.ID) > 8 {
 				short = c.ID[:8]
 			}
+			//gitlab:allow-unescaped short: a commit SHA, hexadecimal digits git computed, truncated here.
 			fmt.Fprintf(&b, "| %s | %s | %s |\n",
 				short, toolutil.EscapeMdTableCell(c.AuthorName), toolutil.EscapeMdTableCell(c.Title))
 		}
@@ -115,7 +127,7 @@ func FormatDiffVersionGetMarkdown(out DiffVersionOutput) string {
 			case d.DeletedFile:
 				status = "deleted"
 			case d.RenamedFile:
-				status = "renamed from " + d.OldPath
+				status = "renamed from " + toolutil.EscapeMdTableCell(d.OldPath)
 			}
 			fmt.Fprintf(&b, "| %s | %s |\n",
 				toolutil.EscapeMdTableCell(d.NewPath), status)

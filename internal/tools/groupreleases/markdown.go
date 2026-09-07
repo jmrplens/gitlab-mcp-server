@@ -42,16 +42,17 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListSummary(&b, len(out.Releases), out.Pagination)
 	b.WriteString("| Tag | Name | Released | Author |\n| --- | --- | --- | --- |\n")
 	for _, r := range out.Releases {
-		tag := toolutil.EscapeMdTableCell(r.TagName)
-		if webURL := releaseWebURL(r); webURL != "" {
-			tag = fmt.Sprintf("[%s](%s)", tag, webURL)
-		}
+		// A tag name may hold ']' and both angle brackets, which the cell
+		// escaper leaves alone, so the label of a hand-built link could be
+		// closed from inside it.
+		tag := toolutil.MdTitleLink(r.TagName, releaseWebURL(r))
 		fmt.Fprintf(
 			&b, "| %s | %s | %s | %s |\n",
 			tag,
 			toolutil.EscapeMdTableCell(r.Name),
+			//gitlab:allow-unescaped r.ReleasedAt: a timestamp this package formatted itself from the time client-go parsed.
 			r.ReleasedAt,
-			releaseAuthor(r),
+			toolutil.EscapeMdTableCell(releaseAuthor(r)),
 		)
 	}
 	return b.String()

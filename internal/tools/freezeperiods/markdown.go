@@ -23,7 +23,9 @@ func FormatListMarkdownString(out ListOutput) string {
 	fmt.Fprintf(&b, "## Freeze Periods (%d)\n\n", len(out.FreezePeriods))
 	toolutil.WriteListSummary(&b, len(out.FreezePeriods), out.Pagination)
 	for _, fp := range out.FreezePeriods {
-		fmt.Fprintf(&b, "- **ID %d**: start=`%s` end=`%s` tz=%s\n", fp.ID, fp.FreezeStart, fp.FreezeEnd, fp.CronTimezone)
+		fmt.Fprintf(&b, "- **ID %d**: start=`%s` end=`%s` tz=%s\n", fp.ID,
+			toolutil.EscapeMdTableCell(fp.FreezeStart), toolutil.EscapeMdTableCell(fp.FreezeEnd),
+			toolutil.EscapeMdTableCell(fp.CronTimezone))
 	}
 	b.WriteString(toolutil.FormatPagination(out.Pagination))
 	toolutil.WriteHints(&b, "Use `gitlab_get_freeze_period` to view details of a specific freeze period")
@@ -40,10 +42,12 @@ func FormatMarkdownString(out Output) string {
 	var b strings.Builder
 	b.WriteString("## Freeze Period\n\n")
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, "- **Start**: `%s`\n", out.FreezeStart)
-	fmt.Fprintf(&b, "- **End**: `%s`\n", out.FreezeEnd)
+	// A freeze window is two cron expressions and a timezone a maintainer
+	// types, and GitLab validates only that the cron parses.
+	fmt.Fprintf(&b, "- **Start**: `%s`\n", toolutil.EscapeMdTableCell(out.FreezeStart))
+	fmt.Fprintf(&b, "- **End**: `%s`\n", toolutil.EscapeMdTableCell(out.FreezeEnd))
 	if out.CronTimezone != "" {
-		fmt.Fprintf(&b, "- **Timezone**: %s\n", out.CronTimezone)
+		fmt.Fprintf(&b, "- **Timezone**: %s\n", toolutil.EscapeMdTableCell(out.CronTimezone))
 	}
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))

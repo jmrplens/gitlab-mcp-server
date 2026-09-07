@@ -15,8 +15,9 @@ func FormatOutputMarkdown(o Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Enterprise User: %s\n\n", toolutil.EscapeMdHeading(o.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdUsername, o.Username)
-	fmt.Fprintf(&b, toolutil.FmtMdEmail, o.Email)
+	fmt.Fprintf(&b, toolutil.FmtMdUsername, toolutil.EscapeMdTableCell(o.Username))
+	fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(o.Email))
+	//gitlab:allow-unescaped o.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
 	fmt.Fprintf(&b, toolutil.FmtMdState, o.State)
 	fmt.Fprintf(&b, "- **Admin**: %v\n", o.IsAdmin)
 	fmt.Fprintf(&b, "- **2FA Enabled**: %v\n", o.TwoFactorEnabled)
@@ -24,9 +25,10 @@ func FormatOutputMarkdown(o Output) string {
 	fmt.Fprintf(&b, "- **Locked**: %v\n", o.Locked)
 	fmt.Fprintf(&b, "- **Bot**: %v\n", o.Bot)
 	if o.WebURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, o.WebURL)
+		toolutil.WriteMdURL(&b, o.WebURL)
 	}
 	if o.CreatedAt != "" {
+		//gitlab:allow-unescaped o.CreatedAt: a timestamp this package formatted itself from the time client-go parsed.
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, o.CreatedAt)
 	}
 	toolutil.WriteHints(

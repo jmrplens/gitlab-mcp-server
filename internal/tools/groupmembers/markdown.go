@@ -17,6 +17,7 @@ func FormatMemberMarkdown(out Output) string {
 	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
 	fmt.Fprintf(&b, "| Username | %s |\n", toolutil.EscapeMdTableCell(out.Username))
 	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
+	//gitlab:allow-unescaped out.State: a membership state GitLab picks from a fixed set (active, awaiting and the rest).
 	fmt.Fprintf(&b, "| State | %s |\n", out.State)
 	fmt.Fprintf(&b, "| Access Level | %s (%d) |\n", toolutil.AccessLevelDescription(gl.AccessLevelValue(out.AccessLevel)), out.AccessLevel)
 	if out.MemberRole != nil {
@@ -77,6 +78,7 @@ func FormatBillableMembersMarkdown(out BillableMembersOutput) string {
 			&b, "| %s | %s | %s | %s | %t | %s |\n",
 			username,
 			toolutil.EscapeMdTableCell(m.Name),
+			//gitlab:allow-unescaped m.State: a membership state GitLab picks from a fixed set (active, awaiting and the rest).
 			m.State,
 			toolutil.EscapeMdTableCell(m.MembershipType),
 			m.Removable,

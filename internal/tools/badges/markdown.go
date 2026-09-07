@@ -34,6 +34,7 @@ func FormatBadgeListMarkdown(badges []BadgeItem, title string, pagination toolut
 			toolutil.EscapeMdTableCell(b.Name),
 			toolutil.EscapeMdTableCell(b.LinkURL),
 			toolutil.EscapeMdTableCell(b.ImageURL),
+			//gitlab:allow-unescaped b.Kind: a badge kind GitLab picks from a fixed set (project, group).
 			b.Kind)
 	}
 	toolutil.WritePagination(&sb, pagination)
@@ -44,16 +45,19 @@ func FormatBadgeListMarkdown(badges []BadgeItem, title string, pagination toolut
 // FormatBadgeMarkdown formats a single badge.
 func FormatBadgeMarkdown(b BadgeItem) *mcp.CallToolResult {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Badge: %s (ID: %d)\n\n", b.Name, b.ID)
-	fmt.Fprintf(&sb, "- **Link URL**: %s\n", b.LinkURL)
-	fmt.Fprintf(&sb, "- **Image URL**: %s\n", b.ImageURL)
+	fmt.Fprintf(&sb, "## Badge: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(b.Name), b.ID)
+	// Every URL here is one a maintainer typed into the badge, placeholders
+	// included, and GitLab renders the last two by substituting into it.
+	fmt.Fprintf(&sb, "- **Link URL**: %s\n", toolutil.EscapeMdTableCell(b.LinkURL))
+	fmt.Fprintf(&sb, "- **Image URL**: %s\n", toolutil.EscapeMdTableCell(b.ImageURL))
 	if b.RenderedLinkURL != "" {
-		fmt.Fprintf(&sb, "- **Rendered Link**: %s\n", b.RenderedLinkURL)
+		fmt.Fprintf(&sb, "- **Rendered Link**: %s\n", toolutil.EscapeMdTableCell(b.RenderedLinkURL))
 	}
 	if b.RenderedImageURL != "" {
-		fmt.Fprintf(&sb, "- **Rendered Image**: %s\n", b.RenderedImageURL)
+		fmt.Fprintf(&sb, "- **Rendered Image**: %s\n", toolutil.EscapeMdTableCell(b.RenderedImageURL))
 	}
 	if b.Kind != "" {
+		//gitlab:allow-unescaped b.Kind: a badge kind GitLab picks from a fixed set (project, group).
 		fmt.Fprintf(&sb, "- **Kind**: %s\n", b.Kind)
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_edit_project_badge` (or `gitlab_edit_group_badge`) to modify this badge")

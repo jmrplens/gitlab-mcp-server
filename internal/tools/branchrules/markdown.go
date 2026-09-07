@@ -50,7 +50,8 @@ func FormatListMarkdown(out ListOutput) string {
 	// Render detailed sections for rules with approval rules or external status checks.
 	for _, r := range out.Rules {
 		if len(r.ApprovalRules) > 0 {
-			fmt.Fprintf(&sb, "### Approval Rules for `%s`\n\n", r.Name)
+			// A branch rule's name is the branch pattern a maintainer typed.
+			fmt.Fprintf(&sb, "### Approval Rules for `%s`\n\n", toolutil.EscapeMdHeading(r.Name))
 			sb.WriteString("| Name | Approvals Required | Type |\n")
 			sb.WriteString("|------|--------------------|------|\n")
 			for _, ar := range r.ApprovalRules {
@@ -64,7 +65,7 @@ func FormatListMarkdown(out ListOutput) string {
 			sb.WriteString("\n")
 		}
 		if len(r.ExternalStatusChecks) > 0 {
-			fmt.Fprintf(&sb, "### External Status Checks for `%s`\n\n", r.Name)
+			fmt.Fprintf(&sb, "### External Status Checks for `%s`\n\n", toolutil.EscapeMdHeading(r.Name))
 			sb.WriteString("| Name | URL |\n")
 			sb.WriteString("|------|-----|\n")
 			for _, esc := range r.ExternalStatusChecks {

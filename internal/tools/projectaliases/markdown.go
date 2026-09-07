@@ -10,11 +10,12 @@ import (
 // FormatOutputMarkdown formats a single project alias as Markdown.
 func FormatOutputMarkdown(out Output) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Project Alias: %s\n\n", out.Name)
+	// An alias name is the string the caller of the create action supplied.
+	fmt.Fprintf(&sb, "## Project Alias: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	fmt.Fprintf(&sb, "| Field | Value |\n")
 	fmt.Fprintf(&sb, "|-------|-------|\n")
 	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&sb, "| Name | `%s` |\n", out.Name)
+	fmt.Fprintf(&sb, "| Name | `%s` |\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&sb, "| Project ID | %d |\n", out.ProjectID)
 	toolutil.WriteHints(
 		&sb,
@@ -36,7 +37,7 @@ func FormatListMarkdown(out ListOutput) string {
 	fmt.Fprintf(&sb, "| ID | Name | Project ID |\n")
 	fmt.Fprintf(&sb, "|----|------|------------|\n")
 	for _, a := range out.Aliases {
-		fmt.Fprintf(&sb, "| %d | `%s` | %d |\n", a.ID, a.Name, a.ProjectID)
+		fmt.Fprintf(&sb, "| %d | `%s` | %d |\n", a.ID, toolutil.EscapeMdTableCell(a.Name), a.ProjectID)
 	}
 	return sb.String()
 }

@@ -406,9 +406,9 @@ func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Service Account: %s\n\n", toolutil.EscapeMdHeading(out.Username))
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, out.Name)
-	fmt.Fprintf(&b, toolutil.FmtMdUsername, out.Username)
-	fmt.Fprintf(&b, toolutil.FmtMdEmail, out.Email)
+	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.Name))
+	fmt.Fprintf(&b, toolutil.FmtMdUsername, toolutil.EscapeMdTableCell(out.Username))
+	fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(out.Email))
 	toolutil.WriteHints(
 		&b,
 		"Use gitlab_group_service_account_update to modify this account",
@@ -443,17 +443,21 @@ func FormatPATOutputMarkdown(out PATOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## PAT: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, out.Name)
+	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&b, "- **Active**: %t\n", out.Active)
 	fmt.Fprintf(&b, "- **Revoked**: %t\n", out.Revoked)
+	//gitlab:allow-unescaped strings.Join(out.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
 	fmt.Fprintf(&b, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
 	if out.CreatedAt != "" {
+		//gitlab:allow-unescaped out.CreatedAt: a timestamp toPATOutput formatted itself, with time.Time.Format.
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, out.CreatedAt)
 	}
 	if out.ExpiresAt != "" {
+		//gitlab:allow-unescaped out.ExpiresAt: a date toPATOutput formatted itself, on the ISO date layout.
 		fmt.Fprintf(&b, "- **Expires**: %s\n", out.ExpiresAt)
 	}
 	if out.Token != "" {
+		//gitlab:allow-unescaped out.Token: the secret GitLab generated, which the reader has to copy back verbatim.
 		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
 	}
 	toolutil.WriteHints(
@@ -479,6 +483,7 @@ func FormatListPATMarkdown(out ListPATOutput) string {
 			toolutil.EscapeMdTableCell(t.Name),
 			t.Active,
 			t.Revoked,
+			//gitlab:allow-unescaped strings.Join(t.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
 			strings.Join(t.Scopes, ", "),
 		)
 	}

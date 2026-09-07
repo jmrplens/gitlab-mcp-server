@@ -13,7 +13,8 @@ func FormatUserListMarkdown(out Output) string {
 	fmt.Fprintf(&b, "## Feature Flag User List: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	fmt.Fprintf(&b, "- **ID**: %d (IID: %d)\n", out.ID, out.IID)
 	if out.UserXIDs != "" {
-		fmt.Fprintf(&b, "- **User XIDs**: %s\n", out.UserXIDs)
+		// The external user ids are a comma-separated list a person supplies.
+		fmt.Fprintf(&b, "- **User XIDs**: %s\n", toolutil.EscapeMdTableCell(out.UserXIDs))
 	}
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))

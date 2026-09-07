@@ -21,7 +21,7 @@ func noteAuthorUsername(n NoteOutput) string {
 func FormatNoteMarkdown(n NoteOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Discussion Note #%d\n\n", n.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, noteAuthorUsername(n))
+	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(noteAuthorUsername(n)))
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(n.CreatedAt))
 	fmt.Fprintf(&b, "- **Resolved**: %v\n", n.Resolved)
 	fmt.Fprintf(&b, "\n%s\n", toolutil.WrapGFMBody(n.Body))

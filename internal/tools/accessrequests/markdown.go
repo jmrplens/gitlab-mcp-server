@@ -13,8 +13,9 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&b, "## Access Request #%d\n\n", out.ID)
 	b.WriteString(toolutil.TblFieldValue)
 	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&b, "| Username | %s |\n", out.Username)
-	fmt.Fprintf(&b, "| Name | %s |\n", out.Name)
+	fmt.Fprintf(&b, "| Username | %s |\n", toolutil.EscapeMdTableCell(out.Username))
+	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
+	//gitlab:allow-unescaped out.State: a membership state GitLab picks from a fixed set (active, awaiting, blocked and the rest).
 	fmt.Fprintf(&b, "| State | %s |\n", out.State)
 	fmt.Fprintf(&b, "| Access Level | %d |\n", out.AccessLevel)
 	if out.CreatedAt != "" {
@@ -45,7 +46,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State", "Access Level"))
 	for _, ar := range out.AccessRequests {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d |\n",
-			ar.ID, ar.Username, ar.Name, ar.State, ar.AccessLevel)
+			//gitlab:allow-unescaped ar.State: a membership state GitLab picks from a fixed set (active, awaiting, blocked and the rest).
+			ar.ID, toolutil.EscapeMdTableCell(ar.Username), toolutil.EscapeMdTableCell(ar.Name), ar.State, ar.AccessLevel)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
