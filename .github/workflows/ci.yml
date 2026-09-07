@@ -147,6 +147,16 @@ jobs:
         run: make check-readonly-graphql
       - name: Check the pinned GraphQL schema parses
         run: make check-graphql-schema
+      # The REST twin of the schema pin: the OpenAPI record the shape check
+      # reads, refused when it is truncated, unprovenanced or older than the
+      # same 180-day window. Documented as a gate from the day it was written
+      # and wired nowhere until the cmd/ consolidation study read the table.
+      - name: Check the pinned GitLab API record
+        run: make check-api-shapes
+      # A meta-tool's description is checked against the parameters its routes
+      # take, which is the third party the golden snapshot never was (issue 574).
+      - name: Check every meta-tool description against its routes
+        run: make check-meta-descriptions
       # The test transport judges every document a test sends. This judges the
       # ones no test reaches, which is why it is a gate of its own.
       - name: Check every GraphQL document against the pinned schema

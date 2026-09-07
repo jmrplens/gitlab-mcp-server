@@ -792,7 +792,7 @@ Human report to stdout (per-site `file:line [category] boundary`), summary line,
 #### Make targets
 
 - `make audit-test-goroutines` — writes `plan/test-goroutines-backlog.json`.
-- `make check-test-goroutines` — CI gate; also step [6/8] of `make analyze`.
+- `make check-test-goroutines` — CI gate; also step [7/14] of `make analyze`.
 
 ### audit_test_names
 
@@ -858,7 +858,7 @@ Per-file tallies (`sites`, `fixable`), a summary line, and optionally the JSON w
 #### Make targets
 
 - `make audit-test-subtests` — writes `plan/test-subtests-backlog.json`.
-- `make check-test-subtests` — CI gate; also step [7/9] of `make analyze`.
+- `make check-test-subtests` — CI gate; also step [8/14] of `make analyze`.
 
 ### audit_md_escaping
 
@@ -906,7 +906,7 @@ Findings grouped by package, each naming the file, line, formatter, construct, v
 #### Make targets
 
 - `make audit-md-escaping` — report plus `plan/md-escaping-backlog.json`.
-- `make check-md-escaping` — CI gate; also step [9/9] of `make analyze`.
+- `make check-md-escaping` — CI gate; also step [10/14] of `make analyze`.
 
 ### audit_string_dupes
 
@@ -975,7 +975,7 @@ One line per violation under a `supply-chain audit FAILED (N problems):` header,
 
 #### Make targets
 
-- `make check-supply-chain` — CI gate; also step [8/8] of `make analyze`.
+- `make check-supply-chain` — CI gate; also step [9/14] of `make analyze`.
 
 ### audit_install_buttons
 
