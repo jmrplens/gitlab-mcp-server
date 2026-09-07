@@ -1348,10 +1348,10 @@ func TestMeta_StorageMoves(t *testing.T) {
 // gitlab_security_finding meta-tool.
 // Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
 //
-// Its fixture is a fresh project with no pipeline, so an empty listing is the
-// correct answer and these subtests can only show that the action routes and
-// that its filters are accepted. That is deliberately not enough to catch a
-// refused GraphQL document, which also answers empty and without an error: the
+// Its fixture is a fresh project with no pipeline, so a not-found naming the
+// pipeline is the correct answer and these subtests can only show that the
+// action routes, refuses a pipeline it cannot find, and accepts its filters.
+// That is deliberately not enough to catch a refused GraphQL document: the
 // assertion that the findings really come back lives in
 // [TestMeta_VulnerabilityLifecycle], which owns a pipeline that publishes
 // three CRITICAL SAST findings.
@@ -1364,20 +1364,23 @@ func TestMeta_SecurityFindings(t *testing.T) {
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
+	// The fixture has no pipeline, so the one right answer to pipeline 1 is a
+	// not-found that names it: the action refuses a pipeline it cannot find
+	// rather than answering an empty page a caller would read as no findings.
 	t.Run("Meta/SecurityFinding/List", func(t *testing.T) {
-		out, err := callToolOn[securityfindings.ListOutput](ctx, sess.meta, "gitlab_security_finding", map[string]any{
+		_, err := callToolOn[securityfindings.ListOutput](ctx, sess.meta, "gitlab_security_finding", map[string]any{
 			"action": "list",
 			"params": map[string]any{
 				"project_path": proj.Path,
 				"pipeline_iid": "1",
 			},
 		})
-		requirePremiumFeature(t, err, "security findings")
-		t.Logf("Security findings: %d", len(out.Findings))
+		requireTruef(t, isNotFoundError(err), "security findings of a project with no pipeline: want a not-found naming the pipeline, got %v", err)
+		t.Logf("Security findings for a missing pipeline: %v", err)
 	})
 
 	t.Run("Meta/SecurityFinding/ListFiltered", func(t *testing.T) {
-		out, err := callToolOn[securityfindings.ListOutput](ctx, sess.meta, "gitlab_security_finding", map[string]any{
+		_, err := callToolOn[securityfindings.ListOutput](ctx, sess.meta, "gitlab_security_finding", map[string]any{
 			"action": "list",
 			"params": map[string]any{
 				"project_path": proj.Path,
@@ -1387,8 +1390,8 @@ func TestMeta_SecurityFindings(t *testing.T) {
 				"first":        10,
 			},
 		})
-		requireNoError(t, err, "security findings list with filters")
-		t.Logf("Filtered security findings: %d", len(out.Findings))
+		requireTruef(t, isNotFoundError(err), "filtered security findings of a project with no pipeline: want a not-found naming the pipeline, got %v", err)
+		t.Logf("Filtered security findings for a missing pipeline: %v", err)
 	})
 }
 
