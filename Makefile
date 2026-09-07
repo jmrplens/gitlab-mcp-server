@@ -13,6 +13,7 @@
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live \
+	gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness \
@@ -49,6 +50,13 @@ export GOTOOLCHAIN := $(GO_TOOLCHAIN)
 
 # E2E test report directory (inside dist/, gitignored)
 E2E_REPORT_DIR=dist/e2e-reports
+
+# Where the unit suite records the requests it issues, one shard per test
+# process. A shard is a byproduct of one run and only the merged inventory is
+# committed, so this lives in the gitignored build directory. The path handed
+# to the recorder is absolute because a test binary runs in its own package
+# directory.
+REQUEST_INVENTORY_SHARDS=dist/request-inventory
 
 # GitLab.com Orbit live-test fixtures. All overridable on the command line
 # or via .env. Defaults are designed for the canonical plens1 namespace.
@@ -1314,6 +1322,32 @@ audit-graphql-documents:
 GRAPHQL_LIVE_URL ?= https://gitlab.com/api/graphql
 check-graphql-documents-live:
 	go run ./cmd/audit_graphql_documents/ -live "$(GRAPHQL_LIVE_URL)"
+
+## gen-request-inventory: record every request the unit suite issues and
+## rewrite docs/development/request-inventory.json. The suite run is where the
+## minutes go; the merge is instant. Recording is off unless
+## GITLAB_MCP_TEST_INVENTORY_DIR names an absolute directory, so an ordinary
+## `make test` pays nothing for it.
+gen-request-inventory:
+	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
+	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))
+	GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS)
+	go run ./cmd/gen_request_inventory/
+
+## check-request-inventory: fail when the committed request inventory is not
+## what the suite records now. CI does not run this target: it sets the same
+## variable on the coverage job's suite run and merges those shards, so the
+## gate costs one `go run` rather than a second suite.
+check-request-inventory:
+	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
+	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))
+	GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS)
+	go run ./cmd/gen_request_inventory/ -check
+
+## audit-request-inventory: merge the shards of the last recorded run and name
+## every package the catalog owns actions in that issued no request at all.
+audit-request-inventory:
+	go run ./cmd/gen_request_inventory/ -v -check
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

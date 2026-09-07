@@ -85,6 +85,7 @@ gitlab-mcp-server/
 │   ├── gen_icon_webp/           # Regenerates light/dark WebP icon fallbacks from icons.go (maintainer-only, requires rsvg-convert + cwebp)
 │   ├── gen_lhm_manifest/        # Generates the capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
+│   ├── gen_request_inventory/   # Merges the request shards the unit suite records into docs/development/request-inventory.json, the committed answer to what this server sends GitLab (make gen-request-inventory); -check gates it, -v names the packages the catalog owns actions in that issued nothing
 │   ├── gen_stats/               # Generates README stats section from codebase metrics
 │   ├── gen_testing_docs/        # Generates docs/development/testing/testing.md
 │   └── internal/                # Helpers shared by the commands: apidocs (GitLab API doc fetcher), auditshared, docgen, graphqlintrospect (one introspection and SDL conversion for gen_graphql_schema and the live re-probe), mcpsurface (pinned surface introspection for generators)
@@ -280,6 +281,7 @@ All tests use `httptest` to mock GitLab API responses. Shared helpers in `intern
 - `testutil.RespondJSON()` — responds with JSON body
 - `testutil.RespondJSONWithPagination()` — responds with pagination headers
 - **The mock refuses what GitLab refuses.** `NewTestClient` wraps the handler it is given, and every POST to `/api/graphql` has its document and its variables validated against the pinned GitLab schema in `internal/graphqlschema` before the mock answers. Until this existed no GraphQL test could fail for the reason that matters: the handler returned whatever the test wrote, so a green test proved our code agreed with our own fixture and nothing about GitLab, and four registered tools shipped documents no current instance accepts. The document half catches an unknown field, an argument the field does not take and a variable typed as something the argument is not; the variables half catches a variable sent that the operation never declared, which is what let eight domains advertise a backward pagination no operation asked for. A refusal is reported with `t.Errorf` and the request still proceeds, so the test's own assertions report too, and never with `t.Fatal`, which would abort the httptest server's goroutine. `testutil.AllowInvalidGraphQL(t)` exempts a test that deliberately sends a malformed document and belongs nowhere else. A document no test drives is covered by `make check-graphql-documents` instead. See [GraphQL Integration](docs/concepts/graphql.md)
+- **The mock records what the request was.** The same wrapper writes down every request a test issues: the method, the path with its identifiers replaced by placeholders, the query parameter names, and for GraphQL the operation and the variables the document declares. Recording is off unless `GITLAB_MCP_TEST_INVENTORY_DIR` names an absolute directory, `make gen-request-inventory` runs the suite with it set, and `cmd/gen_request_inventory` merges the shards into `docs/development/request-inventory.json`. It exists because all five dimensions of the 1:1 audit describe the surface and none of them looks at the request a handler builds, which is how nine registered tools shipped unable to work. The attribution is the package that built the client and the test that built it, never the action: nothing on the wire names an action, and the httptest server answers on its own goroutine where the calling test is not on the stack. CI records during the coverage job and gates the artifact with `go run ./cmd/gen_request_inventory/ -check`
 - **Never `t.Fatal`/`FailNow` off the test goroutine** (httptest handlers, `go` statements, MCP handlers): follow the six-rule contract in `.github/instructions/test-goroutines.instructions.md` — `t.Errorf` + deterministic response + `return`, or record with atomics and assert afterwards. `make check-test-goroutines` detects violations; `make audit-test-goroutines` writes the work list
 - **Every case table runs under `t.Run`**: a range over a slice or map literal that asserts must open one subtest per case, named by a `name` field, the string element, or the map key. `go run ./cmd/audit_test_subtests/ -fix` rewrites the unambiguous shapes; `// sequential: <reason>` on the line above a loop declares dependent steps rather than cases; `make check-test-subtests` gates it in CI
 - Test naming: `TestToolName_Scenario_ExpectedResult`
@@ -418,7 +420,10 @@ spelled twice), every `OTEL_*` variable (owned by the OpenTelemetry
 specification and read by the exporters themselves), and `AUTOPILOT` (a
 convention other agent tooling sets, honored as an alias of
 `GITLAB_MCP_YOLO_MODE` and never warned about). The evaluator's `EVAL_SURFACE_*`
-are developer-only, driven by `make` targets, and out of scope.
+and the test transport's `GITLAB_MCP_TEST_INVENTORY_DIR` are developer-only,
+driven by `make` targets, read by test code that `cmd/server` never links, and
+out of scope: they configure the harness rather than the server, and there is
+no legacy spelling of either to warn anybody about.
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
@@ -470,6 +475,7 @@ are developer-only, driven by `make` targets, and out of scope.
 | `EVAL_SURFACE_CASE_SET`   | No      | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (Community Edition only), `all` (CE+Enterprise). Used by `make eval-surfaces-docker-enterprise-all` |
 | `EVAL_SURFACE_SERVER_MODE` | No     | `cmd/eval_mcp_surfaces`: protective server mode under evaluation — `default`, `read-only`, or `safe-mode`. Alias `SERVER_MODE=` on the Makefile target |
 | `EVAL_SURFACE_FIXTURE_SMOKE` | No   | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) |
+| `GITLAB_MCP_TEST_INVENTORY_DIR` | No | `internal/testutil`: absolute directory the test transport records every request it sees into, one shard per test process, merged by `cmd/gen_request_inventory`. Empty (default) records nothing. A relative path is refused rather than resolved, because a test binary runs in its own package directory and would scatter a shard under each of 178 of them |
 | `--max-output-retries`  | No       | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output (`2` default, `0` disables) |
 
 None of the three `GITLAB_MCP_ALLOWED_*_DIRS` allow-lists applies in HTTP mode: a server reached over HTTP refuses every caller-supplied local path, since the caller has no files on the machine the server runs on and `content_base64` is the remote form. The transport is inferred from the process arguments in `internal/toolutil/file_utils.go`, so a deployment that never heard of this policy still gets the right answer.

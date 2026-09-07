@@ -77,6 +77,12 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       - name: Run tests with coverage
+        # The suite also records every request it issues, which is what the
+        # inventory gate below merges. Recording is a shard file per test
+        # process and costs the run nothing measurable, so it rides along here
+        # rather than paying for a second seven-minute suite of its own.
+        env:
+          GITLAB_MCP_TEST_INVENTORY_DIR: ${{ github.workspace }}/dist/request-inventory
         run: |
           go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...
           go tool cover -func=coverage.out
@@ -87,6 +93,8 @@ jobs:
             exit 1
           fi
           echo "PASS: coverage ${COVERAGE}% meets minimum ${COVERAGE_MIN}%"
+      - name: Check the recorded request inventory
+        run: go run ./cmd/gen_request_inventory/ -check
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
