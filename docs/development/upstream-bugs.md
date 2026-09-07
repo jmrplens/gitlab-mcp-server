@@ -473,6 +473,7 @@ The gap was measured against the pinned GitLab schema in
 struct). Larger for the user objects, because widening them changes the shape of
 a published struct: the ids would stay and a `*BasicUser` would join them, which
 is the same accretion the SDK already makes elsewhere.
+
 ### The epics wrapper is missing two filters and twelve response fields
 
 - **Reported**: no.
