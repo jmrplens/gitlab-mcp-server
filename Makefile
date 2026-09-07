@@ -12,6 +12,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
+	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources \
@@ -321,7 +322,7 @@ test-e2e-docker-enterprise: ensure-gotestsum
 ##   make test-e2e-gitlab-com                                # default plens1
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_MIRROR=true     # also mirror
-test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests
+test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests check-graphql-documents-live
 	@echo ""
 	@echo "=== test-e2e-gitlab-com complete ==="
 	@echo "Reports and timings printed above. To re-run later without"
@@ -590,15 +591,17 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/9] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/9] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/9] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/9] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/9] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/9] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/9] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[8/9] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[9/9] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
+	run_check "[1/11] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/11] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/11] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/11] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/11] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/11] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/11] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[8/11] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[9/11] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
+	run_check "[10/11] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[11/11] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1259,6 +1262,44 @@ check-readonly-graphql:
 ## GraphQL at all rather than only what failed.
 audit-readonly-graphql:
 	go run ./cmd/audit_readonly_graphql/ -v
+
+## gen-graphql-schema: re-pin the GitLab GraphQL schema from a live instance.
+## Needs the network, so it is not a gate: run it when GitLab has changed and
+## commit the result. Set GITLAB_TOKEN to a gitlab.com credential: GitLab
+## answers introspection to anyone but tells only an authenticated caller which
+## version it runs, and check-graphql-schema refuses a pin that records none.
+gen-graphql-schema:
+	go run ./cmd/gen_graphql_schema/
+
+## check-graphql-schema: fail when the committed schema does not parse, its
+## provenance record does not decode, or the pin is not of what this project
+## claims to be pinned to: another instance, a truncated or narrower answer, no
+## recorded version, or older than the 180-day window. No network, so it is a
+## gate.
+check-graphql-schema:
+	go run ./cmd/gen_graphql_schema/ --check
+
+## check-graphql-documents: fail when a raw GraphQL document in the source is
+## one GitLab would refuse. The test transport catches the documents a test
+## sends; this catches the ones no test reaches.
+check-graphql-documents:
+	go run ./cmd/audit_graphql_documents/
+
+## audit-graphql-documents: same gate, listing every document checked rather
+## than only the refused ones.
+audit-graphql-documents:
+	go run ./cmd/audit_graphql_documents/ -v
+
+## check-graphql-documents-live: judge every document against a schema fetched
+## from gitlab.com right now rather than the pinned one. Needs the network, so
+## it is not a CI gate; it is the only thing that reports a field GitLab has
+## narrowed since the pin, which is how every defect the pin was built for
+## arose. Run it beside the other live suites (make test-e2e-gitlab-com).
+check-graphql-documents-live:
+	@tmp=$$(mktemp -d) && \
+		go run ./cmd/gen_graphql_schema/ -dir "$$tmp" && \
+		go run ./cmd/audit_graphql_documents/ -schema "$$tmp/gitlab-schema.graphql"; \
+		status=$$?; rm -rf "$$tmp"; exit $$status
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

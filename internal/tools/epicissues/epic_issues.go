@@ -85,7 +85,7 @@ mutation($id: WorkItemID!) {
 `
 
 const mutationReorderChild = `
-mutation($id: WorkItemID!, $childrenIds: [WorkItemID!]!, $adjacentWorkItemId: WorkItemID!, $relativePosition: RelativePosition!) {
+mutation($id: WorkItemID!, $childrenIds: [WorkItemID!]!, $adjacentWorkItemId: WorkItemID!, $relativePosition: RelativePositionType!) {
   workItemUpdate(input: {
     id: $id
     hierarchyWidget: {

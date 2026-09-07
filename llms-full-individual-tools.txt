@@ -7725,9 +7725,9 @@ List published CI/CD Catalog resources (component projects) with optional search
 - `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
 - `first` (integer): Number of items to return (default 20, max 100)
 - `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
-- `scope` (string): Filter scope: ALL (default) or NAMESPACED
+- `scope` (string): Filter scope: ALL (default) or NAMESPACES
 - `search` (string): Search resources by name or description
-- `sort` (string): Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC
+- `sort` (string): Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC, CREATED_ASC, CREATED_DESC, USAGE_COUNT_ASC, USAGE_COUNT_DESC
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -8625,13 +8625,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_security_findings
 
-List a pipeline's security report findings with severity, confidence, scanner, and report-type filters plus keyset pagination. Returns: matching findings with UUID, name, severity, confidence, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.
+List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.
 
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
 - `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
-- `confidence` (array of strings): Filter by confidence: CONFIRMED, MEDIUM, LOW
 - `first` (integer): Number of items to return (default 20, max 100)
 - `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `pipeline_iid` (string) (required): Pipeline IID within the project
@@ -8639,6 +8638,8 @@ List a pipeline's security report findings with severity, confidence, scanner, a
 - `report_type` (array of strings): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING
 - `scanner` (array of strings): Filter by scanner external IDs
 - `severity` (array of strings): Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN
+- `sort` (string): Sort order: severity_desc (default) or severity_asc
+- `state` (array of strings): Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -8841,7 +8842,7 @@ List work item types for a namespace. Returns: id, name, and enabled flag for ea
 - `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Project or group full path (namespace path)
 - `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
-- `name` (string): Filter by work item type name
+- `name` (string): Filter by work item type name, an IssueType enum value such as ISSUE or TASK
 - `only_available` (boolean): Return only available work item types
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -8863,9 +8864,9 @@ List work items in a project or group namespace with filtering and cursor pagina
 - `label_name` (array of strings): Filter by label names
 - `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `search` (string): Search in title and description
-- `sort` (string): Sort order
+- `sort` (string): Sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC
 - `state` (string): Filter by state (opened/closed/all)
-- `types` (array of strings): Filter by work item types
+- `types` (array of strings): Filter by work item types, IssueType enum values such as ISSUE or TASK
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

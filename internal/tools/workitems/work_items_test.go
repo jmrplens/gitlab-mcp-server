@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -228,6 +229,84 @@ func TestList_Filters(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestList_TypeFilter_ReachesGitLabUppercased verifies the normalisation the
+// types filter depends on.
+//
+// The values reach GitLab as a GraphQL IssueType, which is case sensitive:
+// gitlab.com answers types ["Issue"] with `Expected "Issue" to be one of:
+// ISSUE, INCIDENT, ...` and executes nothing, so the caller is told the
+// namespace holds no matching work items. This server sent exactly that until
+// the pinned schema began judging variables, with every test green, because the
+// mock answered whatever it was asked. The case table is the spellings a caller
+// or a model actually writes.
+func TestList_TypeFilter_ReachesGitLabUppercased(t *testing.T) {
+	cases := []struct {
+		name string
+		sent []string
+		want []any
+	}{
+		{name: "title case, the natural guess", sent: []string{"Issue", "Task"}, want: []any{"ISSUE", "TASK"}},
+		{name: "lower case", sent: []string{"incident"}, want: []any{"INCIDENT"}},
+		{name: "already correct", sent: []string{"TEST_CASE"}, want: []any{"TEST_CASE"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var sent []any
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var request struct {
+					Variables map[string]any `json:"variables"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					t.Errorf("decode GraphQL request: %v", err)
+					http.Error(w, "decode GraphQL request", http.StatusInternalServerError)
+					return
+				}
+				sent, _ = request.Variables["types"].([]any)
+				testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[]}}}}`)
+			})
+
+			_, err := List(t.Context(), testutil.NewTestClient(t, handler), ListInput{
+				FullPath: testFullPath, Types: testCase.sent,
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !slices.Equal(sent, testCase.want) {
+				t.Errorf("types reached GitLab as %#v, want %#v", sent, testCase.want)
+			}
+		})
+	}
+}
+
+// TestListWorkItemTypes_NameFilter_ReachesGitLabUppercased is the same
+// guarantee for the type list's name filter, which is the other place an
+// IssueType value leaves this package.
+func TestListWorkItemTypes_NameFilter_ReachesGitLabUppercased(t *testing.T) {
+	var sent any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Variables map[string]any `json:"variables"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode GraphQL request: %v", err)
+			http.Error(w, "decode GraphQL request", http.StatusInternalServerError)
+			return
+		}
+		sent = request.Variables["name"]
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItemTypes":{"nodes":[]}}}}`)
+	})
+
+	_, err := ListWorkItemTypes(t.Context(), testutil.NewTestClient(t, handler), ListWorkItemTypesInput{
+		FullPath: testFullPath, Name: "Issue",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if sent != "ISSUE" {
+		t.Errorf("name reached GitLab as %#v, want %q", sent, "ISSUE")
 	}
 }
 

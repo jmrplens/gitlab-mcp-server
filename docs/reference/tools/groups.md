@@ -201,7 +201,7 @@ List all members of a GitLab group including inherited members. Returns user ID,
 
 ### `gitlab_list_billable_group_members`
 
-List the billable members of a group with seat, membership type, `removable` flag, `is_last_owner`, last activity, and last login (Premium/Ultimate). Supports search, ordering, and offset or keyset pagination.
+List the billable members of a group with seat, membership type, `removable` flag, `is_last_owner`, last activity, and last login (Premium/Ultimate). Supports search, ordering, and offset or keyset pagination. `sort` is one combined token, not a direction: `access_level_asc`, `access_level_desc`, `last_joined`, `oldest_joined`, `name_asc`, `name_desc`, `oldest_sign_in`, `recent_sign_in`, `last_activity_on_asc` or `last_activity_on_desc`.
 
 | Annotation | **Read** |
 | ---------- | -------- |

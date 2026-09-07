@@ -122,7 +122,10 @@ For a full walkthrough use the `create-mcp-tool` skill
 3. **ActionSpec**: add a canonical route in `internal/tools/{domain}/action_specs.go`
    with metadata, owner package, compatibility policy, and tests.
 4. **Handler + tests**: `httptest`-based table-driven tests using
-   `testutil.NewTestClient` and `testutil.RespondJSON`.
+   `testutil.NewTestClient` and `testutil.RespondJSON`. A GraphQL document sent
+   through that client is validated against the pinned GitLab schema before the
+   mock answers, so a mock can no longer accept what GitLab refuses; a document
+   no test drives is covered by `make check-graphql-documents`.
 5. **Markdown formatter**: register via `toolutil.RegisterMarkdown[T](fn)`
    in the sub-package `markdown.go` `init()`. List formatters must add
    `toolutil.HintPreserveLinks` as the first hint in `WriteHints()`.

@@ -63,6 +63,7 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 		opts.Aliases = []string{"list work item types", "show work item types", "find work item types", individualTool}
 		opts.RelatedActions = []string{actionWorkItemList, "work_item.create"}
 		opts.IndividualTool.Description = "List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, only_available flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item."
+		opts.InputSchemaOverrides = workItemTypeListEnumOverrides()
 	}
 	return toolutil.NewReadActionSpec(name, route, opts)
 }
@@ -108,15 +109,80 @@ func workItemOptions(individualTool string) toolutil.ActionSpecOptions {
 	}
 }
 
-// workItemListEnumOverrides constrains the state filter on the work item list
-// action. The field maps to IssuableState in the GraphQL query; the three
-// values below are the safe, stable subset documented for work items.
+// workItemListEnumOverrides constrains the state and sort filters on the work
+// item list action. The state field maps to IssuableState in the GraphQL query;
+// the three values below are the safe, stable subset documented for work items.
+//
+// The sort override is not decoration. Without it, toolutil.canonicalParamEnums
+// injects the REST-wide [asc, desc] pair, and this action's sort is a GraphQL
+// WorkItemSort (client-go workitems.go:732 declares the variable with that
+// type), which holds no such value. The published schema and GitLab then
+// disagree in both directions: every value the server would accept GitLab
+// refuses, and every value GitLab accepts the server refuses before the request
+// is built, since go-sdk validates arguments against the published schema. It
+// is the same defect the vulnerability, security finding and CI catalog sorts
+// carried, and it survives here only because it is reached through client-go
+// rather than through one of this repository's own documents.
+//
+// GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#workitemsort
 func workItemListEnumOverrides() []toolutil.InputSchemaOverride {
 	return []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("state", map[string]any{
 			"enum": []any{"opened", "closed", "all"},
 		}),
+		toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": workItemSortValues}),
+		toolutil.SchemaPropertyOverride("types", map[string]any{
+			"items": map[string]any{"type": "string", "enum": issueTypeValues},
+		}),
 	}
+}
+
+// issueTypeValues is the IssueType GraphQL enum, which the types filter and the
+// work item type list's name filter both reach.
+//
+// It is published because "Filter by work item types" told a model nothing, and
+// the natural guesses (Issue, issue) are ones GitLab refuses outright: the
+// enum is case sensitive and the request fails validation before execution, so
+// the caller was told the namespace had no matching work items. The handlers
+// uppercase what they are given as well, so a caller who learned the old
+// spelling keeps working.
+//
+// GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#issuetype
+var issueTypeValues = []any{
+	"EPIC", "INCIDENT", "ISSUE", "KEY_RESULT",
+	"OBJECTIVE", "REQUIREMENT", "TASK", "TEST_CASE", "TICKET",
+}
+
+// workItemTypeListEnumOverrides constrains the name filter on the work item
+// type list action to the same IssueType enum.
+func workItemTypeListEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("name", map[string]any{"enum": issueTypeValues}),
+	}
+}
+
+// workItemSortValues is the WorkItemSort GraphQL enum. The deprecated lowercase
+// aliases GitLab renamed in 13.5 (created_asc and friends) are deliberately
+// left out: they still work, and offering both spellings would double the list
+// for nothing.
+var workItemSortValues = []any{
+	"BLOCKING_ISSUES_ASC", "BLOCKING_ISSUES_DESC",
+	"CLOSED_AT_ASC", "CLOSED_AT_DESC",
+	"CREATED_ASC", "CREATED_DESC",
+	"DUE_DATE_ASC", "DUE_DATE_DESC",
+	"ESCALATION_STATUS_ASC", "ESCALATION_STATUS_DESC",
+	"HEALTH_STATUS_ASC", "HEALTH_STATUS_DESC",
+	"LABEL_PRIORITY_ASC", "LABEL_PRIORITY_DESC",
+	"MILESTONE_DUE_ASC", "MILESTONE_DUE_DESC",
+	"POPULARITY_ASC", "POPULARITY_DESC",
+	"PRIORITY_ASC", "PRIORITY_DESC",
+	"RELATIVE_POSITION_ASC",
+	"SEVERITY_ASC", "SEVERITY_DESC",
+	"START_DATE_ASC", "START_DATE_DESC",
+	"STATUS_ASC", "STATUS_DESC",
+	"TITLE_ASC", "TITLE_DESC",
+	"UPDATED_ASC", "UPDATED_DESC",
+	"WEIGHT_ASC", "WEIGHT_DESC",
 }
 
 // workItemCreateEnumOverrides constrains health_status and the nested

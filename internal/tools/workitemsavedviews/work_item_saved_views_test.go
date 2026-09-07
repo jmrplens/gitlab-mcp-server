@@ -388,7 +388,7 @@ func TestCreate_DefaultsDisplaySettings(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	if _, err := Create(context.Background(), client, CreateInput{
-		NamespacePath: "my-group", Name: "Minimal", Sort: "ID",
+		NamespacePath: "my-group", Name: "Minimal", Sort: "CREATED_DESC",
 	}); err != nil {
 		t.Fatalf("Create() unexpected error: %v", err)
 	}
@@ -402,13 +402,13 @@ func TestCreate_Validation(t *testing.T) {
 		input CreateInput
 		want  string
 	}{
-		{name: "no namespace", input: CreateInput{Name: "n", Sort: "ID"}, want: "namespace_path"},
-		{name: "no name", input: CreateInput{NamespacePath: "g", Sort: "ID"}, want: "name"},
-		{name: "blank name", input: CreateInput{NamespacePath: "g", Name: "  ", Sort: "ID"}, want: "name"},
+		{name: "no namespace", input: CreateInput{Name: "n", Sort: "CREATED_DESC"}, want: "namespace_path"},
+		{name: "no name", input: CreateInput{NamespacePath: "g", Sort: "CREATED_DESC"}, want: "name"},
+		{name: "blank name", input: CreateInput{NamespacePath: "g", Name: "  ", Sort: "CREATED_DESC"}, want: "name"},
 		{name: "no sort", input: CreateInput{NamespacePath: "g", Name: "n"}, want: "sort"},
 		{
 			name:  "malformed filter timestamp",
-			input: CreateInput{NamespacePath: "g", Name: "n", Sort: "ID", Filters: &Filters{DueBefore: "next tuesday"}},
+			input: CreateInput{NamespacePath: "g", Name: "n", Sort: "CREATED_DESC", Filters: &Filters{DueBefore: "next tuesday"}},
 			want:  "filters.due_before",
 		},
 	}
@@ -433,7 +433,7 @@ func TestCreate_ServerError(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	_, err := Create(context.Background(), client, CreateInput{NamespacePath: "g", Name: "n", Sort: "ID"})
+	_, err := Create(context.Background(), client, CreateInput{NamespacePath: "g", Name: "n", Sort: "CREATED_DESC"})
 	if err == nil {
 		t.Fatal("Create() error = nil, want the mutation error")
 	}
@@ -731,7 +731,7 @@ func TestMutations_UnmarshalableDisplaySettings(t *testing.T) {
 
 	t.Run("create", func(t *testing.T) {
 		_, err := Create(context.Background(), client, CreateInput{
-			NamespacePath: "g", Name: "n", Sort: "ID", DisplaySettings: bad,
+			NamespacePath: "g", Name: "n", Sort: "CREATED_DESC", DisplaySettings: bad,
 		})
 		if err == nil || !strings.Contains(err.Error(), "display_settings") {
 			t.Errorf("Create() error = %v, want one naming display_settings", err)
