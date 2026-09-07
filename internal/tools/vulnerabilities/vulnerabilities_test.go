@@ -36,8 +36,8 @@ const sampleVulnNode = `{
   },
   "location": {
     "file": "app/controllers/sessions_controller.rb",
-    "startLine": 42,
-    "endLine": 42,
+    "startLine": "42",
+    "endLine": "42",
     "blobPath": "/project/-/blob/main/app/controllers/sessions_controller.rb"
   }
 }`
@@ -72,8 +72,8 @@ const sampleVulnGetNode = `{
   },
   "location": {
     "file": "app/controllers/sessions_controller.rb",
-    "startLine": 42,
-    "endLine": 42,
+    "startLine": "42",
+    "endLine": "42",
     "blobPath": "/project/-/blob/main/app/controllers/sessions_controller.rb"
   },
   "project": {
@@ -1206,4 +1206,28 @@ func containsStr(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// TestLineNumber_ReadsGitLabsStringAndTakesNothingElseForALine pins how the
+// line a location carries is read. GitLab types startLine and endLine as
+// String, and the licensed e2e run found a live instance sending them quoted
+// while the response struct expected an int, which failed the whole decode.
+func TestLineNumber_ReadsGitLabsStringAndTakesNothingElseForALine(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{name: "a quoted number", in: "42", want: 42},
+		{name: "a number with spaces around it", in: " 7 ", want: 7},
+		{name: "an empty string", in: "", want: 0},
+		{name: "a value that is not a number", in: "n/a", want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := lineNumber(tt.in); got != tt.want {
+				t.Errorf("lineNumber(%q) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
+	}
 }
