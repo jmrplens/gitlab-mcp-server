@@ -12,9 +12,14 @@
 // "a client each": every request runs under the client its own entry carries,
 // and anything that was ever keyed on the server is keyed on the entry instead.
 //
-// The pool has a configurable maximum size ([WithMaxSize]) and uses LRU
-// eviction when the limit is reached. Token plus URL hashes (SHA-256) are used
-// as pool keys so that raw tokens are never stored in memory.
+// The pool has a configurable maximum size ([WithMaxSize]) and evicts when the
+// limit is reached: the least recently used entry that [WithInUse] does not
+// report as busy, falling back to the least recently used of all when every
+// entry is busy, because the pool is bounded before it is polite. That fallback
+// is counted apart from the ordinary case ([Metrics.BusyEvictions]) and logged
+// at WARN, since it is the only path that ends work a client is waiting on.
+// Token plus URL hashes (SHA-256) are used as pool keys so that raw tokens are
+// never stored in memory.
 //
 // The package also extracts GitLab tokens and per-request GitLab URLs from HTTP
 // headers and includes an authentication-failure rate limiter for the HTTP MCP

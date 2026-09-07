@@ -181,17 +181,51 @@ The action attribute is the only thing that tells them apart.
 
 ### Metrics
 
-| Instrument                      | Unit | What it answers                                                   |
-| ------------------------------- | ---- | ----------------------------------------------------------------- |
-| `mcp.server.operation.duration` | `s`  | how long requests take, by method and action                      |
-| `mcp.client.operation.duration` | `s`  | how long this server waits on the client (elicitation, sampling)  |
-| `http.client.request.duration`  | `s`  | how long GitLab takes                                             |
-| `mcp.server.session.duration`   | `s`  | how long a client stays connected (stdio and `--stateless=false`) |
+| Instrument                             | Unit         | What it answers                                                        |
+| -------------------------------------- | ------------ | ---------------------------------------------------------------------- |
+| `mcp.server.operation.duration`        | `s`          | how long requests take, by method and action                           |
+| `mcp.client.operation.duration`        | `s`          | how long this server waits on the client (elicitation, sampling)       |
+| `http.client.request.duration`         | `s`          | how long GitLab takes                                                  |
+| `mcp.server.session.duration`          | `s`          | how long a client stays connected (stdio and `--stateless=false`)      |
+| `gitlab_mcp.credential_pool.entries`   | `{entry}`    | how many credentials the pool holds (HTTP mode)                        |
+| `gitlab_mcp.credential_pool.capacity`  | `{entry}`    | how many it may hold, which is `--max-http-clients`                    |
+| `gitlab_mcp.credential_pool.evictions` | `{eviction}` | entries dropped, split by `gitlab_mcp.credential_pool.eviction.reason` |
 
 `mcp.server.session.duration` is deliberately not recorded under the default
 stateless HTTP transport, where each POST is its own session: the histogram
 would be a copy of `mcp.server.operation.duration` under a name promising
 something else.
+
+The three credential-pool instruments carry this server's own namespace rather
+than the convention's `mcp.`, because a credential pool is this deployment's
+concept and not the protocol's, and a name under `mcp.` would claim part of a
+namespace the semantic convention owns. They are published by HTTP mode only,
+and `capacity` is published beside `entries` so "how close to the bound" is
+answerable without typing the flag's value into a dashboard query.
+
+`gitlab_mcp.credential_pool.eviction.reason` takes one of seven values, one per
+removal path, and every one of them is exported from process start whether it
+has fired or not, so a panel is never empty for the ambiguous reason:
+
+| Reason                | What happened                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `size_pressure`       | The pool was full and dropped its least recently used entry, which was doing nothing      |
+| `size_pressure_busy`  | The pool was full, **every** entry was serving a subscription, and the oldest went anyway |
+| `idle`                | `--pool-idle-timeout` reclaimed an entry nobody had used                                  |
+| `stale_credential`    | The credential had not been re-checked against GitLab inside the age ceiling              |
+| `rejected_credential` | GitLab answered a call made with that credential with `401`                               |
+| `invalid_credential`  | Periodic revalidation found GitLab refusing the credential                                |
+| `rebuild`             | The configuration shape's catalog registration failed, taking its entries with it         |
+
+`size_pressure_busy` is the one to alert on. It is the only path that ends a
+subscription somebody is waiting on, and it means the pool held nothing quiet to
+take: see [the lever](http-server-mode.md#the-lever-and-what-it-costs) for the
+value of `--max-http-clients` that puts it out of reach. It has a matching WARN
+line, `server pool: evicted an entry that was serving a subscription`, carrying
+`in_use=true` and the `max_size` to raise.
+
+Entries dropped at shutdown are deliberately uncounted: nothing observes a
+metric after the process ends.
 
 One attribute the convention asks for is missing, and it cannot be supplied:
 `jsonrpc.request.id`. The Go SDK gives a receiving middleware no access to the

@@ -11,6 +11,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -484,4 +485,51 @@ func maximalTraceState() string {
 		members = append(members, fmt.Sprintf("vendor%02d=%s", i, strings.Repeat("v", 256)))
 	}
 	return strings.Join(members, ",")
+}
+
+// TestServerMiddleware_A5xxTakesTheSpanStatusAndA4xxDoesNot pins the
+// convention's asymmetry, which reads as leniency until you see the reason.
+//
+// "For HTTP status codes in the 4xx range span status MUST be left unset in
+// case of SpanKind.SERVER": a refused credential is this server working
+// correctly, and marking it an error would put every unauthenticated scanner
+// into an operator's error rate. A 5xx is ours and takes the status, with no
+// description, because any text there would come from a handler this middleware
+// cannot see and is exactly where a GitLab error body would leak in.
+func TestServerMiddleware_A5xxTakesTheSpanStatusAndA4xxDoesNot(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		want   codes.Code
+	}{
+		{name: "a refused credential leaves the status unset", status: http.StatusUnauthorized, want: codes.Unset},
+		{name: "a caller fault leaves it unset too", status: http.StatusBadRequest, want: codes.Unset},
+		{name: "a server fault takes it", status: http.StatusInternalServerError, want: codes.Error},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := newRecorder(t)
+			previous := otel.GetTracerProvider()
+			otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)))
+			t.Cleanup(func() { otel.SetTracerProvider(previous) })
+
+			handler := ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			handler.ServeHTTP(httptest.NewRecorder(),
+				httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody))
+
+			spans := recorder.Ended()
+			if len(spans) != 1 {
+				t.Fatalf("recorded %d spans, want 1", len(spans))
+			}
+			if got := spans[0].Status().Code; got != tt.want {
+				t.Errorf("span status = %v, want %v", got, tt.want)
+			}
+			if description := spans[0].Status().Description; description != "" {
+				t.Errorf("span status description = %q, want empty: a handler's text must not reach the trace", description)
+			}
+		})
+	}
 }

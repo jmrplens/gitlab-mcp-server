@@ -117,16 +117,19 @@ nada más.
 
 ## Qué vigilar
 
-| Señal                                        | Dónde                     | Por qué importa                                                                       |
-| -------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------- |
-| Igualdad de `config_digest` entre instancias | `/health`                 | El único detector de una instancia que sirve otro catálogo                            |
-| `status` y el código HTTP                    | `/health`                 | `503 draining` es la señal para el balanceador, no un fallo                           |
-| `build` por instancia                        | `/health`                 | Qué versión ejecuta realmente cada instancia                                          |
-| Pico de conjunto residente                   | Métricas del host         | Lo que dimensiona el proceso son las llamadas en vuelo, no las credenciales           |
-| Tiempo de CPU por llamada                    | Telemetría                | El techo son los hilos divididos entre esto                                           |
-| Desalojos del pool                           | Registros                 | Desalojar a menudo significa que `--max-http-clients` está por debajo de la población |
-| Tasa de `429`                                | Registros del balanceador | Distingue el limitador por credencial del presupuesto de autenticación                |
-| Fallos de autenticación por dirección        | Registros                 | Diez por minuto bloquean una dirección                                                |
+| Señal                                                           | Dónde                     | Por qué importa                                                                                                                                          |
+| --------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Igualdad de `config_digest` entre instancias                    | `/health`                 | El único detector de una instancia que sirve otro catálogo                                                                                               |
+| `status` y el código HTTP                                       | `/health`                 | `503 draining` es la señal para el balanceador, no un fallo                                                                                              |
+| `build` por instancia                                           | `/health`                 | Qué versión ejecuta realmente cada instancia                                                                                                             |
+| Pico de conjunto residente                                      | Métricas del host         | Lo que dimensiona el proceso son las llamadas en vuelo, no las credenciales                                                                              |
+| Tiempo de CPU por llamada                                       | Telemetría                | El techo son los hilos divididos entre esto                                                                                                              |
+| Desalojos del pool                                              | Registros                 | Desalojar a menudo significa que `--max-http-clients` está por debajo de la población                                                                    |
+| `server pool: evicted an entry that was serving a subscription` | Registros                 | Un `WARN` con `in_use=true` y el `max_size` que hay que subir. Es una señal, no un error: solo salta cuando todas las entradas del pool estaban ocupadas |
+| `gitlab_mcp.credential_pool.entries` frente a `.capacity`       | Telemetría                | Cuánto se acerca el pool a su límite                                                                                                                     |
+| `gitlab_mcp.credential_pool.evictions` por razón                | Telemetría                | `size_pressure_busy` es la que merece una alerta                                                                                                         |
+| Tasa de `429`                                                   | Registros del balanceador | Distingue el limitador por credencial del presupuesto de autenticación                                                                                   |
+| Fallos de autenticación por dirección                           | Registros                 | Diez por minuto bloquean una dirección                                                                                                                   |
 
 <Aside type="danger" title="La trampa que más duele a escala">
 

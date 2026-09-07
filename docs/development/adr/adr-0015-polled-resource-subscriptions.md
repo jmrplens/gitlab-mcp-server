@@ -45,8 +45,17 @@ make the worst case something an operator can predict.
   a finished one at 60s; anything without a lifecycle field at 15s. GitLab
   has no terminal state — a retried pipeline reuses its ID and starts
   running again — so nothing ever retires itself for being "done".
-- **Ten watchers per server, and a server is one token.** That is the
-  ceiling on concurrent polling and on concurrent outbound requests.
+- **Ten watchers per credential, and 512 across the process.** Together those
+  are the ceiling on concurrent polling and on concurrent outbound requests.
+  The first number was written here as "per server" when a server was one
+  token; since [ADR-0020](adr-0020-one-server-per-configuration-shape.md) a
+  server is one configuration shape and the watchers belong to the pool entry,
+  which is one credential. The second exists because a credential is one API
+  call to mint, so the per-credential number multiplies by however many a
+  caller holds and only a process-wide one bounds the process. It refuses
+  rather than evicting: stopping one credential's watch to admit another's is
+  the trade [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561)
+  rules out.
 - **The session bounds the watch.** When the subscribing session
   disconnects, its watches stop. The SDK does not do this for us: it drops a
   disconnected session from its subscriber table without ever calling the
@@ -150,7 +159,11 @@ make the worst case something an operator can predict.
    self-managed instance's default budget is 120 requests a minute per user,
    and that default is off unless an administrator enables it. The floor of
    5s exists precisely so that "one urgent watch" cannot become "ten
-   watchers at 5s eating the whole budget".
+   watchers at 5s eating the whole budget". That argument is about one
+   credential's budget, which is GitLab's unit of throttling; what bounds
+   **this process** with many credentials in it is the 512 across the
+   process, worth at most about 102 outbound requests a second at the floor
+   and 34 at the base.
 
 3. **Slowing down is honest; stopping silently is not.** MCP defines no
    lease, no TTL and no expiry message, and its one notification means only

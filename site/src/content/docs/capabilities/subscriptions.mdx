@@ -47,9 +47,11 @@ The polling cadence adapts to the resource:
 | No lifecycle field | 15s        | a wiki page, a file, a label                    |
 | Lease-demoted      | 10min      | 30 minutes without any request on the session   |
 
-Watchers use the subscriber's own GitLab token, capped at **10 watchers per credential** (one pool entry per token+URL in HTTP mode). The worst case — ten watchers at the 5s floor — is 120 requests/minute; ten demoted watches cost one. A 429 from GitLab pauses every watcher with exponential back-off (30s doubling to 5 minutes).
+Watchers use the subscriber's own GitLab token, capped at **10 watchers per credential** (one pool entry per token+URL in HTTP mode) and at **512 per process**. The worst case — ten watchers at the 5s floor — is 120 requests/minute; ten demoted watches cost one. A 429 from GitLab pauses every watcher with exponential back-off (30s doubling to 5 minutes). The process ceiling refuses rather than stopping anyone's watch, and it refuses before a credential at its own cap spends a demoted watch making room, so a refusal never costs you a subscription you already had.
 
-Nothing retires itself for being "finished": GitLab has no terminal state — a retried pipeline reuses its ID and runs again, a closed issue reopens — so a watch only ends when the client unsubscribes, its session disconnects, the resource returns 401/403/404, the 24-hour lifetime cap is reached, or it is evicted to make room at the watcher cap.
+The process ceiling exists because a credential is one API call to mint, so a per-credential number multiplies by however many a caller holds. It refuses rather than making room: stopping one credential's watch to start another's is a trade this server does not make. Neither ceiling is configurable, and both refusals say which one was reached.
+
+Nothing retires itself for being "finished": GitLab has no terminal state — a retried pipeline reuses its ID and runs again, a closed issue reopens — so a watch only ends when the client unsubscribes, its session disconnects, the resource returns 401/403/404, the 24-hour lifetime cap is reached, it is evicted to make room at the watcher cap, or the pool drops the credential's entry under `--max-http-clients` pressure. That last one prefers an entry that is not serving a subscription and takes a busy one only when every pooled entry is busy; when it happens the watchers stop, the open `subscriptions/listen` requests are completed, and reconnecting is enough, because nothing is wrong with the credential.
 
 ## Lifetime and renewal
 
@@ -72,6 +74,40 @@ A watch that goes unrenewed does not silently die — it slows down. After 30 mi
 }
 ```
 
+## Why a subscription ended
+
+On protocol 2026-07-28 a subscription is a `subscriptions/listen` request the client leaves open, and the server ends it by answering it. Every ending the **server** initiates says which one it was, in the result's `_meta`, beside the subscription id the SDK stamps there:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "_meta": {
+      "io.modelcontextprotocol/subscriptionId": 1,
+      "io.github.jmrplens/watch-end": {
+        "reason": "credential_evicted",
+        "detail": "the server released this credential's pooled entry under capacity pressure; reconnect and subscribe again, the credential itself is still valid"
+      }
+    }
+  }
+}
+```
+
+| `reason`             | What happened                                                 | What to do                                                          |
+| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `credential_evicted` | Size pressure took this credential's pooled entry             | Reconnect and subscribe again now; the credential is still valid    |
+| `credential_reset`   | The entry was reclaimed for idleness, staleness, or a rebuild | Reconnect and subscribe again; nothing is wrong with the credential |
+| `credential_revoked` | GitLab refused the credential                                 | Re-authenticate first; the same token will be refused again         |
+| `resource_gone`      | The watched resource answered 401, 403 or 404                 | Check access; subscribe again only if the resource comes back       |
+| `lifetime_reached`   | The absolute 24-hour watch lifetime ran out                   | Subscribe again; expected on a long-lived client                    |
+| `watcher_evicted`    | A demoted watch of yours was stopped at the watcher cap       | Subscribe again, and keep the session busy                          |
+| `shutdown`           | The server is stopping                                        | Reconnect; behind a balancer another instance will take you         |
+
+`detail` is a sentence of advice, so a client that does not recognize the reason word can still act on it. A `status` field appears only on `resource_gone`, and it is relayed rather than interpreted: GitLab answers 404 for a resource you may not see, so a 404 here does not mean deleted. The vocabulary is closed and published in the server card's `subscriptions.end_reasons`, which is served in HTTP mode only: on stdio there is no endpoint to read it from, and the four reasons reachable there (`resource_gone`, `lifetime_reached`, `watcher_evicted` and `shutdown`) are documented on this page instead. Treat an unrecognized value as "an ending this client does not know", never as "any ending".
+
+An ending **you** caused carries no reason, because you caused it. Neither does a session-era `resources/subscribe` under `--stateless=false`: it holds no open request, so there is nothing to answer, and terminating the session is the only ending the protocol offers it. Use `subscriptions/listen` if you want the reason.
+
 ## Transport notes
 
 - **stdio**: works as-is on both protocol generations.
@@ -87,6 +123,7 @@ A refused legacy `resources/subscribe` carries a deliberate JSON-RPC code — ne
 | URI deliberately not subscribable                           | `-32602` (invalid params)                                                 |
 | Resource unreadable on the authorization read (401/403/404) | `-32602` — the same code the SDK answers an unknown `resources/read` with |
 | Rate limited, watcher cap full, or server shutting down     | `-32000` (server busy — transient, retry later)                           |
+| Watchers per process at 512                                 | `-32000`, with `server-wide` in the message                               |
 | Transient GitLab failure on the first read                  | `-32603` (internal error)                                                 |
 | `resources/subscribe` on stateless HTTP                     | `-32600` — use `subscriptions/listen` instead                             |
 

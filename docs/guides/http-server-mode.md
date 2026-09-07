@@ -854,10 +854,29 @@ no periodic ping of its own.
 
 When the pool is full (`--max-http-clients` reached) and a new `(token, url)` pair arrives:
 
-1. The **least recently used** pool entry is evicted
-2. The evicted server and GitLab client are removed from the pool
+1. The **least recently used entry that is not serving a subscription** is evicted; only when every pooled entry is busy does the least recently used of all go
+2. The evicted entry and its GitLab client are removed from the pool. The shape server stays, because it is shared by every credential of that configuration
 3. A new entry is created for the new `(token, url)` pair
-4. If the evicted client reconnects, a fresh server is created
+4. If the evicted client reconnects, a fresh entry is created for it
+
+An entry is busy while its credential holds an open `subscriptions/listen` stream or at least one resource watcher. That is work the pool cannot see: a watcher polls GitLab directly and a listen is one request the client never repeats, so neither refreshes the entry, and both would otherwise sit at the LRU tail, which is exactly where size pressure looks. Preferring the quiet entries is what makes the exemption a protection rather than a delay. The fallback is what keeps the pool bounded: an entry is passed over in favor of another one, never in favor of growing past `--max-http-clients`.
+
+**What the evicted client receives.** Eviction is an ending it is told about rather than a stream that goes quiet:
+
+- its watchers stop;
+- its open `subscriptions/listen` requests are completed with a result, so a protocol 2026-07-28 client sees the call finish instead of waiting on it forever;
+- that result names the ending: `credential_evicted` for size pressure, `credential_reset` for an entry reclaimed for idleness, staleness or a rebuild, `credential_revoked` for a credential GitLab refused. Without it a client cannot tell "the server ran out of room", which it should answer by reconnecting at once, from "your token was revoked", which it should answer by re-authenticating first. The whole vocabulary is in [Why a subscription ended](../reference/capabilities/subscriptions.md#why-a-subscription-ended);
+- under `--stateless=false`, the sessions that no stream ended are terminated, so the client's next request re-initializes. Such a client is told **that** its subscription ended and not why: it held no open request for an answer to be written on, which is one more reason to prefer `subscriptions/listen`.
+
+#### The lever, and what it costs
+
+`--max-http-clients` is the setting that decides how often any of this happens.
+
+**Set it above the simultaneous client population.** That is the ordinary case and the whole of the advice for most deployments: with room in the pool, an arriving credential evicts nobody. Frequent eviction of any kind means the number is below the population, and the log lines under [Server Logs](#server-logs) are how you see it.
+
+**Above the two process-wide ceilings, the busy fallback is unreachable at rest.** A busy entry holds at least one open `subscriptions/listen` stream or at least one resource watcher, and both are bounded across the whole process: 512 open streams and 512 concurrent watchers, neither of them configurable. At most 1024 entries can therefore be busy at once, so a `--max-http-clients` of 1025 or more cannot be made entirely busy and the fallback that takes a subscriber's entry can never fire. It holds on both transports, and the default stateless one needs less: there a session-era `resources/subscribe` is refused unless it arrived through a listen, so a watcher cannot exist without a stream and 513 already makes the fallback unreachable. "At rest" is the qualifier: a listen refused by the stream ceiling still holds its per-credential slot for the length of the refused request, so the busy count can briefly exceed the sum by the number of refusals in flight.
+
+**The cost is tenancy.** At the measured 50 KiB per entry, 1025 pooled entries is about 50 MiB of live heap, and the flag's upper bound is 10000. It is not a memory setting for the work those credentials make the process do; size that from requests in flight, per [Resource Consumption](../reference/resource-consumption.md).
 
 ```mermaid
 sequenceDiagram
@@ -874,7 +893,7 @@ sequenceDiagram
     GS->>Pool: GetOrCreate("glpat-abc123", "https://gitlab.example.com")
 
     alt (token, url) not in pool
-        Pool->>Pool: Check maxSize, evict LRU if full
+        Pool->>Pool: Check maxSize, evict the least recently used entry that is not busy
         Pool->>Pool: NewClientWithToken(url, token, skipTLS)
         Pool->>Pool: factory(client) → *mcp.Server
         Pool-->>GS: *mcp.Server (new)
@@ -959,9 +978,19 @@ and `config_digest` as well, elided here for width:
 {"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
 {"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
 {"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
-{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"gitlab_url":"https://gitlab.com","enterprise":false}
+{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":false}
+{"level":"WARN","msg":"server pool: evicted an entry that was serving a subscription","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":true}
 {"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
+
+The two eviction lines are separate messages rather than one message at two
+levels, so an operator can filter for exactly one of them. The `WARN` is the
+busy fallback of [Pool Eviction](#4-pool-eviction): the pool held nothing quiet
+to take, so an entry serving a subscription went and that client's watch ended.
+It is a signal rather than an error, and `max_size` on the line is the number to
+raise. The same event is counted as `size_pressure_busy` on
+`gitlab_mcp.credential_pool.evictions` for a deployment running
+[telemetry](telemetry.md).
 
 ### Health Check
 
@@ -998,6 +1027,10 @@ Liveness is reported both ways on purpose. `started_at` is the stable fact — i
 **Draining.** On `SIGTERM` the process marks itself draining before anything else: from that moment `/health` answers `503` with `"status": "draining"` and `Cache-Control: no-store`, so a balancer that polls it stops sending new work and does not serve the last `200` from a cache across the flip. By default the listener then closes at once, so only a probe that lands in between sees the `503`; `--drain-delay` (`GITLAB_MCP_DRAIN_DELAY`) keeps the listener open for that long first, and set to at least one probe interval it guarantees the balancer sees the flip before the close. In-flight requests still get the 15-second drain after that. Upper bound 5 minutes; the delay applies to HTTP mode only, since stdio has no listener to hold open.
 
 `config_digest` exists for fleets. Two instances behind one balancer that report different digests serve different catalogs to whichever clients reach them, and nothing else detects that: compare the digests in the same loop that proves the balancer's affinity, and treat a mismatch as a misconfigured node. A build from a different version with the same settings reports the same digest, so a rolling upgrade does not trip the comparison.
+
+**No pool state, on purpose.** The endpoint publishes no entry count, no eviction counter and no configuration beyond the digest, and that is what lets it need no credential. Pool occupancy is precisely the reconnaissance a caller probing for the busy-entry fallback would want: one sample says how full the pool is, and two say how fast it is churning. The counters go to the logs and to OpenTelemetry instead, both of which the operator controls; see [Server Logs](#server-logs) and the [Telemetry guide](telemetry.md).
+
+What that withholds is occupancy from callers in general, not the fact of a caller's own eviction. A client whose `subscriptions/listen` ends with `credential_evicted` holds an open stream, which is what made its entry busy, so it can infer that the pool had nothing quiet to take at that instant. That inference is accepted: it is about the eviction that just happened to it, and the alternative is to stop telling an evicted client why its subscription ended.
 
 `/health` reports only that the process is up; it performs no GitLab round-trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
 

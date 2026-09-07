@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -169,11 +170,29 @@ type Options struct {
 	// and it also bounds concurrent outbound requests, which nothing else
 	// in this server does.
 	MaxWatchers int
+	// SharedWatchers bounds concurrent watchers across every manager holding
+	// the same gate, on top of the per-manager [Options.MaxWatchers]. Nil, the
+	// default, is no shared ceiling.
+	//
+	// It refuses and never evicts. A watcher belongs to one credential and this
+	// gate spans all of them, so making room here would mean stopping some
+	// other tenant's watch to serve this one. Within a manager
+	// [Manager.Subscribe] still replaces a demoted watch first, which is one
+	// credential reclaiming a slot it already holds.
+	SharedWatchers *WatcherGate
 	// OnStop, if set, is called once when a watch ends for a reason the
-	// subscriber did not ask for: [ErrInaccessible], [ErrLifetimeExceeded]
-	// or [ErrEvicted]. It is not called when a client unsubscribes, when
-	// its session ends, or when the manager is closed — in all three the
-	// client either asked for it or is already gone.
+	// subscriber did not ask for. The reason is an error that wraps one of
+	// [ErrInaccessible], [ErrLifetimeExceeded] or [ErrEvicted], so a caller
+	// branches on it with errors.Is rather than by comparison. It is not
+	// called when a client unsubscribes, when its session ends, or when the
+	// manager is closed, since in all three the client either asked for it or
+	// is already gone.
+	//
+	// The wrapping is what carries the detail past this boundary: an
+	// inaccessible resource arrives as the read error [TranslateReadError]
+	// wrapped, so the HTTP status GitLab answered with is still recoverable
+	// from it. The other two are the sentinels alone, because there is nothing
+	// underneath them to keep.
 	//
 	// It exists so the transport layer can tell the client something, and
 	// runs on the watcher's goroutine with no locks held.
@@ -216,6 +235,81 @@ func (o Options) withDefaults() Options {
 		o.Logger = slog.Default()
 	}
 	return o
+}
+
+// WatcherGate is a ceiling on concurrent watchers that several managers share.
+//
+// [Options.MaxWatchers] bounds one manager, which in HTTP mode is one
+// credential, and a credential is one API call to mint: the per-credential
+// number therefore multiplies by however many a caller holds, and only a shared
+// one bounds the process. That is the same reasoning that keeps the listen
+// stream ceiling process-wide, and the reason neither is configurable: an
+// operator who can raise the shared number can undo the bound.
+//
+// The gate is injected rather than declared here because this package owns no
+// process-wide state and knows nothing about the server that runs it. A nil
+// gate, which is the zero value of [Options.SharedWatchers], is no ceiling at
+// all: that is a manager built directly, by this package's own tests or by an
+// embedder. It is not any transport this repository ships, since cmd/server
+// installs the process gate on stdio as well as on HTTP, where it simply never
+// binds because a stdio process runs one manager held to [Options.MaxWatchers].
+//
+// It is an atomic count rather than a sum over the managers alive, because a
+// gate that asked each manager how many watchers it holds would take its own
+// lock and then theirs, while a manager holds its lock and waits for the gate.
+// Two managers subscribing at once would deadlock on that inversion.
+type WatcherGate struct {
+	limit int
+	held  atomic.Int64
+}
+
+// NewWatcherGate returns a gate admitting limit concurrent watchers across
+// every manager it is given to. A non-positive limit admits any number.
+func NewWatcherGate(limit int) *WatcherGate {
+	return &WatcherGate{limit: limit}
+}
+
+// acquire takes a slot and reports whether it got one.
+//
+// A compare-and-swap rather than an add followed by a retraction on refusal,
+// so the count never reads above the limit even for an instant. Under the
+// add-first shape, k callers racing at a full gate drive the count to limit+k
+// until each retracts, and an admission that had a free slot waiting for it
+// could be refused by other callers' failed attempts. That would also make
+// [WatcherGate.count] a number the refusal message and the log line could
+// report above the ceiling they name.
+func (g *WatcherGate) acquire() bool {
+	if g == nil || g.limit <= 0 {
+		return true
+	}
+	for {
+		held := g.held.Load()
+		if held >= int64(g.limit) {
+			return false
+		}
+		if g.held.CompareAndSwap(held, held+1) {
+			return true
+		}
+	}
+}
+
+// release gives a slot back.
+//
+// Its guards are acquire's, so an admission that never counted is not counted
+// back either and a gate with no ceiling can never fall below zero.
+func (g *WatcherGate) release() {
+	if g == nil || g.limit <= 0 {
+		return
+	}
+	g.held.Add(-1)
+}
+
+// count reports how many slots are held right now.
+func (g *WatcherGate) count() int64 {
+	if g == nil {
+		return 0
+	}
+	return g.held.Load()
 }
 
 // Manager owns the watchers for one MCP server, which in HTTP mode means
@@ -327,12 +421,47 @@ func (m *Manager[S]) Subscribe(ctx context.Context, subscriber S, uri string) er
 			"uri", uri, "kind", kind.String(), "subscribers", count)
 		return m.awaitStart(ctx, w, subscriber)
 	}
+	// The shared slot is taken before this manager's own cap is enforced,
+	// because enforcing that cap spends something: it stops the longest-demoted
+	// watch to make room. Evicting first and then finding the shared gate full
+	// would leave the caller with one watch fewer than it started with and
+	// nothing in its place, since the slot the eviction returns is a
+	// process-wide atomic that another credential can take in that instant.
+	// Taking the slot first makes both refusals free: neither touches this
+	// credential's watches, and the per-credential one gives the slot straight
+	// back, so the shared count ends where it started.
+	//
+	// The trade is that a credential at its own cap cannot replace a demoted
+	// watch while the shared gate is saturated, although the replacement would
+	// be net-neutral for the gate. It is refused instead, which is the right
+	// answer from a process already at its ceiling and costs the caller
+	// nothing.
+	if !m.opts.SharedWatchers.acquire() {
+		held, limit := m.opts.SharedWatchers.count(), m.opts.SharedWatchers.limit
+		m.mu.Unlock()
+		// At WARN because the ceiling is not configurable: the operator cannot
+		// act on the number, but a deployment saturating it is running at a
+		// bound nothing else reports, and only the refused client would
+		// otherwise know.
+		//
+		// The kind rather than the URI: nothing has accepted this URI yet, its
+		// length is bounded only by the request body, and this line is on at
+		// the default level, so echoing it would let one refused request write
+		// as many bytes into the operator's log as the request carried. The
+		// client's own error names what it asked for.
+		m.opts.Logger.Warn("subscription refused: this process is at its watcher ceiling",
+			"kind", kind.String(), "watching", held, "limit", limit)
+		return fmt.Errorf("%w: server-wide, %d watching, limit %d", ErrTooManySubscriptions, held, limit)
+	}
 	if len(m.watchers) >= m.opts.MaxWatchers && !m.evictDemotedLocked() {
+		m.opts.SharedWatchers.release()
 		m.mu.Unlock()
 		return fmt.Errorf("%w: %d watching, limit %d", ErrTooManySubscriptions, len(m.watchers), m.opts.MaxWatchers)
 	}
 	// Reserve the slot before releasing the lock so two concurrent
-	// subscribes cannot both pass the cap check.
+	// subscribes cannot both pass the cap check. An eviction just above
+	// returned a slot of its own, so the two net to the one this watcher
+	// holds.
 	w := &watcher[S]{
 		uri:         uri,
 		kind:        kind,
@@ -415,12 +544,31 @@ func (m *Manager[S]) start(ctx context.Context, w *watcher[S]) error {
 	return nil
 }
 
+// dropWatcherLocked removes one watcher from the registry and returns the
+// shared slot it holds. m.mu must be held.
+//
+// This is the only place a watcher leaves m.watchers, which is what makes the
+// shared count trustworthy: a removal path that deleted its own map entry would
+// leak a slot for the life of the process, and the leak would surface much
+// later as subscriptions refused for no visible reason. Removal points are easy
+// to add, which is why the credential pool holds itself to the same one-exit
+// discipline for its own eviction notification.
+//
+// The identity check is what makes it safe to call for a watcher that may
+// already be gone: one replaced by a newer watcher for the same URI had its
+// slot returned by whoever replaced it.
+func (m *Manager[S]) dropWatcherLocked(w *watcher[S]) {
+	if m.watchers[w.uri] != w {
+		return
+	}
+	delete(m.watchers, w.uri)
+	m.opts.SharedWatchers.release()
+}
+
 // abandonLocked drops a watcher that never started and releases whoever is
 // waiting on it. m.mu must be held.
 func (m *Manager[S]) abandonLocked(w *watcher[S], reason error) {
-	if m.watchers[w.uri] == w {
-		delete(m.watchers, w.uri)
-	}
+	m.dropWatcherLocked(w)
 	w.readyErr = reason
 	close(w.ready)
 }
@@ -468,7 +616,7 @@ func (m *Manager[S]) Unsubscribe(subscriber S, uri string) error {
 		m.opts.Logger.Debug("subscriber left, watcher still in use", "uri", uri, "subscribers", count)
 		return nil
 	}
-	delete(m.watchers, uri)
+	m.dropWatcherLocked(w)
 	cancel := w.cancel
 	m.mu.Unlock()
 
@@ -491,13 +639,13 @@ func (m *Manager[S]) Unsubscribe(subscriber S, uri string) error {
 func (m *Manager[S]) UnsubscribeAll(subscriber S) int {
 	m.mu.Lock()
 	stopped := make([]*watcher[S], 0, len(m.watchers))
-	for uri, w := range m.watchers {
+	for _, w := range m.watchers {
 		if _, held := w.subscribers[subscriber]; !held {
 			continue
 		}
 		delete(w.subscribers, subscriber)
 		if len(w.subscribers) == 0 {
-			delete(m.watchers, uri)
+			m.dropWatcherLocked(w)
 			stopped = append(stopped, w)
 		}
 	}
@@ -540,13 +688,18 @@ func (m *Manager[S]) Close() {
 	// whose first read is still in flight has no cancel yet, and needs
 	// none: start re-checks closed under this same lock and abandons the
 	// launch.
+	//
+	// Dropped one at a time rather than by replacing the map, because each one
+	// holds a slot of the shared ceiling and the count only comes back through
+	// the single removal point. Deleting from a map while ranging over it is
+	// defined, and the entries removed are exactly the ones already seen.
 	cancels := make([]context.CancelFunc, 0, len(m.watchers))
 	for _, w := range m.watchers {
 		if w.cancel != nil {
 			cancels = append(cancels, w.cancel)
 		}
+		m.dropWatcherLocked(w)
 	}
-	m.watchers = make(map[string]*watcher[S])
 	m.mu.Unlock()
 
 	for _, cancel := range cancels {
@@ -637,15 +790,19 @@ func (m *Manager[S]) watch(ctx context.Context, w *watcher[S], first time.Durati
 // client either requested the stop or is no longer there to hear about it.
 func (m *Manager[S]) retire(w *watcher[S], cause error) {
 	m.mu.Lock()
-	if m.watchers[w.uri] == w {
-		delete(m.watchers, w.uri)
-	}
+	m.dropWatcherLocked(w)
 	evicted := w.evicted
 	m.mu.Unlock()
 
 	switch {
 	case errors.Is(cause, ErrInaccessible):
-		m.announceStop(w.uri, ErrInaccessible)
+		// The cause rather than the bare sentinel, because it is the only
+		// thing carrying what actually happened: [TranslateReadError] wraps
+		// the read error, so a caller can still recover the status GitLab
+		// answered with and tell its client whether the resource is gone or
+		// its access was withdrawn. Announcing the sentinel threw that away
+		// one call before anybody could read it.
+		m.announceStop(w.uri, cause)
 	case errors.Is(cause, context.DeadlineExceeded):
 		m.announceStop(w.uri, ErrLifetimeExceeded)
 	case evicted:
@@ -798,7 +955,7 @@ func (m *Manager[S]) evictDemotedLocked() bool {
 	if oldest == nil {
 		return false
 	}
-	delete(m.watchers, oldest.uri)
+	m.dropWatcherLocked(oldest)
 	oldest.evicted = true
 	if oldest.cancel != nil {
 		oldest.cancel()

@@ -89,7 +89,7 @@ func TestCredentialStates_AddGetRemove_TracksThePool(t *testing.T) {
 	})
 
 	t.Run("eviction drops only its own entry", func(t *testing.T) {
-		states.remove("owner-mine", nil)
+		states.remove("owner-mine", nil, endOfCredentialEviction)
 
 		if got := states.get("owner-mine"); got != nil {
 			t.Errorf("get after remove = %v, want nil; the state must not outlive its pool entry", got)
@@ -103,8 +103,8 @@ func TestCredentialStates_AddGetRemove_TracksThePool(t *testing.T) {
 		// Both reachable: the pool evicts an entry whose insert callback found
 		// no shape, and an empty owner is what a state that was never filed
 		// reports.
-		states.remove("owner-mine", nil)
-		states.remove("", nil)
+		states.remove("owner-mine", nil, endOfCredentialEviction)
+		states.remove("", nil, endOfCredentialEviction)
 	})
 }
 
@@ -157,7 +157,7 @@ func TestCredentialStates_Remove_StopsTheWatchersAndEndsTheStreams(t *testing.T)
 	state.streams = streams
 	states.add(state)
 
-	states.remove("owner-evicted", nil)
+	states.remove("owner-evicted", nil, endOfCredentialEviction)
 
 	waitFor(t, func() bool { return runtime.manager.Len() == 0 && mineCtx.Err() != nil })
 	if got := runtime.manager.Len(); got != 0 {
@@ -227,8 +227,8 @@ func TestCredentialState_Busy_ReportsTheWorkThePoolCannotSee(t *testing.T) {
 // no subscriptions.
 func TestCredentialState_Close_WithNothingToRelease_IsANoOp(t *testing.T) {
 	var absent *credentialState
-	absent.close(nil)
-	credentialTestState(t, "owner-mine").close(nil)
+	absent.close(nil, endOfCredentialEviction)
+	credentialTestState(t, "owner-mine").close(nil, endOfCredentialEviction)
 }
 
 // TestWithCredentialState_InstallsTheStateAndItsClientTogether covers the
@@ -423,7 +423,7 @@ func TestServerShell_NewCredentialState_TakesWhatTheEntryDecides(t *testing.T) {
 	}
 
 	state := shell.newCredentialState(entry)
-	t.Cleanup(func() { state.close(nil) })
+	t.Cleanup(func() { state.close(nil, endOfCredentialEviction) })
 
 	if state.owner != entry.Owner() {
 		t.Errorf("owner = %q, want the entry's own token %q", state.owner, entry.Owner())
@@ -472,7 +472,7 @@ func TestServerShell_NewCredentialState_AnEntryWithNoConfiguration_FallsBackToTh
 
 	// The zero entry: no configuration, no client, no owner.
 	state := shell.newCredentialState(&serverpool.Entry{})
-	t.Cleanup(func() { state.close(nil) })
+	t.Cleanup(func() { state.close(nil, endOfCredentialEviction) })
 
 	if state.limiter == nil {
 		t.Error("the shell's own rate was not used for an entry that resolved none")
@@ -522,7 +522,7 @@ func TestServerShell_DefaultCredentialState_FailsClosedOnlyWhenShared(t *testing
 			if err != nil {
 				t.Fatalf("newServerShell: %v", err)
 			}
-			t.Cleanup(func() { shell.state.close(nil) })
+			t.Cleanup(func() { shell.state.close(nil, endOfCredentialEviction) })
 
 			if shell.state == nil {
 				t.Fatal("the shell has no default state; every unbound request would resolve to nothing at all")
