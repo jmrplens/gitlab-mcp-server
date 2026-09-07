@@ -1,3 +1,12 @@
+# IPv4 only, whatever the daemon's default is. A host whose Docker enables IPv6
+# on new networks (TrueNAS SCALE does, with a fdd0::/48 pool) hands every
+# service an IPv6 address as well, GitLab resolves e2e-fixture to that one
+# first, and the hook test fails with "Failed to open TCP connection to
+# fdd0:0:0:3::2:8080" against a fixture nothing reaches over IPv6.
+networks:
+  default:
+    enable_ipv6: false
+
 services:
   gitlab:
     image: ${GITLAB_IMAGE:-gitlab/gitlab-ce:latest}
