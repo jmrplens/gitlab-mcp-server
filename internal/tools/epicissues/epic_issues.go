@@ -84,39 +84,23 @@ mutation($id: WorkItemID!) {
 }
 `
 
+// mutationReorderChild moves one child among its siblings. The item updated
+// is the child, with the epic as parentId: GitLab refuses relativePosition
+// combined with childrenIds ("Relative position cannot be combined with
+// childrenIds"), so the parent cannot be told which child moves. The mutation
+// answers with the child alone; the epic's children are listed afterwards.
 const mutationReorderChild = `
-mutation($id: WorkItemID!, $childrenIds: [WorkItemID!]!, $adjacentWorkItemId: WorkItemID!, $relativePosition: RelativePositionType!) {
+mutation($id: WorkItemID!, $parentId: WorkItemID!, $adjacentWorkItemId: WorkItemID!, $relativePosition: RelativePositionType!) {
   workItemUpdate(input: {
     id: $id
     hierarchyWidget: {
-      childrenIds: $childrenIds
+      parentId: $parentId
       adjacentWorkItemId: $adjacentWorkItemId
       relativePosition: $relativePosition
     }
   }) {
     workItem {
       id
-      widgets {
-        ... on WorkItemWidgetHierarchy {
-          children(first: 100) {
-            nodes {
-              id
-              iid
-              title
-              state
-              webUrl
-              createdAt
-              updatedAt
-              author { username }
-              widgets {
-                ... on WorkItemWidgetLabels {
-                  labels { nodes { title } }
-                }
-              }
-            }
-          }
-        }
-      }
     }
     errors
   }
@@ -504,12 +488,14 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 			hintEpicGIDResolution)
 	}
 
+	// The child is the item updated and the epic is its parentId; see the
+	// comment on mutationReorderChild for why the parent cannot be the target.
 	var resp gqlMutationResponse
 	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query: mutationReorderChild,
 		Variables: map[string]any{
-			"id":                 epicGID,
-			"childrenIds":        []string{input.ChildID},
+			"id":                 input.ChildID,
+			"parentId":           epicGID,
 			"adjacentWorkItemId": input.AdjacentID,
 			"relativePosition":   pos,
 		},
@@ -523,19 +509,7 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 		return ListOutput{}, fmt.Errorf("epicIssueUpdate: %s", resp.Data.WorkItemUpdate.Errors[0])
 	}
 
-	var children []ChildOutput
-	if resp.Data.WorkItemUpdate.WorkItem != nil {
-		for _, w := range resp.Data.WorkItemUpdate.WorkItem.Widgets {
-			if w.Children != nil {
-				for _, n := range w.Children.Nodes {
-					children = append(children, nodeToChildOutput(n))
-				}
-			}
-		}
-	}
-	if len(children) == 0 {
-		return List(ctx, client, ListInput{FullPath: input.FullPath, IID: input.IID})
-	}
-
-	return ListOutput{Issues: children}, nil
+	// The mutation answers with the child that moved, not with the epic's
+	// children, so the order the caller asked about is read back from the epic.
+	return List(ctx, client, ListInput{FullPath: input.FullPath, IID: input.IID})
 }
