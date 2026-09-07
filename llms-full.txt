@@ -16852,8 +16852,8 @@ Get a single CI/CD Catalog resource by GID or full path. Returns: the resource w
 
 **Parameters:**
 
-- `full_path` (string): Full path of the project hosting the resource (e.g. my-group/my-components). Use either id or full_path.
-- `id` (string): Catalog resource GID (e.g. gid://gitlab/Ci::CatalogResource/1). Use either id or full_path.
+- `full_path` (string): Full path of the project hosting the resource (e.g. my-group/my-components). Give exactly one of id or full_path. Sending both is refused.
+- `id` (string): Catalog resource GID (e.g. gid://gitlab/Ci::CatalogResource/1). Give exactly one of id or full_path. Sending both is refused.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

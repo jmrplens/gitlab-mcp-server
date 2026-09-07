@@ -45,7 +45,7 @@ func main() {
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
 	scope := flag.String("scope", "structs,actions,metadata,enums", "one of {structs,actions,metadata,enums,sdk,paths} for a single-scope report, or the first four (default) for the merged backlog; other combinations are not supported")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
-	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint against GitLab's API documentation (needs the network and reads ~250 pages; a candidate list, never a gate)")
+	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint against GitLab's API documentation (needs the network and reads ~250 pages; fails on an endpoint no declaration in cmd/audit_1to1/internal/paths accounts for)")
 	refresh := flag.Bool("refresh", false, "with -validate-docs or -check-endpoints, force re-fetch of cited docs even when cached and fresh")
 	offline := flag.Bool("offline", false, "with -validate-docs or -check-endpoints, use only cached docs; do not fetch")
 	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "with -validate-docs or -check-endpoints, re-download cached docs older than this")
@@ -199,9 +199,9 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 }
 
 // runSingle runs one analyzer and returns its native JSON shape plus whether
-// that scope's gate passes. Only sdk and enums gate; the three candidate
-// streams always report clean, because a listed candidate is a backlog entry
-// rather than a defect.
+// that scope's gate passes. Only sdk, enums and paths gate; the three
+// candidate streams always report clean, because a listed candidate is a
+// backlog entry rather than a defect.
 func runSingle(ctx context.Context, scope string, opts options) (content []byte, clean bool, err error) {
 	switch scope {
 	case "structs", "actions", "enums", "sdk", scopePaths:
@@ -236,8 +236,9 @@ func runSingle(ctx context.Context, scope string, opts options) (content []byte,
 // through, or nil when the comparison was not asked for.
 //
 // Nil is the default because the comparison needs the network and two minutes
-// of it on a cold cache, and it gates nothing: a run that only wants the gate
-// should not pay for a list nobody asked to see.
+// of it on a cold cache: a run that only wants the two offline checks should
+// not pay for it. When it is asked for it gates, on the endpoints no
+// declaration in cmd/audit_1to1/internal/paths accounts for.
 func endpointFetcher(root string, opts options) *apidocs.Fetcher {
 	if !opts.endpoints {
 		return nil

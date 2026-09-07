@@ -43,6 +43,9 @@ type UpdateOutput struct {
 
 // Update updates a submodule reference in a repository.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (UpdateOutput, error) {
+	if string(input.ProjectID) == "" {
+		return UpdateOutput{}, toolutil.ErrRequiredString("update_repository_submodule", "project_id")
+	}
 	opts := &gl.UpdateSubmoduleOptions{
 		Branch:    new(input.Branch),
 		CommitSHA: new(input.CommitSHA),

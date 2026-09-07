@@ -44,6 +44,7 @@ type shardRecord struct {
 	Method    string   `json:"method"`
 	Path      string   `json:"path"`
 	Query     []string `json:"query,omitempty"`
+	Body      []string `json:"body,omitempty"`
 	Operation string   `json:"operation,omitempty"`
 	Variables []string `json:"variables,omitempty"`
 }
@@ -128,6 +129,7 @@ func readShard(path string) ([]shardRecord, error) {
 // merge folds the records into one row per package, method and endpoint.
 func merge(records []shardRecord) []row {
 	queries := map[rowKey]map[string]struct{}{}
+	bodies := map[rowKey]map[string]struct{}{}
 	variables := map[rowKey]map[string]struct{}{}
 	for _, record := range records {
 		key := rowKey{
@@ -139,9 +141,11 @@ func merge(records []shardRecord) []row {
 		}
 		if _, ok := queries[key]; !ok {
 			queries[key] = map[string]struct{}{}
+			bodies[key] = map[string]struct{}{}
 			variables[key] = map[string]struct{}{}
 		}
 		addAll(queries[key], record.Query)
+		addAll(bodies[key], record.Body)
 		addAll(variables[key], record.Variables)
 	}
 
@@ -153,6 +157,7 @@ func merge(records []shardRecord) []row {
 			Method:    key.method,
 			Path:      key.path,
 			Query:     sortedNames(query),
+			Body:      sortedNames(bodies[key]),
 			Operation: key.operation,
 			Variables: sortedNames(variables[key]),
 		})
@@ -242,6 +247,9 @@ func rowLine(r row) string {
 	}
 	if len(r.Query) > 0 {
 		line += " ?" + strings.Join(r.Query, ",")
+	}
+	if len(r.Body) > 0 {
+		line += " {" + strings.Join(r.Body, ",") + "}"
 	}
 	if len(r.Variables) > 0 {
 		line += " $" + strings.Join(r.Variables, ",")

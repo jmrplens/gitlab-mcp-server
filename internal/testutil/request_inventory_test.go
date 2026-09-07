@@ -60,8 +60,8 @@ func TestDescribeRequest_REST_RecordsMethodPathAndQueryNames(t *testing.T) {
 	if !ok {
 		t.Fatal("describeRequest reported no record for a REST call")
 	}
-	if record.Kind != kindREST || record.Method != http.MethodGet || record.Path != "/projects/:id/issues" {
-		t.Errorf("record = %+v, want a rest GET of /projects/:id/issues", record)
+	if record.Kind != kindREST || record.Method != http.MethodGet || record.Path != "/projects/:project_id/issues" {
+		t.Errorf("record = %+v, want a rest GET of /projects/:project_id/issues", record)
 	}
 	if !slices.Equal(record.Query, []string{"per_page", "state"}) {
 		t.Errorf("query = %v, want [per_page state]", record.Query)
@@ -81,6 +81,92 @@ func TestDescribeRequest_NoQuery_OmitsTheField(t *testing.T) {
 	}
 	if record.Query != nil {
 		t.Errorf("query = %v, want nil", record.Query)
+	}
+}
+
+// jsonRequest builds a request with a JSON body of the given content type,
+// which is what decides whether the recorder reads it at all.
+func jsonRequest(t *testing.T, method, contentType, body string) *http.Request {
+	t.Helper()
+	request := httptest.NewRequestWithContext(t.Context(), method, "http://gitlab.example.com/api/v4/projects/1/issues", strings.NewReader(body))
+	if contentType != "" {
+		request.Header.Set("Content-Type", contentType)
+	}
+	return request
+}
+
+// TestDescribeRequest_JSONBody_RecordsItsFieldNames verifies the half of a
+// mutating request the path cannot carry. Without it a create or an update is
+// a method and an endpoint and nothing else, which is most of what this server
+// sends and where a wrong field name would live.
+//
+// The values are absent for the reason the query values are: a value is a
+// fixture, a name is part of the request. A body this cannot read field names
+// out of is recorded as a row with no body rather than skipped, because the
+// endpoint was still reached.
+func TestDescribeRequest_JSONBody_RecordsItsFieldNames(t *testing.T) {
+	tests := []struct {
+		name    string
+		request func() *http.Request
+		want    []string
+	}{
+		{"a JSON object", func() *http.Request {
+			return jsonRequest(t, http.MethodPost, "application/json", `{"title":"t","labels":"a,b","confidential":true}`)
+		}, []string{"confidential", "labels", "title"}},
+		{"a content type with a charset after it", func() *http.Request {
+			return jsonRequest(t, http.MethodPut, "application/json; charset=utf-8", `{"title":"t"}`)
+		}, []string{"title"}},
+		{"a multipart upload, which is never read", func() *http.Request {
+			return jsonRequest(t, http.MethodPost, "multipart/form-data; boundary=x", `{"title":"t"}`)
+		}, nil},
+		{"a request declaring no content type", func() *http.Request {
+			return jsonRequest(t, http.MethodPost, "", `{"title":"t"}`)
+		}, nil},
+		{"a JSON array, which has no field names", func() *http.Request {
+			return jsonRequest(t, http.MethodPost, "application/json", `[{"title":"t"}]`)
+		}, nil},
+		{"an empty JSON object", func() *http.Request {
+			return jsonRequest(t, http.MethodPost, "application/json", `{}`)
+		}, nil},
+		{"a body that cannot be read", func() *http.Request {
+			request := jsonRequest(t, http.MethodPost, "application/json", `{"title":"t"}`)
+			request.Body = failingBody{}
+			return request
+		}, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := tt.request()
+
+			record, ok := describeRequest(requestOrigin{}, request)
+
+			if !ok {
+				t.Fatal("describeRequest reported no record for a REST call")
+			}
+			if !slices.Equal(record.Body, tt.want) {
+				t.Errorf("body = %v, want %v", record.Body, tt.want)
+			}
+		})
+	}
+}
+
+// TestDescribeRequest_JSONBody_StaysReadable verifies that reading the field
+// names leaves the body where the handler under test can still read it, which
+// every mock that decodes what it was sent depends on.
+func TestDescribeRequest_JSONBody_StaysReadable(t *testing.T) {
+	request := jsonRequest(t, http.MethodPost, "application/json", `{"title":"t"}`)
+
+	if _, ok := describeRequest(requestOrigin{}, request); !ok {
+		t.Fatal("describeRequest reported no record")
+	}
+
+	var round map[string]any
+	if err := json.NewDecoder(request.Body).Decode(&round); err != nil {
+		t.Fatalf("the body was consumed: %v", err)
+	}
+	if round["title"] != "t" {
+		t.Errorf("body round-tripped as %v, want the title it was sent", round)
 	}
 }
 
@@ -319,9 +405,16 @@ func TestRecordingHandler_RecordingOff_ReturnsTheHandlerUnchanged(t *testing.T) 
 // The project is addressed by path, so the row also proves the encoded
 // identifier collapses: without that, one endpoint reached by id and by path
 // would be two rows and the inventory would count fixtures.
+//
+// A client built here would ordinarily record nothing, since this package's
+// own fixtures are not requests this server sends GitLab, so the test moves
+// that exemption aside to drive the wiring. This is the only place the whole
+// chain from [NewTestClient] to a shard line is exercised, which is what makes
+// it worth the seam: nothing else would notice the wrapper being dropped.
 func TestNewTestClient_Recording_WritesTheRequestTheClientMade(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(InventoryDirEnv, dir)
+	restoreRecorderPackage(t, "internal/testutil/not-this-package")
 
 	client := NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		RespondJSON(w, http.StatusOK, `{"id":1,"path_with_namespace":"group/project"}`)
@@ -338,11 +431,40 @@ func TestNewTestClient_Recording_WritesTheRequestTheClientMade(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
 		t.Fatalf("Unmarshal(%s) error = %v", lines[0], err)
 	}
-	if record.Path != "/projects/:id" || record.Method != http.MethodGet {
-		t.Errorf("record = %+v, want a GET of /projects/:id", record)
+	if record.Path != "/projects/:project_id" || record.Method != http.MethodGet {
+		t.Errorf("record = %+v, want a GET of /projects/:project_id", record)
 	}
 	if record.Package != "internal/testutil" || record.Test != t.Name() {
 		t.Errorf("attribution = %s/%s, want internal/testutil/%s", record.Package, record.Test, t.Name())
+	}
+}
+
+// restoreRecorderPackage points the self-exemption at another name for one
+// test and puts the real one back afterwards.
+func restoreRecorderPackage(t *testing.T, name string) {
+	t.Helper()
+	previous := recorderPackage
+	recorderPackage = name
+	t.Cleanup(func() { recorderPackage = previous })
+}
+
+// TestRecordingHandler_ThisPackagesOwnClient_RecordsNothing verifies the
+// exemption itself: this package's fixtures exercise its own mock, and a
+// request nothing in internal/tools issued has no place in an inventory read
+// as what this server sends GitLab.
+func TestRecordingHandler_ThisPackagesOwnClient_RecordsNothing(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(InventoryDirEnv, dir)
+
+	client := NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		RespondJSON(w, http.StatusOK, `{"id":1}`)
+	}))
+	if _, _, err := client.GL().Projects.GetProject(1, nil); err != nil {
+		t.Fatalf("GetProject error = %v", err)
+	}
+
+	if lines := shardLines(t, dir); len(lines) != 0 {
+		t.Errorf("wrote %d line(s), want none:\n%s", len(lines), strings.Join(lines, "\n"))
 	}
 }
 

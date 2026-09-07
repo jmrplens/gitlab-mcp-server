@@ -220,15 +220,17 @@ func TestDifferences_StaleArtifact_NamesTheRequestsThatMoved(t *testing.T) {
 	})
 	now := []row{
 		{Package: "internal/tools/issues", Kind: "rest", Method: http.MethodGet, Path: "/projects/:id/issues", Query: []string{"per_page", "state"}},
+		{Package: "internal/tools/issues", Kind: "rest", Method: http.MethodPost, Path: "/projects/:id/issues", Body: []string{"description", "title"}},
 		{Package: "internal/tools/issues", Kind: "graphql", Method: http.MethodPost, Path: "/graphql", Operation: "query project", Variables: []string{"fullPath"}},
 	}
 
 	report := differences(committed, now)
 
 	for _, want := range []string{
-		"now issued and not in the committed inventory (2)",
+		"now issued and not in the committed inventory (3)",
 		"/graphql query project $fullPath",
 		"/projects/:id/issues ?per_page,state",
+		"POST /projects/:id/issues {description,title}",
 		"in the committed inventory and no longer issued (2)",
 		"/projects/:id/old_place",
 	} {

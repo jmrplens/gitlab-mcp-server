@@ -59,6 +59,39 @@ func TestClassify_Owners_AreSplitThreeWays(t *testing.T) {
 	})
 }
 
+// TestClassify_TheRootOwner_ResolvesToTheOrchestrationPackage verifies the one
+// owner that is not a directory under internal/tools.
+//
+// The catalog gives a spec group that declares none the owner "tools", and
+// TestCollectedActionSpecs_DeclareCatalogOwnership admits it beside the domain
+// names, so it has to resolve to internal/tools itself. Calling it unmapped
+// would report a catalog-metadata defect that is not one, and the gate now
+// fails on unmapped owners.
+func TestClassify_TheRootOwner_ResolvesToTheOrchestrationPackage(t *testing.T) {
+	root := t.TempDir()
+	makeToolsPackage(t, root, "issues")
+
+	t.Run("covered when the root package recorded something", func(t *testing.T) {
+		coverage := Classify(root,
+			[]Row{{Package: ToolsDir, Path: "/projects/:project_id"}},
+			[]Action{{ID: "discover.project", Owner: RootOwner}})
+
+		if coverage.Covered != 1 || coverage.Unmapped != 0 {
+			t.Errorf("coverage = %+v, want the root owner covered", coverage)
+		}
+	})
+
+	t.Run("silent, not unmapped, when it recorded nothing", func(t *testing.T) {
+		coverage := Classify(root,
+			[]Row{{Package: "internal/tools/issues", Path: "/projects/:project_id/issues"}},
+			[]Action{{ID: "discover.project", Owner: RootOwner}})
+
+		if coverage.Silent != 1 || coverage.Unmapped != 0 {
+			t.Errorf("coverage = %+v, want the root owner silent rather than unmapped", coverage)
+		}
+	})
+}
+
 // TestClassify_SeveralOwnersAndActions_AreSortedForAStableReport verifies the
 // order, since a report that reshuffles between runs turns every audit into a
 // diff nobody can read.

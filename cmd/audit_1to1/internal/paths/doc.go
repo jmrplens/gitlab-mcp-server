@@ -24,6 +24,26 @@
 // action it owns, and a package that recorded nothing is a finding against all
 // of them.
 //
+// That grain is the check's limit and it is worth saying plainly, because the
+// number it prints reads stronger than it is: 990 of 1082 actions observed
+// means 990 actions whose owning package issued some request, not 990 actions
+// whose own request anybody has seen. Summary.Grain says so beside the number,
+// since the number is what gets quoted. As a regression guard it is real and
+// as per-action assurance it is nothing, and the layer that closes that gap is
+// a live instance rather than a stronger reading of this file.
+//
+// An action whose declared owner names no package at all is a finding of its
+// own rather than a curiosity. Nothing in the catalog validates that an owner
+// is a package, so such an action used to be classified unmapped, which was
+// gated by nothing and dropped from the -gaps-only report: it could be neither
+// counted nor seen. It is counted now. The owner "tools" is the exception the
+// catalog itself defines, for the orchestration package rather than a domain
+// under it, and it resolves to internal/tools, which records requests of its
+// own.
+//
+// What no version of this can catch is an owner that names a real package and
+// the wrong one, because the recording joins on that name and nothing else.
+//
 // A package may nevertheless be silent for a reason, and internal/tools/adminspecs
 // is the whole of it today: it declares specs whose handlers live in other
 // packages, so its requests are recorded under the package that made them.
@@ -38,12 +58,29 @@
 // standalone gate cmd/audit_graphql_documents, so there is one answer to
 // whether a document is one GitLab would refuse.
 //
+// This check judges the document and never the values sent with it, and the
+// two halves of that family are worth keeping straight because neither
+// substitutes for the other. Of the nine tools that shipped unable to work,
+// four sent a document the schema refuses and this is what catches them; the
+// other five sent a document the schema accepts carrying a value GitLab does
+// not have, an enum miscased or a filter typed as a string, and what catches
+// those is the validating transport in internal/testutil, which validates the
+// variables with the document every time a test drives one. That check lives
+// under every unit test and belongs to whoever keeps NewTestClient wrapping
+// the handler it is given: removing that wrapper would remove half the
+// coverage of this defect family, silently, which is why
+// TestNewTestClient_Recording_WritesTheRequestTheClientMade and its GraphQL
+// counterpart exist there.
+//
 // # Does the endpoint exist
 //
-// Each recorded REST endpoint against GitLab's own API documentation. This one
-// is a candidate list a human adjudicates and deliberately not a gate, and the
-// reasons are in [CheckEndpoints]: the oracle is prose, and a false failure
-// here would poison the whole dimension.
+// Each recorded REST endpoint against GitLab's own API documentation. It runs
+// only when asked for, because the oracle is 250 pages over the network, and
+// when it runs it gates: an endpoint no declaration in endpoint_declarations.go
+// accounts for fails the run, which is what the issue behind this dimension
+// asked for. The declarations are what make that safe, since the oracle is
+// prose and a handful of endpoints GitLab serves are written down in a way no
+// comparison can match; [EndpointCheck] has the categories and the reasons.
 //
 // # Where the report goes
 //
@@ -62,4 +99,25 @@
 // and the inventory catch a request that cannot work, a real instance catches a
 // response we misread, and the other five rules keep catching the surface we
 // failed to expose.
+//
+// Two more limits, both deliberate and neither obvious.
+//
+// The inventory records which parameter names an endpoint was sent and never
+// which of them were sent together, so a combination of optional inputs that
+// GitLab refuses is invisible here. gitlab_get_catalog_resource was in that
+// state: id and full_path are both optional, both were published, GitLab
+// accepts exactly one, and nothing sent both because no test did. The answer
+// to that class is a handler that refuses the combination and a schema that
+// says so, which is where the fix went, rather than an inventory of every
+// combination the tests happen to use: a combination is a property of the
+// fixtures, and a file that recorded them would be read as a contract.
+//
+// The issue that asked for this dimension also asked for the mock to refuse a
+// request whose path is not in the committed inventory, and that is not built.
+// It was declined while the inventory had never been read by anybody, on the
+// grounds that a baseline nobody has checked is not one to gate against; the
+// inventory has since been read and corrected, so the objection is spent and
+// the reason it is still not here is only that an allow-list of paths fails
+// every new test before its endpoint is committed, which is the deadlock the
+// observation check already had to be taught to avoid.
 package paths

@@ -15,6 +15,13 @@ import (
 // name carries when the catalog knows it as an owner.
 const ToolsDir = "internal/tools"
 
+// RootOwner is what the catalog calls the orchestration package itself, which
+// is ToolsDir rather than a directory under it: a spec group that declares no
+// owner is given this one, and TestCollectedActionSpecs_DeclareCatalogOwnership
+// admits it beside the domain names. Resolving it to the root package is what
+// keeps an action owned by it from being classified as owned by nothing.
+const RootOwner = "tools"
+
 // Action is one catalog action as this dimension sees it: an identity and the
 // package that owns it, which is the only handle the recording can be joined
 // on.
@@ -54,9 +61,10 @@ type Owner struct {
 // The three counts are disjoint and none of them is per action, which is the
 // point of keeping them apart. Covered means the package owning the action
 // issued some request, not that this action's request was seen; silent means
-// the package issued none; unmapped means the action's owner is not a package
-// under internal/tools at all, so the recording could not have seen it either
-// way.
+// the package issued none; unmapped means the action's owner names no package
+// at all, neither the orchestration package nor a domain under it, so the
+// recording could not have seen it either way and the fault is in the
+// catalog's ownership metadata rather than in any test.
 //
 // Silent is weaker than "never exercised" for a second reason beyond the
 // coarse grain, and internal/tools/adminspecs is the whole of it today: a
@@ -83,6 +91,10 @@ func Classify(root string, rows []Row, actions []Action) Coverage {
 	for _, row := range rows {
 		if owner, ok := strings.CutPrefix(row.Package, ToolsDir+"/"); ok {
 			recorded[owner] = struct{}{}
+			continue
+		}
+		if row.Package == ToolsDir {
+			recorded[RootOwner] = struct{}{}
 		}
 	}
 
@@ -97,7 +109,7 @@ func Classify(root string, rows []Row, actions []Action) Coverage {
 		}
 		known, asked := isPackage[action.Owner]
 		if !asked {
-			known = directoryExists(filepath.Join(root, filepath.FromSlash(ToolsDir), action.Owner))
+			known = directoryExists(PackageDir(root, action.Owner))
 			isPackage[action.Owner] = known
 		}
 		if known {
@@ -132,6 +144,15 @@ func Packages(owners []Owner) []string {
 		names = append(names, owner.Package)
 	}
 	return names
+}
+
+// PackageDir is where the package an owner names lives, which is ToolsDir
+// itself for [RootOwner] and a directory under it for every domain.
+func PackageDir(root, owner string) string {
+	if owner == RootOwner {
+		return filepath.Join(root, filepath.FromSlash(ToolsDir))
+	}
+	return filepath.Join(root, filepath.FromSlash(ToolsDir), owner)
 }
 
 // directoryExists reports whether path is a directory.

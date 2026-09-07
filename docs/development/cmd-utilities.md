@@ -125,11 +125,27 @@ A documented per-endpoint subset (the branch protection levels are `0`, `30`, `4
 
 Report keys: `schema_version`, `client_go_path`, a `summary` block (`sdk_enums`, `fields`, `fields_with_gaps`, `unsurfaced_output_fields`, `missing_values`, `extra_values`, `stale_exemptions` and `packages`), `packages[]` with one finding per (action, field), and `stale_exemptions[]`. With `-gaps-only` only the fields with a finding are listed.
 
+#### Request paths (R-PATH)
+
+`-scope=paths`. Every other rule describes the surface: the fields we accept, the fields we return, the actions we register, the discovery metadata we attach, the enum values we advertise. All of them compare what we publish against what the SDK and the API documentation offer, and none of them looks at the request a handler builds. That is how nine registered tools shipped while being unable to work: a perfect input struct, a perfect output struct, a registered action, complete enums, and a request GitLab refuses.
+
+This rule reads the request instead, out of `docs/development/request-inventory.json`, the inventory `internal/testutil` records and [gen_request_inventory](#gen_request_inventory) commits. Three checks:
+
+- **Has the path ever been observed.** An action whose owning package issued no request at all has never had its request seen by anything, which is exactly the state the broken documents were in. Held at package grain, because nothing on the wire names an action, and the report says so beside the number (`actions_observed_grain`): 990 of 1082 observed means 990 actions whose owning package issued some request, not 990 actions whose own request anybody has seen. As a regression guard it is real; as per-action assurance it is nothing. A package may nevertheless be silent for a reason, and `internal/tools/adminspecs` is the whole of it today: it declares specs whose handlers live in other packages, so its requests are recorded under the package that makes them. Such a package is held to a declaration with a category and a reason in `declaredSilentOwners` (`cmd/audit_1to1/internal/paths/declarations.go`), the way `-scope=sdk` holds a client-go service to one, and a declaration that no longer describes the tree is itself a finding. An action whose owner names no package fails too: nothing validates that field, and such an action used to be classified unmapped, which the gate ignored and `-gaps-only` dropped, so it could be neither counted nor seen. The owner `tools` is the catalog's own exception, naming the orchestration package rather than a domain under it, and resolves to `internal/tools`; an owner that names a real package and the wrong one is a lie no version of this check can catch.
+- **Does the document validate.** Every raw GraphQL document in the source, against the pinned schema. The reading and the judging are `cmd/internal/graphqldocs`', shared with the standalone gate [audit_graphql_documents](#audit_graphql_documents), so there is one answer to whether a document is one GitLab would refuse. This judges the document and never the values sent with it, which is the other half of the same defect family: of the nine tools that could not work, four sent a document the schema refuses and five sent an accepted document carrying a value GitLab does not have. The second half is caught by the validating transport in `internal/testutil`, which checks the variables with the document on every request a test drives, and neither check substitutes for the other.
+- **Does the endpoint exist.** `-check-endpoints` compares every recorded REST endpoint with GitLab's own API documentation, and **fails on an endpoint no declaration accounts for**. The declarations are what make that safe, because the oracle is prose: 57 documentation lines omit the leading slash, `emoji_reactions.md` gives the note reactions one plaintext block for issues and leaves the merge request and snippet variants to a sentence, `usage_data.md` documents `/usage_data/track_events` only in prose and a curl example, `attestations.md` writes its endpoint lines without the `projects` scope its own curl example shows, the generic package registry and Terraform state are documented outside `doc/api` entirely, and the `/services/` alias for the integrations endpoints, which client-go still uses, is not documented at all. Each of those shapes is written down in `declaredUndocumentedEndpoints` (`cmd/audit_1to1/internal/paths/endpoint_declarations.go`) with a category and a reason, and a declaration that stops matching anything is a finding of its own, so the excuse cannot outlive the thing it excuses. The listing of pages comes from the repository tree rather than `api_resources.md`, because 101 of the 253 pages under `doc/api` are not linked from that index or from `rest/_index.md`, and following every link out of the pages they do list still leaves 77 unreached. Against the full 247 readable pages the comparison finds 82 undocumented endpoints out of 1378 recorded, all of them declared; against the index alone it would report roughly five times as many, nearly all about where the index stops. A hole in the corpus produces candidates that are only about the hole, so the report counts the pages it could not read.
+
+The first two checks need no network and no suite run: the inventory is committed, the schema is pinned, and the catalog is compiled in. That is what makes them a CI gate. The third needs 250 pages over the network, so it runs only when asked for, and nothing schedules it today: a declaration going stale is noticed the next time somebody runs `make audit-1to1-paths-endpoints`.
+
+Report keys: `schema_version`, `inventory`, a `summary` block (14 counters, `actions_observed_grain` among them), `graphql_refusals[]`, `silent_owners[]`, `stale_declarations[]`, and an `endpoints` block that says whether the documentation comparison ran, how many pages it read, which it could not, the endpoints no page spells out with the declaration that accounts for each, and the declarations that accounted for none. With `-gaps-only` `silent_owners[]` holds the undeclared and the unmapped ones and `endpoints.undocumented[]` holds the undeclared ones.
+
 #### Make targets
 
 - `make audit-1to1` — writes `plan/1to1-backlog.json`, then runs `audit-1to1-sdk`.
 - `make audit-1to1-sdk` — the SDK parity gate, enum values included; fails the build on a finding.
 - `make audit-1to1-enums` — the enum value rule alone; fails the build on a finding.
+- `make audit-1to1-paths` — the request-path gate (R-PATH); fails the build on a finding. No network.
+- `make audit-1to1-paths-endpoints` — the same plus the documentation comparison, written to `plan/1to1-paths.json`; fails on an endpoint no declaration accounts for. Needs the network.
 - `make audit-1to1-validate-docs` — validates the doc/api citations (CI gate).
 - `make audit-struct-completeness` — legacy wrapper running `-scope=structs`.
 - `make audit-action-coverage` — legacy wrapper running `-scope=actions`.
@@ -1083,6 +1099,62 @@ collide and `make check-llms` keeps checking the files it generates).
 - `make check-llms` — CI gate, also part of `make audit-docs`.
 - `pnpm run llms:check` in `site/` — checks the site index's section table still covers the
   content collection.
+
+### gen_request_inventory
+
+Merges the request shards the unit suite records into `docs/development/request-inventory.json`, the committed answer to what this server actually sends GitLab.
+
+The 1:1 audit has five dimensions and every one of them describes the surface: the fields we accept, the fields we return, the actions we register, the discovery metadata we attach, the enum values we advertise. All five compare what we publish with what the SDK and the API documentation offer, and not one looks at the request a handler builds. That is how nine registered tools shipped unable to work, with a perfect input struct, a perfect output struct, a registered action, complete enums, and a request GitLab refuses. This is the first half of the missing dimension: recording it.
+
+`internal/testutil.NewTestClient` does the recording, so the 6444 clients the suite already builds became the instrument at no cost to the tests themselves. Each records the method, the path with its identifiers replaced by placeholders, the query parameter names, the top-level field names of a JSON request body, and for GraphQL the operation and the variables the document declares. Recording is off unless `GITLAB_MCP_TEST_INVENTORY_DIR` names an absolute directory, and one test process writes one shard, so package binaries running in parallel never contend. A client built by `internal/testutil`'s own tests records nothing: those fixtures exercise this harness's mock and are not requests this server sends GitLab.
+
+A row is one package, method and templated endpoint, carrying the union of the parameter, body-field and variable names that package was seen sending it. Two calls that differ only in an optional filter are the same endpoint, so the union answers which names were sent and deliberately not which of them were sent together: a combination is a property of the fixtures, and a file that recorded them would be read as a contract. That is why `gitlab_get_catalog_resource` could send GitLab `id` and `full_path` together for a release while this file listed both names on one row.
+
+The body-field names matter more than they look. Without them 97% of the mutating rows carried a method and a path and nothing else, which is where a wrong field name lives, and the artifact still read as an answer to what this server sends.
+
+The path rule reads the shape of a segment and never a list of names, because a list would have to be kept in step with a thousand actions. A segment is an identifier when it is all digits, when it carries a percent-encoded slash (at either escaping depth), when it is hexadecimal and long enough to be a commit, or when it is shaped like a UUID. The placeholder is named after the collection segment in front of it, so `/projects/1/issues/2/notes` is `/projects/:project_id/issues/:issue_id/notes`: the placeholders used to be positional, `:id` for the first identifier and `:iid` for the rest, and that made `:id` name the project on one row and the board on the next whenever the project was spelled as a fixture word the rule cannot recognize.
+
+What the rule cannot catch is an identifier that looks like a word: a branch named `main`, a wiki slug, a CI variable key, a project addressed as `my-project`, all stay in the path verbatim, so one endpoint reached with three of them is three rows. That limit is left visible rather than papered over. Templating by the parent segment instead, so that anything after `projects` or `groups` is the project or group, was measured against the recorded requests rather than assumed: `projects` is also followed by the literals `import`, `shared` and `user`, `groups` by `import` and `shared`, `packages` by `generic`, `npm` and `ml_models`, `snippets` by `all` and `public`, `runners` by `all`, `verify` and `reset_registration_token`, and `personal_access_tokens` by `self`. Each of those is a different endpoint from the one with an identifier in that position.
+
+The attribution is the package that built the client and the test that built it, never the action, and the reason is where the recording sits rather than a law about what can be known. Nothing on the wire names an action, and at the moment a request is observed nothing on the stack does either, because the `httptest` server answers on its own goroutine while the test goroutine that called the handler is blocked out of sight. A `RoundTripper` on the client would see that goroutine, since an outgoing request is dispatched on the caller's own; what it would name is a Go function, and the catalog's route for an action is a closure over its handler, so turning a frame into an action ID means recording the handler's function identity on the spec, in production code, for a test artifact. The honest coarse attribution was worth more than a mapping that is a guess. The committed artifact keeps the package and drops the test name, so adding a test that reaches an endpoint already listed does not change it; the shard keeps the test name, so a row can still be traced back.
+
+The committed recording is a Linux one, made as root on a filesystem with symlinks. Nothing in the suite currently issues a request only under one of those conditions, and one test that did was renamed to publish a file name another test already sends, so today the artifact is machine-independent. A regeneration on another platform may legitimately differ, and a test that skips conditionally must not be the only producer of a row.
+
+The summary this prints counts actions whose owning package recorded nothing, which is weaker than "this action was never exercised" in two ways worth knowing: it is package-grained, and a package that declares specs whose handlers live elsewhere is counted silent even though the handler's own package recorded the request. `internal/tools/adminspecs` is the whole of that case today, and it is why the silent list is read package by package rather than action by action.
+
+What this does not do is judge. It says what we send, not whether GitLab would accept it: comparing these paths with GitLab's own documentation is the check that follows, and a response our output struct misreads can only be caught by a real instance.
+
+#### Usage
+
+```bash
+# Record the suite and rewrite the artifact
+make gen-request-inventory
+
+# CI gate: verify it against shards already recorded
+go run ./cmd/gen_request_inventory/ -check
+
+# Name every package the catalog owns actions in that issued no request
+go run ./cmd/gen_request_inventory/ -v -check
+```
+
+#### Flags
+
+| Flag      | Type     | Default                                   | Description                                                                        |
+| --------- | -------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
+| `-shards` | `string` | `dist/request-inventory`                  | Directory holding the recorded shards, absolute or relative to the repository root |
+| `-out`    | `string` | `docs/development/request-inventory.json` | Committed inventory path                                                           |
+| `-check`  | `bool`   | `false`                                   | Verify the committed inventory is current without writing it                       |
+| `-v`      | `bool`   | `false`                                   | Name every package the catalog owns actions in that recorded nothing               |
+
+#### Output
+
+The artifact on disk, and a three-line summary on stderr: how many rows, distinct paths and packages the inventory holds, and how much of the catalog the recording could see. Exits non-zero when the shard directory holds no shard, when a shard cannot be read, and in `-check` mode when the committed artifact is not what the shards say it should be. An empty shard directory is an error rather than an empty inventory, because writing that would erase the artifact and report the whole file as a change.
+
+#### Make targets
+
+- `make gen-request-inventory`: records the suite, then rewrites the artifact.
+- `make check-request-inventory`: the same, gating instead of writing. CI does not run this target: it sets `GITLAB_MCP_TEST_INVENTORY_DIR` on the coverage job's suite run and merges those shards, so the gate costs one `go run` rather than a second seven-minute suite.
+- `make audit-request-inventory`: the gate, naming the silent packages.
 
 ### gen_stats
 

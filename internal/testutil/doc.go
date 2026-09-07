@@ -30,4 +30,21 @@
 //	    }))
 //	    // ... call the domain handler with client ...
 //	}
+//
+// # Coverage
+//
+// This package does not reach the repository's 100% statement rule, and the
+// residue is named here rather than left for the next contributor to
+// rediscover: the [testing.T.Fatalf] branches of [AssertEmbeddedResource],
+// [IsolateTempDir] and the legacy elicitation client. Every one of them exists
+// to abort the caller's test, so reaching it means arranging for a helper to
+// fail while the test that called it keeps running, and the only way to do
+// that is to route the abort through a package variable a test can replace.
+// That would cost these helpers the guarantee they are used for, since a
+// Fatalf that no longer aborts leaves the code after it running on the value
+// it was refusing, and it would have to be done at every call site to be
+// worth anything. The recording and shape files added for the request
+// inventory are at 100%, and the seams they use ([createShard],
+// [recorderPackage], the requestReporter interface) are the pattern to follow
+// if these are ever closed.
 package testutil
