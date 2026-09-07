@@ -3820,6 +3820,7 @@
         "adjacentWorkItemId",
         "childrenIds",
         "id",
+        "parentId",
         "relativePosition"
       ]
     },
