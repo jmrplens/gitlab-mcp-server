@@ -2738,8 +2738,8 @@ func TestGetPushRules_NoRulesConfigured_SaysSoInsteadOfPanicking(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for a project with no push rules, got nil")
 	}
-	if !strings.Contains(err.Error(), "no push rules are configured") {
-		t.Errorf("error = %q, want it to say no push rules are configured", err)
+	if !strings.Contains(err.Error(), "push rules not found") {
+		t.Errorf("error = %q, want it to say the push rules were not found", err)
 	}
 }
 

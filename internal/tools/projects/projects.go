@@ -3280,9 +3280,11 @@ func GetPushRules(ctx context.Context, client *gitlabclient.Client, input GetPus
 			"reading push rules requires Premium/Ultimate licensing and at least Maintainer role on the project")
 	}
 	// A project whose rules were deleted is answered with null and a 200, not
-	// a 404, so it arrives here as no rule and no error.
+	// a 404, so it arrives here as no rule and no error. It is reported as a
+	// not-found, which is what it is and what a caller polling for the delete
+	// to land looks for.
 	if rule == nil {
-		return PushRuleOutput{}, errors.New("projectGetPushRules: no push rules are configured on this project. Use gitlab_project_add_push_rule to create one")
+		return PushRuleOutput{}, errors.New("projectGetPushRules: push rules not found: none are configured on this project. Use gitlab_project_add_push_rule to create one")
 	}
 	return pushRuleOutputFromGL(rule), nil
 }
