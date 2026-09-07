@@ -59,7 +59,7 @@ Tools marked **Delete** require user confirmation before execution.
 
 ### Pagination
 
-The four list tools paginate by GraphQL cursor, not by page number. They accept `first`/`after` for forward paging and `last`/`before` for backward paging, and reject `page` and `per_page`. `first` defaults to 20 and is clamped to 100. Take the next cursor from `pagination.end_cursor` in the previous response.
+The four list tools paginate by GraphQL cursor, not by page number. They accept `first`/`after` for forward paging and `last`/`before` for backward paging, and reject `page` and `per_page`. `first` defaults to 20 and is clamped to 100. Take the next cursor from `pagination.end_cursor` in the previous response, and the previous page's from `pagination.start_cursor`. The cursor picks the direction: `before` on its own pages backward at the default size, and naming both `first` and `last` is refused, because GitLab refuses it too.
 
 ### Sending an avatar
 

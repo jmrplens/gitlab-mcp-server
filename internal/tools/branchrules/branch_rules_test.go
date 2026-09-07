@@ -231,6 +231,63 @@ func TestList_MissingProjectPath(t *testing.T) {
 	}
 }
 
+// TestList_GraphQLErrorsAreReported verifies that a document GitLab refused is
+// answered with its errors rather than as a missing project.
+//
+// GitLab returns HTTP 200 with a top-level errors array and a null project,
+// which client-go leaves for the caller to notice, so the nil check would
+// otherwise blame the project path for a fault in the query.
+func TestList_GraphQLErrorsAreReported(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQLError(w, http.StatusOK, "Field 'branchRules' doesn't accept argument 'before'")
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{ProjectPath: "my-group/my-project"})
+	if err == nil {
+		t.Fatalf("List() = %+v, want the GraphQL errors reported", out)
+	}
+	if !strings.Contains(err.Error(), "doesn't accept argument") {
+		t.Errorf("List() error = %v, want it to carry the GitLab message", err)
+	}
+	if strings.Contains(err.Error(), "not found") {
+		t.Errorf("List() error = %v, want it not to blame the project path", err)
+	}
+}
+
+// TestListWith_UndeclaredPaginationVariable verifies that the list handler
+// refuses to run an operation that declares fewer variables than its input can
+// send, instead of sending one GitLab would discard.
+//
+// This is the defect the shared helper's signature exists to prevent: a
+// variable an operation does not declare is ignored rather than rejected, so
+// the caller would be answered with a page it did not ask for and no error.
+// branchRules is forward-only upstream, so the document dropped here is the
+// forward cursor rather than the backward pair.
+//
+// The shortened document is passed in rather than assigned over the package
+// constant, so nothing a parallel neighbor reads changes underneath it.
+func TestListWith_UndeclaredPaginationVariable(t *testing.T) {
+	document := strings.Replace(queryListBranchRulesCE, ", $after: String", "", 1)
+
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("listWith() ran an operation that cannot receive its own cursor")
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": {"branchRules": {"nodes": []}}}`)
+		},
+	})
+
+	_, err := listWith(context.Background(), testutil.NewTestClient(t, handler), document,
+		ListInput{ProjectPath: "my-group/my-project"})
+	if err == nil {
+		t.Fatal("listWith() error = nil, want a refusal naming the missing declaration")
+	}
+	if !strings.Contains(err.Error(), "$after") {
+		t.Errorf("listWith() error = %v, want it to name $after", err)
+	}
+}
+
 // TestList_ServerError verifies that List_ServerError returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -366,6 +423,12 @@ func TestList_Pagination(t *testing.T) {
 	if out2.Pagination.HasNextPage {
 		t.Error("page 2: expected HasNextPage = false")
 	}
+	// The mock answers page two the way a keyset connection would, with a
+	// previous page and a start cursor. This tool takes no before parameter,
+	// so naming that cursor would offer a model a page it cannot ask for.
+	if md := FormatListMarkdown(out2); strings.Contains(md, "prev page cursor") {
+		t.Errorf("page 2 markdown = %q, want no previous page on a forward-only connection", md)
+	}
 }
 
 // TestList_NullOptionalFields verifies the List_NullOptionalFields handler.
@@ -468,7 +531,7 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 				MatchingBranchesCount: 5,
 			},
 		},
-		Pagination: toolutil.GraphQLPaginationOutput{HasNextPage: false},
+		Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: false},
 	}
 
 	md := FormatListMarkdown(out)

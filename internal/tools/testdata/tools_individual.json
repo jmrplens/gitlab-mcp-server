@@ -1006,15 +1006,15 @@
       "additionalProperties": false,
       "properties": {
         "after": {
-          "description": "Cursor for forward pagination, taken from a previous response pagination.end_cursor",
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination, taken from a previous response pagination.start_cursor",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
-          "description": "Number of items to return from the start of the page (default 20, max 100)",
+          "description": "Number of items to return (default 20, max 100)",
           "type": [
             "null",
             "integer"
@@ -1035,7 +1035,7 @@
           ]
         },
         "last": {
-          "description": "Number of items to return from the end of the page, for backward pagination",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -1144,15 +1144,15 @@
           "type": "integer"
         },
         "after": {
-          "description": "Cursor for forward pagination, taken from a previous response pagination.end_cursor",
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination, taken from a previous response pagination.start_cursor",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
-          "description": "Number of items to return from the start of the page (default 20, max 100)",
+          "description": "Number of items to return (default 20, max 100)",
           "type": [
             "null",
             "integer"
@@ -1163,7 +1163,7 @@
           "type": "string"
         },
         "last": {
-          "description": "Number of items to return from the end of the page, for backward pagination",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -1399,15 +1399,15 @@
           "type": "integer"
         },
         "after": {
-          "description": "Cursor for forward pagination, taken from a previous response pagination.end_cursor",
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination, taken from a previous response pagination.start_cursor",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
-          "description": "Number of items to return from the start of the page (default 20, max 100)",
+          "description": "Number of items to return (default 20, max 100)",
           "type": [
             "null",
             "integer"
@@ -1418,7 +1418,7 @@
           "type": "string"
         },
         "last": {
-          "description": "Number of items to return from the end of the page, for backward pagination",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -1946,15 +1946,15 @@
       "additionalProperties": false,
       "properties": {
         "after": {
-          "description": "Cursor for forward pagination, taken from a previous response pagination.end_cursor",
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination, taken from a previous response pagination.start_cursor",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
-          "description": "Number of items to return from the start of the page (default 20, max 100)",
+          "description": "Number of items to return (default 20, max 100)",
           "type": [
             "null",
             "integer"
@@ -1968,7 +1968,7 @@
           ]
         },
         "last": {
-          "description": "Number of items to return from the end of the page, for backward pagination",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -28767,7 +28767,7 @@
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "epic_iid": {
@@ -28786,7 +28786,7 @@
           "type": "string"
         },
         "last": {
-          "description": "Number of items from the end (backward pagination)",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -29768,16 +29768,12 @@
   },
   {
     "name": "gitlab_epic_note_list",
-    "description": "List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion.",
+    "description": "List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "after": {
           "description": "Cursor for forward pagination (from previous response end_cursor)",
-          "type": "string"
-        },
-        "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
           "type": "string"
         },
         "epic_iid": {
@@ -29794,13 +29790,6 @@
         "full_path": {
           "description": "Full path of the group (e.g. my-group or my-group/sub-group)",
           "type": "string"
-        },
-        "last": {
-          "description": "Number of items from the end (backward pagination)",
-          "type": [
-            "null",
-            "integer"
-          ]
         }
       },
       "required": [
@@ -29899,17 +29888,10 @@
             },
             "has_next_page": {
               "type": "boolean"
-            },
-            "has_previous_page": {
-              "type": "boolean"
-            },
-            "start_cursor": {
-              "type": "string"
             }
           },
           "required": [
-            "has_next_page",
-            "has_previous_page"
+            "has_next_page"
           ],
           "type": "object"
         }
@@ -95650,7 +95632,7 @@
   },
   {
     "name": "gitlab_list_branch_rules",
-    "description": "List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.",
+    "description": "List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -95658,19 +95640,8 @@
           "description": "Cursor for forward pagination (from previous response end_cursor)",
           "type": "string"
         },
-        "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
-          "type": "string"
-        },
         "first": {
           "description": "Number of items to return (default 20, max 100)",
-          "type": [
-            "null",
-            "integer"
-          ]
-        },
-        "last": {
-          "description": "Number of items from the end (backward pagination)",
           "type": [
             "null",
             "integer"
@@ -95706,17 +95677,10 @@
             },
             "has_next_page": {
               "type": "boolean"
-            },
-            "has_previous_page": {
-              "type": "boolean"
-            },
-            "start_cursor": {
-              "type": "string"
             }
           },
           "required": [
-            "has_next_page",
-            "has_previous_page"
+            "has_next_page"
           ],
           "type": "object"
         },
@@ -96581,7 +96545,7 @@
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
@@ -96592,7 +96556,7 @@
           ]
         },
         "last": {
-          "description": "Number of items from the end (backward pagination)",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -97681,7 +97645,7 @@
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
@@ -97696,7 +97660,7 @@
           "type": "string"
         },
         "last": {
-          "description": "Number of items from the end (backward pagination)",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -99730,16 +99694,12 @@
   },
   {
     "name": "gitlab_list_epic_discussions",
-    "description": "List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list.",
+    "description": "List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "after": {
           "description": "Cursor for forward pagination (from previous response end_cursor)",
-          "type": "string"
-        },
-        "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
           "type": "string"
         },
         "epic_iid": {
@@ -99756,13 +99716,6 @@
         "full_path": {
           "description": "Full path of the group (e.g. my-group or my-group/sub-group)",
           "type": "string"
-        },
-        "last": {
-          "description": "Number of items from the end (backward pagination)",
-          "type": [
-            "null",
-            "integer"
-          ]
         }
       },
       "required": [
@@ -99865,17 +99818,10 @@
             },
             "has_next_page": {
               "type": "boolean"
-            },
-            "has_previous_page": {
-              "type": "boolean"
-            },
-            "start_cursor": {
-              "type": "string"
             }
           },
           "required": [
-            "has_next_page",
-            "has_previous_page"
+            "has_next_page"
           ],
           "type": "object"
         }
@@ -108113,7 +108059,7 @@
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "confidence": {
@@ -108134,7 +108080,7 @@
           ]
         },
         "last": {
-          "description": "Number of items from the end (backward pagination)",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -110972,7 +110918,7 @@
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
@@ -110997,7 +110943,7 @@
           ]
         },
         "last": {
-          "description": "Number of items from the end (backward pagination)",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"
@@ -111298,24 +111244,30 @@
       "additionalProperties": false,
       "properties": {
         "after": {
-          "description": "Cursor for forward pagination",
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
-          "description": "Number of types to return from the beginning (cursor pagination)",
-          "type": "integer"
+          "description": "Number of items to return (default 20, max 100)",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "full_path": {
           "description": "Project or group full path (namespace path)",
           "type": "string"
         },
         "last": {
-          "description": "Number of types to return from the end (backward cursor pagination)",
-          "type": "integer"
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "name": {
           "description": "Filter by work item type name",
@@ -111407,16 +111359,20 @@
   },
   {
     "name": "gitlab_list_work_items",
-    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the next-page cursor. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
+    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the cursors for the next and previous pages. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "after": {
-          "description": "Cursor for forward pagination",
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
           "type": "string"
         },
         "author_username": {
           "description": "Filter by author username",
+          "type": "string"
+        },
+        "before": {
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "confidential": {
@@ -111427,7 +111383,7 @@
           ]
         },
         "first": {
-          "description": "Number of items to return (cursor-based pagination)",
+          "description": "Number of items to return (default 20, max 100)",
           "type": [
             "null",
             "integer"
@@ -111459,6 +111415,13 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "last": {
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
+          "type": [
+            "null",
+            "integer"
           ]
         },
         "search": {
@@ -209893,7 +209856,7 @@
           "type": "string"
         },
         "before": {
-          "description": "Cursor for backward pagination (from previous response start_cursor)",
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
         "first": {
@@ -209904,7 +209867,7 @@
           ]
         },
         "last": {
-          "description": "Number of items from the end (backward pagination)",
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
           "type": [
             "null",
             "integer"

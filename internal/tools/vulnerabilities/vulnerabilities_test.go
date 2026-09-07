@@ -240,6 +240,102 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
+// TestList_GraphQLErrorsAreReported verifies that a document GitLab refused is
+// answered with its errors rather than with an empty page of vulnerabilities.
+//
+// This is the worst place in the server for a swallowed error: when the project
+// resolves over REST, the branch below answers a null project with an empty
+// list, so a query the instance rejected reads as a project with nothing to
+// report.
+func TestList_GraphQLErrorsAreReported(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilities": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQLError(w, http.StatusOK, "Type mismatch on variable $severity and argument severity")
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{ProjectPath: "my-group/my-project"})
+	if err == nil {
+		t.Fatalf("List() = %+v, want the GraphQL errors reported", out)
+	}
+	if !strings.Contains(err.Error(), "Type mismatch") {
+		t.Errorf("List() error = %v, want it to carry the GitLab message", err)
+	}
+}
+
+// TestList_BackwardPagination verifies that a caller following start_cursor
+// backwards is sent before and last, and no first.
+//
+// The absence of first is the assertion that matters. The vulnerabilities
+// connection is keyset paginated, and GitLab answers first beside last with
+// "Can only provide either first or last, not both", so a request carrying the
+// pair would fail rather than return the previous page.
+func TestList_BackwardPagination(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilities": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
+			}
+			if last, ok := vars["last"].(float64); !ok || int(last) != 5 {
+				t.Errorf("last = %v, want 5", vars["last"])
+			}
+			if vars["before"] != "cursor1" {
+				t.Errorf("before = %v, want cursor1", vars["before"])
+			}
+			if first, ok := vars["first"]; ok {
+				t.Errorf("first = %v, want it unset when the caller paged backwards", first)
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"vulnerabilities": {
+						"nodes": [`+sampleVulnNode+`],
+						"pageInfo": {"hasNextPage": true, "hasPreviousPage": false, "endCursor": "cursor2", "startCursor": "cursor1"}
+					}
+				}
+			}`)
+		},
+	})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		ProjectPath: "my-group/my-project",
+		Last:        new(5),
+		Before:      "cursor1",
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Vulnerabilities) != 1 {
+		t.Errorf("got %d vulnerabilities, want 1", len(out.Vulnerabilities))
+	}
+}
+
+// TestList_ContradictoryPageSizes verifies that naming both first and last is
+// refused before a request is made. The keyset connection answers the pair with
+// "Can only provide either first or last, not both", so guessing which one the
+// caller meant would only turn a clear refusal into a wrong page.
+func TestList_ContradictoryPageSizes(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilities": func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("List() reached GitLab with a contradictory page request")
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": {"vulnerabilities": {"nodes": []}}}`)
+		},
+	})
+
+	_, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		ProjectPath: "my-group/my-project",
+		First:       new(10),
+		Last:        new(5),
+	})
+	if err == nil {
+		t.Fatal("List() error = nil, want a refusal naming the conflict")
+	}
+	if !strings.Contains(err.Error(), "first and last cannot be combined") {
+		t.Errorf("List() error = %v, want it to name the conflict", err)
+	}
+}
+
 // TestList_ProjectNilExistingProjectReturnsEmpty verifies unavailable vulnerability data returns an empty list when the project exists.
 func TestList_ProjectNilExistingProjectReturnsEmpty(t *testing.T) {
 	mux := http.NewServeMux()

@@ -26,9 +26,7 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
           discussions(first: $first, after: $after) {
             pageInfo {
               hasNextPage
-              hasPreviousPage
               endCursor
-              startCursor
             }
             nodes {
               id
@@ -172,6 +170,18 @@ type gqlDiscussionsResponse struct {
 	Data struct {
 		Namespace *gqlNamespaceDiscWorkItem `json:"namespace"`
 	} `json:"data"`
+	Errors []toolutil.GraphQLError `json:"errors"`
+}
+
+// topLevelError reports what GitLab refused, or nil when it refused nothing.
+//
+// GitLab answers a rejected document with HTTP 200 and a top-level errors
+// array, which client-go does not turn into an error, so a query the instance
+// refused reaches a handler looking exactly like an epic that is not there.
+// Both handlers that run this document need the same answer, which is why it
+// lives on the envelope rather than at one call site.
+func (r gqlDiscussionsResponse) topLevelError(operation string) error {
+	return toolutil.GraphQLTopLevelError(operation, r.Errors)
 }
 
 // extractDiscussionHex extracts the hex ID from a Discussion GID.
@@ -290,10 +300,16 @@ type Output struct {
 }
 
 // ListOutput holds a list of epic discussions.
+//
+// Pagination is forward-only because the work item notes widget is: its
+// discussions field accepts first and after alone. Being keyset-paginated it
+// does report a previous page and a start cursor from its second page on, and
+// that half is dropped here rather than passed on, since no argument on this
+// tool could spend the cursor.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Discussions []Output                         `json:"discussions"`
-	Pagination  toolutil.GraphQLPaginationOutput `json:"pagination"`
+	Discussions []Output                                `json:"discussions"`
+	Pagination  toolutil.GraphQLForwardPaginationOutput `json:"pagination"`
 }
 
 // Handlers.
@@ -309,14 +325,28 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.IID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("epicDiscussionList", "epic_iid")
 	}
+	return listWith(ctx, client, queryListDiscussions, input)
+}
 
-	vars := input.Variables()
+// listWith runs one discussions document against the variables the input
+// resolves to.
+//
+// The document is a parameter rather than read from the package constant so
+// that a test can hand it one declaring too little and prove the pagination
+// guard refuses it. The alternative, a package-level variable a test reassigns,
+// would put a document under a parallel neighbor's feet, and the race detector
+// would report it as a data race rather than as this guard.
+func listWith(ctx context.Context, client *gitlabclient.Client, query string, input ListInput) (ListOutput, error) {
+	vars, err := input.Variables(query)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("epicDiscussionList: %w", err)
+	}
 	vars["fullPath"] = input.FullPath
 	vars["iid"] = strconv.FormatInt(input.IID, 10)
 
 	var resp gqlDiscussionsResponse
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     queryListDiscussions,
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     query,
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
@@ -325,6 +355,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
+		if graphQLErr := resp.topLevelError("epicDiscussionList"); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 		return ListOutput{}, fmt.Errorf("epicDiscussionList: epic not found in group %q with IID %d", input.FullPath, input.IID)
 	}
 
@@ -342,7 +375,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	return ListOutput{
 		Discussions: discussions,
-		Pagination:  toolutil.PageInfoToOutput(pageInfo),
+		Pagination:  toolutil.PageInfoToForwardOutput(pageInfo),
 	}, nil
 }
 
@@ -379,6 +412,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
+		if graphQLErr := resp.topLevelError("epicDiscussionGet"); graphQLErr != nil {
+			return Output{}, graphQLErr
+		}
 		return Output{}, fmt.Errorf("epicDiscussionGet: epic not found in group %q with IID %d", input.FullPath, input.IID)
 	}
 

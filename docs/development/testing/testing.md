@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,373 |
-| Unit test functions                                   | 13,771 |
+| Total test functions                                  | 14,411 |
+| Unit test functions                                   | 13,809 |
 | E2E test functions                                    |    602 |
 | cmd test functions                                    |  2,577 |
 | Test files (internal/)                                |    512 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,721 | 81.5% |
-| `TestFunc` (no underscore)             |    976 |  6.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,676 | 11.7% |
+| `TestFunc_Scenario` (2-part)           | 11,754 | 81.6% |
+| `TestFunc` (no underscore)             |    981 |  6.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,676 | 11.6% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,336 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,344 |        138 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,526 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,556 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            602 |        237 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,577 |        161 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,373** |    **910** |                                                                                                 |
+| **Total**               |     **14,411** |    **910** |                                                                                                 |
 
 ### Core Packages
 
@@ -76,8 +76,8 @@
 | subscriptions |        90 |    98.5% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        37 |    89.6% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       856 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,336** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       864 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,344** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -98,9 +98,9 @@
 | pipelines         |   110 |   100.0% |    12 |
 | runners           |   109 |   100.0% |    19 |
 | containerregistry |   101 |   100.0% |    16 |
+| workitems         |   100 |   100.0% |     6 |
 | accesstokens      |    97 |   100.0% |    18 |
 | branches          |    95 |   100.0% |    10 |
-| workitems         |    95 |   100.0% |     6 |
 | pipelineschedules |    94 |    99.7% |    11 |
 | groupmilestones   |    90 |   100.0% |     8 |
 | snippets          |    89 |    99.5% |    15 |
@@ -118,7 +118,7 @@
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        97 |          2 |   100.0% |        18 |
-| achievements            |        56 |          3 |   100.0% |        12 |
+| achievements            |        57 |          3 |   100.0% |        12 |
 | actioncatalog           |        44 |          5 |    99.1% |         0 |
 | actioncompat            |        44 |          2 |   100.0% |         1 |
 | adminspecs              |         6 |          1 |   100.0% |        92 |
@@ -133,10 +133,10 @@
 | badges                  |        56 |          1 |   100.0% |        12 |
 | boards                  |        73 |          2 |    99.3% |        10 |
 | branches                |        95 |          1 |   100.0% |        10 |
-| branchrules             |        16 |          1 |   100.0% |         1 |
+| branchrules             |        18 |          1 |   100.0% |         1 |
 | broadcastmessages       |        30 |          2 |   100.0% |         5 |
 | bulkimports             |        35 |          2 |   100.0% |         7 |
-| cicatalog               |        24 |          1 |   100.0% |         2 |
+| cicatalog               |        27 |          1 |   100.0% |         2 |
 | cilint                  |        26 |          1 |   100.0% |         2 |
 | civariables             |        46 |          2 |   100.0% |         5 |
 | ciyamltemplates         |        23 |          1 |   100.0% |         2 |
@@ -146,7 +146,7 @@
 | compliancepolicy        |         6 |          1 |   100.0% |         2 |
 | containerregistry       |       101 |          4 |   100.0% |        16 |
 | customattributes        |        32 |          1 |   100.0% |         4 |
-| customemoji             |        26 |          2 |   100.0% |         3 |
+| customemoji             |        29 |          2 |   100.0% |         3 |
 | dbmigrations            |         7 |          1 |   100.0% |         1 |
 | dependencies            |        15 |          2 |   100.0% |         4 |
 | dependencyfirewall      |        19 |          3 |   100.0% |         1 |
@@ -162,9 +162,9 @@
 | elicitationtools        |        65 |          2 |    98.7% |         4 |
 | enterpriseusers         |        35 |          3 |   100.0% |         4 |
 | environments            |        56 |          2 |   100.0% |         6 |
-| epicdiscussions         |        16 |          2 |   100.0% |         6 |
-| epicissues              |        18 |          2 |   100.0% |         4 |
-| epicnotes               |        11 |          2 |   100.0% |         5 |
+| epicdiscussions         |        20 |          2 |   100.0% |         6 |
+| epicissues              |        19 |          2 |   100.0% |         4 |
+| epicnotes               |        15 |          2 |   100.0% |         5 |
 | epics                   |        52 |          2 |   100.0% |         6 |
 | epicworkitems           |         3 |          1 |   100.0% |         0 |
 | errortracking           |        25 |          2 |   100.0% |         5 |
@@ -269,7 +269,7 @@
 | securefiles             |        28 |          2 |   100.0% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
 | securitycategories      |        16 |          1 |   100.0% |         3 |
-| securityfindings        |        20 |          1 |   100.0% |         1 |
+| securityfindings        |        23 |          1 |   100.0% |         1 |
 | securityscanprofiles    |        17 |          1 |   100.0% |         3 |
 | securitysettings        |        32 |          3 |   100.0% |         3 |
 | settings                |        17 |          1 |    94.4% |         2 |
@@ -288,12 +288,12 @@
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
 | users                   |       210 |          7 |   100.0% |        38 |
-| vulnerabilities         |        62 |          3 |   100.0% |         8 |
+| vulnerabilities         |        65 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        61 |          2 |   100.0% |         6 |
-| workitems               |        95 |          3 |   100.0% |         6 |
-| workitemsavedviews      |        50 |          4 |   100.0% |         7 |
-| **Total**               | **8,526** |    **359** |          | **1,187** |
+| workitems               |       100 |          3 |   100.0% |         6 |
+| workitemsavedviews      |        51 |          4 |   100.0% |         7 |
+| **Total**               | **8,556** |    **359** |          | **1,187** |
 
 </details>
 

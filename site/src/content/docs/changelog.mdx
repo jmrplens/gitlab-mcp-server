@@ -6,7 +6,7 @@ faq:
   - q: "Where is the GitLab MCP Server changelog?"
     a: "Release notes live on the GitHub Releases page, one entry per version, generated from the commits in that release. There is also an Atom feed at https://github.com/jmrplens/gitlab-mcp-server/releases.atom that any feed reader or automation can subscribe to. This page documents the release process itself — what a version number means, what each release ships, and how to verify a download — rather than duplicating notes that would fall out of date."
   - q: "How does GitLab MCP Server version its releases?"
-    a: "It follows semantic versioning. The patch number changes for fixes and internal work with no interface change. The minor number changes when tools, actions, resources or prompts are added, or when configuration gains an option — additive changes that leave existing calls working. The major number changes only for a breaking change to the MCP surface or to configuration, such as removing an action or changing a required parameter."
+    a: "It follows semantic versioning. The patch number changes for fixes and internal work with no interface change. The minor number changes when tools, actions, resources or prompts are added, or when configuration gains an option — additive changes that leave existing calls working. One narrow case is not additive and is still minor: a parameter, a combination of parameters, or a response field that the GitLab endpoint behind a tool could not honor may be withdrawn, because what was published was answered with the wrong page rather than an error. The major number changes only for a breaking change to the MCP surface or to configuration, such as removing an action or changing a required parameter."
   - q: "What does each release publish?"
     a: "Every release publishes binaries for Linux, macOS and Windows on both amd64 and arm64, a macOS universal binary, a container image on GHCR and Docker Hub, a Claude Desktop extension (.mcpb), the npm packages, and checksums.txt. The checksums are signed keylessly with Cosign/Sigstore, every binary ships an SPDX SBOM, and the release artifacts carry SLSA build provenance attestations, so you can verify what you downloaded before running it."
   - q: "How do I get notified about new GitLab MCP Server releases?"
@@ -26,14 +26,17 @@ The current release is **v{stats.version}**.
 
 Versioning is semantic, and for this project the interesting boundary is the MCP surface: the tools, actions, resources, prompts and configuration options a client depends on.
 
-| Change                                               | Example                             | Version bump |
-| ---------------------------------------------------- | ----------------------------------- | ------------ |
-| Fixes and internal work with no interface change     | A handler returns a clearer error   | Patch        |
-| New actions, tools, resources or prompts             | A GitLab API domain gains coverage  | Minor        |
-| New optional configuration                           | A flag is added with a safe default | Minor        |
-| Removing an action, or changing a required parameter | An action ID is renamed             | Major        |
+| Change                                                                                           | Example                             | Version bump |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------- | ------------ |
+| Fixes and internal work with no interface change                                                 | A handler returns a clearer error   | Patch        |
+| New actions, tools, resources or prompts                                                         | A GitLab API domain gains coverage  | Minor        |
+| New optional configuration                                                                       | A flag is added with a safe default | Minor        |
+| Withdrawing a parameter, a combination of parameters, or a response field a tool could not honor | A cursor the GitLab field rejects   | Minor        |
+| Removing an action, or changing a required parameter                                             | An action ID is renamed             | Major        |
 
 Additive releases are the common case. A minor bump can change how many tools you see — the catalog grows — but it does not invalidate a call that already worked.
+
+The one exception is the withdrawal row, and it is deliberate. It covers three shapes of one fault, all of which a release may repair without waiting for a major version. A parameter a tool published but the GitLab endpoint behind it never read was answered by discarding it, so the call returned a page nobody asked for and no error. A combination of parameters the endpoint refuses, such as a forward and a backward page size together, was answered by silently picking one of them. A response field no parameter of that tool can act on, such as a cursor for a page it will not serve, offered a next step that does not exist. Withdrawing any of the three replaces a silently wrong answer with an honest one: a refusal naming the parameter it rejected, or a response that stops offering a step the tool cannot take. That is the reason to do it rather than a side effect, because a silently wrong answer is worse than a refused one. Any release that withdraws one names the tools in its notes.
 
 ## What each release ships
 

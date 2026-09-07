@@ -48,7 +48,7 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| %d | %s | %s | %v |\n", n.ID, toolutil.EscapeMdTableCell(noteAuthorUsername(n)), toolutil.FormatTime(n.CreatedAt), n.System)
 	}
 	b.WriteString("\n")
-	b.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Notes)))
+	b.WriteString(toolutil.FormatGraphQLForwardPagination(out.Pagination, len(out.Notes)))
 	b.WriteString("\n")
 	toolutil.WriteHints(
 		&b,

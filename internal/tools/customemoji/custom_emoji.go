@@ -24,9 +24,9 @@ type Item struct {
 // GraphQL queries and mutations.
 
 const queryListCustomEmoji = `
-query($groupPath: ID!, $first: Int!, $after: String) {
+query($groupPath: ID!, $first: Int, $after: String, $last: Int, $before: String) {
   group(fullPath: $groupPath) {
-    customEmoji(first: $first, after: $after) {
+    customEmoji(first: $first, after: $after, last: $last, before: $before) {
       nodes {
         id
         name
@@ -124,7 +124,7 @@ type gqlDestroyCustomEmojiPayload struct {
 // ListInput is the input for listing custom emoji.
 type ListInput struct {
 	GroupPath string `json:"group_path" jsonschema:"required,Group full path (e.g. my-group)"`
-	toolutil.GraphQLPaginationInput
+	toolutil.GraphQLCursorPaginationInput
 }
 
 // ListOutput is the output for listing custom emoji.
@@ -140,16 +140,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("list_custom_emoji: group_path is required")
 	}
 
-	vars := input.Variables()
+	vars, err := input.Variables(queryListCustomEmoji)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("list_custom_emoji: %w", err)
+	}
 	vars["groupPath"] = input.GroupPath
 
 	var resp struct {
 		Data struct {
 			Group *gqlGroupCustomEmoji `json:"group"`
 		} `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
 	}
 
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query:     queryListCustomEmoji,
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
@@ -157,7 +161,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_custom_emoji", err, http.StatusNotFound, "verify group_path with gitlab_group_get")
 	}
 
+	// GitLab answers a rejected document with HTTP 200 and a top-level errors
+	// array, which client-go does not turn into an error, so a query the
+	// instance refused would otherwise be reported as a missing group.
 	if resp.Data.Group == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("list_custom_emoji", resp.Errors); graphQLErr != nil {
+			return ListOutput{}, graphQLErr
+		}
 		return ListOutput{}, fmt.Errorf("list_custom_emoji: group %q not found", input.GroupPath)
 	}
 

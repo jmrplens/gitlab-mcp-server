@@ -141,6 +141,113 @@ func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
 	}
 }
 
+// TestListWith_UndeclaredPaginationVariable verifies that the list handler
+// refuses to run an operation that declares fewer variables than its input can
+// send, instead of sending one GitLab would discard.
+//
+// This is the defect the shared helper's signature exists to prevent: a
+// variable an operation does not declare is ignored rather than rejected, so
+// the caller would be answered with a page it did not ask for and no error.
+// The discussions connection this query pages is forward-only upstream, so the
+// document dropped here is the forward cursor rather than the backward pair.
+//
+// The shortened document is passed in rather than assigned over the package
+// constant, so nothing a parallel neighbor reads changes underneath it.
+func TestListWith_UndeclaredPaginationVariable(t *testing.T) {
+	document := strings.Replace(queryListWorkItemNotes, ", $after: String", "", 1)
+
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("listWith() ran an operation that cannot receive its own cursor")
+		testutil.RespondGraphQL(w, http.StatusOK, gqlNotesData)
+	}})
+
+	_, err := listWith(context.Background(), testutil.NewTestClient(t, handler), document,
+		ListInput{FullPath: testFullPath, IID: 5})
+	if err == nil {
+		t.Fatal("listWith() error = nil, want a refusal naming the missing declaration")
+	}
+	if !strings.Contains(err.Error(), "$after") {
+		t.Errorf("listWith() error = %v, want it to name $after", err)
+	}
+}
+
+// TestList_GraphQLErrorsAreReported verifies that a document GitLab refused is
+// answered with its errors rather than as a missing epic.
+//
+// GitLab returns HTTP 200 with a top-level errors array and a null namespace,
+// which client-go leaves for the caller to notice, so the nil check would
+// otherwise blame the group path and IID for a fault in the query.
+func TestList_GraphQLErrorsAreReported(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQLError(w, http.StatusOK, "Field 'discussions' doesn't accept argument 'before'")
+	}})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{FullPath: testFullPath, IID: 5})
+	if err == nil {
+		t.Fatalf("List() = %+v, want the GraphQL errors reported", out)
+	}
+	if !strings.Contains(err.Error(), "doesn't accept argument") {
+		t.Errorf("List() error = %v, want it to carry the GitLab message", err)
+	}
+	if strings.Contains(err.Error(), "not found") {
+		t.Errorf("List() error = %v, want it not to blame the epic", err)
+	}
+}
+
+// TestGet_GraphQLErrorsAreReported verifies that Get reports a refused document
+// the same way List does.
+//
+// Get runs the same document through the same envelope, so a query the
+// instance refused arrives at the same nil check and used to be reported as a
+// missing epic, sending a caller to verify a path that was never the problem.
+func TestGet_GraphQLErrorsAreReported(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQLError(w, http.StatusOK, "Field 'discussions' doesn't accept argument 'before'")
+	}})
+
+	out, err := Get(context.Background(), testutil.NewTestClient(t, handler),
+		GetInput{FullPath: testFullPath, IID: 5, NoteID: 7})
+	if err == nil {
+		t.Fatalf("Get() = %+v, want the GraphQL errors reported", out)
+	}
+	if !strings.Contains(err.Error(), "doesn't accept argument") {
+		t.Errorf("Get() error = %v, want it to carry the GitLab message", err)
+	}
+	if strings.Contains(err.Error(), "not found") {
+		t.Errorf("Get() error = %v, want it not to blame the epic", err)
+	}
+}
+
+// TestList_ForwardOnlyPaginationDropsPreviousPage verifies that a previous page
+// reported by GitLab reaches neither the output nor the Markdown summary.
+//
+// The work item notes widget refuses before and last while paginating by
+// keyset, so from its second page on it reports hasPreviousPage and a real
+// startCursor. This tool has no parameter that could spend that cursor, so
+// naming it would offer a model a page it can never ask for.
+func TestList_ForwardOnlyPaginationDropsPreviousPage(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, strings.Replace(
+			gqlNotesData,
+			`"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": null, "startCursor": null}`,
+			`"pageInfo": {"hasNextPage": true, "hasPreviousPage": true, "endCursor": "next", "startCursor": "prev"}`,
+			1,
+		))
+	}})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{FullPath: testFullPath, IID: 5})
+	if err != nil {
+		t.Fatalf("List() error = %v, want nil", err)
+	}
+	if !out.Pagination.HasNextPage || out.Pagination.EndCursor != "next" {
+		t.Errorf("Pagination = %+v, want the forward half preserved", out.Pagination)
+	}
+	md := FormatListMarkdown(out)
+	if strings.Contains(md, "prev page cursor") || strings.Contains(md, "prev") {
+		t.Errorf("markdown = %q, want no previous page on a forward-only connection", md)
+	}
+}
+
 // TestList verifies the List handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -841,7 +948,7 @@ func TestFormatListMarkdown(t *testing.T) {
 					{ID: 100, Author: authorObj("alice"), CreatedAt: "2026-01-15T10:00:00Z", System: false},
 					{ID: 101, Author: authorObj("admin"), CreatedAt: "2026-01-15T12:00:00Z", System: true},
 				},
-				Pagination: toolutil.GraphQLPaginationOutput{HasNextPage: false},
+				Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: false},
 			},
 			contains: []string{
 				"## Epic Notes (2)",
@@ -858,7 +965,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "renders empty state when no notes",
 			input: ListOutput{
 				Notes:      []Output{},
-				Pagination: toolutil.GraphQLPaginationOutput{},
+				Pagination: toolutil.GraphQLForwardPaginationOutput{},
 			},
 			contains: []string{
 				"## Epic Notes (0)",
