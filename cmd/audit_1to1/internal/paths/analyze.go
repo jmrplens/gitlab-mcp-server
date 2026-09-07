@@ -79,7 +79,10 @@ type Summary struct {
 	TypedUnpublishedField int `json:"typed_unpublished_fields"`
 	// TypedUndeclaredFields counts the typed findings no declaration in
 	// shape_declarations.go accounts for, which is the half a reader is being
-	// asked to act on.
+	// asked to act on. It spans both levels, so a run whose top-level findings
+	// are all declared still reports the nested ones that are not; read it
+	// against TypedUnpublishedField and TypedNestedUnpublished to see which
+	// level the number is coming from.
 	TypedUndeclaredFields int `json:"typed_undeclared_fields"`
 	// TypedNestedCompared and TypedNestedUnpublished are the same comparison
 	// one level down: a nested output type held against the properties GitLab's

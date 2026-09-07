@@ -250,7 +250,7 @@ const docRunnerDetailsGET = "docs/development/gitlab-api-shapes.json " +
 
 // docProjectApprovals cites the page and the line on it that says what the
 // project-level approvers array holds.
-const docProjectApprovals = "merge_request_approvals.md#get-project-level-approval-configuration " +
+const docProjectApprovals = "merge_request_approvals.md#retrieve-approval-configuration-for-a-project " +
 	"(`\"approvers\": []  // Deprecated in GitLab 12.3, always returns empty`, and the record gives that " +
 	"element the single property `user` while approved_at appears only on the merge request's approved_by)"
 
@@ -302,10 +302,12 @@ var docAddedFields = map[string]string{
 	// fetched via raw REST (rawApprovalState/rawListApprovalRules/rawMutateApprovalRule).
 	"mrapprovals.RuleOutput.overridden": docMRApprovals,
 
-	// invites — queued_users is documented on the add-a-member response for an
-	// instance with member promotion management enabled, and absent from
-	// gl.InvitesResult; fetched via raw REST (postInvitation into the
-	// invitesResultAPI superset).
+	// invites: queued_users is documented in doc/api/invitations.md on the
+	// add-a-member response for an instance with member promotion management
+	// enabled, and absent from gl.InvitesResult; fetched via raw REST
+	// (postInvitation into the invitesResultAPI superset). The page is spelled
+	// with its doc/api prefix here so -validate-docs scans it: the table's own
+	// values carry only the bare file name, which docCitationRE does not match.
 	"invites.InviteResultOutput.queued_users": "invitations.md#add-a-member-to-a-group-or-project",
 
 	// groupboards — documented in doc/api/group_boards.md but absent from

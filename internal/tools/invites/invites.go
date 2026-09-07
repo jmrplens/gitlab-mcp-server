@@ -87,10 +87,11 @@ type InviteResultOutput struct {
 	// QueuedUsers is what GitLab answers with instead of inviting outright when
 	// the instance has member promotion management enabled: the username of
 	// each invitee whose promotion an administrator has to approve, against the
-	// reason it was queued. Documented in invitations.md and absent from
-	// gl.InvitesResult, so it arrives through the raw request the handlers
-	// issue.
-	QueuedUsers map[string]string `json:"queued_users,omitempty"`
+	// reason it was queued. That setting is Ultimate on GitLab Self-Managed and
+	// GitLab Dedicated only, hence the tier tag. Documented in invitations.md
+	// and absent from gl.InvitesResult, so it arrives through the raw request
+	// the handlers issue.
+	QueuedUsers map[string]string `json:"queued_users,omitempty" tier:"ultimate"`
 }
 
 // Handlers.

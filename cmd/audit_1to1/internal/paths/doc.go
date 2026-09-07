@@ -120,7 +120,10 @@
 // property it sits under, and only when the document describes an object there
 // at all: 11 nested types compared, 25 fields reported. The reticence is what
 // makes that level usable, since it is the level whose first, unguarded attempt
-// produced 1418 findings.
+// produced 1418 findings. None of those 25 is declared yet, so
+// typed_undeclared_fields reads 25 while the three top-level findings are all
+// answered: that counter spans both levels. They sit in issuelinks and
+// pipelinetriggers, and adjudicating one means reading its page first.
 //
 // A finding at type grain can be answered rather than fixed, because the oracle
 // is generated and is not always complete: an endpoint rendering a bare hash
