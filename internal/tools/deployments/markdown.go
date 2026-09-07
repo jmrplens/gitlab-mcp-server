@@ -32,7 +32,9 @@ func FormatOutputMarkdown(d Output) string {
 	b.WriteString(toolutil.TblSep2Col)
 	fmt.Fprintf(&b, "| IID | %d |\n", d.IID)
 	fmt.Fprintf(&b, "| Ref | %s |\n", toolutil.EscapeMdTableCell(d.Ref))
+	//gitlab:allow-unescaped d.SHA: a commit SHA, hexadecimal by construction.
 	fmt.Fprintf(&b, "| SHA | %s |\n", d.SHA)
+	//gitlab:allow-unescaped d.Status: a deployment status GitLab picks from a fixed set (created, running, success, failed, canceled, blocked).
 	fmt.Fprintf(&b, "| Status | %s |\n", d.Status)
 	if d.User != nil && d.User.Username != "" {
 		fmt.Fprintf(&b, "| User | %s |\n", toolutil.EscapeMdTableCell(d.User.Username))
@@ -47,7 +49,8 @@ func FormatOutputMarkdown(d Output) string {
 		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(d.UpdatedAt))
 	}
 	if d.Deployable != nil && d.Deployable.Pipeline != nil && d.Deployable.Pipeline.WebURL != "" {
-		fmt.Fprintf(&b, "| Pipeline | [#%d](%s) |\n", d.Deployable.Pipeline.ID, d.Deployable.Pipeline.WebURL)
+		fmt.Fprintf(&b, "| Pipeline | %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", d.Deployable.Pipeline.ID), d.Deployable.Pipeline.WebURL))
 	}
 	toolutil.WriteHints(
 		&b,

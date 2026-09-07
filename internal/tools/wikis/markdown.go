@@ -25,10 +25,11 @@ func formatWikiNotFound(out wikiNotFoundOutput) *mcp.CallToolResult {
 func FormatOutputMarkdownString(w Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Wiki: %s\n\n", toolutil.EscapeMdHeading(w.Title))
-	fmt.Fprintf(&b, "- **Slug**: %s\n", w.Slug)
+	fmt.Fprintf(&b, "- **Slug**: %s\n", toolutil.EscapeMdTableCell(w.Slug))
+	//gitlab:allow-unescaped w.Format: a wiki format, a gl.WikiFormatValue GitLab picks from a fixed set (markdown, rdoc, asciidoc, org).
 	fmt.Fprintf(&b, "- **Format**: %s\n", w.Format)
 	if w.Encoding != "" {
-		fmt.Fprintf(&b, "- **Encoding**: %s\n", w.Encoding)
+		fmt.Fprintf(&b, "- **Encoding**: %s\n", toolutil.EscapeMdTableCell(w.Encoding))
 	}
 	if w.Content != "" {
 		fmt.Fprintf(&b, "\n### Content\n\n%s\n", toolutil.WrapGFMBody(w.Content))
@@ -59,6 +60,7 @@ func FormatListMarkdownString(out ListOutput) string {
 			&b, "| %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(w.Title),
 			toolutil.EscapeMdTableCell(w.Slug),
+			//gitlab:allow-unescaped w.Format: a wiki format, a gl.WikiFormatValue GitLab picks from a fixed set (markdown, rdoc, asciidoc, org).
 			w.Format,
 		)
 	}
@@ -79,13 +81,14 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 func FormatAttachmentMarkdownString(o AttachmentOutput) string {
 	var b strings.Builder
 	b.WriteString("## Wiki Attachment Uploaded\n\n")
-	fmt.Fprintf(&b, "- **File Name**: %s\n", o.FileName)
-	fmt.Fprintf(&b, "- **File Path**: %s\n", o.FilePath)
+	fmt.Fprintf(&b, "- **File Name**: %s\n", toolutil.EscapeMdTableCell(o.FileName))
+	fmt.Fprintf(&b, "- **File Path**: %s\n", toolutil.EscapeMdTableCell(o.FilePath))
 	if o.Branch != "" {
-		fmt.Fprintf(&b, "- **Branch**: %s\n", o.Branch)
+		fmt.Fprintf(&b, "- **Branch**: %s\n", toolutil.EscapeMdTableCell(o.Branch))
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdURL, o.URL)
-	fmt.Fprintf(&b, "- **Markdown**: `%s`\n", o.Markdown)
+	toolutil.WriteMdURL(&b, o.URL)
+	// GitLab builds this snippet around the file name whoever uploaded it chose.
+	fmt.Fprintf(&b, "- **Markdown**: `%s`\n", toolutil.EscapeMdTableCell(o.Markdown))
 	toolutil.WriteHints(
 		&b,
 		toolutil.HintPreserveLinks,

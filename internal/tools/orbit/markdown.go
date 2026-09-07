@@ -71,7 +71,10 @@ func FormatStatusMarkdown(out StatusOutput) string {
 			if component.Replicas != nil {
 				replicas = fmt.Sprintf("%d/%d", component.Replicas.Ready, component.Replicas.Desired)
 			}
-			fmt.Fprintf(&b, "| %s | %s | %s |\n", component.Name, component.Status, replicas)
+			// Both come back from the Knowledge Graph API as free strings, and
+			// nothing in this repository constrains either.
+			fmt.Fprintf(&b, "| %s | %s | %s |\n",
+				toolutil.EscapeMdTableCell(component.Name), toolutil.EscapeMdTableCell(component.Status), replicas)
 		}
 	}
 	toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` to inspect indexing status for a namespace or project")
@@ -232,7 +235,9 @@ func writeKV(b *strings.Builder, key, value string) {
 	if value == "" {
 		return
 	}
-	fmt.Fprintf(b, "- %s: %s\n", key, value)
+	// The key is a literal at every call site; the value is whatever the
+	// Knowledge Graph API answered.
+	fmt.Fprintf(b, "- %s: %s\n", key, toolutil.EscapeMdTableCell(value))
 }
 
 // prettyAny returns a pretty-printed JSON string for any value, or

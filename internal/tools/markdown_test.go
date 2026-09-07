@@ -115,10 +115,14 @@ func TestFormatProject_Markdown(t *testing.T) {
 // and the empty-state message.
 func TestFormatProject_ListMarkdown(t *testing.T) {
 	t.Run("with projects", func(t *testing.T) {
+		// Each fixture carries a web_url because the row is asserted to be a
+		// link: toolutil.MdTitleLink renders a bare label when it has no
+		// address to point at, rather than the empty link "[alpha]()" this
+		// formatter used to write from the same fixture.
 		out := projects.ListOutput{
 			Projects: []projects.Output{
-				{ID: 1, Name: "alpha", PathWithNamespace: "g/alpha", Visibility: "public"},
-				{ID: 2, Name: "beta", PathWithNamespace: "g/beta", Visibility: "private"},
+				{ID: 1, Name: "alpha", PathWithNamespace: "g/alpha", Visibility: "public", WebURL: "https://gl.example.com/g/alpha"},
+				{ID: 2, Name: "beta", PathWithNamespace: "g/beta", Visibility: "private", WebURL: "https://gl.example.com/g/beta"},
 			},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2, PerPage: 20},
 		}
@@ -126,7 +130,7 @@ func TestFormatProject_ListMarkdown(t *testing.T) {
 		if !strings.Contains(md, "## Projects (2)") {
 			t.Error(errMissingHeader)
 		}
-		if !strings.Contains(md, "[alpha]") {
+		if !strings.Contains(md, "[alpha](https://gl.example.com/g/alpha)") {
 			t.Error("missing project row")
 		}
 		if !strings.Contains(md, "Page 1 of 1") {
@@ -841,14 +845,17 @@ func TestIssueState_Emoji(t *testing.T) {
 func TestFormatCommit_ListMarkdown(t *testing.T) {
 	t.Run("with commits", func(t *testing.T) {
 		out := commits.ListOutput{
-			Commits:    []commits.Output{{ShortID: "abc1234", Title: "fix bug", AuthorName: "dev", CommittedDate: testDate20260101}},
+			Commits: []commits.Output{{
+				ShortID: "abc1234", Title: "fix bug", AuthorName: "dev",
+				CommittedDate: testDate20260101, WebURL: "https://gl.example.com/c/abc1234",
+			}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
 		md := commits.FormatListMarkdown(out)
 		if !strings.Contains(md, "## Commits (1)") {
 			t.Error(errMissingHeader)
 		}
-		if !strings.Contains(md, "[abc1234]") {
+		if !strings.Contains(md, "[abc1234](https://gl.example.com/c/abc1234)") {
 			t.Error("missing commit row")
 		}
 	})
@@ -907,14 +914,17 @@ func TestFormatCommit_DiffMarkdown(t *testing.T) {
 // TestFormatMR_CommitsMarkdown verifies MR commits table rendering.
 func TestFormatMR_CommitsMarkdown(t *testing.T) {
 	out := mergerequests.CommitsOutput{
-		Commits:    []commits.Output{{ShortID: "abc", Title: "fix", AuthorName: "dev", CommittedDate: testDate20260101}},
+		Commits: []commits.Output{{
+			ShortID: "abc", Title: "fix", AuthorName: "dev",
+			CommittedDate: testDate20260101, WebURL: "https://gl.example.com/c/abc",
+		}},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	}
 	md := mergerequests.FormatCommitsMarkdown(out)
 	if !strings.Contains(md, "## MR Commits (1)") {
 		t.Error(errMissingHeader)
 	}
-	if !strings.Contains(md, "[abc]") {
+	if !strings.Contains(md, "[abc](https://gl.example.com/c/abc)") {
 		t.Error("missing commit row")
 	}
 }
@@ -923,13 +933,16 @@ func TestFormatMR_CommitsMarkdown(t *testing.T) {
 func TestFormatMR_PipelinesMarkdown(t *testing.T) {
 	t.Run("with pipelines", func(t *testing.T) {
 		out := mergerequests.PipelinesOutput{
-			Pipelines: []pipelines.Output{{ID: 50, Status: "success", Source: "push", Ref: "main"}},
+			Pipelines: []pipelines.Output{{
+				ID: 50, Status: "success", Source: "push", Ref: "main",
+				WebURL: "https://gl.example.com/p/50",
+			}},
 		}
 		md := mergerequests.FormatPipelinesMarkdown(out)
 		if !strings.Contains(md, "## MR Pipelines (1)") {
 			t.Error(errMissingHeader)
 		}
-		if !strings.Contains(md, "[#50]") {
+		if !strings.Contains(md, "[#50](https://gl.example.com/p/50)") {
 			t.Error("missing pipeline row")
 		}
 	})
@@ -1017,7 +1030,10 @@ func TestFormatLabel_ListMarkdown(t *testing.T) {
 func TestFormatMilestone_ListMarkdown(t *testing.T) {
 	t.Run("with milestones", func(t *testing.T) {
 		out := milestones.ListOutput{
-			Milestones: []milestones.Output{{IID: 1, Title: "v1.0", State: "active", DueDate: "2026-06-01", Expired: false}},
+			Milestones: []milestones.Output{{
+				IID: 1, Title: "v1.0", State: "active", DueDate: "2026-06-01",
+				Expired: false, WebURL: "https://gl.example.com/m/1",
+			}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
 		md := milestones.FormatListMarkdownString(out)
@@ -1133,14 +1149,17 @@ func TestFormatJob_Markdown(t *testing.T) {
 func TestFormatJob_ListMarkdown(t *testing.T) {
 	t.Run("with jobs", func(t *testing.T) {
 		out := jobs.ListOutput{
-			Jobs:       []jobs.Output{{ID: 1, Name: "test", Stage: "test", Status: "success", Duration: 10.0}},
+			Jobs: []jobs.Output{{
+				ID: 1, Name: "test", Stage: "test", Status: "success",
+				Duration: 10.0, WebURL: "https://gl.example.com/j/1",
+			}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
 		md := jobs.FormatListMarkdown(out)
 		if !strings.Contains(md, "## Jobs (1)") {
 			t.Error(errMissingHeader)
 		}
-		if !strings.Contains(md, "[#1]") {
+		if !strings.Contains(md, "[#1](https://gl.example.com/j/1)") {
 			t.Error("missing job row")
 		}
 	})

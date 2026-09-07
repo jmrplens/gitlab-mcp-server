@@ -32,6 +32,7 @@ func FormatOutputMarkdown(e Output) string {
 	b.WriteString(toolutil.TblSep2Col)
 	fmt.Fprintf(&b, "| ID | %d |\n", e.ID)
 	fmt.Fprintf(&b, "| Slug | %s |\n", toolutil.EscapeMdTableCell(e.Slug))
+	//gitlab:allow-unescaped e.State: an environment state GitLab picks from a fixed set (available, stopping, stopped).
 	fmt.Fprintf(&b, "| State | %s |\n", e.State)
 	if e.Tier != "" {
 		fmt.Fprintf(&b, "| Tier | %s |\n", toolutil.EscapeMdTableCell(e.Tier))
@@ -71,7 +72,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
 	for _, e := range out.Environments {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
-			e.ID, toolutil.EscapeMdTableCell(e.Name), e.State, e.Tier, toolutil.EscapeMdTableCell(e.ExternalURL))
+			e.ID, toolutil.EscapeMdTableCell(e.Name), e.State, toolutil.EscapeMdTableCell(e.Tier), toolutil.EscapeMdTableCell(e.ExternalURL))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

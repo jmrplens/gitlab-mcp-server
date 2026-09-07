@@ -13,17 +13,20 @@ import (
 func FormatTodoMarkdown(t TodoOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Todo #%d\n\n", t.ID)
+	//gitlab:allow-unescaped t.ActionName: a to-do action, a gl.TodoAction GitLab picks from a fixed set.
 	fmt.Fprintf(&b, "- **Action**: %s\n", t.ActionName)
+	//gitlab:allow-unescaped t.TargetType: a to-do target type, a gl.TodoTargetType GitLab picks from a fixed set.
 	fmt.Fprintf(&b, "- **Target Type**: %s\n", t.TargetType)
 	if t.TargetTitle != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdTarget, t.TargetTitle)
+		fmt.Fprintf(&b, toolutil.FmtMdTarget, toolutil.EscapeMdTableCell(t.TargetTitle))
 	}
+	//gitlab:allow-unescaped t.State: a to-do state GitLab picks from a fixed set (pending, done).
 	fmt.Fprintf(&b, toolutil.FmtMdState, t.State)
 	if t.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(t.CreatedAt))
 	}
 	if t.TargetURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURLNewline, t.TargetURL)
+		toolutil.WriteMdURLNewline(&b, t.TargetURL)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -53,7 +56,8 @@ func formatIssueList(out ListOutput, heading string, hints ...string) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, i := range out.Issues {
 		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
+		//gitlab:allow-unescaped i.State: an issue state, one of GitLab's fixed set (opened, closed).
+		fmt.Fprintf(&b, "| %s | %s | %s %s | %s | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL), toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b, append([]string{toolutil.HintPreserveLinks}, hints...)...)
@@ -105,9 +109,11 @@ func FormatTimeStatsMarkdown(ts TimeStatsOutput) string {
 	var b strings.Builder
 	b.WriteString("## Time Tracking\n\n")
 	if ts.HumanTimeEstimate != "" {
+		//gitlab:allow-unescaped ts.HumanTimeEstimate: a duration GitLab renders from a count of seconds, "3d 4h 30m".
 		fmt.Fprintf(&b, "- **Estimate**: %s\n", ts.HumanTimeEstimate)
 	}
 	if ts.HumanTotalTimeSpent != "" {
+		//gitlab:allow-unescaped ts.HumanTotalTimeSpent: a duration GitLab renders from a count of seconds, "3d 4h 30m".
 		fmt.Fprintf(&b, "- **Spent**: %s\n", ts.HumanTotalTimeSpent)
 	}
 	fmt.Fprintf(&b, "- **Estimate (seconds)**: %d\n", ts.TimeEstimate)
@@ -155,7 +161,8 @@ func FormatRelatedMRsMarkdown(out RelatedMRsOutput, heading string) string {
 		if mr.Author != nil {
 			author = mr.Author.Username
 		}
-		fmt.Fprintf(&b, "| !%d | %s | %s | @%s | %s -> %s |\n", mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State, toolutil.EscapeMdTableCell(author), mr.SourceBranch, mr.TargetBranch)
+		//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
+		fmt.Fprintf(&b, "| !%d | %s | %s | @%s | %s -> %s |\n", mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State, toolutil.EscapeMdTableCell(author), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -175,31 +182,34 @@ func FormatMarkdown(i Output) string {
 	}
 	fmt.Fprintf(&b, "## %s Issue #%d: %s%s\n\n", toolutil.IssueStateEmoji(i.State), i.IID, toolutil.EscapeMdHeading(i.Title), confidentialTag)
 	if i.References != nil && i.References.Full != "" {
-		fmt.Fprintf(&b, "- **Reference**: %s\n", i.References.Full)
+		fmt.Fprintf(&b, "- **Reference**: %s\n", toolutil.EscapeMdTableCell(i.References.Full))
 	}
 	fmt.Fprintf(&b, "- **State**: %s %s\n", toolutil.IssueStateEmoji(i.State), i.State)
+	//gitlab:allow-unescaped i.IssueType: an issue type GitLab picks from a fixed set (issue, incident, test_case, task).
 	if i.IssueType != "" && i.IssueType != "issue" {
 		fmt.Fprintf(&b, "- **Type**: %s\n", i.IssueType)
 	}
 	if i.Confidential {
 		fmt.Fprintf(&b, "- %s **Confidential**\n", toolutil.EmojiConfidential)
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, AuthorName(i))
+	fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, toolutil.EscapeMdTableCell(AuthorName(i)))
 	if len(i.Labels) > 0 {
-		fmt.Fprintf(&b, "- **Labels**: %s\n", strings.Join(i.Labels, ", "))
+		// A label title is free text: GitLab's only rule on one is that it
+		// carries no comma.
+		fmt.Fprintf(&b, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(i.Labels, ", ")))
 	}
 	if names := assigneeUsernames(i); len(names) > 0 {
-		fmt.Fprintf(&b, "- **Assignees**: %s\n", strings.Join(prefixAt(names), ", "))
+		fmt.Fprintf(&b, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(prefixAt(names), ", ")))
 	}
 	if i.Milestone != nil && i.Milestone.Title != "" {
-		fmt.Fprintf(&b, "- **Milestone**: %s\n", i.Milestone.Title)
+		fmt.Fprintf(&b, "- **Milestone**: %s\n", toolutil.EscapeMdTableCell(i.Milestone.Title))
 	}
 	if i.DueDate != "" {
 		fmt.Fprintf(&b, "- **Due Date**: %s\n", toolutil.FormatTime(i.DueDate))
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(i.CreatedAt))
 	if i.State == "closed" && closerName(i) != "" {
-		fmt.Fprintf(&b, "- **Closed By**: @%s", closerName(i))
+		fmt.Fprintf(&b, "- **Closed By**: @%s", toolutil.EscapeMdTableCell(closerName(i)))
 		if i.ClosedAt != "" {
 			fmt.Fprintf(&b, " on %s", toolutil.FormatTime(i.ClosedAt))
 		}
@@ -217,7 +227,7 @@ func FormatMarkdown(i Output) string {
 	if i.Description != "" {
 		fmt.Fprintf(&b, "\n### Description\n\n%s%s\n", toolutil.WrapGFMBody(i.Description), toolutil.RichContentHint(toolutil.DetectRichContent(i.Description), i.WebURL))
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdURLNewline, i.WebURL)
+	toolutil.WriteMdURLNewline(&b, i.WebURL)
 	toolutil.WriteHints(
 		&b,
 		"Use gitlab_issue action 'note_list' to see comments on this issue",
@@ -256,7 +266,7 @@ func FormatListGroupMarkdown(out ListGroupOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, i := range out.Issues {
 		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL), toolutil.EscapeMdTableCell(i.Title), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

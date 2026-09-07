@@ -320,6 +320,7 @@ func FormatUserActivitiesMarkdownString(o UserActivitiesOutput) string {
 		b.WriteString("|---|---|\n")
 		for _, a := range o.Activities {
 			fmt.Fprintf(&b, "| %s | %s |\n",
+				//gitlab:allow-unescaped a.LastActivityOn: a date this package formatted itself, with time.Time.Format on the ISO date layout.
 				toolutil.EscapeMdTableCell(a.Username), a.LastActivityOn)
 		}
 	}
@@ -344,6 +345,7 @@ func FormatUserMembershipsMarkdownString(o UserMembershipsOutput) string {
 		b.WriteString("|---|---|---|---|\n")
 		for _, m := range o.Memberships {
 			fmt.Fprintf(&b, "| %d | %s | %s | %d |\n",
+				//gitlab:allow-unescaped m.SourceType: GitLab names the membership source Project or Namespace, and nothing else.
 				m.SourceID, toolutil.EscapeMdTableCell(m.SourceName), m.SourceType, m.AccessLevel)
 		}
 	}
@@ -360,6 +362,7 @@ func FormatUserRunnerMarkdownString(o UserRunnerOutput) string {
 	var b strings.Builder
 	b.WriteString("## User Runner Created\n\n")
 	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
+	//gitlab:allow-unescaped o.Token: the runner token GitLab minted, which the reader has to copy back verbatim.
 	fmt.Fprintf(&b, "- **Token**: %s\n", o.Token)
 	if o.TokenExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Token Expires At**: %s\n", toolutil.FormatTime(o.TokenExpiresAt))
@@ -377,7 +380,9 @@ func FormatDeleteUserIdentityMarkdownString(o DeleteUserIdentityOutput) string {
 		toolutil.FmtMdID+
 		"- **Provider**: %s\n"+
 		"- **Deleted**: %s %v\n",
-		o.UserID, o.Provider, toolutil.EmojiSuccess, o.Deleted)
+		// The provider is the caller's own argument echoed back, not a response
+		// field, so nothing in this repository constrains it.
+		o.UserID, toolutil.EscapeMdTableCell(o.Provider), toolutil.EmojiSuccess, o.Deleted)
 }
 
 // parseDate parses a YYYY-MM-DD string to time.Time, returning zero on failure.

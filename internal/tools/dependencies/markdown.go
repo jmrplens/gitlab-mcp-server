@@ -23,6 +23,7 @@ func FormatListMarkdown(out ListOutput) string {
 			&sb, "| %s | %s | %s | %d | %d |\n",
 			toolutil.EscapeMdTableCell(d.Name),
 			toolutil.EscapeMdTableCell(d.Version),
+			//gitlab:allow-unescaped d.PackageManager: a package manager GitLab names from the scanner it ran (bundler, npm, maven and the rest).
 			d.PackageManager,
 			len(d.Vulnerabilities),
 			len(d.Licenses),
@@ -40,10 +41,10 @@ func FormatExportMarkdown(e ExportOutput) string {
 	fmt.Fprintf(&sb, "| ID | %d |\n", e.ID)
 	fmt.Fprintf(&sb, "| Finished | %s |\n", toolutil.BoolEmoji(e.HasFinished))
 	if e.Self != "" {
-		fmt.Fprintf(&sb, "| Self | %s |\n", e.Self)
+		fmt.Fprintf(&sb, "| Self | %s |\n", toolutil.EscapeMdTableCell(e.Self))
 	}
 	if e.Download != "" {
-		fmt.Fprintf(&sb, "| Download | %s |\n", e.Download)
+		fmt.Fprintf(&sb, "| Download | %s |\n", toolutil.EscapeMdTableCell(e.Download))
 	}
 	return sb.String()
 }

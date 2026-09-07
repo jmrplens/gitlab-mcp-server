@@ -16,14 +16,21 @@ func FormatOutputMarkdown(j Output) string {
 	if j.Pipeline != nil && j.Pipeline.ID > 0 {
 		fmt.Fprintf(&b, "- **Pipeline**: #%d\n", j.Pipeline.ID)
 	}
-	fmt.Fprintf(&b, "- **Stage**: %s\n", j.Stage)
+	// A stage name is written in .gitlab-ci.yml, and GitLab constrains its
+	// length rather than its characters; the jobs tables already escape it.
+	fmt.Fprintf(&b, "- **Stage**: %s\n", toolutil.EscapeMdTableCell(j.Stage))
+	//gitlab:allow-unescaped j.Status: a job status, GitLab's own build state (created, running, success, failed and the rest).
 	fmt.Fprintf(&b, toolutil.FmtMdStatus, j.Status)
 	if j.AllowFailure {
 		b.WriteString("- **Allow Failure**: yes\n")
 	}
-	fmt.Fprintf(&b, "- **Ref**: %s\n", j.Ref)
+	fmt.Fprintf(&b, "- **Ref**: %s\n", toolutil.EscapeMdTableCell(j.Ref))
 	if j.Commit != nil && j.Commit.ID != "" {
-		fmt.Fprintf(&b, "- **Commit**: `%s`\n", j.Commit.ID[:min(len(j.Commit.ID), 12)])
+		// Named rather than sliced inline so the exemption can refer to it: a
+		// directive's expression is cut at its first colon.
+		shortID := j.Commit.ID[:min(len(j.Commit.ID), 12)]
+		//gitlab:allow-unescaped shortID: the first twelve characters of a git object id, which is hexadecimal.
+		fmt.Fprintf(&b, "- **Commit**: `%s`\n", shortID)
 	}
 	if j.Duration > 0 {
 		fmt.Fprintf(&b, "- **Duration**: %.1fs\n", j.Duration)
@@ -32,18 +39,19 @@ func FormatOutputMarkdown(j Output) string {
 		fmt.Fprintf(&b, "- **Queued**: %.1fs\n", j.QueuedDuration)
 	}
 	if j.FailureReason != "" {
+		//gitlab:allow-unescaped j.FailureReason: GitLab stores the failure reason as an integer column behind a fixed enum map and serializes the key, such as script_failure.
 		fmt.Fprintf(&b, "- **Failure Reason**: %s\n", j.FailureReason)
 	}
 	if j.Coverage > 0 {
 		fmt.Fprintf(&b, "- **Coverage**: %.1f%%\n", j.Coverage)
 	}
 	if j.User != nil && j.User.Username != "" {
-		fmt.Fprintf(&b, "- **User**: %s\n", j.User.Username)
+		fmt.Fprintf(&b, "- **User**: %s\n", toolutil.EscapeMdTableCell(j.User.Username))
 	}
 	if j.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(j.CreatedAt))
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdURL, j.WebURL)
+	toolutil.WriteMdURL(&b, j.WebURL)
 	toolutil.WriteHints(
 		&b,
 		"Use action 'trace' to view the full job log output",
@@ -65,8 +73,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Name | Stage | Status | Duration |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, j := range out.Jobs {
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s %s | %.1fs |\n",
-			j.ID, j.WebURL, toolutil.EscapeMdTableCell(j.Name), toolutil.EscapeMdTableCell(j.Stage), toolutil.PipelineStatusEmoji(j.Status), j.Status, j.Duration)
+		fmt.Fprintf(&b, "| %s | %s | %s | %s %s | %.1fs |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", j.ID), j.WebURL), toolutil.EscapeMdTableCell(j.Name), toolutil.EscapeMdTableCell(j.Stage), toolutil.PipelineStatusEmoji(j.Status), j.Status, j.Duration)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -112,6 +120,7 @@ func FormatBridgeListMarkdown(out BridgeListOutput) string {
 		}
 		fmt.Fprintf(&b, "| %d | %s | %s | %s %s | %.1fs | %s |\n",
 			br.ID, toolutil.EscapeMdTableCell(br.Name), toolutil.EscapeMdTableCell(br.Stage),
+			//gitlab:allow-unescaped br.Status: a bridge carries the same job status enum a job does.
 			toolutil.PipelineStatusEmoji(br.Status), br.Status, br.Duration, ds)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -146,9 +155,11 @@ func FormatArtifactsMarkdown(out ArtifactsOutput) string {
 func FormatSingleArtifactMarkdown(out SingleArtifactOutput) string {
 	var b strings.Builder
 	if out.JobID > 0 {
-		fmt.Fprintf(&b, "## Job #%d: %s\n\n", out.JobID, out.ArtifactPath)
+		// The artifact path is echoed from the caller's own argument: an entry
+		// name in a zip, authored by whoever wrote the CI job.
+		fmt.Fprintf(&b, "## Job #%d: %s\n\n", out.JobID, toolutil.EscapeMdHeading(out.ArtifactPath))
 	} else {
-		fmt.Fprintf(&b, "## %s\n\n", out.ArtifactPath)
+		fmt.Fprintf(&b, "## %s\n\n", toolutil.EscapeMdHeading(out.ArtifactPath))
 	}
 	fmt.Fprintf(&b, "- **Size**: %d bytes\n", out.Size)
 	if out.Truncated {
@@ -168,6 +179,9 @@ func FormatSingleArtifactMarkdown(out SingleArtifactOutput) string {
 func FormatWaitMarkdown(out WaitOutput) string {
 	var b strings.Builder
 	if out.TimedOut {
+		//gitlab:allow-unescaped out.Job.Status: the polled job's status is the same GitLab enum a job's own status is.
+		//gitlab:allow-unescaped out.FinalStatus: the status the poller last read off the job, so the same GitLab enum.
+		//gitlab:allow-unescaped out.WaitedFor: the poller writes this duration itself, with time.Duration.String over time.Since.
 		fmt.Fprintf(&b, "## \u23F0 Job #%d: Timed Out (current: %s)\n\n", out.Job.ID, out.Job.Status)
 	} else {
 		var emoji string

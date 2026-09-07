@@ -18,10 +18,7 @@ func FormatListMarkdown(title, emptyText string, iterations []Output, pagination
 	builder.WriteString(toolutil.MarkdownTableHeader("ID", "IID", "Title", "State", "Start", "Due", "URL"))
 	for _, iteration := range iterations {
 		state := StateName(iteration.State)
-		url := toolutil.EscapeMdTableCell(iteration.WebURL)
-		if iteration.WebURL != "" {
-			url = fmt.Sprintf("[%s](%s)", state, iteration.WebURL)
-		}
+		url := toolutil.MdTitleLink(state, iteration.WebURL)
 		fmt.Fprintf(&builder, "| %d | %d | %s | %s | %s | %s | %s |\n",
 			iteration.ID, iteration.IID, toolutil.EscapeMdTableCell(iteration.Title),
 			state, toolutil.FormatTime(iteration.StartDate), toolutil.FormatTime(iteration.DueDate), url)
@@ -44,7 +41,7 @@ func FormatOutputMarkdown(output Output, hints ...string) string {
 	fmt.Fprintf(&builder, "| Start | %s |\n", toolutil.FormatTime(output.StartDate))
 	fmt.Fprintf(&builder, "| Due | %s |\n", toolutil.FormatTime(output.DueDate))
 	if output.WebURL != "" {
-		fmt.Fprintf(&builder, toolutil.FmtMdURL, output.WebURL)
+		toolutil.WriteMdURL(&builder, output.WebURL)
 	}
 	fmt.Fprintf(&builder, toolutil.FmtMdCreated, toolutil.FormatTime(output.CreatedAt))
 	if output.Description != "" {

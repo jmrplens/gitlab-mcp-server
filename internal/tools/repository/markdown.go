@@ -54,6 +54,7 @@ func FormatCompareMarkdown(out CompareOutput) string {
 		b.WriteString("| Short ID | Title | Author |\n")
 		b.WriteString(toolutil.TblSep3Col)
 		for _, c := range out.Commits {
+			//gitlab:allow-unescaped c.ShortID: an abbreviated git object id, which GitLab derives from the commit hash and is hexadecimal.
 			fmt.Fprintf(&b, toolutil.FmtRow3Str, c.ShortID, toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName))
 		}
 	}
@@ -75,7 +76,7 @@ func FormatCompareMarkdown(out CompareOutput) string {
 		}
 	}
 	if out.WebURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURLNewline, out.WebURL)
+		toolutil.WriteMdURLNewline(&b, out.WebURL)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -113,10 +114,13 @@ func FormatContributorsMarkdown(out ContributorsOutput) string {
 func FormatBlobMarkdown(out BlobOutput) string {
 	var b strings.Builder
 	b.WriteString("## Repository Blob\n\n")
-	fmt.Fprintf(&b, "- **SHA**: %s\n", out.SHA)
+	// The blob SHA is not GitLab's echo of anything it validated: it is the
+	// caller's own argument, filtered only by a remote endpoint answering 200.
+	fmt.Fprintf(&b, "- **SHA**: %s\n", toolutil.EscapeMdTableCell(out.SHA))
 	fmt.Fprintf(&b, "- **Size**: %d bytes\n", out.Size)
 	switch out.ContentCategory {
 	case "image":
+		//gitlab:allow-unescaped out.ImageMIMEType: sniffed by http.DetectContentType on a branch that only runs when the result already begins with image/, so it is one of that function's own constants.
 		fmt.Fprintf(&b, "- **Content type**: image (%s)\n", out.ImageMIMEType)
 		b.WriteString("\n> \U0001F5BC\uFE0F Image content is attached below as ImageContent for multimodal viewing.\n")
 	case "binary":
@@ -135,10 +139,13 @@ func FormatBlobMarkdown(out BlobOutput) string {
 func FormatRawBlobContentMarkdown(out RawBlobContentOutput) string {
 	var b strings.Builder
 	b.WriteString("## Repository Raw Blob Content\n\n")
-	fmt.Fprintf(&b, "- **SHA**: %s\n", out.SHA)
+	// The blob SHA is not GitLab's echo of anything it validated: it is the
+	// caller's own argument, filtered only by a remote endpoint answering 200.
+	fmt.Fprintf(&b, "- **SHA**: %s\n", toolutil.EscapeMdTableCell(out.SHA))
 	fmt.Fprintf(&b, "- **Size**: %d bytes\n", out.Size)
 	switch out.ContentCategory {
 	case "image":
+		//gitlab:allow-unescaped out.ImageMIMEType: sniffed by http.DetectContentType on a branch that only runs when the result already begins with image/, so it is one of that function's own constants.
 		fmt.Fprintf(&b, "- **Content type**: image (%s)\n", out.ImageMIMEType)
 		b.WriteString("\n> \U0001F5BC\uFE0F Image content is attached below as ImageContent for multimodal viewing.\n")
 	case "binary":
@@ -177,12 +184,15 @@ func rawBlobResult(out RawBlobContentOutput) *mcp.CallToolResult {
 func FormatArchiveMarkdown(out ArchiveOutput) string {
 	var b strings.Builder
 	b.WriteString("## Repository Archive\n\n")
-	fmt.Fprintf(&b, "- **Project**: %s\n", out.ProjectID)
-	fmt.Fprintf(&b, "- **Format**: %s\n", out.Format)
+	// Archive makes no API call at all, so all three are the caller's own
+	// arguments echoed back, format included: nothing checks it against the
+	// eight values its schema lists.
+	fmt.Fprintf(&b, "- **Project**: %s\n", toolutil.EscapeMdTableCell(out.ProjectID))
+	fmt.Fprintf(&b, "- **Format**: %s\n", toolutil.EscapeMdTableCell(out.Format))
 	if out.SHA != "" {
-		fmt.Fprintf(&b, "- **SHA/Ref**: %s\n", out.SHA)
+		fmt.Fprintf(&b, "- **SHA/Ref**: %s\n", toolutil.EscapeMdTableCell(out.SHA))
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdURL, out.URL)
+	toolutil.WriteMdURL(&b, out.URL)
 	toolutil.WriteHints(
 		&b,
 		toolutil.HintPreserveLinks,

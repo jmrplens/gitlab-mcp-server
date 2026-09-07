@@ -74,11 +74,14 @@ func FormatTestMarkdown(output TestOutput) *mcp.CallToolResult {
 	sb.WriteString("## Hook Test Event\n\n")
 	sb.WriteString("| Property | Value |\n")
 	sb.WriteString("|----------|-------|\n")
-	fmt.Fprintf(&sb, "| Event Name | %s |\n", e.EventName)
-	fmt.Fprintf(&sb, "| Name | %s |\n", e.Name)
-	fmt.Fprintf(&sb, "| Path | %s |\n", e.Path)
+	// A system hook event carries the name and path of whatever it fired about,
+	// both of which a person chose.
+	fmt.Fprintf(&sb, "| Event Name | %s |\n", toolutil.EscapeMdTableCell(e.EventName))
+	fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(e.Name))
+	fmt.Fprintf(&sb, "| Path | %s |\n", toolutil.EscapeMdTableCell(e.Path))
 	fmt.Fprintf(&sb, "| Project ID | %d |\n", e.ProjectID)
-	fmt.Fprintf(&sb, "| Owner | %s (%s) |\n", e.OwnerName, e.OwnerEmail)
+	fmt.Fprintf(&sb, "| Owner | %s (%s) |\n",
+		toolutil.EscapeMdTableCell(e.OwnerName), toolutil.EscapeMdTableCell(e.OwnerEmail))
 	toolutil.WriteHints(&sb, "Verify the hook is receiving events correctly")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }

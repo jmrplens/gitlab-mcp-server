@@ -235,8 +235,10 @@ func writeProjectSnippetTable(b *strings.Builder, snippets []Output) {
 	b.WriteString("|---|---|---|---|---|---|\n")
 	for _, s := range snippets {
 		proj := resolveProjectLabel(s)
+		//gitlab:allow-unescaped s.Visibility: a snippet visibility GitLab answers as private, internal or public.
 		fmt.Fprintf(b, "| %d | %s | %s | %s | @%s | %d |\n",
-			s.ID, toolutil.MdTitleLink(toolutil.EscapeMdTableCell(s.Title), s.WebURL), proj, s.Visibility, authorUsername(s.Author), len(s.Files))
+			s.ID, toolutil.MdTitleLink(s.Title, s.WebURL), toolutil.EscapeMdTableCell(proj), s.Visibility,
+			toolutil.EscapeMdTableCell(authorUsername(s.Author)), len(s.Files))
 	}
 }
 
@@ -257,7 +259,8 @@ func writeSimpleSnippetTable(b *strings.Builder, snippets []Output) {
 	b.WriteString("|---|---|---|---|---|\n")
 	for _, s := range snippets {
 		fmt.Fprintf(b, "| %d | %s | %s | @%s | %d |\n",
-			s.ID, toolutil.MdTitleLink(toolutil.EscapeMdTableCell(s.Title), s.WebURL), s.Visibility, authorUsername(s.Author), len(s.Files))
+			s.ID, toolutil.MdTitleLink(s.Title, s.WebURL), s.Visibility,
+			toolutil.EscapeMdTableCell(authorUsername(s.Author)), len(s.Files))
 	}
 }
 

@@ -19,7 +19,8 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	sb.WriteString("| SHA | Title | Author |\n")
 	sb.WriteString("|-----|-------|--------|\n")
 	for _, c := range out.Commits {
-		fmt.Fprintf(&sb, "| %s | %s | %s |\n", c.ShortID, toolutil.EscapeMdTableCell(c.Title), c.AuthorName)
+		//gitlab:allow-unescaped c.ShortID: an abbreviated commit SHA, hexadecimal by construction.
+		fmt.Fprintf(&sb, "| %s | %s | %s |\n", c.ShortID, toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName))
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_commit_get` to view full details of a specific commit")
 	return toolutil.ToolResultWithMarkdown(sb.String())

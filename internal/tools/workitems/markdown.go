@@ -13,23 +13,30 @@ import (
 func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	wi := out.WorkItem
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Work Item #%d: %s\n\n", wi.IID, wi.Title)
-	fmt.Fprintf(&sb, "- **Type**: %s\n", wi.Type)
+	fmt.Fprintf(&sb, "## Work Item #%d: %s\n\n", wi.IID, toolutil.EscapeMdHeading(wi.Title))
+	// The type name is a GraphQL String rather than an enum, and this file's
+	// own type table already escapes the same value.
+	fmt.Fprintf(&sb, "- **Type**: %s\n", toolutil.EscapeMdTableCell(wi.Type))
+	//gitlab:allow-unescaped wi.State: a work item state from the GraphQL WorkItemState enum (OPEN, CLOSED), never text anybody types.
 	fmt.Fprintf(&sb, toolutil.FmtMdState, wi.State)
 	if wi.Status != "" {
-		fmt.Fprintf(&sb, "- **Status**: %s\n", wi.Status)
+		// The status widget carries the display name of a status in the
+		// namespace's lifecycle, which an administrator can create and rename.
+		fmt.Fprintf(&sb, "- **Status**: %s\n", toolutil.EscapeMdTableCell(wi.Status))
 	}
 	if wi.Author != "" {
-		fmt.Fprintf(&sb, toolutil.FmtMdAuthor, wi.Author)
+		fmt.Fprintf(&sb, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(wi.Author))
 	}
 	if len(wi.Assignees) > 0 {
-		fmt.Fprintf(&sb, "- **Assignees**: %s\n", strings.Join(wi.Assignees, ", "))
+		fmt.Fprintf(&sb, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(wi.Assignees, ", ")))
 	}
 	if len(wi.Labels) > 0 {
-		fmt.Fprintf(&sb, "- **Labels**: %s\n", strings.Join(wi.Labels, ", "))
+		// A label title is free text: GitLab's only rule on one is that it
+		// carries no comma.
+		fmt.Fprintf(&sb, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(wi.Labels, ", ")))
 	}
 	if wi.WebURL != "" {
-		fmt.Fprintf(&sb, "- **URL**: %s\n", wi.WebURL)
+		toolutil.WriteMdURL(&sb, wi.WebURL)
 	}
 	if wi.Description != "" {
 		fmt.Fprintf(&sb, "\n### Description\n\n%s\n", wi.Description)
@@ -39,7 +46,8 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 		sb.WriteString("| IID | Link Type | Path |\n")
 		sb.WriteString("|-----|-----------|------|\n")
 		for _, li := range wi.LinkedItems {
-			fmt.Fprintf(&sb, "| %d | %s | %s |\n", li.IID, li.LinkType, li.Path)
+			//gitlab:allow-unescaped li.LinkType: a link type from GitLab's own closed set (blocks, is_blocked_by, relates_to).
+			fmt.Fprintf(&sb, "| %d | %s | %s |\n", li.IID, li.LinkType, toolutil.EscapeMdTableCell(li.Path))
 		}
 	}
 	if len(wi.Children) > 0 {
@@ -47,7 +55,7 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 		sb.WriteString("| IID | Path |\n")
 		sb.WriteString("|-----|------|\n")
 		for _, c := range wi.Children {
-			fmt.Fprintf(&sb, "| %d | %s |\n", c.IID, c.Path)
+			fmt.Fprintf(&sb, "| %d | %s |\n", c.IID, toolutil.EscapeMdTableCell(c.Path))
 		}
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_update_work_item` to modify this work item")
@@ -72,7 +80,8 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	sb.WriteString("|-----|------|-------|--------|-------|--------|\n")
 	for _, wi := range out.WorkItems {
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %s | %s |\n",
-			wi.IID, wi.Type, wi.State, wi.Status, toolutil.EscapeMdTableCell(wi.Title), wi.Author)
+			wi.IID, toolutil.EscapeMdTableCell(wi.Type), wi.State, toolutil.EscapeMdTableCell(wi.Status),
+			toolutil.EscapeMdTableCell(wi.Title), toolutil.EscapeMdTableCell(wi.Author))
 	}
 	if out.Pagination.HasNextPage {
 		fmt.Fprintf(&sb, "\n> Next page cursor: `%s`\n", out.Pagination.EndCursor)

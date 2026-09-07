@@ -3917,6 +3917,16 @@ func hasExplicitConfirm(params map[string]any) bool {
 	return false
 }
 
+// formatSearchOutput renders a catalog search as a Markdown table.
+//
+// Every cell but the Why column holds catalog metadata compiled into the
+// binary from an ActionSpec rather than text read from a GitLab response, so
+// escaping it would teach the next reader a rule that is not the rule.
+// formatFindOutput builds the same two values under the same names, and one
+// declaration covers a package.
+//
+//gitlab:allow-unescaped result.ID: a canonical catalog ID such as project.create, compiled in from an ActionSpec rather than read from a GitLab response.
+//gitlab:allow-unescaped required: the action's required parameter names, joined from its compiled-in input schema, so each one is a JSON property identifier.
 func formatSearchOutput(output SearchOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## GitLab Action Search\n\n")
@@ -3961,6 +3971,19 @@ func formatSearchOutput(output SearchOutput) string {
 	return b.String()
 }
 
+// formatDescribeOutput renders one or more catalog actions as a heading and a
+// list of their metadata.
+//
+// Everything it interpolates is compiled into the binary from an ActionSpec or
+// derived from the action's own input schema, so none of it is GitLab-authored
+// text and none of it wants an escaper.
+//
+//gitlab:allow-unescaped action.ID: a canonical catalog ID such as project.create, compiled in from an ActionSpec rather than read from a GitLab response.
+//gitlab:allow-unescaped action.Tool: the backing meta-tool name of the catalog group, such as gitlab_issue, compiled in from an ActionSpec.
+//gitlab:allow-unescaped action.Action: the action name inside the catalog group, compiled in from an ActionSpec.
+//gitlab:allow-unescaped strings.Join(action.RequiredParams, "`, `"): the action's required parameter names, read from its compiled-in input schema, so each one is a JSON property identifier.
+//gitlab:allow-unescaped strings.Join(action.RelatedActions, "`, `"): curated canonical catalog IDs, compiled in from an ActionSpec or from actionUXMetadataByID.
+//gitlab:allow-unescaped action.SchemaURI: the constant gitlab://tools/ prefix concatenated with a canonical catalog ID by toolDetailURIForID.
 func formatDescribeOutput(output DescribeOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## GitLab Action Description\n\n")

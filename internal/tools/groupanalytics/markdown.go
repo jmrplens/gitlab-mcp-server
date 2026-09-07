@@ -14,7 +14,7 @@ func FormatIssuesCountMarkdown(out IssuesCountOutput) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Recently Created Issues Count\n\n")
 	fmt.Fprint(&sb, toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtGroupRow, out.GroupPath)
+	fmt.Fprintf(&sb, fmtGroupRow, toolutil.EscapeMdTableCell(out.GroupPath))
 	fmt.Fprintf(&sb, "| Issues Count (last 90 days) | **%d** |\n", out.IssuesCount)
 	toolutil.WriteHints(
 		&sb,
@@ -29,7 +29,7 @@ func FormatMRCountMarkdown(out MRCountOutput) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Recently Created Merge Requests Count\n\n")
 	fmt.Fprint(&sb, toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtGroupRow, out.GroupPath)
+	fmt.Fprintf(&sb, fmtGroupRow, toolutil.EscapeMdTableCell(out.GroupPath))
 	fmt.Fprintf(&sb, "| Merge Requests Count (last 90 days) | **%d** |\n", out.MergeRequestsCount)
 	toolutil.WriteHints(
 		&sb,
@@ -44,7 +44,7 @@ func FormatMembersCountMarkdown(out MembersCountOutput) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Recently Added Members Count\n\n")
 	fmt.Fprint(&sb, toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtGroupRow, out.GroupPath)
+	fmt.Fprintf(&sb, fmtGroupRow, toolutil.EscapeMdTableCell(out.GroupPath))
 	fmt.Fprintf(&sb, "| New Members Count (last 90 days) | **%d** |\n", out.NewMembersCount)
 	toolutil.WriteHints(
 		&sb,

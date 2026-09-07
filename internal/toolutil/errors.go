@@ -275,6 +275,8 @@ func (e *DetailedError) Error() string {
 // tool results. Includes all available context for diagnostics.
 func (e *DetailedError) Markdown() string {
 	var b strings.Builder
+	//gitlab:allow-unescaped e.Domain: the tool domain the handler named when it built the error, compiled in rather than read from GitLab.
+	//gitlab:allow-unescaped e.Action: the action the handler named when it built the error, compiled in rather than read from GitLab.
 	fmt.Fprintf(&b, "## "+EmojiCross+" Error: %s/%s\n\n", e.Domain, e.Action)
 	fmt.Fprintf(&b, "**Message**: %s\n", e.Message)
 	if e.GitLabStatus > 0 {

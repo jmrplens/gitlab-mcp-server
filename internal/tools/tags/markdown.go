@@ -25,21 +25,25 @@ func formatTagNotFound(out tagNotFoundOutput) *mcp.CallToolResult {
 func FormatOutputMarkdownString(t Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Tag: %s\n\n", toolutil.EscapeMdHeading(t.Name))
+	//gitlab:allow-unescaped t.Target: the object id the tag resolves to, which GitLab reports as a hexadecimal SHA.
 	fmt.Fprintf(&b, toolutil.FmtMdTarget, t.Target)
 	fmt.Fprintf(&b, "- **Protected**: %v\n", t.Protected)
 	if t.Message != "" {
-		fmt.Fprintf(&b, "- **Message**: %s\n", t.Message)
+		// The annotated tag message is what whoever tagged typed, and this
+		// server's own tag.create writes it.
+		fmt.Fprintf(&b, "- **Message**: %s\n", toolutil.EscapeMdTableCell(t.Message))
 	}
 	if t.Commit != nil {
 		if t.Commit.ID != "" {
+			//gitlab:allow-unescaped t.Commit.ID: a commit SHA, hexadecimal by construction.
 			fmt.Fprintf(&b, "- **Commit SHA**: %s\n", t.Commit.ID)
 		}
 		if t.Commit.Message != "" {
-			fmt.Fprintf(&b, "- **Commit Message**: %s\n", t.Commit.Message)
+			fmt.Fprintf(&b, "- **Commit Message**: %s\n", toolutil.EscapeMdTableCell(t.Commit.Message))
 		}
 	}
 	if t.Release != nil && t.Release.Description != "" {
-		fmt.Fprintf(&b, "- **Release**: %s\n", t.Release.Description)
+		fmt.Fprintf(&b, "- **Release**: %s\n", toolutil.EscapeMdTableCell(t.Release.Description))
 	}
 	if t.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(t.CreatedAt))
@@ -89,21 +93,27 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 func FormatSignatureMarkdownString(out SignatureOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Tag Signature\n\n")
+	//gitlab:allow-unescaped out.SignatureType: a signing scheme GitLab names, one of PGP, SSH or X509.
 	fmt.Fprintf(&b, "- **Signature Type**: %s\n", out.SignatureType)
+	//gitlab:allow-unescaped out.VerificationStatus: a verification verdict GitLab computes, not text it stored.
 	fmt.Fprintf(&b, "- **Verification Status**: %s\n", out.VerificationStatus)
 	cert := out.X509Certificate
 	fmt.Fprintf(&b, "\n### X.509 Certificate\n\n")
-	fmt.Fprintf(&b, "- **Subject**: %s\n", cert.Subject)
-	fmt.Fprintf(&b, toolutil.FmtMdEmail, cert.Email)
+	// The subject and the email are read out of the signer's own certificate,
+	// which GitLab stores as parsed rather than validating.
+	fmt.Fprintf(&b, "- **Subject**: %s\n", toolutil.EscapeMdTableCell(cert.Subject))
+	fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(cert.Email))
+	//gitlab:allow-unescaped cert.CertificateStatus: a GitLab certificate status, either good or revoked.
 	fmt.Fprintf(&b, toolutil.FmtMdStatus, cert.CertificateStatus)
 	if cert.SerialNumber != "" {
+		//gitlab:allow-unescaped cert.SerialNumber: GetSignature fills it from big.Int.String, so it holds decimal digits.
 		fmt.Fprintf(&b, "- **Serial Number**: %s\n", cert.SerialNumber)
 	}
 	issuer := cert.X509Issuer
 	fmt.Fprintf(&b, "\n### Issuer\n\n")
-	fmt.Fprintf(&b, "- **Subject**: %s\n", issuer.Subject)
+	fmt.Fprintf(&b, "- **Subject**: %s\n", toolutil.EscapeMdTableCell(issuer.Subject))
 	if issuer.CrlURL != "" {
-		fmt.Fprintf(&b, "- **CRL URL**: %s\n", issuer.CrlURL)
+		fmt.Fprintf(&b, "- **CRL URL**: %s\n", toolutil.EscapeMdTableCell(issuer.CrlURL))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -163,7 +173,11 @@ func FormatListProtectedTagsMarkdownString(out ListProtectedTagsOutput) string {
 		for i, al := range t.CreateAccessLevels {
 			levels[i] = formatAccessLevelSummary(al)
 		}
-		fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(t.Name), strings.Join(levels, ", "))
+		// GitLab's access-level description is a role name for a plain rule but
+		// a user's display name, a group's name or a deploy key's title for a
+		// granular one, and this file's detail formatter escapes the same field.
+		fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(t.Name),
+			toolutil.EscapeMdTableCell(strings.Join(levels, ", ")))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

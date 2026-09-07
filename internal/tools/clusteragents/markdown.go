@@ -28,8 +28,9 @@ func FormatAgentsListMarkdown(out ListAgentsOutput) string {
 // FormatAgentMarkdown renders a single cluster agent summary.
 func FormatAgentMarkdown(a AgentItem) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Cluster Agent\n\n- **ID**: %d\n- **Name**: %s\n", a.ID, a.Name)
+	fmt.Fprintf(&b, "## Cluster Agent\n\n- **ID**: %d\n- **Name**: %s\n", a.ID, toolutil.EscapeMdTableCell(a.Name))
 	if a.CreatedAt != "" {
+		//gitlab:allow-unescaped a.CreatedAt: a timestamp this package formatted itself, through toolutil.FormatTimePtr.
 		fmt.Fprintf(&b, "- **Created At**: %s\n", a.CreatedAt)
 	}
 	if a.CreatedByUserID != 0 {
@@ -58,6 +59,7 @@ func FormatTokensListMarkdown(out ListAgentTokensOutput) string {
 	}
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status"))
 	for _, t := range out.Tokens {
+		//gitlab:allow-unescaped t.Status: an agent token status GitLab picks from a fixed set (active, revoked).
 		fmt.Fprintf(&sb, "| %d | %s | %s |\n", t.ID, toolutil.EscapeMdTableCell(t.Name), t.Status)
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
@@ -68,17 +70,21 @@ func FormatTokensListMarkdown(out ListAgentTokensOutput) string {
 // FormatTokenMarkdown renders a single cluster agent token summary.
 func FormatTokenMarkdown(t AgentTokenItem) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Agent Token\n\n- **ID**: %d\n- **Name**: %s\n- **Status**: %s\n", t.ID, t.Name, t.Status)
+	//gitlab:allow-unescaped t.Status: an agent token status GitLab picks from a fixed set (active, revoked).
+	fmt.Fprintf(&sb, "## Agent Token\n\n- **ID**: %d\n- **Name**: %s\n- **Status**: %s\n", t.ID, toolutil.EscapeMdTableCell(t.Name), t.Status)
 	if t.Description != "" {
 		fmt.Fprintf(&sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(t.Description))
 	}
 	if t.CreatedAt != "" {
+		//gitlab:allow-unescaped t.CreatedAt: a timestamp this package formatted itself, through toolutil.FormatTimePtr.
 		fmt.Fprintf(&sb, "- **Created At**: %s\n", t.CreatedAt)
 	}
 	if t.LastUsedAt != "" {
+		//gitlab:allow-unescaped t.LastUsedAt: a timestamp this package formatted itself, through toolutil.FormatTimePtr.
 		fmt.Fprintf(&sb, "- **Last Used At**: %s\n", t.LastUsedAt)
 	}
 	if t.Token != "" {
+		//gitlab:allow-unescaped t.Token: the secret GitLab generated, which the reader has to copy back verbatim.
 		fmt.Fprintf(&sb, "- **Token**: %s\n", t.Token)
 	}
 	toolutil.WriteHints(&sb, "Store the token value securely. It cannot be retrieved later")

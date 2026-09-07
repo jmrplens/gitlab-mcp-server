@@ -37,8 +37,10 @@ func FormatListMarkdown(out ListOutput) string {
 		if len(sha) > 8 {
 			sha = sha[:8]
 		}
-		fmt.Fprintf(&b, "| [#%d](%s) | %s %s | %s | %s | %s |\n",
-			p.ID, p.WebURL, toolutil.PipelineStatusEmoji(p.Status), p.Status, toolutil.EscapeMdTableCell(p.Source), toolutil.EscapeMdTableCell(p.Ref), sha)
+		fmt.Fprintf(&b, "| %s | %s %s | %s | %s | %s |\n",
+			//gitlab:allow-unescaped p.Status: a pipeline status, one of GitLab's fixed set (created, running, success, failed and the rest).
+			//gitlab:allow-unescaped sha: the first characters of a commit SHA, which is hexadecimal.
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", p.ID), p.WebURL), toolutil.PipelineStatusEmoji(p.Status), p.Status, toolutil.EscapeMdTableCell(p.Source), toolutil.EscapeMdTableCell(p.Ref), sha)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -54,15 +56,22 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatDetailMarkdown(p DetailOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s Pipeline #%d: %s\n\n", toolutil.PipelineStatusEmoji(p.Status), p.ID, p.Status)
+	//gitlab:allow-unescaped p.Source: a pipeline source, one of GitLab's fixed set (push, web, schedule, trigger and the rest).
 	fmt.Fprintf(&b, "- **IID**: %d\n", p.IID)
 	fmt.Fprintf(&b, "- **Source**: %s\n", p.Source)
-	fmt.Fprintf(&b, "- **Ref**: %s (tag: %v)\n", p.Ref, p.Tag)
+	// A ref is not an identifier: git check-ref-format permits '|', '<' and
+	// '>', so a pushable branch can end this line or open a tag in it.
+	fmt.Fprintf(&b, "- **Ref**: %s (tag: %v)\n", toolutil.EscapeMdTableCell(p.Ref), p.Tag)
+	//gitlab:allow-unescaped p.SHA: a commit SHA, hexadecimal digits only.
 	fmt.Fprintf(&b, "- **SHA**: %s\n", p.SHA)
 	if p.BeforeSHA != "" {
+		//gitlab:allow-unescaped p.BeforeSHA: the commit SHA the push started from, hexadecimal digits only.
 		fmt.Fprintf(&b, "- **Before SHA**: %s\n", p.BeforeSHA)
 	}
 	if p.Name != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdName, p.Name)
+		// The pipeline name comes from workflow:name in .gitlab-ci.yml, which
+		// is free text and interpolates CI variables besides.
+		fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(p.Name))
 	}
 	if p.Duration > 0 {
 		fmt.Fprintf(&b, "- **Duration**: %ds\n", p.Duration)
@@ -71,13 +80,16 @@ func FormatDetailMarkdown(p DetailOutput) string {
 		fmt.Fprintf(&b, "- **Queued**: %ds\n", p.QueuedDuration)
 	}
 	if p.Coverage != "" {
+		//gitlab:allow-unescaped p.Coverage: the average job coverage GitLab computes for the pipeline and serializes as a decimal number.
 		fmt.Fprintf(&b, "- **Coverage**: %s%%\n", p.Coverage)
 	}
 	if p.YamlErrors != "" {
-		fmt.Fprintf(&b, "- **YAML Errors**: %s\n", p.YamlErrors)
+		// GitLab quotes the user's own CI file back in this message, job and
+		// stage names included, and a Psych parse error carries "(<unknown>)".
+		fmt.Fprintf(&b, "- **YAML Errors**: %s\n", toolutil.EscapeMdTableCell(p.YamlErrors))
 	}
 	if p.User != nil && p.User.Username != "" {
-		fmt.Fprintf(&b, "- **User**: %s\n", p.User.Username)
+		fmt.Fprintf(&b, "- **User**: %s\n", toolutil.EscapeMdTableCell(p.User.Username))
 	}
 	if p.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(p.CreatedAt))
@@ -88,7 +100,7 @@ func FormatDetailMarkdown(p DetailOutput) string {
 	if p.FinishedAt != "" {
 		fmt.Fprintf(&b, "- **Finished**: %s\n", toolutil.FormatTime(p.FinishedAt))
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdURL, p.WebURL)
+	toolutil.WriteMdURL(&b, p.WebURL)
 	toolutil.WriteHints(
 		&b,
 		"Use gitlab_job action 'list' with this pipeline_id to see all jobs",
@@ -110,6 +122,7 @@ func FormatVariablesMarkdown(out VariablesOutput) string {
 	b.WriteString(toolutil.TblSep3Col)
 	for _, v := range out.Variables {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n",
+			//gitlab:allow-unescaped v.VariableType: a CI variable type GitLab picks from a fixed set (env_var, file).
 			toolutil.EscapeMdTableCell(v.Key), toolutil.EscapeMdTableCell(v.Value), v.VariableType)
 	}
 	toolutil.WriteHints(
@@ -201,6 +214,10 @@ func testSuiteSummaryOutputs(suites []TestSuiteSummaryOutput) []testSuiteMarkdow
 }
 
 // FormatWaitMarkdown renders the wait result as a Markdown summary.
+//
+//gitlab:allow-unescaped out.Pipeline.Status: the same pipeline status enum, reached through the pipeline the wait polled.
+//gitlab:allow-unescaped out.FinalStatus: the status the wait ended on, taken from that same pipeline.
+//gitlab:allow-unescaped out.WaitedFor: how long this server waited, rendered by time.Duration.String.
 func FormatWaitMarkdown(out WaitOutput) string {
 	var b strings.Builder
 	if out.TimedOut {

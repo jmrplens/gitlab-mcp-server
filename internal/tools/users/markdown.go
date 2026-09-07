@@ -26,16 +26,20 @@ func FormatMarkdownString(u Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## GitLab User: %s\n\n", toolutil.EscapeMdHeading(u.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, u.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdUsername, u.Username)
-	fmt.Fprintf(&b, toolutil.FmtMdEmail, u.Email)
+	fmt.Fprintf(&b, toolutil.FmtMdUsername, toolutil.EscapeMdTableCell(u.Username))
+	// GitLab validates an address with a regexp that excludes whitespace and a
+	// second '@' and admits both '|' and '<'.
+	fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(u.Email))
+	//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned, ldap_blocked).
 	fmt.Fprintf(&b, toolutil.FmtMdState, u.State)
 	if u.Bio != "" {
-		fmt.Fprintf(&b, "- **Bio**: %s\n", u.Bio)
+		// A bio is free profile text, and GitLab allows newlines in it.
+		fmt.Fprintf(&b, "- **Bio**: %s\n", toolutil.EscapeMdTableCell(u.Bio))
 	}
 	fmt.Fprintf(&b, "- **Admin**: %v\n", u.IsAdmin)
-	fmt.Fprintf(&b, toolutil.FmtMdURL, u.WebURL)
+	toolutil.WriteMdURL(&b, u.WebURL)
 	if u.AvatarURL != "" {
-		fmt.Fprintf(&b, "- **Avatar**: %s\n", u.AvatarURL)
+		fmt.Fprintf(&b, "- **Avatar**: %s\n", toolutil.EscapeMdTableCell(u.AvatarURL))
 	}
 	if len(u.SCIMIdentities) > 0 {
 		b.WriteString("\n### SCIM Identities\n\n")
@@ -68,8 +72,9 @@ func FormatListMarkdownString(o ListOutput) string {
 	} else {
 		b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email", "State"))
 		for _, u := range o.Users {
-			fmt.Fprintf(&b, "| %d | [@%s](%s) | %s | %s | %s |\n",
-				u.ID, toolutil.EscapeMdTableCell(u.Username), u.WebURL,
+			//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned, ldap_blocked).
+			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
+				u.ID, toolutil.MdTitleLink("@"+u.Username, u.WebURL),
 				toolutil.EscapeMdTableCell(u.Name),
 				toolutil.EscapeMdTableCell(u.Email), u.State)
 		}
@@ -93,12 +98,15 @@ func FormatStatusMarkdownString(o StatusOutput) string {
 	var b strings.Builder
 	b.WriteString("## User Status\n\n")
 	if o.Emoji != "" {
-		fmt.Fprintf(&b, "- **Emoji**: %s\n", o.Emoji)
+		// The status widget's emoji name is a plain string in the SDK, and this
+		// server's own set_user_status writes the field.
+		fmt.Fprintf(&b, "- **Emoji**: %s\n", toolutil.EscapeMdTableCell(o.Emoji))
 	}
 	if o.Message != "" {
-		fmt.Fprintf(&b, "- **Message**: %s\n", o.Message)
+		fmt.Fprintf(&b, "- **Message**: %s\n", toolutil.EscapeMdTableCell(o.Message))
 	}
 	if o.Availability != "" {
+		//gitlab:allow-unescaped o.Availability: a gl.AvailabilityValue, whose values are not_set and busy.
 		fmt.Fprintf(&b, "- **Availability**: %s\n", o.Availability)
 	}
 	if o.ClearStatusAt != "" {
@@ -121,9 +129,11 @@ func FormatSSHKeyMarkdownString(o SSHKeyOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## SSH Key: %s\n\n", toolutil.EscapeMdHeading(o.Title))
 	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	fmt.Fprintf(&b, "- **Title**: %s\n", o.Title)
+	fmt.Fprintf(&b, "- **Title**: %s\n", toolutil.EscapeMdTableCell(o.Title))
+	//gitlab:allow-unescaped o.Key: GitLab stores only a public key it could parse, and this truncation stops inside the algorithm name and the base64 body, short of the free-text comment.
 	fmt.Fprintf(&b, "- **Key**: `%.40s...`\n", o.Key)
 	if o.UsageType != "" {
+		//gitlab:allow-unescaped o.UsageType: an SSH key usage GitLab picks from a fixed set (auth, signing, auth_and_signing).
 		fmt.Fprintf(&b, "- **Usage Type**: %s\n", o.UsageType)
 	}
 	if o.CreatedAt != "" {
@@ -151,6 +161,9 @@ func FormatSSHKeyListMarkdownString(o SSHKeyListOutput) string {
 		b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Usage Type", "Created At", "Expires At"))
 		for _, k := range o.Keys {
 			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
+				//gitlab:allow-unescaped k.UsageType: an SSH key usage GitLab picks from a fixed set (auth, signing, auth_and_signing).
+				//gitlab:allow-unescaped k.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
+				//gitlab:allow-unescaped k.ExpiresAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
 				k.ID, toolutil.EscapeMdTableCell(k.Title), k.UsageType, k.CreatedAt, k.ExpiresAt)
 		}
 	}
@@ -202,6 +215,9 @@ func FormatContributionEventsMarkdownString(o ContributionEventsOutput) string {
 		for _, e := range o.Events {
 			target := toolutil.FormatTarget(e.TargetType, e.TargetIID, e.TargetTitle, e.TargetURL)
 			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
+				//gitlab:allow-unescaped e.ActionName: a contribution-event action GitLab writes from its own vocabulary (opened, closed, pushed to and the rest).
+				//gitlab:allow-unescaped e.TargetType: the target's class name in GitLab, such as Issue, MergeRequest or Milestone.
+				//gitlab:allow-unescaped e.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
 				e.ID, e.ActionName, e.TargetType, target, e.CreatedAt)
 		}
 	}

@@ -15,6 +15,7 @@ func FormatMarkdown(v Output) string {
 	fmt.Fprintf(&b, "## Group Milestone: %s\n\n", toolutil.EscapeMdHeading(v.Title))
 	fmt.Fprintf(&b, "- **ID**: %d (IID: %d)\n", v.ID, v.IID)
 	fmt.Fprintf(&b, "- **Group**: %d\n", v.GroupID)
+	//gitlab:allow-unescaped v.State: GitLab computes a milestone's state, which is active or closed and never text a person typed.
 	fmt.Fprintf(&b, toolutil.FmtMdState, v.State)
 	if v.Description != "" {
 		toolutil.WriteDescription(&b, v.Description)
@@ -55,6 +56,9 @@ func FormatListMarkdownString(out ListOutput) string {
 	b.WriteString("|----|-----|-------|-------|------------|----------|\n")
 	for _, m := range out.Milestones {
 		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %s |\n",
+			//gitlab:allow-unescaped m.State: GitLab computes a milestone's state, which is active or closed and never text a person typed.
+			//gitlab:allow-unescaped m.StartDate: toOutput renders this from the ISO date the client library decoded, so it holds digits and hyphens.
+			//gitlab:allow-unescaped m.DueDate: toOutput renders this from the ISO date the client library decoded, so it holds digits and hyphens.
 			m.ID, m.IID, toolutil.EscapeMdTableCell(m.Title), m.State, m.StartDate, m.DueDate)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -85,6 +89,7 @@ func FormatIssuesMarkdownString(out IssuesOutput) string {
 	b.WriteString("|----|-----|-------|-------|\n")
 	for _, issue := range out.Issues {
 		fmt.Fprintf(&b, "| %d | %d | %s | %s |\n",
+			//gitlab:allow-unescaped issue.State: GitLab computes an issue's state, which is opened or closed and never text a person typed.
 			issue.ID, issue.IID, toolutil.MdTitleLink(issue.Title, issue.WebURL), issue.State)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -110,6 +115,7 @@ func FormatMergeRequestsMarkdownString(out MergeRequestsOutput) string {
 	b.WriteString("|----|-----|-------|-------|--------|--------|\n")
 	for _, mr := range out.MergeRequests {
 		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %s |\n",
+			//gitlab:allow-unescaped mr.State: GitLab computes a merge request's state, one of opened, closed, locked or merged.
 			mr.ID, mr.IID, toolutil.MdTitleLink(mr.Title, mr.WebURL), mr.State,
 			toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
 	}
@@ -135,6 +141,7 @@ func FormatBurndownChartEventsMarkdownString(out BurndownChartEventsOutput) stri
 	b.WriteString("| Created At | Weight | Action |\n")
 	b.WriteString("|------------|--------|--------|\n")
 	for _, e := range out.Events {
+		//gitlab:allow-unescaped e.Action: GitLab names the resource event that moved the burndown line, which is an enum of its own.
 		fmt.Fprintf(&b, "| %s | %d | %s |\n", toolutil.FormatTime(e.CreatedAt), e.Weight, e.Action)
 	}
 	toolutil.WritePagination(&b, out.Pagination)

@@ -56,7 +56,9 @@ func FormatGetMarkdown(out GetOutput) string {
 	v := out.Vulnerability
 	var sb strings.Builder
 
-	fmt.Fprintf(&sb, "## Vulnerability: %s\n\n", v.Title)
+	// The title comes out of the security report artifact, which a repository's
+	// own CI job writes.
+	fmt.Fprintf(&sb, "## Vulnerability: %s\n\n", toolutil.EscapeMdHeading(v.Title))
 	writeVulnerabilitySummary(&sb, v)
 	writeVulnerabilityIdentifiers(&sb, v.Identifiers)
 	writeVulnerabilityDescription(&sb, v.Description)
@@ -86,11 +88,10 @@ func writeVulnerabilitySummary(sb *strings.Builder, v Item) {
 	}
 
 	if v.PrimaryID != nil {
-		id := v.PrimaryID.Name
-		if v.PrimaryID.URL != "" {
-			id = fmt.Sprintf("[%s](%s)", v.PrimaryID.Name, v.PrimaryID.URL)
-		}
-		fmt.Fprintf(sb, "| Primary Identifier | %s |\n", id)
+		// Both halves come out of the report's identifier object, so the name
+		// can close the label and the URL can close the destination.
+		fmt.Fprintf(sb, "| Primary Identifier | %s |\n",
+			toolutil.MdTitleLink(v.PrimaryID.Name, v.PrimaryID.URL))
 	}
 
 	if v.Location != nil {
@@ -145,16 +146,15 @@ func writeVulnerabilityIdentifiers(sb *strings.Builder, identifiers []Identifier
 }
 
 func writeVulnerabilityIdentifier(sb *strings.Builder, id IdentifierItem) {
-	name := toolutil.EscapeMdTableCell(id.Name)
-	if id.URL != "" {
-		name = fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(id.Name), id.URL)
-	}
+	// The cell escaper neutralizes the pipe and the angle bracket and leaves
+	// ']' alone, so an identifier named "CWE-89](http://attacker.invalid/x)"
+	// closed the label and retargeted the link. MdTitleLink escapes both halves.
 	fmt.Fprintf(
 		sb, "| %s | %s | %s | %s |\n",
-		name,
+		toolutil.MdTitleLink(id.Name, id.URL),
 		toolutil.EscapeMdTableCell(id.ExternalType),
 		toolutil.EscapeMdTableCell(id.ExternalID),
-		id.URL,
+		toolutil.EscapeMdTableCell(id.URL),
 	)
 }
 
@@ -195,6 +195,8 @@ func FormatMutationMarkdown(out MutationOutput, action string) string {
 }
 
 // severityBadge returns an emoji + text badge for vulnerability severity.
+//
+//gitlab:allow-unescaped severityBadge(v.Severity): five of the six answers are constants written here, and the sixth is a VulnerabilitySeverity enum token, which GitLab spells as one bare word.
 func severityBadge(severity string) string {
 	switch strings.ToUpper(severity) {
 	case "CRITICAL":
@@ -213,11 +215,14 @@ func severityBadge(severity string) string {
 }
 
 // formatDate trims the time portion from ISO 8601 timestamps for display.
+// Slicing the first ten bytes shortens the value without saying anything about
+// what is in them, so the result is escaped: what arrives here is a GraphQL
+// field this package copies verbatim, and a cell is where it lands.
 func formatDate(ts string) string {
 	if len(ts) > 10 {
-		return ts[:10]
+		return toolutil.EscapeMdTableCell(ts[:10])
 	}
-	return ts
+	return toolutil.EscapeMdTableCell(ts)
 }
 
 // FormatSeverityCountMarkdown renders vulnerability severity counts as Markdown.

@@ -23,7 +23,7 @@ func FormatListMarkdown(out ListOutput) string {
 
 	for _, r := range out.Resources {
 		desc := toolutil.EscapeMdTableCell(truncate(r.Description, 60))
-		name := fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(r.Name), r.WebPath)
+		name := toolutil.MdTitleLink(r.Name, r.WebPath)
 		fmt.Fprintf(
 			&sb, "| %s | %s | %d | %d | %s | %s | %s |\n",
 			name,
@@ -47,7 +47,7 @@ func FormatGetMarkdown(out GetOutput) string {
 	r := out.Resource
 	var sb strings.Builder
 
-	fmt.Fprintf(&sb, "## Catalog Resource: %s\n\n", r.Name)
+	fmt.Fprintf(&sb, "## Catalog Resource: %s\n\n", toolutil.EscapeMdHeading(r.Name))
 	writeCatalogResourceSummary(&sb, r)
 	writeCatalogResourceComponents(&sb, r.Components)
 	writeCatalogResourceVersions(&sb, r.Versions)
@@ -58,7 +58,7 @@ func writeCatalogResourceSummary(sb *strings.Builder, r ResourceDetail) {
 	sb.WriteString("| Field | Value |\n|-------|-------|\n")
 	fmt.Fprintf(sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(r.ID))
 	fmt.Fprintf(sb, "| Full Path | %s |\n", toolutil.EscapeMdTableCell(r.FullPath))
-	fmt.Fprintf(sb, "| Web Path | [%s](%s) |\n", toolutil.EscapeMdTableCell(r.WebPath), r.WebPath)
+	fmt.Fprintf(sb, "| Web Path | %s |\n", toolutil.MdTitleLink(r.WebPath, r.WebPath))
 	fmt.Fprintf(sb, "| Stars | %d |\n", r.StarCount)
 	fmt.Fprintf(sb, "| Usage (30d) | %d |\n", r.Last30DayUsageCount)
 	if r.VerificationLevel != "" {
@@ -92,7 +92,7 @@ func writeCatalogResourceComponents(sb *strings.Builder, components []ComponentI
 }
 
 func writeCatalogResourceComponent(sb *strings.Builder, component ComponentItem) {
-	fmt.Fprintf(sb, "#### `%s`\n\n", component.Name)
+	fmt.Fprintf(sb, "#### `%s`\n\n", toolutil.EscapeMdHeading(component.Name))
 	if component.Description != "" {
 		fmt.Fprintf(sb, "%s\n\n", component.Description)
 	}
@@ -115,7 +115,7 @@ func writeCatalogComponentInput(sb *strings.Builder, input InputItem) {
 	}
 	fmt.Fprintf(
 		sb, "| `%s` | %s | %s | %s | %s |\n",
-		input.Name,
+		toolutil.EscapeMdTableCell(input.Name),
 		toolutil.EscapeMdTableCell(input.Type),
 		required,
 		toolutil.EscapeMdTableCell(input.Default),
@@ -159,14 +159,18 @@ func truncate(s string, maxLen int) string {
 
 // formatDate extracts the YYYY-MM-DD date portion from an ISO 8601 timestamp.
 // Returns an empty string if iso is empty.
+//
+// Slicing the first ten bytes shortens the value without saying anything about
+// what is in them, so the result is escaped: what arrives here is a GraphQL
+// field this package copies verbatim, and a cell is where it lands.
 func formatDate(iso string) string {
 	if iso == "" {
 		return ""
 	}
 	if len(iso) >= 10 {
-		return iso[:10]
+		return toolutil.EscapeMdTableCell(iso[:10])
 	}
-	return iso
+	return toolutil.EscapeMdTableCell(iso)
 }
 
 func init() {

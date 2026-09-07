@@ -3,7 +3,6 @@ package toolutil
 
 import (
 	"bytes"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1136,25 +1135,44 @@ func TestAppendResourceLink_NoOp(t *testing.T) {
 	})
 }
 
-// TestFmtMdURL_ClickableLinkFormat verifies that FmtMdURL produces
+// TestWriteMdURL_ClickableLinkFormat verifies that WriteMdURL produces
 // a Markdown clickable link [url](url) instead of a plain URL.
-func TestFmtMdURL_ClickableLinkFormat(t *testing.T) {
-	url := "https://gitlab.example.com/project"
-	result := fmt.Sprintf(FmtMdURL, url)
+func TestWriteMdURL_ClickableLinkFormat(t *testing.T) {
+	var b strings.Builder
+	WriteMdURL(&b, "https://gitlab.example.com/project")
 	want := "- **URL**: [https://gitlab.example.com/project](https://gitlab.example.com/project)\n"
-	if result != want {
-		t.Errorf("FmtMdURL =\n%q\nwant:\n%q", result, want)
+	if b.String() != want {
+		t.Errorf("WriteMdURL =\n%q\nwant:\n%q", b.String(), want)
 	}
 }
 
-// TestFmtMdURLNewline_ClickableLinkFormat verifies that FmtMdURLNewline
+// TestWriteMdURLNewline_ClickableLinkFormat verifies that WriteMdURLNewline
 // produces a clickable link with a leading newline.
-func TestFmtMdURLNewline_ClickableLinkFormat(t *testing.T) {
-	url := "https://gitlab.example.com/project"
-	result := fmt.Sprintf(FmtMdURLNewline, url)
+func TestWriteMdURLNewline_ClickableLinkFormat(t *testing.T) {
+	var b strings.Builder
+	WriteMdURLNewline(&b, "https://gitlab.example.com/project")
 	want := "\n- **URL**: [https://gitlab.example.com/project](https://gitlab.example.com/project)\n"
-	if result != want {
-		t.Errorf("FmtMdURLNewline =\n%q\nwant:\n%q", result, want)
+	if b.String() != want {
+		t.Errorf("WriteMdURLNewline =\n%q\nwant:\n%q", b.String(), want)
+	}
+}
+
+// TestWriteMdURL_HostileURL_CannotEndTheLink verifies that a URL cannot close
+// the destination this helper wrote around it.
+//
+// The pair of constants this helper replaced put one value in both halves of a
+// link, which is why every call site rendered a URL with nothing in front of
+// it. A destination holding ')' ended the link early and left the rest of the
+// address as prose, and a label holding '<' opened raw HTML inside it.
+func TestWriteMdURL_HostileURL_CannotEndTheLink(t *testing.T) {
+	var b strings.Builder
+	WriteMdURL(&b, "https://gitlab.example.com/x)<img src=q>")
+	got := b.String()
+	if strings.Contains(got, ")<") {
+		t.Errorf("WriteMdURL = %q, which lets the destination end early", got)
+	}
+	if !strings.Contains(got, "%29") || !strings.Contains(got, "%3C") {
+		t.Errorf("WriteMdURL = %q, want the parenthesis and angle bracket percent-encoded", got)
 	}
 }
 
@@ -1387,6 +1405,15 @@ func TestWriteDiscussionNotes_BodyCannotForgeStructure(t *testing.T) {
 			name:    "body carrying a control sequence",
 			body:    "ok\x1b[2J",
 			wantNot: []string{"\x1b"},
+		},
+		{
+			// A note with no body at all still gets its author line, and no
+			// quote block under it: an indented empty line there reads as the
+			// start of a code block rather than as part of the list item.
+			name:     "no body",
+			body:     "",
+			wantHave: []string{"**@attacker**"},
+			wantNot:  []string{"  >"},
 		},
 	}
 	for _, tt := range tests {

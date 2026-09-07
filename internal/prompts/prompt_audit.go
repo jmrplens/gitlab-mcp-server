@@ -86,8 +86,9 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "| Name | %s |\n", mdInline(project.Name))
 	fmt.Fprintf(&b, "| Path | %s |\n", mdInline(project.PathWithNamespace))
 	fmt.Fprintf(&b, "| Description | %s |\n", mdInline(emptyDash(project.Description)))
+	//gitlab:allow-unescaped string(project.Visibility): a gl.VisibilityValue, which GitLab fills with private, internal or public.
 	fmt.Fprintf(&b, "| Visibility | %s |\n", string(project.Visibility))
-	fmt.Fprintf(&b, "| Default branch | %s |\n", emptyDash(project.DefaultBranch))
+	fmt.Fprintf(&b, "| Default branch | %s |\n", mdInline(emptyDash(project.DefaultBranch)))
 	fmt.Fprintf(&b, "| Created | %s |\n", formatAuditDate(project.CreatedAt))
 	fmt.Fprintf(&b, "| Last activity | %s |\n", formatAuditDate(project.LastActivityAt))
 	b.WriteString("\n")
@@ -106,7 +107,9 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	// Merge settings
 	b.WriteString("## Merge Settings\n\n")
 	b.WriteString(settingValueTableHeader)
+	//gitlab:allow-unescaped emptyDash(string(project.MergeMethod)): a gl.MergeMethodValue, which GitLab fills with merge, ff or rebase_merge.
 	fmt.Fprintf(&b, "| Merge method | %s |\n", emptyDash(string(project.MergeMethod)))
+	//gitlab:allow-unescaped emptyDash(string(project.SquashOption)): a gl.SquashOptionValue, which GitLab fills with never, always, default_on or default_off.
 	fmt.Fprintf(&b, "| Squash option | %s |\n", emptyDash(string(project.SquashOption)))
 	fmt.Fprintf(&b, "| Only merge if pipeline succeeds | %s |\n", toolutil.BoolEmoji(project.OnlyAllowMergeIfPipelineSucceeds))
 	fmt.Fprintf(&b, "| Only merge if all discussions resolved | %s |\n", toolutil.BoolEmoji(project.OnlyAllowMergeIfAllDiscussionsAreResolved))
@@ -117,7 +120,7 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	// CI/CD settings
 	b.WriteString("## CI/CD Settings\n\n")
 	b.WriteString(settingValueTableHeader)
-	fmt.Fprintf(&b, "| CI config path | %s |\n", emptyDash(project.CIConfigPath))
+	fmt.Fprintf(&b, "| CI config path | %s |\n", mdInline(emptyDash(project.CIConfigPath)))
 	fmt.Fprintf(&b, "| Auto DevOps enabled | %s |\n", toolutil.BoolEmoji(project.AutoDevopsEnabled))
 	fmt.Fprintf(&b, "| Public pipelines | %s |\n", toolutil.BoolEmoji(project.PublicJobs))
 	fmt.Fprintf(&b, "| Shared runners | %s |\n", toolutil.BoolEmoji(project.SharedRunnersEnabled))
@@ -134,10 +137,13 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 		fmt.Fprintf(&b, "| Deny delete tag | %s |\n", toolutil.BoolEmoji(pushRule.DenyDeleteTag))
 		fmt.Fprintf(&b, "| Member check | %s |\n", toolutil.BoolEmoji(pushRule.MemberCheck))
 		fmt.Fprintf(&b, "| Prevent secrets | %s |\n", toolutil.BoolEmoji(pushRule.PreventSecrets))
-		fmt.Fprintf(&b, "| Commit message regex | %s |\n", emptyDash(pushRule.CommitMessageRegex))
-		fmt.Fprintf(&b, "| Branch name regex | %s |\n", emptyDash(pushRule.BranchNameRegex))
-		fmt.Fprintf(&b, "| Author email regex | %s |\n", emptyDash(pushRule.AuthorEmailRegex))
-		fmt.Fprintf(&b, "| File name regex | %s |\n", emptyDash(pushRule.FileNameRegex))
+		// A push rule is a regular expression a maintainer types, where '|' is
+		// the alternation operator, so an ordinary rule breaks the row on its
+		// own with nobody attacking anything.
+		fmt.Fprintf(&b, "| Commit message regex | %s |\n", mdInline(emptyDash(pushRule.CommitMessageRegex)))
+		fmt.Fprintf(&b, "| Branch name regex | %s |\n", mdInline(emptyDash(pushRule.BranchNameRegex)))
+		fmt.Fprintf(&b, "| Author email regex | %s |\n", mdInline(emptyDash(pushRule.AuthorEmailRegex)))
+		fmt.Fprintf(&b, "| File name regex | %s |\n", mdInline(emptyDash(pushRule.FileNameRegex)))
 		fmt.Fprintf(&b, "| Max file size (MB) | %d |\n", pushRule.MaxFileSize)
 		b.WriteString("\n")
 	}
@@ -296,7 +302,7 @@ func writeSharedGroups(b *strings.Builder, groups []gl.ProjectSharedWithGroup) {
 			expires = sg.ExpiresAt.String()
 		}
 		fmt.Fprintf(b, "| %s (#%d) | %s | %s |\n",
-			sg.GroupName, sg.GroupID,
+			mdInline(sg.GroupName), sg.GroupID,
 			accessLevelName(gl.AccessLevelValue(sg.GroupAccessLevel)),
 			expires)
 	}
@@ -378,8 +384,10 @@ func writeMemberTable(b *strings.Builder, members []*gl.ProjectMember) {
 	b.WriteString("| User | Name | Access | State |\n")
 	b.WriteString("|------|------|--------|-------|\n")
 	for _, m := range members {
+		//gitlab:allow-unescaped m.Username: a GitLab namespace path, which the instance holds to letters, digits, underscore, dash and dot.
+		//gitlab:allow-unescaped m.State: a membership state GitLab picks from a fixed set (active, blocked, awaiting and the rest).
 		fmt.Fprintf(b, "| @%s | %s | %s | %s |\n",
-			m.Username, m.Name, accessLevelName(m.AccessLevel), m.State)
+			m.Username, mdInline(m.Name), accessLevelName(m.AccessLevel), m.State)
 	}
 	b.WriteString("\n")
 }
@@ -478,8 +486,9 @@ func writeLabelsAudit(b *strings.Builder, labels []*gl.Label) {
 		if desc == "" {
 			desc = toolutil.EmojiWarning + " _missing_"
 		}
+		//gitlab:allow-unescaped l.Color: a label color, which GitLab validates as a #RGB or #RRGGBB literal.
 		fmt.Fprintf(b, "| %s | %s | %s | %d | %d |\n",
-			l.Name, l.Color, desc, l.OpenIssuesCount, l.OpenMergeRequestsCount)
+			mdInline(l.Name), l.Color, mdInline(desc), l.OpenIssuesCount, l.OpenMergeRequestsCount)
 	}
 	b.WriteString("\n")
 }
@@ -669,13 +678,13 @@ func writeFullSettingsSection(b *strings.Builder, project *gl.Project) {
 	b.WriteString("## 1. Project Settings\n\n")
 	b.WriteString(settingValueTableHeader)
 	fmt.Fprintf(b, "| Visibility | %s |\n", string(project.Visibility))
-	fmt.Fprintf(b, "| Default branch | %s |\n", emptyDash(project.DefaultBranch))
+	fmt.Fprintf(b, "| Default branch | %s |\n", mdInline(emptyDash(project.DefaultBranch)))
 	fmt.Fprintf(b, "| Merge method | %s |\n", emptyDash(string(project.MergeMethod)))
 	fmt.Fprintf(b, "| Squash option | %s |\n", emptyDash(string(project.SquashOption)))
 	fmt.Fprintf(b, "| Pipeline required | %s |\n", toolutil.BoolEmoji(project.OnlyAllowMergeIfPipelineSucceeds))
 	fmt.Fprintf(b, "| All discussions resolved | %s |\n", toolutil.BoolEmoji(project.OnlyAllowMergeIfAllDiscussionsAreResolved))
 	fmt.Fprintf(b, "| Remove source branch | %s |\n", toolutil.BoolEmoji(project.RemoveSourceBranchAfterMerge))
-	fmt.Fprintf(b, "| CI config path | %s |\n", emptyDash(project.CIConfigPath))
+	fmt.Fprintf(b, "| CI config path | %s |\n", mdInline(emptyDash(project.CIConfigPath)))
 	b.WriteString("\n")
 }
 
@@ -692,7 +701,7 @@ func writeFullBranchSection(b *strings.Builder, branches []*gl.ProtectedBranch) 
 		push := formatAccessLevels(pb.PushAccessLevels)
 		merge := formatAccessLevels(pb.MergeAccessLevels)
 		fmt.Fprintf(b, "| %s | %s | %s | %s | %s |\n",
-			pb.Name, push, merge, toolutil.BoolEmoji(pb.AllowForcePush), toolutil.BoolEmoji(pb.CodeOwnerApprovalRequired))
+			mdInline(pb.Name), push, merge, toolutil.BoolEmoji(pb.AllowForcePush), toolutil.BoolEmoji(pb.CodeOwnerApprovalRequired))
 	}
 	b.WriteString("\n")
 }
@@ -769,8 +778,9 @@ func writeFullWebhooksSection(b *strings.Builder, webhooks []*gl.ProjectHook) {
 	if len(webhooks) > 0 {
 		b.WriteString("\n| URL | Push | MR | Issues | SSL |\n|-----|------|-----|--------|-----|\n")
 		for _, h := range webhooks {
+			// Escaped outside the truncation, so no entity is cut in half.
 			fmt.Fprintf(b, "| %s | %s | %s | %s | %s |\n",
-				maskURL(h.URL), toolutil.BoolEmoji(h.PushEvents), toolutil.BoolEmoji(h.MergeRequestsEvents),
+				mdInline(maskURL(h.URL)), toolutil.BoolEmoji(h.PushEvents), toolutil.BoolEmoji(h.MergeRequestsEvents),
 				toolutil.BoolEmoji(h.IssuesEvents), toolutil.BoolEmoji(h.EnableSSLVerification))
 		}
 	}
@@ -787,9 +797,9 @@ func writeFullPushRulesSection(b *strings.Builder, pushRule *gl.ProjectPushRules
 	b.WriteString("| Rule | Value |\n|------|-------|\n")
 	fmt.Fprintf(b, "| Prevent secrets | %s |\n", toolutil.BoolEmoji(pushRule.PreventSecrets))
 	fmt.Fprintf(b, "| Member check | %s |\n", toolutil.BoolEmoji(pushRule.MemberCheck))
-	fmt.Fprintf(b, "| Commit message regex | %s |\n", emptyDash(pushRule.CommitMessageRegex))
-	fmt.Fprintf(b, "| Branch name regex | %s |\n", emptyDash(pushRule.BranchNameRegex))
-	fmt.Fprintf(b, "| Author email regex | %s |\n", emptyDash(pushRule.AuthorEmailRegex))
+	fmt.Fprintf(b, "| Commit message regex | %s |\n", mdInline(emptyDash(pushRule.CommitMessageRegex)))
+	fmt.Fprintf(b, "| Branch name regex | %s |\n", mdInline(emptyDash(pushRule.BranchNameRegex)))
+	fmt.Fprintf(b, "| Author email regex | %s |\n", mdInline(emptyDash(pushRule.AuthorEmailRegex)))
 	b.WriteString("\n")
 }
 

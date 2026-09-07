@@ -13,7 +13,8 @@ func FormatOutputMarkdown(v Output) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Instance Variable: %s\n\n", v.Key)
+	fmt.Fprintf(&b, "## Instance Variable: %s\n\n", toolutil.EscapeMdHeading(v.Key))
+	//gitlab:allow-unescaped v.VariableType: a CI variable type GitLab picks from a fixed set (env_var, file).
 	fmt.Fprintf(&b, "- **Type**: %s\n", v.VariableType)
 	fmt.Fprintf(&b, "- **Protected**: %t\n", v.Protected)
 	fmt.Fprintf(&b, "- **Masked**: %t\n", v.Masked)
@@ -22,7 +23,7 @@ func FormatOutputMarkdown(v Output) string {
 		toolutil.WriteDescription(&b, v.Description)
 	}
 	if !v.Masked {
-		fmt.Fprintf(&b, "- **Value**: %s\n", v.Value)
+		fmt.Fprintf(&b, "- **Value**: %s\n", toolutil.EscapeMdTableCell(v.Value))
 	} else {
 		b.WriteString("- **Value**: [masked]\n")
 	}

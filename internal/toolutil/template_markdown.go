@@ -66,12 +66,15 @@ type TemplateDetailMarkdown struct {
 // FormatTemplateDetailMarkdown renders a shared template detail layout.
 func FormatTemplateDetailMarkdown(detail TemplateDetailMarkdown) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, FmtMdH2, detail.Title)
+	// The project-template endpoints also serve issue and merge-request
+	// description templates, whose name is a file in .gitlab/issue_templates
+	// named by whoever pushed it.
+	fmt.Fprintf(&b, FmtMdH2, EscapeMdHeading(detail.Title))
 	if detail.Key != "" {
-		fmt.Fprintf(&b, "- **Key**: %s\n", detail.Key)
+		fmt.Fprintf(&b, "- **Key**: %s\n", EscapeMdTableCell(detail.Key))
 	}
 	if detail.Nickname != "" {
-		fmt.Fprintf(&b, "- **Nickname**: %s\n", detail.Nickname)
+		fmt.Fprintf(&b, "- **Nickname**: %s\n", EscapeMdTableCell(detail.Nickname))
 	}
 	if detail.Popular {
 		b.WriteString("- **Popular**: Yes\n")
@@ -106,9 +109,12 @@ func writeTemplateDetailList(b *strings.Builder, label string, values []string, 
 	if len(values) == 0 {
 		return
 	}
+	// The permissions, conditions and limitations arrays come back as the API
+	// sent them, and nothing this server controls constrains their contents.
+	joined := EscapeMdTableCell(strings.Join(values, ", "))
 	if plain {
-		fmt.Fprintf(b, "**%s**: %s\n", label, strings.Join(values, ", "))
+		fmt.Fprintf(b, "**%s**: %s\n", label, joined)
 		return
 	}
-	fmt.Fprintf(b, "- **%s**: %s\n", label, strings.Join(values, ", "))
+	fmt.Fprintf(b, "- **%s**: %s\n", label, joined)
 }

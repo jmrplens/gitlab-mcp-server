@@ -174,5 +174,6 @@ func FormatAdminActionMarkdownString(o AdminActionOutput) string {
 		toolutil.FmtMdID+
 		"- **Action**: %s\n"+
 		"- **Success**: %s %v\n",
+		//gitlab:allow-unescaped o.Action: one of the nine constants this file writes beside the request, never a value GitLab returned.
 		o.UserID, o.Action, toolutil.EmojiSuccess, o.Success)
 }

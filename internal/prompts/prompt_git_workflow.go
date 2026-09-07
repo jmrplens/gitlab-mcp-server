@@ -85,6 +85,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 	b.WriteString("| Commit | Title | Author | Hygiene |\n")
 	b.WriteString("|--------|-------|--------|---------|\n")
 	for _, commit := range comparison.Commits {
+		//gitlab:allow-unescaped shortSHA(commit.ID): the first characters of a commit SHA, which is hexadecimal.
 		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", shortSHA(commit.ID), mdInline(firstLine(commit.Title)), mdInline(commit.AuthorName), commitHygieneLabel(commit))
 	}
 

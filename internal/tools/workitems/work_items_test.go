@@ -837,7 +837,9 @@ func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 		"**Author**: alice",
 		"**Assignees**: bob, carol",
 		"**Labels**: bug, urgent",
-		"**URL**: https://gitlab.example.com/work_items/42",
+		// The URL line is now the shared clickable one, as every other domain
+		// writes it.
+		"**URL**: [https://gitlab.example.com/work_items/42](https://gitlab.example.com/work_items/42)",
 		testSectionDesc,
 		"A very detailed description.",
 	}
@@ -965,7 +967,7 @@ func TestFormatGetMarkdown_OnlyWebURL(t *testing.T) {
 	}}
 	result := FormatGetMarkdown(out)
 	text := extractText(t, result)
-	if !strings.Contains(text, "**URL**: https://example.com/wi/1") {
+	if !strings.Contains(text, "**URL**: [https://example.com/wi/1](https://example.com/wi/1)") {
 		t.Errorf("missing URL: %s", text)
 	}
 }

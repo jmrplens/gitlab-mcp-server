@@ -11,12 +11,15 @@ import (
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## LDAP Link: %s\n\n", toolutil.EscapeMdHeading(out.CN))
-	fmt.Fprintf(&b, "- **CN**: %s\n", out.CN)
+	// The common name, the LDAP filter and the provider label are all typed by
+	// the administrator who configured the link, and a filter is an expression
+	// whose own syntax uses parentheses and vertical bars.
+	fmt.Fprintf(&b, "- **CN**: %s\n", toolutil.EscapeMdTableCell(out.CN))
 	if out.Filter != "" {
-		fmt.Fprintf(&b, "- **Filter**: %s\n", out.Filter)
+		fmt.Fprintf(&b, "- **Filter**: %s\n", toolutil.EscapeMdTableCell(out.Filter))
 	}
 	fmt.Fprintf(&b, "- **Access Level**: %d\n", out.GroupAccess)
-	fmt.Fprintf(&b, "- **Provider**: %s\n", out.Provider)
+	fmt.Fprintf(&b, "- **Provider**: %s\n", toolutil.EscapeMdTableCell(out.Provider))
 	if out.MemberRoleID != 0 {
 		fmt.Fprintf(&b, "- **Member Role ID**: %d\n", out.MemberRoleID)
 	}

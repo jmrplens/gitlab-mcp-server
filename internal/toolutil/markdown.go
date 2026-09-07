@@ -53,8 +53,7 @@ const (
 	FmtMdTarget      = "- **Target**: %s\n"
 	FmtMdCreated     = "- **Created**: %s\n"
 	FmtMdUpdated     = "- **Updated**: %s\n"
-	FmtMdURL         = "- **URL**: [%[1]s](%[1]s)\n"
-	FmtMdURLNewline  = "\n- **URL**: [%[1]s](%[1]s)\n"
+	fmtMdURLLine     = "- **URL**: %s\n"
 	FmtMdAuthorAt    = "- **Author**: @%s\n"
 	FmtMdAuthor      = "- **Author**: %s\n"
 	FmtMdSectionText = "\n%s\n"
@@ -117,6 +116,26 @@ const (
 	EmojiNew          = "\U0001F195"   // 🆕
 	EmojiHand         = "\u270B"       // ✋
 )
+
+// WriteMdURL appends the "- **URL**: ..." line, rendering url as a link whose
+// label and destination are the same address.
+//
+// It replaces a pair of format constants that read "- **URL**: [%[1]s](%[1]s)"
+// and were used at 31 call sites. One value filling both halves of a link is a
+// shape no argument can be escaped into safely, so each of those call sites
+// hand-wrote a link with nothing in front of it, and the audit flagged every
+// one of them twice. Escaping belongs here, once, rather than in a decision
+// each of 22 packages makes for itself.
+func WriteMdURL(b *strings.Builder, url string) {
+	fmt.Fprintf(b, fmtMdURLLine, MdTitleLink(url, url))
+}
+
+// WriteMdURLNewline appends the same line as [WriteMdURL], preceded by a blank
+// line, for a formatter that closes a section with it.
+func WriteMdURLNewline(b *strings.Builder, url string) {
+	b.WriteString("\n")
+	WriteMdURL(b, url)
+}
 
 // WritePagination appends a newline-wrapped pagination summary to the builder.
 func WritePagination(b *strings.Builder, p PaginationOutput) {
@@ -293,10 +312,12 @@ func FormatStorageMoveCollectionMarkdown[T any](moves []T, pagination Pagination
 }
 
 func storageMoveEntityCell(entity StorageMoveEntityMarkdown, includeID bool) string {
-	name := EscapeMdTableCell(entity.Name)
-	if entity.URL != "" {
-		name = fmt.Sprintf("[%s](%s)", name, entity.URL)
-	}
+	// The name is a group name or a snippet title, and the cell escaper leaves
+	// the brackets alone, so a title of "Fix login](http://attacker.invalid/x)"
+	// closed the label of the link written around it here. MdTitleLink escapes
+	// both halves and returns the bare escaped name when there is no URL,
+	// which is the shape this used to build by hand.
+	name := MdTitleLink(entity.Name, entity.URL)
 	if includeID {
 		return fmt.Sprintf("%s (ID: %d)", name, entity.ID)
 	}
@@ -367,7 +388,9 @@ func FormatCICDVariableMarkdown(v CICDVariableMarkdown, opts CICDVariableMarkdow
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s: %s\n\n", opts.Title, v.Key)
+	// A CI/CD variable key is held to word characters by GitLab, but this same
+	// file escapes the field in its list table, so it is escaped here too.
+	fmt.Fprintf(&b, "## %s: %s\n\n", opts.Title, EscapeMdHeading(v.Key))
 	b.WriteString(TblFieldValue)
 	fmt.Fprintf(&b, "| Type | %s |\n", EscapeMdTableCell(v.VariableType))
 	fmt.Fprintf(&b, "| Protected | %s |\n", BoolEmoji(v.Protected))
@@ -614,6 +637,7 @@ func FormatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts Discuss
 		WriteListSummary(&b, len(discussions), opts.Pagination)
 	}
 	for _, discussion := range discussions {
+		//gitlab:allow-unescaped discussion.ID: a discussion thread id, hexadecimal digits from the REST digest or from the numeric half of a GraphQL global id.
 		fmt.Fprintf(&b, "### Discussion %s\n", discussion.ID)
 		writeDiscussionNotes(&b, discussion.Notes)
 		b.WriteString("\n")
@@ -664,7 +688,7 @@ func FormatDiscussionNoteMarkdown(note DiscussionNoteMarkdown, hints ...string) 
 	var b strings.Builder
 	b.WriteString("## Note\n\n")
 	fmt.Fprintf(&b, FmtMdID, note.ID)
-	fmt.Fprintf(&b, FmtMdAuthorAt, note.Author)
+	fmt.Fprintf(&b, FmtMdAuthorAt, EscapeMdTableCell(note.Author))
 	b.WriteString("- **Body**:\n\n")
 	b.WriteString(WrapGFMBody(note.Body))
 	b.WriteString("\n")
@@ -800,7 +824,10 @@ func FormatTemplateListMarkdown(templates []TemplateMarkdown, pagination Paginat
 // code block.
 func FormatTemplateContentMarkdown(title, name, language, content string, hints ...string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s: %s\n\n", title, name)
+	//gitlab:allow-unescaped title: the template family label NewTemplateRenderer was built with, a constant at every call site.
+	// On an instance with custom file templates the set is served out of a
+	// designated project, so the name is a repository file name somebody chose.
+	fmt.Fprintf(&b, "## %s: %s\n\n", title, EscapeMdHeading(name))
 	fence := MarkdownCodeFence(content)
 	fmt.Fprintf(&b, "%s%s\n", fence, sanitizeFenceInfo(language))
 	b.WriteString(content)
@@ -954,7 +981,7 @@ type NoteMarkdownOptions struct {
 func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s #%d\n\n", opts.Title, note.ID)
-	fmt.Fprintf(&b, FmtMdAuthor, note.Author)
+	fmt.Fprintf(&b, FmtMdAuthor, EscapeMdTableCell(note.Author))
 	fmt.Fprintf(&b, FmtMdCreated, FormatTime(note.CreatedAt))
 	if note.System {
 		b.WriteString("- **System note**\n")
@@ -969,7 +996,7 @@ func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
 		}
 		fmt.Fprintf(&b, "- **Resolvable**: %s\n", resolved)
 		if note.ResolvedBy != "" {
-			fmt.Fprintf(&b, "- **Resolved By**: @%s\n", note.ResolvedBy)
+			fmt.Fprintf(&b, "- **Resolved By**: @%s\n", EscapeMdTableCell(note.ResolvedBy))
 		}
 	}
 	fmt.Fprintf(&b, FmtMdSectionText, WrapGFMBody(note.Body))

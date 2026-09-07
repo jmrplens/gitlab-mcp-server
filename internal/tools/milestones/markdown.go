@@ -2,6 +2,7 @@ package milestones
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -40,9 +41,10 @@ func FormatListMarkdownString(v ListOutput) string {
 			expired = "Yes"
 		}
 		fmt.Fprintf(
-			&b, "| [%d](%s) | %s | %s | %s | %s |\n",
-			m.IID, m.WebURL,
+			&b, "| %s | %s | %s | %s | %s |\n",
+			toolutil.MdTitleLink(strconv.FormatInt(m.IID, 10), m.WebURL),
 			toolutil.EscapeMdTableCell(m.Title),
+			//gitlab:allow-unescaped m.State: a milestone state, which GitLab returns as active or closed.
 			m.State,
 			due,
 			expired,
@@ -68,6 +70,7 @@ func FormatMarkdown(v Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Milestone: %s\n\n", toolutil.EscapeMdHeading(v.Title))
 	fmt.Fprintf(&b, "- **ID**: %d (IID: %d)\n", v.ID, v.IID)
+	//gitlab:allow-unescaped v.State: a milestone state, which GitLab returns as active or closed.
 	fmt.Fprintf(&b, toolutil.FmtMdState, v.State)
 	if v.Description != "" {
 		toolutil.WriteDescription(&b, v.Description)
@@ -80,7 +83,7 @@ func FormatMarkdown(v Output) string {
 	}
 	fmt.Fprintf(&b, "- **Expired**: %v\n", v.Expired)
 	if v.WebURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, v.WebURL)
+		toolutil.WriteMdURL(&b, v.WebURL)
 	}
 	if v.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(v.CreatedAt))
@@ -111,11 +114,12 @@ func FormatIssuesMarkdownString(v MilestoneIssuesOutput) string {
 			created = issue.CreatedAt
 		}
 		fmt.Fprintf(
-			&b, "| [#%d](%s) | %s | %s | %s |\n",
-			issue.IID,
-			issue.WebURL,
+			&b, "| %s | %s | %s | %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
 			toolutil.EscapeMdTableCell(issue.Title),
+			//gitlab:allow-unescaped issue.State: an issue state, which GitLab returns as opened or closed.
 			issue.State,
+			//gitlab:allow-unescaped created: a creation timestamp formatted from a time.Time as RFC 3339, or the literal dash, in this table and in the merge request one below.
 			created,
 		)
 	}
@@ -149,10 +153,10 @@ func FormatMergeRequestsMarkdownString(v MilestoneMergeRequestsOutput) string {
 			created = mr.CreatedAt
 		}
 		fmt.Fprintf(
-			&b, "| [!%d](%s) | %s | %s | %s | %s | %s |\n",
-			mr.IID,
-			mr.WebURL,
+			&b, "| %s | %s | %s | %s | %s | %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL),
 			toolutil.EscapeMdTableCell(mr.Title),
+			//gitlab:allow-unescaped mr.State: a merge request state, which GitLab returns as opened, closed, locked or merged.
 			mr.State,
 			toolutil.EscapeMdTableCell(mr.SourceBranch),
 			toolutil.EscapeMdTableCell(mr.TargetBranch),

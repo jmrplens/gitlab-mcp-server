@@ -283,7 +283,11 @@ func DeleteBySecret(ctx context.Context, client *gitlabclient.Client, input Dele
 func UploadToolResult(u UploadOutput) *mcp.CallToolResult {
 	md := FormatUploadMarkdown(u)
 	if toolutil.IsImageFile(u.Alt) && u.FullURL != "" {
-		md += fmt.Sprintf("\n![%s](%s)\n", u.Alt, u.FullURL)
+		// An image embed is a link with a '!' in front, so both halves want the
+		// same escaping MdTitleLink gives a link, applied here because the
+		// helper writes no '!'.
+		md += fmt.Sprintf("\n![%s](%s)\n",
+			toolutil.EscapeMdLinkLabel(u.Alt), toolutil.EscapeMdLinkDestination(u.FullURL))
 	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

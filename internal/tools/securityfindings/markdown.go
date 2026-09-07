@@ -34,6 +34,7 @@ func FormatListMarkdown(out ListOutput) string {
 
 		fmt.Fprintf(
 			&sb, "| %s | %s | %s | %s | %s | %s | %s |\n",
+			//gitlab:allow-unescaped severityBadge(f.Severity): most answers are constants written here, and the fallback is a severity enum token GitLab spells as one bare word.
 			severityBadge(f.Severity),
 			toolutil.EscapeMdTableCell(f.Confidence),
 			toolutil.EscapeMdTableCell(name),

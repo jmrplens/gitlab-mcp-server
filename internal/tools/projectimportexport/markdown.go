@@ -47,10 +47,12 @@ func appendNonEmptyStatusRow(rows *[]statusRow, field, value string) {
 
 func projectImportExportStatusResult(title, name string, id int64, path string, rows []statusRow, hint string) *mcp.CallToolResult {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## %s: %s\n\n", title, name)
+	// The title is a literal at every call site; the project's name and path
+	// are what whoever created it chose.
+	fmt.Fprintf(&sb, "## %s: %s\n\n", title, toolutil.EscapeMdHeading(name))
 	sb.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&sb, "| ID | %d |\n", id)
-	fmt.Fprintf(&sb, "| Path | %s |\n", path)
+	fmt.Fprintf(&sb, "| Path | %s |\n", toolutil.EscapeMdTableCell(path))
 	for _, row := range rows {
 		fmt.Fprintf(&sb, "| %s | %s |\n", row.Field, row.Value)
 	}

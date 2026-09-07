@@ -16,13 +16,16 @@ func FormatPublishMarkdown(out PublishOutput) string {
 	fmt.Fprintf(&b, "## Package Published\n\n")
 	fmt.Fprintf(&b, "- **Package File ID**: %d\n", out.PackageFileID)
 	fmt.Fprintf(&b, "- **Package ID**: %d\n", out.PackageID)
-	fmt.Fprintf(&b, "- **File Name**: %s\n", out.FileName)
+	// The only validation on a package file name refuses a space and a leading
+	// tilde or at-sign, so a pipe and a '<' both survive.
+	fmt.Fprintf(&b, "- **File Name**: %s\n", toolutil.EscapeMdTableCell(out.FileName))
 	fmt.Fprintf(&b, fmtSizeBytes, out.Size)
 	if out.SHA256 != "" {
+		//gitlab:allow-unescaped out.SHA256: a SHA-256 digest, computed by GitLab for a published file and by crypto/sha256 here for a downloaded one, so hexadecimal either way.
 		fmt.Fprintf(&b, "- **SHA256**: %s\n", out.SHA256)
 	}
 	if out.URL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, out.URL)
+		toolutil.WriteMdURL(&b, out.URL)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -37,7 +40,9 @@ func FormatPublishMarkdown(out PublishOutput) string {
 func FormatDownloadMarkdown(out DownloadOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Package Downloaded\n\n")
-	fmt.Fprintf(&b, "- **Output Path**: %s\n", out.OutputPath)
+	// The output path is the caller's own argument echoed back, before any
+	// canonicalization.
+	fmt.Fprintf(&b, "- **Output Path**: %s\n", toolutil.EscapeMdTableCell(out.OutputPath))
 	fmt.Fprintf(&b, fmtSizeBytes, out.Size)
 	if out.SHA256 != "" {
 		fmt.Fprintf(&b, "- **SHA256**: %s\n", out.SHA256)
@@ -84,7 +89,9 @@ func writePackageRow(b *strings.Builder, p ListItem, lastColumn string) {
 		p.ID,
 		toolutil.EscapeMdTableCell(p.Name),
 		toolutil.EscapeMdTableCell(p.Version),
+		//gitlab:allow-unescaped p.PackageType: the registry format GitLab stores the package under, one of its own enum values (generic, maven, npm and the rest).
 		p.PackageType,
+		//gitlab:allow-unescaped p.Status: a GitLab package status enum value (default, hidden, processing, error).
 		p.Status,
 		toolutil.EscapeMdTableCell(lastColumn),
 	)
@@ -170,6 +177,7 @@ func FormatFileListMarkdown(out FileListOutput) string {
 			f.PackageFileID,
 			toolutil.EscapeMdTableCell(f.FileName),
 			f.Size,
+			//gitlab:allow-unescaped sha: the leading characters of a SHA-256 digest, which is hexadecimal, so slicing it cannot split a rune.
 			sha,
 		)
 	}
@@ -188,16 +196,16 @@ func FormatPublishAndLinkMarkdown(out PublishAndLinkOutput) string {
 	fmt.Fprintf(&b, "## Package Published & Linked\n\n")
 	fmt.Fprintf(&b, "### Package\n\n")
 	fmt.Fprintf(&b, "- **Package File ID**: %d\n", out.Package.PackageFileID)
-	fmt.Fprintf(&b, "- **File Name**: %s\n", out.Package.FileName)
+	fmt.Fprintf(&b, "- **File Name**: %s\n", toolutil.EscapeMdTableCell(out.Package.FileName))
 	fmt.Fprintf(&b, fmtSizeBytes, out.Package.Size)
 	if out.Package.URL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, out.Package.URL)
+		toolutil.WriteMdURL(&b, out.Package.URL)
 	}
 	fmt.Fprintf(&b, "\n### Release Link\n\n")
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ReleaseLink.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, out.ReleaseLink.Name)
+	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.ReleaseLink.Name))
 	if out.ReleaseLink.URL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, out.ReleaseLink.URL)
+		toolutil.WriteMdURL(&b, out.ReleaseLink.URL)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -232,7 +240,9 @@ func FormatPublishDirMarkdown(out PublishDirOutput) string {
 	if len(out.Errors) > 0 {
 		fmt.Fprintf(&b, "\n### Errors (%d)\n\n", len(out.Errors))
 		for _, e := range out.Errors {
-			fmt.Fprintf(&b, "- %s\n", e)
+			// Each is a local directory entry name plus a wrapped error whose
+			// text carries GitLab's own message.
+			fmt.Fprintf(&b, "- %s\n", toolutil.EscapeMdTableCell(e))
 		}
 	}
 	toolutil.WriteHints(

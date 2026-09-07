@@ -267,7 +267,7 @@ func writeTeamOverviewWorkload(b *strings.Builder, stats map[string]*teamOvervie
 	b.WriteString("|--------|------|----------|--------|-----------|\n")
 	for _, username := range sortedKeys(stats) {
 		stat := stats[username]
-		fmt.Fprintf(b, "| @%s | %s | %d | %d | %d |\n", username, stat.name, stat.openMRs, stat.mergedMRs, stat.reviewMRs)
+		fmt.Fprintf(b, "| @%s | %s | %d | %d | %d |\n", username, mdInline(stat.name), stat.openMRs, stat.mergedMRs, stat.reviewMRs)
 	}
 	b.WriteString("\n")
 }
@@ -326,7 +326,9 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 	var b strings.Builder
 	branchInfo := ""
 	if opts.TargetBranch != nil {
-		branchInfo = " targeting " + *opts.TargetBranch
+		// The branch is escaped rather than branchInfo, because EscapeMdHeading
+		// trims the leading space this string starts with.
+		branchInfo = " targeting " + mdHeading(*opts.TargetBranch)
 	}
 	fmt.Fprintf(&b, "# Group MR Dashboard: %s (%d %s MRs%s)\n\n", mdHeading(groupID), len(mrs), state, branchInfo)
 
@@ -475,7 +477,7 @@ func writeReviewerWorkloadTable(b *strings.Builder, stats map[string]*reviewerWo
 		if stat.oldestMR != nil {
 			oldest = formatAge(time.Since(*stat.oldestMR))
 		}
-		fmt.Fprintf(b, "| @%s | %s | %d | %s |\n", username, stat.name, stat.count, oldest)
+		fmt.Fprintf(b, "| @%s | %s | %d | %s |\n", username, mdInline(stat.name), stat.count, oldest)
 	}
 	b.WriteString("\n")
 }

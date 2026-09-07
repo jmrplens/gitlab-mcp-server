@@ -50,18 +50,20 @@ func milestoneTitles(ms []*toolutil.MilestoneOutput) []string {
 func FormatMarkdown(r Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Release: %s\n\n", toolutil.EscapeMdHeading(r.Name))
-	fmt.Fprintf(&b, "- **Tag**: %s\n", r.TagName)
+	// A tag name is a git ref, and check-ref-format permits '|', '<' and '>'.
+	fmt.Fprintf(&b, "- **Tag**: %s\n", toolutil.EscapeMdTableCell(r.TagName))
 	if r.Author != nil && r.Author.Username != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, r.Author.Username)
+		fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, toolutil.EscapeMdTableCell(r.Author.Username))
 	}
 	if webURL := releaseWebURL(r); webURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, webURL)
+		toolutil.WriteMdURL(&b, webURL)
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(r.CreatedAt))
 	if r.ReleasedAt != "" {
 		fmt.Fprintf(&b, "- **Released**: %s\n", toolutil.FormatTime(r.ReleasedAt))
 	}
 	if r.Commit != nil && r.Commit.ID != "" {
+		//gitlab:allow-unescaped r.Commit.ID: a commit SHA, hexadecimal by construction.
 		fmt.Fprintf(&b, "- **Commit**: %s\n", r.Commit.ID)
 	}
 	if r.UpcomingRelease {
@@ -100,10 +102,9 @@ func FormatListMarkdown(out ListOutput) string {
 		if released == "" {
 			released = r.CreatedAt
 		}
-		tag := toolutil.EscapeMdTableCell(r.TagName)
-		if webURL := releaseWebURL(r); webURL != "" {
-			tag = fmt.Sprintf("[%s](%s)", tag, webURL)
-		}
+		// The cell escaper leaves ']' alone, so a hand-built link's label could
+		// be closed from inside it by a tag holding one.
+		tag := toolutil.MdTitleLink(r.TagName, releaseWebURL(r))
 		var author string
 		if r.Author != nil {
 			author = r.Author.Username

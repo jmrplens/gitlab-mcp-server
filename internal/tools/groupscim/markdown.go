@@ -14,7 +14,8 @@ func FormatOutputMarkdown(o Output) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## SCIM Identity\n\n")
-	fmt.Fprintf(&b, "- **External UID**: `%s`\n", o.ExternalUID)
+	// The external UID is whatever the identity provider sent for the user.
+	fmt.Fprintf(&b, "- **External UID**: `%s`\n", toolutil.EscapeMdTableCell(o.ExternalUID))
 	fmt.Fprintf(&b, "- **User ID**: %d\n", o.UserID)
 	fmt.Fprintf(&b, "- **Active**: %t\n", o.Active)
 	toolutil.WriteHints(
@@ -35,7 +36,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| External UID | User ID | Active |\n")
 	b.WriteString("| ------------ | ------: | ------ |\n")
 	for _, id := range out.Identities {
-		fmt.Fprintf(&b, "| `%s` | %d | %t |\n", id.ExternalUID, id.UserID, id.Active)
+		fmt.Fprintf(&b, "| `%s` | %d | %t |\n", toolutil.EscapeMdTableCell(id.ExternalUID), id.UserID, id.Active)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -49,7 +50,7 @@ func FormatUpdateMarkdown(out UpdateOutput) string {
 	var b strings.Builder
 	b.WriteString("## SCIM Identity Updated\n\n")
 	fmt.Fprintf(&b, "- **Updated**: %t\n", out.Updated)
-	fmt.Fprintf(&b, "- **Message**: %s\n", out.Message)
+	fmt.Fprintf(&b, "- **Message**: %s\n", toolutil.EscapeMdTableCell(out.Message))
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_get_group_scim_identity` to verify the new external UID",

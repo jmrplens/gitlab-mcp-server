@@ -56,14 +56,19 @@ func FormatListDefinitionsMarkdown(output ListDefinitionsOutput) *mcp.CallToolRe
 func FormatFeatureMarkdown(output SetOutput) *mcp.CallToolResult {
 	f := output.Feature
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Feature Flag: %s\n\n", f.Name)
+	// A feature flag name is the string the caller of feature.set supplied,
+	// which GitLab creates on demand rather than validating against a list.
+	fmt.Fprintf(&sb, "## Feature Flag: %s\n\n", toolutil.EscapeMdHeading(f.Name))
 	sb.WriteString("| Property | Value |\n")
 	sb.WriteString("|----------|-------|\n")
+	//gitlab:allow-unescaped f.State: a feature flag state GitLab picks from a fixed set (on, off, conditional).
 	fmt.Fprintf(&sb, "| State | %s |\n", f.State)
 	fmt.Fprintf(&sb, "| Gates | %s |\n", toolutil.EscapeMdTableCell(formatGates(f.Gates)))
 	if f.Definition != nil {
-		fmt.Fprintf(&sb, "| Type | %s |\n", f.Definition.Type)
-		fmt.Fprintf(&sb, "| Group | %s |\n", f.Definition.Group)
+		// Both are read out of the flag's definition file in GitLab's own
+		// source tree, so neither is a set this server can know.
+		fmt.Fprintf(&sb, "| Type | %s |\n", toolutil.EscapeMdTableCell(f.Definition.Type))
+		fmt.Fprintf(&sb, "| Group | %s |\n", toolutil.EscapeMdTableCell(f.Definition.Group))
 		fmt.Fprintf(&sb, "| Default Enabled | %v |\n", f.Definition.DefaultEnabled)
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_set_feature_flag` to toggle this feature")

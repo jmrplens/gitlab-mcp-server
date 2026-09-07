@@ -10,6 +10,7 @@
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
@@ -589,14 +590,15 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/8] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/8] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/8] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/8] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/8] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/8] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/8] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[8/8] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[1/9] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/9] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/9] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/9] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/9] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/9] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/9] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[8/9] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[9/9] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1219,6 +1221,20 @@ audit-test-subtests:
 ## subtest. CI gate.
 check-test-subtests:
 	go run ./cmd/audit_test_subtests/ -check
+
+## audit-md-escaping: report every value a Markdown formatter interpolates into
+## a table cell, a heading, a list item or a link without routing it through
+## toolutil.EscapeMdTableCell, EscapeMdHeading or MdTitleLink, with the JSON
+## work list. `-contexts` narrows the sweep to some of the five constructs;
+## `//gitlab:allow-unescaped <expression>: <reason>` in the owning package
+## declares a value that needs none.
+audit-md-escaping:
+	go run ./cmd/audit_md_escaping/ -v -json plan/md-escaping-backlog.json
+
+## check-md-escaping: fail when a value still reaches a Markdown construct
+## unescaped, or when a directive excuses nothing. CI gate.
+check-md-escaping:
+	go run ./cmd/audit_md_escaping/ -check
 
 ## audit-gateway-chars: report served descriptions and titles violating the
 ## gateway-safe text policy (pure ASCII prose, no semicolons), across every
