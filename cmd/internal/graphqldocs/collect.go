@@ -1,4 +1,4 @@
-package main
+package graphqldocs
 
 import (
 	"errors"
@@ -27,45 +27,54 @@ import (
 const loadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
 	packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
 
-// document is one GraphQL document found in the source.
-type document struct {
-	// pkg is the import path of the package that declares it.
-	pkg string
-	// name is the constant or variable it is declared as, or "" when it is
+// DefaultPatterns are the packages an audit loads. Every GraphQL document this
+// repository writes lives under them.
+//
+// It is a function rather than a variable because a caller that appended to a
+// shared slice would change what every later caller audits, and an audit that
+// silently looks at the wrong tree is the failure this package exists to
+// remove.
+func DefaultPatterns() []string { return []string{"./internal/..."} }
+
+// Document is one GraphQL document found in the source.
+type Document struct {
+	// Package is the import path of the package that declares it.
+	Package string
+	// Name is the constant or variable it is declared as, or "" when it is
 	// written inline at the point of use.
-	name string
-	// position is where a reader will find it.
-	position token.Position
-	// text is the folded value, with any shared fragment already spliced in.
-	text string
+	Name string
+	// Position is where a reader will find it.
+	Position token.Position
+	// Text is the folded value, with any shared fragment already spliced in.
+	Text string
 }
 
-// label names a document for a report line.
-func (d document) label() string {
-	if d.name == "" {
+// Label names a document for a report line.
+func (d Document) Label() string {
+	if d.Name == "" {
 		return "an inline document"
 	}
-	return d.name
+	return d.Name
 }
 
 // collector walks the loaded packages and gathers their documents.
 type collector struct {
 	fset      *token.FileSet
-	documents []document
+	documents []Document
 	// claimed holds the positions of expressions already reported under the
 	// name they are declared as, so the inline pass does not report them a
 	// second time without one.
 	claimed map[token.Pos]bool
 }
 
-// collect loads the packages named by patterns, rooted at dir, and returns
+// Collect loads the packages named by patterns, rooted at dir, and returns
 // every GraphQL document they declare.
 //
 // The overlay is how a test supplies source that is not on disk: a fixture
 // package written in the test file itself is type-checked like any other, so
 // the folding of a document assembled from a fragment is exercised for real
 // rather than mocked. Production passes nil.
-func collect(dir string, patterns []string, overlay map[string][]byte) ([]document, error) {
+func Collect(dir string, patterns []string, overlay map[string][]byte) ([]Document, error) {
 	// The standalone files are read first because it costs milliseconds and
 	// type-checking the tree costs seconds: a run that cannot read one of its
 	// own documents should say so before paying for the rest.
@@ -101,16 +110,16 @@ func collect(dir string, patterns []string, overlay map[string][]byte) ([]docume
 // key because a package holds documents from several files and, for a
 // standalone .graphql document, offset alone says nothing about which file it
 // came from.
-func sortDocuments(documents []document) {
+func sortDocuments(documents []Document) {
 	sort.Slice(documents, func(i, j int) bool {
 		left, right := documents[i], documents[j]
-		if left.pkg != right.pkg {
-			return left.pkg < right.pkg
+		if left.Package != right.Package {
+			return left.Package < right.Package
 		}
-		if left.position.Filename != right.position.Filename {
-			return left.position.Filename < right.position.Filename
+		if left.Position.Filename != right.Position.Filename {
+			return left.Position.Filename < right.Position.Filename
 		}
-		return left.position.Offset < right.position.Offset
+		return left.Position.Offset < right.Position.Offset
 	})
 }
 
@@ -132,8 +141,8 @@ func sortDocuments(documents []document) {
 // The walk goes through [os.Root], as cmd/format_md_tables does, so a read is
 // scoped to the tree being audited rather than to whatever a symlink in it
 // points at.
-func collectFiles(dir string, patterns []string) ([]document, error) {
-	var found []document
+func collectFiles(dir string, patterns []string) ([]Document, error) {
+	var found []Document
 	for _, base := range walkRoots(dir, patterns) {
 		root, err := os.OpenRoot(base)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -153,8 +162,8 @@ func collectFiles(dir string, patterns []string) ([]document, error) {
 }
 
 // documentsUnder reads every standalone document in one already-opened tree.
-func documentsUnder(root *os.Root, base string) ([]document, error) {
-	var found []document
+func documentsUnder(root *os.Root, base string) ([]Document, error) {
+	var found []Document
 	err := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || path.Ext(name) != graphQLExt || isPinnedSchema(name) {
 			return err
@@ -165,11 +174,11 @@ func documentsUnder(root *os.Root, base string) ([]document, error) {
 			return fmt.Errorf("read %s: %w", filepath.Join(base, local), readErr)
 		}
 		full := filepath.Join(base, local)
-		found = append(found, document{
-			pkg:      filepath.ToSlash(filepath.Dir(full)),
-			name:     path.Base(name),
-			position: token.Position{Filename: full, Line: 1},
-			text:     string(text),
+		found = append(found, Document{
+			Package:  filepath.ToSlash(filepath.Dir(full)),
+			Name:     path.Base(name),
+			Position: token.Position{Filename: full, Line: 1},
+			Text:     string(text),
 		})
 		return nil
 	})
@@ -251,11 +260,11 @@ func (c *collector) recordNamed(pkg *packages.Package, spec *ast.ValueSpec) {
 			continue
 		}
 		c.claimed[value.Pos()] = true
-		c.documents = append(c.documents, document{
-			pkg:      pkg.PkgPath,
-			name:     name.Name,
-			position: c.fset.Position(name.Pos()),
-			text:     text,
+		c.documents = append(c.documents, Document{
+			Package:  pkg.PkgPath,
+			Name:     name.Name,
+			Position: c.fset.Position(name.Pos()),
+			Text:     text,
 		})
 	}
 }
@@ -271,10 +280,10 @@ func (c *collector) recordInline(pkg *packages.Package, expr ast.Expr) bool {
 	if !ok {
 		return false
 	}
-	c.documents = append(c.documents, document{
-		pkg:      pkg.PkgPath,
-		position: c.fset.Position(expr.Pos()),
-		text:     text,
+	c.documents = append(c.documents, Document{
+		Package:  pkg.PkgPath,
+		Position: c.fset.Position(expr.Pos()),
+		Text:     text,
 	})
 	return true
 }

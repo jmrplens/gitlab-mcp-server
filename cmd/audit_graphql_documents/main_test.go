@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
 )
 
 // afterThePin is a day later than the committed provenance record, so the age
@@ -21,52 +22,53 @@ func afterThePin() time.Time { return time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC
 // soundFixture holds documents the pinned schema accepts, written the way the
 // repository writes them: a named constant, and one assembled from a shared
 // fragment.
-const soundFixture = `package sound
-
-const vulnFields = @@
-      id
-      title
-      severity
-@@
-
-const getVulnerability = @@
-query($id: VulnerabilityID!) {
-  vulnerability(id: $id) {@@ + vulnFields + @@
-  }
-}
-@@
-`
+const soundFixture = "package sound\n\n" +
+	"const vulnFields = `\n      id\n      title\n      severity\n`\n\n" +
+	"const getVulnerability = `\nquery($id: VulnerabilityID!) {\n  vulnerability(id: $id) {` + vulnFields + `\n  }\n}\n`\n"
 
 // brokenFixture holds the two shapes GitLab refuses that no test would ever
 // catch on its own: a field the type does not have, and an argument the field
 // does not accept.
-const brokenFixture = `package broken
+const brokenFixture = "package broken\n\n" +
+	"const listVulnerabilities = `\nquery($path: ID!, $severity: [String!]) {\n" +
+	"  project(fullPath: $path) {\n    vulnerabilities(severity: $severity) {\n" +
+	"      nodes {\n        id\n        hasSolutions\n      }\n    }\n  }\n}\n`\n"
 
-const listVulnerabilities = @@
-query($path: ID!, $severity: [String!]) {
-  project(fullPath: $path) {
-    vulnerabilities(severity: $severity) {
-      nodes {
-        id
-        hasSolutions
-      }
-    }
-  }
+// fixtureModule writes a throwaway module holding one package per entry and
+// returns its root.
+//
+// A module of its own rather than an overlay over this repository, because
+// what this file tests is the command around the audit: the exit status, the
+// two streams and the shape of a finding. The reading of the source is
+// cmd/internal/graphqldocs's own business and is tested there against the
+// harder shapes.
+func fixtureModule(t *testing.T, packages map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module fixture\n\ngo 1.24\n"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	for name, source := range packages {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatalf("prepare the fixture: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name+".go"), []byte(source), 0o600); err != nil {
+			t.Fatalf("prepare the fixture: %v", err)
+		}
+	}
+	return root
 }
-@@
-`
 
-// runFixture runs the audit over a fixture package set and returns the exit
-// status with both streams.
-func runFixture(t *testing.T, sources map[string]string, verbose bool) (int, string, string) {
+// runFixture runs the audit over a fixture module and returns the exit status
+// with both streams.
+func runFixture(t *testing.T, packages map[string]string, verbose bool) (int, string, string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	status := run(auditRun{
-		dir:      repoRoot(t),
-		verbose:  verbose,
-		patterns: []string{fixturePattern},
-		overlay:  fixtureOverlay(t, sources),
-	}, &out, &errOut)
+	status := run(graphqldocs.Options{
+		Dir:      fixtureModule(t, packages),
+		Patterns: []string{"./..."},
+	}, verbose, &out, &errOut)
 	return status, out.String(), errOut.String()
 }
 
@@ -85,12 +87,11 @@ func TestRun_AgainstASchemaTheCallerSupplies_JudgesByThatSchema(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	status := run(auditRun{
-		dir:        repoRoot(t),
-		patterns:   []string{fixturePattern},
-		overlay:    fixtureOverlay(t, map[string]string{"sound": soundFixture}),
-		schemaPath: narrowed,
-	}, &out, &errOut)
+	status := run(graphqldocs.Options{
+		Dir:        fixtureModule(t, map[string]string{"sound": soundFixture}),
+		Patterns:   []string{"./..."},
+		SchemaPath: narrowed,
+	}, false, &out, &errOut)
 
 	if status != 1 {
 		t.Fatalf("exit status %d, want 1: the supplied schema has no vulnerability field.\nstdout:\n%s", status, out.String())
@@ -213,10 +214,11 @@ func TestRun_ASuppliedSchemaThatCannotBeUsed_Fails(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			var out, errOut bytes.Buffer
 
-			status := run(auditRun{
-				dir: repoRoot(t), patterns: []string{fixturePattern},
-				overlay: fixtureOverlay(t, map[string]string{"sound": soundFixture}), schemaPath: testCase.path,
-			}, &out, &errOut)
+			status := run(graphqldocs.Options{
+				Dir:        fixtureModule(t, map[string]string{"sound": soundFixture}),
+				Patterns:   []string{"./..."},
+				SchemaPath: testCase.path,
+			}, false, &out, &errOut)
 
 			if status != 1 {
 				t.Fatalf("exit status %d, want 1", status)
@@ -250,15 +252,20 @@ func TestRun_DocumentsThePinnedSchemaAccepts_Succeeds(t *testing.T) {
 }
 
 // TestRun_Verbose_ListsWhatItAccepted verifies that the set a reviewer has to
-// care about is reviewable rather than a count.
+// care about is reviewable rather than a count, and that the listing names only
+// what passed: a document printed as accepted and refused in the same run would
+// be worse than either line alone.
 func TestRun_Verbose_ListsWhatItAccepted(t *testing.T) {
-	status, out, _ := runFixture(t, map[string]string{"sound": soundFixture}, true)
+	status, out, _ := runFixture(t, map[string]string{"sound": soundFixture, "broken": brokenFixture}, true)
 
-	if status != 0 {
-		t.Fatalf("exit status %d, want 0", status)
+	if status != 1 {
+		t.Fatalf("exit status %d, want 1: the broken fixture is refused", status)
 	}
 	if !strings.Contains(out, "ok  ") || !strings.Contains(out, "getVulnerability") {
 		t.Errorf("the verbose run does not name the document it checked:\n%s", out)
+	}
+	if strings.Contains(out, "listVulnerabilities") {
+		t.Errorf("the verbose run listed a refused document as accepted:\n%s", out)
 	}
 }
 
@@ -273,7 +280,7 @@ func TestRun_ADocumentGitLabWouldRefuse_Fails(t *testing.T) {
 	}
 	for _, want := range []string{
 		"listVulnerabilities",
-		fixtureDir + "/broken/broken.go:",
+		"broken/broken.go:",
 		`Cannot query field "hasSolutions"`,
 		`used in position expecting type "[VulnerabilitySeverity!]"`,
 		"refuses 1 of 1 document(s)",
@@ -290,10 +297,7 @@ func TestRun_ADocumentGitLabWouldRefuse_Fails(t *testing.T) {
 // pointed at the wrong tree: finding no documents at all means the audit is
 // looking somewhere the documents are not, which must not read as a pass.
 func TestRun_NothingToCheck_IsAFailure(t *testing.T) {
-	const noDocuments = `package empty
-
-const notADocument = "there is no GraphQL here"
-`
+	const noDocuments = "package empty\n\nconst notADocument = \"there is no GraphQL here\"\n"
 
 	status, _, errOut := runFixture(t, map[string]string{"empty": noDocuments}, false)
 
@@ -310,7 +314,7 @@ const notADocument = "there is no GraphQL here"
 func TestRun_SourceThatCannotBeLoaded_Fails(t *testing.T) {
 	var out, errOut bytes.Buffer
 
-	status := run(auditRun{dir: t.TempDir(), patterns: []string{"./..."}}, &out, &errOut)
+	status := run(graphqldocs.Options{Dir: t.TempDir(), Patterns: []string{"./..."}}, false, &out, &errOut)
 
 	if status != 1 {
 		t.Fatalf("exit status %d, want 1", status)
@@ -320,33 +324,75 @@ func TestRun_SourceThatCannotBeLoaded_Fails(t *testing.T) {
 	}
 }
 
-// TestFinding_RefusalThatCarriesNoReasons_IsStillReported verifies the branch
-// taken when the failure is not a refusal but an inability to load the pinned
-// schema: there are no reasons to list, and the one line there is must survive.
-func TestFinding_RefusalThatCarriesNoReasons_IsStillReported(t *testing.T) {
-	found := document{pkg: "x/y", name: "queryThing"}
-
+// TestFinding_EveryReason_IsListedUnderTheDocument verifies that a finding
+// names the document once and every objection under it, including the case
+// where the audit could not judge the document at all and the single line it
+// has must survive.
+func TestFinding_EveryReason_IsListedUnderTheDocument(t *testing.T) {
 	cases := []struct {
-		name string
-		err  error
-		want string
+		name    string
+		reasons []string
+		want    string
 	}{
-		{
-			name: "a refusal",
-			err:  &graphqlschema.ValidationError{Reasons: []string{"first", "second"}},
-			want: "    - first\n    - second\n",
-		},
-		{name: "anything else", err: errors.New("the pin is corrupt"), want: "    the pin is corrupt\n"},
+		{name: "a refusal", reasons: []string{"first", "second"}, want: "    - first\n    - second\n"},
+		{name: "anything else", reasons: []string{"the pin is corrupt"}, want: "    - the pin is corrupt\n"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			report := finding("", found, testCase.err)
+			report := finding("", graphqldocs.Refusal{
+				Document: graphqldocs.Document{Package: "x/y", Name: "queryThing"},
+				Reasons:  testCase.reasons,
+			})
 
 			if !strings.HasPrefix(report, "x/y queryThing (") {
 				t.Errorf("the report does not name the document:\n%s", report)
 			}
 			if !strings.HasSuffix(report, testCase.want) {
 				t.Errorf("the report does not end with %q:\n%s", testCase.want, report)
+			}
+		})
+	}
+}
+
+// TestRelative_PositionsUnderTheRoot_AreTrimmed verifies that a finding reads
+// as a path a person can open, and that a position outside the root is left
+// whole rather than turned into a walk of parent directories.
+func TestRelative_PositionsUnderTheRoot_AreTrimmed(t *testing.T) {
+	cases := []struct {
+		name     string
+		position token.Position
+		root     string
+		want     string
+	}{
+		{
+			name:     "under the root",
+			position: token.Position{Filename: filepath.Join("/repo", "internal", "tools", "x.go"), Line: 12},
+			root:     "/repo",
+			want:     "internal/tools/x.go:12",
+		},
+		{
+			name:     "outside the root",
+			position: token.Position{Filename: filepath.Join("/elsewhere", "x.go"), Line: 3},
+			root:     "/repo",
+			want:     filepath.Join("/elsewhere", "x.go") + ":3",
+		},
+		{
+			name:     "no root to trim against",
+			position: token.Position{Filename: filepath.Join("/repo", "x.go"), Line: 1},
+			root:     "",
+			want:     filepath.Join("/repo", "x.go") + ":1",
+		},
+		{
+			name:     "a filename that is not a path under the root",
+			position: token.Position{Filename: "relative.go", Line: 7},
+			root:     "/repo",
+			want:     "relative.go:7",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := relative(testCase.position, testCase.root); got != testCase.want {
+				t.Errorf("relative() = %q, want %q", got, testCase.want)
 			}
 		})
 	}

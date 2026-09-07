@@ -16,6 +16,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/requestinventory"
 )
 
 // writeShard writes one shard file holding the given lines.
@@ -270,7 +272,7 @@ func TestRender_Inventory_IsIndentedJSONEndingInANewline(t *testing.T) {
 	if !strings.HasSuffix(string(content), "\n") {
 		t.Error("the rendered inventory does not end in a newline")
 	}
-	var decoded inventory
+	var decoded requestinventory.Inventory
 	if err := json.Unmarshal(content, &decoded); err != nil {
 		t.Fatalf("Unmarshal error = %v", err)
 	}

@@ -1,4 +1,4 @@
-package main
+package graphqldocs
 
 import (
 	"go/token"
@@ -18,7 +18,7 @@ import (
 // which keeps generated Go source out of the repository while still
 // type-checking it for real, which is what folds a document assembled from a
 // shared fragment into the one string GitLab would receive.
-const fixtureDir = "cmd/audit_graphql_documents/fixture"
+const fixtureDir = "cmd/internal/graphqldocs/fixture"
 
 // fixturePattern matches every fixture package at once.
 const fixturePattern = "./" + fixtureDir + "/..."
@@ -149,9 +149,9 @@ query {
 `
 
 // loadFixture collects the documents in a fixture package set.
-func loadFixture(t *testing.T, sources map[string]string) []document {
+func loadFixture(t *testing.T, sources map[string]string) []Document {
 	t.Helper()
-	found, err := collect(repoRoot(t), []string{fixturePattern}, fixtureOverlay(t, sources))
+	found, err := Collect(repoRoot(t), []string{fixturePattern}, fixtureOverlay(t, sources))
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -159,10 +159,10 @@ func loadFixture(t *testing.T, sources map[string]string) []document {
 }
 
 // names returns each collected document's label, sorted, for comparison.
-func names(documents []document) []string {
+func names(documents []Document) []string {
 	labels := make([]string, 0, len(documents))
 	for _, found := range documents {
-		labels = append(labels, found.label())
+		labels = append(labels, found.Label())
 	}
 	sort.Strings(labels)
 	return labels
@@ -180,27 +180,27 @@ func TestCollect_EveryShapeADocumentIsWrittenIn_IsFoundExactlyOnce(t *testing.T)
 		t.Fatalf("collected %v, want %v", got, want)
 	}
 	t.Run("findings are ordered by package", func(t *testing.T) {
-		if !strings.HasSuffix(found[0].pkg, "/docs") || !strings.HasSuffix(found[len(found)-1].pkg, "/other") {
-			t.Errorf("collected in package order %q .. %q, want docs before other", found[0].pkg, found[len(found)-1].pkg)
+		if !strings.HasSuffix(found[0].Package, "/docs") || !strings.HasSuffix(found[len(found)-1].Package, "/other") {
+			t.Errorf("collected in package order %q .. %q, want docs before other", found[0].Package, found[len(found)-1].Package)
 		}
 	})
 
-	byLabel := map[string]document{}
+	byLabel := map[string]Document{}
 	for _, one := range found {
-		byLabel[one.label()] = one
+		byLabel[one.Label()] = one
 	}
 	t.Run("the fragment is spliced into the named document", func(t *testing.T) {
-		if !strings.Contains(byLabel["listQuery"].text, "author {") {
-			t.Errorf("listQuery was collected without its fragment:\n%s", byLabel["listQuery"].text)
+		if !strings.Contains(byLabel["listQuery"].Text, "author {") {
+			t.Errorf("listQuery was collected without its fragment:\n%s", byLabel["listQuery"].Text)
 		}
 	})
 	t.Run("the package is recorded", func(t *testing.T) {
-		if !strings.HasSuffix(byLabel["listQuery"].pkg, "/docs") {
-			t.Errorf("package = %q, want the fixture package", byLabel["listQuery"].pkg)
+		if !strings.HasSuffix(byLabel["listQuery"].Package, "/docs") {
+			t.Errorf("package = %q, want the fixture package", byLabel["listQuery"].Package)
 		}
 	})
 	t.Run("the position points at the declaration", func(t *testing.T) {
-		if byLabel["listQuery"].position.Line == 0 {
+		if byLabel["listQuery"].Position.Line == 0 {
 			t.Error("the collected document has no position")
 		}
 	})
@@ -240,16 +240,16 @@ func use() { undefinedHelper() }
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			found, err := collect(testCase.dir, testCase.patterns, testCase.overlay)
+			found, err := Collect(testCase.dir, testCase.patterns, testCase.overlay)
 
 			if err == nil {
-				t.Fatalf("collect() error = nil, want one naming %q", testCase.want)
+				t.Fatalf("Collect() error = nil, want one naming %q", testCase.want)
 			}
 			if found != nil {
-				t.Errorf("collect() documents = %v, want nil on failure", found)
+				t.Errorf("Collect() documents = %v, want nil on failure", found)
 			}
 			if !strings.Contains(err.Error(), testCase.want) {
-				t.Errorf("collect() error = %q, want it to name %q", err, testCase.want)
+				t.Errorf("Collect() error = %q, want it to name %q", err, testCase.want)
 			}
 		})
 	}
@@ -260,13 +260,13 @@ func use() { undefinedHelper() }
 // directory of this repository that holds no Go at all, which is exactly the
 // shape a mistyped pattern produces.
 func TestCollect_PatternMatchingNothing_IsReported(t *testing.T) {
-	found, err := collect(repoRoot(t), []string{"./docs/..."}, nil)
+	found, err := Collect(repoRoot(t), []string{"./docs/..."}, nil)
 
 	if err == nil {
-		t.Fatalf("collect() error = nil and found %d document(s), want the empty-match refusal", len(found))
+		t.Fatalf("Collect() error = nil and found %d document(s), want the empty-match refusal", len(found))
 	}
 	if !strings.Contains(err.Error(), "no packages matched") {
-		t.Errorf("collect() error = %q, want it to say nothing matched", err)
+		t.Errorf("Collect() error = %q, want it to say nothing matched", err)
 	}
 }
 
@@ -290,60 +290,16 @@ func TestWalk_PackageWithoutTypeInformation_IsSkipped(t *testing.T) {
 func TestDocumentLabel_UnnamedDocument_SaysSo(t *testing.T) {
 	cases := []struct {
 		name string
-		doc  document
+		doc  Document
 		want string
 	}{
-		{name: "declared under a name", doc: document{name: "queryListThings"}, want: "queryListThings"},
-		{name: "written where it is used", doc: document{}, want: "an inline document"},
+		{name: "declared under a name", doc: Document{Name: "queryListThings"}, want: "queryListThings"},
+		{name: "written where it is used", doc: Document{}, want: "an inline document"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := testCase.doc.label(); got != testCase.want {
-				t.Errorf("label() = %q, want %q", got, testCase.want)
-			}
-		})
-	}
-}
-
-// TestRelative_PositionsUnderTheRoot_AreTrimmed verifies that a finding reads
-// as a path a person can open, and that a position outside the root is left
-// whole rather than turned into a walk of parent directories.
-func TestRelative_PositionsUnderTheRoot_AreTrimmed(t *testing.T) {
-	cases := []struct {
-		name     string
-		position token.Position
-		root     string
-		want     string
-	}{
-		{
-			name:     "under the root",
-			position: token.Position{Filename: filepath.Join("/repo", "internal", "tools", "x.go"), Line: 12},
-			root:     "/repo",
-			want:     "internal/tools/x.go:12",
-		},
-		{
-			name:     "outside the root",
-			position: token.Position{Filename: filepath.Join("/elsewhere", "x.go"), Line: 3},
-			root:     "/repo",
-			want:     filepath.Join("/elsewhere", "x.go") + ":3",
-		},
-		{
-			name:     "no root to trim against",
-			position: token.Position{Filename: filepath.Join("/repo", "x.go"), Line: 1},
-			root:     "",
-			want:     filepath.Join("/repo", "x.go") + ":1",
-		},
-		{
-			name:     "a filename that is not a path under the root",
-			position: token.Position{Filename: "relative.go", Line: 7},
-			root:     "/repo",
-			want:     "relative.go:7",
-		},
-	}
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			if got := relative(testCase.position, testCase.root); got != testCase.want {
-				t.Errorf("relative() = %q, want %q", got, testCase.want)
+			if got := testCase.doc.Label(); got != testCase.want {
+				t.Errorf("Label() = %q, want %q", got, testCase.want)
 			}
 		})
 	}
@@ -381,14 +337,14 @@ func TestCollectFiles_StandaloneDocuments_AreFoundAndThePinIsNot(t *testing.T) {
 	if len(found) != 1 {
 		t.Fatalf("collectFiles() found %d document(s), want 1: %+v", len(found), found)
 	}
-	if found[0].name != "create.graphql" {
-		t.Errorf("collectFiles() named the document %q, want %q", found[0].name, "create.graphql")
+	if found[0].Name != "create.graphql" {
+		t.Errorf("collectFiles() named the document %q, want %q", found[0].Name, "create.graphql")
 	}
-	if !strings.Contains(found[0].text, "createCustomEmoji") {
-		t.Errorf("collectFiles() read %q, want the document's text", found[0].text)
+	if !strings.Contains(found[0].Text, "createCustomEmoji") {
+		t.Errorf("collectFiles() read %q, want the document's text", found[0].Text)
 	}
-	if found[0].position.Filename == "" || found[0].position.Line != 1 {
-		t.Errorf("collectFiles() positioned the document at %+v, want its file at line 1", found[0].position)
+	if found[0].Position.Filename == "" || found[0].Position.Line != 1 {
+		t.Errorf("collectFiles() positioned the document at %+v, want its file at line 1", found[0].Position)
 	}
 }
 
@@ -493,16 +449,16 @@ func TestCollect_AStandaloneDocumentItCannotRead_StopsBeforeTypeChecking(t *test
 		t.Fatalf("prepare the fixture: %v", err)
 	}
 
-	found, err := collect(root, []string{"./..."}, nil)
+	found, err := Collect(root, []string{"./..."}, nil)
 
 	if err == nil {
-		t.Fatal("collect() error = nil, want the read failure")
+		t.Fatal("Collect() error = nil, want the read failure")
 	}
 	if found != nil {
-		t.Errorf("collect() returned %+v, want nothing on failure", found)
+		t.Errorf("Collect() returned %+v, want nothing on failure", found)
 	}
 	if !strings.Contains(err.Error(), "read ") {
-		t.Errorf("collect() error = %q, want it to name the file it could not read", err)
+		t.Errorf("Collect() error = %q, want it to name the file it could not read", err)
 	}
 }
 
@@ -514,18 +470,18 @@ func TestCollect_AStandaloneDocumentItCannotRead_StopsBeforeTypeChecking(t *test
 // same: without it, two such documents in one package would be ordered by
 // nothing at all and a re-run could report them either way round.
 func TestSortDocuments_OrdersByPackageThenFileThenPosition(t *testing.T) {
-	documents := []document{
-		{pkg: "b/pkg", name: "second package", position: token.Position{Filename: "b.go"}},
-		{pkg: "a/pkg", name: "later in the same file", position: token.Position{Filename: "a.go", Offset: 90}},
-		{pkg: "a/pkg", name: "second file", position: token.Position{Filename: "z.graphql"}},
-		{pkg: "a/pkg", name: "first file", position: token.Position{Filename: "a.go", Offset: 10}},
+	documents := []Document{
+		{Package: "b/pkg", Name: "second package", Position: token.Position{Filename: "b.go"}},
+		{Package: "a/pkg", Name: "later in the same file", Position: token.Position{Filename: "a.go", Offset: 90}},
+		{Package: "a/pkg", Name: "second file", Position: token.Position{Filename: "z.graphql"}},
+		{Package: "a/pkg", Name: "first file", Position: token.Position{Filename: "a.go", Offset: 10}},
 	}
 
 	sortDocuments(documents)
 
 	got := make([]string, 0, len(documents))
 	for _, found := range documents {
-		got = append(got, found.name)
+		got = append(got, found.Name)
 	}
 	want := []string{"first file", "later in the same file", "second file", "second package"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {

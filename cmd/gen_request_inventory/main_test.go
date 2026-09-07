@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/requestinventory"
 )
 
 const sampleRecord = `{"package":"internal/tools/issues","test":"TestList","kind":"rest","method":"GET","path":"/projects/:id/issues","query":["state"]}`
@@ -18,9 +20,9 @@ const sampleRecord = `{"package":"internal/tools/issues","test":"TestList","kind
 // out of the way of what is being asserted.
 func stubCatalog(t *testing.T) {
 	t.Helper()
-	original := buildCatalog
-	buildCatalog = func() ([]string, error) { return nil, nil }
-	t.Cleanup(func() { buildCatalog = original })
+	original := catalogActions
+	catalogActions = func() ([]requestinventory.Action, error) { return nil, nil }
+	t.Cleanup(func() { catalogActions = original })
 }
 
 // prepareRoot lays out a repository root with one shard in it and returns the

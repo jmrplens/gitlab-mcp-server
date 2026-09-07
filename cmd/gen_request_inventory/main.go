@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/requestinventory"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
@@ -18,7 +19,7 @@ const (
 	defaultShardDir = "dist/request-inventory"
 
 	// defaultOutputPath is the committed artifact.
-	defaultOutputPath = "docs/development/request-inventory.json"
+	defaultOutputPath = requestinventory.Path
 )
 
 // main parses the flags, merges the shards, and either rewrites the committed

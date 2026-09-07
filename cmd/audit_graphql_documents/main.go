@@ -14,6 +14,7 @@ import (
 
 	"github.com/vektah/gqlparser/v2/ast"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
@@ -95,19 +96,21 @@ func main() {
 // this audit ends are reachable from a test instead of only from a process. It
 // returns the exit status rather than calling os.Exit.
 func run(cfg auditRun, out, errOut io.Writer) int {
-	judged, err := judge(cfg)
+	probed, provenance, err := resolveSchema(cfg)
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)
 		return 1
 	}
 
-	documents, err := collect(cfg.dir, cfg.patterns, cfg.overlay)
+	result, err := graphqldocs.Audit(graphqldocs.Options{
+		Dir:        cfg.dir,
+		Patterns:   cfg.patterns,
+		Schema:     probed,
+		Provenance: provenance,
+		Overlay:    cfg.overlay,
+	})
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)
-		return 1
-	}
-	if len(documents) == 0 {
-		fmt.Fprintln(errOut, prefix, "no GraphQL documents were found, which means this audit is looking at the wrong thing")
 		return 1
 	}
 
@@ -118,119 +121,87 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		root = absolute
 	}
 
-	refused := 0
-	for _, found := range documents {
-		validationErr := judged.validate(found.text)
-		if validationErr == nil {
-			if cfg.verbose {
-				fmt.Fprintf(out, "    ok  %s %s\n", found.pkg, found.label())
+	if cfg.verbose {
+		refused := refusedDocuments(result)
+		for _, found := range result.Documents {
+			if !refused[found.Position] {
+				fmt.Fprintf(out, "    ok  %s %s\n", found.Package, found.Label())
 			}
-			continue
 		}
-		refused++
-		fmt.Fprint(errOut, finding(root, found, validationErr))
+	}
+	for _, refusal := range result.Refusals {
+		fmt.Fprint(errOut, finding(root, refusal))
 	}
 
 	// Drift is reported whether or not a document was refused, and it is not
 	// itself a failure. A refusal says a document broke; the drift under our
 	// selection sets says how far the pin has moved from what an instance
 	// serves now, which is the question a reader of that refusal asks next.
-	if judged.probed != nil {
+	if probed != nil {
 		// The pinned schema and its provenance record are embedded, and their
 		// own gate (make check-graphql-schema) refuses a build where either
 		// does not load, so a failure here is not something this command could
 		// act on.
 		fmt.Fprint(out, driftReport(
-			cmdutil.Must(graphqlschema.Schema()), judged.probed, documents,
+			cmdutil.Must(graphqlschema.Schema()), probed, result.Documents,
 			cmdutil.Must(graphqlschema.SourceInfo()), cfg.clock(),
 		))
 	}
 
-	if refused > 0 {
+	if len(result.Refusals) > 0 {
 		fmt.Fprintf(errOut, "\n%s the schema refuses %d of %d document(s) (%s)\n",
-			prefix, refused, len(documents), judged.source)
+			prefix, len(result.Refusals), len(result.Documents), result.Provenance)
 		return 1
 	}
-	fmt.Fprintf(out, "%s %d document(s) accepted (%s)\n", prefix, len(documents), judged.source)
+	fmt.Fprintf(out, "%s %d document(s) accepted (%s)\n", prefix, len(result.Documents), result.Provenance)
 	return 0
 }
 
-// judgement is what one run judges its documents by.
-type judgement struct {
-	// validate is the check each document is put through.
-	validate func(string) error
-	// source is the one line that says whose opinion refused a document: a
-	// schema pinned on a recorded day, one fetched today, or one from a file.
-	source string
-	// probed is the schema this run was handed, and nil when the pin judged.
-	// Drift is only a question when there are two schemas to compare.
-	probed *ast.Schema
-}
-
-// judge resolves the schema this run judges by.
-func judge(cfg auditRun) (judgement, error) {
+// resolveSchema decides what this run judges by, and returns nil when that is
+// the pin. A non-nil schema is one the caller handed the audit rather than one
+// it loaded itself, which is also exactly the condition drift can be reported
+// under: there are two schemas to compare only when somebody supplied the
+// second.
+func resolveSchema(cfg auditRun) (*ast.Schema, string, error) {
 	switch {
 	case cfg.live != "" && cfg.schemaPath != "":
-		return judgement{}, errors.New("-live and -schema both name a schema to judge by: pass one")
+		return nil, "", errors.New("-live and -schema both name a schema to judge by: pass one")
 	case cfg.live != "":
-		return judgeLive(cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), graphqlintrospect.FetchTimeout)
+		defer cancel()
+		return liveSchema(ctx, cfg.live, cfg.token, cfg.tokenWithheld)
 	case cfg.schemaPath != "":
-		return judgeFile(cfg.schemaPath)
+		sdl, err := os.ReadFile(cfg.schemaPath) //#nosec G304 -- the path is the operator's own -schema flag
+		if err != nil {
+			return nil, "", fmt.Errorf("read the schema to judge against: %w", err)
+		}
+		schema, err := graphqlschema.Load(sdl)
+		if err != nil {
+			return nil, "", fmt.Errorf("%s: %w", cfg.schemaPath, err)
+		}
+		return schema, fmt.Sprintf("%d types from %s, not the pinned schema", len(schema.Types), cfg.schemaPath), nil
 	default:
-		// The provenance record is embedded and its own gate
-		// (make check-graphql-schema) refuses a build where it does not decode,
-		// so a failure there is not something this command could act on.
-		return judgement{
-			validate: graphqlschema.ValidateDocument,
-			source:   cmdutil.Must(graphqlschema.SourceInfo()).String(),
-		}, nil
+		return nil, "", nil
 	}
 }
 
-// judgeLive fetches the schema an instance serves right now.
-func judgeLive(cfg auditRun) (judgement, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), graphqlintrospect.FetchTimeout)
-	defer cancel()
-
-	schema, provenance, err := liveSchema(ctx, cfg.live, cfg.token, cfg.tokenWithheld)
-	if err != nil {
-		return judgement{}, err
+// refusedDocuments indexes the refusals by position so the verbose listing can
+// name what passed without repeating what failed. The position is the key
+// because it is what tells two documents apart: an inline one has no name, and
+// a package holds several.
+func refusedDocuments(result graphqldocs.Result) map[token.Position]bool {
+	refused := make(map[token.Position]bool, len(result.Refusals))
+	for _, refusal := range result.Refusals {
+		refused[refusal.Document.Position] = true
 	}
-	return against(schema, provenance), nil
-}
-
-// judgeFile loads a schema from an SDL file the caller supplies.
-func judgeFile(path string) (judgement, error) {
-	sdl, err := os.ReadFile(path)
-	if err != nil {
-		return judgement{}, fmt.Errorf("read the schema to judge against: %w", err)
-	}
-	schema, err := graphqlschema.Load(sdl)
-	if err != nil {
-		return judgement{}, fmt.Errorf("%s: %w", path, err)
-	}
-	return against(schema, fmt.Sprintf("%d types from %s, not the pinned schema", len(schema.Types), path)), nil
-}
-
-// against builds the judgement for a schema that is not the pinned one.
-func against(schema *ast.Schema, provenance string) judgement {
-	return judgement{
-		validate: func(document string) error { return graphqlschema.ValidateDocumentAgainst(schema, document) },
-		source:   provenance,
-		probed:   schema,
-	}
+	return refused
 }
 
 // finding renders one refused document with every reason under it.
-func finding(root string, found document, err error) string {
+func finding(root string, refusal graphqldocs.Refusal) string {
 	var report strings.Builder
-	fmt.Fprintf(&report, "%s %s (%s)\n", found.pkg, found.label(), relative(found.position, root))
-
-	var refusal *graphqlschema.ValidationError
-	if !errors.As(err, &refusal) {
-		fmt.Fprintf(&report, "    %s\n", err)
-		return report.String()
-	}
+	fmt.Fprintf(&report, "%s %s (%s)\n",
+		refusal.Document.Package, refusal.Document.Label(), relative(refusal.Document.Position, root))
 	for _, reason := range refusal.Reasons {
 		fmt.Fprintf(&report, "    - %s\n", reason)
 	}
