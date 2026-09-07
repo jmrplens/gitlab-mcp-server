@@ -630,6 +630,7 @@ func individualSpecsByToolNameMap(groups []ActionSpecGroup) map[string][]tooluti
 // reports only non-allowlisted drift.
 func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 	t.Helper()
+	skipDeferredSnapshotParity(t)
 	sortToolSnapshots(want)
 	sortToolSnapshots(got)
 	if len(want) != len(got) {
@@ -644,41 +645,59 @@ func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnap
 		return
 	}
 	var diffs []string
-	observedSchemaGaps := make(map[string]struct{})
-	observedAnnotationGaps := make(map[string]struct{})
-	for index := range want {
-		name := want[index].Name
-		if name != got[index].Name {
-			diffs = append(diffs, fmt.Sprintf("%s projected name = %s", name, got[index].Name))
-			continue
-		}
-		if want[index].Description != got[index].Description {
-			diffs = append(diffs, "CHANGED "+name+" description")
-		}
-		if !schemaJSONEqual(t, name, want[index].InputSchema, got[index].InputSchema) {
-			if _, ok := knownIndividualProjectionSchemaGaps[name]; !ok {
-				diffs = append(diffs, schemaDiffMessage(t, name, want[index].InputSchema, got[index].InputSchema))
-			} else {
-				observedSchemaGaps[name] = struct{}{}
-			}
-		}
-		if !schemaJSONEqual(t, name, want[index].OutputSchema, got[index].OutputSchema) {
-			diffs = append(diffs, "CHANGED "+name+" outputSchema")
-		}
-		if !annotationsEqual(t, name, want[index].Annotations, got[index].Annotations) {
-			if _, ok := knownIndividualProjectionAnnotationGaps[name]; !ok {
-				diffs = append(diffs, "CHANGED "+name+" annotations")
-			} else {
-				observedAnnotationGaps[name] = struct{}{}
-			}
-		}
+	observed := projectionGapsObserved{schema: map[string]struct{}{}, annotation: map[string]struct{}{}}
+	// The two slices are the same length by the guard above; the loop bound
+	// repeats it so that the indexing is provably in range where it happens.
+	for index := 0; index < len(want) && index < len(got); index++ {
+		diffs = append(diffs, projectionDiffs(t, want[index], got[index], observed)...)
 	}
-	appendStaleProjectionGapDiffs(&diffs, "schema", knownIndividualProjectionSchemaGaps, observedSchemaGaps)
-	appendStaleProjectionGapDiffs(&diffs, "annotation", knownIndividualProjectionAnnotationGaps, observedAnnotationGaps)
+	appendStaleProjectionGapDiffs(&diffs, "schema", knownIndividualProjectionSchemaGaps, observed.schema)
+	appendStaleProjectionGapDiffs(&diffs, "annotation", knownIndividualProjectionAnnotationGaps, observed.annotation)
 	if len(diffs) > 0 {
 		sort.Strings(diffs)
 		t.Fatalf("generated individual snapshot parity drift against %s:\n%s", goldenPath, strings.Join(diffs, "\n"))
 	}
+}
+
+// projectionGapsObserved records which allowlisted projection gaps a
+// comparison actually met, so an allowlist entry nothing meets any more can be
+// reported as stale.
+type projectionGapsObserved struct {
+	schema     map[string]struct{}
+	annotation map[string]struct{}
+}
+
+// projectionDiffs compares one expected snapshot with its projection and
+// returns the drift, allowlisted gaps recorded in observed rather than
+// reported.
+func projectionDiffs(t *testing.T, wanted, projected toolSnapshot, observed projectionGapsObserved) []string {
+	t.Helper()
+	name := wanted.Name
+	if name != projected.Name {
+		return []string{fmt.Sprintf("%s projected name = %s", name, projected.Name)}
+	}
+	var diffs []string
+	if wanted.Description != projected.Description {
+		diffs = append(diffs, "CHANGED "+name+" description")
+	}
+	if !schemaJSONEqual(t, name, wanted.InputSchema, projected.InputSchema) {
+		if _, ok := knownIndividualProjectionSchemaGaps[name]; !ok {
+			diffs = append(diffs, schemaDiffMessage(t, name, wanted.InputSchema, projected.InputSchema))
+		} else {
+			observed.schema[name] = struct{}{}
+		}
+	}
+	if !schemaJSONEqual(t, name, wanted.OutputSchema, projected.OutputSchema) {
+		diffs = append(diffs, "CHANGED "+name+" outputSchema")
+	}
+	if !annotationsEqual(t, name, wanted.Annotations, projected.Annotations) {
+		if _, ok := knownIndividualProjectionAnnotationGaps[name]; !ok {
+			diffs = append(diffs, "CHANGED "+name+" annotations")
+		} else {
+			observed.annotation[name] = struct{}{}
+		}
+	}
+	return diffs
 }
 
 // schemaDiffMessage formats a stable JSON schema diff for snapshot failures.

@@ -60,6 +60,22 @@ permissions:
 # (site/.node-version) and pnpm (the packageManager field in site/package.json).
 env:
   COVERAGE_MIN: "90"
+  # Freshness gates compare a committed, generated artifact (README stats,
+  # llms*.txt, the tool snapshots, the token footprint, the testing reference,
+  # the request inventory, the manifests) with what the tree would generate
+  # now. In a stack every layer below the top would fail on drift the top
+  # overwrites, and refreshing each layer costs a suite run per layer for
+  # artifacts nobody keeps. So they are deferred there and run where the
+  # artifacts land: at the top of a stack, on a pull request to main that is
+  # not in a stack, and on every push to main. The unit suite reads the same
+  # answer through GITLAB_MCP_TEST_SNAPSHOT_PARITY.
+  #
+  # A pull request in a GitHub stack is tested as the whole stack up to it
+  # merged into the stack's base, and github.base_ref is that base (main) for
+  # every layer, so the layer is told from its position in the stack rather
+  # than from its own base branch, which stays in the event payload. A pull
+  # request outside a stack whose base is another branch is deferred as before.
+  FRESHNESS: ${{ github.event_name == 'pull_request' && ((github.event.pull_request.stack != null && github.event.pull_request.stack.position != github.event.pull_request.stack.size) || (github.event.pull_request.stack == null && github.event.pull_request.base.ref != 'main')) && 'deferred' || 'checked' }}
 
 jobs:
   # The unit suite with coverage, and nothing else: it is the longest single
@@ -77,6 +93,8 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       - name: Run tests with coverage
+        env:
+          GITLAB_MCP_TEST_SNAPSHOT_PARITY: ${{ env.FRESHNESS }}
         run: |
           go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...
           go tool cover -func=coverage.out
@@ -110,8 +128,10 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       - name: Check generated llms files
+        if: env.FRESHNESS == 'checked'
         run: make check-llms
       - name: Check LobeHub manifest
+        if: env.FRESHNESS == 'checked'
         run: make check-lhm-manifest
       - name: Check documented tool names exist
         run: make check-doc-tool-names
@@ -145,6 +165,7 @@ jobs:
       - name: Check plugin manifests (Agent Plugins + legacy Open Plugins)
         run: make check-openplugin
       - name: Check README repository statistics
+        if: env.FRESHNESS == 'checked'
         run: make check-stats
       - name: Check test-goroutine aborts
         run: make check-test-goroutines
@@ -155,8 +176,10 @@ jobs:
       - name: Check test-file naming convention
         run: make check-test-file-names
       - name: Check token footprint
+        if: env.FRESHNESS == 'checked'
         run: make check-footprint
       - name: Check site stats
+        if: env.FRESHNESS == 'checked'
         run: make check-site-stats
       - name: Check brand assets
         run: make brand-check
@@ -167,6 +190,7 @@ jobs:
       # the gate only holds on the machine that committed the assets. It
       # stays maintainer tooling, run with gen-icon-webp after icon edits.
       - name: Check action catalog manifest
+        if: env.FRESHNESS == 'checked'
         run: make check-action-catalog-manifest
       # Everything in the testing reference that the source tree determines:
       # test counts, naming breakdown, per-layer tables, and which packages
@@ -179,6 +203,7 @@ jobs:
       # coverage pass here at all, so this costs seconds on a job SonarCloud
       # already waits on. `make gen-testing-docs` refreshes the numbers.
       - name: Check the generated testing reference
+        if: env.FRESHNESS == 'checked'
         run: make check-testing-docs
 
   sonarcloud:
