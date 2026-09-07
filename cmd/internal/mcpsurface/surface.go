@@ -99,7 +99,10 @@ func Session(setup func(*mcp.Server)) (session *mcp.ClientSession, cleanup func(
 // It delegates to [dynamiccatalog.Build] with a configuration that narrows
 // nothing, so the generators describe the catalog the server assembles rather
 // than a second assembly of the same parts: an unconfigured deployment is what
-// a generated artifact must describe, and there is one assembler for it.
+// a generated artifact must describe, and this is the function cmd/server
+// calls to assemble it. Several audit commands and the e2e suite still put
+// their own copy together; each one that moves onto this package is one fewer
+// surface that can drift from the served one without a test noticing.
 //
 // Assembly reads only the ActionSpecs compiled into this binary, so a failure
 // means the committed catalog is malformed, which no generator run can fix and
