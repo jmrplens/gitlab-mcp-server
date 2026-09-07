@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
@@ -20,18 +21,6 @@ const (
 	defaultEndpoint = "https://gitlab.com/api/graphql"
 	// defaultDir is where the package that embeds the schema lives.
 	defaultDir = "internal/graphqlschema"
-	// unknownVersion is recorded when the instance would not say what it runs,
-	// which is what GitLab answers an anonymous caller.
-	unknownVersion = "unknown"
-	// fetchTimeout bounds the whole generation. The introspection payload is
-	// tens of megabytes of JSON and gitlab.com takes seconds to produce it.
-	fetchTimeout = 3 * time.Minute
-	// minimumTypes is the floor a pin of gitlab.com has to clear. It answered
-	// with 4331 types on the day of the pin and grows release over release, so
-	// a figure well under that catches a truncated introspection and a pin from
-	// a Community Edition instance, which carries none of the Ultimate types
-	// the vulnerability and security finding documents select.
-	minimumTypes = 4000
 	// maxPinAge is how long a pin may stand before --check refuses it. GitLab
 	// ships monthly and narrows fields in place, so half a year is roughly six
 	// releases of drift: long enough not to ambush an unrelated change often,
@@ -52,6 +41,12 @@ type genRun struct {
 	now func() time.Time
 }
 
+// target is the instance this run asks, in the shape the introspection package
+// takes.
+func (c genRun) target() graphqlintrospect.Target {
+	return graphqlintrospect.Target{Endpoint: c.endpoint, Token: c.token, Client: c.client}
+}
+
 // clock is now with a default, so a run that only checks the committed pair
 // does not have to supply one to ask how old it is.
 func (c genRun) clock() time.Time {
@@ -67,12 +62,22 @@ func main() {
 	check := flag.Bool("check", false, "load the committed schema instead of fetching one, and fail when it does not parse")
 	flag.Parse()
 
+	// -url takes an arbitrary endpoint, so the credential is resolved against
+	// the instance GITLAB_URL names rather than followed wherever the flag
+	// points. Pinning gitlab.com with a version recorded therefore asks for
+	// GITLAB_URL=https://gitlab.com beside the token, which is the honest
+	// requirement: the version comes from a credential, and a credential is
+	// for one instance.
+	credential, withheld := graphqlintrospect.CredentialFor(*endpoint, os.Getenv("GITLAB_URL"), os.Getenv("GITLAB_TOKEN"))
+	if withheld != "" {
+		fmt.Fprintln(os.Stderr, prefix+" note:", withheld)
+	}
 	os.Exit(run(genRun{
 		endpoint: *endpoint,
 		dir:      *dir,
 		check:    *check,
-		token:    os.Getenv("GITLAB_TOKEN"),
-		client:   &http.Client{Timeout: fetchTimeout},
+		token:    credential,
+		client:   &http.Client{Timeout: graphqlintrospect.FetchTimeout},
 		now:      time.Now,
 	}, os.Stdout, os.Stderr))
 }
@@ -140,16 +145,16 @@ func pinProblems(source graphqlschema.Source, now time.Time) []string {
 			source.Instance, defaultEndpoint,
 		))
 	}
-	if source.Types < minimumTypes {
+	if graphqlintrospect.TruncatedAnswer(source.Types) {
 		problems = append(problems, fmt.Sprintf(
 			"the pin carries %d types and gitlab.com answers with more than %d: the introspection was truncated or the instance was a narrower edition",
-			source.Types, minimumTypes,
+			source.Types, graphqlintrospect.MinimumTypes,
 		))
 	}
 	// A blank version is refused alongside the recorded "unknown": the
 	// decoder accepts any string here, so a record with the field emptied by
 	// hand would otherwise pass the one check that asks about it.
-	if source.GitLabVersion == "" || source.GitLabVersion == unknownVersion {
+	if source.GitLabVersion == "" || source.GitLabVersion == graphqlintrospect.UnknownVersion {
 		problems = append(problems,
 			"the pin records no GitLab version, which is what an introspection without GITLAB_TOKEN produces: nothing can then say which release the gate speaks for")
 	}
@@ -188,18 +193,33 @@ func pinAge(source graphqlschema.Source, now time.Time) (time.Duration, error) {
 
 // generate is the network half: introspect, convert, and write.
 func generate(cfg genRun, out, errOut io.Writer) int {
-	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), graphqlintrospect.FetchTimeout)
 	defer cancel()
 
 	fmt.Fprintf(out, prefix+" introspecting %s\n", cfg.endpoint)
-	schema, err := introspect(ctx, cfg)
+	schema, err := graphqlintrospect.Introspect(ctx, cfg.target())
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)
 		return 1
 	}
 
-	version, revision := instanceVersion(ctx, cfg)
-	sdl := renderSDL(schema)
+	// An answer too short to be a GitLab schema does not replace one that was
+	// whole. The floor alone cannot tell a truncation from a narrower edition,
+	// which is why a probe of such an instance is still allowed to write into
+	// an empty directory for `-schema` to read; what it must not do is
+	// overwrite a pin that already cleared the floor and exit reporting
+	// success. `--check` would refuse the result, but only after the good pin
+	// was already gone from the working tree.
+	if graphqlintrospect.TruncatedAnswer(len(schema.Types)) {
+		if _, existing, readErr := readArtifacts(cfg.dir); readErr == nil && !graphqlintrospect.TruncatedAnswer(existing.Types) {
+			fmt.Fprintf(errOut, prefix+" %s answered with %d types and the pin in %s carries %d: refusing to replace a whole schema with a truncated answer\n",
+				cfg.endpoint, len(schema.Types), cfg.dir, existing.Types)
+			return 1
+		}
+	}
+
+	version, revision := graphqlintrospect.InstanceVersion(ctx, cfg.target())
+	sdl := graphqlintrospect.RenderSDL(schema)
 
 	// Loading what is about to be committed is the only check that the
 	// conversion produced SDL at all. A renderer that dropped an implements
