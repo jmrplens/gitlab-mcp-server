@@ -126,3 +126,27 @@ func TestJSONTags_ATagThatIsNotAQuotedString_PublishesNothing(t *testing.T) {
 		t.Errorf("jsonTags() = %v, want only the field whose tag is a quoted string", tags)
 	}
 }
+
+// TestJSONTags_FollowsEncodingJSON verifies that the names a struct is said to
+// publish are the names encoding/json would write: an unexported field is not
+// marshaled however it is tagged, a tag naming no key keeps the Go field name,
+// "-" publishes nothing, and an embed tagged with a name is keyed by that name.
+// The check exists because a name this reads and GitLab never receives is a
+// phantom finding, and a name it drops that GitLab does receive is a missed one.
+func TestJSONTags_FollowsEncodingJSON(t *testing.T) {
+	quoted := func(tag string) *ast.BasicLit {
+		return &ast.BasicLit{Kind: token.STRING, Value: "`" + tag + "`"}
+	}
+	structType := &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{
+		{Names: []*ast.Ident{{Name: "hidden"}}, Type: &ast.Ident{Name: "string"}, Tag: quoted(`json:"hidden"`)},
+		{Names: []*ast.Ident{{Name: "Kept"}}, Type: &ast.Ident{Name: "string"}, Tag: quoted(`json:",omitempty"`)},
+		{Names: []*ast.Ident{{Name: "Renamed"}}, Type: &ast.Ident{Name: "string"}, Tag: quoted(`json:"renamed"`)},
+		{Names: []*ast.Ident{{Name: "Dropped"}}, Type: &ast.Ident{Name: "string"}, Tag: quoted(`json:"-"`)},
+		{Type: &ast.Ident{Name: "Embedded"}, Tag: quoted(`json:"embedded"`)},
+		{Type: &ast.Ident{Name: "Promoted"}, Tag: quoted(`json:",omitempty"`)},
+	}}}
+
+	if tags := jsonTags(structType); strings.Join(tags, ",") != "Kept,embedded,renamed" {
+		t.Errorf("jsonTags() = %v, want Kept,embedded,renamed", tags)
+	}
+}

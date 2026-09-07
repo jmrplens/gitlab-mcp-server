@@ -110,12 +110,12 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 			check.Join.Exact++
 		case matchLoose:
 			check.Join.Loose++
-			record := segments[literal]
-			if record == nil {
-				record = &UntemplatedSegment{Segment: literal, Example: request.Path}
-				segments[literal] = record
+			segment := segments[literal]
+			if segment == nil {
+				segment = &UntemplatedSegment{Segment: literal, Example: request.Path}
+				segments[literal] = segment
 			}
-			record.Count++
+			segment.Count++
 		default:
 			check.Join.Unmatched++
 			continue

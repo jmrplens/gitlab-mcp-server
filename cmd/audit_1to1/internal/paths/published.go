@@ -184,11 +184,14 @@ func namedType(expr ast.Expr) string {
 	}
 }
 
-// jsonTags returns the json names a struct publishes, sorted. A field tagged
-// "-" publishes nothing, and an untagged one is left out rather than guessed
-// at: this repository tags every field it means a client to see, so an untagged
-// one is an embed or an oversight, and neither should become a finding about
-// GitLab.
+// jsonTags returns the json names a struct publishes, sorted, following the
+// rules encoding/json applies to a tag: a field tagged "-" publishes nothing,
+// an unexported field publishes nothing whatever its tag says, and a tag that
+// names no key (`json:",omitempty"`) publishes the Go field name. An untagged
+// field is left out rather than guessed at: this repository tags every field
+// it means a client to see, so an untagged one is an embed or an oversight,
+// and neither should become a finding about GitLab. An embed tagged with a
+// name is published under that name, as encoding/json does.
 func jsonTags(structType *ast.StructType) []string {
 	var names []string
 	for _, field := range structType.Fields.List {
@@ -200,10 +203,25 @@ func jsonTags(structType *ast.StructType) []string {
 			continue
 		}
 		name, _, _ := strings.Cut(reflect.StructTag(raw).Get("json"), ",")
-		if name == "" || name == "-" {
+		if name == "-" {
 			continue
 		}
-		names = append(names, name)
+		if len(field.Names) == 0 {
+			if name != "" {
+				names = append(names, name)
+			}
+			continue
+		}
+		for _, ident := range field.Names {
+			if !ident.IsExported() {
+				continue
+			}
+			key := name
+			if key == "" {
+				key = ident.Name
+			}
+			names = append(names, key)
+		}
 	}
 	sort.Strings(names)
 	return names
