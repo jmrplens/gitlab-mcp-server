@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
 // fixtureDir is the directory the in-memory fixture packages pretend to live
@@ -344,5 +346,189 @@ func TestRelative_PositionsUnderTheRoot_AreTrimmed(t *testing.T) {
 				t.Errorf("relative() = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestCollectFiles_StandaloneDocuments_AreFoundAndThePinIsNot verifies the half
+// of the inventory that does not go through the type checker.
+//
+// A go:embed variable is not a constant, so a document moved into its own file
+// folds to nothing and would leave the inventory in silence: the audit would
+// report one fewer document and still exit 0. Reading the files directly closes
+// that. The pinned schema is the one .graphql file that must be skipped, since
+// it is an SDL and not a document anybody sends.
+func TestCollectFiles_StandaloneDocuments_AreFoundAndThePinIsNot(t *testing.T) {
+	root := t.TempDir()
+	tree := filepath.Join(root, "internal", "tools", "customemoji")
+	if err := os.MkdirAll(tree, 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	write := func(dir, name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatalf("prepare the fixture: %v", err)
+		}
+	}
+	write(tree, "create.graphql", "mutation($p: ID!) {\n  createCustomEmoji(input: {groupPath: $p}) { errors }\n}\n")
+	write(tree, "helper.go", "package customemoji\n")
+	write(tree, "notes.txt", "mutation { nothing }\n")
+	write(filepath.Join(root, "internal"), graphqlschema.SDLFileName, "type Query {\n  ok: Boolean\n}\n")
+
+	found, err := collectFiles(root, []string{"./internal/..."})
+	if err != nil {
+		t.Fatalf("collectFiles() error = %v, want nil", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("collectFiles() found %d document(s), want 1: %+v", len(found), found)
+	}
+	if found[0].name != "create.graphql" {
+		t.Errorf("collectFiles() named the document %q, want %q", found[0].name, "create.graphql")
+	}
+	if !strings.Contains(found[0].text, "createCustomEmoji") {
+		t.Errorf("collectFiles() read %q, want the document's text", found[0].text)
+	}
+	if found[0].position.Filename == "" || found[0].position.Line != 1 {
+		t.Errorf("collectFiles() positioned the document at %+v, want its file at line 1", found[0].position)
+	}
+}
+
+// TestCollectFiles_ATreeThatIsNotThere_IsNotAnError verifies that a pattern
+// naming a directory which does not exist is left to the package loader, which
+// has already answered it. Complaining twice about one mistyped pattern helps
+// nobody.
+func TestCollectFiles_ATreeThatIsNotThere_IsNotAnError(t *testing.T) {
+	found, err := collectFiles(t.TempDir(), []string{"./nowhere/..."})
+	if err != nil {
+		t.Fatalf("collectFiles() error = %v, want nil", err)
+	}
+	if len(found) != 0 {
+		t.Errorf("collectFiles() found %+v, want nothing", found)
+	}
+}
+
+// TestCollectFiles_ARootThatIsNotADirectory_Fails verifies that the two ways a
+// walk root can be unusable are told apart. A root that is simply absent is a
+// question about the patterns, which the package loader answers; anything else
+// is a tree the audit was asked to read and could not, and skipping that would
+// be the silence this pass exists to remove.
+func TestCollectFiles_ARootThatIsNotADirectory_Fails(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "internal"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	found, err := collectFiles(root, []string{"./internal/..."})
+
+	if err == nil {
+		t.Fatal("collectFiles() error = nil, want the unusable root")
+	}
+	if found != nil {
+		t.Errorf("collectFiles() returned %+v, want nothing on failure", found)
+	}
+	if !strings.Contains(err.Error(), "open ") {
+		t.Errorf("collectFiles() error = %q, want it to name the root it could not open", err)
+	}
+}
+
+// TestCollectFiles_AFileItCannotRead_Fails verifies that a document the audit
+// could not read stops the run. Skipping it would be the exact silence the
+// standalone-file pass was added to remove.
+func TestCollectFiles_AFileItCannotRead_Fails(t *testing.T) {
+	root := t.TempDir()
+	tree := filepath.Join(root, "internal")
+	if err := os.MkdirAll(tree, 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	// A dangling symlink is the portable way to make the read fail: WalkDir
+	// reports it as an ordinary entry without following it, and the read then
+	// finds nothing there. A mode-0 file would not do, since the suite runs as
+	// root in CI and root reads it anyway.
+	if err := os.Symlink(filepath.Join(root, "gone"), filepath.Join(tree, "dangling.graphql")); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	_, err := collectFiles(root, []string{"./internal/..."})
+
+	if err == nil {
+		t.Fatal("collectFiles() error = nil, want the read failure")
+	}
+	if !strings.Contains(err.Error(), "read ") {
+		t.Errorf("collectFiles() error = %q, want it to name the file it could not read", err)
+	}
+}
+
+// TestWalkRoots_TurnsLoadPatternsIntoDirectories verifies that both halves of
+// the inventory search the same tree, since a mismatch would leave standalone
+// documents unjudged wherever the two disagreed.
+func TestWalkRoots_TurnsLoadPatternsIntoDirectories(t *testing.T) {
+	cases := []struct {
+		name    string
+		pattern string
+		want    string
+	}{
+		{name: "a recursive pattern", pattern: "./internal/...", want: filepath.Join("/repo", "internal")},
+		{name: "one package", pattern: "./internal/tools", want: filepath.Join("/repo", "internal", "tools")},
+		// The expectation goes through filepath.Join like its neighbors, because
+		// walkRoots joins the directory with the pattern and Windows spells the
+		// result "\repo".
+		{name: "the whole module", pattern: "./...", want: filepath.Join("/repo")},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			roots := walkRoots("/repo", []string{testCase.pattern})
+
+			if len(roots) != 1 || roots[0] != testCase.want {
+				t.Errorf("walkRoots() = %v, want [%s]", roots, testCase.want)
+			}
+		})
+	}
+}
+
+// TestCollect_AStandaloneDocumentItCannotRead_StopsBeforeTypeChecking verifies
+// that a file the audit cannot read ends the run, and ends it before the
+// expensive half. Skipping it would be the silence this pass exists to remove.
+func TestCollect_AStandaloneDocumentItCannotRead_StopsBeforeTypeChecking(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Symlink(filepath.Join(root, "gone"), filepath.Join(root, "dangling.graphql")); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	found, err := collect(root, []string{"./..."}, nil)
+
+	if err == nil {
+		t.Fatal("collect() error = nil, want the read failure")
+	}
+	if found != nil {
+		t.Errorf("collect() returned %+v, want nothing on failure", found)
+	}
+	if !strings.Contains(err.Error(), "read ") {
+		t.Errorf("collect() error = %q, want it to name the file it could not read", err)
+	}
+}
+
+// TestSortDocuments_OrdersByPackageThenFileThenPosition verifies the order
+// findings are reported in.
+//
+// The filename is part of the key because a package holds documents from
+// several files, and for a standalone .graphql document every offset is the
+// same: without it, two such documents in one package would be ordered by
+// nothing at all and a re-run could report them either way round.
+func TestSortDocuments_OrdersByPackageThenFileThenPosition(t *testing.T) {
+	documents := []document{
+		{pkg: "b/pkg", name: "second package", position: token.Position{Filename: "b.go"}},
+		{pkg: "a/pkg", name: "later in the same file", position: token.Position{Filename: "a.go", Offset: 90}},
+		{pkg: "a/pkg", name: "second file", position: token.Position{Filename: "z.graphql"}},
+		{pkg: "a/pkg", name: "first file", position: token.Position{Filename: "a.go", Offset: 10}},
+	}
+
+	sortDocuments(documents)
+
+	got := make([]string, 0, len(documents))
+	for _, found := range documents {
+		got = append(got, found.name)
+	}
+	want := []string{"first file", "later in the same file", "second file", "second package"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("sortDocuments() = %v, want %v", got, want)
 	}
 }

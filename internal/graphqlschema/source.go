@@ -1,7 +1,7 @@
 package graphqlschema
 
 import (
-	_ "embed"
+	_ "embed" // registers the go:embed directive that carries the pin's provenance
 	"encoding/json"
 	"fmt"
 )

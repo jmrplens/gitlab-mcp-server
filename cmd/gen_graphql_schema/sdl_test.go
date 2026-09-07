@@ -64,7 +64,7 @@ func TestRenderSDL_EveryKind_ProducesSchemaGqlparserLoads(t *testing.T) {
 
 	sdl := renderSDL(schema)
 
-	if _, err := graphqlschema.Load(compress(sdl)); err != nil {
+	if _, err := graphqlschema.Load([]byte(sdl)); err != nil {
 		t.Fatalf("the rendered SDL does not load:\n%v\n\n%s", err, sdl)
 	}
 	cases := []struct {
@@ -112,7 +112,7 @@ func TestRenderSDL_InstanceWithoutMutations_EmitsOnlyTheRootsItHas(t *testing.T)
 	if !strings.Contains(sdl, "schema {\n  query: Query\n}") {
 		t.Errorf("the schema block names a root the instance did not:\n%s", sdl)
 	}
-	if _, err := graphqlschema.Load(compress(sdl)); err != nil {
+	if _, err := graphqlschema.Load([]byte(sdl)); err != nil {
 		t.Fatalf("the rendered SDL does not load: %v", err)
 	}
 }

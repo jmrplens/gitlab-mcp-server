@@ -251,16 +251,31 @@ func TestReasonLines_NonRefusalError_IsStillReported(t *testing.T) {
 }
 
 // TestDocumentLabel_NamesTheOperation verifies the label a failure is filed
-// under, including the two shapes that carry no usable first line.
+// under.
+//
+// The root field is part of it because the operation signature alone is not
+// unique: only 30 of this repository's 38 documents have a distinct first line,
+// and "mutation($id: VulnerabilityID!) {" labels three on its own, so a re-pin
+// that refuses several at once could not be triaged from the output.
 func TestDocumentLabel_NamesTheOperation(t *testing.T) {
 	cases := []struct {
 		name     string
 		document string
 		want     string
 	}{
-		{name: "a leading newline is skipped", document: "\n\nquery($id: ID!) {\n  x\n}", want: "query($id: ID!) {"},
+		{name: "a leading newline is skipped", document: "\n\nquery($id: ID!) {\n  x\n}", want: "query($id: ID!) { x"},
+		{
+			name:     "the root field tells two identical signatures apart",
+			document: "mutation($id: VulnerabilityID!) {\n  vulnerabilityDismiss(input: {id: $id}) {\n    errors\n  }\n}",
+			want:     "mutation($id: VulnerabilityID!) { vulnerabilityDismiss(input: {id: $id}) {",
+		},
 		{name: "nothing at all", document: "   \n  \n", want: "(empty document)"},
-		{name: "a signature longer than the limit", document: strings.Repeat("q", labelLimit+10), want: strings.Repeat("q", labelLimit) + "..."},
+		{name: "one line only", document: "query { currentUser { id } }", want: "query { currentUser { id } }"},
+		{
+			name:     "a signature longer than the limit",
+			document: strings.Repeat("q", labelLimit+10),
+			want:     strings.Repeat("q", labelLimit) + "...",
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -312,4 +327,38 @@ func TestNewTestClient_GraphQLThroughTheClient_IsValidated(t *testing.T) {
 			t.Fatalf("GraphQL.Do() error = %v", err)
 		}
 	})
+}
+
+// TestVerdictProvenance_ProvenanceUnavailable_StillNamesThePin verifies the
+// fallback line. The record is embedded and gated, so this branch is not
+// reachable from a real build, and it still has to say who judged the document:
+// a failure that names nothing leaves the reader unable to tell a wrong
+// document from a stale pin, which is the whole reason the line exists.
+func TestVerdictProvenance_ProvenanceUnavailable_StillNamesThePin(t *testing.T) {
+	original := sourceInfo
+	sourceInfo = func() (graphqlschema.Source, error) {
+		return graphqlschema.Source{}, errors.New("the record is corrupt")
+	}
+	t.Cleanup(func() { sourceInfo = original })
+
+	got := verdictProvenance()
+
+	if !strings.Contains(got, "pinned GitLab schema") {
+		t.Errorf("verdictProvenance() = %q, want it to name the pinned schema", got)
+	}
+}
+
+// TestVerdictProvenance_TheRealRecord_CarriesTheInstanceAndTheDay verifies the
+// line a developer actually meets, which has to carry enough for them to judge
+// whether their document is wrong or the pin has aged.
+func TestVerdictProvenance_TheRealRecord_CarriesTheInstanceAndTheDay(t *testing.T) {
+	got := verdictProvenance()
+
+	for _, want := range []string{"gitlab.com", "retrieved", "make gen-graphql-schema"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("verdictProvenance() = %q, want it to carry %q", got, want)
+			}
+		})
+	}
 }

@@ -16,12 +16,27 @@ import (
 // not. Descriptions and deprecation reasons are left out because validation
 // never consults them and they would triple the file.
 //
+// None of that shape currently decides anything, and the comment would be
+// misleading without saying so: every GitLab instance answers any
+// introspection-shaped operation with its own canned full __schema payload and
+// ignores the selection set entirely. Asking gitlab.com for
+// `{ metadata { version } __type(name: "Vulnerability") { name } }` returns the
+// whole schema, 4331 types, carrying description, isDeprecated and
+// deprecationReason keys nothing here requested; gitlab.gnome.org,
+// invent.kde.org and salsa.debian.org all behave the same way. The query is
+// written correctly anyway, because the day an instance starts honoring it is
+// not a day anybody will be watching this file.
+//
 // includeDeprecated is asked for on fields and enum values because a
 // deprecated field is still a field GitLab serves, and our documents select
 // several. It is deliberately not asked for on arguments or input fields:
 // deprecating those arrived later in graphql-ruby, and a self-managed instance
 // that does not accept the argument would refuse the whole introspection
-// rather than answer without it.
+// rather than answer without it. The risk points both ways and only one
+// direction is obvious. An old instance refusing an unknown argument loses the
+// whole pin loudly; the specification defaulting args(includeDeprecated:) to
+// false loses the deprecated arguments silently, and the gate would then refuse
+// documents GitLab still accepts.
 //
 // The ofType chain is nine deep, which covers every wrapper GitLab nests
 // (a non-null list of non-null lists reaches four) with room to spare.

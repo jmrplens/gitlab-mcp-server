@@ -33,7 +33,7 @@ var objectLiteral = regexp.MustCompile(`^\{\s*[A-Za-z_][A-Za-z0-9_]*\s*:\s*["']`
 // shared fragment: the fragment is spliced into the middle of a selection set,
 // never in front of the operation.
 func looksLikeDocument(value string) bool {
-	trimmed := strings.TrimSpace(value)
+	trimmed := skipComments(value)
 	if !strings.Contains(trimmed, "{") || !strings.Contains(trimmed, "}") {
 		return false
 	}
@@ -51,6 +51,26 @@ func looksLikeDocument(value string) bool {
 		}
 	}
 	return false
+}
+
+// skipComments trims leading whitespace and any GraphQL comment lines in front
+// of a document.
+//
+// A "#" comment is legal at the top of a document and gqlparser accepts one, so
+// without this a maintainer who writes a perfectly ordinary explanatory line
+// above an operation drops that document out of the inventory. The audit would
+// then report one fewer document and exit 0, which is the silence this whole
+// command exists to remove.
+func skipComments(value string) string {
+	trimmed := strings.TrimSpace(value)
+	for strings.HasPrefix(trimmed, "#") {
+		_, rest, found := strings.Cut(trimmed, "\n")
+		if !found {
+			return ""
+		}
+		trimmed = strings.TrimSpace(rest)
+	}
+	return trimmed
 }
 
 // opensSelectionSet reports whether what follows an opening brace is a GraphQL

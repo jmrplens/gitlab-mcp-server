@@ -100,6 +100,12 @@ func AssertQueryParam(t *testing.T, r *http.Request, key, expected string) {
 // refusal is reported with [testing.TB.Errorf]; [AllowInvalidGraphQL] is the
 // opt-out for a test that sends a malformed document on purpose.
 //
+// That validation is the reason to build a test's client here rather than
+// wiring [httptest.NewServer] to gitlabclient.NewClient by hand. A handful of
+// tests still do the latter, none of them sending GraphQL today, and any
+// GraphQL written against one of those seams would be judged by nobody, which
+// is the state this helper exists to end.
+//
 // The returned client is safe for concurrent use; the httptest.Server that
 // backs it is goroutine-safe by construction.
 func NewTestClient(tb testing.TB, handler http.Handler) *gitlabclient.Client {

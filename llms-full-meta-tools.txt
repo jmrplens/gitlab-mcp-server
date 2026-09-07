@@ -1963,7 +1963,7 @@ Errors: 404 not found (hint: check full_path or id), 403 forbidden (hint: requir
 
 Param conventions: * = required. id format = GID (gid://gitlab/Ci::Catalog::Resource/123). full_path = namespace/project (e.g. mygroup/components/docker-build).
 
-- list: search, scope (ALL/NAMESPACED), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC), first (max 100), after (cursor)
+- list: search, scope (ALL/NAMESPACES), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC/CREATED_ASC/CREATED_DESC/USAGE_COUNT_ASC/USAGE_COUNT_DESC), first (max 100), after (cursor)
 - get: exactly one of id* or full_path* (mutually exclusive)
 
 See also: gitlab_template (built-in templates and CI lint), gitlab_pipeline (run pipelines using catalog components), gitlab_project (publisher project metadata).
@@ -13167,7 +13167,7 @@ Action guidance:
 List pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
 Returns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Errors: 404 not found, 403 forbidden, each with actionable hints.
 
-- list: project_path*, pipeline_iid*, severity, confidence, scanner, report_type (arrays), first, after
+- list: project_path*, pipeline_iid*, severity, scanner, report_type, state (arrays), sort (severity_desc/severity_asc), first, after
 
 See also: gitlab_vulnerability, gitlab_pipeline
 
