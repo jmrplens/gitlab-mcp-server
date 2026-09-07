@@ -16,7 +16,13 @@ import (
 // shape every recorder test needs and none of them should repeat.
 func newRecorderIn(t *testing.T) *recorder {
 	t.Helper()
-	return &recorder{dir: t.TempDir(), seen: map[string]bool{}}
+	rec := &recorder{dir: t.TempDir(), seen: map[string]bool{}}
+	// The shard has to be closed before the directory is removed. On Linux it
+	// makes no difference; on Windows a directory holding an open file cannot
+	// be removed, and t.TempDir reports that as a failure of the test whose
+	// assertions have all already passed.
+	t.Cleanup(rec.release)
+	return rec
 }
 
 // shardLines reads back every line a recorder wrote.
@@ -246,6 +252,40 @@ func TestDescribeRequest_UnrecordableGraphQL_IsSkipped(t *testing.T) {
 	}
 }
 
+// TestReleaseRecorders_AnOpenShard_IsClosedAndForgotten verifies the release
+// the tests depend on, and that a real run does not need.
+//
+// A shard belongs to one test process and the operating system closes it at
+// exit, so nothing in production calls this. Windows is why it exists: a
+// directory holding an open file cannot be removed there, so a test recording
+// into t.TempDir() fails in cleanup after every one of its own assertions has
+// passed, which is a failure nobody reading the test can explain. Two CI runs
+// went red for exactly that.
+func TestReleaseRecorders_AnOpenShard_IsClosedAndForgotten(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(InventoryDirEnv, dir)
+	t.Cleanup(releaseRecorders)
+
+	rec := inventoryRecorder()
+	if rec == nil {
+		t.Fatal("inventoryRecorder() = nil with a directory set")
+	}
+	rec.observe(&recordingReporter{name: t.Name()}, requestOrigin{pkg: "internal/tools/issues", test: t.Name()},
+		restRequest(t, "/api/v4/projects/1/issues"))
+	if rec.file == nil {
+		t.Fatal("the recorder wrote a line without opening a shard")
+	}
+
+	releaseRecorders()
+
+	if rec.file != nil {
+		t.Error("releaseRecorders() left the shard open, so the directory holding it cannot be removed on Windows")
+	}
+	if again := inventoryRecorder(); again == rec {
+		t.Error("releaseRecorders() left the released recorder in the registry, so a later run would write through a closed file")
+	}
+}
+
 // TestRecorderObserve_RepeatedRequest_IsWrittenOnce verifies the dedup that
 // makes recording affordable: a path two hundred assertions reach is one line.
 func TestRecorderObserve_RepeatedRequest_IsWrittenOnce(t *testing.T) {
@@ -369,6 +409,7 @@ func TestInventoryRecorder_Environment_DecidesWhetherRecordingHappens(t *testing
 
 	dir := t.TempDir()
 	t.Setenv(InventoryDirEnv, dir)
+	t.Cleanup(releaseRecorders)
 	first := inventoryRecorder()
 	if first == nil {
 		t.Fatal("inventoryRecorder() = nil with a directory set")
@@ -414,6 +455,10 @@ func TestRecordingHandler_RecordingOff_ReturnsTheHandlerUnchanged(t *testing.T) 
 func TestNewTestClient_Recording_WritesTheRequestTheClientMade(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(InventoryDirEnv, dir)
+	// The recorder this creates lives in the package-wide registry, so the test
+	// cannot close its shard directly; releasing the registry is what lets the
+	// temporary directory be removed on Windows.
+	t.Cleanup(releaseRecorders)
 	restoreRecorderPackage(t, "internal/testutil/not-this-package")
 
 	client := NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -455,6 +500,7 @@ func restoreRecorderPackage(t *testing.T, name string) {
 func TestRecordingHandler_ThisPackagesOwnClient_RecordsNothing(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(InventoryDirEnv, dir)
+	t.Cleanup(releaseRecorders)
 
 	client := NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		RespondJSON(w, http.StatusOK, `{"id":1}`)
