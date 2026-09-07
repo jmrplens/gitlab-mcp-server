@@ -9,12 +9,14 @@
 package subscriptions
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -1643,4 +1645,506 @@ func TestClearRateLimit_AfterPauseExpires_Resets(t *testing.T) {
 			t.Errorf("back-off = %v, want it reset to roughly the base %v", got, rateLimitBackoff)
 		}
 	})
+}
+
+// TestLease_ReportsTheIntervalTheManagerIsRunningWith covers the accessor a
+// caller renewing by some other means has to read.
+//
+// It is not a getter for its own sake. cmd/server holds a watch open while a
+// subscriptions/listen stream is open, and it renews at a third of this value;
+// guessing the interval instead would either waste work on every stream or miss
+// the deadline the first time the option changed.
+func TestLease_ReportsTheIntervalTheManagerIsRunningWith(t *testing.T) {
+	tests := []struct {
+		name string
+		set  time.Duration
+		want time.Duration
+	}{
+		{name: "a configured lease", set: 4 * time.Minute, want: 4 * time.Minute},
+		{name: "the default", want: DefaultLease},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _, _ := newTestManager(t, Options{Lease: tt.set})
+
+			if got := m.Lease(); got != tt.want {
+				t.Errorf("Lease() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDemotedCount_CountsTheWatchesThatSlowedDown covers the number that says
+// whether the lease is doing its job.
+//
+// Zero while subscribers are present and non-zero once they go quiet is the
+// whole signal: a count stuck at the total means whatever renews watches on
+// this transport is not reaching them, which is a failure that otherwise shows
+// up only as subscriptions that answer late.
+func TestDemotedCount_CountsTheWatchesThatSlowedDown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		m, _, _ := newTestManager(t, leaseOptions(time.Minute, time.Hour))
+
+		if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
+			t.Fatalf("Subscribe: %v", err)
+		}
+		if got := m.DemotedCount(); got != 0 {
+			t.Errorf("DemotedCount() = %d on a fresh watch, want 0", got)
+		}
+
+		time.Sleep(3 * time.Minute)
+		synctest.Wait()
+		if got := m.DemotedCount(); got != 1 {
+			t.Errorf("DemotedCount() = %d after the lease expired, want 1", got)
+		}
+
+		if revived := m.RenewAll(subA); revived != 1 {
+			t.Errorf("RenewAll revived %d watches, want 1", revived)
+		}
+		if got := m.DemotedCount(); got != 0 {
+			t.Errorf("DemotedCount() = %d after a renewal, want 0", got)
+		}
+	})
+}
+
+// The shared watcher ceiling.
+//
+// MaxWatchers bounds one manager, which in HTTP mode is one credential, and a
+// credential is one API call to mint. The gate is what bounds the process, and
+// the tests below hold it to the three things that make it worth having: it
+// refuses rather than evicting somebody else's watch, it reserves nothing for
+// anyone, and every path that removes a watcher gives its slot back.
+
+// gatedURIs are the resources these tests watch. Distinct URIs rather than one,
+// because a second subscription to a watched URI joins instead of taking a slot,
+// which is the one admission the gate must never refuse.
+var gatedURIs = []string{
+	"gitlab://project/42/pipeline/1",
+	"gitlab://project/42/pipeline/2",
+	"gitlab://project/42/pipeline/3",
+}
+
+// newSharedManager wires a manager onto fresh fakes with a gate somebody else
+// may also hold, which is the shape HTTP mode builds: one manager per
+// credential, one gate for the process.
+//
+// A caller that brought its own logger keeps it, which is how the refusal's log
+// line is asserted; everything else runs quiet.
+func newSharedManager(t *testing.T, gate *WatcherGate, o Options) (*Manager[string], *fakeReader) {
+	t.Helper()
+	o.SharedWatchers = gate
+	if o.Logger == nil {
+		o = quietOptions(o)
+	}
+	r, n := newFakeReader(), &fakeNotifier{}
+	m := New[string](r, n, o)
+	t.Cleanup(m.Close)
+	return m, r
+}
+
+// lockedBuffer collects log output whichever goroutine writes it, since a
+// watcher logs from its own.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// assertGateMatchesWatchers checks the invariant that makes the single removal
+// point provable rather than merely asserted: the slots held are exactly the
+// watchers alive across every manager sharing the gate.
+func assertGateMatchesWatchers(t *testing.T, gate *WatcherGate, managers ...*Manager[string]) {
+	t.Helper()
+	var alive int64
+	for _, m := range managers {
+		alive += int64(m.Len())
+	}
+	if got := gate.count(); got != alive {
+		t.Errorf("the gate holds %d slots for %d live watchers; a removal path is not returning its slot", got, alive)
+	}
+}
+
+// TestWatcherGate_AtTheSharedLimit_ANewWatcherIsRefused verifies the ceiling
+// binds across credentials, and that reaching it costs the refused caller
+// nothing but the refusal.
+//
+// Refusing is the whole design: the alternative, making room by stopping a
+// watch, would mean one credential's subscription ending so another's could
+// start, which is the shape issue 561 rules out.
+func TestWatcherGate_AtTheSharedLimit_ANewWatcherIsRefused(t *testing.T) {
+	gate := NewWatcherGate(2)
+	first, _ := newSharedManager(t, gate, Options{})
+	logs := &lockedBuffer{}
+	second, reader := newSharedManager(t, gate, Options{Logger: slog.New(slog.NewTextHandler(logs, nil))})
+	ctx := context.Background()
+
+	if err := first.Subscribe(ctx, subA, gatedURIs[0]); err != nil {
+		t.Fatalf("Subscribe on the first credential: %v", err)
+	}
+	if err := second.Subscribe(ctx, subA, gatedURIs[1]); err != nil {
+		t.Fatalf("Subscribe on the second credential: %v", err)
+	}
+
+	err := second.Subscribe(ctx, subA, gatedURIs[2])
+	if !errors.Is(err, ErrTooManySubscriptions) {
+		t.Fatalf("Subscribe past the shared ceiling = %v, want ErrTooManySubscriptions", err)
+	}
+	if !strings.Contains(err.Error(), "server-wide") {
+		t.Errorf("refusal = %q, want it to name which ceiling was reached", err)
+	}
+	if !strings.Contains(err.Error(), "limit 2") {
+		t.Errorf("refusal = %q, want it to name the number an operator would have to raise", err)
+	}
+	if got := reader.readCount(gatedURIs[2]); got != 0 {
+		t.Errorf("reads of the refused URI = %d, want 0: a refusal must not cost an API call", got)
+	}
+	if got := first.Len(); got != 1 {
+		t.Errorf("the first credential holds %d watchers, want 1: nobody else's watch may be taken to make room", got)
+	}
+	// The operator has no lever for this ceiling, so the log line is the only
+	// place a saturated instance says so; without it the fact lives entirely in
+	// the error one refused caller received.
+	for _, want := range []string{"level=WARN", "watcher ceiling", "limit=2"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(logs.String(), want) {
+				t.Errorf("the refusal logged nothing containing %q:\n%s", want, logs.String())
+			}
+		})
+	}
+	assertGateMatchesWatchers(t, gate, first, second)
+}
+
+// TestWatcherGate_ARefusalAtTheCeiling_CostsTheCredentialNothing covers the one
+// point where the two ceilings meet.
+//
+// A credential at its own MaxWatchers makes room by stopping its longest-demoted
+// watch. If the shared gate were consulted after that eviction, a subscribe the
+// gate went on to refuse would have spent a watch on a request that was not
+// admitted: the caller would end the exchange holding one subscription fewer
+// than it started with, told only that the condition is transient, and a client
+// that retried would lose one more watch per attempt. The slot is taken first
+// for that reason, and this is what says so.
+func TestWatcherGate_ARefusalAtTheCeiling_CostsTheCredentialNothing(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		gate := NewWatcherGate(2)
+		opts := leaseOptions(time.Minute, time.Hour)
+		opts.MaxWatchers = 1
+		atCap, reader := newSharedManager(t, gate, opts)
+		other, _ := newSharedManager(t, gate, Options{})
+
+		subscribeAll(t, atCap, subA, gatedURIs[0])
+		// Past the lease, which is what makes this watch evictable by the
+		// credential's own cap and so puts the two ceilings in each other's way.
+		time.Sleep(3 * time.Minute)
+		synctest.Wait()
+		if got := atCap.DemotedCount(); got != 1 {
+			t.Fatalf("DemotedCount() = %d, want the only watch demoted", got)
+		}
+
+		// The other credential fills the gate, so the eviction this credential's
+		// cap would perform cannot be followed by an admission.
+		subscribeAll(t, other, subA, gatedURIs[1])
+
+		err := atCap.Subscribe(context.Background(), subA, gatedURIs[2])
+		if !errors.Is(err, ErrTooManySubscriptions) {
+			t.Fatalf("Subscribe at both ceilings = %v, want ErrTooManySubscriptions", err)
+		}
+		if !strings.Contains(err.Error(), "server-wide") {
+			t.Errorf("refusal = %q, want the shared ceiling named: it is the one that refused", err)
+		}
+		if got := atCap.Len(); got != 1 {
+			t.Errorf("the refused credential holds %d watchers, want the 1 it held before asking", got)
+		}
+		if got := atCap.DemotedCount(); got != 1 {
+			t.Errorf("demoted watches after the refusal = %d, want 1: a refusal must not spend one", got)
+		}
+		if got := reader.readCount(gatedURIs[2]); got != 0 {
+			t.Errorf("reads of the refused URI = %d, want 0: a refusal must not cost an API call", got)
+		}
+		assertGateMatchesWatchers(t, gate, atCap, other)
+	})
+}
+
+// TestWatcherGate_ReservesNothingPerCredential verifies the ceiling is
+// first-come, with no share held back for anyone.
+//
+// This is the guard on a remedy that keeps looking attractive and is not one.
+// A per-credential share reads as fairness and is not, because the share key is
+// something an attacker mints: a personal access token is one API call, and a
+// project or group access token creates a distinct bot user, so a reserve
+// guarantees the honest tenant one slot and the attacker one per credential
+// they care to create. That reasoning is recorded on issue 540 and issue 561
+// rules the remedy out; a change that adds a reserve fails here.
+func TestWatcherGate_ReservesNothingPerCredential(t *testing.T) {
+	gate := NewWatcherGate(1)
+	holder, _ := newSharedManager(t, gate, Options{})
+	newcomer, _ := newSharedManager(t, gate, Options{})
+	ctx := context.Background()
+
+	if err := holder.Subscribe(ctx, subA, gatedURIs[0]); err != nil {
+		t.Fatalf("Subscribe on the holding credential: %v", err)
+	}
+
+	err := newcomer.Subscribe(ctx, subA, gatedURIs[1])
+	if !errors.Is(err, ErrTooManySubscriptions) {
+		t.Errorf("Subscribe on a credential holding nothing = %v, want ErrTooManySubscriptions", err)
+	}
+	if got := newcomer.Len(); got != 0 {
+		t.Errorf("the refused credential holds %d watchers, want 0", got)
+	}
+	assertGateMatchesWatchers(t, gate, holder, newcomer)
+}
+
+// TestWatcherGate_AJoinerIsAdmittedWithTheGateFull verifies joining a watch
+// that already exists is not charged to the ceiling.
+//
+// The ceiling bounds polling, and a joiner adds none: the SDK fans one
+// resources/updated out to every subscribed session, so a second subscriber on
+// a watched URI is an entry in a set. Charging it would refuse a client for
+// work the server was already doing.
+func TestWatcherGate_AJoinerIsAdmittedWithTheGateFull(t *testing.T) {
+	gate := NewWatcherGate(1)
+	m, _ := newSharedManager(t, gate, Options{})
+	ctx := context.Background()
+
+	if err := m.Subscribe(ctx, subA, gatedURIs[0]); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+	if err := m.Subscribe(ctx, subB, gatedURIs[0]); err != nil {
+		t.Errorf("a second subscriber joining a watched URI = %v, want it admitted with the gate full", err)
+	}
+	if got := gate.count(); got != 1 {
+		t.Errorf("the gate holds %d slots for one watcher, want 1", got)
+	}
+	assertGateMatchesWatchers(t, gate, m)
+}
+
+// TestWatcherGate_EveryRemovalPathReturnsItsSlot walks every way a watcher can
+// leave a manager and asserts the shared slot comes back with it.
+//
+// A missed release is the failure this gate is most likely to fail by, and the
+// worst-behaved one: it leaks a slot for the life of the process and surfaces
+// much later as subscriptions refused with nothing visibly holding the
+// ceiling. So the cases are the removal paths themselves, one per call site,
+// and each asserts the count against the watchers actually alive rather than
+// against a number written down here.
+func TestWatcherGate_EveryRemovalPathReturnsItsSlot(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     Options
+		drive    func(t *testing.T, m *Manager[string], r *fakeReader)
+		wantHeld int64
+	}{
+		{
+			name: "a subscriber unsubscribes",
+			opts: leaseOptions(time.Hour, 2*time.Hour),
+			drive: func(t *testing.T, m *Manager[string], _ *fakeReader) {
+				t.Helper()
+				subscribeAll(t, m, subA, gatedURIs[0])
+				if err := m.Unsubscribe(subA, gatedURIs[0]); err != nil {
+					t.Errorf("Unsubscribe: %v", err)
+				}
+			},
+		},
+		{
+			name: "a session drops everything it held",
+			opts: leaseOptions(time.Hour, 2*time.Hour),
+			drive: func(t *testing.T, m *Manager[string], _ *fakeReader) {
+				t.Helper()
+				subscribeAll(t, m, subA, gatedURIs[0], gatedURIs[1])
+				if stopped := m.UnsubscribeAll(subA); stopped != 2 {
+					t.Errorf("UnsubscribeAll stopped %d watchers, want 2", stopped)
+				}
+			},
+		},
+		{
+			name: "one of two subscribers leaves, so the watch stays",
+			opts: leaseOptions(time.Hour, 2*time.Hour),
+			drive: func(t *testing.T, m *Manager[string], _ *fakeReader) {
+				t.Helper()
+				subscribeAll(t, m, subA, gatedURIs[0])
+				subscribeAll(t, m, subB, gatedURIs[0])
+				if err := m.Unsubscribe(subB, gatedURIs[0]); err != nil {
+					t.Errorf("Unsubscribe: %v", err)
+				}
+			},
+			// The slot belongs to the watcher, not to a subscriber: releasing
+			// it here would hand the ceiling a slot the poll still occupies.
+			wantHeld: 1,
+		},
+		{
+			name: "the resource stops being readable",
+			opts: leaseOptions(time.Hour, 2*time.Hour),
+			drive: func(t *testing.T, m *Manager[string], r *fakeReader) {
+				t.Helper()
+				subscribeAll(t, m, subA, gatedURIs[0])
+				r.fail(gatedURIs[0], ErrInaccessible)
+				time.Sleep(2 * time.Minute)
+				synctest.Wait()
+			},
+		},
+		{
+			name: "the watch reaches its maximum lifetime",
+			opts: func() Options {
+				o := leaseOptions(time.Minute, time.Hour)
+				o.MaxLifetime = 3 * time.Minute
+				return o
+			}(),
+			drive: func(t *testing.T, m *Manager[string], _ *fakeReader) {
+				t.Helper()
+				subscribeAll(t, m, subA, gatedURIs[0])
+				time.Sleep(4 * time.Minute)
+				synctest.Wait()
+			},
+		},
+		{
+			name: "a demoted watch is evicted for a new one",
+			opts: func() Options {
+				o := leaseOptions(time.Minute, time.Hour)
+				o.MaxWatchers = 1
+				return o
+			}(),
+			drive: func(t *testing.T, m *Manager[string], _ *fakeReader) {
+				t.Helper()
+				subscribeAll(t, m, subA, gatedURIs[0])
+				time.Sleep(3 * time.Minute)
+				synctest.Wait()
+				subscribeAll(t, m, subA, gatedURIs[1])
+				synctest.Wait()
+			},
+			// The replacement holds the slot the evicted watch returned, so a
+			// missed release here would show as two.
+			wantHeld: 1,
+		},
+		{
+			name: "the first read fails, so the watcher never starts",
+			opts: leaseOptions(time.Hour, 2*time.Hour),
+			drive: func(t *testing.T, m *Manager[string], r *fakeReader) {
+				t.Helper()
+				r.fail(gatedURIs[0], ErrInaccessible)
+				if err := m.Subscribe(context.Background(), subA, gatedURIs[0]); err == nil {
+					t.Error("Subscribe on an unreadable resource = nil, want the read failure surfaced")
+				}
+			},
+		},
+		{
+			name: "the manager is closed",
+			opts: leaseOptions(time.Hour, 2*time.Hour),
+			drive: func(t *testing.T, m *Manager[string], _ *fakeReader) {
+				t.Helper()
+				subscribeAll(t, m, subA, gatedURIs[0], gatedURIs[1])
+				m.Close()
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				gate := NewWatcherGate(2)
+				m, r := newSharedManager(t, gate, tt.opts)
+
+				tt.drive(t, m, r)
+
+				if got := gate.count(); got != tt.wantHeld {
+					t.Errorf("the gate holds %d slots, want %d", got, tt.wantHeld)
+				}
+				assertGateMatchesWatchers(t, gate, m)
+			})
+		})
+	}
+}
+
+// subscribeAll subscribes one subscriber to several URIs, failing the test on
+// the first refusal.
+func subscribeAll(t *testing.T, m *Manager[string], subscriber string, uris ...string) {
+	t.Helper()
+	for _, uri := range uris {
+		if err := m.Subscribe(context.Background(), subscriber, uri); err != nil {
+			t.Fatalf("Subscribe(%s): %v", uri, err)
+		}
+	}
+}
+
+// TestWatcherGate_AWithdrawalMidRead_ReturnsTheSlotExactlyOnce verifies the
+// removal point is idempotent for a watcher that is already gone.
+//
+// A subscriber that withdraws while the first read is in flight has its slot
+// returned by the withdrawal, and the launch that follows finds its own entry
+// replaced and must not return it a second time. A double release is the leak
+// in the other direction: the ceiling would quietly grow, which no refusal
+// would ever reveal.
+func TestWatcherGate_AWithdrawalMidRead_ReturnsTheSlotExactlyOnce(t *testing.T) {
+	gate := NewWatcherGate(1)
+	g := newGatedReader()
+	m := New[string](g, &fakeNotifier{}, quietOptions(Options{
+		BaseInterval:   time.Millisecond,
+		MinInterval:    time.Millisecond,
+		SharedWatchers: gate,
+	}))
+	t.Cleanup(m.Close)
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		_ = m.Subscribe(context.Background(), subA, testURI)
+	})
+
+	<-g.entered // the first read is in flight, so the slot is taken
+	if err := m.Unsubscribe(subA, testURI); err != nil {
+		t.Fatalf("Unsubscribe mid-read: %v", err)
+	}
+	close(g.release)
+	wg.Wait()
+
+	if got := gate.count(); got != 0 {
+		t.Errorf("the gate holds %d slots after a withdrawn subscribe, want 0", got)
+	}
+	assertGateMatchesWatchers(t, gate, m)
+}
+
+// TestWatcherGate_WithoutACeiling_AdmitsEveryone covers the two ways a manager
+// runs unbounded: a manager built directly passes no gate at all, which is this
+// package's own tests and any embedder, and a gate built with no limit is the
+// same answer written down. Neither is a transport this repository ships, since
+// cmd/server installs the process gate on stdio as well as on HTTP.
+//
+// The counting has to stay off in both, or a release that pairs with an
+// admission nobody counted would drive the count below zero.
+func TestWatcherGate_WithoutACeiling_AdmitsEveryone(t *testing.T) {
+	tests := []struct {
+		name string
+		gate *WatcherGate
+	}{
+		{name: "no gate at all", gate: nil},
+		{name: "a gate with no limit", gate: NewWatcherGate(0)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for range 3 {
+				if !tt.gate.acquire() {
+					t.Fatal("acquire() = false with no ceiling in force")
+				}
+			}
+			if got := tt.gate.count(); got != 0 {
+				t.Errorf("count() = %d, want 0: an admission that was never counted must not be", got)
+			}
+			tt.gate.release()
+			if got := tt.gate.count(); got != 0 {
+				t.Errorf("count() = %d after a release, want 0", got)
+			}
+		})
+	}
 }

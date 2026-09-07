@@ -5,8 +5,10 @@ package httpe2e
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -69,7 +71,7 @@ func TestSubscriptionsListen_IsServedOnTheDefaultTransport(t *testing.T) {
 		},
 	}
 
-	gitlab := startFakeGitLabServingAProject(t)
+	gitlab := startFakeGitLabServingProjects(t)
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.URL, "--capability-surface=full")
 
 	for _, tt := range tests {
@@ -129,7 +131,7 @@ func firstSSEFrame(t *testing.T, srv *server, rpcMethod, protocol, body string) 
 	return ""
 }
 
-// startFakeGitLabServingAProject is startFakeGitLab plus the one project these
+// startFakeGitLabServingProjects is startFakeGitLab plus the projects these
 // subscriptions watch.
 //
 // The shared fake answers 404 to everything but /user and /version, which is
@@ -138,7 +140,11 @@ func firstSSEFrame(t *testing.T, srv *server, rpcMethod, protocol, body string) 
 // before the acknowledgment is ever reached. That refusal is correct behavior,
 // so the resource has to exist for the acknowledgment to be the thing under
 // test.
-func startFakeGitLabServingAProject(t *testing.T) *httptest.Server {
+//
+// Any numeric project id is served, because the watcher ceiling is reached by
+// watching distinct resources: a second subscription to a URI already watched
+// joins the existing watcher rather than taking a slot.
+func startFakeGitLabServingProjects(t *testing.T) *httptest.Server {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -150,9 +156,15 @@ func startFakeGitLabServingAProject(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":7,"username":"someone"}`))
 	})
-	mux.HandleFunc("/api/v4/projects/123", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/v4/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if _, err := strconv.Atoi(id); err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":123,"name":"proj","path_with_namespace":"g/p","web_url":"http://example.invalid/g/p"}`))
+		_, _ = fmt.Fprintf(w,
+			`{"id":%s,"name":"proj","path_with_namespace":"g/p","web_url":"http://example.invalid/g/p"}`, id)
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -161,4 +173,63 @@ func startFakeGitLabServingAProject(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+// TestSubscriptionsListen_PastTheWatcherCeiling_IsRefusedWhole drives a listen
+// that asks for more watchers than the credential may hold, and pins two things
+// about the refusal on the wire.
+//
+// The first is the code. A watcher ceiling is server state, not a bad request:
+// the listen is well formed and a retry later can succeed, so it takes the
+// implementation-defined -32000 the rate limit and the stream ceiling already
+// answer with. The manager speaks in sentinels and the SDK marshals an
+// unrecognized error with code 0, which generic clients render as "unknown
+// error", so the mapping is the whole difference between a client that backs
+// off and a client that gives up.
+//
+// The second is that the refusal is whole. The SDK subscribes each URI in turn
+// and returns the first error before acknowledging anything, unwinding the ones
+// it had already taken, so a listen refused at its last URI must leave nothing
+// watching. The check for that is the listen after it: a credential holding ten
+// stranded watchers could not be granted an eleventh.
+//
+// The process-wide ceiling this release adds takes exactly this path, with
+// "server-wide" in the message instead of the count. It is not what this test
+// reaches, because reaching 512 live watchers over the wire needs 52
+// credentials to hold them, so the ceiling itself is pinned in the unit tests
+// of internal/subscriptions and cmd/server, and what is proven here is the road
+// their refusal travels to the client.
+func TestSubscriptionsListen_PastTheWatcherCeiling_IsRefusedWhole(t *testing.T) {
+	const meta = `"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",` +
+		`"io.modelcontextprotocol/clientCapabilities":{},` +
+		`"io.modelcontextprotocol/clientInfo":{"name":"probe","version":"1"}}`
+	// One more than DefaultMaxWatchers, which is what a credential may watch.
+	const asked = 11
+
+	uris := make([]string, 0, asked)
+	for i := range asked {
+		uris = append(uris, fmt.Sprintf(`"gitlab://project/%d"`, 900+i))
+	}
+
+	gitlab := startFakeGitLabServingProjects(t)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.URL, "--capability-surface=full")
+
+	refused := firstSSEFrame(t, srv, "subscriptions/listen", "2026-07-28",
+		`{"jsonrpc":"2.0","id":11,"method":"subscriptions/listen","params":{"notifications":{"resourceSubscriptions":[`+
+			strings.Join(uris, ",")+`]},`+meta+`}}`)
+	for _, want := range []string{`"code":-32000`, "too many active subscriptions", "limit 10"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(refused, want) {
+				t.Errorf("the refusal does not contain %q:\n%s", want, refused)
+			}
+		})
+	}
+
+	granted := firstSSEFrame(t, srv, "subscriptions/listen", "2026-07-28",
+		`{"jsonrpc":"2.0","id":12,"method":"subscriptions/listen","params":{"notifications":{"resourceSubscriptions":`+
+			`["gitlab://project/950"]},`+meta+`}}`)
+	if !strings.Contains(granted, "notifications/subscriptions/acknowledged") {
+		t.Errorf("a listen for one resource after the refusal was not acknowledged, so the refused listen left "+
+			"watchers behind:\n%s", granted)
+	}
 }

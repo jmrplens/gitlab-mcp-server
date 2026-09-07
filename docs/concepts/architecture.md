@@ -140,7 +140,7 @@ The `main()` function supports two runtime modes:
 2. Creates a `serverpool.ServerPool` with a factory function
 3. On each request, extracts the token and GitLab URL from headers, calls `pool.GetOrCreateEntry(token, gitlabURL, scopes)` to get or create the entry for that credential
 4. The pool factory creates a GitLab client, verifies it, resolves the entry's configuration, and asks for the MCP server of the resulting configuration shape. That server is built and registered once and shared by every credential of the same shape; the credential itself is bound to each request from the entry
-5. LRU eviction drops the least recently used entry when `--max-http-clients` is reached
+5. When `--max-http-clients` is reached, eviction drops the least recently used entry that is not serving a subscription, and falls back to the least recently used of all only when every entry is busy
 6. Starts `StreamableHTTPHandler` and blocks until SIGINT/SIGTERM
 
 ### Configuration (`internal/config`)
@@ -234,17 +234,17 @@ Manages a bounded pool of per-token+URL credentials in HTTP mode. Each unique co
 
 The MCP server an entry is served by is shared with every other entry of the same configuration shape ([ADR-0020](../development/adr/adr-0020-one-server-per-configuration-shape.md)), so `Entry` rather than `*mcp.Server` is what identifies a credential: the insert and evict callbacks, the session-ownership check and the notification filter all key on `Entry.Owner()`.
 
-| File            | Purpose                                                                                                                                                                                                                      |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pool.go`       | `ServerPool` with LRU eviction, `Entry`, `GetOrCreateEntry()`, `GetOrCreate()`, `GetOrCreateWithScopes()`, `Close()`; narrows an entry to read-only when its token cannot write                                              |
-| `token.go`      | `ExtractToken()` reads the token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers; `ResolveRequestOptionsFor()` resolves `GITLAB-URL` against the published instances and records ignored config-like request headers |
-| `rate_limit.go` | `AuthRateLimiter`: the per-address authentication failure budget                                                                                                                                                             |
-| `doc.go`        | Package documentation                                                                                                                                                                                                        |
+| File            | Purpose                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pool.go`       | `ServerPool` with LRU eviction, `Entry`, `GetOrCreateEntry()`, `GetOrCreate()`, `GetOrCreateWithScopes()`, `Close()`; narrows an entry to read-only when its token cannot write. Both eviction paths ask `WithInUse` whether an entry is busy: the idle sweep skips a busy entry outright, and size pressure prefers an unbusy one and takes a busy one only when every entry is busy |
+| `token.go`      | `ExtractToken()` reads the token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers; `ResolveRequestOptionsFor()` resolves `GITLAB-URL` against the published instances and records ignored config-like request headers                                                                                                                                                          |
+| `rate_limit.go` | `AuthRateLimiter`: the per-address authentication failure budget                                                                                                                                                                                                                                                                                                                      |
+| `doc.go`        | Package documentation                                                                                                                                                                                                                                                                                                                                                                 |
 
 Key characteristics:
 
 - **Bounded size** — `--max-http-clients` limits the pool (default: 100)
-- **LRU eviction** — least recently used entry is closed when pool is full
+- **LRU eviction with a busy-entry preference**: the least recently used entry that is not serving a subscription is closed when the pool is full, and the least recently used of all goes only when every entry is busy. An evicted credential is told: its watchers stop and its open listen streams are completed
 - **SHA-256 session key** — `SHA-256(token + "\x00" + gitlabURL)` for safe map keys and logging
 - **Thread-safe** — `sync.RWMutex` with double-check locking
 - **Clean shutdown** — `Close()` stops all servers and releases resources
@@ -571,7 +571,7 @@ sequenceDiagram
     MCP-->>Pool: MCP server for this shape
     Pool-->>HTTP: entry (credential) + its shape server
     HTTP-->>Client: JSON-RPC response (stateless by default: no Mcp-Session-Id)
-    Note over Pool: LRU eviction when max-http-clients reached
+    Note over Pool: At max-http-clients, evicts the least recently used entry that is not busy
 ```
 
 ## Key Design Decisions

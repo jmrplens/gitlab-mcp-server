@@ -88,7 +88,7 @@ func TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials(t *testing.T
 
 	for _, surface := range surfaces {
 		t.Run(surface, func(t *testing.T) {
-			gitlab := startFakeGitLabServingAProject(t)
+			gitlab := startFakeGitLabServingProjects(t)
 			pprofAddr := fmt.Sprintf("127.0.0.1:%d", freePort(t))
 			srv := startServer(t, nil,
 				"--gitlab-url="+gitlab.URL,

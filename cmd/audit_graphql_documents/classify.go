@@ -37,6 +37,9 @@ func looksLikeDocument(value string) bool {
 	if !strings.Contains(trimmed, "{") || !strings.Contains(trimmed, "}") {
 		return false
 	}
+	if unitAnnotation.MatchString(trimmed) {
+		return false
+	}
 	if rest, found := strings.CutPrefix(trimmed, "{"); found {
 		return opensSelectionSet(rest) && !objectLiteral.MatchString(trimmed)
 	}
@@ -86,3 +89,16 @@ func opensSelectionSet(rest string) bool {
 	next, _ := utf8.DecodeRuneInString(strings.TrimSpace(rest))
 	return next == '_' || next == '.' || unicode.IsLetter(next)
 }
+
+// unitAnnotation matches one word wrapped in braces with no space anywhere, the
+// shape OpenTelemetry writes a unit in.
+//
+// `metric.WithUnit("{entry}")` and its two neighbors were read as anonymous
+// queries and reported as broken documents in a package that sends no GraphQL at
+// all. The discriminator is the whitespace rather than the single field, because
+// `{ __typename }` is a legal document of one field and is written with spaces,
+// while a UCUM annotation never is. A document written as `{__typename}` would
+// now be skipped, which trades a false alarm on every metric unit for a silence
+// on a shape this repository does not use and gqlparser would still judge
+// through any test that drives it.
+var unitAnnotation = regexp.MustCompile(`^\{[A-Za-z_][A-Za-z0-9_]*\}$`)

@@ -363,6 +363,82 @@ writing.
   credential's streams itself, which is what produces the completion result, and
   terminates the sessions no stream ended, which is the only ending a session-era
   `resources/subscribe` can be given.
+
+  What the fallback costs to reach is worth writing down, because it is the
+  whole of the exposure. Every entry in the pool has to be busy at the same
+  moment and stay that way, including the one the arriving credential just
+  created. On the default stateless transport that is one held connection per
+  entry, since a session-era `resources/subscribe` is refused there unless it
+  arrived through a listen and so a watcher cannot exist without a stream; open
+  streams are capped at 512 per process, which makes the fallback unreachable at
+  rest on any pool of 513 or more. Under `--stateless=false` a watcher needs no
+  held connection, so an entry is held busy for about two requests and a
+  keep-alive every half hour; watchers are now capped at 512 per process as
+  well, which puts the same bound on that transport at a pool of 1025 or more.
+  The watcher ceiling refuses rather than evicting, for the reason the pool does
+  the opposite: the pool must stay bounded and its entries are interchangeable
+  work, while a watcher belongs to one credential and stopping one to admit
+  another would be the cross-tenant trade this whole section rules out.
+
+  What that ceiling costs to fill is the same shape of exposure and is recorded
+  beside it. 512 slots is about 52 credentials at the per-credential cap of ten,
+  and under `--stateless=false` holding them is nearly free: a watcher needs no
+  held connection, so an incumbent pays one keep-alive per session before
+  `--session-timeout` and one re-subscribe per `MaxLifetime`, while every other
+  tenant's new watch is refused. That is the same free incumbency the rejected
+  pool refusal has, and it is accepted here because the alternative is unbounded
+  polling from one process: the only cheaper defence would key on a mintable
+  identity, which is the share rejected below. A refusal at the ceiling is
+  reported at WARN and nowhere else, unlike the pool's evictions, because there
+  is no flag it would tell an operator to raise; if a deployment ever needs to
+  alert on saturation rather than grep for it, that line is the event to count.
+
+  Two remedies were considered and rejected, and they are recorded here rather
+  than only in the tracker so the next reader finds the reasoning where the
+  decision is. **Refusing the arriving credential** when every entry is busy
+  converts churn into a first-come lockout whose incumbency is free to hold: a
+  listen asking only for list-changed notifications makes an entry busy with no
+  watcher and no polling, and listen streams carry no lifetime bound where
+  watchers do. In the accidental case, a stateful deployment whose population of
+  subscribing clients exceeds `--max-http-clients`, it also punishes the
+  newcomer instead of letting the oldest subscriber re-listen. **A per-credential
+  or per-busy-entry share** of the pool fails for the reason that split
+  [issue 540](https://github.com/jmrplens/gitlab-mcp-server/issues/540): the
+  share key is mintable one API call at a time, so the share is the appearance
+  of fairness rather than the fact of it. Both are set out in
+  [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561).
+
+  **The ending now says which ending it was.** Telling a client its
+  subscription is over says nothing about what to do next, and the seven ways
+  the server can end one call for three different answers: reconnect now,
+  reconnect and expect a rebuilt entry, or re-authenticate before retrying
+  anything. The cause travels from the pool through `WithOnEvict` and reaches
+  the client as `io.github.jmrplens/watch-end` in the completion result of its
+  `subscriptions/listen`, from a closed vocabulary published on the server card
+  and documented in
+  [Resource subscriptions](../../reference/capabilities/subscriptions.md#why-a-subscription-ended).
+  What the reason carries about the deployment is one bit, to one recipient, and
+  it is written down here rather than claimed away. No count, no other
+  credential's URIs and no configuration travel in it, and `/health` still
+  publishes no pool state to an unauthenticated caller. But `credential_evicted`
+  reaches a client only over an open `subscriptions/listen`, and holding one is
+  what makes that credential's entry busy, so a client receiving it learns that
+  at that instant the pool had nothing quiet to take. Merging the busy and
+  unbusy evictions into one cause does not close that, since the recipient's own
+  busyness supplies the missing bit, and the oracle is not new either: before
+  the vocabulary existed, a bare completion on a list-changed-only listen
+  already meant "evicted or shut down". It is accepted for what it buys, a
+  client that can tell an eviction from a revocation and act differently, and
+  the alternative would be to stop telling an evicted client anything.
+
+  One client is not reached by any of this, and it is worth stating plainly
+  rather than implying otherwise: a session-era `resources/subscribe` under
+  `--stateless=false` holds no open request, so there is no result to write a
+  reason on. Terminating the session remains the only ending the protocol
+  offers it. The `logging` capability would be the one remaining channel, and
+  this server does not declare it because SEP-2577 deprecated it, which is a
+  trade worth keeping: a deprecated capability declared to carry one advisory
+  string would appear in every handshake this server answers.
 - NEG-004: The shape registry is a second cache beside the pool, with its own
   lifetime. A shape is dropped when its registration fails and otherwise lives
   for the process, which is bounded by the number of distinct configurations a

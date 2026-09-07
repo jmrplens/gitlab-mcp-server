@@ -643,14 +643,64 @@ func TestSharedServer_AnEvictedCredentialsListenIsEnded(t *testing.T) {
 	// The SDK writes the listen's result when its handler's context ends, which
 	// is the graceful completion the specification asks for. Its absence would
 	// mean the stream was torn down rather than ended.
-	var completed bool
+	var completion string
 	for _, frame := range seen {
 		if strings.Contains(frame, `"result"`) && strings.Contains(frame, `"id":1`) {
-			completed = true
+			completion = frame
 		}
 	}
-	if !completed {
-		t.Errorf("the stream closed without the listen's completion result; frames: %v", seen)
+	if completion == "" {
+		t.Fatalf("the stream closed without the listen's completion result; frames: %v", seen)
+	}
+
+	// What the client is told, on the wire. A completion result carrying no
+	// reason is the same answer this credential would get if the resource had
+	// gone away or the server were shutting down, and a client cannot act on
+	// an ending it cannot tell apart from three others. The subscription id the
+	// SDK stamps has to survive beside it, since that is what the client
+	// matches the completion to its own request with.
+	endings := []struct {
+		name string
+		want string
+	}{
+		{name: "the reason", want: `"reason":"credential_evicted"`},
+		{name: "the vendor key it arrives under", want: `"io.github.jmrplens/watch-end"`},
+		{name: "the SDK's subscription id", want: `"io.modelcontextprotocol/subscriptionId"`},
+	}
+	for _, ending := range endings {
+		t.Run(ending.name, func(t *testing.T) {
+			if !strings.Contains(completion, ending.want) {
+				t.Errorf("the completion result is missing %s:\n%s", ending.want, completion)
+			}
+		})
+	}
+
+	// The operator's half of the same event. A busy eviction used to be
+	// indistinguishable in the log from an ordinary one, so a deployment
+	// evicting its own subscribers looked exactly like a deployment recycling
+	// idle callers, and the number to raise was on neither line.
+	// The line itself, not the whole output: the harness starts every server
+	// with two deprecated environment variables and so with two WARN lines
+	// already printed, and a level asserted against everything the server said
+	// would match one of those however this line were logged.
+	line := awaitLogLine(t, srv, "server pool: evicted an entry that was serving a subscription")
+	if line == "" {
+		t.Fatalf("the busy eviction produced no WARN line.\nserver output:\n%s", srv.logs())
+	}
+	fields := []struct {
+		name string
+		want string
+	}{
+		{name: "level", want: `"level":"WARN"`},
+		{name: "in_use", want: `"in_use":true`},
+		{name: "max_size", want: `"max_size":1`},
+	}
+	for _, field := range fields {
+		t.Run(field.name, func(t *testing.T) {
+			if !strings.Contains(line, field.want) {
+				t.Errorf("the busy eviction line is missing %s:\n%s", field.want, line)
+			}
+		})
 	}
 }
 

@@ -1371,6 +1371,520 @@ func TestEvictLRU_AnElementNamingNoEntry_IsDroppedFirst(t *testing.T) {
 	}
 }
 
+// capturedRecords is an [slog.Handler] that keeps every record it is handed, so
+// a test can assert on a log line without parsing a stream.
+//
+// A handler rather than a JSON handler over a bytes.Buffer, because
+// slog.SetDefault is process-wide: another test logging while this one is
+// installed would write into that buffer concurrently, and a bytes.Buffer is
+// not safe for that. The mutex here is.
+type capturedRecords struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (c *capturedRecords) Enabled(context.Context, slog.Level) bool { return true }
+
+func (c *capturedRecords) Handle(_ context.Context, record slog.Record) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.records = append(c.records, record.Clone())
+	return nil
+}
+
+func (c *capturedRecords) WithAttrs([]slog.Attr) slog.Handler { return c }
+
+func (c *capturedRecords) WithGroup(string) slog.Handler { return c }
+
+// find returns the first captured record carrying the given message.
+func (c *capturedRecords) find(message string) (slog.Record, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, record := range c.records {
+		if record.Message == message {
+			return record, true
+		}
+	}
+	return slog.Record{}, false
+}
+
+// captureLogs installs a recording handler as the default logger for the length
+// of the test.
+func captureLogs(t *testing.T) *capturedRecords {
+	t.Helper()
+
+	captured := &capturedRecords{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(captured))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return captured
+}
+
+// logAttr returns the value of one attribute of a captured record.
+func logAttr(record slog.Record, key string) (slog.Value, bool) {
+	var value slog.Value
+	found := false
+	record.Attrs(func(attr slog.Attr) bool {
+		if attr.Key != key {
+			return true
+		}
+		value, found = attr.Value, true
+		return false
+	})
+	return value, found
+}
+
+// TestEvictLRU_CountsTheBusyFallbackApartFromAnOrdinaryEviction pins the split
+// the two counters exist for.
+//
+// Evictions has always conflated size pressure with revalidation refusals and
+// failed rebuilds, so an operator reading it could not tell "the pool is too
+// small" from "somebody's token was revoked", let alone tell either from the
+// one case that ends a subscription under a client that is waiting on it. The
+// four disjoint counters answer that; this pins the two size-pressure halves,
+// in both directions, so a change that stops distinguishing them fails here.
+func TestEvictLRU_CountsTheBusyFallbackApartFromAnOrdinaryEviction(t *testing.T) {
+	tests := []struct {
+		name string
+		busy bool
+		// wantSize and wantBusy are the two counters after one eviction.
+		wantSize int64
+		wantBusy int64
+	}{
+		{name: "an unbusy victim is ordinary size pressure", busy: false, wantSize: 1, wantBusy: 0},
+		{name: "an all-busy pool takes the fallback", busy: true, wantSize: 0, wantBusy: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := testConfig(stubGitLabBase)
+			pool := New(cfg, testFactory(), WithMaxSize(2),
+				WithInUse(func(*Entry) bool { return tt.busy }))
+
+			for _, token := range []string{"older", "newer"} {
+				if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+					t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+				}
+			}
+
+			pool.mu.Lock()
+			pool.evictLRU()
+			pool.mu.Unlock()
+
+			stats := pool.Stats()
+			if stats.SizeEvictions != tt.wantSize {
+				t.Errorf("SizeEvictions = %d, want %d", stats.SizeEvictions, tt.wantSize)
+			}
+			if stats.BusyEvictions != tt.wantBusy {
+				t.Errorf("BusyEvictions = %d, want %d", stats.BusyEvictions, tt.wantBusy)
+			}
+			// The legacy total counts both halves and always has, so it moves
+			// on either path. Nobody may export it beside the two above.
+			if stats.Evictions != 1 {
+				t.Errorf("Evictions = %d, want 1: the legacy total covers both halves", stats.Evictions)
+			}
+			if stats.InvalidEvictions != 0 || stats.RebuildEvictions != 0 || stats.IdleEvictions != 0 {
+				t.Errorf("size pressure moved another path's counter: %+v", stats)
+			}
+		})
+	}
+}
+
+// TestEvictLRU_AnAllBusyPool_EvictsAndAdmitsTheArrivingCredential is the guard
+// against turning the fallback into a refusal.
+//
+// Refusing the newcomer when every pooled entry is serving a subscription looks
+// like the kinder answer and is not: it converts churn into a first-come
+// lockout, and the incumbency is free to hold, because a listen asking only for
+// list-changed notifications makes an entry busy with no watcher and no polling
+// and listen streams carry no lifetime bound. In the accidental case, a
+// deployment whose population of subscribing clients exceeds
+// --max-http-clients, it also punishes the newcomer rather than letting the
+// oldest subscriber re-listen. Recorded on
+// https://github.com/jmrplens/gitlab-mcp-server/issues/561; a change that
+// implements the refusal fails here rather than in review.
+func TestEvictLRU_AnAllBusyPool_EvictsAndAdmitsTheArrivingCredential(t *testing.T) {
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, testFactory(), WithMaxSize(1),
+		WithInUse(func(*Entry) bool { return true }))
+
+	if _, err := pool.GetOrCreate("the-subscriber", stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate(the-subscriber) error: %v", err)
+	}
+
+	if _, err := pool.GetOrCreate("the-newcomer", stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate(the-newcomer) was refused by a pool full of busy entries: %v", err)
+	}
+
+	if _, ok := pool.entries[sessionKey("the-newcomer", stubGitLabBase)]; !ok {
+		t.Error("the arriving credential was not admitted, so the fallback has become a refusal")
+	}
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d, want 1: --max-http-clients is not a bound otherwise", pool.Size())
+	}
+	if got := pool.Stats().BusyEvictions; got != 1 {
+		t.Errorf("BusyEvictions = %d, want 1", got)
+	}
+}
+
+// TestEvictLRU_TheBusyFallbackWarns_AndTheOrdinaryPathDoesNot pins the line an
+// operator greps for.
+//
+// A busy eviction was invisible: one INFO message covered both halves and named
+// neither the state of the victim nor the number to raise. Two distinct messages
+// rather than one message at two levels, because an operator filtering their
+// logs matches on the message.
+func TestEvictLRU_TheBusyFallbackWarns_AndTheOrdinaryPathDoesNot(t *testing.T) {
+	const (
+		busyMessage     = "server pool: evicted an entry that was serving a subscription"
+		ordinaryMessage = "server pool: evicted LRU entry"
+	)
+
+	tests := []struct {
+		name      string
+		busy      bool
+		message   string
+		absent    string
+		wantLevel slog.Level
+		wantInUse bool
+	}{
+		{
+			name: "the fallback warns", busy: true,
+			message: busyMessage, absent: ordinaryMessage,
+			wantLevel: slog.LevelWarn, wantInUse: true,
+		},
+		{
+			name: "ordinary size pressure stays at info", busy: false,
+			message: ordinaryMessage, absent: busyMessage,
+			wantLevel: slog.LevelInfo, wantInUse: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			captured := captureLogs(t)
+			evictOneUnder(t, tt.busy)
+
+			if _, found := captured.find(tt.absent); found {
+				t.Errorf("both eviction messages were logged; %q should not have been", tt.absent)
+			}
+			record, found := captured.find(tt.message)
+			if !found {
+				t.Fatalf("no %q record was logged", tt.message)
+			}
+			if record.Level != tt.wantLevel {
+				t.Errorf("level = %v, want %v", record.Level, tt.wantLevel)
+			}
+			if inUse, ok := logAttr(record, "in_use"); !ok {
+				t.Error("the eviction line carries no in_use field, so nothing says whether a subscription was ended")
+			} else if inUse.Bool() != tt.wantInUse {
+				t.Errorf("in_use = %v, want %v", inUse.Bool(), tt.wantInUse)
+			}
+			// The number the operator has to raise, on the line that tells
+			// them to raise it.
+			if maxSize, ok := logAttr(record, "max_size"); !ok {
+				t.Error("the eviction line carries no max_size field")
+			} else if maxSize.Int64() != 2 {
+				t.Errorf("max_size = %d, want 2", maxSize.Int64())
+			}
+		})
+	}
+}
+
+// evictOneUnder fills a pool of two and drives one size-pressure eviction, with
+// every entry reported busy or not as busy says.
+func evictOneUnder(t *testing.T, busy bool) {
+	t.Helper()
+
+	pool := New(testConfig(stubGitLabBase), testFactory(), WithMaxSize(2),
+		WithInUse(func(*Entry) bool { return busy }))
+	for _, token := range []string{"older", "newer"} {
+		if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+			t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+		}
+	}
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.evictLRU()
+}
+
+// TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn pins the disjointness the
+// exported metric depends on.
+//
+// The reasons are published as one series per value of an attribute, which is
+// only meaningful while each path increments exactly one of them. A path that
+// increments two would double-count, and a path that increments none would
+// vanish from the total.
+func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
+	tests := []struct {
+		name string
+		// evict drives one removal path against a freshly filled pool.
+		evict func(t *testing.T, pool *ServerPool, srv *mcp.Server, key string)
+		// counter names the series this path is supposed to move, as
+		// [evictionCounters] labels it. Every other counter must stay at zero,
+		// which is read from that map rather than listed per case: a counter
+		// added there is then covered by every case at once, where a per-case
+		// list of the others is a list somebody forgets to extend.
+		counter string
+		// busy reports every pooled entry as in use, which is what sends size
+		// pressure down its fallback.
+		busy bool
+	}{
+		{
+			name: "revalidation refusal moves InvalidEvictions",
+			evict: func(_ *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				pool.evictByKey(key)
+			},
+			counter: "invalid_credential",
+		},
+		{
+			name: "a failed shape rebuild moves RebuildEvictions",
+			evict: func(t *testing.T, pool *ServerPool, srv *mcp.Server, _ string) {
+				t.Helper()
+				if !pool.EvictServer(srv) {
+					t.Error("EvictServer() found nothing, but the entry was just created")
+				}
+			},
+			counter: "rebuild",
+		},
+		{
+			name: "the idle sweep moves IdleEvictions",
+			evict: func(_ *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				pool.mu.Lock()
+				pool.entries[key].lastUsed = time.Now().Add(-time.Hour)
+				pool.mu.Unlock()
+				pool.evictIdle()
+			},
+			counter: "idle",
+		},
+		{
+			name: "the credential-recheck ceiling moves StaleCredentialEvictions",
+			evict: func(_ *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				pool.mu.Lock()
+				pool.maxCredentialAge = time.Minute
+				pool.entries[key].lastValidated = time.Now().Add(-time.Hour)
+				pool.mu.Unlock()
+				pool.evictStaleCredential(key)
+			},
+			counter: "stale_credential",
+		},
+		{
+			name: "a 401 on a call moves RejectedCredentialEvictions",
+			evict: func(t *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				t.Helper()
+				pool.mu.RLock()
+				entry := pool.entries[key]
+				pool.mu.RUnlock()
+				if entry == nil {
+					t.Fatal("the entry was gone before the rejection could be driven")
+				}
+				pool.evictRejectedCredential(key, entry)
+			},
+			counter: "rejected_credential",
+		},
+		{
+			name: "size pressure on a quiet pool moves SizeEvictions",
+			evict: func(t *testing.T, pool *ServerPool, _ *mcp.Server, _ string) {
+				t.Helper()
+				if _, err := pool.GetOrCreate("glpat-the-newcomer", stubGitLabBase); err != nil {
+					t.Errorf("GetOrCreate() for the arriving credential: %v", err)
+				}
+			},
+			counter: "size_pressure",
+		},
+		{
+			name: "size pressure on an all-busy pool moves BusyEvictions",
+			evict: func(t *testing.T, pool *ServerPool, _ *mcp.Server, _ string) {
+				t.Helper()
+				if _, err := pool.GetOrCreate("glpat-the-newcomer", stubGitLabBase); err != nil {
+					t.Errorf("GetOrCreate() for the arriving credential: %v", err)
+				}
+			},
+			counter: "size_pressure_busy",
+			busy:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const token = "glpat-one-entry"
+
+			cfg := testConfig(stubGitLabBase)
+			// A pool of one, so the two size-pressure cases evict on the
+			// arrival of a second credential and the other five have room to
+			// spare regardless.
+			options := []Option{WithMaxSize(1), WithIdleTimeout(time.Minute)}
+			if tt.busy {
+				options = append(options, WithInUse(func(*Entry) bool { return true }))
+			}
+			pool := New(cfg, testFactory(), options...)
+			srv, err := pool.GetOrCreate(token, stubGitLabBase)
+			if err != nil {
+				t.Fatalf("GetOrCreate() error: %v", err)
+			}
+
+			tt.evict(t, pool, srv, sessionKey(token, stubGitLabBase))
+
+			assertOnlyItsOwnCounterMoved(t, pool.Stats(), tt.counter)
+		})
+	}
+}
+
+// assertOnlyItsOwnCounterMoved checks that the named series moved by exactly one
+// and every other stayed where it was.
+func assertOnlyItsOwnCounterMoved(t *testing.T, stats Snapshot, counter string) {
+	t.Helper()
+
+	for name, read := range evictionCounters {
+		want := int64(0)
+		if name == counter {
+			want = 1
+		}
+		if got := read(stats); got != want {
+			t.Errorf("the %s counter = %d, want %d; snapshot: %+v", name, got, want, stats)
+		}
+	}
+}
+
+// evictionCounters is every counter the eviction metric publishes as a series
+// of its own, keyed by the reason attribute value internal/mcpotel labels it
+// with. The legacy Evictions total is deliberately absent: it overlaps four of
+// these, so a case asserting it stayed at zero would fail on three paths that
+// are behaving correctly.
+var evictionCounters = map[string]func(Snapshot) int64{
+	"size_pressure":       func(s Snapshot) int64 { return s.SizeEvictions },
+	"size_pressure_busy":  func(s Snapshot) int64 { return s.BusyEvictions },
+	"idle":                func(s Snapshot) int64 { return s.IdleEvictions },
+	"stale_credential":    func(s Snapshot) int64 { return s.StaleCredentialEvictions },
+	"rejected_credential": func(s Snapshot) int64 { return s.RejectedCredentialEvictions },
+	"invalid_credential":  func(s Snapshot) int64 { return s.InvalidEvictions },
+	"rebuild":             func(s Snapshot) int64 { return s.RebuildEvictions },
+}
+
+// TestOnEvict_EachRemovalPathNamesItsOwnCause pins the vocabulary the callback
+// is handed, one case per call site of [ServerPool.dropEntry].
+//
+// The cause is not decoration: cmd/server turns it into the sentence an evicted
+// subscriber is given, and the seven paths do not deserve the same sentence. A
+// credential taken for size pressure is still valid and should reconnect at
+// once; one GitLab has refused must be replaced first. Before the cause
+// existed, the caller could only guess, and it guessed "evicted" for all of
+// them, so a client whose token had just been revoked was told to retry with
+// the same token.
+//
+// Every path is here rather than the interesting ones, because a path that
+// arrives with the zero value reaches the client as an ending nobody can name,
+// and nothing else in the build would notice.
+func TestOnEvict_EachRemovalPathNamesItsOwnCause(t *testing.T) {
+	tests := []struct {
+		name string
+		// evict drives one removal path against a pool holding one entry.
+		evict func(t *testing.T, pool *ServerPool, entry *Entry, key string)
+		want  EvictionCause
+	}{
+		{
+			name: "a full pool taking a new credential",
+			evict: func(t *testing.T, pool *ServerPool, _ *Entry, _ string) {
+				t.Helper()
+				if _, err := pool.GetOrCreateEntry("glpat-arriving", stubGitLabBase, nil); err != nil {
+					t.Fatalf("the arriving credential: %v", err)
+				}
+			},
+			want: CauseSizePressure,
+		},
+		{
+			name: "the idle sweep",
+			evict: func(_ *testing.T, pool *ServerPool, _ *Entry, key string) {
+				pool.mu.Lock()
+				pool.entries[key].lastUsed = time.Now().Add(-time.Hour)
+				pool.mu.Unlock()
+				pool.evictIdle()
+			},
+			want: CauseIdle,
+		},
+		{
+			name: "a credential too long unchecked",
+			evict: func(_ *testing.T, pool *ServerPool, _ *Entry, key string) {
+				pool.mu.Lock()
+				pool.maxCredentialAge = time.Minute
+				pool.entries[key].lastValidated = time.Now().Add(-time.Hour)
+				pool.mu.Unlock()
+				pool.evictStaleCredential(key)
+			},
+			want: CauseStaleCredential,
+		},
+		{
+			name: "GitLab refusing the credential on a call",
+			evict: func(_ *testing.T, pool *ServerPool, entry *Entry, key string) {
+				pool.evictRejectedCredential(key, entry)
+			},
+			want: CauseRejectedCredential,
+		},
+		{
+			name: "the periodic revalidation finding the credential refused",
+			evict: func(_ *testing.T, pool *ServerPool, _ *Entry, key string) {
+				pool.evictByKey(key)
+			},
+			want: CauseInvalidCredential,
+		},
+		{
+			name: "a configuration shape whose registration failed",
+			evict: func(t *testing.T, pool *ServerPool, entry *Entry, _ string) {
+				t.Helper()
+				if !pool.EvictServer(entry.Server()) {
+					t.Error("EvictServer() found nothing, but the entry was just created")
+				}
+			},
+			want: CauseRebuild,
+		},
+		{
+			name: "the pool shutting down",
+			evict: func(_ *testing.T, pool *ServerPool, _ *Entry, _ string) {
+				pool.Close()
+			},
+			want: CausePoolClosed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const token = "glpat-the-one-entry"
+
+			var mu sync.Mutex
+			var causes []EvictionCause
+			pool := New(testConfig(stubGitLabBase), testFactory(),
+				// One, so size pressure has somewhere to bite and every other
+				// path still has an entry of its own to take.
+				WithMaxSize(1),
+				WithIdleTimeout(time.Minute),
+				WithOnEvict(func(_ *Entry, cause EvictionCause) {
+					mu.Lock()
+					defer mu.Unlock()
+					causes = append(causes, cause)
+				}))
+			entry, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil)
+			if err != nil {
+				t.Fatalf("GetOrCreateEntry() error: %v", err)
+			}
+
+			tt.evict(t, pool, entry, sessionKey(token, stubGitLabBase))
+
+			mu.Lock()
+			defer mu.Unlock()
+			if len(causes) != 1 {
+				t.Fatalf("onEvict fired %d times, want 1: causes %v", len(causes), causes)
+			}
+			if causes[0] != tt.want {
+				t.Errorf("cause = %q, want %q", causes[0], tt.want)
+			}
+			if causes[0] == "" {
+				t.Error("the path left the zero value, which reaches a client as an ending nobody can name")
+			}
+		})
+	}
+}
+
 // TestEvictIdle_AKeptEntryMovesToTheFrontOfTheLRU pins the second half of the
 // same decision.
 //
@@ -2235,7 +2749,7 @@ func TestStartIdleEviction_NilContextAndDisabled_DoesNotPanic(t *testing.T) {
 // the single place an entry leaves the map.
 func TestPool_OnEvictFiresOnEveryRemovalPath(t *testing.T) {
 	newRecordingPool := func(evicted *[]*mcp.Server, mu *sync.Mutex, opts ...Option) *ServerPool {
-		record := WithOnEvict(func(entry *Entry) {
+		record := WithOnEvict(func(entry *Entry, _ EvictionCause) {
 			mu.Lock()
 			defer mu.Unlock()
 			*evicted = append(*evicted, entry.Server())
@@ -2326,7 +2840,7 @@ func TestStartRevalidation_PanickingEvictionCallback_DoesNotKillTheProcess(t *te
 
 	pool := New(testConfig(srv.URL), testFactory(),
 		WithRevalidateInterval(10*time.Millisecond),
-		WithOnEvict(func(*Entry) { panic("a callback outside the pool") }),
+		WithOnEvict(func(*Entry, EvictionCause) { panic("a callback outside the pool") }),
 	)
 	if _, err := pool.GetOrCreate("glpat-revalidate", srv.URL); err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
@@ -3075,7 +3589,7 @@ func TestEvictServer_DropsEveryEntryServedByThatServer(t *testing.T) {
 	var evicted []string
 	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
 		return shared, nil
-	}, WithOnEvict(func(entry *Entry) {
+	}, WithOnEvict(func(entry *Entry, _ EvictionCause) {
 		mu.Lock()
 		defer mu.Unlock()
 		evicted = append(evicted, entry.Owner())
@@ -3701,7 +4215,7 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 		cfg := testConfig(stubGitLabBase)
 		pool := New(cfg, testFactory(),
 			WithRevalidateInterval(10*time.Millisecond),
-			WithOnEvict(func(*Entry) {
+			WithOnEvict(func(*Entry, EvictionCause) {
 				select {
 				case panicked <- struct{}{}:
 				default:

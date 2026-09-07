@@ -109,15 +109,20 @@ cannot change until a human or a clock acts.
 
 A watch ends, or slows, for these reasons and no others:
 
-| Event                                     | Effect                                | Told to the client?              |
-| ----------------------------------------- | ------------------------------------- | -------------------------------- |
-| `resources/unsubscribe`                   | Stops when the last subscriber leaves | It asked for it                  |
-| The session disconnects                   | Stops                                 | It is gone                       |
-| 30 minutes with no traffic on the session | **Slows to a 10-minute poll**         | `_meta` on the next notification |
-| Any request on the session                | Restores full speed                   | —                                |
-| The resource returns 401, 403 or 404      | Stops                                 | Stream closed (2026-07-28)       |
-| 24 hours, renewals included               | Stops                                 | Stream closed (2026-07-28)       |
-| Evicted to make room at the cap           | Stops                                 | Stream closed (2026-07-28)       |
+| Event                                     | Effect                                | Told to the client?                                                                                                            |
+| ----------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `resources/unsubscribe`                   | Stops when the last subscriber leaves | It asked for it                                                                                                                |
+| The session disconnects                   | Stops                                 | It is gone                                                                                                                     |
+| 30 minutes with no traffic on the session | **Slows to a 10-minute poll**         | `_meta` on the next notification                                                                                               |
+| Any request on the session                | Restores full speed                   | —                                                                                                                              |
+| The resource returns 401, 403 or 404      | Stops                                 | Stream closed with `resource_gone` (2026-07-28)                                                                                |
+| 24 hours, renewals included               | Stops                                 | Stream closed with `lifetime_reached` (2026-07-28)                                                                             |
+| Evicted to make room at the cap           | Stops                                 | Stream closed with `watcher_evicted` (2026-07-28)                                                                              |
+| The pool evicts this credential's entry   | Stops                                 | Stream closed with `credential_evicted`, `credential_reset` or `credential_revoked`; session terminated on `--stateless=false` |
+| The server is shutting down               | Stops                                 | Stream closed with `shutdown` (2026-07-28)                                                                                     |
+
+The reason words are a closed vocabulary, listed in
+[Why a subscription ended](#why-a-subscription-ended).
 
 **The lease slows a watch down; it does not end it.** MCP defines no lease,
 no TTL and no expiry message, and its one notification means "this changed,
@@ -134,24 +139,70 @@ answer `tools/list`, `prompts/list` or a repeated `resources/read` from its
 own cache, in which case nothing arrives here to renew — which is correct,
 since a client serving itself from cache is not evidence of anything.
 
+**A watch can also end because the pool dropped the credential it belongs
+to.** In HTTP mode the watchers hang off a pool entry, and
+`--max-http-clients` bounds how many entries a process holds. Size pressure
+prefers an entry that is not serving a subscription and takes one that is
+only when every pooled entry is busy, so this is the last thing the pool
+does rather than the first. When it does happen, the credential's watchers
+stop, its open `subscriptions/listen` requests are completed, and under
+`--stateless=false` the sessions that no stream ended are terminated.
+Nothing is wrong with the credential: reconnect and subscribe again. The
+operator's lever, and the pool size above which the fallback is unreachable,
+are in [HTTP Server Mode](../../guides/http-server-mode.md#4-pool-eviction).
+
 ## Limits
 
-| Limit               | Value                      | Why                                                                          |
-| ------------------- | -------------------------- | ---------------------------------------------------------------------------- |
-| Watchers per server | 10                         | A server is one token, so this is the ceiling on one user's polling          |
-| Floor interval      | 5s                         | Ten watchers at 5s would be 120 requests a minute — an entire default budget |
-| Rate-limit pause    | 30s, doubling to 5 minutes | GitLab enforces limits per user, so one 429 pauses every watcher             |
+| Limit                   | Value                      | Why                                                                                                                                          |
+| ----------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Watchers per credential | 10                         | A watcher polls with the subscriber's own token, so this is the ceiling on one credential's polling                                          |
+| Watchers per process    | 512                        | A credential is one API call to mint, so a per-credential number multiplies by however many a caller holds; only this one bounds the process |
+| Floor interval          | 5s                         | Ten watchers at 5s would be 120 requests a minute — an entire default budget                                                                 |
+| Rate-limit pause        | 30s, doubling to 5 minutes | GitLab enforces limits per user, so one 429 pauses every watcher                                                                             |
 
 At the 15s base, ten watchers cost 40 requests a minute. Once demoted, the
 same ten cost one. A self-managed instance's default is 7,200 authenticated
 requests an hour (120 a minute), and that limit is disabled unless an
 administrator enables it.
 
-When the cap is reached, a new subscription evicts the **longest-demoted**
-watch rather than being refused — a subscriber who is actively waiting wins
-the slot over one whose own inactivity already devalued it, and the watch
-that has been slow the longest is the one to go. If every watch is still
-active, the new subscription is refused with an error.
+When the per-credential cap is reached, a new subscription evicts the
+**longest-demoted** watch rather than being refused — a subscriber who is
+actively waiting wins the slot over one whose own inactivity already devalued
+it, and the watch that has been slow the longest is the one to go. If every
+watch is still active, the new subscription is refused with an error.
+
+The process ceiling only ever refuses. Making room there would mean stopping
+some other credential's watch to start this one, and nothing about the arriving
+subscription makes it worth more than the one already running.
+
+Within a credential the demoted-watch eviction above still applies while the
+process ceiling has room. When it does not, the subscribe is refused **before**
+anything is stopped, so a refusal never costs the caller a watch it already
+held: a credential at its own cap keeps its demoted watch and is told the
+server-wide ceiling was reached. The alternative order, stopping the demoted
+watch and then finding the process full, would leave that caller holding one
+subscription fewer than it started with and nothing in its place, and a client
+retrying a refusal it was told is transient would lose one more watch per
+attempt.
+
+Both refusals carry `-32000`: the
+process one says `server-wide` in as many words, and the per-credential one
+carries that credential's own count and limit, so a client's error says which
+ceiling it met and an operator reading it knows whether the number to look at is
+that caller's or the deployment's. Neither ceiling is configurable: the
+per-credential one multiplies by however many credentials a caller holds, and an
+operator who could raise the process one could undo the bound. The lever an
+operator does have is `--max-http-clients`, which decides how many credentials
+the pool serves at once.
+
+What the process ceiling costs is worth knowing before you meet it. 512 slots is
+about 52 credentials at the per-credential cap of ten, and under
+`--stateless=false` a watcher needs no held connection, so whoever holds those
+slots keeps them for one keep-alive per session and one re-subscribe a day while
+everyone else is refused. That is accepted deliberately: the alternative is
+unbounded polling from one process, and a share per credential would be no
+defence at all, since a credential is one API call to mint. A saturated
+deployment says so in its own log, at WARN, once per refusal.
 
 ## Error codes
 
@@ -164,6 +215,7 @@ error would marshal as:
 | URI is deliberately not subscribable                                       | `-32602` (invalid params)                                                   | No — pick a subscribable URI     |
 | Resource unreadable on the authorization read (401/403/404)                | `-32602` — the code the SDK itself answers an unknown `resources/read` with | Only if the resource appears     |
 | Rate limited, watcher cap with no evictable watch, or server shutting down | `-32000` (implementation-defined server busy)                               | Yes — the condition is transient |
+| Watchers per process at 512                                                | `-32000`, with `server-wide` in the message                                 | Yes, the condition is transient  |
 | Transient GitLab failure on the first read                                 | `-32603` (internal error)                                                   | Yes                              |
 | `resources/subscribe` on stateless HTTP                                    | `-32600` (invalid request for this session state)                           | No — use `subscriptions/listen`  |
 
@@ -208,6 +260,77 @@ No client is obliged to read any of it, and no client known today does. It
 is included because a subscriber has no other way to learn that its watch
 slowed down, and because everything it says is true whether or not anyone
 looks.
+
+## Why a subscription ended
+
+On protocol 2026-07-28 a subscription is a `subscriptions/listen` request the
+client leaves open, and the server ends it by answering it. Every ending the
+**server** initiates carries a reason in that result's `_meta`, under a vendor
+key namespaced to this project, beside the subscription id the SDK stamps
+there:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "_meta": {
+      "io.modelcontextprotocol/subscriptionId": 1,
+      "io.github.jmrplens/watch-end": {
+        "reason": "credential_evicted",
+        "detail": "the server released this credential's pooled entry under capacity pressure; reconnect and subscribe again, the credential itself is still valid"
+      }
+    }
+  }
+}
+```
+
+Without it, all seven endings below are one bare result: a client cannot tell
+"the server ran out of room" from "your token was revoked", and the right
+response to those two is not the same.
+
+| `reason`             | What happened                                                                                      | What to do                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `credential_evicted` | Size pressure took this credential's pooled entry                                                  | Reconnect and subscribe again now; the credential is still valid       |
+| `credential_reset`   | The entry was reclaimed for idleness, for the credential-recheck ceiling, or to rebuild its server | Reconnect and subscribe again; nothing is wrong with the credential    |
+| `credential_revoked` | GitLab refused the credential, at revalidation or on a call                                        | Re-authenticate first; the same token will be refused again            |
+| `resource_gone`      | The watched resource answered 401, 403 or 404, so the watch retired                                | Check access; subscribe again only if the resource comes back          |
+| `lifetime_reached`   | The absolute 24-hour watch lifetime ran out                                                        | Subscribe again; expected on a long-lived client                       |
+| `watcher_evicted`    | One of this credential's own demoted watches was stopped at the watcher cap                        | Subscribe again, and keep the session busy so the watch is not demoted |
+| `shutdown`           | The server is stopping                                                                             | Reconnect; behind a balancer another instance will take you            |
+
+Three things are worth knowing about the shape:
+
+- **`detail` is a sentence, not a restatement.** A client that does not
+  recognize a reason word can act on the prose, and so can a person reading a
+  frame in a log.
+- **`status` appears only on `resource_gone`**, and only when the failed read
+  carried an HTTP status. It is relayed, not interpreted: GitLab answers 404
+  for a resource the caller may not see, precisely so that it cannot be told
+  apart from one that does not exist, so a 404 here does **not** mean deleted.
+- **The vocabulary is closed and published.** The `subscriptions.end_reasons`
+  array of the [server card](../../guides/http-server-mode.md#server-card)
+  lists it, so a client can learn the set without meeting each value in
+  production. The card is served in HTTP mode only; on stdio there is no
+  endpoint to read it from, and the four reasons reachable there
+  (`resource_gone`, `lifetime_reached`, `watcher_evicted` and `shutdown`) are
+  documented on this page instead. Treat an unrecognized value as "ended for a
+  reason this client does not know", never as "any ending".
+
+**A client-initiated ending carries no reason**, deliberately. If the client
+cancels its own listen or disconnects, it caused the ending, and the result may
+never reach it at all.
+
+**A session-era `resources/subscribe` carries no reason either**, and this is a
+real limitation rather than an oversight. That subscription holds no open
+request, so there is nothing to answer: on `--stateless=false` the only ending
+the protocol offers is terminating the session, which is what the server does.
+What such a client observes is its standalone SSE stream ending and its next
+request being answered as a new session. The `logging` capability would be the
+one place left to carry an advisory string, and this server deliberately does
+not declare it, because SEP-2577 deprecated it; declaring a deprecated
+capability to carry one sentence is the wrong trade. Use `subscriptions/listen`
+if you want the reason.
 
 ## Change detection
 

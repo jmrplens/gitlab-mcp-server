@@ -1,7 +1,9 @@
 package mcpotel
 
 import (
+	"bufio"
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -235,5 +237,69 @@ func TestSessionDuration_ASessionWithManyRequests_IsMeasuredOnce(t *testing.T) {
 	if _, recorded := histogram.DataPoints[0].Attributes.Value(AttrMCPProtocolVersion); !recorded {
 		t.Errorf("%s is absent from the session measurement; attributes = %v",
 			AttrMCPProtocolVersion, histogram.DataPoints[0].Attributes.ToSlice())
+	}
+}
+
+// TestSessionDuration_ASessionThatEndsBadly_CarriesAnErrorType covers the
+// conditional half of the instrument's attribute set.
+//
+// error.type is Conditionally Required, "If and only if session ends with an
+// error", so a clean close carries no error attribute at all rather than one
+// saying there was no error. Every other test here closes cleanly, which left
+// the branch that records a failure unexercised: a client whose process dies
+// mid-frame is the ordinary way a real session ends badly, and it is the case an
+// operator most wants counted.
+//
+// Driven over a raw pipe rather than the in-memory transports, because a
+// malformed frame is the thing being tested and the SDK's own client cannot
+// send one.
+func TestSessionDuration_ASessionThatEndsBadly_CarriesAnErrorType(t *testing.T) {
+	reader, restore := newMetricRecorder(t)
+	defer restore()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server.AddReceivingMiddleware(Middleware(Options{Transport: TransportPipe}))
+
+	serverConn, clientConn := net.Pipe()
+	serverSession, err := server.Connect(t.Context(),
+		&mcp.IOTransport{Reader: serverConn, Writer: serverConn}, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	client := bufio.NewReader(clientConn)
+	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18",` +
+		`"capabilities":{},"clientInfo":{"name":"raw","version":"0"}}}` + "\n"
+	if _, writeErr := clientConn.Write([]byte(initialize)); writeErr != nil {
+		t.Fatalf("writing initialize: %v", writeErr)
+	}
+	if _, readErr := client.ReadString('\n'); readErr != nil {
+		t.Fatalf("reading the initialize response: %v", readErr)
+	}
+
+	// A frame that is not JSON at all, which is what a client crashing
+	// mid-write leaves on the wire. The session ends on the decode failure
+	// rather than on an orderly close.
+	if _, writeErr := clientConn.Write([]byte("this is not a JSON-RPC frame\n")); writeErr != nil {
+		t.Fatalf("writing the malformed frame: %v", writeErr)
+	}
+	if serverSession.Wait() == nil {
+		t.Fatal("the session ended cleanly after a malformed frame, so this test drives the wrong branch")
+	}
+	_ = clientConn.Close()
+
+	recorded, ok := awaitMetric(t, reader, "mcp.server.session.duration")
+	if !ok {
+		t.Fatal("no session duration was recorded for a session that ended badly")
+	}
+	histogram, ok := recorded.Data.(metricdata.Histogram[float64])
+	if !ok {
+		t.Fatalf("data is %T, want a float64 histogram", recorded.Data)
+	}
+	if len(histogram.DataPoints) != 1 {
+		t.Fatalf("recorded %d data points, want 1 per session", len(histogram.DataPoints))
+	}
+	if _, present := histogram.DataPoints[0].Attributes.Value(AttrErrorType); !present {
+		t.Error("a session that ended with an error carries no error.type, which the convention makes Conditionally Required")
 	}
 }
