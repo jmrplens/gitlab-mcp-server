@@ -1113,6 +1113,24 @@ func geoSiteListed(sites []geo.Output, siteID int64) bool {
 // TestMeta_StorageMoves exercises storage move tools via the
 // gitlab_storage_move meta-tool.
 // Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// requireRoutingRefusal is what the storage-move subtests share. Without Geo
+// the instance refuses these endpoints, and the refusal carrying one of the
+// expected statuses is the routing being validated; an answer instead of a
+// refusal means Geo is configured and the assertion has nothing to say.
+func requireRoutingRefusal(t *testing.T, err error, action string, codes ...int) {
+	t.Helper()
+	if err == nil {
+		t.Skip("Geo may be configured")
+	}
+	for _, code := range codes {
+		if isHTTPStatus(err, code) {
+			t.Logf("%s routing validated: %v", action, err)
+			return
+		}
+	}
+	t.Fatalf("%s error was not one of %v: %v", action, codes, err)
+}
+
 func TestMeta_StorageMoves(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
@@ -1235,13 +1253,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 			"action": "get_project",
 			"params": map[string]any{"id": int64(999999)},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 404) {
-			t.Fatalf("get_project error was not 404: %v", err)
-		}
-		t.Logf("get_project routing validated: %v", err)
+		requireRoutingRefusal(t, err, "get_project", 404)
 	})
 
 	t.Run("Meta/StorageMove/GetGroup_NotFound", func(t *testing.T) {
@@ -1249,13 +1261,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 			"action": "get_group",
 			"params": map[string]any{"id": int64(999999)},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 404) {
-			t.Fatalf("get_group error was not 404: %v", err)
-		}
-		t.Logf("get_group routing validated: %v", err)
+		requireRoutingRefusal(t, err, "get_group", 404)
 	})
 
 	t.Run("Meta/StorageMove/GetSnippet_NotFound", func(t *testing.T) {
@@ -1263,13 +1269,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 			"action": "get_snippet",
 			"params": map[string]any{"id": int64(999999)},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 404) {
-			t.Fatalf("get_snippet error was not 404: %v", err)
-		}
-		t.Logf("get_snippet routing validated: %v", err)
+		requireRoutingRefusal(t, err, "get_snippet", 404)
 	})
 
 	t.Run("Meta/StorageMove/GetProjectForProject_NotFound", func(t *testing.T) {
@@ -1280,13 +1280,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 				"id":         int64(999999),
 			},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 404) {
-			t.Fatalf("get_project_for_project error was not 404: %v", err)
-		}
-		t.Logf("get_project_for_project routing validated: %v", err)
+		requireRoutingRefusal(t, err, "get_project_for_project", 404)
 	})
 
 	t.Run("Meta/StorageMove/GetGroupForGroup_NotFound", func(t *testing.T) {
@@ -1297,13 +1291,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 				"id":       int64(999999),
 			},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 404) {
-			t.Fatalf("get_group_for_group error was not 404: %v", err)
-		}
-		t.Logf("get_group_for_group routing validated: %v", err)
+		requireRoutingRefusal(t, err, "get_group_for_group", 404)
 	})
 
 	t.Run("Meta/StorageMove/GetSnippetForSnippet_NotFound", func(t *testing.T) {
@@ -1314,13 +1302,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 				"id":         int64(999999),
 			},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 404) {
-			t.Fatalf("get_snippet_for_snippet error was not 404: %v", err)
-		}
-		t.Logf("get_snippet_for_snippet routing validated: %v", err)
+		requireRoutingRefusal(t, err, "get_snippet_for_snippet", 404)
 	})
 
 	t.Run("Meta/StorageMove/ScheduleAllProject_NotFound", func(t *testing.T) {
@@ -1336,13 +1318,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 				"destination_storage_name": "e2e-missing-destination",
 			},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 400) && !isHTTPStatus(err, 404) && !isHTTPStatus(err, 422) {
-			t.Fatalf("schedule_all_project error was not 400/404/422: %v", err)
-		}
-		t.Logf("schedule_all_project routing validated: %v", err)
+		requireRoutingRefusal(t, err, "schedule_all_project", 400, 404, 422)
 	})
 
 	t.Run("Meta/StorageMove/ScheduleAllGroup_NotFound", func(t *testing.T) {
@@ -1353,13 +1329,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 				"destination_storage_name": "e2e-missing-destination",
 			},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 400) && !isHTTPStatus(err, 404) && !isHTTPStatus(err, 422) {
-			t.Fatalf("schedule_all_group error was not 400/404/422: %v", err)
-		}
-		t.Logf("schedule_all_group routing validated: %v", err)
+		requireRoutingRefusal(t, err, "schedule_all_group", 400, 404, 422)
 	})
 
 	t.Run("Meta/StorageMove/ScheduleAllSnippet_NotFound", func(t *testing.T) {
@@ -1370,13 +1340,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 				"destination_storage_name": "e2e-missing-destination",
 			},
 		})
-		if err == nil {
-			t.Skip("Geo may be configured")
-		}
-		if !isHTTPStatus(err, 400) && !isHTTPStatus(err, 404) && !isHTTPStatus(err, 422) {
-			t.Fatalf("schedule_all_snippet error was not 400/404/422: %v", err)
-		}
-		t.Logf("schedule_all_snippet routing validated: %v", err)
+		requireRoutingRefusal(t, err, "schedule_all_snippet", 400, 404, 422)
 	})
 }
 
@@ -1849,6 +1813,67 @@ func TestMeta_EnterpriseUsers(t *testing.T) {
 // The setup uses a freshly created group to keep state isolated
 // between runs; the integration is created, read, and then deleted
 // inside the same test so no persistent side-effect is left behind.
+// groupDatadogAPI drives the group Datadog integration endpoints directly with
+// the root token, because the e2e-tester PAT the MCP server uses hits a 404 on
+// the group-level SET in the docker sandbox where the same call works as root.
+// A type rather than three closures inside the test, so that each helper can
+// mark itself as one and the test body stays readable.
+type groupDatadogAPI struct {
+	ctx     context.Context
+	baseURL string
+	token   string
+	group   string
+}
+
+func (d groupDatadogAPI) path() string {
+	return "/api/v4/groups/" + d.group + "/integrations/datadog"
+}
+
+// do issues one request and returns the status with the trimmed body.
+func (d groupDatadogAPI) do(t *testing.T, method, body string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(d.ctx, method, d.baseURL+d.path(), strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("PRIVATE-TOKEN", d.token)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, d.path(), err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, strings.TrimSpace(string(raw))
+}
+
+func (d groupDatadogAPI) put(t *testing.T, body string) (int, string) {
+	t.Helper()
+	return d.do(t, http.MethodPut, body)
+}
+
+// get decodes the record when GitLab answers 200 and leaves it empty otherwise,
+// so a caller checking only the status is not failed by a body it never reads.
+func (d groupDatadogAPI) get(t *testing.T) (int, integrations.GetGroupDatadogOutput) {
+	t.Helper()
+	var out integrations.GetGroupDatadogOutput
+	status, raw := d.do(t, http.MethodGet, "")
+	if status == http.StatusOK {
+		if decErr := json.Unmarshal([]byte(raw), &out); decErr != nil {
+			t.Fatalf("decode response: %v; body=%s", decErr, raw)
+		}
+	}
+	return status, out
+}
+
+func (d groupDatadogAPI) del(t *testing.T) int {
+	t.Helper()
+	status, _ := d.do(t, http.MethodDelete, "")
+	return status
+}
+
 func TestGroupDatadogIntegration(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
@@ -1883,52 +1908,7 @@ func TestGroupDatadogIntegration(t *testing.T) {
 	if gitlabURL == "" {
 		t.Skipf("GITLAB_URL not set; cannot make direct API calls")
 	}
-	httpDo := func(t *testing.T, method, path, body string) (int, string) {
-		t.Helper()
-		req, err := http.NewRequestWithContext(ctx, method, gitlabURL+path, strings.NewReader(body))
-		if err != nil {
-			t.Fatalf("build request: %v", err)
-		}
-		req.Header.Set("PRIVATE-TOKEN", rootToken)
-		if body != "" {
-			req.Header.Set("Content-Type", "application/json")
-		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("%s %s: %v", method, path, err)
-		}
-		defer resp.Body.Close()
-		raw, _ := io.ReadAll(resp.Body)
-		return resp.StatusCode, strings.TrimSpace(string(raw))
-	}
-	putDatadog := func(t *testing.T, body string) (int, string) {
-		return httpDo(t, http.MethodPut, "/api/v4/groups/"+grpName+"/integrations/datadog", body)
-	}
-	getDatadog := func(t *testing.T) (int, integrations.GetGroupDatadogOutput) {
-		var out integrations.GetGroupDatadogOutput
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, gitlabURL+"/api/v4/groups/"+grpName+"/integrations/datadog", nil)
-		req.Header.Set("PRIVATE-TOKEN", rootToken)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("GET: %v", err)
-		}
-		defer resp.Body.Close()
-		// Read the body once; both the optional JSON decode below and
-		// the test log (when the round-trip goes sideways) want the
-		// raw payload, so we keep it in a buffer rather than draining
-		// it into io.Discard first.
-		raw, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode == http.StatusOK {
-			if decErr := json.Unmarshal(raw, &out); decErr != nil {
-				t.Fatalf("decode response: %v; body=%s", decErr, strings.TrimSpace(string(raw)))
-			}
-		}
-		return resp.StatusCode, out
-	}
-	delDatadog := func(t *testing.T) int {
-		status, _ := httpDo(t, http.MethodDelete, "/api/v4/groups/"+grpName+"/integrations/datadog", "")
-		return status
-	}
+	datadog := groupDatadogAPI{ctx: ctx, baseURL: gitlabURL, token: rootToken, group: grpName}
 
 	// SET with a fake api_key. The GitLab API validates api_key as a
 	// required field AND checks its format (a plain alphanumeric
@@ -1937,7 +1917,7 @@ func TestGroupDatadogIntegration(t *testing.T) {
 	// placeholder; the value is never read or used (we never call
 	// Datadog), the test cleans up via delete below.
 	t.Run("SetWithFakeAPIKey", func(t *testing.T) {
-		status, body := putDatadog(t, `{"api_key":"0123456789abcdef0123456789abcdef"}`)
+		status, body := datadog.put(t, `{"api_key":"0123456789abcdef0123456789abcdef"}`)
 		if status != http.StatusOK {
 			t.Fatalf("PUT /groups/:id/integrations/datadog = %d, want 200; body=%s", status, body)
 		}
@@ -1953,7 +1933,7 @@ func TestGroupDatadogIntegration(t *testing.T) {
 	// doesn't 404. That proves the PUT actually persisted
 	// something the GET can retrieve.
 	t.Run("GetAfterSet", func(t *testing.T) {
-		status, _ := getDatadog(t)
+		status, _ := datadog.get(t)
 		if status != http.StatusOK {
 			t.Fatalf("GET = %d, want 200", status)
 		}
@@ -1962,7 +1942,7 @@ func TestGroupDatadogIntegration(t *testing.T) {
 	// DELETE clears the integration; no further GET assertion needed
 	// because the next get would just 404 again.
 	t.Run("DeleteAndConfirmGone", func(t *testing.T) {
-		status := delDatadog(t)
+		status := datadog.del(t)
 		if status != http.StatusNoContent {
 			t.Fatalf("DELETE = %d, want 204", status)
 		}

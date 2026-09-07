@@ -46,7 +46,7 @@ func TestMeta_ProjectIterations(t *testing.T) {
 	// Iterations only work on projects under a Group (not User namespace).
 	// Create a group first, then a project under it.
 	groupName := uniqueName("e2e-iterations-proj")
-	grpOut, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+	grpOut, setupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"name":       groupName,
@@ -54,7 +54,7 @@ func TestMeta_ProjectIterations(t *testing.T) {
 			"visibility": "private",
 		},
 	})
-	requireNoError(t, err, "create group for project iteration test")
+	requireNoError(t, setupErr, "create group for project iteration test")
 	groupIDStr := strconv.FormatInt(grpOut.ID, 10)
 
 	t.Cleanup(func() {

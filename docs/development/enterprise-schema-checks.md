@@ -115,6 +115,24 @@ The release rehearsal (`gh workflow run release.yml --ref <branch>`, described i
 release process section of [CLAUDE.md](../../CLAUDE.md)) is the moment to run it, so a
 tag cannot be cut without somebody having looked at the result.
 
+## What every push checks without a license
+
+Two things about the Enterprise suite need no GitLab at all, and neither
+happened until issue 570. The suite is compiled with `-tags "e2e enterprise"`
+in the CI compile job, and it is linted with that tag added, in a pass of its
+own over `test/e2e/suite/` (`make golangci-lint` runs it, and the comment on
+`GO_ANALYSIS_ENTERPRISE_TAGS` in the Makefile says why it cannot share the
+ordinary pass: the CE and EE halves of the suite exclude each other, so one
+run sees one half and never the other). Between the day the first
+`_ee_test.go` was written and that change, nothing had compiled those 41 files
+except a person running `make test-e2e-docker-enterprise` by hand, which is
+how nineteen helpers and four constants only CE tests use came to be unused
+under the Enterprise tag without anyone knowing.
+
+The licensed run is still where the behaviour is checked, and that is
+unchanged. What changed is that the code it compiles is known to compile, and
+to pass every linter, before anyone boots a GitLab for it.
+
 ## Why not just run the suite on a schedule
 
 Because the license does not exist. Everything above follows from that one fact:

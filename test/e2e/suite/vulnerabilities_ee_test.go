@@ -156,15 +156,15 @@ func TestMeta_VulnerabilityLifecycle(t *testing.T) {
 
 	// 3. Manually trigger a pipeline so the runner processes the
 	// SAST job.
-	created, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+	created, triggerErr := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
 			"ref":        defaultBranch,
 		},
 	})
-	if err != nil {
-		t.Skipf("could not trigger vulnerability pipeline (fixture not available): %v", err)
+	if triggerErr != nil {
+		t.Skipf("could not trigger vulnerability pipeline (fixture not available): %v", triggerErr)
 	}
 	pipelineID := created.ID
 	pipelineIID := strconv.FormatInt(created.IID, 10)

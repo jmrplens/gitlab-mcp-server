@@ -39,6 +39,7 @@ func adminLicenseCachedKey(t *testing.T) string {
 		}
 	}
 	for _, path := range candidates {
+		//nolint:gosec // G703: the path is the suite's own license cache or the operator's E2E_ENTERPRISE_LICENSE_FILE, read by a test on the operator's machine.
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue

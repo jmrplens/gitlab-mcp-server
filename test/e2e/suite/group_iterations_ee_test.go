@@ -53,6 +53,7 @@ func TestMeta_GroupIterations(t *testing.T) {
 	t.Run("Meta/GroupIteration/List_WithTestGroup", func(t *testing.T) {
 		// Create a group via the shared fixture so the resource is registered
 		// in the per-test ledger and cleaned up automatically.
+		//nolint:contextcheck // Per-test cleanup ledger is owned by NewE2EContext; the GitLab operation still receives ctx.
 		e2e := NewE2EContext(t)
 		grp := CreateGroupMeta(ctx, e2e, sess.meta, "e2e-iterations")
 		groupIDStr := grp.gidStr()
