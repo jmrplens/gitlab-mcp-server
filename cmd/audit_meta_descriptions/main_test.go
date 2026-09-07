@@ -394,7 +394,7 @@ func TestAcceptedFor_GroupOrStandalone_ReadsTheRightSchemas(t *testing.T) {
 
 // TestAudit_BothBlocks_CountsLinesAndSortsFindings verifies audit reads both
 // blocks of a served description, counts every line it read, and orders the
-// findings by tool then kind then detail so the report is stable.
+// findings by tool, then kind, then detail.
 func TestAudit_BothBlocks_CountsLinesAndSortsFindings(t *testing.T) {
 	catalog := testCatalog(t, "gitlab_widget", "list", "search")
 	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble +
@@ -442,6 +442,21 @@ func TestAudit_SortsByDetailWithinAKind(t *testing.T) {
 	findings, _ := audit([]*mcp.Tool{tool}, catalog)
 	if len(findings) != 2 || findings[0].detail != "filter" || findings[1].detail != "query" {
 		t.Fatalf("findings = %+v, want them ordered by the name they report", findings)
+	}
+}
+
+// TestAudit_SortsByLineWhenEverythingElseTies verifies two findings that agree
+// on tool, kind and detail are ordered by the line they came from: six actions
+// of one tool offering one wrong parameter tie on every other part of the key,
+// and without the line they printed in a different order from run to run.
+func TestAudit_SortsByLineWhenEverythingElseTies(t *testing.T) {
+	catalog := testCatalog(t, "gitlab_widget", "list", "search")
+	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble +
+		"Widget actions.\n\n- search: query\n- list: query\n"}
+
+	findings, _ := audit([]*mcp.Tool{tool}, catalog)
+	if len(findings) != 2 || findings[0].line != "- list: query" || findings[1].line != "- search: query" {
+		t.Fatalf("findings = %+v, want them ordered by the line each came from", findings)
 	}
 }
 

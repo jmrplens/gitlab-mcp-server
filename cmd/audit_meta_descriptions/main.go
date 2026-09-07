@@ -143,14 +143,20 @@ func audit(served []*mcp.Tool, catalog *actioncatalog.Catalog) (findings []findi
 			findings = append(findings, judgeGuidance(tool.Name, mentioned, allowed)...)
 		}
 	}
-	sort.Slice(findings, func(i, j int) bool {
+	// The line is part of the key, and the sort is stable, because six lines of
+	// one tool naming one wrong parameter tie on everything else: without it the
+	// same corpus printed those six in a different order from run to run.
+	sort.SliceStable(findings, func(i, j int) bool {
 		if findings[i].tool != findings[j].tool {
 			return findings[i].tool < findings[j].tool
 		}
 		if findings[i].kind != findings[j].kind {
 			return findings[i].kind < findings[j].kind
 		}
-		return findings[i].detail < findings[j].detail
+		if findings[i].detail != findings[j].detail {
+			return findings[i].detail < findings[j].detail
+		}
+		return findings[i].line < findings[j].line
 	})
 	return findings, lines
 }

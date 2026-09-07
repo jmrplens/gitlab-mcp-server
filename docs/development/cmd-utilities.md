@@ -614,8 +614,8 @@ One line per finding (tool, kind, the offending name or `parameter=value`, and t
 
 #### Make targets
 
-- `make audit-meta-descriptions` — the report.
-- `make check-meta-descriptions` — CI gate.
+- `make audit-meta-descriptions` prints the report.
+- `make check-meta-descriptions` is the CI gate.
 
 ### audit_tokens
 
