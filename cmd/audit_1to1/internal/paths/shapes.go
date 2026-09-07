@@ -18,6 +18,15 @@ import (
 // whether a path exists. This asks what the answer at that path contains, from
 // the document GitLab generates out of the code that renders it.
 //
+// What it says is an upper bound rather than an answer, because Grape renders a
+// conditional expose (`expose :x, if: ->(_, options) { options[...] }`) only
+// when the route passes the option, and the generator that writes the record
+// cannot see the condition. A field in the record therefore proves that the
+// entity can render it and nothing about a given route, so a decision about one
+// endpoint's response is only settled by reading the entity's condition or a
+// live answer. The epics domain published `subscribed` and `reference` on that
+// mistake, both of them in the record and neither ever sent.
+//
 // It is asked at two grains, both reported and neither gating.
 //
 // [ShapeCheck.Unpublished] is the package grain: a package's recorded endpoints

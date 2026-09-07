@@ -58,11 +58,6 @@ func FormatOutputMarkdown(e Output) string {
 	if e.MilestoneID != nil {
 		fmt.Fprintf(&b, "- **Milestone ID**: %d\n", *e.MilestoneID)
 	}
-	// Only the REST path reports it, and only for the authenticated caller, so
-	// an absent value means "not asked" rather than "not subscribed".
-	if e.Subscribed != nil {
-		fmt.Fprintf(&b, "- **Subscribed**: %t\n", *e.Subscribed)
-	}
 	if e.StartDate != "" {
 		//gitlab:allow-unescaped e.StartDate: a date this package wrote itself, with time.Format on the DateOnly layout.
 		fmt.Fprintf(&b, "- **Start date**: %s\n", e.StartDate)

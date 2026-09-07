@@ -93,7 +93,7 @@ readable without opening the tracker:
 | 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | No | No | No | No | Yes |
 | 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | No | No | No | No | Yes |
 | 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | No | No | No | No | None possible |
-| 28 | client-go | [The epics wrapper is missing two filters and fourteen response fields](#the-epics-wrapper-is-missing-two-filters-and-fourteen-response-fields) | No | No | No | Was yes | Yes |
+| 28 | client-go | [The epics wrapper is missing two filters and twelve response fields](#the-epics-wrapper-is-missing-two-filters-and-twelve-response-fields) | No | No | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -473,7 +473,7 @@ The gap was measured against the pinned GitLab schema in
 struct). Larger for the user objects, because widening them changes the shape of
 a published struct: the ids would stay and a `*BasicUser` would join them, which
 is the same accretion the SDK already makes elsewhere.
-### The epics wrapper is missing two filters and fourteen response fields
+### The epics wrapper is missing two filters and twelve response fields
 
 - **Reported**: no.
 - **In review**: no.
@@ -496,22 +496,31 @@ really sends or really accepts.
   OpenAPI document GitLab generates from its own Grape definitions
   (`docs/development/gitlab-api-shapes.json`); the prose page
   [doc/api/epics.md](https://docs.gitlab.com/api/epics/#list-all-group-epics)
-  lists `author_username` in the list endpoint's parameter table and mentions
-  `confidential` only under create and update, which is a gap in the page
-  rather than in the endpoint. There is no way to send either one through the
-  wrapper.
-- `Epic` declares fourteen fewer fields than the endpoint returns: `parent_iid`,
-  `color`, `text_color`, `web_edit_url`, `work_item_id`, `subscribed`,
-  `reference`, `references`, `imported`, `imported_from`, `_links`, `end_date`,
+  lists `author_username` in the list endpoint's parameter table and in that
+  table's `not` row, and prints `confidential` in the example bodies of list,
+  create and update while naming it in the parameter tables of create and
+  update only, which is a gap in the page rather than in the endpoint. There is
+  no way to send either one through the wrapper.
+- `Epic` declares twelve fewer fields than the endpoint returns: `parent_iid`,
+  `color`, `text_color`, `web_edit_url`, `work_item_id`, `references`,
+  `imported`, `imported_from`, `_links`, `end_date`,
   `start_date_from_inherited_source` and `due_date_from_inherited_source`. The
-  same OpenAPI record lists every one of them on all five epic GETs. The other
-  two oracles each corroborate all but a couple, and not the same couple, so
-  every field has the record plus at least one of them behind it: live
-  gitlab.com GETs on 2026-09-07 carried all but `reference` (the list response
-  leaves out `subscribed` as well, the single-epic one sends it), and the
-  documentation page's example bodies print all but `web_edit_url`, which it
-  never mentions, and `text_color`, which appears only in its
-  `with_labels_details` parameter row.
+  same OpenAPI record lists every one of them on all five epic GETs, live
+  gitlab.com GETs on 2026-09-07 carried all twelve, and the documentation
+  page's example bodies print all but `web_edit_url`, which it never mentions,
+  and `text_color`, which appears only in its `with_labels_details` parameter
+  row.
+
+  `subscribed` and `reference` were counted here too, on the strength of the
+  record alone, and neither belongs. A Grape entity's conditional expose is
+  invisible to the generator that writes that record, so the record is the
+  upper bound of what an entity can render rather than a statement about a
+  route: `ee/lib/api/entities/epic.rb` exposes `subscribed` under
+  `options.fetch(:include_subscribed, false)`, which `ee/lib/api/epics.rb`
+  passes on `GET :id/epics/:epic_iid` alone, and `reference` under
+  `with_reference`, which nothing sets and which GitLab deprecated in favour of
+  `references`. The wrapper is missing neither, because the endpoints this
+  server calls do not send them.
 - `Epic.Labels` is typed `[]string`, and the documented `with_labels_details`
   parameter makes GitLab answer with an array of label objects instead. A caller
   who sends it gets a JSON decode failure rather than epics, so the parameter

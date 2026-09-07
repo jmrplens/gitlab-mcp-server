@@ -271,7 +271,34 @@ var docOmittedFields = map[string]string{
 	"epics.Output.status":       epicPhantomWidget,
 	"epics.Output.iteration_id": epicPhantomWidget,
 	"epics.Output.parent":       "exposed flattened as parent_iid + parent_path (the two fields of gl.WorkItemIID)",
+	// epics: the OpenAPI record lists subscribed and reference on every epic
+	// GET, and both were still the zero value on each response the two
+	// REST-backed epic actions returned. The record says what the entity can
+	// render; the entity says under which condition, and neither condition
+	// holds on the routes this package calls.
+	"epics.Output.subscribed":       docEpicSubscribed,
+	"epics.LinksItem.subscribed":    docEpicSubscribed,
+	"epics.Output.reference":        docEpicReference,
+	"epics.LinksItem.reference":     docEpicReference,
+	"epics.LinksItem.label_details": docEpicChildrenNoOptions,
 }
+
+// docEpicSubscribed, docEpicReference and docEpicChildrenNoOptions cite the
+// entity and the route rather than the OpenAPI record, which lists all three
+// fields: Grape renders a conditional expose only when the option its `if:`
+// names is passed, and the generator that writes the record cannot see the
+// condition, so the record is the upper bound of what an entity can render and
+// says nothing about a given route.
+const (
+	docEpicSubscribed = "ee/lib/api/entities/epic.rb exposes subscribed under " +
+		"options.fetch(:include_subscribed, false); ee/lib/api/epics.rb passes it on " +
+		"GET :id/epics/:epic_iid alone, which this package never calls (get takes the Work Items path)"
+	docEpicReference = "ee/lib/api/entities/epic.rb exposes reference under with_reference, which no epic " +
+		"endpoint sets, and which GitLab has retired in favor of references"
+	docEpicChildrenNoOptions = "ee/lib/api/epic_links.rb declares GET /groups/:id/-/epics/:epic_iid/epics with " +
+		"id and epic_iid alone and presents the entity with no options, so its labels array is always titles; " +
+		"with_labels_details is a parameter of the list endpoint, which fills epics.Output.label_details"
+)
 
 // docEpicsGET cites the three oracles that agree the two fields are not sent,
 // since gl.Epic declaring them is the only reason to think they are.
@@ -384,20 +411,18 @@ var docAddedFields = map[string]string{
 	"commits.GPGSignatureOutput.key":              docCommitSignature,
 	"commits.GPGSignatureOutput.x509_certificate": docCommitSignature,
 
-	// epics: fourteen fields the epic response documents and gl.Epic does not
-	// declare, plus the object half of the dual-shape labels array that
-	// with_labels_details asks for; fetched via raw REST (rawListEpics into the
-	// epicAPI superset) on the list and child-epic paths. Like the omissions
-	// above, these keys record which fields are doc-justified rather than
-	// invented; the converters take the superset, so the gl.Epic diff that
-	// would consult them is not currently run.
+	// epics: twelve fields the epic response documents and gl.Epic does not
+	// declare; fetched via raw REST (rawListEpics into the epicAPI superset) on
+	// the list and child-epic paths. Like the omissions above, these keys record
+	// which fields are doc-justified rather than invented; the converters take
+	// the superset, so the gl.Epic diff that would consult them is not currently
+	// run. subscribed and reference were here and are now omissions: the record
+	// lists them, and the entity renders neither on these routes.
 	"epics.LinksItem.parent_iid":                       docEpics,
 	"epics.LinksItem.work_item_id":                     docEpics,
 	"epics.LinksItem.color":                            docEpics,
 	"epics.LinksItem.text_color":                       docEpics,
 	"epics.LinksItem.web_edit_url":                     docEpics,
-	"epics.LinksItem.subscribed":                       docEpics,
-	"epics.LinksItem.reference":                        docEpics,
 	"epics.LinksItem.references":                       docEpics,
 	"epics.LinksItem.imported":                         docEpics,
 	"epics.LinksItem.imported_from":                    docEpics,
@@ -405,9 +430,12 @@ var docAddedFields = map[string]string{
 	"epics.LinksItem.end_date":                         docEpics,
 	"epics.LinksItem.start_date_from_inherited_source": docEpics,
 	"epics.LinksItem.due_date_from_inherited_source":   docEpics,
-	"epics.LinksItem.label_details":                    docEpicsLabelDetails,
-	"epics.BasicUserOutput.locked":                     docEpicsAuthor,
-	"epics.BasicUserOutput.public_email":               docEpicsAuthor,
+	// The object half of the dual-shape labels array belongs to the endpoint
+	// whose parameter asks for it. This entry named LinksItem, whose endpoint
+	// takes no such parameter and never renders it.
+	"epics.Output.label_details":         docEpicsLabelDetails,
+	"epics.BasicUserOutput.locked":       docEpicsAuthor,
+	"epics.BasicUserOutput.public_email": docEpicsAuthor,
 
 	// projectimportexport — the import-status response documents `created_at`, but the
 	// SDK gl.ImportStatus tags its timestamp `create_at` (upstream typo); we surface the

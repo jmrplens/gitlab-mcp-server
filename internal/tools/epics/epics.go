@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -158,21 +159,28 @@ func (l *epicLabels) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// epicAPI decodes a REST epic in full: gl.Epic plus the fourteen fields GitLab
+// epicAPI decodes a REST epic in full: gl.Epic plus the twelve fields GitLab
 // sends that it does not declare, and the dual-shape labels array it cannot
 // decode.
 //
 // The fields are GitLab's own, not ours to infer: its generated OpenAPI record
-// lists all fourteen on each of the five epic GETs
+// lists all twelve on each of the five epic GETs
 // (docs/development/gitlab-api-shapes.json, GET /api/v4/groups/{id}/-/epics).
-// Two further oracles each corroborate all but a couple, and not the same
-// couple, so every field rests on the record plus at least one of them: live
-// gitlab.com GETs on 2026-09-07 carried all but reference (the list response
-// omits subscribed too, the single-epic one sends it), while doc/api/epics.md
-// prints all but web_edit_url, which it never mentions, and text_color, which
-// appears only in its with_labels_details parameter row.
+// Two further oracles corroborate them, so every field rests on the record plus
+// at least one of them: live gitlab.com GETs on 2026-09-07 carried all twelve,
+// while doc/api/epics.md prints all but web_edit_url, which it never mentions,
+// and text_color, which appears only in its with_labels_details parameter row.
 // Reading them costs no extra round trip, since they arrive on the response
 // client-go already asks for and discards.
+//
+// subscribed and reference are deliberately not among them, and the record is
+// why they once were: it says what the entity can render, not what a route
+// does. ee/lib/api/entities/epic.rb exposes subscribed only under
+// options.fetch(:include_subscribed, false), which ee/lib/api/epics.rb passes
+// on GET :id/epics/:epic_iid alone, a route neither path here calls; it exposes
+// reference only under with_reference, which nothing sets and which GitLab has
+// retired in favor of references. Both were the zero value on every response
+// these two actions ever returned.
 //
 // Author and Labels shadow the embedded gl.Epic fields of the same name: the
 // shallower field is the one encoding/json fills, so the embedded ones stay
@@ -186,8 +194,6 @@ type epicAPI struct {
 	TextColor                    string                     `json:"text_color"`
 	WebEditURL                   string                     `json:"web_edit_url"`
 	WorkItemID                   int64                      `json:"work_item_id"`
-	Subscribed                   *bool                      `json:"subscribed"`
-	Reference                    string                     `json:"reference"`
 	References                   *toolutil.ReferencesOutput `json:"references"`
 	Imported                     bool                       `json:"imported"`
 	ImportedFrom                 string                     `json:"imported_from"`
@@ -229,21 +235,31 @@ func rawListEpics(
 // Two GitLab APIs answer this action and the filters decide which: a request
 // naming only what the REST epics endpoint accepts is served by it, and
 // anything below that only Namespace.workItems can express routes the whole
-// request through the Work Items GraphQL query. [usesWorkItemsPath] is the one
-// place that decision is made, so a filter added here and forgotten there is
-// silently dropped rather than refused.
+// request through the Work Items GraphQL query. [workItemsPathReason] is the
+// one place that decision is made, so a filter added here and forgotten there
+// is silently dropped rather than refused.
+//
+// The page request follows the same split, and [validateListPagination]
+// enforces it: page, per_page, pagination and page_token are the REST
+// endpoint's, first, after, last and before are the query's, and asking for one
+// beside a filter that routes to the other is refused rather than answered with
+// a page nobody asked for.
 type ListInput struct {
-	FullPath            string   `json:"full_path" jsonschema:"Full path of the group (e.g. my-group or my-group/sub-group),required"`
-	State               string   `json:"state,omitempty" jsonschema:"Filter by state (opened/closed/all)"`
-	Search              string   `json:"search,omitempty" jsonschema:"Search in title and description"`
-	In                  []string `json:"in,omitempty" jsonschema:"Fields the search term is matched against: TITLE, DESCRIPTION, or both. Both are searched when omitted"`
-	AuthorUsername      string   `json:"author_username,omitempty" jsonschema:"Filter by author username"`
-	AuthorID            *int64   `json:"author_id,omitempty" jsonschema:"Filter by author user ID. Accepted by the REST epics endpoint only, so it is dropped when another filter routes the request through the Work Items API, where author_username is the equivalent"`
-	AssigneeUsernames   []string `json:"assignee_usernames,omitempty" jsonschema:"Filter by assignee usernames"`
-	AssigneeWildcardID  string   `json:"assignee_wildcard_id,omitempty" jsonschema:"Filter by assignment state rather than by user: ANY, ME, or NONE"`
-	IIDs                []string `json:"iids,omitempty" jsonschema:"Fetch only these epic IIDs, each as a decimal string (e.g. [\"12\", \"34\"])"`
-	IDs                 []string `json:"ids,omitempty" jsonschema:"Fetch only these epics by global ID, in full gid://gitlab/WorkItem/123 form. Unlike every other id input here this is not a bare number"`
-	ParentIDs           []string `json:"parent_ids,omitempty" jsonschema:"Return only epics whose parent is one of these global IDs, in full gid://gitlab/WorkItem/123 form"`
+	FullPath           string   `json:"full_path" jsonschema:"Full path of the group (e.g. my-group or my-group/sub-group),required"`
+	State              string   `json:"state,omitempty" jsonschema:"Filter by state (opened/closed/all)"`
+	Search             string   `json:"search,omitempty" jsonschema:"Search in title and description"`
+	In                 []string `json:"in,omitempty" jsonschema:"Fields the search term is matched against: TITLE, DESCRIPTION, or both. Both are searched when omitted"`
+	AuthorUsername     string   `json:"author_username,omitempty" jsonschema:"Filter by author username"`
+	AuthorID           *int64   `json:"author_id,omitempty" jsonschema:"Filter by author user ID. Accepted by the REST epics endpoint only, so it is dropped when another filter routes the request through the Work Items API, where author_username is the equivalent"`
+	AssigneeUsernames  []string `json:"assignee_usernames,omitempty" jsonschema:"Filter by assignee usernames"`
+	AssigneeWildcardID string   `json:"assignee_wildcard_id,omitempty" jsonschema:"Filter by assignment state rather than by user: ANY, ME, or NONE"`
+	IIDs               []string `json:"iids,omitempty" jsonschema:"Fetch only these epic IIDs, each as a decimal string (e.g. [\"12\", \"34\"])"`
+	IDs                []string `json:"ids,omitempty" jsonschema:"Fetch only these epics by global ID, in full gid://gitlab/WorkItem/123 form. Unlike every other id input here this is not a bare number"`
+	// An epic under another epic is the multi-level hierarchy
+	// docs.gitlab.com/user/work_items/child_items/ puts at Tier: Ultimate
+	// under "Work with multi-level hierarchies", so a filter that selects by
+	// one names something no lower tier can have.
+	ParentIDs           []string `json:"parent_ids,omitempty" tier:"ultimate" jsonschema:"Return only epics whose parent is one of these global IDs, in full gid://gitlab/WorkItem/123 form"`
 	LabelName           []string `json:"label_name,omitempty" jsonschema:"Filter by label names"`
 	MilestoneTitle      []string `json:"milestone_title,omitempty" jsonschema:"Filter by the titles of the milestones assigned to the epic"`
 	MilestoneWildcardID string   `json:"milestone_wildcard_id,omitempty" jsonschema:"Filter by milestone assignment rather than by title: ANY, NONE, STARTED, or UPCOMING"`
@@ -273,13 +289,27 @@ type ListInput struct {
 
 // usesWorkItemsPath reports whether the request names anything only the Work
 // Items query can express.
+func usesWorkItemsPath(in ListInput) bool {
+	return workItemsPathReason(in) != ""
+}
+
+// workItemsPathReason names the first parameter that sends the whole request
+// through the Work Items query, or "" when the REST epics endpoint can answer
+// it.
+//
+// It names the parameter rather than reporting a bare yes so a refusal can say
+// what took the request off the REST path: a caller told only that page is
+// unavailable has no way to find which of their filters made it so.
 //
 // gl.ListGroupEpicsOptions carries none of these, so a filter left out of this
 // list reaches GitLab on neither path: the REST endpoint is asked for an
 // unfiltered page and the caller is handed it with no error. Every filter
 // added to [ListInput] that the REST endpoint does not accept belongs here.
-func usesWorkItemsPath(in ListInput) bool {
-	return namesWorkItemsIdentity(in) || namesWorkItemsAttribute(in)
+func workItemsPathReason(in ListInput) string {
+	if name := namesWorkItemsIdentity(in); name != "" {
+		return name
+	}
+	return namesWorkItemsAttribute(in)
 }
 
 // namesWorkItemsIdentity covers the filters that name epics, people or a page
@@ -288,23 +318,107 @@ func usesWorkItemsPath(in ListInput) bool {
 // author_username and confidential are here although GitLab's REST epics
 // endpoint documents both: client-go's ListGroupEpicsOptions declares neither,
 // so the Work Items query is the only way either one reaches GitLab from here.
-func namesWorkItemsIdentity(in ListInput) bool {
-	return in.AuthorUsername != "" || in.Confidential != nil ||
-		in.After != "" || in.Before != "" || in.Last != nil ||
-		len(in.AssigneeUsernames) > 0 || in.AssigneeWildcardID != "" ||
-		len(in.IIDs) > 0 || len(in.IDs) > 0 || len(in.ParentIDs) > 0
+func namesWorkItemsIdentity(in ListInput) string {
+	switch {
+	case in.AuthorUsername != "":
+		return "author_username"
+	case in.Confidential != nil:
+		return "confidential"
+	case in.After != "":
+		return "after"
+	case in.Before != "":
+		return "before"
+	case in.Last != nil:
+		return "last"
+	case len(in.AssigneeUsernames) > 0:
+		return "assignee_usernames"
+	case in.AssigneeWildcardID != "":
+		return "assignee_wildcard_id"
+	case len(in.IIDs) > 0:
+		return "iids"
+	case len(in.IDs) > 0:
+		return "ids"
+	case len(in.ParentIDs) > 0:
+		return "parent_ids"
+	}
+	return ""
 }
 
 // namesWorkItemsAttribute covers the filters that describe an epic rather than
 // naming one.
-func namesWorkItemsAttribute(in ListInput) bool {
-	return len(in.In) > 0 ||
-		len(in.MilestoneTitle) > 0 || in.MilestoneWildcardID != "" ||
-		in.ClosedAfter != "" || in.ClosedBefore != "" ||
-		in.DueAfter != "" || in.DueBefore != "" ||
-		in.HealthStatusFilter != "" ||
-		in.Weight != "" || in.WeightWildcardID != "" ||
-		in.Subscribed != ""
+func namesWorkItemsAttribute(in ListInput) string {
+	switch {
+	case len(in.In) > 0:
+		return "in"
+	case len(in.MilestoneTitle) > 0:
+		return "milestone_title"
+	case in.MilestoneWildcardID != "":
+		return "milestone_wildcard_id"
+	case in.ClosedAfter != "":
+		return "closed_after"
+	case in.ClosedBefore != "":
+		return "closed_before"
+	case in.DueAfter != "":
+		return "due_after"
+	case in.DueBefore != "":
+		return "due_before"
+	case in.HealthStatusFilter != "":
+		return "health_status_filter"
+	case in.Weight != "":
+		return "weight"
+	case in.WeightWildcardID != "":
+		return "weight_wildcard_id"
+	case in.Subscribed != "":
+		return "subscribed"
+	}
+	return ""
+}
+
+// validateListPagination refuses an offset or keyset page request that the Work
+// Items query cannot honor.
+//
+// The four parameters below reach GitLab through gl.ListOptions, which only the
+// REST epics endpoint is given, so a request combining one of them with a
+// Work-Items-only filter used to be answered with the first cursor page and no
+// word about it: page=2 came back as page one, which reads as a list that ends
+// where it does not. Mapping them onto first and after is not available either,
+// since a cursor cannot be computed from a page number without walking the
+// pages before it. Refusing names both halves instead, so the caller can drop
+// one or ask for the other API's page shape.
+func validateListPagination(in ListInput) error {
+	reason := workItemsPathReason(in)
+	if reason == "" {
+		return nil
+	}
+	named := offsetPaginationNames(in)
+	if len(named) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"epicList: %s cannot be combined with %s, which is answered by the Work Items API. "+
+			"That API pages by cursor: send first and after (or last and before), "+
+			"or drop %s to page this list with %s",
+		strings.Join(named, " and "), reason, reason, strings.Join(named, " and "),
+	)
+}
+
+// offsetPaginationNames lists the page parameters the request carries that only
+// the REST epics endpoint can spend.
+func offsetPaginationNames(in ListInput) []string {
+	var named []string
+	if in.Page > 0 {
+		named = append(named, "page")
+	}
+	if in.PerPage > 0 {
+		named = append(named, "per_page")
+	}
+	if in.Pagination != "" {
+		named = append(named, "pagination")
+	}
+	if in.PageToken != "" {
+		named = append(named, "page_token")
+	}
+	return named
 }
 
 // The two directions order_by and sort accept, spelled the way the REST epics
@@ -385,19 +499,21 @@ type GetLinksInput struct {
 
 // CreateInput defines parameters for creating a new epic.
 type CreateInput struct {
-	FullPath     string             `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	Title        string             `json:"title" jsonschema:"Epic title,required"`
-	Description  string             `json:"description,omitempty" jsonschema:"Epic description (Markdown supported)"`
-	Confidential *bool              `json:"confidential,omitempty" jsonschema:"Whether the epic is confidential"`
-	Color        string             `json:"color,omitempty" jsonschema:"Epic color (hex format, e.g. #FF0000)"`
-	StartDate    string             `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
-	DueDate      string             `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
-	CreatedAt    string             `json:"created_at,omitempty" jsonschema:"Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z). Honored for group owners and administrators only, and ignored when it cannot be parsed"`
-	CreateSource string             `json:"create_source,omitempty" jsonschema:"Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic"`
-	AssigneeIDs  []int64            `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees"`
-	LabelIDs     []int64            `json:"label_ids,omitempty" jsonschema:"Global IDs of labels"`
-	MilestoneID  *int64             `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone to assign to the epic"`
-	ParentID     *int64             `json:"parent_id,omitempty" jsonschema:"Global ID of the parent epic, which makes this one a sub-epic in the same call"`
+	FullPath     string  `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
+	Title        string  `json:"title" jsonschema:"Epic title,required"`
+	Description  string  `json:"description,omitempty" jsonschema:"Epic description (Markdown supported)"`
+	Confidential *bool   `json:"confidential,omitempty" jsonschema:"Whether the epic is confidential"`
+	Color        string  `json:"color,omitempty" jsonschema:"Epic color (hex format, e.g. #FF0000)"`
+	StartDate    string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
+	DueDate      string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
+	CreatedAt    string  `json:"created_at,omitempty" jsonschema:"Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z). Honored for group owners and administrators only, and ignored when it cannot be parsed"`
+	CreateSource string  `json:"create_source,omitempty" jsonschema:"Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic"`
+	AssigneeIDs  []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees"`
+	LabelIDs     []int64 `json:"label_ids,omitempty" jsonschema:"Global IDs of labels"`
+	MilestoneID  *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone to assign to the epic"`
+	// Making an epic a sub-epic is the Ultimate multi-level hierarchy
+	// [ListInput.ParentIDs] cites.
+	ParentID     *int64             `json:"parent_id,omitempty" tier:"ultimate" jsonschema:"Global ID of the parent epic, which makes this one a sub-epic in the same call"`
 	LinkedItems  *CreateLinkedItems `json:"linked_items,omitempty" tier:"ultimate" jsonschema:"Epics to link to the new one, all with the same link type"`
 	Weight       *int64             `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the epic"`
 	HealthStatus string             `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
@@ -416,12 +532,14 @@ type CreateInput struct {
 // ITERATION nor CRM_CONTACTS. Issue and Task carry all three, which is where
 // the field was copied from.
 type UpdateInput struct {
-	FullPath       string  `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID            int64   `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
-	Title          string  `json:"title,omitempty" jsonschema:"Updated epic title"`
-	Description    string  `json:"description,omitempty" jsonschema:"Updated description (Markdown supported)"`
-	StateEvent     string  `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
-	ParentID       *int64  `json:"parent_id,omitempty" jsonschema:"Global ID of the parent epic work item"`
+	FullPath    string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
+	IID         int64  `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
+	Title       string `json:"title,omitempty" jsonschema:"Updated epic title"`
+	Description string `json:"description,omitempty" jsonschema:"Updated description (Markdown supported)"`
+	StateEvent  string `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
+	// Reparenting reaches the same hierarchy creating one does, so it carries
+	// the tier [ListInput.ParentIDs] cites.
+	ParentID       *int64  `json:"parent_id,omitempty" tier:"ultimate" jsonschema:"Global ID of the parent epic work item"`
 	Color          string  `json:"color,omitempty" jsonschema:"Epic color (hex format)"`
 	StartDate      string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
 	DueDate        string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
@@ -452,6 +570,10 @@ type DeleteInput struct {
 // url either: gl.Epic declares both, and GitLab's OpenAPI record, its
 // doc/api/epics.md example bodies and a live gitlab.com response agree that no
 // epic endpoint sends either one.
+//
+// There is no subscribed and no reference for the reason [epicAPI] records: the
+// entity renders each one only under an option no route this package calls
+// passes.
 type Output struct {
 	toolutil.HintableOutput
 	ID           int64                          `json:"id"`
@@ -492,8 +614,6 @@ type Output struct {
 	MilestoneID  *int64                     `json:"milestone_id,omitempty"`
 	Upvotes      int64                      `json:"upvotes,omitempty"`
 	Downvotes    int64                      `json:"downvotes,omitempty"`
-	Subscribed   *bool                      `json:"subscribed,omitempty"`
-	Reference    string                     `json:"reference,omitempty"`
 	References   *toolutil.ReferencesOutput `json:"references,omitempty"`
 	Imported     bool                       `json:"imported,omitempty"`
 	ImportedFrom string                     `json:"imported_from,omitempty"`
@@ -529,29 +649,35 @@ type LinksOutput struct {
 
 // LinksItem is the child-epic output for the GetLinks REST endpoint. Per the
 // 1:1 audit policy it surfaces the whole REST epic: every field of gl.Epic
-// GitLab sends, plus the fourteen it sends that gl.Epic does not declare
+// GitLab sends, plus the twelve it sends that gl.Epic does not declare
 // (see [epicAPI]). The author is a full nested object.
 //
-// user_notes_count and url are absent for the reason [Output] records: gl.Epic
-// declares them and no epic endpoint sends them.
+// user_notes_count, url, subscribed and reference are absent for the reasons
+// [Output] and [epicAPI] record.
+//
+// There is no label_details either, and unlike the four above that is this
+// endpoint rather than the entity: ee/lib/api/epic_links.rb declares GET
+// /groups/:id/-/epics/:epic_iid/epics with id and epic_iid alone and presents
+// the entity with no options, so the labels array is always titles here.
+// with_labels_details belongs to the list endpoint, which fills [Output]'s
+// label_details; the dual-shape decoder stays because that path needs it.
 type LinksItem struct {
-	ID           int64                          `json:"id"`
-	IID          int64                          `json:"iid"`
-	GroupID      int64                          `json:"group_id,omitempty"`
-	ParentID     int64                          `json:"parent_id,omitempty"`
-	ParentIID    int64                          `json:"parent_iid,omitempty"`
-	WorkItemID   int64                          `json:"work_item_id,omitempty"`
-	Title        string                         `json:"title"`
-	Description  string                         `json:"description,omitempty"`
-	State        string                         `json:"state"`
-	WebURL       string                         `json:"web_url,omitempty"`
-	WebEditURL   string                         `json:"web_edit_url,omitempty"`
-	Author       *BasicUserOutput               `json:"author,omitempty"`
-	Labels       []string                       `json:"labels,omitempty"`
-	LabelDetails []*toolutil.LabelDetailsOutput `json:"label_details,omitempty"`
-	Confidential bool                           `json:"confidential,omitempty"`
-	Color        string                         `json:"color,omitempty"`
-	TextColor    string                         `json:"text_color,omitempty"`
+	ID           int64            `json:"id"`
+	IID          int64            `json:"iid"`
+	GroupID      int64            `json:"group_id,omitempty"`
+	ParentID     int64            `json:"parent_id,omitempty"`
+	ParentIID    int64            `json:"parent_iid,omitempty"`
+	WorkItemID   int64            `json:"work_item_id,omitempty"`
+	Title        string           `json:"title"`
+	Description  string           `json:"description,omitempty"`
+	State        string           `json:"state"`
+	WebURL       string           `json:"web_url,omitempty"`
+	WebEditURL   string           `json:"web_edit_url,omitempty"`
+	Author       *BasicUserOutput `json:"author,omitempty"`
+	Labels       []string         `json:"labels,omitempty"`
+	Confidential bool             `json:"confidential,omitempty"`
+	Color        string           `json:"color,omitempty"`
+	TextColor    string           `json:"text_color,omitempty"`
 
 	StartDate                    string `json:"start_date,omitempty"`
 	StartDateIsFixed             bool   `json:"start_date_is_fixed,omitempty"`
@@ -567,8 +693,6 @@ type LinksItem struct {
 
 	Upvotes      int64                      `json:"upvotes,omitempty"`
 	Downvotes    int64                      `json:"downvotes,omitempty"`
-	Subscribed   *bool                      `json:"subscribed,omitempty"`
-	Reference    string                     `json:"reference,omitempty"`
 	References   *toolutil.ReferencesOutput `json:"references,omitempty"`
 	Imported     bool                       `json:"imported,omitempty"`
 	ImportedFrom string                     `json:"imported_from,omitempty"`
@@ -670,12 +794,9 @@ func toLinkItem(e *epicAPI) LinksItem {
 		WebEditURL:   e.WebEditURL,
 		Author:       basicUserFromEpicAuthor(e.Author),
 		Labels:       e.Labels.Names,
-		LabelDetails: e.Labels.Details,
 		Confidential: e.Confidential,
 		Color:        e.Color,
 		TextColor:    e.TextColor,
-		Subscribed:   e.Subscribed,
-		Reference:    e.Reference,
 		References:   e.References,
 		Imported:     e.Imported,
 		ImportedFrom: e.ImportedFrom,
@@ -733,8 +854,6 @@ func epicToOutput(e *epicAPI) Output {
 		Confidential: e.Confidential,
 		Color:        e.Color,
 		TextColor:    e.TextColor,
-		Subscribed:   e.Subscribed,
-		Reference:    e.Reference,
 		References:   e.References,
 		Imported:     e.Imported,
 		ImportedFrom: e.ImportedFrom,
@@ -830,6 +949,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("epicList: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if err := validateListOrdering(input); err != nil {
+		return ListOutput{}, err
+	}
+	if err := validateListPagination(input); err != nil {
 		return ListOutput{}, err
 	}
 	if usesWorkItemsPath(input) {

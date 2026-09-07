@@ -737,12 +737,11 @@ func isoDay(month, day int) *gl.ISOTime {
 }
 
 // fullRESTEpic is a REST epic with every field GitLab sends populated: the ones
-// gl.Epic declares and the fourteen the [epicAPI] superset adds.
+// gl.Epic declares and the twelve the [epicAPI] superset adds.
 func fullRESTEpic() *epicAPI {
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	updated := time.Date(2026, 1, 3, 3, 4, 5, 0, time.UTC)
 	closed := time.Date(2026, 1, 4, 3, 4, 5, 0, time.UTC)
-	subscribed := true
 	declared := gl.Epic{
 		ID:                      44,
 		IID:                     7,
@@ -778,8 +777,6 @@ func fullRESTEpic() *epicAPI {
 		TextColor:                    "#FFFFFF",
 		WebEditURL:                   "/groups/g/-/epics/7",
 		WorkItemID:                   1032,
-		Subscribed:                   &subscribed,
-		Reference:                    "&7",
 		References:                   &toolutil.ReferencesOutput{Short: "&7", Relative: "g&7", Full: "g&7"},
 		Imported:                     true,
 		ImportedFrom:                 "github",
@@ -849,11 +846,8 @@ func assertRESTEpicSupersetFields(t *testing.T, out Output) {
 	if out.Color != "#1068bf" || out.TextColor != "#FFFFFF" || out.WebEditURL != "/groups/g/-/epics/7" || out.WorkItemID != 1032 {
 		t.Fatalf("unexpected presentation fields: %+v", out)
 	}
-	if out.Subscribed == nil || !*out.Subscribed {
-		t.Errorf("Subscribed = %v, want a set true", out.Subscribed)
-	}
-	if out.Reference != "&7" || out.References == nil || out.References.Full != "g&7" {
-		t.Fatalf("unexpected references: %q / %+v", out.Reference, out.References)
+	if out.References == nil || out.References.Full != "g&7" {
+		t.Fatalf("unexpected references: %+v", out.References)
 	}
 	if !out.Imported || out.ImportedFrom != "github" {
 		t.Errorf("import fields = %t / %q, want true / github", out.Imported, out.ImportedFrom)
@@ -904,10 +898,10 @@ func assertLinkItemDates(t *testing.T, item LinksItem) {
 
 func assertLinkItemSupersetFields(t *testing.T, item LinksItem) {
 	t.Helper()
-	if item.Color != "#1068bf" || item.TextColor != "#FFFFFF" || item.WebEditURL == "" || item.Reference != "&7" {
+	if item.Color != "#1068bf" || item.TextColor != "#FFFFFF" || item.WebEditURL == "" {
 		t.Fatalf("unexpected presentation fields: %+v", item)
 	}
-	if item.Subscribed == nil || item.References == nil || item.Links == nil || !item.Imported || item.ImportedFrom != "github" {
+	if item.References == nil || item.Links == nil || !item.Imported || item.ImportedFrom != "github" {
 		t.Fatalf("unexpected superset fields: %+v", item)
 	}
 }
@@ -1415,14 +1409,12 @@ func TestDelete_CancelledContext(t *testing.T) {
 func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 	w := int64(5)
 	milestone := int64(9)
-	subscribed := true
 	out := Output{
 		IID:          1,
 		Title:        "Full Epic",
 		Type:         "Epic",
 		State:        "CLOSED",
 		MilestoneID:  &milestone,
-		Subscribed:   &subscribed,
 		Author:       &BasicUserOutput{Username: "alice"},
 		Assignees:    []*BasicUserOutput{{Username: "bob"}, {Username: "carol"}},
 		Confidential: true,
@@ -1445,7 +1437,7 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 	result := FormatOutputMarkdown(out)
 	for _, want := range []string{
 		"bob, carol", "Confidential", "planning", "onTrack",
-		"Weight", "Milestone ID", "Subscribed", "true",
+		"Weight", "Milestone ID",
 		"2026-01-01", "2026-03-31", "#FF0000", "Parent", "&10",
 		"Closed", "gitlab.example.com", "Linked Items", "blocks", "g/sub",
 		"Epic description body",
@@ -1603,6 +1595,72 @@ func TestList_RESTOnlyFilters_StayOnTheRESTPath(t *testing.T) {
 				t.Errorf("%s reported a cursor block from the REST path", tc.name)
 			}
 		})
+	}
+}
+
+// TestList_OffsetPageRequestWithAWorkItemsFilter_IsRefused verifies that each
+// of the four page parameters only the REST endpoint can spend is refused when
+// a filter has routed the request to the Work Items query.
+//
+// Before the refusal the parameter was dropped with the options carrying it and
+// the caller was handed the first cursor page: page 2 came back as page one,
+// with no error to say the page they asked for was never fetched. The handler
+// is given a forbidding transport, since a refused request must reach neither
+// API.
+func TestList_OffsetPageRequestWithAWorkItemsFilter_IsRefused(t *testing.T) {
+	cases := []struct {
+		name  string
+		apply func(*ListInput)
+		names []string
+	}{
+		{"page", func(in *ListInput) { in.Page = 2 }, []string{"page"}},
+		{"per_page", func(in *ListInput) { in.PerPage = 50 }, []string{"per_page"}},
+		{"pagination", func(in *ListInput) { in.Pagination = "keyset" }, []string{"pagination"}},
+		{"page_token", func(in *ListInput) { in.PageToken = "1042" }, []string{"page_token"}},
+		{
+			"every one of them at once",
+			func(in *ListInput) {
+				in.Page, in.PerPage, in.Pagination, in.PageToken = 2, 50, "keyset", "1042"
+			},
+			[]string{"page", "per_page", "pagination", "page_token"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			input := ListInput{FullPath: testFullPath, HealthStatusFilter: "atRisk"}
+			tc.apply(&input)
+			_, err := List(t.Context(), client, input)
+			if err == nil {
+				t.Fatal("List() answered a cursor page for an offset page request")
+			}
+			// Naming both halves is the point: a caller told only that their
+			// page request failed cannot tell which filter took it off the
+			// REST path.
+			for _, name := range append(tc.names, "health_status_filter") {
+				if !strings.Contains(err.Error(), name) {
+					t.Errorf("error does not name %q: %v", name, err)
+				}
+			}
+		})
+	}
+}
+
+// TestList_OffsetPageRequestOnTheRESTPath_IsServed verifies the refusal above
+// is about the combination and not about the parameters: the same page request
+// with no Work-Items-only filter beside it is answered by the REST endpoint,
+// which is the API that can spend it.
+func TestList_OffsetPageRequestOnTheRESTPath_IsServed(t *testing.T) {
+	client := testutil.NewTestClient(t, epicListPathRouter())
+	input := ListInput{FullPath: testFullPath}
+	input.Page, input.PerPage = 2, 50
+	input.Pagination, input.PageToken = "keyset", "1042"
+	out, err := List(t.Context(), client, input)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.OffsetPagination == nil {
+		t.Error("an offset page request left the REST path")
 	}
 }
 
@@ -1855,11 +1913,12 @@ func TestBuildCreateOptions_EmptyLinkedItems(t *testing.T) {
 // --- REST superset coverage ---
 
 // restEpicJSON is one epic as GitLab really answers, taken from
-// GET /api/v4/groups/gitlab-org/epics on 2026-09-07 and reshaped to the
-// example bodies of doc/api/epics.md, which add the two the list response
-// leaves out (subscribed, which the single-epic GET does carry, and reference,
-// which neither live response did) and the parent that a top-level epic has
+// GET /api/v4/groups/gitlab-org/epics on 2026-09-07 and reshaped to the example
+// bodies of doc/api/epics.md, which add the parent that a top-level epic has
 // none of.
+//
+// It carries no subscribed and no reference, which is what these two routes
+// really send: the entity renders each only under an option neither passes.
 const restEpicJSON = `{
 	"id": 29,
 	"work_item_id": 1032,
@@ -1877,7 +1936,6 @@ const restEpicJSON = `{
 	"text_color": "#FFFFFF",
 	"web_url": "http://gitlab.example.com/groups/test/-/epics/4",
 	"web_edit_url": "/groups/test/-/epics/4",
-	"reference": "&4",
 	"references": {"short": "&4", "relative": "&4", "full": "test&4"},
 	"author": {"id": 10, "name": "Lu Mayer", "username": "kam", "state": "active", "locked": false, "public_email": "kam@example.com", "web_url": "http://gitlab.example.com/kam"},
 	"start_date": "2026-01-01",
@@ -1897,7 +1955,6 @@ const restEpicJSON = `{
 	"labels": ["planning"],
 	"upvotes": 4,
 	"downvotes": 0,
-	"subscribed": true,
 	"_links": {
 		"self": "http://gitlab.example.com/api/v4/groups/7/epics/4",
 		"epic_issues": "http://gitlab.example.com/api/v4/groups/7/epics/4/issues",
@@ -1919,7 +1976,6 @@ func assertRESTSupersetOnTheWire(t *testing.T, out Output) {
 		{"color", out.Color, "#1068bf"},
 		{"text_color", out.TextColor, "#FFFFFF"},
 		{"web_edit_url", out.WebEditURL, "/groups/test/-/epics/4"},
-		{"reference", out.Reference, "&4"},
 		{"imported", out.Imported, false},
 		{"imported_from", out.ImportedFrom, "none"},
 		{"end_date", out.EndDate, "2026-07-31"},
@@ -1933,11 +1989,6 @@ func assertRESTSupersetOnTheWire(t *testing.T, out Output) {
 			}
 		})
 	}
-	t.Run("subscribed", func(t *testing.T) {
-		if out.Subscribed == nil || !*out.Subscribed {
-			t.Errorf("Subscribed = %v, want a set true", out.Subscribed)
-		}
-	})
 	t.Run("references", func(t *testing.T) {
 		if out.References == nil || out.References.Full != "test&4" {
 			t.Errorf("References = %+v, want full test&4", out.References)
@@ -1955,7 +2006,7 @@ func assertRESTSupersetOnTheWire(t *testing.T, out Output) {
 	})
 }
 
-// TestList_RESTPath_SurfacesTheFieldsTheSDKDrops verifies that the fourteen
+// TestList_RESTPath_SurfacesTheFieldsTheSDKDrops verifies that the twelve
 // fields GitLab sends and gl.Epic does not declare reach the output, and that
 // the raw fetch asks for the same path client-go asks for.
 func TestList_RESTPath_SurfacesTheFieldsTheSDKDrops(t *testing.T) {
@@ -1995,13 +2046,56 @@ func TestGetLinks_RESTPath_SurfacesTheFieldsTheSDKDrops(t *testing.T) {
 	if len(out.ChildEpics) != 1 {
 		t.Fatalf("len(ChildEpics) = %d, want 1", len(out.ChildEpics))
 	}
-	item := out.ChildEpics[0]
-	if item.WorkItemID != 1032 || item.ParentIID != 3 || item.TextColor != "#FFFFFF" || item.Reference != "&4" {
-		t.Errorf("superset fields missing from the child epic: %+v", item)
+	assertLinkItemSupersetOnTheWire(t, out.ChildEpics[0])
+}
+
+// assertLinkItemSupersetOnTheWire checks each of the twelve fields gl.Epic does
+// not declare arrived on the child epic from a real response body.
+//
+// Every one of them is asserted rather than a sample, because the child-epics
+// endpoint is the one path whose output type is not also filled by the list
+// converter: a field dropped from toLinkItem alone would be caught nowhere else.
+func assertLinkItemSupersetOnTheWire(t *testing.T, item LinksItem) {
+	t.Helper()
+	cases := []struct {
+		name      string
+		got, want any
+	}{
+		{"work_item_id", item.WorkItemID, int64(1032)},
+		{"parent_iid", item.ParentIID, int64(3)},
+		{"color", item.Color, "#1068bf"},
+		{"text_color", item.TextColor, "#FFFFFF"},
+		{"web_edit_url", item.WebEditURL, "/groups/test/-/epics/4"},
+		{"imported", item.Imported, false},
+		{"imported_from", item.ImportedFrom, "none"},
+		{"end_date", item.EndDate, "2026-07-31"},
+		{"start_date_from_inherited_source", item.StartDateFromInheritedSource, "2026-01-07"},
+		{"due_date_from_inherited_source", item.DueDateFromInheritedSource, "2026-07-31"},
 	}
-	if item.Subscribed == nil || item.References == nil || item.Links == nil {
-		t.Errorf("nested superset objects missing from the child epic: %+v", item)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("%s = %v, want %v", tc.name, tc.got, tc.want)
+			}
+		})
 	}
+	t.Run("references", func(t *testing.T) {
+		if item.References == nil || item.References.Full != "test&4" {
+			t.Errorf("References = %+v, want full test&4", item.References)
+		}
+	})
+	t.Run("_links", func(t *testing.T) {
+		if item.Links == nil || item.Links.Parent == "" || item.Links.EpicIssues == "" {
+			t.Errorf("Links = %+v, want the four documented URLs", item.Links)
+		}
+	})
+	// The child-epics endpoint takes no with_labels_details, so its labels
+	// array is always titles and the item publishes no label_details to fill.
+	t.Run("labels are titles", func(t *testing.T) {
+		if len(item.Labels) != 1 || item.Labels[0] != "planning" {
+			t.Errorf("Labels = %v, want [planning]", item.Labels)
+		}
+	})
 }
 
 // TestList_WithLabelsDetails_DecodesTheObjectShape verifies the labels array
