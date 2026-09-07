@@ -575,6 +575,46 @@ func TestBuildCatalogSession_ServerModeShapesDynamicSurface(t *testing.T) {
 	}
 }
 
+// TestBuildCatalogSession_ReadOnlyDynamicNamesTheCauseOfAWithheldAction
+// verifies the evaluated dynamic surface answers a write the protective mode
+// withheld by naming the cause, not by calling the action unknown.
+//
+// The catalog is assembled by dynamiccatalog.Build, which is what cmd/server
+// assembles, so the bookkeeping FilterActionCatalog produces reaches the
+// registry through WithWithheldActions. While the evaluator assembled its own
+// catalog that bookkeeping did not exist, and the evaluated model read
+// "unknown action ... Did you mean" — an answer whose suggestions are all real
+// read-only actions, so it reads as "this server cannot do that" for a
+// capability the deployment has and this session merely may not use. Scoring a
+// model against that answer measures a surface the product never serves.
+func TestBuildCatalogSession_ReadOnlyDynamicNamesTheCauseOfAWithheldAction(t *testing.T) {
+	client := newEvalTestClient(t, false)
+
+	session, closeSession, _, _, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeReadOnly)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(dynamic, read-only) error = %v", err)
+	}
+	defer closeSession()
+
+	result, callErr := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      dynamicExecuteActionTool,
+		Arguments: map[string]any{"action": "issue.create", "params": map[string]any{}},
+	})
+	if callErr != nil {
+		t.Fatalf("CallTool(%s) error = %v", dynamicExecuteActionTool, callErr)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool(%s, issue.create) succeeded in read-only mode", dynamicExecuteActionTool)
+	}
+	answer := callToolResultText(result)
+	if !strings.Contains(answer, "exists but is not available") {
+		t.Errorf("read-only answer = %q, want the withheld cause", answer)
+	}
+	if strings.Contains(answer, "Did you mean") {
+		t.Errorf("read-only answer = %q, want the withheld cause rather than an unknown-action guess", answer)
+	}
+}
+
 // hasEvalRoute reports whether any tool in routes exposes the action id, which
 // dynamic routes key by canonical ID and meta routes key by action name.
 func hasEvalRoute(routes map[string]toolutil.ActionMap, actionID string) bool {

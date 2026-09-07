@@ -24,6 +24,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamiccatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -400,18 +401,22 @@ func newCatalogSession(client *gitlabclient.Client, toolSurface, serverMode stri
 	return session, closeSession, err
 }
 
-// applyEvalServerMode applies the protective server mode to the catalog the
-// evaluated model will see, using the same catalog transforms the server
-// applies for GITLAB_MCP_READ_ONLY and GITLAB_MCP_SAFE_MODE. Both act per action, so
-// evaluating them means evaluating a different catalog, not a different client.
-func applyEvalServerMode(catalog *actioncatalog.Catalog, serverMode string) *actioncatalog.Catalog {
-	switch serverMode {
-	case ServerModeReadOnly:
-		return catalog.FilterReadOnlyActions()
-	case ServerModeSafe:
-		return catalog.WithSafeModePreviews()
-	default:
-		return catalog
+// evalServerConfig describes the deployment the evaluated catalog is assembled
+// for, so the assemblers the server itself uses can be handed the same
+// configuration a server would receive.
+//
+// The tier is the one thing this has to state rather than pass through:
+// [edition.TierForEnterprise] is the mapping the catalog builders apply to the
+// legacy binary "enterprise" notion, so an enterprise client evaluates the
+// Ultimate catalog and a Community one the Free catalog, exactly as before.
+// GITLAB_MCP_READ_ONLY and GITLAB_MCP_SAFE_MODE both act per action, so
+// evaluating either means evaluating a different catalog, not a different
+// client.
+func evalServerConfig(client *gitlabclient.Client, serverMode string) *config.ServerConfig {
+	return &config.ServerConfig{
+		Tier:     edition.TierForEnterprise(client.IsEnterprise()),
+		ReadOnly: serverMode == ServerModeReadOnly,
+		SafeMode: serverMode == ServerModeSafe,
 	}
 }
 
@@ -434,31 +439,37 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode st
 			return completionHandler.Complete(ctx, req)
 		},
 	})
+	cfg := evalServerConfig(client, serverMode)
 	var surfaceCatalog *actioncatalog.Catalog
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:
-		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
+		// dynamiccatalog.Build is the assembler cmd/server uses, in the order
+		// it uses it: the filters run before the standalone actions join, so
+		// no narrowed action is left behind them, and safe-mode previews come
+		// last over the whole catalog, so a standalone write is previewed like
+		// any other. Assembling an equivalent catalog here was what the e2e
+		// suite did before this package existed, and a test that builds its
+		// own copy of the thing under test is testing the copy.
+		actionCatalog, withheld, catalogErr := dynamiccatalog.Build(client, cfg)
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
-		actionCatalog, catalogErr = dynamictools.AddStandaloneCatalog(actionCatalog, client, dynamictools.StandaloneOptions{})
-		if catalogErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("add standalone dynamic catalog: %w", catalogErr)
-		}
-		actionCatalog = applyEvalServerMode(actionCatalog, serverMode)
 		surfaceCatalog = actionCatalog
-		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
+		// The bookkeeping is the point of building it this way: without it the
+		// evaluated model reads a narrowed action as absent rather than as
+		// withheld, and scores a capability the deployment has.
+		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog,
+			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator))
 		routes = dynamicValidationRoutes(actionCatalog.ActionMaps())
 	case config.ToolSurfaceMeta:
-		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
+		filteredCatalog, _, catalogErr := tools.SharedMetaCatalog(client, cfg)
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
-		actionCatalog = applyEvalServerMode(actionCatalog, serverMode)
-		surfaceCatalog = actionCatalog
-		tools.RegisterMetaCatalog(server, actionCatalog)
+		surfaceCatalog = filteredCatalog
+		tools.RegisterMetaCatalog(server, filteredCatalog)
 		tools.RegisterMetaStandaloneTools(server, client)
-		routes = actionCatalog.ActionMaps()
+		routes = filteredCatalog.ActionMaps()
 	default:
 		return nil, nil, nil, nil, fmt.Errorf("unsupported tool surface %q", toolSurface)
 	}

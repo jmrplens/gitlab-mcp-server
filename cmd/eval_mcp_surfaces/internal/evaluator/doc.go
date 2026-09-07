@@ -14,6 +14,17 @@
 //  4. Results are aggregated into a Markdown report and optional trace
 //     artifacts.
 //
+// # The evaluated surface
+//
+// The catalog a model is scored against is assembled by the same functions
+// cmd/server assembles its own with: dynamiccatalog.Build for the dynamic
+// surface and tools.SharedMetaCatalog for the meta surface, both given a
+// config.ServerConfig built from --server-mode. Assembling an equivalent
+// catalog here instead would measure a surface the product does not serve:
+// the filters and the standalone actions have an order, and the bookkeeping
+// they produce is what tells a model that a withheld write exists and is not
+// available, rather than that the server cannot do it at all.
+//
 // # Public API
 //
 // [Run] is the CLI entry point. [AllEvalCases], [CaseByID], [CasesByPreset],
