@@ -60,6 +60,12 @@ func FormatOutputMarkdown(e Output) string {
 	if e.Weight != nil {
 		fmt.Fprintf(&b, "- **Weight**: %d\n", *e.Weight)
 	}
+	if e.MilestoneID != nil {
+		fmt.Fprintf(&b, "- **Milestone ID**: %d\n", *e.MilestoneID)
+	}
+	if e.IterationID != nil {
+		fmt.Fprintf(&b, "- **Iteration ID**: %d\n", *e.IterationID)
+	}
 	if e.StartDate != "" {
 		//gitlab:allow-unescaped e.StartDate: a date this package wrote itself, with time.Format on the DateOnly layout.
 		fmt.Fprintf(&b, "- **Start date**: %s\n", e.StartDate)
@@ -89,6 +95,14 @@ func FormatOutputMarkdown(e Output) string {
 		for _, li := range e.LinkedItems {
 			//gitlab:allow-unescaped li.LinkType: a link type the Work Items API documents, one of blocks, is_blocked_by and relates_to.
 			fmt.Fprintf(&b, "| %d | %s | %s |\n", li.IID, li.LinkType, toolutil.EscapeMdTableCell(li.Path))
+		}
+	}
+	if len(e.Children) > 0 {
+		b.WriteString("\n### Child Epics\n\n")
+		b.WriteString("| IID | Path |\n")
+		b.WriteString("| --- | --- |\n")
+		for _, child := range e.Children {
+			fmt.Fprintf(&b, "| &%d | %s |\n", child.IID, toolutil.EscapeMdTableCell(child.Path))
 		}
 	}
 	if e.Description != "" {
@@ -128,6 +142,15 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.EscapeMdTableCell(labels),
 			toolutil.FormatTime(e.CreatedAt),
 		)
+	}
+	// Exactly one block is ever set, and which one says which API answered:
+	// the cursor pair belongs to the Work Items query, the page numbers to the
+	// REST epics endpoint.
+	if out.Pagination != nil {
+		fmt.Fprintf(&b, toolutil.FmtMdSectionText, toolutil.FormatGraphQLPagination(*out.Pagination, len(out.Epics)))
+	}
+	if out.OffsetPagination != nil {
+		toolutil.WritePagination(&b, *out.OffsetPagination)
 	}
 	toolutil.WriteHints(
 		&b,

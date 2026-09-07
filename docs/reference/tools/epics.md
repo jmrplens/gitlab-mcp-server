@@ -51,10 +51,12 @@ Epics require GitLab Premium or Ultimate and are always scoped to a group.
 
 ### `gitlab_epic_list`
 
-List epics for a GitLab group via the Work Items GraphQL API (type=Epic). Supports filtering by state, labels, author, search text, and cursor-based pagination.
+List epics for a GitLab group. Filters by state, search text (with `in` choosing title, description or both), author, assignees, labels, milestone, weight, health status, subscription, explicit IIDs or global IDs, parent epic, and the created, updated, closed and due date ranges. Pages in both directions: `first` and `after` forward, `last` and `before` backward.
 
 | Annotation | **Read** |
 | ---------- | -------- |
+
+> **Two APIs answer this action.** A request naming only what the REST epics endpoint accepts is served by it and reports `offset_pagination` (page numbers). Any filter only the Work Items GraphQL query can express routes the whole request through that query instead, and it reports `pagination` (cursors). Exactly one block comes back, which is how a caller knows which answered. `author_id`, `order_by` and `with_labels_details` are REST-only and are dropped when another filter takes the Work Items path; use `author_username` and `sort` there.
 
 ### `gitlab_epic_get`
 
@@ -74,14 +76,14 @@ Get all child epics of a parent epic (via REST API). Returns the list of sub-epi
 
 ### `gitlab_epic_create`
 
-Create a new epic in a GitLab group via the Work Items GraphQL API. Supports title, description, labels, confidentiality, and color.
+Create a new epic in a GitLab group via the Work Items GraphQL API. Supports title, description, labels, assignees, confidentiality, color, weight, health status, milestone, a parent epic (`parent_id`, which creates a sub-epic in one call), links to other epics (`linked_items`), a backdated `created_at` for group owners and administrators, and a `create_source` tracking label.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_epic_update`
 
-Update an existing group epic via the Work Items GraphQL API. Can modify title, description, labels (replace, add, or remove), and state (close/reopen).
+Update an existing group epic via the Work Items GraphQL API. Can modify title, description, labels (replace, add, or remove), assignees, dates, weight, health status, milestone, parent epic, and state (close/reopen).
 
 | Annotation | **Update** |
 | ---------- | ---------- |
