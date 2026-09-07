@@ -7,9 +7,9 @@
     "gitlab_com": 1091
   },
   "meta": {
-    "base": 33,
-    "self_managed_enterprise": 50,
-    "gitlab_com": 51
+    "base": 34,
+    "self_managed_enterprise": 51,
+    "gitlab_com": 52
   },
   "dynamic": 2,
   "catalog_actions": {

@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Medium Reference
 
-> Version 2.7.5 | up to 1091 tools | 33 base meta-tools; 50 self-managed enterprise meta-tools; 51 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.5 | up to 1091 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 Every tool and action with its description, without the per-action JSON schemas.
 Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.
@@ -246,6 +246,12 @@ Actions (34): controller_create, controller_delete, controller_get, controller_l
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages.
 
 Actions (10): code, commits, issues, merge_requests, milestones, notes, projects, snippets, users, wiki
+
+### gitlab_server
+
+**Server**
+
+MCP server self-diagnostics: GitLab connectivity probe, server/GitLab version, and authenticated user identity.
 
 ### gitlab_snippet
 
