@@ -89,6 +89,7 @@ readable without opening the tracker:
 | 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | No | No | No | No | Yes |
 | 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | No | No | No | No | Yes |
 | 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | No | No | No | No | Yes |
+| 24 | gitlab-org/gitlab | [Approvals page documents the POST's response under the GET](#the-merge-request-approvals-page-documents-the-deprecated-posts-response-under-the-get) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -148,6 +149,40 @@ MUST cannot be met by its named mechanism. Recorded as
 [ADR-0019](adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md).
 
 **Effort**: large, and it is a product decision rather than a patch.
+
+### The merge request approvals page documents the deprecated POST's response under the GET
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, now that we read the generated document instead.
+- **Workaround**: yes. The carve-outs in
+  `cmd/audit_1to1/internal/structs/analyze.go` cite
+  `docs/development/gitlab-api-shapes.json` rather than the prose page, which is
+  the only entry in that table that does. It retires when the page is corrected.
+
+**Where**: `doc/api/merge_request_approvals.md`, the section for
+`GET /projects/:id/merge_requests/:merge_request_iid/approvals`.
+
+**What**: the example response printed under the GET carries `id`, `iid`,
+`project_id`, `title`, `description`, `state`, `created_at`, `updated_at`,
+`merge_status`, `approvals_required`, `approvals_left` and more. GitLab renders
+that endpoint with `::API::Entities::MergeRequestApprovals`
+(`lib/api/entities/merge_request_approvals.rb`), which exposes four fields:
+`user_has_approved`, `user_can_approve`, `approved` and `approved_by`. The wider
+body is the response of the `POST` at the same path, deprecated in GitLab 16.0.
+GitLab's own generated OpenAPI document already separates the two.
+
+**How we found it**: `gitlab_mr_approval_config` published all twenty-four
+fields of `gl.MergeRequestApprovals` and every one of the twenty extra arrived
+as a zero. The 1:1 audit was green throughout, because it compares our type
+against the SDK type and the SDK type models the POST. It surfaced when
+`cmd/gen_api_shapes` gave the audit an oracle that speaks for GitLab, and the
+e2e suite had recorded the live CE observation months earlier without anyone
+connecting it to the output type.
+
+**Effort**: small. A documentation correction, though the deprecated POST's
+example needs to stay reachable for callers still using it.
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 

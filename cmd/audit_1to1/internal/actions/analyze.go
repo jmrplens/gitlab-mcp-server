@@ -168,35 +168,34 @@ var acceptedMissingMethods = map[string]string{
 	"Discussions.UpdateEpicDiscussionNote": coveredGraphQLEpicDsc,
 
 	// COVERED_RAW — raw REST (NewRequest/Do or URL-built); SDK method not called.
-	"Commits.GetGPGSignature":                           "COVERED_RAW. gitlab_commit_signature",
-	"Deployments.GetProjectDeployment":                  "COVERED_RAW. gitlab_deployment_get",
-	"Deployments.ListProjectDeployments":                "COVERED_RAW. gitlab_deployment_list",
-	"Jobs.ListPipelineJobs":                             "COVERED_RAW. gitlab_job_list",
-	"Jobs.ListProjectJobs":                              "COVERED_RAW. gitlab_job_list_project",
-	"MergeRequestApprovals.ChangeApprovalConfiguration": "COVERED_RAW. gitlab_mr_approval_config",
-	"MergeRequestApprovals.CreateApprovalRule":          "COVERED_RAW. gitlab_mr_approval_rule_create",
-	"MergeRequestApprovals.GetApprovalRules":            "COVERED_RAW. gitlab_mr_approval_rules",
-	"MergeRequestApprovals.GetApprovalState":            "COVERED_RAW. gitlab_mr_approval_state",
-	"MergeRequestApprovals.UpdateApprovalRule":          "COVERED_RAW. gitlab_mr_approval_rule_update",
-	"PipelineSchedules.GetPipelineSchedule":             "COVERED_RAW. gitlab_pipeline_schedule_get",
-	"IssueBoards.GetIssueBoard":                         "COVERED_RAW. gitlab_board_get",
-	"IssueBoards.GetIssueBoardLists":                    "COVERED_RAW. gitlab_board_list_lists",
-	"GroupIssueBoards.CreateGroupIssueBoard":            "COVERED_RAW. Groupboards raw",
-	"GroupIssueBoards.GetGroupIssueBoard":               "COVERED_RAW. gitlab_group_board_get",
-	"GroupIssueBoards.ListGroupIssueBoards":             "COVERED_RAW. gitlab_group_board_list",
-	"GroupIssueBoards.UpdateIssueBoard":                 "COVERED_RAW. gitlab_group_board_update",
-	"Projects.AddProjectHook":                           "COVERED_RAW. gitlab_project_hook_add",
-	"Projects.EditProjectHook":                          "COVERED_RAW. gitlab_project_hook_edit",
-	"Projects.GetProjectHook":                           "COVERED_RAW. gitlab_project_hook_get",
-	"Projects.ListProjectHooks":                         "COVERED_RAW. gitlab_project_hook_list",
-	"Projects.ListUserContributedProjects":              "COVERED_RAW. gitlab_project_list_user_contributed",
-	"Projects.ListUserProjects":                         "COVERED_RAW. gitlab_project_list_user_projects",
-	"Projects.ListUserStarredProjects":                  "COVERED_RAW. gitlab_project_list_user_starred",
-	"ProjectImportExport.ImportFromFile":                "COVERED_RAW. gitlab_import_project_from_file",
-	"ProjectImportExport.ImportStatus":                  "COVERED_RAW. gitlab_get_project_import_status",
-	"Features.SetFeatureFlag":                           "COVERED_RAW. gitlab_set_feature_flag (raw POST)",
-	"Repositories.Archive":                              "COVERED_RAW. gitlab_repository_archive (URL-built)",
-	"GenericPackages.DownloadPackageFile":               "COVERED_RAW. gitlab_package_download (streamed)",
+	"Commits.GetGPGSignature":                  "COVERED_RAW. gitlab_commit_signature",
+	"Deployments.GetProjectDeployment":         "COVERED_RAW. gitlab_deployment_get",
+	"Deployments.ListProjectDeployments":       "COVERED_RAW. gitlab_deployment_list",
+	"Jobs.ListPipelineJobs":                    "COVERED_RAW. gitlab_job_list",
+	"Jobs.ListProjectJobs":                     "COVERED_RAW. gitlab_job_list_project",
+	"MergeRequestApprovals.CreateApprovalRule": "COVERED_RAW. gitlab_mr_approval_rule_create",
+	"MergeRequestApprovals.GetApprovalRules":   "COVERED_RAW. gitlab_mr_approval_rules",
+	"MergeRequestApprovals.GetApprovalState":   "COVERED_RAW. gitlab_mr_approval_state",
+	"MergeRequestApprovals.UpdateApprovalRule": "COVERED_RAW. gitlab_mr_approval_rule_update",
+	"PipelineSchedules.GetPipelineSchedule":    "COVERED_RAW. gitlab_pipeline_schedule_get",
+	"IssueBoards.GetIssueBoard":                "COVERED_RAW. gitlab_board_get",
+	"IssueBoards.GetIssueBoardLists":           "COVERED_RAW. gitlab_board_list_lists",
+	"GroupIssueBoards.CreateGroupIssueBoard":   "COVERED_RAW. Groupboards raw",
+	"GroupIssueBoards.GetGroupIssueBoard":      "COVERED_RAW. gitlab_group_board_get",
+	"GroupIssueBoards.ListGroupIssueBoards":    "COVERED_RAW. gitlab_group_board_list",
+	"GroupIssueBoards.UpdateIssueBoard":        "COVERED_RAW. gitlab_group_board_update",
+	"Projects.AddProjectHook":                  "COVERED_RAW. gitlab_project_hook_add",
+	"Projects.EditProjectHook":                 "COVERED_RAW. gitlab_project_hook_edit",
+	"Projects.GetProjectHook":                  "COVERED_RAW. gitlab_project_hook_get",
+	"Projects.ListProjectHooks":                "COVERED_RAW. gitlab_project_hook_list",
+	"Projects.ListUserContributedProjects":     "COVERED_RAW. gitlab_project_list_user_contributed",
+	"Projects.ListUserProjects":                "COVERED_RAW. gitlab_project_list_user_projects",
+	"Projects.ListUserStarredProjects":         "COVERED_RAW. gitlab_project_list_user_starred",
+	"ProjectImportExport.ImportFromFile":       "COVERED_RAW. gitlab_import_project_from_file",
+	"ProjectImportExport.ImportStatus":         "COVERED_RAW. gitlab_get_project_import_status",
+	"Features.SetFeatureFlag":                  "COVERED_RAW. gitlab_set_feature_flag (raw POST)",
+	"Repositories.Archive":                     "COVERED_RAW. gitlab_repository_archive (URL-built)",
+	"GenericPackages.DownloadPackageFile":      "COVERED_RAW. gitlab_package_download (streamed)",
 
 	// COVERED_GENERIC — superseding/generic variant covers the same capability.
 	"MergeRequests.GetMergeRequestApprovals":                      "COVERED_GENERIC. Mrapprovals config/state",
@@ -229,6 +228,12 @@ var acceptedMissingMethods = map[string]string{
 	// INTENTIONAL_SKIP_OTHER
 	"Jobs.GetJobTokensJob":       "INTENTIONAL_SKIP_OTHER. CI-job-token self-lookup; not usable with a PAT",
 	"Repositories.StreamArchive": "INTENTIONAL_SKIP_OTHER. Streaming dup of Repositories.Archive (gitlab_repository_archive)",
+	// This used to read "COVERED_RAW. gitlab_mr_approval_config", and it was
+	// the paper trail behind twenty phantom output fields: that action calls
+	// the GET at this path and never the POST, but the claim of coverage made
+	// the POST's 24-field response look like the shape the action should
+	// publish. Set approval requirements through the approval rules instead.
+	"MergeRequestApprovals.ChangeApprovalConfiguration": "INTENTIONAL_SKIP_OTHER. Deprecated in GitLab 16.0; approval rules supersede it (gitlab_mr_approval_rule_create/update)",
 
 	// COVERED_RAW — the generic slug-dispatched integration actions (project
 	// gitlab_set_integration + group list/get/set/delete) cover the full integration

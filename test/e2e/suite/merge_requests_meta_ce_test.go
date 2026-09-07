@@ -246,12 +246,15 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "approval_config")
-		// The identity of the merge request is not assertable here. GitLab CE
-		// answers this endpoint with four fields, `approved`, `approved_by`,
-		// `user_can_approve` and `user_has_approved`, and none of the merge
-		// request's own fields the SDK type declares; I checked against a live
-		// 19.3 instance. What the fixture does guarantee is that nobody has
-		// approved the merge request it just created.
+		// The identity of the merge request is not assertable here, and no
+		// longer published: GitLab answers this endpoint with four fields,
+		// `approved`, `approved_by`, `user_can_approve` and
+		// `user_has_approved`, and none of the merge request's own fields the
+		// SDK type declares. I checked against a live 19.3 instance, GitLab's
+		// generated OpenAPI document says the same, and the twenty fields the
+		// output used to carry are the response of the deprecated POST at this
+		// path. What the fixture guarantees is that nobody has approved the
+		// merge request it just created.
 		requireTruef(t, !out.Approved, "a freshly created MR reports approved = true")
 		requireTruef(t, len(out.ApprovedBy) == 0,
 			"a freshly created MR reports %d approvers, want none", len(out.ApprovedBy))

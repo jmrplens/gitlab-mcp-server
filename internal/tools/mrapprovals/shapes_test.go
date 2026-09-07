@@ -6,6 +6,7 @@
 package mrapprovals
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -78,41 +79,9 @@ func TestApproverUserOutputs_EmptyAndNilElements(t *testing.T) {
 	}
 }
 
-// TestApproverGroupOutput_NilAndFull verifies approverGroupOutput maps the nested
-// group fields and returns nil for a nil input.
-func TestApproverGroupOutput_NilAndFull(t *testing.T) {
-	if got := approverGroupOutput(nil); got != nil {
-		t.Errorf("approverGroupOutput(nil) = %v, want nil", got)
-	}
-	out := approverGroupOutput(&gl.MergeRequestApproverGroup{
-		Group: gl.MergeRequestApproverNestedGroup{
-			ID: 3, Name: "Sec", Path: "sec", Description: "d", Visibility: "private",
-			AvatarURL: "https://a", WebURL: "https://w", FullName: "Sec Team",
-			FullPath: "org/sec", LFSEnabled: true, RequestAccessEnabled: true,
-		},
-	})
-	if out == nil || out.Group.ID != 3 || out.Group.Name != "Sec" || out.Group.Path != "sec" ||
-		out.Group.Description != "d" || out.Group.Visibility != "private" || out.Group.AvatarURL != "https://a" ||
-		out.Group.WebURL != "https://w" || out.Group.FullName != "Sec Team" || out.Group.FullPath != "org/sec" ||
-		!out.Group.LFSEnabled || !out.Group.RequestAccessEnabled {
-		t.Fatalf("approverGroupOutput full = %+v", out)
-	}
-}
-
-// TestApproverGroupOutputs_EmptyAndNilElements verifies approverGroupOutputs
-// returns nil for an empty slice and skips nil elements.
-func TestApproverGroupOutputs_EmptyAndNilElements(t *testing.T) {
-	if got := approverGroupOutputs(nil); got != nil {
-		t.Errorf("approverGroupOutputs(nil) = %v, want nil", got)
-	}
-	out := approverGroupOutputs([]*gl.MergeRequestApproverGroup{
-		nil,
-		{Group: gl.MergeRequestApproverNestedGroup{Name: "Kept"}},
-	})
-	if len(out) != 1 || out[0].Group.Name != "Kept" {
-		t.Fatalf("approverGroupOutputs skip-nil = %+v", out)
-	}
-}
+// The two approver-group converter tests stood here. Their subject is gone
+// along with the field that reached it: GitLab answers approver_groups only at
+// the deprecated POST this package does not call.
 
 // TestGroupOutput_NilAndFull verifies groupOutput maps the documented reference
 // subset fields and returns nil for a nil input. created_at is intentionally not
@@ -217,11 +186,17 @@ func TestRuleToOutput_NilSourceRule(t *testing.T) {
 	}
 }
 
-// TestConfigToOutput_AllAdditiveFields verifies configToOutput surfaces every
-// previously-missing field of gl.MergeRequestApprovals, including the timestamps,
-// approver groups, approvers, suggested approvers, and the per-rule
-// approval_rules_left list.
-func TestConfigToOutput_AllAdditiveFields(t *testing.T) {
+// TestConfigToOutput_TakesTheFourFieldsTheGETAnswersWith verifies the converter
+// against the endpoint rather than against the SDK type.
+//
+// Its predecessor asserted the opposite, field by field: that configToOutput
+// surfaced every member of gl.MergeRequestApprovals. That is what held the
+// defect in place. The SDK type models the response of the POST at this path,
+// deprecated in GitLab 16.0, and a test demanding SDK fidelity from a converter
+// reading a GET's answer demands that twenty fields be published which GitLab
+// never sends. Filling every SDK field here and asserting only four come out is
+// the shape that catches a re-widening.
+func TestConfigToOutput_TakesTheFourFieldsTheGETAnswersWith(t *testing.T) {
 	created := time.Date(2026, 1, 1, 8, 0, 0, 0, time.UTC)
 	updated := time.Date(2026, 1, 2, 8, 0, 0, 0, time.UTC)
 	c := gl.MergeRequestApprovals{
@@ -231,6 +206,8 @@ func TestConfigToOutput_AllAdditiveFields(t *testing.T) {
 		RequirePasswordToApprove: true, HasApprovalRules: true, UserHasApproved: true,
 		UserCanApprove: true, MergeRequestApproversAvailable: true,
 		MultipleApprovalRulesAvailable: true,
+		ApprovedBy:                     []*gl.MergeRequestApproverUser{{User: &gl.BasicUser{Name: "Alice"}}},
+		SuggestedApprovers:             []*gl.BasicUser{{Name: "Bob"}},
 		Approvers:                      []*gl.MergeRequestApproverUser{{User: &gl.BasicUser{Name: "Eve"}}},
 		ApproverGroups:                 []*gl.MergeRequestApproverGroup{{Group: gl.MergeRequestApproverNestedGroup{Name: "Sec"}}},
 		ApprovalRulesLeft: []*gl.MergeRequestApprovalRule{
@@ -238,21 +215,24 @@ func TestConfigToOutput_AllAdditiveFields(t *testing.T) {
 			{ID: 5, Name: "Left Rule", ApprovalsRequired: 1},
 		},
 	}
+
 	out := configToOutput(&c)
-	if out.Description != "desc" || out.MergeStatus != "can_be_merged" ||
-		out.CreatedAt != "2026-01-01T08:00:00Z" || out.UpdatedAt != "2026-01-02T08:00:00Z" ||
-		!out.RequirePasswordToApprove || !out.MergeRequestApproversAvailable ||
-		!out.MultipleApprovalRulesAvailable {
-		t.Fatalf("configToOutput additive scalars = %+v", out)
+
+	if !out.Approved || !out.UserHasApproved || !out.UserCanApprove {
+		t.Errorf("configToOutput scalars = %+v, want the three booleans the GET answers with", out)
 	}
-	if len(out.Approvers) != 1 || out.Approvers[0].User == nil || out.Approvers[0].User.Name != "Eve" {
-		t.Errorf("Approvers = %+v", out.Approvers)
+	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0].User == nil || out.ApprovedBy[0].User.Name != "Alice" {
+		t.Errorf("ApprovedBy = %+v, want the one approver", out.ApprovedBy)
 	}
-	if len(out.ApproverGroups) != 1 || out.ApproverGroups[0].Group.Name != "Sec" {
-		t.Errorf("ApproverGroups = %+v", out.ApproverGroups)
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal the output: %v", err)
 	}
-	// The nil *MergeRequestApprovalRule element is skipped, leaving one rule.
-	if len(out.ApprovalRulesLeft) != 1 || out.ApprovalRulesLeft[0].ID != 5 {
-		t.Errorf("ApprovalRulesLeft = %+v", out.ApprovalRulesLeft)
+	var keys map[string]json.RawMessage
+	if unmarshalErr := json.Unmarshal(encoded, &keys); unmarshalErr != nil {
+		t.Fatalf("read the output back: %v", unmarshalErr)
+	}
+	if len(keys) != 4 {
+		t.Errorf("published %d keys (%v), want exactly approved, user_has_approved, user_can_approve and approved_by", len(keys), keys)
 	}
 }

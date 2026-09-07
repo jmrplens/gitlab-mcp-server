@@ -316,7 +316,7 @@ List the approval rules configured for a GitLab merge request. Returns rule name
 
 ### `gitlab_mr_approval_config`
 
-Get the approval configuration for a GitLab merge request including required approvals, current approvers, suggested approvers, and user approval status.
+Get the approvals of a GitLab merge request: whether it is approved, who approved it and when, and whether the calling user has approved and may approve. Available on every tier. For how many approvals are required and how many remain, use `gitlab_mr_approval_state`.
 
 | Annotation | **Read** |
 | ---------- | -------- |

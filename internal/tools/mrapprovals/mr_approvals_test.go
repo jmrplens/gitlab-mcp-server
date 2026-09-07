@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -401,8 +403,25 @@ func TestApprovalRuleToOutputSkips_NilEntries(t *testing.T) {
 // Config (GetConfiguration) tests
 // ---------------------------------------------------------------------------.
 
-// configResponse identifies the config response constant used by this package.
+// configResponse is what GitLab answers at
+// GET /projects/:id/merge_requests/:merge_request_iid/approvals: four fields, on
+// every tier.
+//
+// It used to carry ten more, invented here, and that is how the phantom fields
+// survived a green test for as long as they did: the fixture was written from
+// the SDK struct rather than from a response, so the assertions proved our
+// converter agreed with our own invention. The extra keys are kept below on
+// purpose, to prove they are dropped rather than merely absent.
 const configResponse = `{
+	"approved": true,
+	"user_has_approved": true, "user_can_approve": false,
+	"approved_by": [{"user": {"name": "Alice"}, "approved_at": "2026-01-15T10:30:00Z"}]
+}`
+
+// configResponseWithPOSTFields is the same answer with the deprecated POST's
+// twenty extra fields bolted on, which is what an old GitLab or a proxy might
+// send. Nothing in ConfigOutput may pick them up.
+const configResponseWithPOSTFields = `{
 	"id": 1, "iid": 10, "project_id": 42, "title": "Test MR", "state": "opened",
 	"approved": true, "approvals_required": 2, "approvals_left": 0,
 	"approvals_before_merge": 2, "has_approval_rules": true,
@@ -428,14 +447,11 @@ func TestMRApprovalConfig_Success(t *testing.T) {
 	if !out.Approved {
 		t.Error("Approved = false, want true")
 	}
-	if out.ApprovalsRequired != 2 {
-		t.Errorf("ApprovalsRequired = %d, want 2", out.ApprovalsRequired)
-	}
-	if out.ApprovalsLeft != 0 {
-		t.Errorf("ApprovalsLeft = %d, want 0", out.ApprovalsLeft)
-	}
 	if !out.UserHasApproved {
 		t.Error("UserHasApproved = false, want true")
+	}
+	if out.UserCanApprove {
+		t.Error("UserCanApprove = true, want false")
 	}
 	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0] == nil || out.ApprovedBy[0].User == nil || out.ApprovedBy[0].User.Name != "Alice" {
 		t.Errorf("ApprovedBy = %v, want one entry with user Alice", out.ApprovedBy)
@@ -443,8 +459,43 @@ func TestMRApprovalConfig_Success(t *testing.T) {
 	if out.ApprovedBy[0].ApprovedAt != "2026-01-15T10:30:00Z" {
 		t.Errorf("ApprovedAt = %q, want %q", out.ApprovedBy[0].ApprovedAt, "2026-01-15T10:30:00Z")
 	}
-	if len(out.SuggestedApprovers) != 1 || out.SuggestedApprovers[0] == nil || out.SuggestedApprovers[0].Name != "Bob" {
-		t.Errorf("SuggestedApprovers = %v, want [Bob]", out.SuggestedApprovers)
+}
+
+// TestMRApprovalConfig_TheDeprecatedPOSTsFields_AreNotPublished pins the repair.
+// The twenty extra fields this output used to carry are the response of the POST
+// at the same path, deprecated in GitLab 16.0 and never called here, so an
+// answer that carries them anyway must still publish four keys and no more. A
+// field test asserts the shape rather than one value, because the defect was
+// that the shape was somebody else's.
+func TestMRApprovalConfig_TheDeprecatedPOSTsFields_AreNotPublished(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/10/approvals" {
+			testutil.RespondJSON(w, http.StatusOK, configResponseWithPOSTFields)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Config(context.Background(), client, ConfigInput{ProjectID: "42", MRIID: 10})
+	if err != nil {
+		t.Fatalf("Config() unexpected error: %v", err)
+	}
+
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal the output: %v", err)
+	}
+	var keys map[string]json.RawMessage
+	if unmarshalErr := json.Unmarshal(encoded, &keys); unmarshalErr != nil {
+		t.Fatalf("read the output back: %v", unmarshalErr)
+	}
+	published := slices.Sorted(maps.Keys(keys))
+	want := []string{"approved", "approved_by", "user_can_approve", "user_has_approved"}
+	if !slices.Equal(published, want) {
+		t.Errorf("published %v, want exactly %v: every other key of the SDK type belongs to the deprecated POST", published, want)
+	}
+	if !out.Approved || !out.UserHasApproved || len(out.ApprovedBy) != 1 {
+		t.Errorf("output = %+v, want the four real fields still read", out)
 	}
 }
 
@@ -770,19 +821,27 @@ func TestMRApproval_Rules404CommunityEdition(t *testing.T) {
 	}
 }
 
-// TestMRApproval_Config404CommunityEdition verifies that Config returns a
-// clear feature-tier message when GitLab CE returns 404.
-func TestMRApproval_Config404CommunityEdition(t *testing.T) {
+// TestMRApproval_Config404_DoesNotBlameTheLicence verifies that a 404 here is
+// reported as a wrong identifier and not as a missing tier.
+//
+// It used to assert the opposite, and the message it pinned was false: GitLab
+// answers this endpoint on Community Edition, which the CE end-to-end suite
+// calls successfully. A model reading "requires GitLab Premium" off a mistyped
+// merge_request_iid stops trying instead of correcting the number.
+func TestMRApproval_Config404_DoesNotBlameTheLicence(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	_, err := Config(context.Background(), client, ConfigInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
-		t.Fatal("Config() expected error for CE 404, got nil")
+		t.Fatal("Config() expected error for a 404, got nil")
 	}
-	if !strings.Contains(err.Error(), "GitLab Premium") {
-		t.Errorf("Config() error should mention GitLab Premium, got: %v", err)
+	if strings.Contains(err.Error(), "Premium") || strings.Contains(err.Error(), "Community Edition") {
+		t.Errorf("Config() error blames the license for an endpoint every tier serves: %v", err)
+	}
+	if !strings.Contains(err.Error(), "merge_request_iid") {
+		t.Errorf("Config() error should point at the identifiers, got: %v", err)
 	}
 }
 
@@ -1096,7 +1155,7 @@ func TestRuleToOutput_NilGroupEntry(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// configToOutput — nil approved_by entry, nil suggested_approvers entry
+// configToOutput — nil approved_by entry
 // ---------------------------------------------------------------------------.
 
 // TestConfig_ToOutputNilEntries verifies Config when to output nil entries.
@@ -1114,9 +1173,6 @@ func TestConfig_ToOutputNilEntries(t *testing.T) {
 	}
 	if out.ApprovedBy[1] == nil || out.ApprovedBy[1].User == nil || out.ApprovedBy[1].User.Name != "Alice" {
 		t.Errorf("ApprovedBy[1] = %v, want user Alice", out.ApprovedBy[1])
-	}
-	if len(out.SuggestedApprovers) != 1 || out.SuggestedApprovers[0] == nil || out.SuggestedApprovers[0].Name != "Bob" {
-		t.Errorf("SuggestedApprovers = %v, want [Bob]", out.SuggestedApprovers)
 	}
 }
 
@@ -1182,44 +1238,37 @@ func TestFormatRulesMarkdown_Empty(t *testing.T) {
 // TestFormatConfigMarkdown_Full verifies FormatConfigMarkdown when full.
 func TestFormatConfigMarkdown_Full(t *testing.T) {
 	c := ConfigOutput{
-		IID:                10,
-		State:              "opened",
-		Approved:           true,
-		ApprovalsRequired:  2,
-		ApprovalsLeft:      0,
-		HasApprovalRules:   true,
-		UserHasApproved:    true,
-		UserCanApprove:     false,
-		ApprovedBy:         []*MergeRequestApproverUserOutput{{User: &BasicUserOutput{Name: "Alice"}}},
-		SuggestedApprovers: []*BasicUserOutput{{Name: "Bob"}},
+		Approved:        true,
+		UserHasApproved: true,
+		UserCanApprove:  false,
+		ApprovedBy:      []*MergeRequestApproverUserOutput{{User: &BasicUserOutput{Name: "Alice"}}},
 	}
 	md := FormatConfigMarkdown(c)
-	assertContains(t, md, "## MR Approval Configuration")
-	assertContains(t, md, "| MR | !10 |")
-	assertContains(t, md, "| State | opened |")
+	assertContains(t, md, "## MR Approvals")
 	assertContains(t, md, "| Approved | true |")
-	assertContains(t, md, "| Approvals Required | 2 |")
-	assertContains(t, md, "| Approvals Left | 0 |")
-	assertContains(t, md, "| Has Approval Rules | true |")
 	assertContains(t, md, "| User Has Approved | true |")
 	assertContains(t, md, "| User Can Approve | false |")
 	assertContains(t, md, "**Approved by**: Alice")
-	assertContains(t, md, "**Suggested approvers**: Bob")
+	// The rows that used to print here read fields GitLab does not answer with,
+	// so each printed a zero: the count and the rules live on approval_state.
+	assertNotContains(t, md, "Approvals Required")
+	assertNotContains(t, md, "Approvals Left")
+	assertNotContains(t, md, "Has Approval Rules")
+	assertNotContains(t, md, "Suggested approvers")
+	assertContains(t, md, "Use action 'approval_state'")
 }
 
 // TestFormatConfigMarkdown_Minimal verifies FormatConfigMarkdown when minimal.
 func TestFormatConfigMarkdown_Minimal(t *testing.T) {
-	md := FormatConfigMarkdown(ConfigOutput{State: "merged"})
-	assertContains(t, md, "| State | merged |")
+	md := FormatConfigMarkdown(ConfigOutput{})
+	assertContains(t, md, "| Approved | false |")
 	assertNotContains(t, md, "**Approved by**")
-	assertNotContains(t, md, "**Suggested approvers**")
 }
 
 // TestFormatConfigMarkdown_ApprovedByWithDate verifies that FormatConfigMarkdown
 // includes the approval date in parentheses when ApprovedAt is non-empty.
 func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
 	c := ConfigOutput{
-		State: "opened",
 		ApprovedBy: []*MergeRequestApproverUserOutput{
 			{User: &BasicUserOutput{Name: "Alice"}, ApprovedAt: "2026-03-15T14:00:00Z"},
 			{User: &BasicUserOutput{Name: "Bob"}, ApprovedAt: ""},
@@ -1238,7 +1287,6 @@ func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
 // remaining named approvers.
 func TestFormatConfigMarkdown_SkipsNilApprovers(t *testing.T) {
 	c := ConfigOutput{
-		State: "opened",
 		ApprovedBy: []*MergeRequestApproverUserOutput{
 			nil,
 			{User: nil},

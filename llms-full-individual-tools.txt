@@ -9064,7 +9064,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_mr_approval_config
 
-Get the approval configuration of a merge request. Returns: approvals required and left, approved-by users with timestamps, suggested approvers, approver groups, and the remaining approval rules. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.
+Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve. For approvals required and left, use the approval state. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.
 
 **Parameters:**
 

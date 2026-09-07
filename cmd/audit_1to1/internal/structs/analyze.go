@@ -190,7 +190,46 @@ var docOmittedFields = map[string]string{
 	// jobs: the job response nests pipeline.id; there is no top-level pipeline_id
 	// (the old MCP pipeline_id was a flattened convenience scalar, now removed).
 	"jobs.Output.pipeline_id": docJobsSingle,
+	// mrapprovals: gl.MergeRequestApprovals models the response of
+	// POST /projects/:id/merge_requests/:iid/approvals, deprecated in GitLab
+	// 16.0. gitlab_mr_approval_config calls the GET at that path, which answers
+	// with four fields, so the twenty below are the zero value on every tier.
+	//
+	// The citation is deliberately not doc/api/merge_request_approvals.md, the
+	// form every other entry here takes: that page still prints an example body
+	// carrying all of them under the GET, so citing it would cite a document
+	// that contradicts the omission. The generated OpenAPI record separates the
+	// two endpoints (docs/development/gitlab-api-shapes.json), the Grape entity
+	// GitLab renders the GET with exposes exactly the four, and the CE
+	// end-to-end suite observed four against a live 19.3 instance.
+	"mrapprovals.ConfigOutput.id":                                docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.iid":                               docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.project_id":                        docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.title":                             docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.description":                       docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.state":                             docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.created_at":                        docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.updated_at":                        docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.merge_status":                      docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.approvals_required":                docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.approvals_left":                    docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.approvals_before_merge":            docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.require_password_to_approve":       docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.has_approval_rules":                docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.merge_request_approvers_available": docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.multiple_approval_rules_available": docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.suggested_approvers":               docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.approvers":                         docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.approver_groups":                   docMRApprovalsGET,
+	"mrapprovals.ConfigOutput.approval_rules_left":               docMRApprovalsGET,
 }
+
+// docMRApprovalsGET cites the record that separates the two endpoints sharing
+// the approvals path, since GitLab's own prose page does not.
+const docMRApprovalsGET = "docs/development/gitlab-api-shapes.json " +
+	"(GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals declares approved, approved_by, " +
+	"user_can_approve and user_has_approved; every other field of the SDK type appears only under the POST at " +
+	"the same path, deprecated in GitLab 16.0)"
 
 // isDocOmittedField reports whether an SDK field is a doc-justified intentional
 // omission on a primary MCP output type.

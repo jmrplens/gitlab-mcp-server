@@ -1542,7 +1542,7 @@ var allMarkdownFixtureData = []markdownFixture{
 	// MR Approvals
 	{"mrapprovals.StateOutput", mrapprovals.StateOutput{Rules: []mrapprovals.RuleOutput{{ID: 1, Name: "rule"}}}},
 	{"mrapprovals.RulesOutput", mrapprovals.RulesOutput{Rules: []mrapprovals.RuleOutput{{ID: 1, Name: "rule"}}}},
-	{"mrapprovals.ConfigOutput", mrapprovals.ConfigOutput{ApprovalsBeforeMerge: 1}},
+	{"mrapprovals.ConfigOutput", mrapprovals.ConfigOutput{Approved: true}},
 	{"mrapprovals.RuleOutput", mrapprovals.RuleOutput{ID: 1, Name: "rule"}},
 
 	// MR Draft Notes

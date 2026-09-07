@@ -103,61 +103,12 @@ func approverUserOutputs(users []*gl.MergeRequestApproverUser) []*MergeRequestAp
 	return out
 }
 
-// MergeRequestApproverNestedGroupOutput mirrors
-// gl.MergeRequestApproverNestedGroup, the group object embedded in the
-// approver_groups list of a merge-request approval configuration.
-type MergeRequestApproverNestedGroupOutput struct {
-	ID                   int64  `json:"id"`
-	Name                 string `json:"name"`
-	Path                 string `json:"path"`
-	Description          string `json:"description,omitempty"`
-	Visibility           string `json:"visibility,omitempty"`
-	AvatarURL            string `json:"avatar_url,omitempty"`
-	WebURL               string `json:"web_url,omitempty"`
-	FullName             string `json:"full_name,omitempty"`
-	FullPath             string `json:"full_path,omitempty"`
-	LFSEnabled           bool   `json:"lfs_enabled"`
-	RequestAccessEnabled bool   `json:"request_access_enabled"`
-}
-
-// MergeRequestApproverGroupOutput mirrors gl.MergeRequestApproverGroup, the
-// wrapper object carrying a single nested approver group.
-type MergeRequestApproverGroupOutput struct {
-	Group MergeRequestApproverNestedGroupOutput `json:"group"`
-}
-
-// approverGroupOutput converts a single gl.MergeRequestApproverGroup to its
-// output shape, returning nil when the SDK value is nil.
-func approverGroupOutput(g *gl.MergeRequestApproverGroup) *MergeRequestApproverGroupOutput {
-	if g == nil {
-		return nil
-	}
-	ng := g.Group
-	return &MergeRequestApproverGroupOutput{
-		Group: MergeRequestApproverNestedGroupOutput{
-			ID: ng.ID, Name: ng.Name, Path: ng.Path, Description: ng.Description,
-			Visibility: ng.Visibility, AvatarURL: ng.AvatarURL, WebURL: ng.WebURL,
-			FullName: ng.FullName, FullPath: ng.FullPath, LFSEnabled: ng.LFSEnabled,
-			RequestAccessEnabled: ng.RequestAccessEnabled,
-		},
-	}
-}
-
-// approverGroupOutputs converts a slice of gl.MergeRequestApproverGroup,
-// skipping nil elements and returning nil for an empty or all-nil slice.
-func approverGroupOutputs(groups []*gl.MergeRequestApproverGroup) []*MergeRequestApproverGroupOutput {
-	if len(groups) == 0 {
-		return nil
-	}
-	out := make([]*MergeRequestApproverGroupOutput, 0, len(groups))
-	for _, g := range groups {
-		if g == nil {
-			continue
-		}
-		out = append(out, approverGroupOutput(g))
-	}
-	return out
-}
+// The approver-group output types stood here, mirroring
+// gl.MergeRequestApproverGroup and its nested group. Nothing publishes them any
+// more: their only reader was ConfigOutput.ApproverGroups, which GitLab answers
+// only at the deprecated POST this package does not call. They are removed
+// rather than kept for a future caller, because a type nothing reaches is a
+// second definition of a group shape that would drift from the one in use.
 
 // GroupOutput is the documented reference subset of the group object embedded
 // in an approval rule's groups list.

@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,743 |
-| Unit test functions                                   | 14,140 |
+| Total test functions                                  | 14,742 |
+| Unit test functions                                   | 14,139 |
 | E2E test functions                                    |    603 |
 | cmd test functions                                    |  2,821 |
 | Test files (internal/)                                |    518 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,840 | 80.3% |
+| `TestFunc_Scenario` (2-part)           | 11,837 | 80.3% |
 | `TestFunc` (no underscore)             |    981 |  6.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,922 | 13.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,924 | 13.1% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,426 |        144 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,561 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,560 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        238 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,821 |        191 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,743** |    **947** |                                                                                                 |
+| **Total**               |     **14,742** |    **947** |                                                                                                 |
 
 ### Core Packages
 
@@ -106,8 +106,8 @@
 | groupmilestones   |    90 |   100.0% |     8 |
 | snippets          |    89 |    99.5% |    15 |
 | integrations      |    87 |    99.6% |    12 |
-| mrapprovals       |    85 |   100.0% |     7 |
 | files             |    84 |   100.0% |     8 |
+| mrapprovals       |    84 |   100.0% |     7 |
 | tags              |    83 |   100.0% |     9 |
 
 ### Complete Tool Sub-Package Test Counts
@@ -228,7 +228,7 @@
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        73 |          1 |   100.0% |         7 |
 | modelregistry           |         7 |          3 |   100.0% |         1 |
-| mrapprovals             |        85 |          3 |   100.0% |         7 |
+| mrapprovals             |        84 |          3 |   100.0% |         7 |
 | mrapprovalsettings      |         9 |          2 |   100.0% |         4 |
 | mrchanges               |        37 |          1 |   100.0% |         4 |
 | mrcontextcommits        |        22 |          1 |   100.0% |         3 |
@@ -294,7 +294,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       102 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        51 |          4 |   100.0% |         7 |
-| **Total**               | **8,561** |    **359** |          | **1,187** |
+| **Total**               | **8,560** |    **359** |          | **1,187** |
 
 </details>
 
