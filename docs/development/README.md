@@ -24,6 +24,7 @@ the full testing reference live in subfolders here.
 | [Token Footprint](token-footprint.md)                                     | Token accounting across tiers, surfaces, and schema modes                  |
 | [Resource Hot Spots](resource-hot-spots.md)                               | What a pooled credential costs in memory, what is shared, and what remains |
 | [Orbit Live Test Fixtures](orbit-fixtures.md)                             | Fixtures, setup, and the indexer caveat for GitLab.com live tests          |
+| [Enterprise Schema Checks](enterprise-schema-checks.md)                   | The unlicensed weekly re-probe, and the licensed pre-release run           |
 | [Testing](testing/README.md)                                              | Unit, E2E, and AI model-evaluation documentation                           |
 | [Architecture Decision Records](adr/README.md)                            | The recorded architectural decisions (ADRs)                                |
 | [Upstream Bugs and Gaps](upstream-bugs.md)                                | Defects found in dependencies, and what we contributed back                |

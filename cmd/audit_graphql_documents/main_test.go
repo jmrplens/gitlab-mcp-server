@@ -3,13 +3,20 @@ package main
 import (
 	"bytes"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
+
+// afterThePin is a day later than the committed provenance record, so the age
+// line a live run prints is a number rather than a negative one.
+func afterThePin() time.Time { return time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC) }
 
 // soundFixture holds documents the pinned schema accepts, written the way the
 // repository writes them: a named constant, and one assembled from a shared
@@ -90,6 +97,98 @@ func TestRun_AgainstASchemaTheCallerSupplies_JudgesByThatSchema(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "not the pinned schema") {
 		t.Errorf("the summary does not say which schema judged the documents:\n%s", errOut.String())
+	}
+}
+
+// okFixture holds one document the smallest possible instance accepts, so a run
+// against a fetched schema can be judged by that schema rather than by the pin.
+const okFixture = `package ok
+
+const queryOk = @@query { ok }@@
+`
+
+// TestRun_AgainstAnInstanceItIntrospects_JudgesByWhatThatInstanceServes
+// verifies the mode the scheduled job runs.
+//
+// It is the one check the pin cannot perform. The pin says the documents were
+// valid on gitlab.com on the day it was taken; this says they are valid on the
+// GitLab an instance is serving now, and it reports where the two disagree
+// about something the documents touch, which is how the pin's age becomes a
+// number somebody sees rather than an assumption.
+func TestRun_AgainstAnInstanceItIntrospects_JudgesByWhatThatInstanceServes(t *testing.T) {
+	var out, errOut bytes.Buffer
+
+	status := run(auditRun{
+		dir:      repoRoot(t),
+		patterns: []string{fixturePattern},
+		overlay:  fixtureOverlay(t, map[string]string{"ok": okFixture}),
+		live:     answeringInstance(t, introspectionAnswer(queryOnly)),
+		now:      afterThePin,
+	}, &out, &errOut)
+
+	if status != 0 {
+		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut.String())
+	}
+	for _, want := range []string{
+		"fetched now, not the pinned schema",
+		"the pin and the live schema disagree on",
+		"Query.ok: the live schema has it, the pin does not",
+		"day(s) ago",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("stdout does not contain %q:\n%s", want, out.String())
+			}
+		})
+	}
+}
+
+// TestRun_AnInstanceThatCannotBeReached_FailsWithoutFallingBackToThePin
+// verifies that a re-probe whose instance never answered stops rather than
+// judging by the pin, which would report a pass for a question nobody asked.
+func TestRun_AnInstanceThatCannotBeReached_FailsWithoutFallingBackToThePin(t *testing.T) {
+	unreachable := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	unreachable.Close()
+
+	var out, errOut bytes.Buffer
+	status := run(auditRun{
+		dir:      repoRoot(t),
+		patterns: []string{fixturePattern},
+		overlay:  fixtureOverlay(t, map[string]string{"ok": okFixture}),
+		live:     unreachable.URL,
+	}, &out, &errOut)
+
+	if status != 1 {
+		t.Fatalf("exit status %d, want 1", status)
+	}
+	if !strings.Contains(errOut.String(), "ask ") {
+		t.Errorf("stderr does not say the instance could not be asked:\n%s", errOut.String())
+	}
+	if strings.Contains(out.String(), "document(s) accepted") {
+		t.Errorf("the run reported documents accepted after the fetch failed:\n%s", out.String())
+	}
+}
+
+// TestRun_BothSchemaSourcesAtOnce_IsRefused verifies that a run naming two
+// schemas is refused rather than silently preferring one. Which of the two
+// judged the documents is the whole meaning of the result, so a run that cannot
+// say must not produce one.
+func TestRun_BothSchemaSourcesAtOnce_IsRefused(t *testing.T) {
+	var out, errOut bytes.Buffer
+
+	status := run(auditRun{
+		dir:        repoRoot(t),
+		patterns:   []string{fixturePattern},
+		overlay:    fixtureOverlay(t, map[string]string{"ok": okFixture}),
+		live:       "https://gitlab.example.com/api/graphql",
+		schemaPath: filepath.Join(t.TempDir(), "unused.graphql"),
+	}, &out, &errOut)
+
+	if status != 1 {
+		t.Fatalf("exit status %d, want 1", status)
+	}
+	if !strings.Contains(errOut.String(), "pass one") {
+		t.Errorf("stderr does not explain the refusal:\n%s", errOut.String())
 	}
 }
 

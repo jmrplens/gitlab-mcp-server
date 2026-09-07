@@ -102,8 +102,21 @@ func ValidateDocument(document string) error {
 // Project.vulnerabilities.severity was [String!] once. Handing the same check a
 // schema fetched today turns that into a failure on the day it happens.
 func ValidateDocumentAgainst(schema *ast.Schema, document string) error {
-	_, err := parseDocument(schema, document)
+	_, err := ParseAgainst(schema, document)
 	return err
+}
+
+// ParseAgainst is [ValidateDocumentAgainst] returning what it parsed, so a
+// caller can walk the fields, arguments and types a document actually depends
+// on rather than the text it is written as.
+//
+// The live re-probe compares two schemas that way. Whole-schema drift between
+// two GitLab releases is thousands of lines and says nothing; the drift under
+// our own selection sets is a handful of coordinates and says everything, and
+// resolving those needs the validated document, where every field carries the
+// definition it resolved to.
+func ParseAgainst(schema *ast.Schema, document string) (*ast.QueryDocument, error) {
+	return parseDocument(schema, document)
 }
 
 // Validate reports whether GitLab would accept document sent with variables.

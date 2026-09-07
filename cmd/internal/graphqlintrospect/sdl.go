@@ -1,4 +1,4 @@
-package main
+package graphqlintrospect
 
 import (
 	"sort"
@@ -23,15 +23,14 @@ var builtinScalars = map[string]bool{
 	"Int": true, "Float": true, "String": true, "Boolean": true, "ID": true,
 }
 
-// renderSDL converts an introspection result into SDL.
+// RenderSDL converts an introspection result into SDL.
 //
-// Everything nameable is sorted, so regenerating against an instance that
-// reorders its answer produces a diff of what actually changed rather than a
-// reshuffle. Order carries no meaning in SDL: a schema is a set of
-// definitions, a type is a set of fields, and a field's arguments are matched
-// by name.
-func renderSDL(schema *schemaIntrospection) string {
-	types := append([]schemaType(nil), schema.Types...)
+// Everything nameable is sorted, so re-fetching from an instance that reorders
+// its answer produces a diff of what actually changed rather than a reshuffle.
+// Order carries no meaning in SDL: a schema is a set of definitions, a type is
+// a set of fields, and a field's arguments are matched by name.
+func RenderSDL(schema *Schema) string {
+	types := append([]Type(nil), schema.Types...)
 	sort.Slice(types, func(i, j int) bool { return types[i].Name < types[j].Name })
 
 	var blocks []string
@@ -47,11 +46,11 @@ func renderSDL(schema *schemaIntrospection) string {
 // renderRoots emits the schema block naming the operation roots. It is written
 // out rather than left implicit because an instance is free to name its roots
 // something other than Query, Mutation and Subscription.
-func renderRoots(schema *schemaIntrospection) string {
+func renderRoots(schema *Schema) string {
 	var lines []string
 	for _, root := range []struct {
 		operation string
-		named     *typeName
+		named     *TypeName
 	}{
 		{"query", schema.QueryType},
 		{"mutation", schema.MutationType},
@@ -66,7 +65,7 @@ func renderRoots(schema *schemaIntrospection) string {
 
 // renderType emits one type definition, or "" for a type SDL must not carry:
 // an introspection type, or a scalar the prelude already defines.
-func renderType(definition *schemaType) string {
+func renderType(definition *Type) string {
 	if strings.HasPrefix(definition.Name, "__") {
 		return ""
 	}
@@ -92,13 +91,13 @@ func renderType(definition *schemaType) string {
 }
 
 // renderFielded emits an object or interface, which differ only in keyword.
-func renderFielded(keyword string, definition *schemaType) string {
+func renderFielded(keyword string, definition *Type) string {
 	head := keyword + " " + definition.Name
 	if implemented := sortedNames(definition.Interfaces); len(implemented) > 0 {
 		head += " implements " + strings.Join(implemented, " & ")
 	}
 
-	fields := append([]schemaItem(nil), definition.Fields...)
+	fields := append([]Field(nil), definition.Fields...)
 	sort.Slice(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
 
 	lines := make([]string, 0, len(fields))
@@ -109,7 +108,7 @@ func renderFielded(keyword string, definition *schemaType) string {
 }
 
 // renderEnum emits an enum with its values.
-func renderEnum(definition *schemaType) string {
+func renderEnum(definition *Type) string {
 	values := sortedNames(definition.EnumValues)
 	lines := make([]string, 0, len(values))
 	for _, value := range values {
@@ -119,8 +118,8 @@ func renderEnum(definition *schemaType) string {
 }
 
 // renderInputObject emits an input object with its fields and defaults.
-func renderInputObject(definition *schemaType) string {
-	fields := append([]inputValue(nil), definition.InputFields...)
+func renderInputObject(definition *Type) string {
+	fields := append([]InputValue(nil), definition.InputFields...)
 	sort.Slice(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
 
 	lines := make([]string, 0, len(fields))
@@ -131,11 +130,11 @@ func renderInputObject(definition *schemaType) string {
 }
 
 // renderArgs emits an argument list, or "" for a field that takes none.
-func renderArgs(args []inputValue) string {
+func renderArgs(args []InputValue) string {
 	if len(args) == 0 {
 		return ""
 	}
-	sorted := append([]inputValue(nil), args...)
+	sorted := append([]InputValue(nil), args...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
 
 	rendered := make([]string, 0, len(sorted))
@@ -156,7 +155,7 @@ func renderDefault(value *string) string {
 
 // renderTypeRef unwraps the NON_NULL and LIST nodes introspection nests a type
 // reference in.
-func renderTypeRef(ref *typeRef) string {
+func renderTypeRef(ref *TypeRef) string {
 	if ref == nil {
 		return ""
 	}
@@ -171,7 +170,7 @@ func renderTypeRef(ref *typeRef) string {
 }
 
 // sortedNames returns the names of a reference list, sorted.
-func sortedNames(refs []typeName) []string {
+func sortedNames(refs []TypeName) []string {
 	names := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		names = append(names, ref.Name)

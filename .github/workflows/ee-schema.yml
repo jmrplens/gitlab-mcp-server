@@ -1,0 +1,188 @@
+# Enterprise GraphQL schema re-probe for gitlab-mcp-server
+#
+# Boots an UNLICENSED gitlab/gitlab-ee:latest, introspects it, and validates
+# every GraphQL document this repository sends against the schema that instance
+# serves right now. Duration: ~20-25 min, almost all of it GitLab booting.
+#
+# Why an unlicensed instance is enough: GitLab builds its GraphQL schema when
+# the process boots, and a license is applied afterwards, so an EE instance
+# serves the whole Enterprise schema before any license exists. Introspecting a
+# booting gitlab/gitlab-ee:latest returned 4233 types including Vulnerability,
+# PipelineSecurityReportFinding, Epic, Iteration, MergeTrain and
+# ComplianceFramework. Licensing is enforced in resolvers and authorization, not
+# by removing types, and a malformed document is refused at validation, before
+# either.
+#
+# Why this is not the enterprise test suite: that suite needs a license, and
+# there is no durable one to give it. The licenses available here are 30-day
+# trials obtained one at a time, so a scheduled licensed job would go red every
+# month for a reason that has nothing to do with the code. The licensed run
+# stays a manual pre-release step, documented in
+# docs/development/enterprise-schema-checks.md. Running it once against a
+# licensed Ultimate also settled that it would not have caught this defect
+# class anyway: every document gitlab.com refuses was executed there and
+# reported success.
+#
+# What this catches that the per-commit gate cannot: the pinned schema
+# (make check-graphql-schema) says our documents were valid on gitlab.com on the
+# day it was taken. This says they are valid on the GitLab that shipped today,
+# which is the version a self-managed instance actually runs, and it reports
+# where the pin and that instance disagree about a type or field one of our
+# documents touches, so the pin's age is a number somebody sees.
+
+name: EE Schema Re-probe
+
+on:
+  schedule:
+    # Thursdays, 04:29 UTC. Weekly is enough: GitLab ships monthly and patches
+    # through the month, so a field narrowed on release day is reported within
+    # days. Thursday rather than Monday keeps this off the weekly CE E2E run
+    # (Mondays 05:17), so two GitLab containers never boot on one morning and a
+    # failure in either arrives on a day of its own. The minute is off the hour
+    # because GitHub delays runs that pile up on round times.
+    - cron: "29 4 * * 4"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to checkout (branch, tag, or PR merge SHA from a fork)"
+        default: ""
+        type: string
+      gitlab_image:
+        description: "GitLab Enterprise Edition Docker image"
+        default: "gitlab/gitlab-ee:latest"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ee-schema-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GITLAB_IMAGE: ${{ inputs.gitlab_image || 'gitlab/gitlab-ee:latest' }}
+  GITLAB_ENDPOINT: http://localhost:8929
+
+jobs:
+  ee-schema:
+    name: "🔬 EE schema re-probe (Docker GitLab EE)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      # The pull is its own step so an image that never arrived is a different
+      # line in the summary from a document that stopped validating. They are
+      # different problems with different owners, and a job that reports them
+      # the same way is a job nobody reads.
+      - name: Pull GitLab EE image
+        id: pull
+        run: docker pull "${GITLAB_IMAGE}"
+
+      # Only the gitlab service: the runner, LDAP and fixture containers exist
+      # for the E2E suite and nothing here talks to them. The compose file is
+      # shared with the CE E2E run so the omnibus configuration has one home.
+      - name: Start GitLab EE via Docker Compose
+        id: start
+        working-directory: test/e2e
+        run: |
+          GITLAB_IMAGE="${GITLAB_IMAGE}" docker compose up -d gitlab
+          echo "GitLab EE container started, no license applied."
+
+      - name: Wait for GitLab readiness
+        id: ready
+        working-directory: test/e2e
+        timeout-minutes: 25
+        run: bash scripts/wait-for-gitlab.sh "${GITLAB_ENDPOINT}" 1200
+
+      # Recorded for the summary rather than asserted on. The instance tells an
+      # anonymous caller nothing about its version, and the re-probe needs no
+      # credential, so the manifest inside the container is where the version a
+      # failure should be read against comes from. Its first line is
+      # `<edition> <version>` (verified against a running container:
+      # `gitlab-ce 19.3.1`), so the cell names both halves and an image that
+      # silently stopped being the Enterprise build is readable in the summary.
+      - name: Record the GitLab version under test
+        id: version
+        if: always() && steps.ready.outcome == 'success'
+        working-directory: test/e2e
+        run: |
+          version="$(docker compose exec -T gitlab head -n 1 /opt/gitlab/version-manifest.txt || true)"
+          echo "version=${version:-unknown}" >> "$GITHUB_OUTPUT"
+
+      # The re-probe. It refuses an introspection too short to be a GitLab
+      # schema (the same type floor make check-graphql-schema refuses a
+      # truncated pin with), so an instance that boots and answers with a
+      # fragment fails loudly here instead of validating nothing and reporting
+      # success.
+      - name: Validate every document against the served schema
+        id: probe
+        run: |
+          mkdir -p test-results
+          go run ./cmd/audit_graphql_documents/ \
+            -live "${GITLAB_ENDPOINT}/api/graphql" -v \
+            2>&1 | tee test-results/ee-schema-report.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: Summarize
+        if: always()
+        env:
+          PULL: ${{ steps.pull.outcome }}
+          START: ${{ steps.start.outcome }}
+          READY: ${{ steps.ready.outcome }}
+          PROBE: ${{ steps.probe.outcome }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "## GitLab EE GraphQL schema re-probe"
+            echo
+            echo "| Step | Outcome |"
+            echo "| --- | --- |"
+            echo "| Image | \`${GITLAB_IMAGE}\` |"
+            echo "| Version | \`${VERSION:-unknown}\` |"
+            echo "| Pull | ${PULL:-skipped} |"
+            echo "| Start | ${START:-skipped} |"
+            echo "| Readiness | ${READY:-skipped} |"
+            echo "| Documents | ${PROBE:-skipped} |"
+            echo
+            if [ "${PULL}" != "success" ] || [ "${START}" != "success" ] || [ "${READY}" != "success" ]; then
+              echo "**The instance never became something to ask.** The image did not pull, or GitLab did not"
+              echo "become ready inside the window. Nothing was validated, and this says nothing about the"
+              echo "documents: it is a job-infrastructure failure, not a schema one."
+            elif [ "${PROBE}" != "success" ]; then
+              echo "**A document this server sends is one that GitLab no longer accepts**, or the instance"
+              echo "answered introspection with less than a whole schema. Both are reported in full below."
+            else
+              echo "Every document this repository sends is one the served schema accepts. The drift lines"
+              echo "below are information, not a failure: they name where the pinned gitlab.com schema and"
+              echo "this instance disagree about something the documents touch, and gitlab.com runs a"
+              echo "pre-release ahead of every self-managed instance, so some disagreement is expected."
+            fi
+            echo
+            if [ -f test-results/ee-schema-report.txt ]; then
+              echo '```text'
+              cat test-results/ee-schema-report.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ee-schema-report
+          path: test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Tear down GitLab
+        if: always()
+        working-directory: test/e2e
+        run: docker compose down -v --remove-orphans
