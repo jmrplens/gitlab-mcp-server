@@ -23,7 +23,7 @@ the full testing reference live in subfolders here.
 | [Godoc Compliance](godoc.md)                                              | The godoc audit workflow for packages, symbols, and tests                  |
 | [Token Footprint](token-footprint.md)                                     | Token accounting across tiers, surfaces, and schema modes                  |
 | [Resource Hot Spots](resource-hot-spots.md)                               | What a pooled credential costs in memory, what is shared, and what remains |
-| [Request Inventory](request-inventory.json)                               | Every request the unit suite issues, by package and endpoint (generated)   |
+| [Request Inventory](cmd-utilities.md#gen_request_inventory)               | What a row of the generated `request-inventory.json` means, and what it does not |
 | [Orbit Live Test Fixtures](orbit-fixtures.md)                             | Fixtures, setup, and the indexer caveat for GitLab.com live tests          |
 | [Enterprise Schema Checks](enterprise-schema-checks.md)                   | The unlicensed weekly re-probe, and the licensed pre-release run           |
 | [Testing](testing/README.md)                                              | Unit, E2E, and AI model-evaluation documentation                           |

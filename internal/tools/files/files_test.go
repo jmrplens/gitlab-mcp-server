@@ -315,6 +315,26 @@ func TestFileCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestFileCreate_MissingFilePath verifies that a create with no file path is
+// refused here rather than sent.
+//
+// The path is the last segment of the endpoint, so an empty one asks GitLab to
+// create a file with no name at POST /projects/:id/repository/files/, which it
+// refuses; the recorded request inventory is what showed this server making
+// that call.
+func TestFileCreate_MissingFilePath(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Branch: "main", CommitMessage: "x"})
+
+	if err == nil {
+		t.Fatal("expected error for empty file_path, got nil")
+	}
+	if !strings.Contains(err.Error(), "file_path is required") {
+		t.Errorf("error = %q, want it to contain 'file_path is required'", err.Error())
+	}
+}
+
 // TestFileCreate_MissingBranch verifies that FileCreate_MissingBranch returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -323,7 +343,7 @@ func TestFileCreate_MissingBranch(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", CommitMessage: "x"})
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", FilePath: "f.go", CommitMessage: "x"})
 	if err == nil {
 		t.Fatal("expected error for empty branch, got nil")
 	}
@@ -1970,6 +1990,7 @@ func TestFileCreate_OptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 	_, err := Create(context.Background(), client, CreateInput{
 		ProjectID:     "1",
+		FilePath:      "f.go",
 		Branch:        "main",
 		CommitMessage: "add",
 		Content:       "data",

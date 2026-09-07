@@ -30,6 +30,9 @@ type GetOutput struct {
 
 // Get retrieves the last 30 days of project statistics.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetOutput, error) {
+	if string(input.ProjectID) == "" {
+		return GetOutput{}, toolutil.ErrRequiredString("gitlab_get_project_statistics", "project_id")
+	}
 	stats, _, err := client.GL().ProjectStatistics.Last30DaysStatistics(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_statistics", err, http.StatusNotFound, "verify project_id with gitlab_project_get")

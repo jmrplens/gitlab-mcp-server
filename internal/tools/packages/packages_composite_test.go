@@ -722,8 +722,12 @@ func TestPackagePublishDirectory_SkipsSubdirectories(t *testing.T) {
 func TestPackagePublishDirectory_SkipsSymlinks(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create a regular file.
-	regular := filepath.Join(dir, "real.bin")
+	// The regular file is named after one another test already publishes,
+	// because this test skips where the filesystem has no symlinks and the
+	// recorded request inventory is compared byte for byte: a file name only
+	// this test sends would be a row that appears or vanishes with the machine
+	// the recording ran on.
+	regular := filepath.Join(dir, "file.bin")
 	os.WriteFile(regular, []byte("real"), 0o600)
 
 	// Create a symlink to that file.
@@ -737,7 +741,7 @@ func TestPackagePublishDirectory_SkipsSymlinks(t *testing.T) {
 		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/packages/generic/") {
 			publishCount++
 			testutil.RespondJSON(w, http.StatusCreated, `{
-				"id": 1, "package_id": 10, "file_name": "real.bin",
+				"id": 1, "package_id": 10, "file_name": "file.bin",
 				"size": 4, "file_sha256": "h", "file_md5": "m", "file_sha1": "s", "file_store": 1
 			}`)
 			return
@@ -758,7 +762,7 @@ func TestPackagePublishDirectory_SkipsSymlinks(t *testing.T) {
 		t.Errorf("TotalFiles = %d, want 1 (symlink should be excluded)", out.TotalFiles)
 	}
 	if publishCount != 1 {
-		t.Errorf("publishCount = %d, want 1 (only real.bin)", publishCount)
+		t.Errorf("publishCount = %d, want 1 (only file.bin)", publishCount)
 	}
 }
 

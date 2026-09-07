@@ -22,6 +22,9 @@ type ScheduleExportInput struct {
 
 // ScheduleExport schedules a new group relations export.
 func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input ScheduleExportInput) error {
+	if string(input.GroupID) == "" {
+		return toolutil.ErrRequiredString("gitlab_schedule_group_relations_export", "group_id")
+	}
 	opts := &gl.GroupRelationsScheduleExportOptions{}
 	if input.Batched != nil {
 		opts.Batched = input.Batched
@@ -77,6 +80,9 @@ type ListExportStatusOutput struct {
 
 // ListExportStatus lists the status of group relations exports.
 func ListExportStatus(ctx context.Context, client *gitlabclient.Client, input ListExportStatusInput) (*ListExportStatusOutput, error) {
+	if string(input.GroupID) == "" {
+		return nil, toolutil.ErrRequiredString("gitlab_list_group_relations_export_status", "group_id")
+	}
 	opts := &gl.ListGroupRelationsStatusOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {

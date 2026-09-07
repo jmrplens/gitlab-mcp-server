@@ -1166,18 +1166,24 @@ audit-1to1-sdk:
 ## audit-1to1-paths: gate the request an action actually issues (R-PATH). The other
 ## five rules describe the surface and none of them looks at the request a handler
 ## builds, which is how nine registered tools shipped unable to work. This FAILS on a
-## GraphQL document the pinned schema refuses, on a package the catalog owns actions in
-## that the unit suite was never seen issuing a request from and that declares no
-## reason, and on a declaration that no longer describes the tree. It reads the
-## committed inventory, so it needs no network and no suite run.
+## GraphQL document the pinned schema refuses, on an action whose owner names no
+## package under internal/tools, on a package the catalog owns actions in that neither
+## the committed inventory shows issuing a request nor declares a reason, and on a
+## declaration that no longer describes the tree. A silent package means one of two
+## things and the finding cannot tell them apart: no test drives that package, or the
+## inventory is stale (`make gen-request-inventory`). It reads the committed inventory,
+## so it needs no network and no suite run.
 audit-1to1-paths:
 	go run ./cmd/audit_1to1/ -scope=paths -gaps-only
 
 ## audit-1to1-paths-endpoints: the same, plus every recorded REST endpoint compared with
 ## GitLab's own API documentation. Needs the network and reads ~250 pages (cached for a
-## week afterwards). It is a candidate list a human adjudicates and never a gate: the
-## oracle is prose, so a deprecated-but-working alias, an endpoint documented under
-## doc/user, and one whose only mention is a sentence all look exactly like a defect.
+## week afterwards). It FAILS on an endpoint no declaration in
+## cmd/audit_1to1/internal/paths/endpoint_declarations.go accounts for, and on a
+## declaration that accounts for nothing any more. The declarations are what make the
+## comparison safe to gate on: the oracle is prose, so a deprecated-but-working alias,
+## an endpoint documented under doc/user, and one whose only mention is a sentence all
+## look exactly like a defect, and each of those is written down with its reason.
 audit-1to1-paths-endpoints:
 	go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -output plan/1to1-paths.json
 	@echo "R-PATH report written to plan/1to1-paths.json"
@@ -1349,6 +1355,13 @@ check-graphql-documents-live:
 ## minutes go; the merge is instant. Recording is off unless
 ## GITLAB_MCP_TEST_INVENTORY_DIR names an absolute directory, so an ordinary
 ## `make test` pays nothing for it.
+##
+## The merge only runs if the suite passed, since shards from a run that died
+## halfway are a partial answer. The R-PATH gate's own unit test therefore
+## skips while that variable is set (see TestRun_TheRealTree_PassesItsOwnGate):
+## without that, a new domain package could not be recorded, because the gate
+## failed on the package the recording was about to add and make stopped before
+## merging.
 gen-request-inventory:
 	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
 	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))

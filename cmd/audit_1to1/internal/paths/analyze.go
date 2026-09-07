@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
@@ -31,29 +32,53 @@ type Report struct {
 
 // Summary is the count of everything the report holds.
 type Summary struct {
-	InventoryRows     int `json:"inventory_rows"`
-	GraphQLDocuments  int `json:"graphql_documents"`
-	GraphQLRefused    int `json:"graphql_refused"`
-	CatalogActions    int `json:"catalog_actions"`
-	ActionsObserved   int `json:"actions_observed"`
-	ActionsSilent     int `json:"actions_silent"`
-	ActionsUnmapped   int `json:"actions_unmapped"`
-	SilentPackages    int `json:"silent_packages"`
-	UndeclaredSilent  int `json:"undeclared_silent_packages"`
-	UndeclaredActions int `json:"undeclared_silent_actions"`
-	StaleDeclarations int `json:"stale_declarations"`
+	InventoryRows    int `json:"inventory_rows"`
+	GraphQLDocuments int `json:"graphql_documents"`
+	GraphQLRefused   int `json:"graphql_refused"`
+	CatalogActions   int `json:"catalog_actions"`
+	// ActionsObserved counts the actions whose owning package was seen issuing
+	// some request, which is not the same as the action's own request having
+	// been seen: the grain is the package, because nothing on the wire names
+	// an action. Grain says so beside the number, since the number is what a
+	// reader quotes.
+	ActionsObserved   int    `json:"actions_observed"`
+	Grain             string `json:"actions_observed_grain"`
+	ActionsSilent     int    `json:"actions_silent"`
+	ActionsUnmapped   int    `json:"actions_unmapped"`
+	SilentPackages    int    `json:"silent_packages"`
+	UndeclaredSilent  int    `json:"undeclared_silent_packages"`
+	UndeclaredActions int    `json:"undeclared_silent_actions"`
+	StaleDeclarations int    `json:"stale_declarations"`
 	// UndocumentedEndpoints is 0 when the documentation comparison did not run,
 	// which Endpoints.Ran is what tells the two apart.
 	UndocumentedEndpoints int `json:"undocumented_endpoints"`
+	// UndeclaredEndpoints counts the undocumented ones no declaration in
+	// endpoint_declarations.go accounts for, which is the half that gates.
+	UndeclaredEndpoints int `json:"undeclared_endpoints"`
 }
+
+// observedGrain is what [Summary.Grain] says, spelled once.
+const observedGrain = "package: an action counts as observed when the package that owns it issued some request, not when its own request was seen"
 
 // clean reports whether the audited tree has no finding, which is to say
 // whether the gate passes.
 //
-// The documentation comparison is deliberately absent: it is a candidate list,
-// for the reasons in [EndpointCheck].
+// An unmapped action counts, because an owner that names no package under
+// internal/tools is a hole in this gate rather than a curiosity: the catalog
+// fills a spec group's missing owner in with "tools", nothing checks that an
+// owner names a real package, and an action classified unmapped is one the
+// silence check can never fail. Leaving it out meant the gate could be
+// silenced by omitting a field.
+//
+// The documentation comparison is deliberately absent from the gate unless it
+// found something undeclared: it is a candidate list, for the reasons in
+// [EndpointCheck].
 func (s Summary) clean() bool {
-	return s.GraphQLRefused == 0 && s.UndeclaredSilent == 0 && s.StaleDeclarations == 0
+	return s.GraphQLRefused == 0 &&
+		s.UndeclaredSilent == 0 &&
+		s.StaleDeclarations == 0 &&
+		s.ActionsUnmapped == 0 &&
+		s.UndeclaredEndpoints == 0
 }
 
 // GraphQLRefusal is one document the schema will not accept.
@@ -121,6 +146,9 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 		}
 	}
 
+	stale = append(stale, endpoints.staleDeclarations()...)
+	sort.Strings(stale)
+
 	report := Report{
 		SchemaVersion:     shared.SchemaVersion,
 		Inventory:         requestinventory.Path,
@@ -134,6 +162,7 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 			GraphQLRefused:        len(documents.Refusals),
 			CatalogActions:        coverage.Total,
 			ActionsObserved:       coverage.Covered,
+			Grain:                 observedGrain,
 			ActionsSilent:         coverage.Silent,
 			ActionsUnmapped:       coverage.Unmapped,
 			SilentPackages:        len(coverage.SilentOwners),
@@ -141,10 +170,12 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 			UndeclaredActions:     undeclaredActions,
 			StaleDeclarations:     len(stale),
 			UndocumentedEndpoints: len(endpoints.Undocumented),
+			UndeclaredEndpoints:   endpoints.undeclared(),
 		},
 	}
 	if gapsOnly {
 		report.SilentOwners = keepUndeclared(report.SilentOwners)
+		report.Endpoints.Undocumented = keepUndeclaredEndpoints(report.Endpoints.Undocumented)
 	}
 	return report, nil
 }
@@ -169,13 +200,30 @@ func refusals(result graphqldocs.Result) []GraphQLRefusal {
 }
 
 // keepUndeclared drops the owners that are not findings, which is what
-// -gaps-only asks for: a declared silence and an unmapped owner are both
-// context rather than work.
+// -gaps-only asks for: a declared silence is context rather than work.
+//
+// An unmapped owner stays, because it is a finding: the catalog names a
+// package that is not one, so nothing could have recorded a request for those
+// actions and no declaration excuses it. It used to be filtered out here, and
+// with the gate ignoring it too, an action whose spec group forgot to name an
+// owner was neither counted nor printed.
 func keepUndeclared(owners []SilentOwner) []SilentOwner {
 	kept := make([]SilentOwner, 0)
 	for _, owner := range owners {
-		if owner.Status == statusUndeclared {
+		if owner.Status != statusDeclared {
 			kept = append(kept, owner)
+		}
+	}
+	return kept
+}
+
+// keepUndeclaredEndpoints drops the undocumented endpoints a declaration
+// accounts for, on the same terms.
+func keepUndeclaredEndpoints(found []Endpoint) []Endpoint {
+	kept := make([]Endpoint, 0)
+	for _, endpoint := range found {
+		if !endpoint.declared() {
+			kept = append(kept, endpoint)
 		}
 	}
 	return kept

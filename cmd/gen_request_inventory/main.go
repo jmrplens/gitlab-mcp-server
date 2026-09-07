@@ -25,7 +25,7 @@ const (
 // main parses the flags, merges the shards, and either rewrites the committed
 // inventory or reports that it has drifted.
 func main() {
-	shardDir := flag.String("shards", defaultShardDir, "directory holding the recorded request shards")
+	shardDir := flag.String("shards", defaultShardDir, "directory holding the recorded request shards, absolute or relative to the repository root")
 	outputPath := flag.String("out", defaultOutputPath, "committed request inventory path")
 	check := flag.Bool("check", false, "verify the committed inventory is current without writing it")
 	verbose := flag.Bool("v", false, "name every package the catalog owns actions in that recorded no request")
@@ -51,14 +51,14 @@ type options struct {
 // run is the testable entry point. Every error names the stage that failed,
 // which is the text main reports.
 func run(progress io.Writer, root string, opts options) error {
-	records, err := readShards(filepath.Join(root, opts.shardDir))
+	records, err := readShards(underRoot(root, opts.shardDir))
 	if err != nil {
 		return err
 	}
 	rows := merge(records)
 	summarize(progress, root, rows, opts.verbose)
 
-	target := filepath.Join(root, opts.outputPath)
+	target := underRoot(root, opts.outputPath)
 	content := render(rows)
 	if opts.check {
 		return checkInventory(target, content, rows)
@@ -67,6 +67,22 @@ func run(progress io.Writer, root string, opts options) error {
 		return fmt.Errorf("write %s: %w", target, writeErr)
 	}
 	return nil
+}
+
+// underRoot resolves a path given on the command line, which is relative to
+// the repository root unless it is already absolute.
+//
+// The recorder demands an absolute directory (a test binary runs in its own
+// package directory, so a relative one scatters a shard under each of them),
+// and filepath.Join treats an absolute second element as relative. Without
+// this, recording into the temporary directory the recorder insists on and
+// then merging it was impossible: the same path the suite wrote to could not
+// be read back.
+func underRoot(root, path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(root, path)
 }
 
 // checkInventory compares the committed artifact with what the shards say it

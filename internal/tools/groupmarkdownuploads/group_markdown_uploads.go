@@ -69,6 +69,9 @@ func uploadedByOutput(u *gl.User) *UploadedByOutput {
 
 // List retrieves group markdown uploads.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (*ListOutput, error) {
+	if string(input.GroupID) == "" {
+		return nil, toolutil.ErrRequiredString("gitlab_list_group_markdown_uploads", "group_id")
+	}
 	opts := &gl.ListMarkdownUploadsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {
@@ -112,6 +115,9 @@ type DeleteByIDInput struct {
 
 // DeleteByID deletes a group markdown upload by its ID.
 func DeleteByID(ctx context.Context, client *gitlabclient.Client, input DeleteByIDInput) error {
+	if string(input.GroupID) == "" {
+		return toolutil.ErrRequiredString("gitlab_delete_group_markdown_upload_by_id", "group_id")
+	}
 	if input.UploadID <= 0 {
 		return toolutil.ErrRequiredInt64("gitlab_delete_group_markdown_upload_by_id", "upload_id")
 	}
@@ -141,6 +147,9 @@ type DeleteBySecretAndFilenameInput struct {
 
 // DeleteBySecretAndFilename deletes a group markdown upload by secret and filename.
 func DeleteBySecretAndFilename(ctx context.Context, client *gitlabclient.Client, input DeleteBySecretAndFilenameInput) error {
+	if string(input.GroupID) == "" {
+		return toolutil.ErrRequiredString("gitlab_delete_group_markdown_upload_by_secret", "group_id")
+	}
 	_, err := client.GL().GroupMarkdownUploads.DeleteGroupMarkdownUploadBySecretAndFilename(string(input.GroupID), input.Secret, input.Filename, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_group_markdown_upload_by_secret", err, http.StatusNotFound,

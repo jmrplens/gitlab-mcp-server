@@ -147,6 +147,32 @@ func TestRun_Check_FailsOnADriftedInventory(t *testing.T) {
 	}
 }
 
+// TestRun_AbsoluteShardDirectory_IsReadWhereItWasNamed verifies the two ends
+// of the pipeline agree about what a path means.
+//
+// The recorder refuses a relative directory, because a test binary runs in its
+// own package directory and would scatter one shard under each of them, so the
+// suite always records into an absolute path. filepath.Join treats an absolute
+// second element as relative, so resolving -shards against the repository root
+// unconditionally made the directory the suite wrote to unreadable by the
+// merge that has to read it.
+func TestRun_AbsoluteShardDirectory_IsReadWhereItWasNamed(t *testing.T) {
+	stubCatalog(t)
+	root, shardDir, outputPath := prepareRoot(t)
+
+	err := run(&bytes.Buffer{}, root, options{shardDir: filepath.Join(root, shardDir), outputPath: outputPath})
+	if err != nil {
+		t.Fatalf("run error = %v, want the absolute shard directory read", err)
+	}
+	written, err := os.ReadFile(filepath.Join(root, outputPath))
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+	if !strings.Contains(string(written), "/projects/:id/issues") {
+		t.Errorf("the inventory does not hold the recorded endpoint:\n%s", written)
+	}
+}
+
 // TestRun_UnusableInputOrOutput_NamesTheStage verifies that each failure says
 // which half of the run it came from, since the two are fixed differently: one
 // means the suite was not recorded, the other that the artifact cannot be

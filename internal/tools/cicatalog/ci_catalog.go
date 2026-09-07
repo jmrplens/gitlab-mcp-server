@@ -415,8 +415,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 // GetInput is the input for getting a single CI/CD Catalog resource.
 type GetInput struct {
-	ID       string `json:"id,omitempty" jsonschema:"Catalog resource GID (e.g. gid://gitlab/Ci::CatalogResource/1). Use either id or full_path."`
-	FullPath string `json:"full_path,omitempty" jsonschema:"Full path of the project hosting the resource (e.g. my-group/my-components). Use either id or full_path."`
+	ID       string `json:"id,omitempty" jsonschema:"Catalog resource GID (e.g. gid://gitlab/Ci::CatalogResource/1). Give exactly one of id or full_path. Sending both is refused."`
+	FullPath string `json:"full_path,omitempty" jsonschema:"Full path of the project hosting the resource (e.g. my-group/my-components). Give exactly one of id or full_path. Sending both is refused."`
 }
 
 // GetOutput is the output for getting a single CI/CD Catalog resource.
@@ -426,9 +426,19 @@ type GetOutput struct {
 }
 
 // Get retrieves a single CI/CD Catalog resource via the GitLab GraphQL API.
+//
+// The exclusion between id and full_path is enforced here because the schema
+// cannot carry it: ciCatalogResource declares both arguments as nullable, and
+// "exactly one of them" is a resolver rule GitLab answers with an error and no
+// data. Sending both used to be reported to the caller as "catalog resource
+// not found", with a suggestion that the resource was an unpublished draft,
+// which is a false answer to a question this server could have refused itself.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetOutput, error) {
 	if input.ID == "" && input.FullPath == "" {
 		return GetOutput{}, errors.New("get_catalog_resource: either id or full_path is required")
+	}
+	if input.ID != "" && input.FullPath != "" {
+		return GetOutput{}, errors.New("get_catalog_resource: give exactly one of id or full_path, not both. GitLab refuses a query carrying both")
 	}
 
 	vars := make(map[string]any)
@@ -443,6 +453,11 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		Data struct {
 			CiCatalogResource *gqlResourceNode `json:"ciCatalogResource"`
 		} `json:"data"`
+		// Errors is what a refused query carries instead of data. Without it a
+		// GitLab sentence naming what was wrong with the request is discarded,
+		// and the nil resource below becomes a not-found message the caller has
+		// no reason to doubt.
+		Errors []toolutil.GraphQLError `json:"errors"`
 	}
 
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
@@ -455,6 +470,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 
 	if resp.Data.CiCatalogResource == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError("get_catalog_resource", resp.Errors); graphQLErr != nil {
+			return GetOutput{}, graphQLErr
+		}
 		lookup := input.ID
 		if lookup == "" {
 			lookup = input.FullPath

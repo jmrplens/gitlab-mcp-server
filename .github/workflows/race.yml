@@ -65,6 +65,16 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       - name: Unit suite under the race detector
+        # Recording is on here and nowhere else under the detector. The request
+        # recorder is the one concurrent thing the test transport has: a
+        # process-global map of recorders, a shard file and a seen set written
+        # from every httptest server goroutine in the binary. The coverage job
+        # that records for real is not race-instrumented, so with the variable
+        # unset here every one of those paths would be invisible to the
+        # detector. The shards are written into the runner's temporary
+        # directory and thrown away: this job gates races, not the artifact.
+        env:
+          GITLAB_MCP_TEST_INVENTORY_DIR: ${{ runner.temp }}/request-inventory-race
         run: go test -race -count=1 -timeout 60m ./cmd/... ./internal/...
 
   # The two transport modules, which are here because they are the only tests

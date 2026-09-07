@@ -63,6 +63,12 @@ const (
 	// cross-process locking is needed.
 	shardPattern = "requests-*.jsonl"
 
+	// jsonContentType is what a request declares when its body carries field
+	// names worth recording. It is matched as a substring of a lowercased
+	// header, since client-go sends "application/json" and a charset
+	// parameter is allowed after it.
+	jsonContentType = "application/json"
+
 	// shardDirPerm is the mode the shard directory is created with. It holds
 	// nothing secret, but nothing needs to read it either except the merge
 	// that runs as the same user.
@@ -86,6 +92,11 @@ type requestRecord struct {
 	// The values are left out because a value is a fixture and a name is part
 	// of the request we make.
 	Query []string `json:"query,omitempty"`
+	// Body holds the top-level field names of a JSON request body, on the same
+	// terms. Without it a mutating row carries a method and a path and nothing
+	// else, which is most of what this server sends and the half where a wrong
+	// field name lives.
+	Body []string `json:"body,omitempty"`
 	// Operation and Variables describe a GraphQL call the way Path and Query
 	// describe a REST one. See [graphQLShape].
 	Operation string   `json:"operation,omitempty"`
@@ -95,13 +106,21 @@ type requestRecord struct {
 // requestOrigin is the attribution the transport can honestly make: the Go
 // package that built the client, and the test that built it.
 //
-// It is not the action. Nothing on the wire names one, and nothing on the
-// stack at the point a request is observed names one either, because the
-// httptest server answers on its own goroutine while the test goroutine that
-// called the handler is blocked somewhere this code cannot see. The catalog's
-// route for an action is a closure over the handler function
-// (toolutil.RouteAction), so even the catalog cannot hand back a function
-// identity to match against.
+// It is not the action, and the reason is where the recording sits rather than
+// any law about what can be known. Nothing on the wire names an action, and at
+// the point a request is observed nothing on the stack does either, because
+// the httptest server answers on its own goroutine while the test goroutine
+// that called the handler is blocked somewhere this code cannot see. A
+// RoundTripper on the client would see it: an outgoing request is dispatched
+// on the caller's own goroutine, so the action handler's frame is still there.
+// That seam is not taken here because the frame names a Go function and the
+// gate asks about a catalog action, and the two are not the same thing: the
+// catalog's route is a closure over the handler (toolutil.RouteAction), so
+// turning a frame into an action ID means recording the handler's function
+// identity on the spec, in production code, for a test artifact. The honest
+// coarse attribution was worth more than a mapping that is a guess, since the
+// whole point of this dimension is to be believed when it says an action's
+// request was never seen.
 //
 // What that misses is worth stating plainly. A package owning thirty actions
 // produces one bucket of rows, so the inventory answers "the issues package
@@ -175,10 +194,34 @@ func recordingHandler(tb testing.TB, next http.Handler) http.Handler {
 		return next
 	}
 	origin := requestOrigin{pkg: callerPackage(), test: tb.Name()}
+	if origin.pkg == recorderPackage {
+		return next
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec.observe(tb, origin, r)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// recorderPackage is this package, and a client built here records nothing:
+// the inventory answers what this server sends GitLab, and a fixture this
+// harness sends itself to exercise its own mock is not that. It is a variable
+// so this package's own end-to-end test can point it elsewhere and still drive
+// the wiring, which is the one thing a test in here cannot check any other
+// way.
+var recorderPackage = shortPackage(packageOf(selfFunctionName()))
+
+// selfFunctionName names this very function, which is how the package is read
+// off the runtime rather than written down twice.
+//
+// A stack that yields no frame needs no branch of its own: the walk then names
+// the empty package, which no recorded origin can equal, so the exemption
+// simply never fires.
+func selfFunctionName() string {
+	counters := make([]uintptr, 1)
+	depth := runtime.Callers(1, counters)
+	frame, _ := runtime.CallersFrames(counters[:depth]).Next()
+	return frame.Function
 }
 
 // observe records one request. It runs on the httptest server's goroutine, so
@@ -208,6 +251,7 @@ func describeRequest(origin requestOrigin, r *http.Request) (requestRecord, bool
 
 	if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, graphQLPath) {
 		record.Query = queryKeys(r)
+		record.Body = bodyKeys(r)
 		return record, true
 	}
 
@@ -233,6 +277,30 @@ func queryKeys(r *http.Request) []string {
 		return nil
 	}
 	return slices.Sorted(maps.Keys(values))
+}
+
+// bodyKeys lists the top-level field names of a JSON request body, sorted, and
+// puts the body back for the mock to read.
+//
+// It reads nothing at all unless the request declares JSON, which is what
+// keeps a multipart upload's megabytes out of this path, and it reports no
+// names rather than a failure for a body that is not a JSON object: an array
+// or a bare value carries no field names to record, and a body this cannot
+// parse is the mock's business rather than the inventory's.
+func bodyKeys(r *http.Request) []string {
+	if r.Body == nil || !strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), jsonContentType) {
+		return nil
+	}
+	body, err := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body, &fields) != nil || len(fields) == 0 {
+		return nil
+	}
+	return slices.Sorted(maps.Keys(fields))
 }
 
 // graphQLDocument reads the document out of a request body and puts the body
@@ -274,6 +342,11 @@ func (rec *recorder) writeLine(reporter requestReporter, line string) {
 		}
 		rec.file = file
 	}
+	// The write is deliberately unbuffered, and that is what makes the shard
+	// safe to never close: the recorder is process-global with no shutdown
+	// hook to hang a Close on, so a buffer would lose whatever its tail held
+	// when the test binary exits. One write syscall per new line is cheap
+	// because a line is written once however many times its request is made.
 	if _, err := rec.file.WriteString(line + "\n"); err != nil {
 		rec.stopf(reporter, "could not write a request inventory shard: %v", err)
 		return

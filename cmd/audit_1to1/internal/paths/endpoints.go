@@ -20,14 +20,24 @@ type Endpoint struct {
 	// reached from several packages often enough that naming only one would
 	// send a reader to the wrong file.
 	Packages []string `json:"packages"`
+	// Category and Reason are the declaration that accounts for this endpoint
+	// being absent from the documentation, and are empty for one nothing
+	// accounts for, which is what the gate fails on.
+	Category string `json:"category,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
+
+// declared reports whether a declaration accounts for this endpoint.
+func (e Endpoint) declared() bool { return e.Category != "" }
 
 // EndpointCheck is what the documentation comparison found, and how much of the
 // documentation it managed to read.
 //
-// It is a candidate list and never a gate, and the reason is that the oracle is
-// prose. GitLab writes its endpoints as `METHOD /path` lines in fenced blocks,
-// which is regular enough to compare against, and then:
+// A recorded endpoint GitLab does not document is a finding, and the issue this
+// dimension answers says so: a path GitLab does not have is a failure, not a
+// report. What stops that from being true of the raw comparison is that the
+// oracle is prose. GitLab writes its endpoints as `METHOD /path` lines in
+// fenced blocks, which is regular enough to compare against, and then:
 //
 //   - 57 of those lines omit the leading slash, and project_access_tokens.md
 //     writes every one of its endpoints that way;
@@ -42,12 +52,19 @@ type Endpoint struct {
 //     Orbit Knowledge Graph endpoints are experimental and documented nowhere.
 //
 // None of those is a defect in this server, and every one of them looks exactly
-// like one. A gate that fails a release over the spelling of a documentation
-// page would be worse than no check, so this reports and does not fail.
+// like one. A gate that failed a release over the spelling of a documentation
+// page would be worse than no check at all, so each of those shapes is
+// declared in endpoint_declarations.go with a category and a reason, the way a
+// silent package is, and the gate fails on what no declaration accounts for. A
+// declaration that stops matching anything is a finding too, so the excuse
+// cannot outlive the thing it excuses.
 //
 // The second half of the honesty is coverage. UnreadAreas counts the pages the
 // fetch could not get, and a hole there produces candidates that are only about
-// the hole: a reader weighing this list has to read that number first.
+// the hole: a reader weighing this list has to read that number first. The
+// check only runs when it is asked for (`-check-endpoints`), because it needs
+// the network and two minutes of it, so this is a gate whenever it runs and
+// never a reason for a run that did not ask for it to fail.
 type EndpointCheck struct {
 	// Ran says whether the comparison was asked for at all.
 	Ran bool `json:"ran"`
@@ -63,8 +80,40 @@ type EndpointCheck struct {
 	// RecordedEndpoints is how many distinct ones this server was recorded
 	// issuing.
 	RecordedEndpoints int `json:"recorded_endpoints,omitempty"`
-	// Undocumented are the recorded endpoints no page spells out.
+	// Undocumented are the recorded endpoints no page spells out, each
+	// carrying the declaration that accounts for it when one does.
 	Undocumented []Endpoint `json:"undocumented,omitempty"`
+	// UnusedDeclarations names the declarations that matched no undocumented
+	// endpoint in this run, sorted.
+	UnusedDeclarations []string `json:"unused_declarations,omitempty"`
+}
+
+// undeclared counts the undocumented endpoints no declaration accounts for.
+func (c EndpointCheck) undeclared() int {
+	count := 0
+	for _, endpoint := range c.Undocumented {
+		if !endpoint.declared() {
+			count++
+		}
+	}
+	return count
+}
+
+// staleDeclarations renders this run's unused declarations as the findings the
+// report lists beside the silent-owner ones.
+//
+// A run that did not compare anything has nothing to say about them: every
+// declaration would look unused, and the loudest wrong answer this could give
+// is that they are all stale.
+func (c EndpointCheck) staleDeclarations() []string {
+	if !c.Ran {
+		return nil
+	}
+	stale := make([]string, 0, len(c.UnusedDeclarations))
+	for _, shape := range c.UnusedDeclarations {
+		stale = append(stale, shape+" is declared undocumented and is not: the documentation now spells it out, or nothing issues it any more")
+	}
+	return stale
 }
 
 // skippedAreaPrefix is the one part of doc/api this does not read: the GraphQL
@@ -123,12 +172,13 @@ func checkEndpoints(ctx context.Context, fetcher *apidocs.Fetcher, rows []reques
 
 	recorded := recordedEndpoints(rows)
 	check.RecordedEndpoints = len(recorded)
-	check.Undocumented = make([]Endpoint, 0)
+	found := make([]Endpoint, 0)
 	for _, endpoint := range recorded {
 		if !isDocumented(documented[endpoint.Method], endpoint.Path) {
-			check.Undocumented = append(check.Undocumented, endpoint)
+			found = append(found, endpoint)
 		}
 	}
+	check.Undocumented, check.UnusedDeclarations = classifyUndocumented(found)
 	return check, nil
 }
 
@@ -222,6 +272,13 @@ func isDocumented(documented [][]string, path string) bool {
 // those comparable; the cost is that a genuinely wrong literal in a placeholder
 // position is accepted, which is the right way round for a list whose whole
 // value is that a reader trusts its entries.
+//
+// An empty segment is the exception, and it has to be: a placeholder stands for
+// a value the caller supplies, and no value at all is not one. Without this,
+// /projects//statistics matched the documented /projects/:id/statistics and
+// the eight requests this server makes with an empty identifier were counted
+// as endpoints GitLab documents, which is precisely the shape of request this
+// dimension exists to notice.
 func matchesShape(recorded, documented []string) bool {
 	for i, want := range documented {
 		if isGlob(want) {
@@ -229,7 +286,7 @@ func matchesShape(recorded, documented []string) bool {
 			// registry documents a file path that may have slashes in it.
 			return i < len(recorded)
 		}
-		if i >= len(recorded) {
+		if i >= len(recorded) || recorded[i] == "" {
 			return false
 		}
 		if isPlaceholder(want) || want == recorded[i] {

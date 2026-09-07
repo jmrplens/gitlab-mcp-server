@@ -206,8 +206,14 @@ func TestRun_TheRefusedDocument_IsNamedWhereAReaderCanOpenIt(t *testing.T) {
 }
 
 // TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext verifies the flag every scope
-// carries: a declared silence and an unmapped owner are context, and a work
-// list that carries them is a work list nobody reads.
+// carries: a declared silence is context, and a work list that carries it is a
+// work list nobody reads.
+//
+// An unmapped owner stays, because it is work: the catalog names a package
+// that is not one, so the recording could never have covered those actions.
+// It used to be filtered out here while the gate ignored it too, which made
+// forgetting to name an owner the one way to leave the gate with nothing to
+// say.
 func TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext(t *testing.T) {
 	root := t.TempDir()
 	makeToolsPackage(t, root, "declared")
@@ -234,8 +240,8 @@ func TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext(t *testing.T) {
 		t.Errorf("the full report lists %+v, want all three owners", decode(t, full).SilentOwners)
 	}
 	owners := decode(t, gaps).SilentOwners
-	if len(owners) != 1 || owners[0].Package != "forgotten" {
-		t.Errorf("the gaps-only report lists %+v, want only the undeclared owner", owners)
+	if len(owners) != 2 || owners[0].Package != "forgotten" || owners[1].Package != "nowhere" {
+		t.Errorf("the gaps-only report lists %+v, want the undeclared and the unmapped owner", owners)
 	}
 	t.Run("the summary still counts everything", func(t *testing.T) {
 		if decode(t, gaps).Summary.ActionsSilent != 2 {
@@ -245,8 +251,12 @@ func TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext(t *testing.T) {
 }
 
 // TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher verifies the switch,
-// since the comparison needs the network and gates nothing: a run that only
-// wants the gate must not pay for it.
+// since the comparison needs the network and two minutes of it: a run that
+// only wants the other two checks must not pay for it.
+//
+// When it does run it gates, on the endpoints no declaration accounts for.
+// The undocumented endpoint stubbed here is declared by nothing, so the gate
+// fails and the run that never compared anything passes.
 func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
 	root := t.TempDir()
 	makeToolsPackage(t, root, "issues")
@@ -260,11 +270,15 @@ func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
 		return EndpointCheck{Ran: true, Undocumented: []Endpoint{{Method: "GET", Path: "/nowhere"}}}, nil
 	}
 
-	if _, _, err := Run(t.Context(), root, false, nil); err != nil {
+	_, cleanWithout, err := Run(t.Context(), root, false, nil)
+	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	if called != 0 {
 		t.Errorf("the comparison ran %d time(s) without a fetcher, want none", called)
+	}
+	if !cleanWithout {
+		t.Error("the gate failed on a comparison that never ran")
 	}
 
 	content, clean, err := Run(t.Context(), root, false, apidocs.New(root, apidocs.Options{}))
@@ -274,11 +288,87 @@ func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
 	if called != 1 {
 		t.Errorf("the comparison ran %d time(s) with a fetcher, want one", called)
 	}
-	if !clean {
-		t.Error("an undocumented endpoint failed the gate, and it is a candidate list")
+	if clean {
+		t.Error("an endpoint no declaration accounts for passed the gate")
 	}
-	if decode(t, content).Summary.UndocumentedEndpoints != 1 {
-		t.Errorf("summary = %+v, want the candidate counted", decode(t, content).Summary)
+	summary := decode(t, content).Summary
+	if summary.UndocumentedEndpoints != 1 || summary.UndeclaredEndpoints != 1 {
+		t.Errorf("summary = %+v, want the endpoint counted as undocumented and undeclared", summary)
+	}
+	t.Run("the work list keeps it", func(t *testing.T) {
+		gaps, _, gapsErr := Run(t.Context(), root, true, apidocs.New(root, apidocs.Options{}))
+		if gapsErr != nil {
+			t.Fatalf("Run() error = %v", gapsErr)
+		}
+		if found := decode(t, gaps).Endpoints.Undocumented; len(found) != 1 || found[0].Path != "/nowhere" {
+			t.Errorf("the gaps-only report lists %+v, want the undeclared endpoint", found)
+		}
+	})
+}
+
+// TestRun_ADeclaredEndpoint_PassesAndIsNotWork verifies the other half of the
+// endpoint gate: a shape the declaration table accounts for is reported with
+// its reason, kept out of the work list, and does not fail the run.
+func TestRun_ADeclaredEndpoint_PassesAndIsNotWork(t *testing.T) {
+	root := t.TempDir()
+	makeToolsPackage(t, root, "issues")
+	withDeclarations(t, map[string]silentOwnerDeclaration{})
+	stubInputs(t, oneRow, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}}, graphqldocs.Result{})
+	original := auditEndpoints
+	t.Cleanup(func() { auditEndpoints = original })
+	withEndpointDeclarations(t, []endpointDeclaration{
+		{Shape: "/orbit/...", Category: categoryUndocumentedAPI, Reason: "experimental and documented nowhere"},
+	})
+	auditEndpoints = func(context.Context, *apidocs.Fetcher, []requestinventory.Row) (EndpointCheck, error) {
+		found, unused := classifyUndocumented([]Endpoint{{Method: "GET", Path: "/orbit/status"}})
+		return EndpointCheck{Ran: true, Undocumented: found, UnusedDeclarations: unused}, nil
+	}
+
+	content, clean, err := Run(t.Context(), root, false, apidocs.New(root, apidocs.Options{}))
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	report := decode(t, content)
+
+	if !clean {
+		t.Errorf("a declared endpoint failed the gate: %+v", report.Summary)
+	}
+	if len(report.Endpoints.Undocumented) != 1 || report.Endpoints.Undocumented[0].Category != categoryUndocumentedAPI {
+		t.Errorf("undocumented = %+v, want the declaration's category on it", report.Endpoints.Undocumented)
+	}
+	gaps, _, err := Run(t.Context(), root, true, apidocs.New(root, apidocs.Options{}))
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if found := decode(t, gaps).Endpoints.Undocumented; len(found) != 0 {
+		t.Errorf("the gaps-only report lists %+v, want a declared endpoint dropped", found)
+	}
+}
+
+// TestRun_ADeclarationThatMatchesNothing_IsAFinding verifies that an endpoint
+// declaration outlives nothing: once the documentation spells the endpoint out,
+// or nothing issues it any more, the excuse left behind is itself reported.
+func TestRun_ADeclarationThatMatchesNothing_IsAFinding(t *testing.T) {
+	root := t.TempDir()
+	makeToolsPackage(t, root, "issues")
+	withDeclarations(t, map[string]silentOwnerDeclaration{})
+	stubInputs(t, oneRow, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}}, graphqldocs.Result{})
+	original := auditEndpoints
+	t.Cleanup(func() { auditEndpoints = original })
+	auditEndpoints = func(context.Context, *apidocs.Fetcher, []requestinventory.Row) (EndpointCheck, error) {
+		return EndpointCheck{Ran: true, UnusedDeclarations: []string{"/orbit/..."}}, nil
+	}
+
+	content, clean, err := Run(t.Context(), root, false, apidocs.New(root, apidocs.Options{}))
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if clean {
+		t.Error("a declaration that accounts for nothing passed the gate")
+	}
+	if stale := decode(t, content).StaleDeclarations; len(stale) != 1 || !strings.Contains(stale[0], "/orbit/...") {
+		t.Errorf("stale = %v, want the unused declaration named", stale)
 	}
 }
 
@@ -371,11 +461,29 @@ func TestRun_AnInputItCannotRead_Fails(t *testing.T) {
 	}
 }
 
+// recordingDirEnv is internal/testutil.InventoryDirEnv, spelled again rather
+// than imported: that package embeds the pinned GraphQL schema and
+// net/http/httptest, and this test needs one string from it. The same reason
+// keeps cmd/gen_request_inventory from importing it.
+const recordingDirEnv = "GITLAB_MCP_TEST_INVENTORY_DIR"
+
 // TestRun_TheRealTree_PassesItsOwnGate verifies the dimension against this
 // repository, which is the only case that can catch an input this scope reads
 // wrongly: a committed inventory it cannot parse, a catalog owner it cannot
 // map, or a declaration table that has drifted from the tree.
+//
+// It skips while the suite is being run to record a new inventory, because the
+// committed one is then the output under construction rather than an input to
+// judge. Without that, adding a domain package deadlocked its own fix: the
+// suite failed here because the committed inventory did not know the package
+// yet, and `make gen-request-inventory` stops at the failing suite before it
+// ever merges the shards that would have taught it. The gate itself still runs
+// in `make audit-1to1-paths`, in `make analyze` and in CI.
 func TestRun_TheRealTree_PassesItsOwnGate(t *testing.T) {
+	if dir := os.Getenv(recordingDirEnv); dir != "" {
+		t.Skipf("%s=%s: the committed inventory is being regenerated by this very run", recordingDirEnv, dir)
+	}
+
 	content, clean, err := Run(t.Context(), repoRoot(t), false, nil)
 	if err != nil {
 		t.Fatalf("Run() error = %v, want the real tree audited", err)
@@ -388,8 +496,15 @@ func TestRun_TheRealTree_PassesItsOwnGate(t *testing.T) {
 	if report.Summary.CatalogActions == 0 || report.Summary.InventoryRows == 0 || report.Summary.GraphQLDocuments == 0 {
 		t.Errorf("summary = %+v, want all three inputs to have been read", report.Summary)
 	}
-	if report.Summary.ActionsObserved*10 < report.Summary.CatalogActions*9 {
-		t.Errorf("only %d of %d catalog actions are owned by a package that recorded a request; the recording has regressed",
-			report.Summary.ActionsObserved, report.Summary.CatalogActions)
+	// The floor counts an action as accounted for when its owner recorded
+	// something or when its owner's silence is declared, rather than by
+	// observation alone. Measured the other way it sat sixteen actions above
+	// today's number, so declaring one more package the size of adminspecs
+	// would have failed this test for doing exactly what the declaration table
+	// is for.
+	accounted := report.Summary.ActionsObserved + report.Summary.ActionsSilent - report.Summary.UndeclaredActions
+	if accounted*10 < report.Summary.CatalogActions*9 {
+		t.Errorf("only %d of %d catalog actions are owned by a package that recorded a request or declared why it did not; the recording has regressed",
+			accounted, report.Summary.CatalogActions)
 	}
 }
