@@ -165,6 +165,16 @@ func TestMeta_ProjectMemberLifecycle(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "member_delete")
+		requireNotListedOn(ctx, t, sess.meta, "project members after delete", "gitlab_project", map[string]any{
+			"action": "members",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out members.ListOutput) []int64 {
+			ids := make([]int64, 0, len(out.Members))
+			for _, m := range out.Members {
+				ids = append(ids, m.ID)
+			}
+			return ids
+		}, userID)
 		t.Logf("Removed member %d", userID)
 	})
 }
@@ -232,6 +242,16 @@ func TestMeta_ProjectGroupSharing(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "delete_shared_group")
+		requireNotListedOn(ctx, t, sess.meta, "project invited groups after unshare", "gitlab_project", map[string]any{
+			"action": "list_invited_groups",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out projects.ListProjectGroupsOutput) []int64 {
+			ids := make([]int64, 0, len(out.Groups))
+			for _, g := range out.Groups {
+				ids = append(ids, g.ID)
+			}
+			return ids
+		}, group.ID)
 		t.Logf("Removed group share %d", group.ID)
 	})
 }
@@ -481,6 +501,12 @@ func TestMeta_ProjectForkRelations(t *testing.T) {
 			"params": map[string]any{"project_id": fork.pidStr()},
 		})
 		requireNoError(t, err, "delete_fork_relation")
+		// The tool answers with the project body rather than a relation object,
+		// so the relation is read back the way create_fork_relation verifies it.
+		unforked, _, getErr := sess.glClient.GL().Projects.GetProject(fork.ID, nil, gl.WithContext(ctx))
+		requireNoError(t, getErr, "read fork project after delete_fork_relation")
+		requireTruef(t, unforked.ForkedFromProject == nil,
+			"project %d still names a source project after the relation was deleted: %+v", fork.ID, unforked.ForkedFromProject)
 		t.Log("Deleted fork relation")
 	})
 }
@@ -535,6 +561,16 @@ func TestMeta_ProjectUploadDeletes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "upload_delete")
+		requireNotListedOn(ctx, t, sess.meta, "project uploads after delete by ID", "gitlab_project", map[string]any{
+			"action": "upload_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out uploads.ListOutput) []int64 {
+			ids := make([]int64, 0, len(out.Uploads))
+			for _, u := range out.Uploads {
+				ids = append(ids, u.ID)
+			}
+			return ids
+		}, up.ID)
 		t.Logf("Deleted upload %d by ID", up.ID)
 	})
 
@@ -550,6 +586,16 @@ func TestMeta_ProjectUploadDeletes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "upload_delete_by_secret")
+		requireNotListedOn(ctx, t, sess.meta, "project uploads after delete by secret", "gitlab_project", map[string]any{
+			"action": "upload_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out uploads.ListOutput) []string {
+			names := make([]string, 0, len(out.Uploads))
+			for _, u := range out.Uploads {
+				names = append(names, u.Filename)
+			}
+			return names
+		}, filename)
 		t.Logf("Deleted upload %s/%s by secret", secret, filename)
 	})
 }

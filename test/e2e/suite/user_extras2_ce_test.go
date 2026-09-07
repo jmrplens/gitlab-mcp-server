@@ -141,6 +141,8 @@ func TestIndividual_UserGPGKeysForUser(t *testing.T) {
 				KeyID:  keyID,
 			})
 			requireNoError(t, err, "delete gpg key for user")
+			requireNotListedOn(ctx, t, sess.individual, "user GPG keys after delete", "gitlab_list_gpg_keys_for_user",
+				usergpgkeys.ListForUserInput{UserID: user.ID}, gpgKeyIDs, keyID)
 			t.Logf("Deleted GPG key %d for user %d", keyID, user.ID)
 		})
 	})

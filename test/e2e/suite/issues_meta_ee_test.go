@@ -82,6 +82,8 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "work_item_get")
+		requireTruef(t, out.WorkItem.IID == workItemIID, "work_item_get answered for IID %d, want %d", out.WorkItem.IID, workItemIID)
+		requireTruef(t, out.WorkItem.Title == workItemTitle, "work item title = %q, want %q", out.WorkItem.Title, workItemTitle)
 		t.Logf("Got work item: %s", out.WorkItem.Title)
 	})
 
@@ -98,6 +100,7 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "work_item_update")
+		requireTruef(t, out.WorkItem.Title == "Updated Work Item", "work item title = %q, want %q", out.WorkItem.Title, "Updated Work Item")
 		t.Logf("Updated work item: %s", out.WorkItem.Title)
 	})
 
@@ -113,6 +116,10 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "work_item_delete")
+		requireGoneOn(ctx, t, sess.meta, "work item after delete", "gitlab_issue", map[string]any{
+			"action": "work_item_get",
+			"params": map[string]any{"full_path": proj.Path, "work_item_iid": workItemIID},
+		})
 		t.Log("Deleted work item")
 	})
 }

@@ -75,6 +75,8 @@ func TestIndividual_Wikis(t *testing.T) {
 			Content:   "Updated E2E wiki content.",
 		})
 		requireNoError(t, err, "wiki update")
+		requireTruef(t, out.Slug == wikiSlug, "wiki update answered for slug %q, want %q", out.Slug, wikiSlug)
+		requireTruef(t, out.Content == "Updated E2E wiki content.", "wiki content = %q, want the text just written", out.Content)
 		t.Logf("Updated wiki page: %s", out.Title)
 	})
 
@@ -85,6 +87,8 @@ func TestIndividual_Wikis(t *testing.T) {
 			Slug:      wikiSlug,
 		})
 		requireNoError(t, err, "wiki delete")
+		requireGoneOn(ctx, t, sess.individual, "wiki page after delete", "gitlab_wiki_get",
+			wikis.GetInput{ProjectID: proj.pidOf(), Slug: wikiSlug})
 		t.Log("Deleted wiki page")
 	})
 }
@@ -178,6 +182,10 @@ func TestMeta_Wikis(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta wiki delete")
+		requireGoneOn(ctx, t, sess.meta, "wiki page after delete", "gitlab_wiki", map[string]any{
+			"action": "get",
+			"params": map[string]any{"project_id": proj.pidStr(), "slug": wikiSlug},
+		})
 		t.Logf("Deleted wiki page: %s", wikiSlug)
 	})
 }

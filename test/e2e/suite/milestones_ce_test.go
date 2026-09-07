@@ -80,6 +80,8 @@ func TestIndividual_Milestones(t *testing.T) {
 			MilestoneIID: milestoneIID,
 		})
 		requireNoError(t, err, "milestone delete")
+		requireGoneOn(ctx, t, sess.individual, "milestone after delete", "gitlab_milestone_get",
+			milestones.GetInput{ProjectID: proj.pidOf(), MilestoneIID: milestoneIID})
 		t.Log("Deleted milestone")
 	})
 }
@@ -159,6 +161,10 @@ func TestMeta_Milestones(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta milestone delete")
+		requireGoneOn(ctx, t, sess.meta, "milestone after delete", "gitlab_project", map[string]any{
+			"action": "milestone_get",
+			"params": map[string]any{"project_id": proj.pidStr(), "milestone_iid": milestoneIID},
+		})
 		t.Logf("Deleted milestone IID=%d", milestoneIID)
 	})
 }

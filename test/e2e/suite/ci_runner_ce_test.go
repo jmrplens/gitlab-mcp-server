@@ -132,6 +132,9 @@ func TestIndividual_CIRunner(t *testing.T) {
 				PipelineID: pipelineID,
 			})
 			requireNoError(t, err, "pipeline retry")
+			// A retry re-runs the failed jobs of the same pipeline rather than
+			// creating a new one.
+			requireTruef(t, out.ID == pipelineID, "retry answered for pipeline %d, want %d", out.ID, pipelineID)
 			t.Logf("Retried pipeline: ID=%d status=%s", out.ID, out.Status)
 
 			waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)

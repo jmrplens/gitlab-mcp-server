@@ -16,8 +16,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/files"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectdiscovery"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 )
@@ -278,7 +280,7 @@ func TestDynamicToolSurface_WriteActionConfirmation(t *testing.T) {
 
 	// Execute branch.create with confirm=true — should succeed.
 	branchName := "e2e-dynamic-branch-" + sanitizeTestName(t.Name())
-	_, err := callToolOn[any](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
+	created, err := callToolOn[branches.Output](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
 		Action:  "branch.create",
 		Confirm: true,
 		Params: map[string]any{
@@ -288,6 +290,7 @@ func TestDynamicToolSurface_WriteActionConfirmation(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "branch.create with confirm=true")
+	requireTruef(t, created.Name == branchName, "dynamic branch.create answered with branch %q, want %q", created.Name, branchName)
 	t.Logf("Branch %q created successfully via dynamic surface", branchName)
 }
 
@@ -313,14 +316,17 @@ func TestDynamicToolSurface_DomainCoverage(t *testing.T) {
 	t.Run("Domain/Issue/Create", func(t *testing.T) {
 		// Find and execute issue creation.
 		_ = dynamicFindAction(ctx, t, "create issue in project", "issue.create")
-		out, err := callToolOn[any](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
+		const issueTitle = "Test issue from dynamic surface"
+		out, err := callToolOn[issues.Output](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
 			Action: "issue.create",
 			Params: map[string]any{
 				"project_id": proj.pidStr(),
-				"title":      "Test issue from dynamic surface",
+				"title":      issueTitle,
 			},
 		})
 		requireNoError(t, err, "issue.create via dynamic surface")
+		requireTruef(t, out.Title == issueTitle, "dynamic issue.create answered with title %q, want %q", out.Title, issueTitle)
+		requireTruef(t, out.IID > 0, "dynamic issue.create answered with IID %d, want a real issue", out.IID)
 		t.Logf("Issue created via dynamic surface: %+v", out)
 	})
 

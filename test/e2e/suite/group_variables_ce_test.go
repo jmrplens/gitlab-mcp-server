@@ -123,6 +123,10 @@ func TestMeta_GroupVariables(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group variable delete")
+		requireGoneOn(ctx, t, sess.meta, "group variable "+varKey+" after delete", "gitlab_ci_variable", map[string]any{
+			"action": "group_get",
+			"params": map[string]any{"group_id": gid, "key": varKey},
+		})
 		t.Logf("Deleted group variable: %s", varKey)
 	})
 }
