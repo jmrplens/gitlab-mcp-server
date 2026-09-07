@@ -136,7 +136,6 @@ func TestShapeConverters_SingleObjects(t *testing.T) {
 // and skip nil entries, using DeepEqual against the complete expected output.
 func TestShapeConverters_Collections(t *testing.T) {
 	now := time.Now()
-	rfc := now.Format(time.RFC3339)
 	iso := gl.ISOTime(now)
 	isoDate := time.Time(iso).Format("2006-01-02")
 
@@ -156,9 +155,12 @@ func TestShapeConverters_Collections(t *testing.T) {
 		protectedBranchRefsOutput([]*gl.ProtectedBranch{nil, {ID: 3, Name: "main"}}),
 		[]*ProtectedBranchRefOutput{{ID: 3, Name: "main"}})
 
+	// The SDK value carries ApprovedAt and the output does not: the project
+	// approvers array is the merge request's struct reused, and only the merge
+	// request's response fills that field.
 	checkEqual(t, "approverUsersOutput",
 		approverUsersOutput([]*gl.MergeRequestApproverUser{nil, {User: &gl.BasicUser{Username: "a"}, ApprovedAt: &now}}),
-		[]*ApproverUserOutput{{User: &toolutil.BasicUserOutput{Username: "a"}, ApprovedAt: rfc}})
+		[]*ApproverUserOutput{{User: &toolutil.BasicUserOutput{Username: "a"}}})
 
 	checkEqual(t, "approverGroupsOutput",
 		approverGroupsOutput([]*gl.MergeRequestApproverGroup{nil, {Group: gl.MergeRequestApproverNestedGroup{ID: 4, Name: "ag", Path: "p", Description: "d", Visibility: "private", AvatarURL: "a", WebURL: "w", FullName: "fn", FullPath: "fp", LFSEnabled: true, RequestAccessEnabled: true}}}),

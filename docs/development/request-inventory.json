@@ -7486,6 +7486,8 @@
         "email",
         "expires_at",
         "id",
+        "invite_source",
+        "member_role_id",
         "user_id"
       ]
     },
@@ -7514,6 +7516,8 @@
         "email",
         "expires_at",
         "id",
+        "invite_source",
+        "member_role_id",
         "user_id"
       ]
     },

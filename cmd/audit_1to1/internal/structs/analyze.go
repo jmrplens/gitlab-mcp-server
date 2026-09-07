@@ -222,6 +222,16 @@ var docOmittedFields = map[string]string{
 	"mrapprovals.ConfigOutput.approvers":                         docMRApprovalsGET,
 	"mrapprovals.ConfigOutput.approver_groups":                   docMRApprovalsGET,
 	"mrapprovals.ConfigOutput.approval_rules_left":               docMRApprovalsGET,
+	// runners: gl.RunnerDetails carries Token because client-go reuses one
+	// struct for the runner endpoints, and GitLab mints a runner's
+	// authentication token once, at registration. The runner details response
+	// never carries it, so the field was the zero value on every call.
+	"runners.DetailsOutput.token": docRunnerDetailsGET,
+	// projects: gl.MergeRequestApproverUser is one struct for two responses.
+	// approved_at is a field of the merge request's approved_by elements; the
+	// project-level approvers array carries the user alone, and has been
+	// documented as always empty since GitLab 12.3.
+	"projects.ApproverUserOutput.approved_at": docProjectApprovals,
 }
 
 // docMRApprovalsGET cites the record that separates the two endpoints sharing
@@ -230,6 +240,19 @@ const docMRApprovalsGET = "docs/development/gitlab-api-shapes.json " +
 	"(GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals declares approved, approved_by, " +
 	"user_can_approve and user_has_approved; every other field of the SDK type appears only under the POST at " +
 	"the same path, deprecated in GitLab 16.0)"
+
+// docRunnerDetailsGET cites the record for the same reason docMRApprovalsGET
+// does: runners.md prints one example body for the whole page, so the prose
+// cannot tell the registration response from the details one.
+const docRunnerDetailsGET = "docs/development/gitlab-api-shapes.json " +
+	"(GET /api/v4/runners/{id} and PUT /api/v4/runners/{id} declare no token; POST /api/v4/runners, the " +
+	"registration endpoint, answers with id, token and token_expires_at, which runners.Output carries)"
+
+// docProjectApprovals cites the page and the line on it that says what the
+// project-level approvers array holds.
+const docProjectApprovals = "merge_request_approvals.md#retrieve-approval-configuration-for-a-project " +
+	"(`\"approvers\": []  // Deprecated in GitLab 12.3, always returns empty`, and the record gives that " +
+	"element the single property `user` while approved_at appears only on the merge request's approved_by)"
 
 // isDocOmittedField reports whether an SDK field is a doc-justified intentional
 // omission on a primary MCP output type.
@@ -278,6 +301,14 @@ var docAddedFields = map[string]string{
 	// create/update rule responses) but absent from gl.MergeRequestApprovalRule;
 	// fetched via raw REST (rawApprovalState/rawListApprovalRules/rawMutateApprovalRule).
 	"mrapprovals.RuleOutput.overridden": docMRApprovals,
+
+	// invites: queued_users is documented in doc/api/invitations.md on the
+	// add-a-member response for an instance with member promotion management
+	// enabled, and absent from gl.InvitesResult; fetched via raw REST
+	// (postInvitation into the invitesResultAPI superset). The page is spelled
+	// with its doc/api prefix here so -validate-docs scans it: the table's own
+	// values carry only the bare file name, which docCitationRE does not match.
+	"invites.InviteResultOutput.queued_users": "invitations.md#add-a-member-to-a-group-or-project",
 
 	// groupboards — documented in doc/api/group_boards.md but absent from
 	// gl.GroupIssueBoard; fetched via raw REST (rawListGroupBoards/rawGetGroupBoard/

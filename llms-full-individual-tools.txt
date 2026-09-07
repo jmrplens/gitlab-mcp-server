@@ -5039,7 +5039,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_invite
 
-Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status and per-email messages. See also: gitlab_group_invite_list_pending, gitlab_group_member_add, gitlab_access_request_request_group.
+Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. See also: gitlab_group_invite_list_pending, gitlab_group_member_add, gitlab_access_request_request_group.
 
 **Parameters:**
 
@@ -5048,6 +5048,8 @@ Invite a user to a group by email or user ID with an access level. Returns: an i
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `id` (string): Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)
+- `invite_source` (string): Source of the invitation that starts the member creation process
+- `member_role_id` (integer): Custom role to assign the new member (Ultimate only)
 - `user_id` (integer): User ID to invite (either email or user_id required)
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -11613,7 +11615,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_create_fork_relation
 
-Create a fork relationship to an upstream project. Returns: a confirmation of the new relation. See also: gitlab_project_delete_fork_relation, gitlab_project_fork.
+Create a fork relationship to an upstream project. Returns: the downstream project as GitLab answers with it, including forked_from_project. See also: gitlab_project_delete_fork_relation, gitlab_project_fork.
 
 **Parameters:**
 
@@ -11982,7 +11984,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_invite
 
-Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status and per-email messages. See also: gitlab_project_invite_list_pending, gitlab_project_member_add, gitlab_access_request_request_project.
+Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. See also: gitlab_project_invite_list_pending, gitlab_project_member_add, gitlab_access_request_request_project.
 
 **Parameters:**
 
@@ -11990,6 +11992,8 @@ Invite a user to a project by email or user ID with an access level. Returns: an
 - `email` (string): Email address to invite (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `id` (string): Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)
+- `invite_source` (string): Source of the invitation that starts the member creation process
+- `member_role_id` (integer): Custom role to assign the new member (Ultimate only)
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `user_id` (integer): User ID to invite (either email or user_id required)
 

@@ -496,10 +496,10 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "List projects a user starred. Returns: projects with namespace, visibility, and pagination metadata. See also: gitlab_project_list_user_projects, gitlab_project_list_starrers.",
 	},
 	"gitlab_project_create_fork_relation": {
-		usage:       "Create a fork relationship linking a project to an upstream source project. Send project_id and the upstream fork_id (or forked_from_id).",
+		usage:       "Create a fork relationship linking a project to an upstream source project. Send project_id and the upstream fork_id (or forked_from_id). The response is the downstream project itself.",
 		aliases:     []string{"create fork relation", "link fork to upstream", "set forked-from project"},
 		related:     []string{"project.delete_fork_relation", actionProjectFork, actionProjectListForks},
-		description: "Create a fork relationship to an upstream project. Returns: a confirmation of the new relation. See also: gitlab_project_delete_fork_relation, gitlab_project_fork.",
+		description: "Create a fork relationship to an upstream project. Returns: the downstream project as GitLab answers with it, including forked_from_project. See also: gitlab_project_delete_fork_relation, gitlab_project_fork.",
 	},
 	"gitlab_project_delete_fork_relation": {
 		usage:       "Remove a project's fork relationship to its upstream source, detaching it from the original project. Send project_id.",

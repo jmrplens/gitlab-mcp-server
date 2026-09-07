@@ -102,6 +102,17 @@ func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[str
 			ExampleBinding:   `params.expires_at:"2026-12-31"`,
 			CommonConfusions: []string{"Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp."},
 		},
+		"invite_source": {
+			ValueSource:      "Name of the flow that started the invitation, recorded by GitLab for attribution.",
+			ExampleBinding:   `params.invite_source:"mcp-server"`,
+			CommonConfusions: []string{"This labels where the invitation came from. It does not change who is invited or what they get."},
+		},
+		"member_role_id": {
+			SemanticRole:     "member_role_id",
+			ValueSource:      "Numeric ID of a custom role to assign instead of relying on access_level alone.",
+			ExampleBinding:   "params.member_role_id:12",
+			CommonConfusions: []string{"Ultimate only, and the role's base access level still has to match access_level."},
+		},
 	}
 }
 
@@ -111,7 +122,7 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 		usage:   "Invite a user to a project by email address or user_id with a chosen access_level. Use when adding someone who is not yet a project member, including external users invited by email. For users who already have an account prefer project.member_add.",
 		aliases: []string{"invite user to project", "add user to project by email", "send project invitation"},
 		related: []string{actionInviteListProject, "project.member_add", "access.request_project", "project.members"},
-		description: "Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status and per-email messages. " +
+		description: "Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. " +
 			"See also: gitlab_project_invite_list_pending, gitlab_project_member_add, gitlab_access_request_request_project.",
 		guidance: inviteGuidance("project_id", toolutil.ParameterGuidance{
 			SemanticRole:     "scope_project",
@@ -124,7 +135,7 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 		usage:   "Invite a user to a group by email address or user_id with a chosen access_level. Use when adding someone who is not yet a group member, including external users invited by email. For users who already have an account prefer group.group_member_add.",
 		aliases: []string{"invite user to group", "add user to group by email", "send group invitation"},
 		related: []string{actionInviteListGroup, "group.group_member_add", "access.request_group", "group.members"},
-		description: "Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status and per-email messages. " +
+		description: "Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. " +
 			"See also: gitlab_group_invite_list_pending, gitlab_group_member_add, gitlab_access_request_request_group.",
 		guidance: inviteGuidance("group_id", toolutil.ParameterGuidance{
 			SemanticRole:     "scope_group",

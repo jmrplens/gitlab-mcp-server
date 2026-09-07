@@ -90,6 +90,8 @@ readable without opening the tracker:
 | 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | No | No | No | No | Yes |
 | 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | No | No | No | No | Yes |
 | 24 | gitlab-org/gitlab | [Approvals page documents the POST's response under the GET](#the-merge-request-approvals-page-documents-the-deprecated-posts-response-under-the-get) | No | No | No | No | Yes |
+| 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | No | No | No | No | Yes |
+| 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -380,6 +382,58 @@ reported these as values offered that the SDK does not declare.
 `EventTypeValue`, one on `EventTargetTypeValue`, three on `TodoAction`, one on
 `DeploymentStatusValue`), and a dedicated value type for the cancellation role;
 none of them changes a signature.
+
+### CreateProjectForkRelation declares a response GitLab does not send
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `internal/tools/projects.CreateForkRelation` issues the
+  `POST` directly and decodes into `gl.Project`. Retire it, and the
+  `acceptedMissingMethods` entry in `cmd/audit_1to1/internal/actions/analyze.go`,
+  once the wrapper returns what the endpoint answers with.
+
+**What**: `CreateProjectForkRelation` decodes `POST /projects/:id/fork/:forked_from_id`
+into `ProjectForkRelation`, a `{id, forked_to_project_id, forked_from_project_id,
+created_at, updated_at}` struct. GitLab answers that endpoint with the downstream
+project, which shares only `id` with that shape, so every other field decodes to
+its zero value and `id` decodes to the project's rather than a relation's. The
+call therefore succeeds and returns a struct that says nothing true.
+
+**Evidence**: `docs/development/gitlab-api-shapes.json` records the response of
+that operation as a project (`_links`, `namespace`, `forked_from_project` and
+the rest of the project body), and the CE end-to-end suite observed the same
+against a live GitLab 19.3.
+
+**Effort**: small. The method returns `*Project` and the `ProjectForkRelation`
+type retires with it; it is a signature change, so the v3 line is where it goes.
+
+### The invitations wrapper is missing two parameters and a response field
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `internal/tools/invites.postInvitation` issues the `POST`
+  directly, with the body built from `gl.InvitesOptions` plus the two fields it
+  does not carry, and decodes into a superset of `gl.InvitesResult`. Retire it,
+  and the two `acceptedMissingMethods` entries in
+  `cmd/audit_1to1/internal/actions/analyze.go`, once the wrapper carries all
+  three.
+
+**What**: `InvitesOptions` models `id`, `email`, `user_id`, `access_level` and
+`expires_at`, while
+[the invitations API](https://docs.gitlab.com/api/invitations/) documents
+`invite_source` and `member_role_id` beside them, the second of which is how an
+Ultimate instance assigns a custom role at invitation time. `InvitesResult`
+models `status` and `message`, and the same page documents a `queued_users` map
+on the response of an instance with member promotion management enabled, which
+is the case where nobody was invited outright and the caller most needs to be
+told.
+
+**Effort**: small. Two fields on the options struct and one on the result; all
+three are additive.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

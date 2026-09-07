@@ -139,6 +139,33 @@ func TestShapeCheck_APackageWhoseEndpointsDeclareNothing_IsNotJudged(t *testing.
 	}
 }
 
+// TestShapeCheck_AnEndpointWithNoDescribedResponse_IsNotCountedAsSearched
+// verifies that the count a finding carries means one thing at both grains. An
+// operation the document leaves without a response contributes no names to the
+// union, so counting it would say the field was looked for in two responses
+// where the record holds one, and a reader weighing the finding would credit it
+// with evidence that was never there.
+func TestShapeCheck_AnEndpointWithNoDescribedResponse_IsNotCountedAsSearched(t *testing.T) {
+	root := recordIn(t, map[string]apishapes.Operation{
+		"GET /api/v4/projects/{id}/thing":    {Response: []string{"described"}},
+		"DELETE /api/v4/projects/{id}/thing": {},
+	})
+	rows := []requestinventory.Row{
+		{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/:project_id/thing"},
+		{Package: "p", Kind: "rest", Method: "DELETE", Path: "/projects/:project_id/thing"},
+	}
+	published := []publishedType{{Package: "p", Name: "Output", Fields: []string{"described", "invented"}}}
+
+	check := shapeCheck(root, rows, published)
+
+	if check.Join.Exact != 2 {
+		t.Fatalf("join = %+v, want both rows matched", check.Join)
+	}
+	if len(check.Unpublished) != 1 || check.Unpublished[0].Endpoints != 1 {
+		t.Errorf("unpublished = %+v, want the one field held against the one described response", check.Unpublished)
+	}
+}
+
 // TestShapeCheck_GraphQLRows_AreNotJoined verifies that a GraphQL row is left
 // alone. The record describes the REST API, so a GraphQL request has no
 // operation there and counting it as unmatched would report a miss that is only

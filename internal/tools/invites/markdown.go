@@ -54,6 +54,14 @@ func FormatInviteResultMarkdownString(out InviteResultOutput) string {
 			fmt.Fprintf(&b, "- %s: %s\n", toolutil.EscapeMdTableCell(k), toolutil.EscapeMdTableCell(v))
 		}
 	}
+	if len(out.QueuedUsers) > 0 {
+		b.WriteString("\n**Queued for administrator approval**:\n")
+		// Keyed by username, against GitLab's own reason for queueing it, which
+		// is what member promotion management answers with instead of inviting.
+		for k, v := range out.QueuedUsers {
+			fmt.Fprintf(&b, "- %s: %s\n", toolutil.EscapeMdTableCell(k), toolutil.EscapeMdTableCell(v))
+		}
+	}
 	toolutil.WriteHints(&b, "Check invitation status or resend if the invite was not received")
 	return b.String()
 }

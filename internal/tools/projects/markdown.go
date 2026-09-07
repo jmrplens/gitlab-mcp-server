@@ -404,22 +404,6 @@ func FormatPushRuleMarkdown(out PushRuleOutput) string {
 	return b.String()
 }
 
-// FormatForkRelationMarkdown renders a fork relation as Markdown.
-func FormatForkRelationMarkdown(out ForkRelationOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Fork Relation (ID: %d)\n\n", out.ID)
-	fmt.Fprintf(&b, "- **Forked To Project ID**: %d\n", out.ForkedToProjectID)
-	fmt.Fprintf(&b, "- **Forked From Project ID**: %d\n", out.ForkedFromProjectID)
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_delete_fork_relation` to remove the fork relation",
-	)
-	return b.String()
-}
-
 // FormatDownloadAvatarMarkdown renders an avatar download result as Markdown.
 func FormatDownloadAvatarMarkdown(out DownloadAvatarOutput) string {
 	var b strings.Builder
@@ -642,7 +626,6 @@ func init() {
 	toolutil.RegisterMarkdown(FormatShareProjectMarkdown)
 	toolutil.RegisterMarkdown(FormatTriggerTestHookMarkdown)
 	toolutil.RegisterMarkdown(FormatPushRuleMarkdown)
-	toolutil.RegisterMarkdown(FormatForkRelationMarkdown)
 	toolutil.RegisterMarkdown(FormatDownloadAvatarMarkdown)
 	toolutil.RegisterMarkdown(FormatApprovalConfigMarkdown)
 	toolutil.RegisterMarkdown(FormatApprovalRuleMarkdown)

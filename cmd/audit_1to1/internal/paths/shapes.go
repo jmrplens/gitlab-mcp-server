@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"maps"
 	"sort"
 	"strings"
 
@@ -17,9 +18,20 @@ import (
 // whether a path exists. This asks what the answer at that path contains, from
 // the document GitLab generates out of the code that renders it.
 //
-// It is a report and not a gate, for one reason that is worth stating rather
-// than fixing: the join is lossy in a way that can only produce a missing
-// finding, never a false one. See [ShapeCheck.Join].
+// It is asked at two grains, both reported and neither gating.
+//
+// [ShapeCheck.Unpublished] is the package grain: a package's recorded endpoints
+// are unioned and every top-level output type of that package is held against
+// the union. It is lossy in a way that can only produce a missing finding,
+// never a false one (see [ShapeCheck.Join] and [unpublishedFields]), and it
+// finds 610 fields across 130 packages, most of which are not phantoms. Three
+// shapes dominate: our own wrappers around a JSON array, whose keys no endpoint
+// can send because the document describes the element; our own answers to a 204
+// and to a not-found; and an endpoint the document gives no schema for in a
+// package where some other endpoint has one.
+//
+// [ShapeCheck.Typed] is the type grain, which cuts those away by asking only
+// about the endpoints each type actually models. See [TypedShapeCheck].
 type ShapeCheck struct {
 	// Ran is false when the record could not be read, which is the only way
 	// this check is skipped. Every other outcome is a finding or a pass.
@@ -41,6 +53,9 @@ type ShapeCheck struct {
 	// Unpublished are the output fields a package publishes that no endpoint it
 	// was recorded calling declares in its response.
 	Unpublished []UnpublishedField `json:"unpublished,omitempty"`
+	// Typed is the same question asked at type grain, beside this one rather
+	// than in place of it.
+	Typed TypedShapeCheck `json:"typed"`
 }
 
 // JoinQuality is how much of the inventory could be compared at all.
@@ -69,17 +84,45 @@ type UntemplatedSegment struct {
 // UnpublishedField is one output field this server publishes that GitLab does
 // not say it sends.
 type UnpublishedField struct {
+	// Grain is which join found it: "package" searched every endpoint the
+	// owning package was recorded calling, "type" only the endpoints the type
+	// itself models.
+	Grain string `json:"grain"`
 	// Package owns the type.
 	Package string `json:"package"`
 	// Type is the Go type publishing the field.
 	Type string `json:"type"`
 	// Field is the json tag.
 	Field string `json:"field"`
-	// Endpoints are the operations this package was recorded calling, whose
-	// responses were searched. A field absent from every one of them is a field
-	// a model is told to expect and will not receive.
+	// Under is the response property this type sits under, set on a nested
+	// finding only: at the top level a type is the response and sits under
+	// nothing.
+	Under string `json:"under,omitempty"`
+	// SDKType is the client-go struct a converter fills the type from, which is
+	// what named the operations searched. Type grain only.
+	SDKType string `json:"sdk_type,omitempty"`
+	// Endpoints is how many operations' responses were searched, counted the
+	// same way at both grains: an operation the document leaves without a
+	// response was not searched and is not among them. A field absent from
+	// every one of them is a field a model is told to expect and will not
+	// receive.
 	Endpoints int `json:"endpoints_searched"`
+	// Operations names those operations, in the collapsed spelling both sides
+	// of the join meet in rather than as GitLab spells them. Type grain only:
+	// at package grain there are up to thirty of them and the count is what a
+	// reader wants.
+	Operations []string `json:"operations,omitempty"`
+	// Category and Reason are the declaration accounting for GitLab's document
+	// not listing a field GitLab does send, and are empty for a finding nothing
+	// accounts for. Type grain only: the package grain unions thirty responses
+	// and cannot say which of them a field belongs to, so a declaration written
+	// against it would excuse more than it read. See [shapeDeclaration].
+	Category string `json:"category,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
+
+// declared reports whether a declaration accounts for this finding.
+func (f UnpublishedField) declared() bool { return f.Category != "" }
 
 // shapeCheck compares the recorded inventory with GitLab's OpenAPI record.
 //
@@ -121,6 +164,13 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 			continue
 		}
 
+		// An operation the document gives no response is nothing to search: it
+		// names no field, so counting it would inflate the number a finding
+		// reports as the responses it was held against.
+		if len(operation.Response) == 0 {
+			continue
+		}
+
 		endpointsPerPackage[request.Package]++
 		fields := byPackage[request.Package]
 		if fields == nil {
@@ -134,6 +184,7 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 
 	check.Untemplated = sortedSegments(segments)
 	check.Unpublished = unpublishedFields(published, byPackage, endpointsPerPackage)
+	check.Typed = typedShapeCheck(root, index, published)
 	return check
 }
 
@@ -175,6 +226,7 @@ func unpublishedFields(published []publishedType, byPackage map[string]map[strin
 				continue
 			}
 			out = append(out, UnpublishedField{
+				Grain:     grainPackage,
 				Package:   publishedType.Package,
 				Type:      publishedType.Name,
 				Field:     field,
@@ -182,16 +234,22 @@ func unpublishedFields(published []publishedType, byPackage map[string]map[strin
 			})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Package != out[j].Package {
-			return out[i].Package < out[j].Package
-		}
-		if out[i].Type != out[j].Type {
-			return out[i].Type < out[j].Type
-		}
-		return out[i].Field < out[j].Field
-	})
+	sortFindings(out)
 	return out
+}
+
+// sortFindings orders the findings of either grain the way a reader reads them:
+// down the tree, then by type, then by field.
+func sortFindings(found []UnpublishedField) {
+	sort.Slice(found, func(i, j int) bool {
+		if found[i].Package != found[j].Package {
+			return found[i].Package < found[j].Package
+		}
+		if found[i].Type != found[j].Type {
+			return found[i].Type < found[j].Type
+		}
+		return found[i].Field < found[j].Field
+	})
 }
 
 // matchQuality says how an endpoint was looked up.
@@ -237,6 +295,7 @@ func newOperationIndex(record apishapes.Document) *operationIndex {
 		merged.Response = union(merged.Response, operation.Response)
 		merged.Params = union(merged.Params, operation.Params)
 		merged.Body = union(merged.Body, operation.Body)
+		merged.Nested = unionNested(merged.Nested, operation.Nested)
 		index.byShape[shapeKey] = merged
 	}
 	return index
@@ -282,6 +341,22 @@ func pathShape(path string) string {
 		}
 	}
 	return strings.Join(segments, "/")
+}
+
+// unionNested merges two operations' nested property maps, property by
+// property, for the same reason the name lists are unioned: two operations can
+// share a shape, and taking one arbitrarily would report the other's nested
+// fields as unpublished.
+func unionNested(a, b map[string][]string) map[string][]string {
+	if len(a) == 0 {
+		return b
+	}
+	out := make(map[string][]string, len(a)+len(b))
+	maps.Copy(out, a)
+	for property, names := range b {
+		out[property] = union(out[property], names)
+	}
+	return out
 }
 
 // union merges two sorted name lists without duplicates.

@@ -2188,7 +2188,11 @@ func projectHookPath(projectID string, hookID int64) string {
 	return fmt.Sprintf("%s/%d", projectHooksPath(projectID), hookID)
 }
 
-func doProjectHookRequest[T any](ctx context.Context, client *gitlabclient.Client, method, path string, opts any) (T, *gl.Response, error) {
+// doProjectRequest issues one raw REST request under the project scope and
+// decodes the body into T. The webhook handlers use it for the fields
+// gl.ProjectHook does not carry, and the fork-relation handler for a response
+// client-go declares the wrong type for.
+func doProjectRequest[T any](ctx context.Context, client *gitlabclient.Client, method, path string, opts any) (T, *gl.Response, error) {
 	var out T
 	req, err := client.GL().NewRequest(method, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
@@ -2231,7 +2235,7 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	opts := &gl.ListProjectHooksOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
-	hooks, resp, err := doProjectHookRequest[[]projectHookAPI](ctx, client, http.MethodGet, projectHooksPath(string(input.ProjectID)), opts)
+	hooks, resp, err := doProjectRequest[[]projectHookAPI](ctx, client, http.MethodGet, projectHooksPath(string(input.ProjectID)), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ListHooksOutput{}, toolutil.WrapErrWithHint("projectListHooks", err,
@@ -2264,7 +2268,7 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 	if input.HookID == 0 {
 		return HookOutput{}, errors.New("projectGetHook: hook_id is required. Use gitlab_project_hook_list to find webhook IDs for the project")
 	}
-	h, _, err := doProjectHookRequest[projectHookAPI](ctx, client, http.MethodGet, projectHookPath(string(input.ProjectID), input.HookID), nil)
+	h, _, err := doProjectRequest[projectHookAPI](ctx, client, http.MethodGet, projectHookPath(string(input.ProjectID), input.HookID), nil)
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("projectGetHook", err, http.StatusNotFound,
 			"webhook may have been deleted. Use gitlab_project_hook_list to find current hook_id values")
@@ -2329,7 +2333,7 @@ func AddHook(ctx context.Context, client *gitlabclient.Client, input AddHookInpu
 		return HookOutput{}, errors.New("projectAddHook: url is required. Provide the URL that will receive webhook HTTP POST requests")
 	}
 	opts := addProjectHookOptions(input)
-	h, _, err := doProjectHookRequest[projectHookAPI](ctx, client, http.MethodPost, projectHooksPath(string(input.ProjectID)), opts)
+	h, _, err := doProjectRequest[projectHookAPI](ctx, client, http.MethodPost, projectHooksPath(string(input.ProjectID)), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return HookOutput{}, toolutil.WrapErrWithHint("projectAddHook", err,
@@ -2469,7 +2473,7 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 		return HookOutput{}, errors.New("projectEditHook: hook_id is required. Use gitlab_project_hook_list to find webhook IDs for the project")
 	}
 	opts := editProjectHookOptions(input)
-	h, _, err := doProjectHookRequest[projectHookAPI](ctx, client, http.MethodPut, projectHookPath(string(input.ProjectID), input.HookID), opts)
+	h, _, err := doProjectRequest[projectHookAPI](ctx, client, http.MethodPut, projectHookPath(string(input.ProjectID), input.HookID), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return HookOutput{}, toolutil.WrapErrWithHint("projectEditHook", err,
@@ -3591,61 +3595,40 @@ type CreateForkRelationInput struct {
 	ForkedFromID int64                `json:"forked_from_id" jsonschema:"ID of the project to set as the fork source,required"`
 }
 
-// ForkRelationOutput holds the result of a fork relation operation.
-type ForkRelationOutput struct {
-	toolutil.HintableOutput
-	ID                  int64  `json:"id"`
-	ForkedToProjectID   int64  `json:"forked_to_project_id"`
-	ForkedFromProjectID int64  `json:"forked_from_project_id"`
-	CreatedAt           string `json:"created_at,omitempty"`
-	UpdatedAt           string `json:"updated_at,omitempty"`
-}
-
-// forkRelationToOutput converts the GitLab API response to the tool output format.
-func forkRelationToOutput(r *gl.ProjectForkRelation) ForkRelationOutput {
-	out := ForkRelationOutput{
-		ID:                  r.ID,
-		ForkedToProjectID:   r.ForkedToProjectID,
-		ForkedFromProjectID: r.ForkedFromProjectID,
-	}
-	if r.CreatedAt != nil {
-		out.CreatedAt = r.CreatedAt.Format(time.RFC3339)
-	}
-	if r.UpdatedAt != nil {
-		out.UpdatedAt = r.UpdatedAt.Format(time.RFC3339)
-	}
-	return out
-}
-
-// CreateForkRelation creates a fork relation between two projects.
-func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input CreateForkRelationInput) (ForkRelationOutput, error) {
+// CreateForkRelation creates a fork relation between two projects and answers
+// with the downstream project GitLab returns.
+//
+// GitLab answers POST /projects/:id/fork/:forked_from_id with the forked
+// project, which docs/development/gitlab-api-shapes.json records and the
+// end-to-end suite observed on a live 19.3 instance. client-go declares the
+// response as ProjectForkRelation, a synthetic {id, forked_to_project_id,
+// forked_from_project_id, created_at, updated_at} pair that no field of the
+// real body fills, so the wrapper decoded five zero values out of a project and
+// this action published them. The request is therefore issued directly, into
+// gl.Project, and the action returns the project the endpoint answers with, the
+// same [Output] every other project action returns. Recorded in
+// docs/development/upstream-bugs.md.
+func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input CreateForkRelationInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
-		return ForkRelationOutput{}, err
+		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return ForkRelationOutput{}, errors.New("projectCreateForkRelation: project_id is required")
+		return Output{}, errors.New("projectCreateForkRelation: project_id is required")
 	}
 	if input.ForkedFromID == 0 {
-		return ForkRelationOutput{}, errors.New("projectCreateForkRelation: forked_from_id is required")
+		return Output{}, errors.New("projectCreateForkRelation: forked_from_id is required")
 	}
-	rel, _, err := client.GL().Projects.CreateProjectForkRelation(string(input.ProjectID), input.ForkedFromID, gl.WithContext(ctx))
+	path := fmt.Sprintf("projects/%s/fork/%d", gl.PathEscape(string(input.ProjectID)), input.ForkedFromID)
+	project, _, err := doProjectRequest[*gl.Project](ctx, client, http.MethodPost, path, nil)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
-			return ForkRelationOutput{}, toolutil.WrapErrWithHint("projectCreateForkRelation", err,
+			return Output{}, toolutil.WrapErrWithHint("projectCreateForkRelation", err,
 				"a fork relation already exists for this project. Use gitlab_project_get to inspect forked_from_project, or call gitlab_project_delete_fork_relation first")
 		}
-		return ForkRelationOutput{}, toolutil.WrapErrWithStatusHint("projectCreateForkRelation", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint("projectCreateForkRelation", err, http.StatusNotFound,
 			"verify both project_id and forked_from_id reference existing projects with gitlab_project_get")
 	}
-	out := forkRelationToOutput(rel)
-	// GitLab 19 responds with the full project body instead of the relation
-	// object, so the SDK decodes both relation IDs to zero even on success.
-	if out.ForkedFromProjectID == 0 && out.ForkedToProjectID == 0 {
-		out.NextSteps = []string{
-			"The fork relation was created even though GitLab returned no relation IDs (GitLab 19 responds with the project body); confirm with gitlab_project_get and check forked_from_project",
-		}
-	}
-	return out, nil
+	return ToOutput(project), nil
 }
 
 // DeleteForkRelationInput defines parameters for deleting a fork relation.

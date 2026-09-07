@@ -1029,6 +1029,25 @@ func TestFlattenInto_Nesting_StopsAtNilAndDepth(t *testing.T) {
 	}
 }
 
+// TestFlattenFields_AStructThatTagsNothing_IsKeyedByFieldName verifies the
+// fallback client-go's Achievement types are the reason for, and the one thing
+// it must not pick up on the way. A struct with no tag of the kind we index by
+// is compared by the names encoding/json would serialize it under, and an
+// unexported field is serialized under none of them, so surfacing one would
+// report a gap against a field no client can ever see.
+func TestFlattenFields_AStructThatTagsNothing_IsKeyedByFieldName(t *testing.T) {
+	untagged := types.NewStruct([]*types.Var{
+		types.NewField(token.NoPos, nil, "Name", tString, false),
+		types.NewField(token.NoPos, types.NewPackage("gitlab.com/x", "gitlab"), "secret", tString, false),
+	}, []string{"", ""})
+
+	got := flattenFields(untagged, []string{tagKeyJSON})
+
+	if len(got) != 1 || got["name"] != typNameString {
+		t.Errorf("flattenFields = %v, want the exported field alone", got)
+	}
+}
+
 // TestDiffPair_URLTagNotation_MatchesTheSnakeCaseMCPName verifies the input
 // diff's fallback tag match: an SDK url tag written in array or negation
 // notation (iids[], not[author_id]) is matched to the snake_case MCP json name

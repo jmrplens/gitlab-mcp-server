@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -122,8 +123,16 @@ func TestJSONTags_ATagThatIsNotAQuotedString_PublishesNothing(t *testing.T) {
 		},
 	}}}
 
-	if tags := jsonTags(structType); strings.Join(tags, ",") != "read" {
+	tags, fieldTypes := jsonTags(structType)
+	if strings.Join(tags, ",") != "read" {
 		t.Errorf("jsonTags() = %v, want only the field whose tag is a quoted string", tags)
+	}
+	// The field type is recorded for the same field and no other. What it names
+	// here is a predeclared type, which the parser writes as the same Ident a
+	// local type is written as; nestedTypes is what tells them apart, by finding
+	// no output type of that name.
+	if !reflect.DeepEqual(fieldTypes, map[string]string{"read": "string"}) {
+		t.Errorf("jsonTags() field types = %v, want the tagged field alone", fieldTypes)
 	}
 }
 
@@ -146,7 +155,14 @@ func TestJSONTags_FollowsEncodingJSON(t *testing.T) {
 		{Type: &ast.Ident{Name: "Promoted"}, Tag: quoted(`json:",omitempty"`)},
 	}}}
 
-	if tags := jsonTags(structType); strings.Join(tags, ",") != "Kept,embedded,renamed" {
+	tags, fieldTypes := jsonTags(structType)
+	if strings.Join(tags, ",") != "Kept,embedded,renamed" {
 		t.Errorf("jsonTags() = %v, want Kept,embedded,renamed", tags)
+	}
+	// The type is recorded under the key the name resolved to, so a field kept
+	// under its Go name and an embed kept under its tag both stay comparable.
+	want := map[string]string{"Kept": "string", "embedded": "Embedded", "renamed": "string"}
+	if !reflect.DeepEqual(fieldTypes, want) {
+		t.Errorf("jsonTags() field types = %v, want %v", fieldTypes, want)
 	}
 }

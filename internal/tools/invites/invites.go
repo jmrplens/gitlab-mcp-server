@@ -3,6 +3,7 @@ package invites
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -36,22 +37,26 @@ type ListPendingGroupInvitationsInput struct {
 
 // ProjectInvitesInput contains parameters for inviting a user to a project.
 type ProjectInvitesInput struct {
-	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	ID          toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)"`
-	Email       string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
-	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
-	AccessLevel int                  `json:"access_level" jsonschema:"Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
-	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the invitation (YYYY-MM-DD)"`
+	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	ID           toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)"`
+	Email        string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
+	UserID       int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
+	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
+	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the invitation (YYYY-MM-DD)"`
+	InviteSource string               `json:"invite_source,omitempty" jsonschema:"Source of the invitation that starts the member creation process"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom role to assign the new member (Ultimate only)" tier:"ultimate"`
 }
 
 // GroupInvitesInput contains parameters for inviting a user to a group.
 type GroupInvitesInput struct {
-	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	ID          toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)"`
-	Email       string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
-	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
-	AccessLevel int                  `json:"access_level" jsonschema:"Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
-	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the invitation (YYYY-MM-DD)"`
+	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	ID           toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)"`
+	Email        string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
+	UserID       int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
+	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
+	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the invitation (YYYY-MM-DD)"`
+	InviteSource string               `json:"invite_source,omitempty" jsonschema:"Source of the invitation that starts the member creation process"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom role to assign the new member (Ultimate only)" tier:"ultimate"`
 }
 
 // Output types.
@@ -79,6 +84,14 @@ type InviteResultOutput struct {
 	toolutil.HintableOutput
 	Status  string            `json:"status"`
 	Message map[string]string `json:"message,omitempty"`
+	// QueuedUsers is what GitLab answers with instead of inviting outright when
+	// the instance has member promotion management enabled: the username of
+	// each invitee whose promotion an administrator has to approve, against the
+	// reason it was queued. That setting is Ultimate on GitLab Self-Managed and
+	// GitLab Dedicated only, hence the tier tag. Documented in invitations.md
+	// and absent from gl.InvitesResult, so it arrives through the raw request
+	// the handlers issue.
+	QueuedUsers map[string]string `json:"queued_users,omitempty" tier:"ultimate"`
 }
 
 // Handlers.
@@ -187,6 +200,47 @@ func applyInviteExpiresAt(opts *gl.InvitesOptions, expiresAt string) {
 	}
 }
 
+// invitesRequest is the documented POST body of an invitation: client-go's own
+// options struct, embedded so every parameter it models keeps its spelling, plus
+// the two invitations.md documents and gl.InvitesOptions does not carry.
+type invitesRequest struct {
+	*gl.InvitesOptions
+	InviteSource string `json:"invite_source,omitempty"`
+	MemberRoleID int64  `json:"member_role_id,omitempty"`
+}
+
+// invitesResultAPI is the raw-fetch superset of an invitation result: the two
+// fields gl.InvitesResult models, plus the documented queued_users map it does
+// not.
+type invitesResultAPI struct {
+	gl.InvitesResult
+	QueuedUsers map[string]string `json:"queued_users"`
+}
+
+// projectInvitationsPath and groupInvitationsPath spell the two routes
+// client-go names routeProjectsIDInvitations and routeGroupsIDInvitations.
+func projectInvitationsPath(escapedID string) string {
+	return fmt.Sprintf("projects/%s/invitations", escapedID)
+}
+
+func groupInvitationsPath(escapedID string) string {
+	return fmt.Sprintf("groups/%s/invitations", escapedID)
+}
+
+// postInvitation issues the invitation POST and decodes the documented
+// response, queued_users included.
+func postInvitation(ctx context.Context, client *gitlabclient.Client, path string, body invitesRequest) (*invitesResultAPI, error) {
+	req, err := client.GL().NewRequest(http.MethodPost, path, body, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	var result invitesResultAPI
+	if _, doErr := client.GL().Do(req, &result); doErr != nil {
+		return nil, doErr
+	}
+	return &result, nil
+}
+
 type sendInvitationArgs struct {
 	scopeID       toolutil.StringOrInt
 	operation     string
@@ -194,11 +248,20 @@ type sendInvitationArgs struct {
 	forbiddenHint string
 	email         string
 	userID        int64
-	opts          *gl.InvitesOptions
-	invite        func(any, *gl.InvitesOptions, ...gl.RequestOptionFunc) (*gl.InvitesResult, *gl.Response, error)
+	body          invitesRequest
+	// path formats the invitations endpoint for the scope, given the escaped
+	// identifier, so the two handlers differ only in the route they name.
+	path func(string) string
 }
 
-func runInvitation(ctx context.Context, args sendInvitationArgs) (InviteResultOutput, error) {
+// runInvitation sends one invitation.
+//
+// The request is issued directly rather than through gl.InvitesService, which
+// models neither the two documented body parameters nor the queued_users the
+// response carries under member promotion management. The body is still built
+// from client-go's own options struct, so the parameters it does model keep the
+// SDK's spelling.
+func runInvitation(ctx context.Context, client *gitlabclient.Client, args sendInvitationArgs) (InviteResultOutput, error) {
 	if args.scopeID == "" {
 		return InviteResultOutput{}, toolutil.WrapErrWithMessage(args.operation, toolutil.ErrFieldRequired(args.requiredField))
 	}
@@ -206,7 +269,7 @@ func runInvitation(ctx context.Context, args sendInvitationArgs) (InviteResultOu
 		return InviteResultOutput{}, toolutil.WrapErrWithMessage(args.operation, errors.New("either email or user_id is required"))
 	}
 
-	result, _, err := args.invite(string(args.scopeID), args.opts, gl.WithContext(ctx))
+	result, err := postInvitation(ctx, client, args.path(gl.PathEscape(string(args.scopeID))), args.body)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return InviteResultOutput{}, toolutil.WrapErrWithHint(args.operation, err, args.forbiddenHint)
@@ -215,7 +278,7 @@ func runInvitation(ctx context.Context, args sendInvitationArgs) (InviteResultOu
 			"valid access_level: 5 (Minimal access), 10 (Guest), 15 (Planner Premium/Ultimate), 20 (Reporter), 25 (Security Manager Premium/Ultimate), 30 (Developer), 40 (Maintainer), 50 (Owner), 60 (Admin where supported); expires_at format: YYYY-MM-DD; user may already be a member")
 	}
 
-	return toInviteResultOutput(result), nil
+	return toInviteResultOutputAPI(result), nil
 }
 
 // ProjectInvites invites a user to a project by email or user ID.
@@ -223,7 +286,9 @@ func runInvitation(ctx context.Context, args sendInvitationArgs) (InviteResultOu
 // The &gl.InvitesOptions{} literal is built here, in the handler that takes the
 // model-facing ProjectInvitesInput, so every documented add-a-member POST body
 // parameter (id, email, user_id, access_level, expires_at) is mapped 1:1 from a
-// public input field.
+// public input field. invite_source and member_role_id sit beside it on
+// [invitesRequest]: invitations.md documents both and gl.InvitesOptions carries
+// neither.
 func ProjectInvites(ctx context.Context, client *gitlabclient.Client, input ProjectInvitesInput) (InviteResultOutput, error) {
 	accessLevel := gl.AccessLevelValue(input.AccessLevel)
 	opts := &gl.InvitesOptions{AccessLevel: &accessLevel}
@@ -237,15 +302,15 @@ func ProjectInvites(ctx context.Context, client *gitlabclient.Client, input Proj
 		opts.UserID = input.UserID
 	}
 	applyInviteExpiresAt(opts, input.ExpiresAt)
-	return runInvitation(ctx, sendInvitationArgs{
+	return runInvitation(ctx, client, sendInvitationArgs{
 		scopeID:       input.ProjectID,
 		operation:     "project_invite",
 		requiredField: "project_id",
 		forbiddenHint: "inviting users requires Maintainer or Owner role on the project",
 		email:         input.Email,
 		userID:        input.UserID,
-		opts:          opts,
-		invite:        client.GL().Invites.ProjectInvites,
+		body:          invitesRequest{InvitesOptions: opts, InviteSource: input.InviteSource, MemberRoleID: input.MemberRoleID},
+		path:          projectInvitationsPath,
 	})
 }
 
@@ -254,7 +319,8 @@ func ProjectInvites(ctx context.Context, client *gitlabclient.Client, input Proj
 // The &gl.InvitesOptions{} literal is built here, in the handler that takes the
 // model-facing GroupInvitesInput, so every documented add-a-member POST body
 // parameter (id, email, user_id, access_level, expires_at) is mapped 1:1 from a
-// public input field.
+// public input field, with invite_source and member_role_id beside it on
+// [invitesRequest] for the same reason [ProjectInvites] records.
 func GroupInvites(ctx context.Context, client *gitlabclient.Client, input GroupInvitesInput) (InviteResultOutput, error) {
 	accessLevel := gl.AccessLevelValue(input.AccessLevel)
 	opts := &gl.InvitesOptions{AccessLevel: &accessLevel}
@@ -268,15 +334,15 @@ func GroupInvites(ctx context.Context, client *gitlabclient.Client, input GroupI
 		opts.UserID = input.UserID
 	}
 	applyInviteExpiresAt(opts, input.ExpiresAt)
-	return runInvitation(ctx, sendInvitationArgs{
+	return runInvitation(ctx, client, sendInvitationArgs{
 		scopeID:       input.GroupID,
 		operation:     "group_invite",
 		requiredField: "group_id",
 		forbiddenHint: "inviting users requires Owner role on the group",
 		email:         input.Email,
 		userID:        input.UserID,
-		opts:          opts,
-		invite:        client.GL().Invites.GroupInvites,
+		body:          invitesRequest{InvitesOptions: opts, InviteSource: input.InviteSource, MemberRoleID: input.MemberRoleID},
+		path:          groupInvitationsPath,
 	})
 }
 
@@ -306,4 +372,13 @@ func toInviteResultOutput(r *gl.InvitesResult) InviteResultOutput {
 		Status:  r.Status,
 		Message: r.Message,
 	}
+}
+
+// toInviteResultOutputAPI maps a raw-fetch [invitesResultAPI] into the output
+// type. It reuses [toInviteResultOutput] for the fields the SDK models, then
+// overlays the one only the raw response carries.
+func toInviteResultOutputAPI(r *invitesResultAPI) InviteResultOutput {
+	out := toInviteResultOutput(&r.InvitesResult)
+	out.QueuedUsers = r.QueuedUsers
+	return out
 }

@@ -187,8 +187,10 @@ func TestGet_Success(t *testing.T) {
 }
 
 // TestGet_DeprecatedAndSubObjects verifies Get surfaces the deprecated
-// token/active/architecture/platform/revision/version/ip_address fields and the
-// full groups/projects sub-object arrays from gl.RunnerDetails.
+// active/architecture/platform/revision/version/ip_address fields and the full
+// groups/projects sub-object arrays from gl.RunnerDetails, and that a token in
+// the response body is not republished: GET /runners/:id answers with no token,
+// so a value that reaches the decoder must not reach a model.
 func TestGet_DeprecatedAndSubObjects(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRunner10 && r.Method == http.MethodGet {
@@ -208,10 +210,17 @@ func TestGet_DeprecatedAndSubObjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Token != "glrt-tok" || !out.Active || out.Architecture != "amd64" ||
+	if !out.Active || out.Architecture != "amd64" ||
 		out.Platform != "linux" || out.Revision != "abc123" || out.Version != "16.0.0" ||
 		out.IPAddress != "10.0.0.1" {
 		t.Errorf("deprecated/details fields mismatch: %+v", out)
+	}
+	encoded, marshalErr := json.Marshal(out)
+	if marshalErr != nil {
+		t.Fatalf(fmtUnexpErr, marshalErr)
+	}
+	if strings.Contains(string(encoded), "glrt-tok") {
+		t.Errorf("details output republished the runner token: %s", encoded)
 	}
 	if len(out.Projects) != 2 || out.Projects[0].Name != "p1" ||
 		out.Projects[0].NameWithNamespace != "ns / p1" || out.Projects[0].Path != "p1" ||

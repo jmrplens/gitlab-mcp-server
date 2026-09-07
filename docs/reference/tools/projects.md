@@ -128,7 +128,7 @@ List users who have starred a project. Supports filtering by search (name or use
 
 ### `gitlab_project_create_fork_relation`
 
-Create a fork relationship to an upstream project. Requires the numeric `forked_from_id` of the source project and the `project_id` of the forked (downstream) project.
+Create a fork relationship to an upstream project. Requires the numeric `forked_from_id` of the source project and the `project_id` of the forked (downstream) project. GitLab answers with the downstream project itself, so the response is a project and carries `forked_from_project`.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

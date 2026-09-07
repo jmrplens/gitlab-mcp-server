@@ -458,8 +458,8 @@ func TestMeta_ProjectCreateForUser(t *testing.T) {
 // actions through the gitlab_project meta-tool.
 //
 // The test creates two unrelated project fixtures, establishes a fork
-// relationship between them via create_fork_relation, asserts the returned
-// relation links the expected source and fork IDs, then removes the
+// relationship between them via create_fork_relation, asserts the project the
+// endpoint answers with names the expected upstream, then removes the
 // relationship via delete_fork_relation.
 //
 // Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
@@ -477,7 +477,7 @@ func TestMeta_ProjectForkRelations(t *testing.T) {
 	fork := CreateProjectMeta(ctx, e2e, sess.meta)
 
 	t.Run("CreateForkRelation", func(t *testing.T) {
-		out, err := callToolOn[projects.ForkRelationOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[projects.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "create_fork_relation",
 			"params": map[string]any{
 				"project_id":     fork.pidStr(),
@@ -485,14 +485,15 @@ func TestMeta_ProjectForkRelations(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "create_fork_relation")
-		// GitLab 19 answers with the full project body instead of a relation
-		// object, so verify the established relation through a project read.
+		requireTruef(t, out.ID == fork.ID && out.ForkedFromProject != nil && out.ForkedFromProject.ID == source.ID,
+			"expected the downstream project %d forked from %d, got %+v", fork.ID, source.ID, out)
+		// The relation is also read back independently, so the assertion above
+		// is about what GitLab stored and not only about what it echoed.
 		forked, _, getErr := sess.glClient.GL().Projects.GetProject(fork.ID, nil, gl.WithContext(ctx))
 		requireNoError(t, getErr, "read fork project after create_fork_relation")
 		requireTruef(t, forked.ForkedFromProject != nil && forked.ForkedFromProject.ID == source.ID,
 			"expected project %d forked from %d, got %+v", fork.ID, source.ID, forked.ForkedFromProject)
-		t.Logf("Created fork relation %d → %d (tool reported %d → %d)",
-			source.ID, fork.ID, out.ForkedFromProjectID, out.ForkedToProjectID)
+		t.Logf("Created fork relation %d → %d", source.ID, fork.ID)
 	})
 
 	t.Run("DeleteForkRelation", func(t *testing.T) {

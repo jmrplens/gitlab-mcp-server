@@ -882,9 +882,11 @@ func TestGroupInvites_WithID(t *testing.T) {
 // exactly as the GitLab add-a-member endpoint expects.
 func TestProjectInvites_CreateBodyParams(t *testing.T) {
 	var body struct {
-		Email       string `json:"email"`
-		AccessLevel int    `json:"access_level"`
-		ExpiresAt   string `json:"expires_at"`
+		Email        string `json:"email"`
+		AccessLevel  int    `json:"access_level"`
+		ExpiresAt    string `json:"expires_at"`
+		InviteSource string `json:"invite_source"`
+		MemberRoleID int64  `json:"member_role_id"`
 	}
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -895,10 +897,12 @@ func TestProjectInvites_CreateBodyParams(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"status":"success"}`)
 	}))
 	if _, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
-		ProjectID:   "42",
-		Email:       "dev@example.com",
-		AccessLevel: 30,
-		ExpiresAt:   "2026-12-31",
+		ProjectID:    "42",
+		Email:        "dev@example.com",
+		AccessLevel:  30,
+		ExpiresAt:    "2026-12-31",
+		InviteSource: "mcp-server",
+		MemberRoleID: 12,
 	}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -911,14 +915,22 @@ func TestProjectInvites_CreateBodyParams(t *testing.T) {
 	if body.ExpiresAt != "2026-12-31" {
 		t.Errorf("expires_at = %q, want %q", body.ExpiresAt, "2026-12-31")
 	}
+	if body.InviteSource != "mcp-server" {
+		t.Errorf("invite_source = %q, want %q", body.InviteSource, "mcp-server")
+	}
+	if body.MemberRoleID != 12 {
+		t.Errorf("member_role_id = %d, want 12", body.MemberRoleID)
+	}
 }
 
 // TestGroupInvites_CreateBodyParams asserts that the user_id and access_level
 // create parameters are serialized into the group invitation POST body.
 func TestGroupInvites_CreateBodyParams(t *testing.T) {
 	var body struct {
-		UserID      int64 `json:"user_id"`
-		AccessLevel int   `json:"access_level"`
+		UserID       int64  `json:"user_id"`
+		AccessLevel  int    `json:"access_level"`
+		InviteSource string `json:"invite_source"`
+		MemberRoleID int64  `json:"member_role_id"`
 	}
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/groups/10/invitations" {
@@ -929,9 +941,11 @@ func TestGroupInvites_CreateBodyParams(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"status":"success"}`)
 	}))
 	if _, err := GroupInvites(context.Background(), client, GroupInvitesInput{
-		GroupID:     "10",
-		UserID:      77,
-		AccessLevel: 40,
+		GroupID:      "10",
+		UserID:       77,
+		AccessLevel:  40,
+		InviteSource: "onboarding",
+		MemberRoleID: 9,
 	}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -940,6 +954,69 @@ func TestGroupInvites_CreateBodyParams(t *testing.T) {
 	}
 	if body.AccessLevel != 40 {
 		t.Errorf("access_level = %d, want 40", body.AccessLevel)
+	}
+	if body.InviteSource != "onboarding" {
+		t.Errorf("invite_source = %q, want %q", body.InviteSource, "onboarding")
+	}
+	if body.MemberRoleID != 9 {
+		t.Errorf("member_role_id = %d, want 9", body.MemberRoleID)
+	}
+}
+
+// TestProjectInvites_QueuedUsers_RoundTrip verifies the documented queued_users
+// map reaches the output and the Markdown, which is the answer an instance with
+// member promotion management enabled gives instead of inviting outright.
+func TestProjectInvites_QueuedUsers_RoundTrip(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusCreated,
+			`{"status":"success","queued_users":{"username_1":"Request queued for administrator approval."}}`)
+	}))
+	out, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
+		ProjectID: "42", Email: "dev@example.com", AccessLevel: 30,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.QueuedUsers["username_1"] != "Request queued for administrator approval." {
+		t.Errorf("QueuedUsers = %v, want the queued username and its reason", out.QueuedUsers)
+	}
+	md := FormatInviteResultMarkdownString(out)
+	if !strings.Contains(md, "username_1") || !strings.Contains(md, "Queued for administrator approval") {
+		t.Errorf("markdown does not report the queued user:\n%s", md)
+	}
+}
+
+// TestToInviteResultOutputAPI_NoQueuedUsers verifies that a plain success
+// answer leaves queued_users absent rather than empty, so the ordinary result
+// says nothing about a queue nobody is in.
+func TestToInviteResultOutputAPI_NoQueuedUsers(t *testing.T) {
+	var result invitesResultAPI
+	result.Status = "success"
+
+	out := toInviteResultOutputAPI(&result)
+	if out.QueuedUsers != nil {
+		t.Errorf("QueuedUsers = %v, want nil", out.QueuedUsers)
+	}
+	if strings.Contains(FormatInviteResultMarkdownString(out), "Queued") {
+		t.Error("markdown named a queue for a result that has none")
+	}
+}
+
+// TestPostInvitation_NewRequestError verifies request construction errors are
+// returned before the GitLab client attempts an HTTP call.
+func TestPostInvitation_NewRequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	result, err := postInvitation(context.Background(), client, "projects/%zz/invitations", invitesRequest{})
+	if err == nil {
+		t.Fatal("expected request construction error")
+	}
+	if result != nil {
+		t.Errorf("result = %+v, want nil", result)
 	}
 }
 
